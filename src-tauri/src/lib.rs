@@ -25,7 +25,10 @@ struct GpuInfo {
     name: String,
     vram_bytes: u64,
     driver_version: String,
+    driver_date: String,         // ISO 8601 for the UI (or "" if unknown)
+    driver_age_days: Option<i64>, // days since DriverDate, if parseable
     video_processor: String,
+    current_refresh_rate_hz: u32,
 }
 
 #[derive(Deserialize)]
@@ -36,7 +39,9 @@ struct Win32VideoController {
     #[serde(rename = "AdapterRAM")]
     adapter_ram: Option<u64>,
     driver_version: Option<String>,
+    driver_date: Option<String>, // CIM_DATETIME, e.g. "20240312123045.000000-420"
     video_processor: Option<String>,
+    current_refresh_rate: Option<u32>,
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -126,6 +131,27 @@ fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
         .collect()
 }
 
+// CIM_DATETIME looks like "20240312123045.000000-420". We only need the date
+// portion; year/month/day are positions 0..4, 4..6, 6..8.
+fn cim_date_age_days(cim: &str) -> Option<i64> {
+    if cim.len() < 8 {
+        return None;
+    }
+    let year: i32 = cim.get(0..4)?.parse().ok()?;
+    let month: u32 = cim.get(4..6)?.parse().ok()?;
+    let day: u32 = cim.get(6..8)?.parse().ok()?;
+    let dt = chrono::NaiveDate::from_ymd_opt(year, month, day)?;
+    let today = Utc::now().date_naive();
+    Some((today - dt).num_days().max(0))
+}
+
+fn cim_date_iso(cim: &str) -> String {
+    if cim.len() < 8 {
+        return String::new();
+    }
+    format!("{}-{}-{}", &cim[0..4], &cim[4..6], &cim[6..8])
+}
+
 fn detect_gpus() -> Vec<GpuInfo> {
     let com = match COMLibrary::new() {
         Ok(c) => c,
@@ -143,11 +169,17 @@ fn detect_gpus() -> Vec<GpuInfo> {
             if name.is_empty() {
                 return None;
             }
+            let driver_date_raw = g.driver_date.unwrap_or_default();
+            let driver_age_days = cim_date_age_days(&driver_date_raw);
+            let driver_date = cim_date_iso(&driver_date_raw);
             Some(GpuInfo {
                 name,
                 vram_bytes: g.adapter_ram.unwrap_or(0),
                 driver_version: g.driver_version.unwrap_or_default(),
+                driver_date,
+                driver_age_days,
                 video_processor: g.video_processor.unwrap_or_default(),
+                current_refresh_rate_hz: g.current_refresh_rate.unwrap_or(0),
             })
         })
         .collect()
@@ -431,6 +463,41 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
         });
+    }
+
+    // GPU driver freshness — flag when ANY adapter's driver is meaningfully stale.
+    let oldest_driver_days = hw
+        .gpus
+        .iter()
+        .filter_map(|g| g.driver_age_days)
+        .max();
+    if let Some(days) = oldest_driver_days {
+        if days >= 90 {
+            let vendor = if gpu_vendor_match(hw, "NVIDIA").is_some() {
+                "NVIDIA"
+            } else if gpu_vendor_match(hw, "AMD").is_some() || gpu_vendor_match(hw, "RADEON").is_some() {
+                "AMD"
+            } else if gpu_vendor_match(hw, "INTEL").is_some() {
+                "Intel"
+            } else {
+                "GPU"
+            };
+            let months = days / 30;
+            recs.push(Recommendation {
+                id: "gpu-driver-update",
+                title: "Update your graphics driver",
+                category: "GPU",
+                severity: "safe",
+                description:
+                    "Your installed graphics driver is several months old. Driver updates routinely include game-specific performance improvements, bug fixes for newly-released titles, and security patches. Update through GeForce Experience / NVIDIA App, AMD Adrenalin, or Intel Graphics Command Center.",
+                impact: "Better game performance · fewer crashes · latest features (DLSS, FSR, frame-gen)",
+                downside: Some(
+                    "New drivers occasionally introduce regressions — keep the previous installer in case you need to roll back.",
+                ),
+                applies_to: format!("{} driver is ~{} months old", vendor, months),
+                currently_applied: false,
+            });
+        }
     }
 
     // HDD-only advisory: the single biggest performance win is hardware, not a tweak.

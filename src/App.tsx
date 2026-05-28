@@ -13,7 +13,10 @@ type GpuInfo = {
   name: string;
   vram_bytes: number;
   driver_version: string;
+  driver_date: string;
+  driver_age_days: number | null;
   video_processor: string;
+  current_refresh_rate_hz: number;
 };
 
 type PhysicalDiskInfo = {
@@ -66,6 +69,14 @@ const APPLIABLE_REC_IDS = new Set<string>(["game-mode", "visual-effects", "sysma
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");
+
+const fmtDriver = (g: GpuInfo) => {
+  const version = g.driver_version || "—";
+  if (g.driver_age_days == null) return version;
+  const months = Math.floor(g.driver_age_days / 30);
+  const age = months < 1 ? "<1 mo" : months === 1 ? "1 mo" : `${months} mo`;
+  return `${version} · ${age} old`;
+};
 
 const CATEGORIES = ["All", "Windows", "Power", "GPU", "Storage", "Network"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -191,7 +202,10 @@ function App() {
                     <div key={i} className="gpu-block">
                       {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
                       <Detail k="VRAM" v={g.vram_bytes > 0 ? `${fmtGB(g.vram_bytes)}*` : "—"} />
-                      <Detail k="Driver" v={g.driver_version || "—"} />
+                      <Detail k="Driver" v={fmtDriver(g)} />
+                      {g.current_refresh_rate_hz > 0 && (
+                        <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
+                      )}
                     </div>
                   ))
                 )}
