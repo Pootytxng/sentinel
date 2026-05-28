@@ -652,6 +652,10 @@ fn check_change_active(c: &AppliedChange) -> bool {
         "visual-effects" => visual_effects_for_best_performance(),
         "sysmain-disable" => !service_running("SysMain"),
         "nvidia-telemetry" => !service_running("NvTelemetryContainer"),
+        "power-ultimate" => current_power_plan_name()
+            .map(|p| p.to_lowercase().contains("ultimate"))
+            .unwrap_or(false),
+        "nagle-disable" => nagle_disabled_on_any_nic(),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -863,6 +867,140 @@ fn rollback_service_disable(
     Ok(())
 }
 
+// ─── Power plan: Ultimate Performance ────────────────────────────────────
+
+fn current_power_plan_guid() -> Option<String> {
+    let output = Command::new("powercfg").args(["/getactivescheme"]).output().ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Format: "Power Scheme GUID: <36-char-guid>  (Plan Name)"
+    for line in stdout.lines() {
+        if let Some(idx) = line.find("GUID:") {
+            let after = line[idx + 5..].trim_start();
+            let guid = after.split_whitespace().next()?.trim();
+            if guid.len() == 36 {
+                return Some(guid.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn apply_power_ultimate() -> Result<serde_json::Value, String> {
+    let prior_guid = current_power_plan_guid().unwrap_or_default();
+    // Idempotent: reuse existing Ultimate Performance plan if it's already
+    // duplicated; otherwise duplicate from the canonical hidden GUID first.
+    // Either way, /setactive on the resulting GUID.
+    let ps = "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; \
+              if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; exit 0 } \
+              $dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; \
+              if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; exit 0 } \
+              exit 1";
+    run_elevated_powershell(ps)?;
+    Ok(serde_json::json!({
+        "prior_plan_guid": prior_guid,
+    }))
+}
+
+fn rollback_power_ultimate(snapshot: &serde_json::Value) -> Result<(), String> {
+    let prior = snapshot
+        .get("prior_plan_guid")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if prior.len() != 36 {
+        return Err("no valid prior plan GUID in snapshot".into());
+    }
+    run_elevated_powershell(&format!("powercfg /setactive {}", prior))?;
+    Ok(())
+}
+
+// ─── Nagle disable across active NICs ────────────────────────────────────
+
+fn apply_nagle_disable() -> Result<serde_json::Value, String> {
+    // Snapshot (no admin): walk every Tcpip interface, capture prior values
+    // on adapters that have an actual IP. Skip loopback / virtual / inactive.
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let interfaces = hklm
+        .open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")
+        .map_err(|e| e.to_string())?;
+    let mut snapshots: Vec<serde_json::Value> = Vec::new();
+    for adapter_name in interfaces.enum_keys().filter_map(|r| r.ok()) {
+        let Ok(adapter) = interfaces.open_subkey(&adapter_name) else {
+            continue;
+        };
+        let has_ip = adapter.get_value::<String, _>("DhcpIPAddress").is_ok()
+            || adapter.get_value::<String, _>("IPAddress").is_ok();
+        if !has_ip {
+            continue;
+        }
+        let prior_ack: Option<u32> = adapter.get_value("TcpAckFrequency").ok();
+        let prior_nodelay: Option<u32> = adapter.get_value("TCPNoDelay").ok();
+        snapshots.push(serde_json::json!({
+            "interface": adapter_name,
+            "prior_ack": prior_ack,
+            "prior_nodelay": prior_nodelay,
+        }));
+    }
+
+    // Apply (admin): write TcpAckFrequency=1 + TCPNoDelay=1 on every NIC
+    // with an IP. PowerShell handles enumeration + the Set-ItemProperty.
+    let ps = "$ifs = Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'; \
+              foreach ($i in $ifs) { \
+                $hasIp = (Get-ItemProperty -Path $i.PSPath -Name 'DhcpIPAddress' -ErrorAction SilentlyContinue) -or (Get-ItemProperty -Path $i.PSPath -Name 'IPAddress' -ErrorAction SilentlyContinue); \
+                if ($hasIp) { \
+                  Set-ItemProperty -Path $i.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord; \
+                  Set-ItemProperty -Path $i.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord; \
+                } \
+              }";
+    run_elevated_powershell(ps)?;
+    Ok(serde_json::json!({ "interfaces": snapshots }))
+}
+
+fn rollback_nagle_disable(snapshot: &serde_json::Value) -> Result<(), String> {
+    let interfaces = snapshot
+        .get("interfaces")
+        .and_then(|v| v.as_array())
+        .ok_or("missing 'interfaces' in snapshot")?;
+    if interfaces.is_empty() {
+        return Err("no interfaces recorded in snapshot".into());
+    }
+    let mut ps = String::new();
+    for entry in interfaces {
+        let iface = entry.get("interface").and_then(|v| v.as_str()).unwrap_or("");
+        if iface.is_empty() {
+            continue;
+        }
+        let path = format!(
+            "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
+            iface
+        );
+        match entry.get("prior_ack").and_then(|v| v.as_u64()) {
+            Some(v) => ps.push_str(&format!(
+                "Set-ItemProperty -Path '{}' -Name 'TcpAckFrequency' -Value {} -Type DWord; ",
+                path, v
+            )),
+            None => ps.push_str(&format!(
+                "Remove-ItemProperty -Path '{}' -Name 'TcpAckFrequency' -ErrorAction SilentlyContinue; ",
+                path
+            )),
+        }
+        match entry.get("prior_nodelay").and_then(|v| v.as_u64()) {
+            Some(v) => ps.push_str(&format!(
+                "Set-ItemProperty -Path '{}' -Name 'TCPNoDelay' -Value {} -Type DWord; ",
+                path, v
+            )),
+            None => ps.push_str(&format!(
+                "Remove-ItemProperty -Path '{}' -Name 'TCPNoDelay' -ErrorAction SilentlyContinue; ",
+                path
+            )),
+        }
+    }
+    if ps.is_empty() {
+        return Err("snapshot had interfaces but none usable for rollback".into());
+    }
+    run_elevated_powershell(&ps)?;
+    Ok(())
+}
+
 fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
@@ -917,6 +1055,8 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         "visual-effects" => apply_visual_effects()?,
         "sysmain-disable" => apply_service_disable("SysMain")?,
         "nvidia-telemetry" => apply_service_disable("NvTelemetryContainer")?,
+        "power-ultimate" => apply_power_ultimate()?,
+        "nagle-disable" => apply_nagle_disable()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -954,6 +1094,8 @@ fn rollback_change(change_id: String) -> Result<(), String> {
         "nvidia-telemetry" => {
             rollback_service_disable("NvTelemetryContainer", &change.snapshot)?
         }
+        "power-ultimate" => rollback_power_ultimate(&change.snapshot)?,
+        "nagle-disable" => rollback_nagle_disable(&change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();

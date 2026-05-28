@@ -78,6 +78,8 @@ const APPLIABLE_REC_IDS = new Set<string>([
   "visual-effects",
   "sysmain-disable",
   "nvidia-telemetry",
+  "power-ultimate",
+  "nagle-disable",
 ]);
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
