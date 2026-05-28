@@ -73,7 +73,12 @@ type AppliedChange = {
   is_still_active: boolean;
 };
 
-const APPLIABLE_REC_IDS = new Set<string>(["game-mode", "visual-effects", "sysmain-disable"]);
+const APPLIABLE_REC_IDS = new Set<string>([
+  "game-mode",
+  "visual-effects",
+  "sysmain-disable",
+  "nvidia-telemetry",
+]);
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");

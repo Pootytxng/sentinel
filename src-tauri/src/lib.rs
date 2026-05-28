@@ -651,6 +651,7 @@ fn check_change_active(c: &AppliedChange) -> bool {
         "game-mode" => game_mode_enabled(),
         "visual-effects" => visual_effects_for_best_performance(),
         "sysmain-disable" => !service_running("SysMain"),
+        "nvidia-telemetry" => !service_running("NvTelemetryContainer"),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -820,20 +821,28 @@ fn ps_service_startup_for_mode(mode: &str) -> &'static str {
     }
 }
 
-fn apply_sysmain_disable() -> Result<serde_json::Value, String> {
-    let (prior_state, prior_start_mode) = service_info("SysMain")
+// Generic "disable a Windows service" — used for SysMain, NVIDIA telemetry,
+// and any future service-shaped rec. Snapshots prior state + start mode so
+// rollback returns the service to exactly where it was.
+fn apply_service_disable(service_name: &str) -> Result<serde_json::Value, String> {
+    let (prior_state, prior_start_mode) = service_info(service_name)
         .unwrap_or_else(|| ("Running".into(), "Auto".into()));
-    run_elevated_powershell(
-        "Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue",
-    )?;
+    let cmd = format!(
+        "Set-Service -Name {0} -StartupType Disabled; Stop-Service -Name {0} -Force -ErrorAction SilentlyContinue",
+        service_name
+    );
+    run_elevated_powershell(&cmd)?;
     Ok(serde_json::json!({
-        "service": "SysMain",
+        "service": service_name,
         "prior_state": prior_state,
         "prior_start_mode": prior_start_mode,
     }))
 }
 
-fn rollback_sysmain_disable(snapshot: &serde_json::Value) -> Result<(), String> {
+fn rollback_service_disable(
+    service_name: &str,
+    snapshot: &serde_json::Value,
+) -> Result<(), String> {
     let prior_start_mode = snapshot
         .get("prior_start_mode")
         .and_then(|v| v.as_str())
@@ -843,9 +852,12 @@ fn rollback_sysmain_disable(snapshot: &serde_json::Value) -> Result<(), String> 
         .and_then(|v| v.as_str())
         .unwrap_or("Running");
     let startup = ps_service_startup_for_mode(prior_start_mode);
-    let mut cmd = format!("Set-Service -Name SysMain -StartupType {}", startup);
+    let mut cmd = format!(
+        "Set-Service -Name {} -StartupType {}",
+        service_name, startup
+    );
     if prior_state == "Running" {
-        cmd.push_str("; Start-Service -Name SysMain");
+        cmd.push_str(&format!("; Start-Service -Name {}", service_name));
     }
     run_elevated_powershell(&cmd)?;
     Ok(())
@@ -903,7 +915,8 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
     let snapshot = match rec_id.as_str() {
         "game-mode" => apply_game_mode()?,
         "visual-effects" => apply_visual_effects()?,
-        "sysmain-disable" => apply_sysmain_disable()?,
+        "sysmain-disable" => apply_service_disable("SysMain")?,
+        "nvidia-telemetry" => apply_service_disable("NvTelemetryContainer")?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -937,7 +950,10 @@ fn rollback_change(change_id: String) -> Result<(), String> {
     match change.rec_id.as_str() {
         "game-mode" => rollback_game_mode(&change.snapshot)?,
         "visual-effects" => rollback_visual_effects(&change.snapshot)?,
-        "sysmain-disable" => rollback_sysmain_disable(&change.snapshot)?,
+        "sysmain-disable" => rollback_service_disable("SysMain", &change.snapshot)?,
+        "nvidia-telemetry" => {
+            rollback_service_disable("NvTelemetryContainer", &change.snapshot)?
+        }
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();
