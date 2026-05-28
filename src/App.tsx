@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -32,20 +32,40 @@ type HardwareInfo = {
   gpus: GpuInfo[];
 };
 
+type Recommendation = {
+  id: string;
+  title: string;
+  category: string;
+  severity: "safe" | "moderate" | "advanced";
+  description: string;
+  impact: string;
+  downside: string | null;
+  applies_to: string;
+};
+
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");
 
+const CATEGORIES = ["All", "Windows", "Power", "GPU", "Storage", "Network"] as const;
+type Category = (typeof CATEGORIES)[number];
+
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
+  const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<Category>("All");
 
   const refresh = async () => {
     setLoading(true);
     setError(null);
     try {
-      const info = await invoke<HardwareInfo>("get_hardware_info");
+      const [info, recommendations] = await Promise.all([
+        invoke<HardwareInfo>("get_hardware_info"),
+        invoke<Recommendation[]>("get_recommendations"),
+      ]);
       setHw(info);
+      setRecs(recommendations);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -56,6 +76,12 @@ function App() {
   useEffect(() => {
     refresh();
   }, []);
+
+  const visibleRecs = useMemo(() => {
+    if (!recs) return [];
+    if (activeCategory === "All") return recs;
+    return recs.filter((r) => r.category === activeCategory);
+  }, [recs, activeCategory]);
 
   return (
     <main className="app">
@@ -72,66 +98,120 @@ function App() {
       {error && <div className="error">Error: {error}</div>}
 
       {hw && (
-        <section className="grid">
-          <Card label="CPU" value={hw.cpu_brand}>
-            <Detail k="Logical cores" v={hw.cpu_cores_logical} />
-            <Detail k="Physical cores" v={hw.cpu_cores_physical} />
-            <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
-          </Card>
+        <>
+          <section>
+            <h2 className="section-title">Your hardware</h2>
+            <div className="grid">
+              <Card label="CPU" value={hw.cpu_brand}>
+                <Detail k="Logical cores" v={hw.cpu_cores_logical} />
+                <Detail k="Physical cores" v={hw.cpu_cores_physical} />
+                <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
+              </Card>
 
-          <Card label="Memory" value={fmtGB(hw.ram_total_bytes)}>
-            <Detail k="In use" v={`${fmtGB(hw.ram_used_bytes)} (${Math.round((hw.ram_used_bytes / hw.ram_total_bytes) * 100)}%)`} />
-            <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
-          </Card>
+              <Card label="Memory" value={fmtGB(hw.ram_total_bytes)}>
+                <Detail
+                  k="In use"
+                  v={`${fmtGB(hw.ram_used_bytes)} (${Math.round(
+                    (hw.ram_used_bytes / hw.ram_total_bytes) * 100
+                  )}%)`}
+                />
+                <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
+              </Card>
 
-          <Card
-            label="Graphics"
-            value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
-          >
-            {hw.gpus.length === 0 ? (
-              <Detail k="Status" v="WMI returned no adapters" />
-            ) : (
-              hw.gpus.map((g, i) => (
-                <div key={i} className="gpu-block">
-                  {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
+              <Card
+                label="Graphics"
+                value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
+              >
+                {hw.gpus.length === 0 ? (
+                  <Detail k="Status" v="WMI returned no adapters" />
+                ) : (
+                  hw.gpus.map((g, i) => (
+                    <div key={i} className="gpu-block">
+                      {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
+                      <Detail k="VRAM" v={g.vram_bytes > 0 ? `${fmtGB(g.vram_bytes)}*` : "—"} />
+                      <Detail k="Driver" v={g.driver_version || "—"} />
+                    </div>
+                  ))
+                )}
+                {hw.gpus.some((g) => g.vram_bytes > 0) && (
+                  <div className="footnote">* WMI caps VRAM at ~4 GB; DXGI fix coming.</div>
+                )}
+              </Card>
+
+              <Card label="System" value={`${hw.os_name} ${hw.os_version}`}>
+                <Detail k="Build" v={hw.kernel_version} />
+                <Detail k="Hostname" v={hw.hostname} />
+              </Card>
+
+              <Card
+                label="Storage"
+                value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}
+              >
+                {hw.disks.map((d) => (
                   <Detail
-                    k="VRAM"
-                    v={g.vram_bytes > 0 ? `${fmtGB(g.vram_bytes)}*` : "—"}
+                    key={d.mount_point}
+                    k={d.mount_point}
+                    v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
                   />
-                  <Detail k="Driver" v={g.driver_version || "—"} />
-                </div>
-              ))
-            )}
-            {hw.gpus.some((g) => g.vram_bytes > 0) && (
-              <div className="footnote">* WMI caps VRAM at ~4 GB; DXGI fix coming.</div>
-            )}
-          </Card>
+                ))}
+              </Card>
+            </div>
+          </section>
 
-          <Card label="System" value={`${hw.os_name} ${hw.os_version}`}>
-            <Detail k="Build" v={hw.kernel_version} />
-            <Detail k="Hostname" v={hw.hostname} />
-          </Card>
+          <section>
+            <div className="section-header">
+              <h2 className="section-title">
+                Recommendations
+                {recs && <span className="count-badge">{recs.length}</span>}
+              </h2>
+              <div className="read-only-pill">Read-only · nothing applied</div>
+            </div>
 
-          <Card label="Storage" value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}>
-            {hw.disks.map((d) => (
-              <Detail
-                key={d.mount_point}
-                k={d.mount_point}
-                v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
-              />
-            ))}
-          </Card>
-        </section>
+            <div className="filter-row">
+              {CATEGORIES.map((c) => {
+                const count =
+                  c === "All" ? recs?.length ?? 0 : recs?.filter((r) => r.category === c).length ?? 0;
+                if (c !== "All" && count === 0) return null;
+                return (
+                  <button
+                    key={c}
+                    className={`chip ${activeCategory === c ? "chip-active" : ""}`}
+                    onClick={() => setActiveCategory(c)}
+                  >
+                    {c} <span className="chip-count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="rec-list">
+              {visibleRecs.map((r) => (
+                <RecCard key={r.id} rec={r} />
+              ))}
+              {visibleRecs.length === 0 && (
+                <div className="empty">No recommendations in this category.</div>
+              )}
+            </div>
+          </section>
+        </>
       )}
 
       <footer className="footer">
-        Recommendations coming next. Nothing has been changed on your PC.
+        Sentinel never changes anything without your explicit approval.
       </footer>
     </main>
   );
 }
 
-function Card({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
+function Card({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="card">
       <div className="card-label">{label}</div>
@@ -146,6 +226,35 @@ function Detail({ k, v }: { k: string; v: string | number }) {
     <div className="detail">
       <span className="detail-key">{k}</span>
       <span className="detail-value">{v}</span>
+    </div>
+  );
+}
+
+function RecCard({ rec }: { rec: Recommendation }) {
+  return (
+    <div className={`rec rec-${rec.severity}`}>
+      <div className="rec-head">
+        <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>{rec.category}</span>
+        <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
+      </div>
+      <h3 className="rec-title">{rec.title}</h3>
+      <p className="rec-desc">{rec.description}</p>
+      <div className="rec-meta">
+        <div className="rec-row">
+          <span className="rec-row-label">Impact</span>
+          <span className="rec-row-value impact">{rec.impact}</span>
+        </div>
+        {rec.downside && (
+          <div className="rec-row">
+            <span className="rec-row-label">Tradeoff</span>
+            <span className="rec-row-value downside">{rec.downside}</span>
+          </div>
+        )}
+        <div className="rec-row">
+          <span className="rec-row-label">Why this</span>
+          <span className="rec-row-value muted">{rec.applies_to}</span>
+        </div>
+      </div>
     </div>
   );
 }
