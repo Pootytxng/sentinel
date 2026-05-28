@@ -1278,70 +1278,8 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // startup-debloat rec was replaced by the dedicated "Startup apps" UI
     // section, which lets the user toggle individual entries directly.
 
-    recs.push(Recommendation {
-        id: "visual-effects".into(),
-        title: "Trim Windows visual effects".into(),
-        category: "Windows".into(),
-        severity: "safe".into(),
-        description:
-            "Animations, transparency, and shadow effects look nice but cost a few percent of GPU and CPU. Setting the 'best performance' preset turns most off; some apply immediately, the rest on your next sign-in.".into(),
-        impact: "Snappier UI · slightly higher in-game FPS".into(),
-        downside: Some("UI looks more utilitarian — no fade animations.".into()),
-        applies_to: "Any Windows version".into(),
-        currently_applied: visual_effects_for_best_performance(),
-    });
-
-    recs.push(Recommendation {
-        id: "mouse-accel-off".into(),
-        title: "Disable mouse acceleration ('Enhance pointer precision')".into(),
-        category: "Windows".into(),
-        severity: "safe".into(),
-        description:
-            "Windows applies a non-linear acceleration curve to mouse movement by default — the same physical motion produces different cursor distances depending on how fast you move. Off = 1:1 movement, which is what every competitive shooter expects and what aim-training builds muscle memory around.".into(),
-        impact: "Consistent aim · predictable flicks · removes a hidden variable".into(),
-        downside: Some("If you've gotten used to acceleration for desktop use, the cursor will feel slower at first — you may want to bump DPI / sensitivity to compensate.".into()),
-        applies_to: "Affects all mouse input system-wide".into(),
-        currently_applied: mouse_accel_disabled(),
-    });
-
-    recs.push(Recommendation {
-        id: "game-bar-disable".into(),
-        title: "Disable Game Bar and Game DVR".into(),
-        category: "Windows".into(),
-        severity: "safe".into(),
-        description:
-            "Game Bar's background capture and Game DVR (Windows' built-in recording layer) add CPU and disk overhead in every running game whether you use them or not. Most users have third-party capture (OBS, ShadowPlay, AMD ReLive) and never touch Windows' version. Turning it off frees up resources.".into(),
-        impact: "Lower background overhead in every game".into(),
-        downside: Some("You'll lose the Win+G overlay and Windows' built-in clip recording.".into()),
-        applies_to: "Affects all games".into(),
-        currently_applied: game_bar_disabled(),
-    });
-
-    recs.push(Recommendation {
-        id: "diagtrack-disable".into(),
-        title: "Disable Windows telemetry (DiagTrack)".into(),
-        category: "Windows".into(),
-        severity: "moderate".into(),
-        description:
-            "DiagTrack ('Connected User Experiences and Telemetry') runs in the background sending usage and diagnostic data to Microsoft. Disabling it has no functional impact on day-to-day use but does mean some of the data Windows uses to detect crashes and roll back broken updates won't be sent.".into(),
-        impact: "Less background network traffic · less idle CPU · privacy".into(),
-        downside: Some("Windows feedback submissions and automatic update-rollback diagnostics rely on this service. Most users never notice.".into()),
-        applies_to: "All Windows installs".into(),
-        currently_applied: !service_running("DiagTrack"),
-    });
-
-    recs.push(Recommendation {
-        id: "windows-search-disable".into(),
-        title: "Disable Windows Search indexer".into(),
-        category: "Windows".into(),
-        severity: "moderate".into(),
-        description:
-            "The Windows Search service (WSearch) constantly indexes your files so the Start menu / File Explorer search returns results instantly. On systems with fast NVMe storage and modern CPUs the constant indexing causes more disk churn than the speed savings justify, and many users notice background activity disappear when it's off.".into(),
-        impact: "Lower idle disk activity · ~50–150 MB RAM back".into(),
-        downside: Some("Start menu / File Explorer search becomes slower and less complete — it falls back to live filesystem walking instead of pre-built indexes.".into()),
-        applies_to: "All Windows installs".into(),
-        currently_applied: !service_running("WSearch"),
-    });
+    // visual-effects, mouse-accel-off, game-bar-disable, diagtrack-disable,
+    // windows-search-disable: all migrated to baseline-rules-v1.json.
 
     recs.push(Recommendation {
         id: "reserved-storage-off".into(),
@@ -1598,18 +1536,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     }
 
     // ─── Network ─────────────────────────────────────────────────────────
-    recs.push(Recommendation {
-        id: "nagle-disable".into(),
-        title: "Disable Nagle's Algorithm on your gaming NIC".into(),
-        category: "Network".into(),
-        severity: "moderate".into(),
-        description:
-            "Nagle's Algorithm batches small TCP packets together to save bandwidth — at the cost of a few extra ms of latency. For competitive online games, turning it off can drop ping by 5–15 ms.".into(),
-        impact: "Lower latency in competitive online games".into(),
-        downside: Some("Marginally more network overhead; harmless on modern connections.".into()),
-        applies_to: "Active network adapter".into(),
-        currently_applied: nagle_disabled_on_any_nic(),
-    });
+    // nagle-disable migrated to baseline-rules-v1.json.
 
     recs
 }
