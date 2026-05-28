@@ -288,6 +288,7 @@ html, body, #root {
 .rec-cat-storage  { background: #1f2942; color: #6aa9ff; }
 .rec-cat-network  { background: #2a1f3d; color: #c084fc; }
 .rec-cat-windows  { background: #1f2d3a; color: #67c4ed; }
+.rec-cat-display  { background: #3a1f2e; color: #f0a3c0; }
 
 .rec-sev {
   margin-left: auto;

@@ -52,6 +52,14 @@ struct PhysicalDiskInfo {
     size_bytes: u64,
 }
 
+#[derive(Serialize, Clone, Default)]
+struct DisplayInfo {
+    width: u32,
+    height: u32,
+    current_refresh_rate_hz: u32,
+    max_refresh_rate_hz: u32,
+}
+
 #[derive(Deserialize)]
 #[serde(rename = "MSFT_PhysicalDisk")]
 #[serde(rename_all = "PascalCase")]
@@ -78,6 +86,7 @@ struct HardwareInfo {
     disks: Vec<DiskInfo>,
     gpus: Vec<GpuInfo>,
     physical_disks: Vec<PhysicalDiskInfo>,
+    display: Option<DisplayInfo>,
 }
 
 #[derive(Serialize)]
@@ -91,6 +100,50 @@ struct Recommendation {
     downside: Option<&'static str>,
     applies_to: String,
     currently_applied: bool,
+}
+
+// Enumerates the primary display's modes via Win32 GDI to find both the
+// current refresh rate and the highest supported rate AT THE CURRENT
+// RESOLUTION. Comparing the two surfaces the classic "144 Hz monitor
+// running at 60 Hz" misconfiguration.
+fn detect_display_info() -> Option<DisplayInfo> {
+    use std::mem;
+    use std::ptr;
+    use winapi::um::wingdi::DEVMODEW;
+    use winapi::um::winuser::{EnumDisplaySettingsW, ENUM_CURRENT_SETTINGS};
+
+    unsafe {
+        let mut current: DEVMODEW = mem::zeroed();
+        current.dmSize = mem::size_of::<DEVMODEW>() as u16;
+        if EnumDisplaySettingsW(ptr::null(), ENUM_CURRENT_SETTINGS, &mut current) == 0 {
+            return None;
+        }
+        let cw = current.dmPelsWidth;
+        let ch = current.dmPelsHeight;
+        let chz = current.dmDisplayFrequency;
+
+        let mut max_hz = chz;
+        for i in 0..2000u32 {
+            let mut mode: DEVMODEW = mem::zeroed();
+            mode.dmSize = mem::size_of::<DEVMODEW>() as u16;
+            if EnumDisplaySettingsW(ptr::null(), i, &mut mode) == 0 {
+                break;
+            }
+            if mode.dmPelsWidth == cw
+                && mode.dmPelsHeight == ch
+                && mode.dmDisplayFrequency > max_hz
+            {
+                max_hz = mode.dmDisplayFrequency;
+            }
+        }
+
+        Some(DisplayInfo {
+            width: cw,
+            height: ch,
+            current_refresh_rate_hz: chz,
+            max_refresh_rate_hz: max_hz,
+        })
+    }
 }
 
 fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
@@ -221,6 +274,7 @@ fn collect_hardware() -> HardwareInfo {
         disks,
         gpus: detect_gpus(),
         physical_disks: detect_physical_disks(),
+        display: detect_display_info(),
     }
 }
 
@@ -463,6 +517,33 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
         });
+    }
+
+    // Monitor refresh rate — the classic "your 144 Hz monitor is at 60 Hz" hidden value.
+    if let Some(display) = &hw.display {
+        let gap = display
+            .max_refresh_rate_hz
+            .saturating_sub(display.current_refresh_rate_hz);
+        if gap >= 24 && display.max_refresh_rate_hz > 0 {
+            recs.push(Recommendation {
+                id: "monitor-max-refresh",
+                title: "Bump your display to its maximum refresh rate",
+                category: "Display",
+                severity: "safe",
+                description:
+                    "Your display supports a much higher refresh rate than it's currently running at. Higher refresh = noticeably smoother motion and lower input lag, at zero hardware cost. Change in Settings → System → Display → Advanced display → Choose a refresh rate.",
+                impact: "Smoother motion · lower input lag · feels dramatically faster",
+                downside: Some("Slightly higher idle power draw."),
+                applies_to: format!(
+                    "{}×{} at {} Hz, supports {} Hz",
+                    display.width,
+                    display.height,
+                    display.current_refresh_rate_hz,
+                    display.max_refresh_rate_hz
+                ),
+                currently_applied: false,
+            });
+        }
     }
 
     // GPU driver freshness — flag when ANY adapter's driver is meaningfully stale.

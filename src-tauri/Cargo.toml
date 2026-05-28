@@ -27,4 +27,5 @@ wmi = "0.14"
 winreg = "0.55"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 runas = "1.2"
+winapi = { version = "0.3", features = ["wingdi", "winuser", "minwindef"] }
 

@@ -26,6 +26,13 @@ type PhysicalDiskInfo = {
   size_bytes: number;
 };
 
+type DisplayInfo = {
+  width: number;
+  height: number;
+  current_refresh_rate_hz: number;
+  max_refresh_rate_hz: number;
+};
+
 type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -41,6 +48,7 @@ type HardwareInfo = {
   disks: DiskInfo[];
   gpus: GpuInfo[];
   physical_disks: PhysicalDiskInfo[];
+  display: DisplayInfo | null;
 };
 
 type Recommendation = {
@@ -78,7 +86,7 @@ const fmtDriver = (g: GpuInfo) => {
   return `${version} · ${age} old`;
 };
 
-const CATEGORIES = ["All", "Windows", "Power", "GPU", "Storage", "Network"] as const;
+const CATEGORIES = ["All", "Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type Category = (typeof CATEGORIES)[number];
 
 function App() {
@@ -211,6 +219,16 @@ function App() {
                 )}
                 {hw.gpus.some((g) => g.vram_bytes > 0) && (
                   <div className="footnote">* WMI caps VRAM at ~4 GB; DXGI fix coming.</div>
+                )}
+                {hw.display && hw.display.width > 0 && (
+                  <Detail
+                    k="Display"
+                    v={
+                      hw.display.max_refresh_rate_hz > hw.display.current_refresh_rate_hz
+                        ? `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz (max ${hw.display.max_refresh_rate_hz} Hz)`
+                        : `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz`
+                    }
+                  />
                 )}
               </Card>
 
