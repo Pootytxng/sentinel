@@ -117,6 +117,7 @@ const APPLIABLE_REC_IDS = new Set<string>([
   "diagtrack-disable",
   "windows-search-disable",
   "fast-startup-off",
+  "reserved-storage-off",
 ]);
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;

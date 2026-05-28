@@ -976,6 +976,16 @@ fn visual_effects_for_best_performance() -> bool {
         .unwrap_or(false)
 }
 
+fn reserved_storage_enabled() -> bool {
+    // Win10/11 stashes the reserved-storage configuration here. BaseHardReserveSize
+    // is the byte count currently set aside; > 0 = reserved storage is active.
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    hklm.open_subkey("Software\\Microsoft\\ReserveManager")
+        .and_then(|k| k.get_value::<u32, _>("BaseHardReserveSize"))
+        .map(|v| v > 0)
+        .unwrap_or(false)
+}
+
 fn fast_startup_state() -> Option<u32> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power")
@@ -1142,6 +1152,21 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         ),
         applies_to: "All Windows installs".into(),
         currently_applied: !service_running("WSearch"),
+    });
+
+    recs.push(Recommendation {
+        id: "reserved-storage-off",
+        title: "Disable Windows Reserved Storage",
+        category: "Storage",
+        severity: "safe",
+        description:
+            "Windows sets aside ~7–10 GB of your C: drive as a working area for major updates. On most modern systems (>= 256 GB) you'll never run into the corner case that justifies it, and reclaiming the space gives you an immediate, visible disk-space win.",
+        impact: "Reclaim ~7–10 GB on C: · no functional impact for most users",
+        downside: Some(
+            "If C: gets very full during a feature update, Windows may fail to install it cleanly until you free space manually.",
+        ),
+        applies_to: "Windows 10 1903+ / Windows 11".into(),
+        currently_applied: !reserved_storage_enabled(),
     });
 
     recs.push(Recommendation {
@@ -1454,6 +1479,7 @@ fn check_change_active(c: &AppliedChange) -> bool {
         "diagtrack-disable" => !service_running("DiagTrack"),
         "windows-search-disable" => !service_running("WSearch"),
         "fast-startup-off" => fast_startup_state() == Some(0),
+        "reserved-storage-off" => !reserved_storage_enabled(),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -1708,6 +1734,27 @@ fn rollback_power_ultimate(snapshot: &serde_json::Value) -> Result<(), String> {
         return Err("no valid prior plan GUID in snapshot".into());
     }
     run_elevated_powershell(&format!("powercfg /setactive {}", prior))?;
+    Ok(())
+}
+
+// ─── Reserved Storage off (PowerShell cmdlet, admin) ─────────────────────
+
+fn apply_reserved_storage_off() -> Result<serde_json::Value, String> {
+    let prior_enabled = reserved_storage_enabled();
+    run_elevated_powershell("Set-WindowsReservedStorageState -State Disabled")?;
+    Ok(serde_json::json!({ "prior_enabled": prior_enabled }))
+}
+
+fn rollback_reserved_storage_off(snapshot: &serde_json::Value) -> Result<(), String> {
+    let was_enabled = snapshot
+        .get("prior_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let state = if was_enabled { "Enabled" } else { "Disabled" };
+    run_elevated_powershell(&format!(
+        "Set-WindowsReservedStorageState -State {}",
+        state
+    ))?;
     Ok(())
 }
 
@@ -2018,6 +2065,7 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         "diagtrack-disable" => apply_service_disable("DiagTrack")?,
         "windows-search-disable" => apply_service_disable("WSearch")?,
         "fast-startup-off" => apply_fast_startup_off()?,
+        "reserved-storage-off" => apply_reserved_storage_off()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -2063,6 +2111,7 @@ fn rollback_change(change_id: String) -> Result<(), String> {
         "diagtrack-disable" => rollback_service_disable("DiagTrack", &change.snapshot)?,
         "windows-search-disable" => rollback_service_disable("WSearch", &change.snapshot)?,
         "fast-startup-off" => rollback_fast_startup_off(&change.snapshot)?,
+        "reserved-storage-off" => rollback_reserved_storage_off(&change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();
