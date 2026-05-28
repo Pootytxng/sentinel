@@ -491,6 +491,95 @@ fn apply_visual_effects() -> Result<serde_json::Value, String> {
     }))
 }
 
+// ─── Admin-elevation helper ──────────────────────────────────────────────
+// Triggers a Windows UAC prompt; the elevated child runs `program args...`,
+// the calling Sentinel process stays at standard user. We use this pattern
+// rather than running Sentinel itself elevated, which would force a UAC
+// prompt on every launch.
+
+fn run_elevated_powershell(command: &str) -> Result<(), String> {
+    let status = runas::Command::new("powershell.exe")
+        .args(&[
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            command,
+        ])
+        .status()
+        .map_err(|e| format!("could not launch elevated process: {}", e))?;
+    if !status.success() {
+        return Err(format!(
+            "Elevated step did not complete (exit code {}). Did you cancel the UAC prompt?",
+            status.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
+        ));
+    }
+    Ok(())
+}
+
+// ─── Service state snapshot via WMI ──────────────────────────────────────
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_Service")]
+#[serde(rename_all = "PascalCase")]
+struct Win32Service {
+    state: Option<String>,
+    start_mode: Option<String>,
+}
+
+fn service_info(name: &str) -> Option<(String, String)> {
+    let com = COMLibrary::new().ok()?;
+    let wmi_conn = WMIConnection::new(com).ok()?;
+    let query = format!("SELECT * FROM Win32_Service WHERE Name='{}'", name);
+    let results: Vec<Win32Service> = wmi_conn.raw_query(&query).ok()?;
+    let svc = results.into_iter().next()?;
+    Some((
+        svc.state.unwrap_or_else(|| "Unknown".into()),
+        svc.start_mode.unwrap_or_else(|| "Unknown".into()),
+    ))
+}
+
+fn ps_service_startup_for_mode(mode: &str) -> &'static str {
+    match mode {
+        "Auto" | "Automatic" => "Automatic",
+        "Manual" => "Manual",
+        "Disabled" => "Disabled",
+        _ => "Automatic",
+    }
+}
+
+fn apply_sysmain_disable() -> Result<serde_json::Value, String> {
+    let (prior_state, prior_start_mode) = service_info("SysMain")
+        .unwrap_or_else(|| ("Running".into(), "Auto".into()));
+    run_elevated_powershell(
+        "Set-Service -Name SysMain -StartupType Disabled; Stop-Service -Name SysMain -Force -ErrorAction SilentlyContinue",
+    )?;
+    Ok(serde_json::json!({
+        "service": "SysMain",
+        "prior_state": prior_state,
+        "prior_start_mode": prior_start_mode,
+    }))
+}
+
+fn rollback_sysmain_disable(snapshot: &serde_json::Value) -> Result<(), String> {
+    let prior_start_mode = snapshot
+        .get("prior_start_mode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Automatic");
+    let prior_state = snapshot
+        .get("prior_state")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Running");
+    let startup = ps_service_startup_for_mode(prior_start_mode);
+    let mut cmd = format!("Set-Service -Name SysMain -StartupType {}", startup);
+    if prior_state == "Running" {
+        cmd.push_str("; Start-Service -Name SysMain");
+    }
+    run_elevated_powershell(&cmd)?;
+    Ok(())
+}
+
 fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
@@ -543,6 +632,7 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
     let snapshot = match rec_id.as_str() {
         "game-mode" => apply_game_mode()?,
         "visual-effects" => apply_visual_effects()?,
+        "sysmain-disable" => apply_sysmain_disable()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -576,6 +666,7 @@ fn rollback_change(change_id: String) -> Result<(), String> {
     match change.rec_id.as_str() {
         "game-mode" => rollback_game_mode(&change.snapshot)?,
         "visual-effects" => rollback_visual_effects(&change.snapshot)?,
+        "sysmain-disable" => rollback_sysmain_disable(&change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();

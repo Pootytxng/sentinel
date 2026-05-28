@@ -53,7 +53,7 @@ type AppliedChange = {
   status: "applied" | "rolled_back";
 };
 
-const APPLIABLE_REC_IDS = new Set<string>(["game-mode", "visual-effects"]);
+const APPLIABLE_REC_IDS = new Set<string>(["game-mode", "visual-effects", "sysmain-disable"]);
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");

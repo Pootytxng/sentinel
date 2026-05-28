@@ -26,4 +26,5 @@ sysinfo = "0.33"
 wmi = "0.14"
 winreg = "0.55"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+runas = "1.2"
 
