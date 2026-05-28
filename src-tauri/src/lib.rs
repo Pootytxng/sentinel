@@ -754,6 +754,23 @@ fn visual_effects_for_best_performance() -> bool {
         .unwrap_or(false)
 }
 
+fn hags_state() -> Option<u32> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers")
+        .and_then(|k| k.get_value::<u32, _>("HwSchMode"))
+        .ok()
+}
+
+fn mouse_accel_disabled() -> bool {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let Ok(key) = hkcu.open_subkey("Control Panel\\Mouse") else {
+        return false;
+    };
+    let speed: String = key.get_value("MouseSpeed").unwrap_or_default();
+    // MouseSpeed = 0 means acceleration off; 1 or 2 means on.
+    speed == "0"
+}
+
 fn nagle_disabled_on_any_nic() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let Ok(interfaces) =
@@ -825,6 +842,21 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         downside: Some("UI looks more utilitarian — no fade animations."),
         applies_to: "Any Windows version".into(),
         currently_applied: visual_effects_for_best_performance(),
+    });
+
+    recs.push(Recommendation {
+        id: "mouse-accel-off",
+        title: "Disable mouse acceleration ('Enhance pointer precision')",
+        category: "Windows",
+        severity: "safe",
+        description:
+            "Windows applies a non-linear acceleration curve to mouse movement by default — the same physical motion produces different cursor distances depending on how fast you move. Off = 1:1 movement, which is what every competitive shooter expects and what aim-training builds muscle memory around.",
+        impact: "Consistent aim · predictable flicks · removes a hidden variable",
+        downside: Some(
+            "If you've gotten used to acceleration for desktop use, the cursor will feel slower at first — you may want to bump DPI / sensitivity to compensate.",
+        ),
+        applies_to: "Affects all mouse input system-wide".into(),
+        currently_applied: mouse_accel_disabled(),
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -937,6 +969,44 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
         });
+    }
+
+    // Hardware-accelerated GPU Scheduling: modern GPUs only, requires reboot.
+    {
+        let state = hags_state();
+        let has_modern_gpu = hw.gpus.iter().any(|g| {
+            let u = g.name.to_uppercase();
+            u.contains("RTX")
+                || u.contains("GTX 16")
+                || u.contains("RX 5")
+                || u.contains("RX 6")
+                || u.contains("RX 7")
+                || u.contains("RX 9")
+                || u.contains("ARC ")
+                || u.contains("ARC A")
+                || u.contains("ARC B")
+        });
+        if has_modern_gpu {
+            recs.push(Recommendation {
+                id: "hags-enable",
+                title: "Enable Hardware-accelerated GPU Scheduling",
+                category: "GPU",
+                severity: "safe",
+                description:
+                    "Lets the GPU manage its own memory and command queue directly instead of routing through the Windows display driver. On supported hardware this reduces input latency and frees up CPU cycles, especially in modern games. Requires a reboot to take effect.",
+                impact: "Lower input latency · CPU cycles freed up for game logic",
+                downside: Some(
+                    "Reboot required. Very occasionally a specific driver/game combo regresses with HAGS on — easy to roll back if it doesn't feel right.",
+                ),
+                applies_to: match state {
+                    Some(0) => "Currently: Auto (driver chooses)".into(),
+                    Some(1) => "Currently: Off".into(),
+                    Some(2) => "Currently: On".into(),
+                    _ => "Modern GPU detected — HAGS not yet configured".into(),
+                },
+                currently_applied: state == Some(2),
+            });
+        }
     }
 
     // Monitor refresh rate — the classic "your 144 Hz monitor is at 60 Hz" hidden value.
@@ -1076,6 +1146,8 @@ fn check_change_active(c: &AppliedChange) -> bool {
             .map(|p| p.to_lowercase().contains("ultimate"))
             .unwrap_or(false),
         "nagle-disable" => nagle_disabled_on_any_nic(),
+        "hags-enable" => hags_state() == Some(2),
+        "mouse-accel-off" => mouse_accel_disabled(),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -1333,6 +1405,82 @@ fn rollback_power_ultimate(snapshot: &serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+// ─── HAGS (HKLM, admin) ──────────────────────────────────────────────────
+
+fn apply_hags_enable() -> Result<serde_json::Value, String> {
+    let prior = hags_state();
+    run_elevated_powershell(
+        "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2 -Type DWord",
+    )?;
+    Ok(serde_json::json!({
+        "prior_hwschmode": prior,
+    }))
+}
+
+fn rollback_hags_enable(snapshot: &serde_json::Value) -> Result<(), String> {
+    let prior = snapshot.get("prior_hwschmode").and_then(|v| v.as_u64());
+    let cmd = match prior {
+        Some(v) => format!(
+            "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value {} -Type DWord",
+            v
+        ),
+        None => "Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -ErrorAction SilentlyContinue".to_string(),
+    };
+    run_elevated_powershell(&cmd)?;
+    Ok(())
+}
+
+// ─── Mouse acceleration off (HKCU, no admin) ─────────────────────────────
+
+fn apply_mouse_accel_off() -> Result<serde_json::Value, String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey("Control Panel\\Mouse")
+        .map_err(|e| e.to_string())?;
+
+    // All three values are REG_SZ strings, not DWORDs. Windows is weird.
+    let prior_speed: String = key.get_value("MouseSpeed").unwrap_or_default();
+    let prior_t1: String = key.get_value("MouseThreshold1").unwrap_or_default();
+    let prior_t2: String = key.get_value("MouseThreshold2").unwrap_or_default();
+
+    let zero = "0".to_string();
+    key.set_value("MouseSpeed", &zero).map_err(|e| e.to_string())?;
+    key.set_value("MouseThreshold1", &zero).map_err(|e| e.to_string())?;
+    key.set_value("MouseThreshold2", &zero).map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "prior_speed": prior_speed,
+        "prior_threshold1": prior_t1,
+        "prior_threshold2": prior_t2,
+    }))
+}
+
+fn rollback_mouse_accel_off(snapshot: &serde_json::Value) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu
+        .open_subkey_with_flags("Control Panel\\Mouse", KEY_SET_VALUE | KEY_READ)
+        .map_err(|e| e.to_string())?;
+
+    let restore = |reg_name: &str, snapshot_key: &str| -> Result<(), String> {
+        let prior = snapshot
+            .get(snapshot_key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if prior.is_empty() {
+            let _ = key.delete_value(reg_name);
+            Ok(())
+        } else {
+            key.set_value(reg_name, &prior.to_string())
+                .map_err(|e| e.to_string())
+        }
+    };
+
+    restore("MouseSpeed", "prior_speed")?;
+    restore("MouseThreshold1", "prior_threshold1")?;
+    restore("MouseThreshold2", "prior_threshold2")?;
+    Ok(())
+}
+
 // ─── Nagle disable across active NICs ────────────────────────────────────
 
 fn apply_nagle_disable() -> Result<serde_json::Value, String> {
@@ -1477,6 +1625,8 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         "nvidia-telemetry" => apply_service_disable("NvTelemetryContainer")?,
         "power-ultimate" => apply_power_ultimate()?,
         "nagle-disable" => apply_nagle_disable()?,
+        "hags-enable" => apply_hags_enable()?,
+        "mouse-accel-off" => apply_mouse_accel_off()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -1516,6 +1666,8 @@ fn rollback_change(change_id: String) -> Result<(), String> {
         }
         "power-ultimate" => rollback_power_ultimate(&change.snapshot)?,
         "nagle-disable" => rollback_nagle_disable(&change.snapshot)?,
+        "hags-enable" => rollback_hags_enable(&change.snapshot)?,
+        "mouse-accel-off" => rollback_mouse_accel_off(&change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();
