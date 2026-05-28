@@ -1,10 +1,16 @@
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
-use winreg::enums::HKEY_CURRENT_USER;
+use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE};
 use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
+
+static HISTORY_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize, Clone)]
 struct DiskInfo {
@@ -355,11 +361,133 @@ fn get_recommendations() -> Vec<Recommendation> {
     build_recommendations(&hw)
 }
 
+// ─── Apply / Rollback ────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone)]
+struct AppliedChange {
+    id: String,
+    rec_id: String,
+    rec_title: String,
+    applied_at: String,
+    snapshot: serde_json::Value,
+    status: String, // "applied" | "rolled_back"
+}
+
+fn sentinel_data_dir() -> PathBuf {
+    let app_data = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Temp".into());
+    PathBuf::from(app_data).join("Sentinel")
+}
+
+fn history_path() -> PathBuf {
+    sentinel_data_dir().join("history.json")
+}
+
+fn load_history() -> Vec<AppliedChange> {
+    let path = history_path();
+    if !path.exists() {
+        return Vec::new();
+    }
+    fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_history(h: &[AppliedChange]) -> Result<(), String> {
+    fs::create_dir_all(sentinel_data_dir()).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(h).map_err(|e| e.to_string())?;
+    fs::write(history_path(), json).map_err(|e| e.to_string())
+}
+
+fn apply_game_mode() -> Result<serde_json::Value, String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey("Software\\Microsoft\\GameBar")
+        .map_err(|e| e.to_string())?;
+    let prior: Option<u32> = key.get_value("AutoGameModeEnabled").ok();
+    key.set_value("AutoGameModeEnabled", &1u32)
+        .map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "key": "AutoGameModeEnabled", "prior": prior }))
+}
+
+fn rollback_game_mode(snapshot: &serde_json::Value) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let key = hkcu
+        .open_subkey_with_flags("Software\\Microsoft\\GameBar", KEY_SET_VALUE | KEY_READ)
+        .map_err(|e| e.to_string())?;
+    match snapshot.get("prior").and_then(|v| v.as_u64()) {
+        Some(v) => key
+            .set_value("AutoGameModeEnabled", &(v as u32))
+            .map_err(|e| e.to_string())?,
+        None => {
+            let _ = key.delete_value("AutoGameModeEnabled");
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChange, String> {
+    let _lock = HISTORY_LOCK
+        .lock()
+        .map_err(|_| "history lock poisoned".to_string())?;
+    let snapshot = match rec_id.as_str() {
+        "game-mode" => apply_game_mode()?,
+        other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
+    };
+    let change = AppliedChange {
+        id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
+        rec_id,
+        rec_title,
+        applied_at: Utc::now().to_rfc3339(),
+        snapshot,
+        status: "applied".into(),
+    };
+    let mut history = load_history();
+    history.push(change.clone());
+    save_history(&history)?;
+    Ok(change)
+}
+
+#[tauri::command]
+fn rollback_change(change_id: String) -> Result<(), String> {
+    let _lock = HISTORY_LOCK
+        .lock()
+        .map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history();
+    let idx = history
+        .iter()
+        .position(|c| c.id == change_id)
+        .ok_or_else(|| format!("change '{}' not found in history", change_id))?;
+    let change = history[idx].clone();
+    if change.status == "rolled_back" {
+        return Err("change has already been rolled back".into());
+    }
+    match change.rec_id.as_str() {
+        "game-mode" => rollback_game_mode(&change.snapshot)?,
+        other => return Err(format!("'{}' rollback not yet implemented", other)),
+    }
+    history[idx].status = "rolled_back".into();
+    save_history(&history)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_applied_changes() -> Vec<AppliedChange> {
+    load_history()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_hardware_info, get_recommendations])
+        .invoke_handler(tauri::generate_handler![
+            get_hardware_info,
+            get_recommendations,
+            apply_recommendation,
+            rollback_change,
+            get_applied_changes,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
