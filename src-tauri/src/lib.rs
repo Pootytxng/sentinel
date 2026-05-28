@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
-use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE};
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VALUE};
 use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
 
@@ -178,6 +178,26 @@ fn visual_effects_for_best_performance() -> bool {
         .and_then(|k| k.get_value::<u32, _>("VisualFXSetting"))
         .map(|v| v == 2)
         .unwrap_or(false)
+}
+
+fn nagle_disabled_on_any_nic() -> bool {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let Ok(interfaces) =
+        hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")
+    else {
+        return false;
+    };
+    for adapter_name in interfaces.enum_keys().filter_map(|r| r.ok()) {
+        let Ok(adapter) = interfaces.open_subkey(&adapter_name) else {
+            continue;
+        };
+        if adapter.get_value::<u32, _>("TcpAckFrequency").ok() == Some(1)
+            && adapter.get_value::<u32, _>("TCPNoDelay").ok() == Some(1)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
@@ -357,7 +377,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         impact: "Lower latency in competitive online games",
         downside: Some("Marginally more network overhead; harmless on modern connections."),
         applies_to: "Active network adapter".into(),
-        currently_applied: false,
+        currently_applied: nagle_disabled_on_any_nic(),
     });
 
     recs
