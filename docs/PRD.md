@@ -1,26 +1,49 @@
 # Product Requirements Document — Sentinel
 
 **Project codename:** Sentinel
-**Status:** Draft v0.1 (vision locked, technical approach TBD)
+**Status:** Draft v0.2 (positioning sharpened; technical approach in flight per [ARCHITECTURE_LOCKS](ARCHITECTURE_LOCKS.md))
 **Owner:** Kuya
-**Last updated:** 2026-05-27
+**Last updated:** 2026-05-28
+
+> Sentinel is not an optimizer that happens to have rollback. Sentinel is a rollback-first Windows configuration safety layer that happens to optimize.
 
 ---
 
 ## 1. Overview
 
-Sentinel is a Windows PC optimization and configuration dashboard built for the everyday gamer — not the power user. It reads the user's actual hardware (CPU, GPU, RAM, drivers, monitor, installed games) and produces recommendations *tailored to that specific machine*, with plain-English descriptions and per-change approval. Every applied tweak is reversible. The product is trust: a non-technical user should feel they can make their PC faster without risking breaking it.
+Sentinel is a hardware-aware Windows configuration safety layer for gamers. It reads the user's actual hardware (CPU, GPU, RAM, drivers, monitor, installed games), identifies risky, conflicting, or missed Windows settings *specific to that rig*, explains in plain English why each one matters, applies only reversible changes, and keeps a complete rollback history per applied change.
+
+The product wedge is **trust**, not "boost." The promised differentiator over generic tweak packs is:
+
+- Reversible changes only
+- Plain-English explanations of every action with the honest downside
+- Per-rig recommendations gated on detected hardware and OS state
+- Complete rollback history that survives rule updates, app updates, and removed recommendations
+- No fake performance claims — "Verified" (a setting was actually changed), "Measured signal" (a probe was run), and "Expected impact" (theory) are kept strictly separate
+
+What Sentinel is **not**, and will refuse to market itself as:
+
+- An "FPS booster" — that's scam-adjacent positioning
+- A magic Windows performance pack — that's the YouTube registry pack space
+- A general "Windows tweaker" — that's the power-user space (NTLite, Process Lasso, ChrisTitusTech WinUtil)
 
 ## 2. Problem & Opportunity
 
-Non-technical PC gamers today have two unappealing paths to optimization:
+Non-technical PC gamers today have two unappealing paths to configuration:
 
-1. **Leave the PC at stock settings.** Miss real performance gains. Tolerate stutter, input lag, slow boots, bloated background processes.
-2. **Follow generic tweak guides** from YouTube, Reddit, or random forums. These guides assume one-size-fits-all hardware, recommend conflicting changes, give no rollback path, and explain nothing. Users break their systems and don't know how to undo it.
+1. **Leave the PC at stock.** Tolerate stutter, input lag, slow boots, conflicting OEM bloat — and never learn whether their hardware is actually misconfigured.
+2. **Follow generic tweak guides** from YouTube, Reddit, or random forums. These guides assume one-size-fits-all hardware, recommend conflicting changes, give no rollback path, mix safe tweaks with reckless ones (HPET, Defender disable, MMCSS overrides, registry TCP packs), and explain nothing. Users break their systems and don't know how to undo it.
 
-There is no shortage of optimization tools — but they're built for power users (NTLite, Process Lasso, ChrisTitusTech WinUtil) or are vendor-lock-in marketing wrappers (GeForce Experience, AMD Adrenalin). Nothing in the market combines: *hardware-aware*, *safe-by-default*, *plain-English*, and *built for non-technical gamers*.
+The optimization-tool market is well-populated, but the offerings stratify into:
 
-The opportunity: a commercial product that owns the "I want my PC faster but I don't want to think about it" segment, with a credible safety story and a clean UX.
+- **Power-user tools** (NTLite, Process Lasso, ChrisTitusTech WinUtil) — assume the user knows what they're doing
+- **Vendor marketing wrappers** (NVIDIA App, AMD Adrenalin, MSI Center, OEM suites) — limited to vendor-specific settings, won't recommend turning their own telemetry off
+- **Tweak-pack / "booster" apps** (Hone, TunedPC, ExitLag-class routing) — varying degrees of scam-adjacency, rarely reversible, no audit trail
+- **Hypertune-class** — closer to the right space but doesn't lead with rollback-first safety
+
+Nothing in the market combines **hardware-aware**, **safe-by-default**, **plain-English**, **rollback-first**, and **built for non-technical gamers**. That's the gap.
+
+The opportunity: a commercial product that owns the "I want my PC running right but I don't want to risk breaking it" segment, with a credible safety story, a visible Trust Ledger, and a clean UX.
 
 ## 3. Goals & Success Metrics
 
