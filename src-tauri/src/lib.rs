@@ -139,15 +139,15 @@ struct HardwareInfo {
     cpu_arch: Option<CpuArchInfo>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Recommendation {
-    id: &'static str,
-    title: &'static str,
-    category: &'static str,
-    severity: &'static str,
-    description: &'static str,
-    impact: &'static str,
-    downside: Option<&'static str>,
+    id: String,
+    title: String,
+    category: String,
+    severity: String,
+    description: String,
+    impact: String,
+    downside: Option<String>,
     applies_to: String,
     currently_applied: bool,
 }
@@ -1051,14 +1051,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     // ─── Universal Windows tweaks ────────────────────────────────────────
     recs.push(Recommendation {
-        id: "power-ultimate",
-        title: "Switch to the Ultimate Performance power plan",
-        category: "Power",
-        severity: "safe",
+        id: "power-ultimate".into(),
+        title: "Switch to the Ultimate Performance power plan".into(),
+        category: "Power".into(),
+        severity: "safe".into(),
         description:
-            "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming, slightly higher idle power draw.",
-        impact: "Lower input latency · steadier frame times",
-        downside: Some("Marginally higher idle power use (~5–10 W on most desktops)."),
+            "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming, slightly higher idle power draw.".into(),
+        impact: "Lower input latency · steadier frame times".into(),
+        downside: Some("Marginally higher idle power use (~5–10 W on most desktops).".into()),
         applies_to: if active_plan.is_empty() {
             "Windows desktop".into()
         } else {
@@ -1068,13 +1068,13 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     });
 
     recs.push(Recommendation {
-        id: "game-mode",
-        title: "Enable Windows Game Mode",
-        category: "Windows",
-        severity: "safe",
+        id: "game-mode".into(),
+        title: "Enable Windows Game Mode".into(),
+        category: "Windows".into(),
+        severity: "safe".into(),
         description:
-            "Game Mode tells Windows to prioritize the foreground game, deprioritize background updates, and pause Windows Update reboots while you're playing.",
-        impact: "Fewer background-process stutters",
+            "Game Mode tells Windows to prioritize the foreground game, deprioritize background updates, and pause Windows Update reboots while you're playing.".into(),
+        impact: "Fewer background-process stutters".into(),
         downside: None,
         applies_to: format!("{} {}", hw.os_name, hw.os_version),
         currently_applied: game_mode_enabled(),
@@ -1084,100 +1084,92 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // section, which lets the user toggle individual entries directly.
 
     recs.push(Recommendation {
-        id: "visual-effects",
-        title: "Trim Windows visual effects",
-        category: "Windows",
-        severity: "safe",
+        id: "visual-effects".into(),
+        title: "Trim Windows visual effects".into(),
+        category: "Windows".into(),
+        severity: "safe".into(),
         description:
-            "Animations, transparency, and shadow effects look nice but cost a few percent of GPU and CPU. Setting the 'best performance' preset turns most off; some apply immediately, the rest on your next sign-in.",
-        impact: "Snappier UI · slightly higher in-game FPS",
-        downside: Some("UI looks more utilitarian — no fade animations."),
+            "Animations, transparency, and shadow effects look nice but cost a few percent of GPU and CPU. Setting the 'best performance' preset turns most off; some apply immediately, the rest on your next sign-in.".into(),
+        impact: "Snappier UI · slightly higher in-game FPS".into(),
+        downside: Some("UI looks more utilitarian — no fade animations.".into()),
         applies_to: "Any Windows version".into(),
         currently_applied: visual_effects_for_best_performance(),
     });
 
     recs.push(Recommendation {
-        id: "mouse-accel-off",
-        title: "Disable mouse acceleration ('Enhance pointer precision')",
-        category: "Windows",
-        severity: "safe",
+        id: "mouse-accel-off".into(),
+        title: "Disable mouse acceleration ('Enhance pointer precision')".into(),
+        category: "Windows".into(),
+        severity: "safe".into(),
         description:
-            "Windows applies a non-linear acceleration curve to mouse movement by default — the same physical motion produces different cursor distances depending on how fast you move. Off = 1:1 movement, which is what every competitive shooter expects and what aim-training builds muscle memory around.",
-        impact: "Consistent aim · predictable flicks · removes a hidden variable",
-        downside: Some(
-            "If you've gotten used to acceleration for desktop use, the cursor will feel slower at first — you may want to bump DPI / sensitivity to compensate.",
-        ),
+            "Windows applies a non-linear acceleration curve to mouse movement by default — the same physical motion produces different cursor distances depending on how fast you move. Off = 1:1 movement, which is what every competitive shooter expects and what aim-training builds muscle memory around.".into(),
+        impact: "Consistent aim · predictable flicks · removes a hidden variable".into(),
+        downside: Some("If you've gotten used to acceleration for desktop use, the cursor will feel slower at first — you may want to bump DPI / sensitivity to compensate.".into()),
         applies_to: "Affects all mouse input system-wide".into(),
         currently_applied: mouse_accel_disabled(),
     });
 
     recs.push(Recommendation {
-        id: "game-bar-disable",
-        title: "Disable Game Bar and Game DVR",
-        category: "Windows",
-        severity: "safe",
+        id: "game-bar-disable".into(),
+        title: "Disable Game Bar and Game DVR".into(),
+        category: "Windows".into(),
+        severity: "safe".into(),
         description:
-            "Game Bar's background capture and Game DVR (Windows' built-in recording layer) add CPU and disk overhead in every running game whether you use them or not. Most users have third-party capture (OBS, ShadowPlay, AMD ReLive) and never touch Windows' version. Turning it off frees up resources.",
-        impact: "Lower background overhead in every game",
-        downside: Some("You'll lose the Win+G overlay and Windows' built-in clip recording."),
+            "Game Bar's background capture and Game DVR (Windows' built-in recording layer) add CPU and disk overhead in every running game whether you use them or not. Most users have third-party capture (OBS, ShadowPlay, AMD ReLive) and never touch Windows' version. Turning it off frees up resources.".into(),
+        impact: "Lower background overhead in every game".into(),
+        downside: Some("You'll lose the Win+G overlay and Windows' built-in clip recording.".into()),
         applies_to: "Affects all games".into(),
         currently_applied: game_bar_disabled(),
     });
 
     recs.push(Recommendation {
-        id: "diagtrack-disable",
-        title: "Disable Windows telemetry (DiagTrack)",
-        category: "Windows",
-        severity: "moderate",
+        id: "diagtrack-disable".into(),
+        title: "Disable Windows telemetry (DiagTrack)".into(),
+        category: "Windows".into(),
+        severity: "moderate".into(),
         description:
-            "DiagTrack ('Connected User Experiences and Telemetry') runs in the background sending usage and diagnostic data to Microsoft. Disabling it has no functional impact on day-to-day use but does mean some of the data Windows uses to detect crashes and roll back broken updates won't be sent.",
-        impact: "Less background network traffic · less idle CPU · privacy",
-        downside: Some(
-            "Windows feedback submissions and automatic update-rollback diagnostics rely on this service. Most users never notice.",
-        ),
+            "DiagTrack ('Connected User Experiences and Telemetry') runs in the background sending usage and diagnostic data to Microsoft. Disabling it has no functional impact on day-to-day use but does mean some of the data Windows uses to detect crashes and roll back broken updates won't be sent.".into(),
+        impact: "Less background network traffic · less idle CPU · privacy".into(),
+        downside: Some("Windows feedback submissions and automatic update-rollback diagnostics rely on this service. Most users never notice.".into()),
         applies_to: "All Windows installs".into(),
         currently_applied: !service_running("DiagTrack"),
     });
 
     recs.push(Recommendation {
-        id: "windows-search-disable",
-        title: "Disable Windows Search indexer",
-        category: "Windows",
-        severity: "moderate",
+        id: "windows-search-disable".into(),
+        title: "Disable Windows Search indexer".into(),
+        category: "Windows".into(),
+        severity: "moderate".into(),
         description:
-            "The Windows Search service (WSearch) constantly indexes your files so the Start menu / File Explorer search returns results instantly. On systems with fast NVMe storage and modern CPUs the constant indexing causes more disk churn than the speed savings justify, and many users notice background activity disappear when it's off.",
-        impact: "Lower idle disk activity · ~50–150 MB RAM back",
-        downside: Some(
-            "Start menu / File Explorer search becomes slower and less complete — it falls back to live filesystem walking instead of pre-built indexes.",
-        ),
+            "The Windows Search service (WSearch) constantly indexes your files so the Start menu / File Explorer search returns results instantly. On systems with fast NVMe storage and modern CPUs the constant indexing causes more disk churn than the speed savings justify, and many users notice background activity disappear when it's off.".into(),
+        impact: "Lower idle disk activity · ~50–150 MB RAM back".into(),
+        downside: Some("Start menu / File Explorer search becomes slower and less complete — it falls back to live filesystem walking instead of pre-built indexes.".into()),
         applies_to: "All Windows installs".into(),
         currently_applied: !service_running("WSearch"),
     });
 
     recs.push(Recommendation {
-        id: "reserved-storage-off",
-        title: "Disable Windows Reserved Storage",
-        category: "Storage",
-        severity: "safe",
+        id: "reserved-storage-off".into(),
+        title: "Disable Windows Reserved Storage".into(),
+        category: "Storage".into(),
+        severity: "safe".into(),
         description:
-            "Windows sets aside ~7–10 GB of your C: drive as a working area for major updates. On most modern systems (>= 256 GB) you'll never run into the corner case that justifies it, and reclaiming the space gives you an immediate, visible disk-space win.",
-        impact: "Reclaim ~7–10 GB on C: · no functional impact for most users",
-        downside: Some(
-            "If C: gets very full during a feature update, Windows may fail to install it cleanly until you free space manually.",
-        ),
+            "Windows sets aside ~7–10 GB of your C: drive as a working area for major updates. On most modern systems (>= 256 GB) you'll never run into the corner case that justifies it, and reclaiming the space gives you an immediate, visible disk-space win.".into(),
+        impact: "Reclaim ~7–10 GB on C: · no functional impact for most users".into(),
+        downside: Some("If C: gets very full during a feature update, Windows may fail to install it cleanly until you free space manually.".into()),
         applies_to: "Windows 10 1903+ / Windows 11".into(),
         currently_applied: !reserved_storage_enabled(),
     });
 
     recs.push(Recommendation {
-        id: "fast-startup-off",
-        title: "Disable Fast Startup",
-        category: "Power",
-        severity: "safe",
+        id: "fast-startup-off".into(),
+        title: "Disable Fast Startup".into(),
+        category: "Power".into(),
+        severity: "safe".into(),
         description:
-            "Fast Startup makes 'Shut down' actually hibernate the Windows kernel session instead of fully shutting down. It saves a few seconds at boot but causes drivers to keep stale state between sessions, breaks dual-boot setups, and is one of the most common silent causes of post-update weirdness ('Windows Update applied but I'm still seeing the bug').",
-        impact: "Clean shutdowns · drivers reload fresh each boot · fixes a category of 'why is X behaving weird' issues",
-        downside: Some("Cold boot will take a few extra seconds (typically 3-8 s on NVMe)."),
+            "Fast Startup makes 'Shut down' actually hibernate the Windows kernel session instead of fully shutting down. It saves a few seconds at boot but causes drivers to keep stale state between sessions, breaks dual-boot setups, and is one of the most common silent causes of post-update weirdness ('Windows Update applied but I'm still seeing the bug').".into(),
+        impact: "Clean shutdowns · drivers reload fresh each boot · fixes a category of 'why is X behaving weird' issues".into(),
+        downside: Some("Cold boot will take a few extra seconds (typically 3-8 s on NVMe).".into()),
         applies_to: match fast_startup_state() {
             Some(1) => "Currently enabled (default on most installs)".into(),
             Some(0) => "Currently disabled".into(),
@@ -1190,27 +1182,27 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
         let telemetry_running = service_running("NvTelemetryContainer");
         recs.push(Recommendation {
-            id: "nvidia-telemetry",
-            title: "Disable NVIDIA Container telemetry services",
-            category: "GPU",
-            severity: "safe",
+            id: "nvidia-telemetry".into(),
+            title: "Disable NVIDIA Container telemetry services".into(),
+            category: "GPU".into(),
+            severity: "safe".into(),
             description:
-                "NVIDIA's driver bundle ships several background services that exist mainly to send usage data and check for GeForce Experience updates. They consume RAM and CPU constantly. Disabling them does not affect game performance or driver functionality.",
-            impact: "Free ~150–250 MB RAM · less background CPU",
-            downside: Some("GeForce Experience won't auto-update; you can still update manually."),
+                "NVIDIA's driver bundle ships several background services that exist mainly to send usage data and check for GeForce Experience updates. They consume RAM and CPU constantly. Disabling them does not affect game performance or driver functionality.".into(),
+            impact: "Free ~150–250 MB RAM · less background CPU".into(),
+            downside: Some("GeForce Experience won't auto-update; you can still update manually.".into()),
             applies_to: name.clone(),
             currently_applied: !telemetry_running,
         });
 
         recs.push(Recommendation {
-            id: "nvidia-low-latency",
-            title: "Set NVIDIA 'Low Latency Mode' to Ultra (per-game)",
-            category: "GPU",
-            severity: "safe",
+            id: "nvidia-low-latency".into(),
+            title: "Set NVIDIA 'Low Latency Mode' to Ultra (per-game)".into(),
+            category: "GPU".into(),
+            severity: "safe".into(),
             description:
-                "Forces the driver to pre-render fewer frames, which shaves a frame or two of input latency. Ideal for competitive shooters; less useful for slower-paced games.",
-            impact: "Lower input lag in fast-paced games",
-            downside: Some("Can slightly reduce maximum FPS in GPU-bound titles."),
+                "Forces the driver to pre-render fewer frames, which shaves a frame or two of input latency. Ideal for competitive shooters; less useful for slower-paced games.".into(),
+            impact: "Lower input lag in fast-paced games".into(),
+            downside: Some("Can slightly reduce maximum FPS in GPU-bound titles.".into()),
             applies_to: "NVIDIA GPU + latency profile".into(),
             currently_applied: false,
         });
@@ -1218,13 +1210,13 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     if let Some(name) = gpu_vendor_match(hw, "AMD").or_else(|| gpu_vendor_match(hw, "RADEON")) {
         recs.push(Recommendation {
-            id: "amd-uxp",
-            title: "Opt out of the AMD User Experience Program",
-            category: "GPU",
-            severity: "safe",
+            id: "amd-uxp".into(),
+            title: "Opt out of the AMD User Experience Program".into(),
+            category: "GPU".into(),
+            severity: "safe".into(),
             description:
-                "AMD's Adrenalin software opts you in by default to a telemetry program that sends usage data. Turning it off has no performance impact.",
-            impact: "Less background network traffic · privacy",
+                "AMD's Adrenalin software opts you in by default to a telemetry program that sends usage data. Turning it off has no performance impact.".into(),
+            impact: "Less background network traffic · privacy".into(),
             downside: None,
             applies_to: name,
             currently_applied: false,
@@ -1236,14 +1228,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     {
         // Has Intel + a discrete card → very likely a laptop or hybrid setup
         recs.push(Recommendation {
-            id: "gpu-prefer-discrete",
-            title: "Force games to use your discrete GPU",
-            category: "GPU",
-            severity: "safe",
+            id: "gpu-prefer-discrete".into(),
+            title: "Force games to use your discrete GPU".into(),
+            category: "GPU".into(),
+            severity: "safe".into(),
             description:
-                "Your PC has both an Intel iGPU and a discrete GPU. Windows sometimes routes games to the iGPU by mistake, tanking performance. Pin individual games to the discrete card in Settings → Display → Graphics.",
-            impact: "Massive FPS gain if a game is mis-routed",
-            downside: Some("Slightly higher battery drain on laptops."),
+                "Your PC has both an Intel iGPU and a discrete GPU. Windows sometimes routes games to the iGPU by mistake, tanking performance. Pin individual games to the discrete card in Settings → Display → Graphics.".into(),
+            impact: "Massive FPS gain if a game is mis-routed".into(),
+            downside: Some("Slightly higher battery drain on laptops.".into()),
             applies_to: "Hybrid GPU setup detected".into(),
             currently_applied: false,
         });
@@ -1257,13 +1249,13 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         let pct_free = (disk.available_bytes as f64 / disk.total_bytes as f64) * 100.0;
         if pct_free < 15.0 && disk.mount_point.starts_with("C:") {
             recs.push(Recommendation {
-                id: "storage-c-low",
-                title: "Free up space on C:",
-                category: "Storage",
-                severity: "safe",
+                id: "storage-c-low".into(),
+                title: "Free up space on C:".into(),
+                category: "Storage".into(),
+                severity: "safe".into(),
                 description:
-                    "Your system drive is nearly full. Below ~15% free, Windows starts to thrash, paging gets sluggish, and updates can fail. Disk Cleanup + uninstalling unused games is the easiest win.",
-                impact: "Restores normal disk performance · prevents update failures",
+                    "Your system drive is nearly full. Below ~15% free, Windows starts to thrash, paging gets sluggish, and updates can fail. Disk Cleanup + uninstalling unused games is the easiest win.".into(),
+                impact: "Restores normal disk performance · prevents update failures".into(),
                 downside: None,
                 applies_to: format!("{} ({:.0}% free)", disk.mount_point, pct_free),
                 currently_applied: false,
@@ -1285,14 +1277,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     if ram_gb >= 16.0 && (has_nvme || has_ssd) {
         let storage_kind = if has_nvme { "NVMe" } else { "SSD" };
         recs.push(Recommendation {
-            id: "sysmain-disable",
-            title: "Disable SysMain (Superfetch)",
-            category: "Windows",
-            severity: "moderate",
+            id: "sysmain-disable".into(),
+            title: "Disable SysMain (Superfetch)".into(),
+            category: "Windows".into(),
+            severity: "moderate".into(),
             description:
-                "SysMain preloads frequently-used apps into RAM to make them launch faster. With 16 GB+ of RAM and fast storage this benefit is small, and on NVMe systems SysMain often causes mysterious disk thrashing instead.",
-            impact: "Lower idle disk activity · ~100–200 MB RAM back",
-            downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage)."),
+                "SysMain preloads frequently-used apps into RAM to make them launch faster. With 16 GB+ of RAM and fast storage this benefit is small, and on NVMe systems SysMain often causes mysterious disk thrashing instead.".into(),
+            impact: "Lower idle disk activity · ~100–200 MB RAM back".into(),
+            downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage).".into()),
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
         });
@@ -1315,16 +1307,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         });
         if has_modern_gpu {
             recs.push(Recommendation {
-                id: "hags-enable",
-                title: "Enable Hardware-accelerated GPU Scheduling",
-                category: "GPU",
-                severity: "safe",
+                id: "hags-enable".into(),
+                title: "Enable Hardware-accelerated GPU Scheduling".into(),
+                category: "GPU".into(),
+                severity: "safe".into(),
                 description:
-                    "Lets the GPU manage its own memory and command queue directly instead of routing through the Windows display driver. On supported hardware this reduces input latency and frees up CPU cycles, especially in modern games. Requires a reboot to take effect.",
-                impact: "Lower input latency · CPU cycles freed up for game logic",
-                downside: Some(
-                    "Reboot required. Very occasionally a specific driver/game combo regresses with HAGS on — easy to roll back if it doesn't feel right.",
-                ),
+                    "Lets the GPU manage its own memory and command queue directly instead of routing through the Windows display driver. On supported hardware this reduces input latency and frees up CPU cycles, especially in modern games. Requires a reboot to take effect.".into(),
+                impact: "Lower input latency · CPU cycles freed up for game logic".into(),
+                downside: Some("Reboot required. Very occasionally a specific driver/game combo regresses with HAGS on — easy to roll back if it doesn't feel right.".into()),
                 applies_to: match state {
                     Some(0) => "Currently: Auto (driver chooses)".into(),
                     Some(1) => "Currently: Off".into(),
@@ -1343,14 +1333,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             .saturating_sub(display.current_refresh_rate_hz);
         if gap >= 24 && display.max_refresh_rate_hz > 0 {
             recs.push(Recommendation {
-                id: "monitor-max-refresh",
-                title: "Bump your display to its maximum refresh rate",
-                category: "Display",
-                severity: "safe",
+                id: "monitor-max-refresh".into(),
+                title: "Bump your display to its maximum refresh rate".into(),
+                category: "Display".into(),
+                severity: "safe".into(),
                 description:
-                    "Your display supports a much higher refresh rate than it's currently running at. Higher refresh = noticeably smoother motion and lower input lag, at zero hardware cost. Change in Settings → System → Display → Advanced display → Choose a refresh rate.",
-                impact: "Smoother motion · lower input lag · feels dramatically faster",
-                downside: Some("Slightly higher idle power draw."),
+                    "Your display supports a much higher refresh rate than it's currently running at. Higher refresh = noticeably smoother motion and lower input lag, at zero hardware cost. Change in Settings → System → Display → Advanced display → Choose a refresh rate.".into(),
+                impact: "Smoother motion · lower input lag · feels dramatically faster".into(),
+                downside: Some("Slightly higher idle power draw.".into()),
                 applies_to: format!(
                     "{}×{} at {} Hz, supports {} Hz",
                     display.width,
@@ -1382,16 +1372,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             };
             let months = days / 30;
             recs.push(Recommendation {
-                id: "gpu-driver-update",
-                title: "Update your graphics driver",
-                category: "GPU",
-                severity: "safe",
+                id: "gpu-driver-update".into(),
+                title: "Update your graphics driver".into(),
+                category: "GPU".into(),
+                severity: "safe".into(),
                 description:
-                    "Your installed graphics driver is several months old. Driver updates routinely include game-specific performance improvements, bug fixes for newly-released titles, and security patches. Update through GeForce Experience / NVIDIA App, AMD Adrenalin, or Intel Graphics Command Center.",
-                impact: "Better game performance · fewer crashes · latest features (DLSS, FSR, frame-gen)",
-                downside: Some(
-                    "New drivers occasionally introduce regressions — keep the previous installer in case you need to roll back.",
-                ),
+                    "Your installed graphics driver is several months old. Driver updates routinely include game-specific performance improvements, bug fixes for newly-released titles, and security patches. Update through GeForce Experience / NVIDIA App, AMD Adrenalin, or Intel Graphics Command Center.".into(),
+                impact: "Better game performance · fewer crashes · latest features (DLSS, FSR, frame-gen)".into(),
+                downside: Some("New drivers occasionally introduce regressions — keep the previous installer in case you need to roll back.".into()),
                 applies_to: format!("{} driver is ~{} months old", vendor, months),
                 currently_applied: false,
             });
@@ -1401,14 +1389,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // HDD-only advisory: the single biggest performance win is hardware, not a tweak.
     if only_hdd {
         recs.push(Recommendation {
-            id: "ssd-upgrade-advisory",
-            title: "Upgrade your system drive to an SSD",
-            category: "Storage",
-            severity: "moderate",
+            id: "ssd-upgrade-advisory".into(),
+            title: "Upgrade your system drive to an SSD".into(),
+            category: "Storage".into(),
+            severity: "moderate".into(),
             description:
-                "Every physical drive Sentinel detected is a spinning hard drive. Windows on an HDD is the single biggest performance handicap on a modern PC — game load times, app launches, and Windows itself will be dramatically faster on an SSD or NVMe drive. Typical cost: $40–100 for 500 GB.",
-            impact: "Multi-second → sub-second boot · 5–10× faster app launches",
-            downside: Some("Requires a hardware purchase and either a Windows reinstall or a drive clone."),
+                "Every physical drive Sentinel detected is a spinning hard drive. Windows on an HDD is the single biggest performance handicap on a modern PC — game load times, app launches, and Windows itself will be dramatically faster on an SSD or NVMe drive. Typical cost: $40–100 for 500 GB.".into(),
+            impact: "Multi-second → sub-second boot · 5–10× faster app launches".into(),
+            downside: Some("Requires a hardware purchase and either a Windows reinstall or a drive clone.".into()),
             applies_to: "Spinning HDDs only — no SSDs detected".into(),
             currently_applied: false,
         });
@@ -1416,14 +1404,14 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     // ─── Network ─────────────────────────────────────────────────────────
     recs.push(Recommendation {
-        id: "nagle-disable",
-        title: "Disable Nagle's Algorithm on your gaming NIC",
-        category: "Network",
-        severity: "moderate",
+        id: "nagle-disable".into(),
+        title: "Disable Nagle's Algorithm on your gaming NIC".into(),
+        category: "Network".into(),
+        severity: "moderate".into(),
         description:
-            "Nagle's Algorithm batches small TCP packets together to save bandwidth — at the cost of a few extra ms of latency. For competitive online games, turning it off can drop ping by 5–15 ms.",
-        impact: "Lower latency in competitive online games",
-        downside: Some("Marginally more network overhead; harmless on modern connections."),
+            "Nagle's Algorithm batches small TCP packets together to save bandwidth — at the cost of a few extra ms of latency. For competitive online games, turning it off can drop ping by 5–15 ms.".into(),
+        impact: "Lower latency in competitive online games".into(),
+        downside: Some("Marginally more network overhead; harmless on modern connections.".into()),
         applies_to: "Active network adapter".into(),
         currently_applied: nagle_disabled_on_any_nic(),
     });
