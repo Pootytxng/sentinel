@@ -53,6 +53,36 @@ struct PhysicalDiskInfo {
 }
 
 #[derive(Serialize, Clone, Default)]
+struct MemoryModuleInfo {
+    capacity_bytes: u64,
+    speed_mhz: u32,
+    type_name: String, // "DDR3" | "DDR4" | "DDR5" | "LPDDR4" | "LPDDR5" | "Unknown"
+    manufacturer: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_PhysicalMemory")]
+#[serde(rename_all = "PascalCase")]
+struct Win32PhysicalMemory {
+    capacity: Option<u64>,
+    configured_clock_speed: Option<u32>,
+    speed: Option<u32>,
+    #[serde(rename = "SMBIOSMemoryType")]
+    smbios_memory_type: Option<u32>,
+    manufacturer: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_DiskDrive")]
+#[serde(rename_all = "PascalCase")]
+struct Win32DiskDrive {
+    model: Option<String>,
+    interface_type: Option<String>,
+    media_type: Option<String>,
+    size: Option<u64>,
+}
+
+#[derive(Serialize, Clone, Default)]
 struct DisplayInfo {
     width: u32,
     height: u32,
@@ -87,6 +117,7 @@ struct HardwareInfo {
     gpus: Vec<GpuInfo>,
     physical_disks: Vec<PhysicalDiskInfo>,
     display: Option<DisplayInfo>,
+    memory_modules: Vec<MemoryModuleInfo>,
 }
 
 #[derive(Serialize)]
@@ -146,10 +177,10 @@ fn detect_display_info() -> Option<DisplayInfo> {
     }
 }
 
-fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
-    // MSFT_PhysicalDisk lives in the Storage namespace, not CIMV2.
-    // media_type: 3=HDD, 4=SSD, 5=SCM (storage-class memory / 3D XPoint)
-    // bus_type:   17=NVMe, 11=SATA, 3=ATA, 7=USB, 8=iSCSI
+fn detect_physical_disks_msft() -> Vec<PhysicalDiskInfo> {
+    // MSFT_PhysicalDisk lives in the Storage namespace; richer detail
+    // (media_type as enum, bus_type for NVMe vs SATA) but the namespace
+    // is more commonly blocked by AV than plain CIMV2.
     let com = match COMLibrary::new() {
         Ok(c) => c,
         Err(_) => return Vec::new(),
@@ -184,6 +215,100 @@ fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
         .collect()
 }
 
+// Fallback when the Storage namespace is blocked / empty. Uses the older
+// Win32_DiskDrive in the standard CIMV2 namespace, which is more universally
+// accessible but loses the NVMe distinction (NVMe drives show as "SCSI"
+// interface). Heuristically infer media type from the descriptive string.
+fn detect_physical_disks_legacy() -> Vec<PhysicalDiskInfo> {
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let conn = match WMIConnection::new(com) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let raw: Vec<Win32DiskDrive> = conn.query().unwrap_or_default();
+    raw.into_iter()
+        .filter_map(|d| {
+            let model = d.model.unwrap_or_default().trim().to_string();
+            if model.is_empty() {
+                return None;
+            }
+            // Best-effort media classification from the model/media strings
+            let lowered = format!("{} {}", model, d.media_type.clone().unwrap_or_default())
+                .to_lowercase();
+            let media = if lowered.contains("ssd")
+                || lowered.contains("nvme")
+                || lowered.contains("solid state")
+            {
+                "SSD"
+            } else if lowered.contains("usb") || lowered.contains("removable") {
+                "Removable"
+            } else {
+                // Default to HDD for "Fixed hard disk media"; this is a
+                // heuristic and may be wrong on systems where Win32_DiskDrive
+                // doesn't distinguish SSDs.
+                "HDD"
+            };
+            let bus = match d.interface_type.as_deref() {
+                Some("SCSI") => "SCSI/NVMe",
+                Some("IDE") => "ATA",
+                Some("USB") => "USB",
+                Some(_) => "Other",
+                None => "Other",
+            };
+            Some(PhysicalDiskInfo {
+                friendly_name: model,
+                media_type: media.into(),
+                bus_type: bus.into(),
+                size_bytes: d.size.unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
+    let primary = detect_physical_disks_msft();
+    if !primary.is_empty() {
+        return primary;
+    }
+    detect_physical_disks_legacy()
+}
+
+fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let conn = match WMIConnection::new(com) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let raw: Vec<Win32PhysicalMemory> = conn.query().unwrap_or_default();
+    raw.into_iter()
+        .map(|m| {
+            // SMBIOSMemoryType values per the SMBIOS spec
+            let type_name = match m.smbios_memory_type {
+                Some(22) => "DDR2",
+                Some(24) => "DDR3",
+                Some(26) => "DDR4",
+                Some(30) => "LPDDR4",
+                Some(34) => "DDR5",
+                Some(35) => "LPDDR5",
+                _ => "Unknown",
+            }
+            .to_string();
+            MemoryModuleInfo {
+                capacity_bytes: m.capacity.unwrap_or(0),
+                speed_mhz: m.configured_clock_speed.or(m.speed).unwrap_or(0),
+                type_name,
+                manufacturer: m.manufacturer.unwrap_or_default().trim().to_string(),
+            }
+        })
+        .collect()
+}
+
 // CIM_DATETIME looks like "20240312123045.000000-420". We only need the date
 // portion; year/month/day are positions 0..4, 4..6, 6..8.
 fn cim_date_age_days(cim: &str) -> Option<i64> {
@@ -205,7 +330,60 @@ fn cim_date_iso(cim: &str) -> String {
     format!("{}-{}-{}", &cim[0..4], &cim[4..6], &cim[6..8])
 }
 
-fn detect_gpus() -> Vec<GpuInfo> {
+// GPU detection has two paths because some user environments (notably certain
+// AV setups) silently block WMI's Win32_VideoController query. DXGI is what
+// every 3D app and game uses to enumerate adapters — AV products almost never
+// intercept it because doing so would break every game. So we use DXGI as the
+// primary source for name + VRAM (which DXGI reports accurately, unlike WMI's
+// 4 GB-capped AdapterRAM), then enrich with WMI for driver info if available.
+
+fn detect_gpus_dxgi() -> Vec<GpuInfo> {
+    use windows::Win32::Graphics::Dxgi::{
+        CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE,
+    };
+
+    let mut gpus = Vec::new();
+    unsafe {
+        let factory: IDXGIFactory1 = match CreateDXGIFactory1() {
+            Ok(f) => f,
+            Err(_) => return gpus,
+        };
+
+        let mut i = 0u32;
+        while let Ok(adapter) = factory.EnumAdapters1(i) {
+            i += 1;
+            let desc = match adapter.GetDesc1() {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            // Skip Microsoft Basic Render (software adapter). Flags is a
+            // raw u32 in this version of the windows crate; the constant is
+            // a typed wrapper with .0 holding the bit value.
+            if desc.Flags & (DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0 {
+                continue;
+            }
+            let len = desc
+                .Description
+                .iter()
+                .position(|&c| c == 0)
+                .unwrap_or(desc.Description.len());
+            let name = String::from_utf16_lossy(&desc.Description[..len])
+                .trim()
+                .to_string();
+            if name.is_empty() {
+                continue;
+            }
+            gpus.push(GpuInfo {
+                name,
+                vram_bytes: desc.DedicatedVideoMemory as u64,
+                ..Default::default()
+            });
+        }
+    }
+    gpus
+}
+
+fn detect_gpus_wmi() -> Vec<GpuInfo> {
     let com = match COMLibrary::new() {
         Ok(c) => c,
         Err(_) => return Vec::new(),
@@ -236,6 +414,33 @@ fn detect_gpus() -> Vec<GpuInfo> {
             })
         })
         .collect()
+}
+
+fn detect_gpus() -> Vec<GpuInfo> {
+    let mut gpus = detect_gpus_dxgi();
+    if gpus.is_empty() {
+        return detect_gpus_wmi();
+    }
+    // Enrich with WMI driver info if accessible; if WMI is blocked we still
+    // have the DXGI-derived name + accurate VRAM, which is the most important
+    // thing the user sees.
+    let wmi_gpus = detect_gpus_wmi();
+    for gpu in &mut gpus {
+        if let Some(w) = wmi_gpus.iter().find(|w| {
+            w.name.eq_ignore_ascii_case(&gpu.name)
+                || w.name.contains(&gpu.name)
+                || gpu.name.contains(&w.name)
+        }) {
+            gpu.driver_version = w.driver_version.clone();
+            gpu.driver_date = w.driver_date.clone();
+            gpu.driver_age_days = w.driver_age_days;
+            gpu.video_processor = w.video_processor.clone();
+            if gpu.current_refresh_rate_hz == 0 {
+                gpu.current_refresh_rate_hz = w.current_refresh_rate_hz;
+            }
+        }
+    }
+    gpus
 }
 
 fn collect_hardware() -> HardwareInfo {
@@ -275,6 +480,7 @@ fn collect_hardware() -> HardwareInfo {
         gpus: detect_gpus(),
         physical_disks: detect_physical_disks(),
         display: detect_display_info(),
+        memory_modules: detect_memory_modules(),
     }
 }
 

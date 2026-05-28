@@ -33,6 +33,13 @@ type DisplayInfo = {
   max_refresh_rate_hz: number;
 };
 
+type MemoryModuleInfo = {
+  capacity_bytes: number;
+  speed_mhz: number;
+  type_name: string;
+  manufacturer: string;
+};
+
 type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -49,6 +56,7 @@ type HardwareInfo = {
   gpus: GpuInfo[];
   physical_disks: PhysicalDiskInfo[];
   display: DisplayInfo | null;
+  memory_modules: MemoryModuleInfo[];
 };
 
 type Recommendation = {
@@ -231,6 +239,27 @@ function App() {
                   )}%)`}
                 />
                 <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
+                {hw.memory_modules.length > 0 && (
+                  <>
+                    <div className="sub-divider">Modules</div>
+                    {hw.memory_modules.map((m, i) => {
+                      const cap = m.capacity_bytes > 0 ? fmtGB(m.capacity_bytes) : "—";
+                      const speed = m.speed_mhz > 0 ? `${m.speed_mhz} MHz` : "";
+                      const type_ = m.type_name !== "Unknown" ? m.type_name : "";
+                      const desc = [type_, speed].filter(Boolean).join("-");
+                      const mfg = m.manufacturer && m.manufacturer !== "Undefined"
+                        ? ` (${m.manufacturer})`
+                        : "";
+                      return (
+                        <Detail
+                          key={i}
+                          k={`Slot ${i + 1}`}
+                          v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`}
+                        />
+                      );
+                    })}
+                  </>
+                )}
               </Card>
 
               <Card
@@ -238,21 +267,18 @@ function App() {
                 value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
               >
                 {hw.gpus.length === 0 ? (
-                  <Detail k="Status" v="WMI returned no adapters" />
+                  <Detail k="Status" v="DXGI and WMI both returned no adapters" />
                 ) : (
                   hw.gpus.map((g, i) => (
                     <div key={i} className="gpu-block">
                       {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
-                      <Detail k="VRAM" v={g.vram_bytes > 0 ? `${fmtGB(g.vram_bytes)}*` : "—"} />
+                      <Detail k="VRAM" v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
                       <Detail k="Driver" v={fmtDriver(g)} />
                       {g.current_refresh_rate_hz > 0 && (
                         <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
                       )}
                     </div>
                   ))
-                )}
-                {hw.gpus.some((g) => g.vram_bytes > 0) && (
-                  <div className="footnote">* WMI caps VRAM at ~4 GB; DXGI fix coming.</div>
                 )}
                 {hw.display && hw.display.width > 0 && (
                   <Detail
