@@ -381,18 +381,8 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         currently_applied: game_mode_enabled(),
     });
 
-    recs.push(Recommendation {
-        id: "startup-debloat",
-        title: "Review and disable noisy startup apps",
-        category: "Windows",
-        severity: "safe",
-        description:
-            "Most preinstalled launchers, updaters, and 'helpers' (Teams, Spotify, Discord, OEM bloat) auto-start with Windows and sit in the background using memory. Disabling them speeds up boot and frees RAM.",
-        impact: "Faster boot · lower idle RAM use",
-        downside: Some("You'll launch those apps manually when you want them."),
-        applies_to: "All Windows installs".into(),
-        currently_applied: false,
-    });
+    // startup-debloat rec was replaced by the dedicated "Startup apps" UI
+    // section, which lets the user toggle individual entries directly.
 
     recs.push(Recommendation {
         id: "visual-effects",
@@ -1108,6 +1098,73 @@ fn get_applied_changes() -> Vec<AppliedChangeView> {
     load_history().into_iter().map(into_view).collect()
 }
 
+// ─── Startup apps (HKCU Run) ─────────────────────────────────────────────
+//
+// Windows tracks auto-start entries in HKCU\...\Run and HKLM\...\Run.
+// Task Manager's "Disabled" state is a separate registry blob under
+// StartupApproved\Run — first byte = 0x02 (enabled) or 0x03 (disabled),
+// followed by an 8-byte timestamp (which we always zero out).
+//
+// V1 is HKCU-only. HKLM (system-wide) entries are visible but need admin
+// to toggle — we'll add that when we re-use the UAC elevation pattern.
+
+#[derive(Serialize, Clone)]
+struct StartupEntry {
+    name: String,
+    command: String,
+    enabled: bool,
+}
+
+#[tauri::command]
+fn get_startup_entries() -> Vec<StartupEntry> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let Ok(run_key) = hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run") else {
+        return Vec::new();
+    };
+    let approval = hkcu
+        .open_subkey(
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run",
+        )
+        .ok();
+
+    let mut entries = Vec::new();
+    for value_result in run_key.enum_values() {
+        let Ok((name, _)) = value_result else { continue };
+        let command: String = run_key.get_value(&name).unwrap_or_default();
+        let enabled = approval
+            .as_ref()
+            .and_then(|k| k.get_raw_value(&name).ok())
+            .map(|v| v.bytes.first().copied() != Some(0x03))
+            .unwrap_or(true); // default enabled if no approval entry exists
+        entries.push(StartupEntry {
+            name,
+            command,
+            enabled,
+        });
+    }
+    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    entries
+}
+
+#[tauri::command]
+fn set_startup_entry_enabled(name: String, enabled: bool) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run")
+        .map_err(|e| e.to_string())?;
+    let first_byte = if enabled { 0x02u8 } else { 0x03u8 };
+    let bytes = vec![first_byte, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    key.set_raw_value(
+        &name,
+        &winreg::RegValue {
+            bytes,
+            vtype: winreg::enums::RegType::REG_BINARY,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1118,6 +1175,8 @@ pub fn run() {
             apply_recommendation,
             rollback_change,
             get_applied_changes,
+            get_startup_entries,
+            set_startup_entry_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

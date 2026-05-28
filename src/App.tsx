@@ -73,6 +73,12 @@ type AppliedChange = {
   is_still_active: boolean;
 };
 
+type StartupEntry = {
+  name: string;
+  command: string;
+  enabled: boolean;
+};
+
 const APPLIABLE_REC_IDS = new Set<string>([
   "game-mode",
   "visual-effects",
@@ -100,6 +106,7 @@ function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
+  const [startup, setStartup] = useState<StartupEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -109,18 +116,38 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const [info, recommendations, history] = await Promise.all([
+      const [info, recommendations, history, startupEntries] = await Promise.all([
         invoke<HardwareInfo>("get_hardware_info"),
         invoke<Recommendation[]>("get_recommendations"),
         invoke<AppliedChange[]>("get_applied_changes"),
+        invoke<StartupEntry[]>("get_startup_entries"),
       ]);
       setHw(info);
       setRecs(recommendations);
       setChanges(history);
+      setStartup(startupEntries);
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleStartup = async (entry: StartupEntry) => {
+    setBusyId(`startup:${entry.name}`);
+    setError(null);
+    try {
+      await invoke("set_startup_entry_enabled", {
+        name: entry.name,
+        enabled: !entry.enabled,
+      });
+      setStartup((prev) =>
+        prev.map((e) => (e.name === entry.name ? { ...e, enabled: !e.enabled } : e))
+      );
+    } catch (e) {
+      setError(`Toggle failed: ${e}`);
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -313,6 +340,34 @@ function App() {
             </div>
           </section>
 
+          {startup.length > 0 && (
+            <section>
+              <div className="section-header">
+                <h2 className="section-title">
+                  Startup apps
+                  <span className="count-badge">{startup.length}</span>
+                </h2>
+                <div className="read-only-pill">
+                  {startup.filter((e) => !e.enabled).length} disabled
+                </div>
+              </div>
+              <p className="section-help">
+                User-scope auto-start entries. Toggle off to keep them from launching with
+                Windows. Re-enable any time — nothing is deleted.
+              </p>
+              <div className="startup-list">
+                {startup.map((entry) => (
+                  <StartupRow
+                    key={entry.name}
+                    entry={entry}
+                    busy={busyId === `startup:${entry.name}`}
+                    onToggle={() => toggleStartup(entry)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {changes.length > 0 && (
             <section>
               <h2 className="section-title">
@@ -423,6 +478,37 @@ function RecCard({
           <span className="rec-manual">Manual for now · auto-apply coming</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function StartupRow({
+  entry,
+  busy,
+  onToggle,
+}: {
+  entry: StartupEntry;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className={`startup-row ${!entry.enabled ? "startup-row-off" : ""}`}>
+      <div className="startup-main">
+        <div className="startup-name">{entry.name}</div>
+        <div className="startup-command">{entry.command || "(no command)"}</div>
+      </div>
+      <button
+        className={`toggle ${entry.enabled ? "toggle-on" : ""}`}
+        onClick={onToggle}
+        disabled={busy}
+        role="switch"
+        aria-checked={entry.enabled}
+        aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.name}`}
+      >
+        <span className="toggle-track">
+          <span className="toggle-thumb" />
+        </span>
+      </button>
     </div>
   );
 }
