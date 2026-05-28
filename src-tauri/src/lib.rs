@@ -976,6 +976,13 @@ fn visual_effects_for_best_performance() -> bool {
         .unwrap_or(false)
 }
 
+fn fast_startup_state() -> Option<u32> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power")
+        .and_then(|k| k.get_value::<u32, _>("HiberbootEnabled"))
+        .ok()
+}
+
 fn game_bar_disabled() -> bool {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let capture: Option<u32> = hkcu
@@ -1120,6 +1127,38 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         ),
         applies_to: "All Windows installs".into(),
         currently_applied: !service_running("DiagTrack"),
+    });
+
+    recs.push(Recommendation {
+        id: "windows-search-disable",
+        title: "Disable Windows Search indexer",
+        category: "Windows",
+        severity: "moderate",
+        description:
+            "The Windows Search service (WSearch) constantly indexes your files so the Start menu / File Explorer search returns results instantly. On systems with fast NVMe storage and modern CPUs the constant indexing causes more disk churn than the speed savings justify, and many users notice background activity disappear when it's off.",
+        impact: "Lower idle disk activity · ~50–150 MB RAM back",
+        downside: Some(
+            "Start menu / File Explorer search becomes slower and less complete — it falls back to live filesystem walking instead of pre-built indexes.",
+        ),
+        applies_to: "All Windows installs".into(),
+        currently_applied: !service_running("WSearch"),
+    });
+
+    recs.push(Recommendation {
+        id: "fast-startup-off",
+        title: "Disable Fast Startup",
+        category: "Power",
+        severity: "safe",
+        description:
+            "Fast Startup makes 'Shut down' actually hibernate the Windows kernel session instead of fully shutting down. It saves a few seconds at boot but causes drivers to keep stale state between sessions, breaks dual-boot setups, and is one of the most common silent causes of post-update weirdness ('Windows Update applied but I'm still seeing the bug').",
+        impact: "Clean shutdowns · drivers reload fresh each boot · fixes a category of 'why is X behaving weird' issues",
+        downside: Some("Cold boot will take a few extra seconds (typically 3-8 s on NVMe)."),
+        applies_to: match fast_startup_state() {
+            Some(1) => "Currently enabled (default on most installs)".into(),
+            Some(0) => "Currently disabled".into(),
+            _ => "Not yet configured".into(),
+        },
+        currently_applied: fast_startup_state() == Some(0),
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -1413,6 +1452,8 @@ fn check_change_active(c: &AppliedChange) -> bool {
         "mouse-accel-off" => mouse_accel_disabled(),
         "game-bar-disable" => game_bar_disabled(),
         "diagtrack-disable" => !service_running("DiagTrack"),
+        "windows-search-disable" => !service_running("WSearch"),
+        "fast-startup-off" => fast_startup_state() == Some(0),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -1667,6 +1708,31 @@ fn rollback_power_ultimate(snapshot: &serde_json::Value) -> Result<(), String> {
         return Err("no valid prior plan GUID in snapshot".into());
     }
     run_elevated_powershell(&format!("powercfg /setactive {}", prior))?;
+    Ok(())
+}
+
+// ─── Fast Startup off (HKLM, admin) ──────────────────────────────────────
+
+fn apply_fast_startup_off() -> Result<serde_json::Value, String> {
+    let prior = fast_startup_state();
+    run_elevated_powershell(
+        "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord",
+    )?;
+    Ok(serde_json::json!({
+        "prior_hiberboot": prior,
+    }))
+}
+
+fn rollback_fast_startup_off(snapshot: &serde_json::Value) -> Result<(), String> {
+    let prior = snapshot.get("prior_hiberboot").and_then(|v| v.as_u64());
+    let cmd = match prior {
+        Some(v) => format!(
+            "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value {} -Type DWord",
+            v
+        ),
+        None => "Remove-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -ErrorAction SilentlyContinue".to_string(),
+    };
+    run_elevated_powershell(&cmd)?;
     Ok(())
 }
 
@@ -1950,6 +2016,8 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         "mouse-accel-off" => apply_mouse_accel_off()?,
         "game-bar-disable" => apply_game_bar_disable()?,
         "diagtrack-disable" => apply_service_disable("DiagTrack")?,
+        "windows-search-disable" => apply_service_disable("WSearch")?,
+        "fast-startup-off" => apply_fast_startup_off()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -1993,6 +2061,8 @@ fn rollback_change(change_id: String) -> Result<(), String> {
         "mouse-accel-off" => rollback_mouse_accel_off(&change.snapshot)?,
         "game-bar-disable" => rollback_game_bar_disable(&change.snapshot)?,
         "diagtrack-disable" => rollback_service_disable("DiagTrack", &change.snapshot)?,
+        "windows-search-disable" => rollback_service_disable("WSearch", &change.snapshot)?,
+        "fast-startup-off" => rollback_fast_startup_off(&change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();
