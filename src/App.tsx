@@ -107,8 +107,12 @@ const fmtDriver = (g: GpuInfo) => {
   return `${version} · ${age} old`;
 };
 
-const CATEGORIES = ["All", "Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
-type Category = (typeof CATEGORIES)[number];
+// Tabs: Overview is always visible. The category tabs match Recommendation
+// .category strings exactly so filtering is a string equality check. Startup
+// and History only appear when they have content.
+const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
+type RecCategory = (typeof REC_CATEGORIES)[number];
+type Tab = "Overview" | RecCategory | "Startup" | "History";
 
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
@@ -118,7 +122,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<Category>("All");
+  const [activeTab, setActiveTab] = useState<Tab>("Overview");
 
   const refresh = async () => {
     setLoading(true);
@@ -200,11 +204,42 @@ function App() {
     refresh();
   }, []);
 
-  const visibleRecs = useMemo(() => {
-    if (!recs) return [];
-    if (activeCategory === "All") return recs;
-    return recs.filter((r) => r.category === activeCategory);
-  }, [recs, activeCategory]);
+  const recCountByCategory = useMemo(() => {
+    const counts: Record<string, number> = {};
+    recs?.forEach((r) => {
+      counts[r.category] = (counts[r.category] ?? 0) + 1;
+    });
+    return counts;
+  }, [recs]);
+
+  // Build the ordered list of tabs that have content
+  const visibleTabs: Tab[] = useMemo(() => {
+    const list: Tab[] = ["Overview"];
+    REC_CATEGORIES.forEach((c) => {
+      if ((recCountByCategory[c] ?? 0) > 0) list.push(c);
+    });
+    if (startup.length > 0) list.push("Startup");
+    if (changes.length > 0) list.push("History");
+    return list;
+  }, [recCountByCategory, startup.length, changes.length]);
+
+  // If the currently active tab disappears (e.g. user rolled back the last
+  // applied change while History was open), fall back to Overview.
+  useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) {
+      setActiveTab("Overview");
+    }
+  }, [visibleTabs, activeTab]);
+
+  const tabBadgeCount = (tab: Tab): number | null => {
+    if (tab === "Overview") return null;
+    if (tab === "Startup") return startup.length;
+    if (tab === "History") return changes.length;
+    return recCountByCategory[tab] ?? 0;
+  };
+
+  const categoryRecs = (cat: RecCategory): Recommendation[] =>
+    (recs ?? []).filter((r) => r.category === cat);
 
   return (
     <main className="app">
@@ -222,198 +257,51 @@ function App() {
 
       {hw && (
         <>
-          <section>
-            <h2 className="section-title">Your hardware</h2>
-            <div className="grid">
-              <Card label="CPU" value={hw.cpu_brand}>
-                <Detail k="Logical cores" v={hw.cpu_cores_logical} />
-                <Detail k="Physical cores" v={hw.cpu_cores_physical} />
-                <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
-              </Card>
+          <nav className="tab-bar" role="tablist">
+            {visibleTabs.map((tab) => {
+              const badge = tabBadgeCount(tab);
+              return (
+                <button
+                  key={tab}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  className={`tab ${activeTab === tab ? "tab-active" : ""}`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab}
+                  {badge !== null && badge > 0 && (
+                    <span className="tab-count">{badge}</span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
-              <Card label="Memory" value={fmtGB(hw.ram_total_bytes)}>
-                <Detail
-                  k="In use"
-                  v={`${fmtGB(hw.ram_used_bytes)} (${Math.round(
-                    (hw.ram_used_bytes / hw.ram_total_bytes) * 100
-                  )}%)`}
-                />
-                <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
-                {hw.memory_modules.length > 0 && (
-                  <>
-                    <div className="sub-divider">Modules</div>
-                    {hw.memory_modules.map((m, i) => {
-                      const cap = m.capacity_bytes > 0 ? fmtGB(m.capacity_bytes) : "—";
-                      const speed = m.speed_mhz > 0 ? `${m.speed_mhz} MHz` : "";
-                      const type_ = m.type_name !== "Unknown" ? m.type_name : "";
-                      const desc = [type_, speed].filter(Boolean).join("-");
-                      const mfg = m.manufacturer && m.manufacturer !== "Undefined"
-                        ? ` (${m.manufacturer})`
-                        : "";
-                      return (
-                        <Detail
-                          key={i}
-                          k={`Slot ${i + 1}`}
-                          v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`}
-                        />
-                      );
-                    })}
-                  </>
-                )}
-              </Card>
+          {activeTab === "Overview" && <OverviewTab hw={hw} />}
 
-              <Card
-                label="Graphics"
-                value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
-              >
-                {hw.gpus.length === 0 ? (
-                  <Detail k="Status" v="DXGI and WMI both returned no adapters" />
-                ) : (
-                  hw.gpus.map((g, i) => (
-                    <div key={i} className="gpu-block">
-                      {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
-                      <Detail k="VRAM" v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
-                      <Detail k="Driver" v={fmtDriver(g)} />
-                      {g.current_refresh_rate_hz > 0 && (
-                        <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
-                      )}
-                    </div>
-                  ))
-                )}
-                {hw.display && hw.display.width > 0 && (
-                  <Detail
-                    k="Display"
-                    v={
-                      hw.display.max_refresh_rate_hz > hw.display.current_refresh_rate_hz
-                        ? `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz (max ${hw.display.max_refresh_rate_hz} Hz)`
-                        : `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz`
-                    }
-                  />
-                )}
-              </Card>
-
-              <Card label="System" value={`${hw.os_name} ${hw.os_version}`}>
-                <Detail k="Build" v={hw.kernel_version} />
-                <Detail k="Hostname" v={hw.hostname} />
-              </Card>
-
-              <Card
-                label="Storage"
-                value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}
-              >
-                {hw.disks.map((d) => (
-                  <Detail
-                    key={d.mount_point}
-                    k={d.mount_point}
-                    v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
-                  />
-                ))}
-                {hw.physical_disks.length > 0 && (
-                  <>
-                    <div className="sub-divider">Physical drives</div>
-                    {hw.physical_disks.map((p, i) => (
-                      <Detail
-                        key={i}
-                        k={p.friendly_name || `Disk ${i + 1}`}
-                        v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}`}
-                      />
-                    ))}
-                  </>
-                )}
-              </Card>
-            </div>
-          </section>
-
-          <section>
-            <div className="section-header">
-              <h2 className="section-title">
-                Recommendations
-                {recs && <span className="count-badge">{recs.length}</span>}
-              </h2>
-              <div className="read-only-pill">Read-only · nothing applied</div>
-            </div>
-
-            <div className="filter-row">
-              {CATEGORIES.map((c) => {
-                const count =
-                  c === "All" ? recs?.length ?? 0 : recs?.filter((r) => r.category === c).length ?? 0;
-                if (c !== "All" && count === 0) return null;
-                return (
-                  <button
-                    key={c}
-                    className={`chip ${activeCategory === c ? "chip-active" : ""}`}
-                    onClick={() => setActiveCategory(c)}
-                  >
-                    {c} <span className="chip-count">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="rec-list">
-              {visibleRecs.map((r) => (
-                <RecCard
-                  key={r.id}
-                  rec={r}
-                  appliable={APPLIABLE_REC_IDS.has(r.id)}
-                  busy={busyId === r.id}
-                  onApply={() => apply(r)}
-                />
-              ))}
-              {visibleRecs.length === 0 && (
-                <div className="empty">No recommendations in this category.</div>
-              )}
-            </div>
-          </section>
-
-          {startup.length > 0 && (
-            <section>
-              <div className="section-header">
-                <h2 className="section-title">
-                  Startup apps
-                  <span className="count-badge">{startup.length}</span>
-                </h2>
-                <div className="read-only-pill">
-                  {startup.filter((e) => !e.enabled).length} disabled
-                </div>
-              </div>
-              <p className="section-help">
-                User-scope auto-start entries. Toggle off to keep them from launching with
-                Windows. Re-enable any time — nothing is deleted.
-              </p>
-              <div className="startup-list">
-                {startup.map((entry) => (
-                  <StartupRow
-                    key={entry.name}
-                    entry={entry}
-                    busy={busyId === `startup:${entry.name}`}
-                    onToggle={() => toggleStartup(entry)}
-                  />
-                ))}
-              </div>
-            </section>
+          {REC_CATEGORIES.includes(activeTab as RecCategory) && (
+            <CategoryTab
+              category={activeTab as RecCategory}
+              recs={categoryRecs(activeTab as RecCategory)}
+              busyId={busyId}
+              onApply={apply}
+            />
           )}
 
-          {changes.length > 0 && (
-            <section>
-              <h2 className="section-title">
-                Applied changes
-                <span className="count-badge">{changes.length}</span>
-              </h2>
-              <div className="change-list">
-                {changes
-                  .slice()
-                  .reverse()
-                  .map((c) => (
-                    <ChangeRow
-                      key={c.id}
-                      change={c}
-                      busy={busyId === c.id}
-                      onRollback={() => rollback(c)}
-                    />
-                  ))}
-              </div>
-            </section>
+          {activeTab === "Startup" && (
+            <StartupTab
+              entries={startup}
+              busyId={busyId}
+              onToggle={toggleStartup}
+            />
+          )}
+
+          {activeTab === "History" && (
+            <HistoryTab
+              changes={changes}
+              busyId={busyId}
+              onRollback={rollback}
+            />
           )}
         </>
       )}
@@ -424,6 +312,224 @@ function App() {
     </main>
   );
 }
+
+// ─── Tabs ────────────────────────────────────────────────────────────────
+
+function OverviewTab({ hw }: { hw: HardwareInfo }) {
+  return (
+    <section className="tab-pane">
+      <h2 className="section-title">Your hardware</h2>
+      <div className="grid">
+        <Card label="CPU" value={hw.cpu_brand}>
+          <Detail k="Logical cores" v={hw.cpu_cores_logical} />
+          <Detail k="Physical cores" v={hw.cpu_cores_physical} />
+          <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
+        </Card>
+
+        <Card label="Memory" value={fmtGB(hw.ram_total_bytes)}>
+          <Detail
+            k="In use"
+            v={`${fmtGB(hw.ram_used_bytes)} (${Math.round(
+              (hw.ram_used_bytes / hw.ram_total_bytes) * 100
+            )}%)`}
+          />
+          <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
+          {hw.memory_modules.length > 0 && (
+            <>
+              <div className="sub-divider">Modules</div>
+              {hw.memory_modules.map((m, i) => {
+                const cap = m.capacity_bytes > 0 ? fmtGB(m.capacity_bytes) : "—";
+                const speed = m.speed_mhz > 0 ? `${m.speed_mhz} MHz` : "";
+                const type_ = m.type_name !== "Unknown" ? m.type_name : "";
+                const desc = [type_, speed].filter(Boolean).join("-");
+                const mfg = m.manufacturer && m.manufacturer !== "Undefined"
+                  ? ` (${m.manufacturer})`
+                  : "";
+                return (
+                  <Detail
+                    key={i}
+                    k={`Slot ${i + 1}`}
+                    v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`}
+                  />
+                );
+              })}
+            </>
+          )}
+        </Card>
+
+        <Card
+          label="Graphics"
+          value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
+        >
+          {hw.gpus.length === 0 ? (
+            <Detail k="Status" v="DXGI and WMI both returned no adapters" />
+          ) : (
+            hw.gpus.map((g, i) => (
+              <div key={i} className="gpu-block">
+                {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
+                <Detail k="VRAM" v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
+                <Detail k="Driver" v={fmtDriver(g)} />
+                {g.current_refresh_rate_hz > 0 && (
+                  <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
+                )}
+              </div>
+            ))
+          )}
+          {hw.display && hw.display.width > 0 && (
+            <Detail
+              k="Display"
+              v={
+                hw.display.max_refresh_rate_hz > hw.display.current_refresh_rate_hz
+                  ? `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz (max ${hw.display.max_refresh_rate_hz} Hz)`
+                  : `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz`
+              }
+            />
+          )}
+        </Card>
+
+        <Card label="System" value={`${hw.os_name} ${hw.os_version}`}>
+          <Detail k="Build" v={hw.kernel_version} />
+          <Detail k="Hostname" v={hw.hostname} />
+        </Card>
+
+        <Card
+          label="Storage"
+          value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}
+        >
+          {hw.disks.map((d) => (
+            <Detail
+              key={d.mount_point}
+              k={d.mount_point}
+              v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
+            />
+          ))}
+          {hw.physical_disks.length > 0 && (
+            <>
+              <div className="sub-divider">Physical drives</div>
+              {hw.physical_disks.map((p, i) => (
+                <Detail
+                  key={i}
+                  k={p.friendly_name || `Disk ${i + 1}`}
+                  v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}`}
+                />
+              ))}
+            </>
+          )}
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function CategoryTab({
+  category,
+  recs,
+  busyId,
+  onApply,
+}: {
+  category: RecCategory;
+  recs: Recommendation[];
+  busyId: string | null;
+  onApply: (rec: Recommendation) => void;
+}) {
+  return (
+    <section className="tab-pane">
+      <div className="section-header">
+        <h2 className="section-title">
+          {category}
+          <span className="count-badge">{recs.length}</span>
+        </h2>
+        <div className="read-only-pill">Nothing applied without your approval</div>
+      </div>
+      <div className="rec-list">
+        {recs.map((r) => (
+          <RecCard
+            key={r.id}
+            rec={r}
+            appliable={APPLIABLE_REC_IDS.has(r.id)}
+            busy={busyId === r.id}
+            onApply={() => onApply(r)}
+          />
+        ))}
+        {recs.length === 0 && (
+          <div className="empty">No recommendations in this category right now.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StartupTab({
+  entries,
+  busyId,
+  onToggle,
+}: {
+  entries: StartupEntry[];
+  busyId: string | null;
+  onToggle: (entry: StartupEntry) => void;
+}) {
+  return (
+    <section className="tab-pane">
+      <div className="section-header">
+        <h2 className="section-title">
+          Startup apps
+          <span className="count-badge">{entries.length}</span>
+        </h2>
+        <div className="read-only-pill">
+          {entries.filter((e) => !e.enabled).length} disabled
+        </div>
+      </div>
+      <p className="section-help">
+        User-scope auto-start entries. Toggle off to keep them from launching with
+        Windows. Re-enable any time — nothing is deleted.
+      </p>
+      <div className="startup-list">
+        {entries.map((entry) => (
+          <StartupRow
+            key={entry.name}
+            entry={entry}
+            busy={busyId === `startup:${entry.name}`}
+            onToggle={() => onToggle(entry)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HistoryTab({
+  changes,
+  busyId,
+  onRollback,
+}: {
+  changes: AppliedChange[];
+  busyId: string | null;
+  onRollback: (change: AppliedChange) => void;
+}) {
+  return (
+    <section className="tab-pane">
+      <h2 className="section-title">
+        Applied changes
+        <span className="count-badge">{changes.length}</span>
+      </h2>
+      <div className="change-list">
+        {changes
+          .slice()
+          .reverse()
+          .map((c) => (
+            <ChangeRow
+              key={c.id}
+              change={c}
+              busy={busyId === c.id}
+              onRollback={() => onRollback(c)}
+            />
+          ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── Reusable bits ───────────────────────────────────────────────────────
 
 function Card({
   label,
