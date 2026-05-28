@@ -172,6 +172,14 @@ fn service_running(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn visual_effects_for_best_performance() -> bool {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects")
+        .and_then(|k| k.get_value::<u32, _>("VisualFXSetting"))
+        .map(|v| v == 2)
+        .unwrap_or(false)
+}
+
 fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     let mut recs: Vec<Recommendation> = Vec::new();
 
@@ -228,11 +236,11 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         category: "Windows",
         severity: "safe",
         description:
-            "Animations, transparency, and shadow effects look nice but cost a few percent of GPU and CPU. Turning the cosmetic ones off makes the UI feel snappier and shaves background load while gaming.",
+            "Animations, transparency, and shadow effects look nice but cost a few percent of GPU and CPU. Setting the 'best performance' preset turns most off; some apply immediately, the rest on your next sign-in.",
         impact: "Snappier UI · slightly higher in-game FPS",
         downside: Some("UI looks more utilitarian — no fade animations."),
         applies_to: "Any Windows version".into(),
-        currently_applied: false,
+        currently_applied: visual_effects_for_best_performance(),
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -426,6 +434,87 @@ fn rollback_game_mode(snapshot: &serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+// Documented "Best Performance" value for HKCU\Control Panel\Desktop\UserPreferencesMask
+const BEST_PERF_USER_PREFS_MASK: [u8; 8] = [0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00];
+
+fn apply_visual_effects() -> Result<serde_json::Value, String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    let (vfx_key, _) = hkcu
+        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects")
+        .map_err(|e| e.to_string())?;
+    let prior_vfx: Option<u32> = vfx_key.get_value("VisualFXSetting").ok();
+    vfx_key
+        .set_value("VisualFXSetting", &2u32)
+        .map_err(|e| e.to_string())?;
+
+    let (desktop_key, _) = hkcu
+        .create_subkey("Control Panel\\Desktop")
+        .map_err(|e| e.to_string())?;
+    let prior_mask: Option<Vec<u8>> = desktop_key
+        .get_raw_value("UserPreferencesMask")
+        .ok()
+        .map(|v| v.bytes);
+    desktop_key
+        .set_raw_value(
+            "UserPreferencesMask",
+            &winreg::RegValue {
+                bytes: BEST_PERF_USER_PREFS_MASK.to_vec(),
+                vtype: winreg::enums::RegType::REG_BINARY,
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "vfx_setting_prior": prior_vfx,
+        "user_prefs_mask_prior": prior_mask,
+    }))
+}
+
+fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    let vfx_key = hkcu
+        .open_subkey_with_flags(
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects",
+            KEY_SET_VALUE | KEY_READ,
+        )
+        .map_err(|e| e.to_string())?;
+    match snapshot.get("vfx_setting_prior").and_then(|v| v.as_u64()) {
+        Some(v) => vfx_key
+            .set_value("VisualFXSetting", &(v as u32))
+            .map_err(|e| e.to_string())?,
+        None => {
+            let _ = vfx_key.delete_value("VisualFXSetting");
+        }
+    }
+
+    let desktop_key = hkcu
+        .open_subkey_with_flags("Control Panel\\Desktop", KEY_SET_VALUE | KEY_READ)
+        .map_err(|e| e.to_string())?;
+    match snapshot.get("user_prefs_mask_prior").and_then(|v| v.as_array()) {
+        Some(arr) => {
+            let bytes: Vec<u8> = arr
+                .iter()
+                .filter_map(|n| n.as_u64().map(|v| v as u8))
+                .collect();
+            desktop_key
+                .set_raw_value(
+                    "UserPreferencesMask",
+                    &winreg::RegValue {
+                        bytes,
+                        vtype: winreg::enums::RegType::REG_BINARY,
+                    },
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        None => {
+            let _ = desktop_key.delete_value("UserPreferencesMask");
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChange, String> {
     let _lock = HISTORY_LOCK
@@ -433,6 +522,7 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         .map_err(|_| "history lock poisoned".to_string())?;
     let snapshot = match rec_id.as_str() {
         "game-mode" => apply_game_mode()?,
+        "visual-effects" => apply_visual_effects()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -465,6 +555,7 @@ fn rollback_change(change_id: String) -> Result<(), String> {
     }
     match change.rec_id.as_str() {
         "game-mode" => rollback_game_mode(&change.snapshot)?,
+        "visual-effects" => rollback_visual_effects(&change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();
