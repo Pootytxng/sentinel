@@ -60,6 +60,15 @@ struct MemoryModuleInfo {
     manufacturer: String,
 }
 
+#[derive(Serialize, Clone, Default)]
+struct WindowsVersionInfo {
+    edition: String,         // "Professional", "Home", "Enterprise", etc.
+    display_version: String, // "23H2", "22H2", "21H2"
+    build: String,           // "22631", "26100"
+    ubr: u32,                // Update Build Revision, the ".X" at the end
+    product_name: String,    // Composed display string, e.g. "Windows 11 Pro 23H2"
+}
+
 #[derive(Deserialize)]
 #[serde(rename = "Win32_PhysicalMemory")]
 #[serde(rename_all = "PascalCase")]
@@ -118,6 +127,7 @@ struct HardwareInfo {
     physical_disks: Vec<PhysicalDiskInfo>,
     display: Option<DisplayInfo>,
     memory_modules: Vec<MemoryModuleInfo>,
+    windows_version: Option<WindowsVersionInfo>,
 }
 
 #[derive(Serialize)]
@@ -525,6 +535,43 @@ fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
         .collect()
 }
 
+fn detect_windows_version() -> Option<WindowsVersionInfo> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let key = hklm
+        .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
+        .ok()?;
+    let build: String = key.get_value("CurrentBuildNumber").unwrap_or_default();
+    let build_num: u32 = build.parse().unwrap_or(0);
+    let edition: String = key.get_value("EditionID").unwrap_or_default();
+    let display_version: String = key.get_value("DisplayVersion").unwrap_or_default();
+    let ubr: u32 = key.get_value("UBR").unwrap_or(0);
+
+    // ProductName lies on Windows 11 (still says "Windows 10 Pro" on most
+    // systems), so synthesize the major from the build number instead.
+    let major = if build_num >= 22000 { "Windows 11" } else { "Windows 10" };
+    let edition_pretty = match edition.as_str() {
+        "Professional" => "Pro",
+        s => s,
+    };
+    let mut product_name = major.to_string();
+    if !edition_pretty.is_empty() {
+        product_name.push(' ');
+        product_name.push_str(edition_pretty);
+    }
+    if !display_version.is_empty() {
+        product_name.push(' ');
+        product_name.push_str(&display_version);
+    }
+
+    Some(WindowsVersionInfo {
+        edition,
+        display_version,
+        build,
+        ubr,
+        product_name,
+    })
+}
+
 fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
     let primary = detect_memory_modules_smbios();
     if !primary.is_empty() {
@@ -705,6 +752,7 @@ fn collect_hardware() -> HardwareInfo {
         physical_disks: detect_physical_disks(),
         display: detect_display_info(),
         memory_modules: detect_memory_modules(),
+        windows_version: detect_windows_version(),
     }
 }
 

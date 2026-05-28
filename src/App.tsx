@@ -40,6 +40,14 @@ type MemoryModuleInfo = {
   manufacturer: string;
 };
 
+type WindowsVersionInfo = {
+  edition: string;
+  display_version: string;
+  build: string;
+  ubr: number;
+  product_name: string;
+};
+
 type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -57,6 +65,7 @@ type HardwareInfo = {
   physical_disks: PhysicalDiskInfo[];
   display: DisplayInfo | null;
   memory_modules: MemoryModuleInfo[];
+  windows_version: WindowsVersionInfo | null;
 };
 
 type Recommendation = {
@@ -391,8 +400,18 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
           )}
         </Card>
 
-        <Card label="System" value={`${hw.os_name} ${hw.os_version}`}>
-          <Detail k="Build" v={hw.kernel_version} />
+        <Card
+          label="System"
+          value={hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`}
+        >
+          <Detail
+            k="Build"
+            v={
+              hw.windows_version
+                ? `${hw.windows_version.build}.${hw.windows_version.ubr}`
+                : hw.kernel_version
+            }
+          />
           <Detail k="Hostname" v={hw.hostname} />
         </Card>
 
