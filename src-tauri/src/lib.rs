@@ -1269,18 +1269,11 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         currently_applied: on_ultimate,
     });
 
-    recs.push(Recommendation {
-        id: "game-mode".into(),
-        title: "Enable Windows Game Mode".into(),
-        category: "Windows".into(),
-        severity: "safe".into(),
-        description:
-            "Game Mode tells Windows to prioritize the foreground game, deprioritize background updates, and pause Windows Update reboots while you're playing.".into(),
-        impact: "Fewer background-process stutters".into(),
-        downside: None,
-        applies_to: format!("{} {}", hw.os_name, hw.os_version),
-        currently_applied: game_mode_enabled(),
-    });
+    // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
+    // and emitted by the load_baseline_rules() pass earlier in this fn.
+    // This is the first rec to live as data rather than code -- proof that
+    // the schema, conditions, applies_to_template, and state_kind dispatch
+    // can fully reconstruct the runtime Recommendation.
 
     // startup-debloat rec was replaced by the dedicated "Startup apps" UI
     // section, which lets the user toggle individual entries directly.
