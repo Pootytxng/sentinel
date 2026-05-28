@@ -152,6 +152,199 @@ struct Recommendation {
     currently_applied: bool,
 }
 
+// ─── Step B: Rules JSON schema + loader ──────────────────────────────────
+//
+// The eventual remote rules.json at the CDN follows this exact schema. The
+// embedded baseline ships with the binary so Sentinel always has a known-good
+// starting rule set, even with no network access. See docs/ARCHITECTURE_LOCKS
+// Tier 2 for the schema-versioning contract.
+
+const RULES_SCHEMA_VERSION: u32 = 1;
+const BASELINE_RULES_JSON: &[u8] = include_bytes!("../resources/baseline-rules-v1.json");
+
+#[derive(Deserialize)]
+struct RulesFile {
+    schema_version: u32,
+    #[serde(default)]
+    #[allow(dead_code)]
+    rules_version: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    comment: String,
+    rules: Vec<RuleSpec>,
+}
+
+#[derive(Deserialize, Clone)]
+struct RuleSpec {
+    id: String,
+    title: String,
+    category: String,
+    severity: String,
+    description: String,
+    impact: String,
+    #[serde(default)]
+    downside: Option<String>,
+    #[serde(default)]
+    applies_to_template: Option<String>,
+    #[serde(default)]
+    conditions: Vec<Condition>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    apply_kind: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    apply_params: Option<serde_json::Value>,
+    #[serde(default)]
+    state_kind: Option<String>,
+    #[serde(default)]
+    state_params: Option<serde_json::Value>,
+}
+
+// Hardware predicates that gate whether a rule fires. Extensible via additive
+// changes; each variant maps to a Rust evaluator in condition_matches().
+#[derive(Deserialize, Clone)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum Condition {
+    GpuVendor { vendor: String },
+    RamGbAtLeast { min_gb: u32 },
+    FastStoragePresent,
+    AllHdd,
+    HasModernDiscreteGpu,
+    DisplayUnderdriven { min_gap_hz: u32 },
+    OldGpuDriverDays { min_days: i64 },
+    StorageBelowFreePercent { mount_prefix: String, percent: f64 },
+}
+
+fn load_baseline_rules() -> RulesFile {
+    let file: RulesFile = serde_json::from_slice(BASELINE_RULES_JSON)
+        .expect("baseline rules JSON must be valid at compile time");
+    assert_eq!(
+        file.schema_version, RULES_SCHEMA_VERSION,
+        "baseline rules schema_version mismatch: file says {}, binary expects {}",
+        file.schema_version, RULES_SCHEMA_VERSION
+    );
+    file
+}
+
+fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
+    match cond {
+        Condition::GpuVendor { vendor } => gpu_vendor_match(hw, &vendor.to_uppercase()).is_some(),
+        Condition::RamGbAtLeast { min_gb } => {
+            let ram_gb = hw.ram_total_bytes as f64 / 1024.0_f64.powi(3);
+            ram_gb >= *min_gb as f64
+        }
+        Condition::FastStoragePresent => hw
+            .physical_disks
+            .iter()
+            .any(|d| d.bus_type == "NVMe" || d.media_type == "SSD"),
+        Condition::AllHdd => {
+            !hw.physical_disks.is_empty()
+                && hw.physical_disks.iter().all(|d| d.media_type == "HDD")
+        }
+        Condition::HasModernDiscreteGpu => hw.gpus.iter().any(|g| {
+            let u = g.name.to_uppercase();
+            u.contains("RTX")
+                || u.contains("GTX 16")
+                || u.contains("RX 5")
+                || u.contains("RX 6")
+                || u.contains("RX 7")
+                || u.contains("RX 9")
+                || u.contains("ARC ")
+                || u.contains("ARC A")
+                || u.contains("ARC B")
+        }),
+        Condition::DisplayUnderdriven { min_gap_hz } => hw
+            .display
+            .as_ref()
+            .map(|d| d.max_refresh_rate_hz.saturating_sub(d.current_refresh_rate_hz) >= *min_gap_hz)
+            .unwrap_or(false),
+        Condition::OldGpuDriverDays { min_days } => hw
+            .gpus
+            .iter()
+            .filter_map(|g| g.driver_age_days)
+            .any(|d| d >= *min_days),
+        Condition::StorageBelowFreePercent { mount_prefix, percent } => {
+            hw.disks.iter().any(|d| {
+                if !d.mount_point.starts_with(mount_prefix) || d.total_bytes == 0 {
+                    return false;
+                }
+                let pct = (d.available_bytes as f64 / d.total_bytes as f64) * 100.0;
+                pct < *percent
+            })
+        }
+    }
+}
+
+// String-keyed state-check dispatcher. Each kind names an existing Rust
+// function; new kinds require a code release. Params allow parameterizing
+// shared shapes (e.g. "service-not-running" takes a service name).
+fn check_state_kind(kind: &str, params: &Option<serde_json::Value>, _hw: &HardwareInfo) -> bool {
+    match kind {
+        "game-mode-enabled" => game_mode_enabled(),
+        "visual-effects-best-perf" => visual_effects_for_best_performance(),
+        "service-not-running" => params
+            .as_ref()
+            .and_then(|p| p.get("service"))
+            .and_then(|s| s.as_str())
+            .map(|name| !service_running(name))
+            .unwrap_or(false),
+        "power-plan-ultimate" => current_power_plan_name()
+            .map(|p| p.to_lowercase().contains("ultimate"))
+            .unwrap_or(false),
+        "nagle-disabled-any-nic" => nagle_disabled_on_any_nic(),
+        "hags-on" => hags_state() == Some(2),
+        "mouse-accel-disabled" => mouse_accel_disabled(),
+        "game-bar-disabled" => game_bar_disabled(),
+        "fast-startup-disabled" => fast_startup_state() == Some(0),
+        "reserved-storage-disabled" => !reserved_storage_enabled(),
+        _ => false,
+    }
+}
+
+// Minimal {variable} substitution for the applies_to_template field. Keep the
+// variable list small and well-known — this is content, not a templating DSL.
+fn template_substitute(template: &str, hw: &HardwareInfo) -> String {
+    let mut out = template.to_string();
+    out = out.replace("{os_name}", &hw.os_name);
+    out = out.replace("{os_version}", &hw.os_version);
+    out = out.replace("{cpu_brand}", &hw.cpu_brand);
+    let ram_gb = hw.ram_total_bytes as f64 / 1024.0_f64.powi(3);
+    out = out.replace("{ram_gb_round}", &format!("{:.0}", ram_gb));
+    out
+}
+
+fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<Recommendation> {
+    for cond in &spec.conditions {
+        if !condition_matches(cond, hw) {
+            return None;
+        }
+    }
+
+    let applies_to = spec
+        .applies_to_template
+        .as_ref()
+        .map(|t| template_substitute(t, hw))
+        .unwrap_or_default();
+
+    let currently_applied = spec
+        .state_kind
+        .as_ref()
+        .map(|kind| check_state_kind(kind, &spec.state_params, hw))
+        .unwrap_or(false);
+
+    Some(Recommendation {
+        id: spec.id.clone(),
+        title: spec.title.clone(),
+        category: spec.category.clone(),
+        severity: spec.severity.clone(),
+        description: spec.description.clone(),
+        impact: spec.impact.clone(),
+        downside: spec.downside.clone(),
+        applies_to,
+        currently_applied,
+    })
+}
+
 // Enumerates the primary display's modes via Win32 GDI to find both the
 // current refresh rate and the highest supported rate AT THE CURRENT
 // RESOLUTION. Comparing the two surfaces the classic "144 Hz monitor
@@ -1045,6 +1238,15 @@ fn nagle_disabled_on_any_nic() -> bool {
 
 fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     let mut recs: Vec<Recommendation> = Vec::new();
+
+    // ── Step B: rules loaded from the embedded baseline JSON ──────────
+    // Currently empty in commit B; first rec (game-mode) migrates over in C.
+    let baseline = load_baseline_rules();
+    for spec in &baseline.rules {
+        if let Some(rec) = evaluate_rule_spec(spec, hw) {
+            recs.push(rec);
+        }
+    }
 
     let active_plan = current_power_plan_name().unwrap_or_default();
     let on_ultimate = active_plan.to_lowercase().contains("ultimate");

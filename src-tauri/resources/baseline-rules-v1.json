@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "rules_version": "1.0.0-baseline",
+  "comment": "Baseline rules embedded into the Sentinel binary via include_bytes!. The eventual remote rules file at rules-v1.json will follow the same schema. Rules can be added here without code changes; behavior (conditions, apply, state checks) is restricted to the named kinds defined in Rust.",
+  "rules": []
+}
