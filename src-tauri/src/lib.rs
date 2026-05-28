@@ -39,6 +39,24 @@ struct Win32VideoController {
     video_processor: Option<String>,
 }
 
+#[derive(Serialize, Clone, Default)]
+struct PhysicalDiskInfo {
+    friendly_name: String,
+    media_type: String, // "HDD" | "SSD" | "SCM" | "Unknown"
+    bus_type: String,   // "NVMe" | "SATA" | "ATA" | "USB" | "Other"
+    size_bytes: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "MSFT_PhysicalDisk")]
+#[serde(rename_all = "PascalCase")]
+struct MsftPhysicalDisk {
+    friendly_name: Option<String>,
+    media_type: Option<u16>,
+    bus_type: Option<u16>,
+    size: Option<u64>,
+}
+
 #[derive(Serialize, Clone)]
 struct HardwareInfo {
     cpu_brand: String,
@@ -54,6 +72,7 @@ struct HardwareInfo {
     hostname: String,
     disks: Vec<DiskInfo>,
     gpus: Vec<GpuInfo>,
+    physical_disks: Vec<PhysicalDiskInfo>,
 }
 
 #[derive(Serialize)]
@@ -67,6 +86,44 @@ struct Recommendation {
     downside: Option<&'static str>,
     applies_to: String,
     currently_applied: bool,
+}
+
+fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
+    // MSFT_PhysicalDisk lives in the Storage namespace, not CIMV2.
+    // media_type: 3=HDD, 4=SSD, 5=SCM (storage-class memory / 3D XPoint)
+    // bus_type:   17=NVMe, 11=SATA, 3=ATA, 7=USB, 8=iSCSI
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let conn = match WMIConnection::with_namespace_path("ROOT\\Microsoft\\Windows\\Storage", com) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let raw: Vec<MsftPhysicalDisk> = conn.query().unwrap_or_default();
+    raw.into_iter()
+        .map(|d| {
+            let media = match d.media_type {
+                Some(3) => "HDD",
+                Some(4) => "SSD",
+                Some(5) => "SCM",
+                _ => "Unknown",
+            };
+            let bus = match d.bus_type {
+                Some(17) => "NVMe",
+                Some(11) => "SATA",
+                Some(3) => "ATA",
+                Some(7) => "USB",
+                _ => "Other",
+            };
+            PhysicalDiskInfo {
+                friendly_name: d.friendly_name.unwrap_or_default(),
+                media_type: media.into(),
+                bus_type: bus.into(),
+                size_bytes: d.size.unwrap_or(0),
+            }
+        })
+        .collect()
 }
 
 fn detect_gpus() -> Vec<GpuInfo> {
@@ -131,6 +188,7 @@ fn collect_hardware() -> HardwareInfo {
         hostname: System::host_name().unwrap_or_else(|| "unknown".into()),
         disks,
         gpus: detect_gpus(),
+        physical_disks: detect_physical_disks(),
     }
 }
 
@@ -349,20 +407,45 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         }
     }
 
-    // ─── RAM-conditional ─────────────────────────────────────────────────
+    // ─── RAM + storage-conditional ───────────────────────────────────────
     let ram_gb = hw.ram_total_bytes as f64 / 1024.0_f64.powi(3);
-    if ram_gb >= 16.0 {
+    let has_nvme = hw.physical_disks.iter().any(|d| d.bus_type == "NVMe");
+    let has_ssd = hw.physical_disks.iter().any(|d| d.media_type == "SSD");
+    let only_hdd = !hw.physical_disks.is_empty()
+        && hw.physical_disks.iter().all(|d| d.media_type == "HDD");
+
+    // SysMain is GOOD on HDDs (it pre-caches apps to speed up launches). Only
+    // recommend disabling when fast storage is present, where the benefit is
+    // marginal and the disk thrashing complaint applies.
+    if ram_gb >= 16.0 && (has_nvme || has_ssd) {
+        let storage_kind = if has_nvme { "NVMe" } else { "SSD" };
         recs.push(Recommendation {
             id: "sysmain-disable",
             title: "Disable SysMain (Superfetch)",
             category: "Windows",
             severity: "moderate",
             description:
-                "SysMain preloads frequently-used apps into RAM to make them launch faster. With 16 GB+ of RAM this benefit is small, and on systems with NVMe SSDs SysMain often causes mysterious disk thrashing instead.",
+                "SysMain preloads frequently-used apps into RAM to make them launch faster. With 16 GB+ of RAM and fast storage this benefit is small, and on NVMe systems SysMain often causes mysterious disk thrashing instead.",
             impact: "Lower idle disk activity · ~100–200 MB RAM back",
-            downside: Some("App launches will be a tiny bit slower (usually unnoticeable on NVMe)."),
-            applies_to: format!("{:.0} GB RAM installed", ram_gb),
+            downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage)."),
+            applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
+        });
+    }
+
+    // HDD-only advisory: the single biggest performance win is hardware, not a tweak.
+    if only_hdd {
+        recs.push(Recommendation {
+            id: "ssd-upgrade-advisory",
+            title: "Upgrade your system drive to an SSD",
+            category: "Storage",
+            severity: "moderate",
+            description:
+                "Every physical drive Sentinel detected is a spinning hard drive. Windows on an HDD is the single biggest performance handicap on a modern PC — game load times, app launches, and Windows itself will be dramatically faster on an SSD or NVMe drive. Typical cost: $40–100 for 500 GB.",
+            impact: "Multi-second → sub-second boot · 5–10× faster app launches",
+            downside: Some("Requires a hardware purchase and either a Windows reinstall or a drive clone."),
+            applies_to: "Spinning HDDs only — no SSDs detected".into(),
+            currently_applied: false,
         });
     }
 

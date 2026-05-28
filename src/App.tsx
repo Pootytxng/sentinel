@@ -16,6 +16,13 @@ type GpuInfo = {
   video_processor: string;
 };
 
+type PhysicalDiskInfo = {
+  friendly_name: string;
+  media_type: string;
+  bus_type: string;
+  size_bytes: number;
+};
+
 type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -30,6 +37,7 @@ type HardwareInfo = {
   hostname: string;
   disks: DiskInfo[];
   gpus: GpuInfo[];
+  physical_disks: PhysicalDiskInfo[];
 };
 
 type Recommendation = {
@@ -208,6 +216,18 @@ function App() {
                     v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
                   />
                 ))}
+                {hw.physical_disks.length > 0 && (
+                  <>
+                    <div className="sub-divider">Physical drives</div>
+                    {hw.physical_disks.map((p, i) => (
+                      <Detail
+                        key={i}
+                        k={p.friendly_name || `Disk ${i + 1}`}
+                        v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}`}
+                      />
+                    ))}
+                  </>
+                )}
               </Card>
             </div>
           </section>

@@ -156,6 +156,17 @@ html, body, #root {
   padding-top: 4px;
 }
 
+.sub-divider {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
 .section-title {
   font-size: 14px;
   font-weight: 600;
