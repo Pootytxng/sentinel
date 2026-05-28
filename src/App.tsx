@@ -96,6 +96,8 @@ const APPLIABLE_REC_IDS = new Set<string>([
   "nagle-disable",
   "hags-enable",
   "mouse-accel-off",
+  "game-bar-disable",
+  "diagtrack-disable",
 ]);
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;

@@ -754,6 +754,19 @@ fn visual_effects_for_best_performance() -> bool {
         .unwrap_or(false)
 }
 
+fn game_bar_disabled() -> bool {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let capture: Option<u32> = hkcu
+        .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR")
+        .and_then(|k| k.get_value("AppCaptureEnabled"))
+        .ok();
+    let dvr: Option<u32> = hkcu
+        .open_subkey("System\\GameConfigStore")
+        .and_then(|k| k.get_value("GameDVR_Enabled"))
+        .ok();
+    capture == Some(0) && dvr == Some(0)
+}
+
 fn hags_state() -> Option<u32> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers")
@@ -857,6 +870,34 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         ),
         applies_to: "Affects all mouse input system-wide".into(),
         currently_applied: mouse_accel_disabled(),
+    });
+
+    recs.push(Recommendation {
+        id: "game-bar-disable",
+        title: "Disable Game Bar and Game DVR",
+        category: "Windows",
+        severity: "safe",
+        description:
+            "Game Bar's background capture and Game DVR (Windows' built-in recording layer) add CPU and disk overhead in every running game whether you use them or not. Most users have third-party capture (OBS, ShadowPlay, AMD ReLive) and never touch Windows' version. Turning it off frees up resources.",
+        impact: "Lower background overhead in every game",
+        downside: Some("You'll lose the Win+G overlay and Windows' built-in clip recording."),
+        applies_to: "Affects all games".into(),
+        currently_applied: game_bar_disabled(),
+    });
+
+    recs.push(Recommendation {
+        id: "diagtrack-disable",
+        title: "Disable Windows telemetry (DiagTrack)",
+        category: "Windows",
+        severity: "moderate",
+        description:
+            "DiagTrack ('Connected User Experiences and Telemetry') runs in the background sending usage and diagnostic data to Microsoft. Disabling it has no functional impact on day-to-day use but does mean some of the data Windows uses to detect crashes and roll back broken updates won't be sent.",
+        impact: "Less background network traffic · less idle CPU · privacy",
+        downside: Some(
+            "Windows feedback submissions and automatic update-rollback diagnostics rely on this service. Most users never notice.",
+        ),
+        applies_to: "All Windows installs".into(),
+        currently_applied: !service_running("DiagTrack"),
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -1148,6 +1189,8 @@ fn check_change_active(c: &AppliedChange) -> bool {
         "nagle-disable" => nagle_disabled_on_any_nic(),
         "hags-enable" => hags_state() == Some(2),
         "mouse-accel-off" => mouse_accel_disabled(),
+        "game-bar-disable" => game_bar_disabled(),
+        "diagtrack-disable" => !service_running("DiagTrack"),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -1405,6 +1448,62 @@ fn rollback_power_ultimate(snapshot: &serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Game Bar / Game DVR off (HKCU, no admin) ────────────────────────────
+
+fn apply_game_bar_disable() -> Result<serde_json::Value, String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (gd, _) = hkcu
+        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR")
+        .map_err(|e| e.to_string())?;
+    let prior_capture: Option<u32> = gd.get_value("AppCaptureEnabled").ok();
+    gd.set_value("AppCaptureEnabled", &0u32)
+        .map_err(|e| e.to_string())?;
+
+    let (gcs, _) = hkcu
+        .create_subkey("System\\GameConfigStore")
+        .map_err(|e| e.to_string())?;
+    let prior_enabled: Option<u32> = gcs.get_value("GameDVR_Enabled").ok();
+    gcs.set_value("GameDVR_Enabled", &0u32)
+        .map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "prior_capture": prior_capture,
+        "prior_enabled": prior_enabled,
+    }))
+}
+
+fn rollback_game_bar_disable(snapshot: &serde_json::Value) -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    let gd = hkcu
+        .open_subkey_with_flags(
+            "Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+            KEY_SET_VALUE | KEY_READ,
+        )
+        .map_err(|e| e.to_string())?;
+    match snapshot.get("prior_capture").and_then(|v| v.as_u64()) {
+        Some(v) => gd
+            .set_value("AppCaptureEnabled", &(v as u32))
+            .map_err(|e| e.to_string())?,
+        None => {
+            let _ = gd.delete_value("AppCaptureEnabled");
+        }
+    }
+
+    let gcs = hkcu
+        .open_subkey_with_flags("System\\GameConfigStore", KEY_SET_VALUE | KEY_READ)
+        .map_err(|e| e.to_string())?;
+    match snapshot.get("prior_enabled").and_then(|v| v.as_u64()) {
+        Some(v) => gcs
+            .set_value("GameDVR_Enabled", &(v as u32))
+            .map_err(|e| e.to_string())?,
+        None => {
+            let _ = gcs.delete_value("GameDVR_Enabled");
+        }
+    }
+    Ok(())
+}
+
 // ─── HAGS (HKLM, admin) ──────────────────────────────────────────────────
 
 fn apply_hags_enable() -> Result<serde_json::Value, String> {
@@ -1627,6 +1726,8 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         "nagle-disable" => apply_nagle_disable()?,
         "hags-enable" => apply_hags_enable()?,
         "mouse-accel-off" => apply_mouse_accel_off()?,
+        "game-bar-disable" => apply_game_bar_disable()?,
+        "diagtrack-disable" => apply_service_disable("DiagTrack")?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let change = AppliedChange {
@@ -1668,6 +1769,8 @@ fn rollback_change(change_id: String) -> Result<(), String> {
         "nagle-disable" => rollback_nagle_disable(&change.snapshot)?,
         "hags-enable" => rollback_hags_enable(&change.snapshot)?,
         "mouse-accel-off" => rollback_mouse_accel_off(&change.snapshot)?,
+        "game-bar-disable" => rollback_game_bar_disable(&change.snapshot)?,
+        "diagtrack-disable" => rollback_service_disable("DiagTrack", &change.snapshot)?,
         other => return Err(format!("'{}' rollback not yet implemented", other)),
     }
     history[idx].status = "rolled_back".into();
