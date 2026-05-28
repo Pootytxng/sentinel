@@ -51,6 +51,7 @@ type AppliedChange = {
   applied_at: string;
   snapshot: unknown;
   status: "applied" | "rolled_back";
+  is_still_active: boolean;
 };
 
 const APPLIABLE_REC_IDS = new Set<string>(["game-mode", "visual-effects", "sysmain-disable"]);
@@ -377,18 +378,26 @@ function ChangeRow({
   onRollback: () => void;
 }) {
   const when = new Date(change.applied_at).toLocaleString();
+  const stale = change.status === "applied" && !change.is_still_active;
+  const stateClass = stale ? "change-stale" : `change-${change.status}`;
+
   return (
-    <div className={`change change-${change.status}`}>
+    <div className={`change ${stateClass}`}>
       <div className="change-main">
         <div className="change-title">{change.rec_title}</div>
-        <div className="change-when">{when}</div>
+        <div className="change-when">
+          {when}
+          {stale && <span className="change-note"> · reverted outside Sentinel</span>}
+        </div>
       </div>
-      {change.status === "applied" ? (
+      {change.status === "rolled_back" ? (
+        <span className="change-status">✓ Rolled back</span>
+      ) : stale ? (
+        <span className="change-status change-status-stale">No longer active</span>
+      ) : (
         <button className="btn btn-rollback" onClick={onRollback} disabled={busy}>
           {busy ? "Rolling back…" : "Roll back"}
         </button>
-      ) : (
-        <span className="change-status">✓ Rolled back</span>
       )}
     </div>
   );

@@ -401,6 +401,46 @@ struct AppliedChange {
     status: String, // "applied" | "rolled_back"
 }
 
+// AppliedChange + a freshly-computed `is_still_active` flag. We never persist
+// this flag (state changes outside Sentinel can revert what we applied), so it
+// has to be recomputed every time history is read.
+#[derive(Serialize)]
+struct AppliedChangeView {
+    id: String,
+    rec_id: String,
+    rec_title: String,
+    applied_at: String,
+    snapshot: serde_json::Value,
+    status: String,
+    is_still_active: bool,
+}
+
+fn check_change_active(c: &AppliedChange) -> bool {
+    match c.rec_id.as_str() {
+        "game-mode" => game_mode_enabled(),
+        "visual-effects" => visual_effects_for_best_performance(),
+        "sysmain-disable" => !service_running("SysMain"),
+        _ => true, // unknown rec → assume still active rather than hide rollback
+    }
+}
+
+fn into_view(c: AppliedChange) -> AppliedChangeView {
+    let is_still_active = if c.status == "applied" {
+        check_change_active(&c)
+    } else {
+        false
+    };
+    AppliedChangeView {
+        id: c.id,
+        rec_id: c.rec_id,
+        rec_title: c.rec_title,
+        applied_at: c.applied_at,
+        snapshot: c.snapshot,
+        status: c.status,
+        is_still_active,
+    }
+}
+
 fn sentinel_data_dir() -> PathBuf {
     let app_data = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Temp".into());
     PathBuf::from(app_data).join("Sentinel")
@@ -625,7 +665,7 @@ fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChange, String> {
+fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
@@ -646,7 +686,7 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
     let mut history = load_history();
     history.push(change.clone());
     save_history(&history)?;
-    Ok(change)
+    Ok(into_view(change))
 }
 
 #[tauri::command]
@@ -675,8 +715,8 @@ fn rollback_change(change_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_applied_changes() -> Vec<AppliedChange> {
-    load_history()
+fn get_applied_changes() -> Vec<AppliedChangeView> {
+    load_history().into_iter().map(into_view).collect()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

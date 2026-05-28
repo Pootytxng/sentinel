@@ -368,6 +368,27 @@ html, body, #root {
 
 .change-rolled_back { opacity: 0.55; }
 
+.change-stale {
+  opacity: 0.7;
+  border-left: 2px solid #f5c451;
+}
+
+.change-note {
+  color: #f5c451;
+  font-style: italic;
+}
+
+.change-status-stale {
+  color: #f5c451;
+  background: rgba(245, 196, 81, 0.12);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .change-main {
   flex: 1;
   display: flex;
