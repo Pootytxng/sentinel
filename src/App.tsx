@@ -41,6 +41,7 @@ type Recommendation = {
   impact: string;
   downside: string | null;
   applies_to: string;
+  currently_applied: boolean;
 };
 
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
@@ -232,10 +233,14 @@ function Detail({ k, v }: { k: string; v: string | number }) {
 
 function RecCard({ rec }: { rec: Recommendation }) {
   return (
-    <div className={`rec rec-${rec.severity}`}>
+    <div className={`rec rec-${rec.severity} ${rec.currently_applied ? "rec-applied" : ""}`}>
       <div className="rec-head">
         <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>{rec.category}</span>
-        <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
+        {rec.currently_applied ? (
+          <span className="rec-status-applied">✓ Already set</span>
+        ) : (
+          <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
+        )}
       </div>
       <h3 className="rec-title">{rec.title}</h3>
       <p className="rec-desc">{rec.description}</p>

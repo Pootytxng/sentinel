@@ -291,6 +291,24 @@ html, body, #root {
 .rec-sev-moderate { color: #f5c451; background: rgba(245, 196, 81, 0.1); }
 .rec-sev-advanced { color: var(--danger); background: rgba(248, 113, 113, 0.1); }
 
+.rec-status-applied {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.rec-applied {
+  border-left-color: #4ade80;
+  opacity: 0.7;
+}
+.rec-applied .rec-title { color: var(--muted); }
+
 .rec-title {
   margin: 0;
   font-size: 15px;

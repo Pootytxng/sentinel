@@ -1,5 +1,9 @@
+use std::process::Command;
+
 use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
+use winreg::enums::HKEY_CURRENT_USER;
+use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
 
 #[derive(Serialize, Clone)]
@@ -56,6 +60,7 @@ struct Recommendation {
     impact: &'static str,
     downside: Option<&'static str>,
     applies_to: String,
+    currently_applied: bool,
 }
 
 fn detect_gpus() -> Vec<GpuInfo> {
@@ -135,8 +140,37 @@ fn gpu_vendor_match(hw: &HardwareInfo, needle: &str) -> Option<String> {
         .map(|g| g.name.clone())
 }
 
+fn current_power_plan_name() -> Option<String> {
+    let output = Command::new("powercfg").args(["/getactivescheme"]).output().ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Format: "Power Scheme GUID: <guid>  (Plan Name)"
+    let start = stdout.find('(')? + 1;
+    let end = stdout.rfind(')')?;
+    Some(stdout[start..end].trim().to_string())
+}
+
+fn game_mode_enabled() -> bool {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    hkcu.open_subkey("Software\\Microsoft\\GameBar")
+        .and_then(|k| k.get_value::<u32, _>("AutoGameModeEnabled"))
+        .map(|v| v == 1)
+        .unwrap_or(false)
+}
+
+fn service_running(name: &str) -> bool {
+    Command::new("sc")
+        .args(["query", name])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("RUNNING"))
+        .unwrap_or(false)
+}
+
 fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     let mut recs: Vec<Recommendation> = Vec::new();
+
+    let active_plan = current_power_plan_name().unwrap_or_default();
+    let on_ultimate = active_plan.to_lowercase().contains("ultimate");
 
     // ─── Universal Windows tweaks ────────────────────────────────────────
     recs.push(Recommendation {
@@ -148,7 +182,12 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming, slightly higher idle power draw.",
         impact: "Lower input latency · steadier frame times",
         downside: Some("Marginally higher idle power use (~5–10 W on most desktops)."),
-        applies_to: "Windows desktop".into(),
+        applies_to: if active_plan.is_empty() {
+            "Windows desktop".into()
+        } else {
+            format!("Currently on '{}'", active_plan)
+        },
+        currently_applied: on_ultimate,
     });
 
     recs.push(Recommendation {
@@ -161,6 +200,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         impact: "Fewer background-process stutters",
         downside: None,
         applies_to: format!("{} {}", hw.os_name, hw.os_version),
+        currently_applied: game_mode_enabled(),
     });
 
     recs.push(Recommendation {
@@ -173,6 +213,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         impact: "Faster boot · lower idle RAM use",
         downside: Some("You'll launch those apps manually when you want them."),
         applies_to: "All Windows installs".into(),
+        currently_applied: false,
     });
 
     recs.push(Recommendation {
@@ -185,10 +226,12 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         impact: "Snappier UI · slightly higher in-game FPS",
         downside: Some("UI looks more utilitarian — no fade animations."),
         applies_to: "Any Windows version".into(),
+        currently_applied: false,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
+        let telemetry_running = service_running("NvTelemetryContainer");
         recs.push(Recommendation {
             id: "nvidia-telemetry",
             title: "Disable NVIDIA Container telemetry services",
@@ -198,7 +241,8 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 "NVIDIA's driver bundle ships several background services that exist mainly to send usage data and check for GeForce Experience updates. They consume RAM and CPU constantly. Disabling them does not affect game performance or driver functionality.",
             impact: "Free ~150–250 MB RAM · less background CPU",
             downside: Some("GeForce Experience won't auto-update; you can still update manually."),
-            applies_to: name,
+            applies_to: name.clone(),
+            currently_applied: !telemetry_running,
         });
 
         recs.push(Recommendation {
@@ -211,6 +255,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Lower input lag in fast-paced games",
             downside: Some("Can slightly reduce maximum FPS in GPU-bound titles."),
             applies_to: "NVIDIA GPU + latency profile".into(),
+            currently_applied: false,
         });
     }
 
@@ -225,6 +270,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Less background network traffic · privacy",
             downside: None,
             applies_to: name,
+            currently_applied: false,
         });
     }
 
@@ -242,6 +288,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Massive FPS gain if a game is mis-routed",
             downside: Some("Slightly higher battery drain on laptops."),
             applies_to: "Hybrid GPU setup detected".into(),
+            currently_applied: false,
         });
     }
 
@@ -262,6 +309,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 impact: "Restores normal disk performance · prevents update failures",
                 downside: None,
                 applies_to: format!("{} ({:.0}% free)", disk.mount_point, pct_free),
+                currently_applied: false,
             });
             break;
         }
@@ -280,6 +328,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Lower idle disk activity · ~100–200 MB RAM back",
             downside: Some("App launches will be a tiny bit slower (usually unnoticeable on NVMe)."),
             applies_to: format!("{:.0} GB RAM installed", ram_gb),
+            currently_applied: !service_running("SysMain"),
         });
     }
 
@@ -294,6 +343,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         impact: "Lower latency in competitive online games",
         downside: Some("Marginally more network overhead; harmless on modern connections."),
         applies_to: "Active network adapter".into(),
+        currently_applied: false,
     });
 
     recs
