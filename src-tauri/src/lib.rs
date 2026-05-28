@@ -276,7 +276,224 @@ fn detect_physical_disks() -> Vec<PhysicalDiskInfo> {
     detect_physical_disks_legacy()
 }
 
-fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
+// ─── RAM detection: SMBIOS direct read (primary) + WMI fallback ──────────
+//
+// Win32_PhysicalMemory through WMI is often the first thing locked-down AV
+// setups block. The SMBIOS firmware table is what Task Manager, CPU-Z, and
+// HWiNFO all use — it goes through GetSystemFirmwareTable, which is a
+// straight kernel call. Same data, more accessible.
+
+fn detect_memory_modules_smbios() -> Vec<MemoryModuleInfo> {
+    use std::ptr;
+
+    // 'RSMB' as the Windows DWORD signature: 'R' in the high byte.
+    const RSMB: u32 = u32::from_be_bytes([b'R', b'S', b'M', b'B']);
+
+    unsafe {
+        // First call with 0 buffer size returns the required size.
+        let needed = winapi::um::sysinfoapi::GetSystemFirmwareTable(
+            RSMB,
+            0,
+            ptr::null_mut(),
+            0,
+        );
+        if needed == 0 {
+            return Vec::new();
+        }
+
+        let mut buffer = vec![0u8; needed as usize];
+        let written = winapi::um::sysinfoapi::GetSystemFirmwareTable(
+            RSMB,
+            0,
+            buffer.as_mut_ptr() as *mut _,
+            needed,
+        );
+        if written == 0 || written as usize > buffer.len() {
+            return Vec::new();
+        }
+
+        // RawSMBIOSData header (8 bytes):
+        //   [0] Used20CallingMethod
+        //   [1] SMBIOSMajorVersion
+        //   [2] SMBIOSMinorVersion
+        //   [3] DmiRevision
+        //   [4..8] Length (u32 little-endian) of the SMBIOS table that follows.
+        if buffer.len() < 8 {
+            return Vec::new();
+        }
+        let smbios_len =
+            u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]) as usize;
+        let end = (8 + smbios_len).min(buffer.len());
+        parse_smbios_memory_devices(&buffer[8..end])
+    }
+}
+
+fn parse_smbios_strings(data: &[u8]) -> Vec<String> {
+    let mut strings = Vec::new();
+    let mut current: Vec<u8> = Vec::new();
+    for &byte in data {
+        if byte == 0 {
+            if current.is_empty() {
+                break; // double null = end of string section
+            }
+            strings.push(String::from_utf8_lossy(&current).into_owned());
+            current.clear();
+        } else {
+            current.push(byte);
+        }
+    }
+    strings
+}
+
+fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> {
+    let mut modules = Vec::new();
+    let mut offset = 0usize;
+
+    while offset + 4 <= data.len() {
+        let struct_type = data[offset];
+        let struct_len = data[offset + 1] as usize;
+        if struct_len < 4 {
+            break;
+        }
+        let formatted_end = offset + struct_len;
+        if formatted_end > data.len() {
+            break;
+        }
+
+        // Find end of string section (double null terminator).
+        let mut string_end = formatted_end;
+        while string_end + 1 < data.len() {
+            if data[string_end] == 0 && data[string_end + 1] == 0 {
+                string_end += 2;
+                break;
+            }
+            string_end += 1;
+        }
+        if string_end > data.len() {
+            string_end = data.len();
+        }
+
+        // End-of-table marker (type 127) — stop walking.
+        if struct_type == 127 {
+            break;
+        }
+
+        // Type 17 = Memory Device. Require enough bytes for the 2.1+
+        // structure layout (manufacturer at 0x17 means we need len >= 0x18).
+        if struct_type == 17 && struct_len >= 0x18 {
+            let size_raw =
+                u16::from_le_bytes([data[offset + 0x0C], data[offset + 0x0D]]);
+
+            // 0x0000 = empty slot; skip entirely.
+            // 0xFFFF = unknown size; skip.
+            // 0x7FFF = use Extended Size at 0x1C-0x1F (in MB).
+            // Otherwise: bit 15 set => KB, else MB (low 15 bits).
+            let capacity_bytes: u64 = match size_raw {
+                0x0000 | 0xFFFF => 0,
+                0x7FFF if struct_len >= 0x20 => {
+                    let ext = u32::from_le_bytes([
+                        data[offset + 0x1C],
+                        data[offset + 0x1D],
+                        data[offset + 0x1E],
+                        data[offset + 0x1F],
+                    ]);
+                    (ext as u64) * 1024 * 1024
+                }
+                0x7FFF => 0,
+                n if n & 0x8000 != 0 => ((n & 0x7FFF) as u64) * 1024,
+                n => (n as u64) * 1024 * 1024,
+            };
+
+            if capacity_bytes == 0 {
+                offset = string_end;
+                continue;
+            }
+
+            let mem_type = data[offset + 0x12];
+            let type_name = match mem_type {
+                0x12 => "DDR",
+                0x13 => "DDR2",
+                0x14 => "DDR2 FB-DIMM",
+                0x18 => "DDR3",
+                0x1A => "DDR4",
+                0x1B => "LPDDR",
+                0x1C => "LPDDR2",
+                0x1D => "LPDDR3",
+                0x1E => "LPDDR4",
+                0x20 => "HBM",
+                0x21 => "HBM2",
+                0x22 => "DDR5",
+                0x23 => "LPDDR5",
+                _ => "Unknown",
+            }
+            .to_string();
+
+            // Speed (peak): bytes 0x15-0x16 in MT/s.
+            let peak_speed = if struct_len >= 0x17 {
+                u16::from_le_bytes([data[offset + 0x15], data[offset + 0x16]])
+            } else {
+                0
+            };
+            // Configured Memory Speed (actual): bytes 0x20-0x21 (SMBIOS 2.7+).
+            let configured_speed = if struct_len >= 0x22 {
+                u16::from_le_bytes([data[offset + 0x20], data[offset + 0x21]])
+            } else {
+                0
+            };
+            // Prefer configured (actual XMP-applied speed), fall back to peak (rated).
+            let speed_mhz: u32 = if configured_speed > 0 {
+                configured_speed as u32
+            } else {
+                peak_speed as u32
+            };
+
+            // Parse strings section and resolve indices for manufacturer + part number.
+            let strings = parse_smbios_strings(&data[formatted_end..string_end]);
+            let resolve = |idx: u8| -> String {
+                let i = idx as usize;
+                if i > 0 && i <= strings.len() {
+                    strings[i - 1].trim().to_string()
+                } else {
+                    String::new()
+                }
+            };
+            let mfg = resolve(data[offset + 0x17]);
+            let part = if struct_len > 0x1A {
+                resolve(data[offset + 0x1A])
+            } else {
+                String::new()
+            };
+            // Filter SMBIOS placeholder strings that just mean "unset".
+            let is_placeholder = |s: &str| {
+                let lower = s.to_lowercase();
+                s.is_empty()
+                    || lower == "unknown"
+                    || lower == "not specified"
+                    || lower.starts_with("0x")
+                    || lower.starts_with("array")
+            };
+            let manufacturer = match (is_placeholder(&mfg), is_placeholder(&part)) {
+                (false, false) => format!("{} {}", mfg, part),
+                (false, true) => mfg,
+                (true, false) => part,
+                (true, true) => String::new(),
+            };
+
+            modules.push(MemoryModuleInfo {
+                capacity_bytes,
+                speed_mhz,
+                type_name,
+                manufacturer,
+            });
+        }
+
+        offset = string_end;
+    }
+
+    modules
+}
+
+fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
     let com = match COMLibrary::new() {
         Ok(c) => c,
         Err(_) => return Vec::new(),
@@ -288,7 +505,6 @@ fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
     let raw: Vec<Win32PhysicalMemory> = conn.query().unwrap_or_default();
     raw.into_iter()
         .map(|m| {
-            // SMBIOSMemoryType values per the SMBIOS spec
             let type_name = match m.smbios_memory_type {
                 Some(22) => "DDR2",
                 Some(24) => "DDR3",
@@ -307,6 +523,14 @@ fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
             }
         })
         .collect()
+}
+
+fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
+    let primary = detect_memory_modules_smbios();
+    if !primary.is_empty() {
+        return primary;
+    }
+    detect_memory_modules_wmi()
 }
 
 // CIM_DATETIME looks like "20240312123045.000000-420". We only need the date
