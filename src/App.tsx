@@ -48,6 +48,13 @@ type WindowsVersionInfo = {
   product_name: string;
 };
 
+type CpuArchInfo = {
+  vendor: string;
+  family_label: string;
+  architecture: string;
+  generation: string;
+};
+
 type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -66,6 +73,7 @@ type HardwareInfo = {
   display: DisplayInfo | null;
   memory_modules: MemoryModuleInfo[];
   windows_version: WindowsVersionInfo | null;
+  cpu_arch: CpuArchInfo | null;
 };
 
 type Recommendation = {
@@ -333,7 +341,17 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
     <section className="tab-pane">
       <h2 className="section-title">Your hardware</h2>
       <div className="grid">
-        <Card label="CPU" value={hw.cpu_brand}>
+        <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand}>
+          {hw.cpu_arch?.architecture && hw.cpu_arch.architecture !== "Unknown" && (
+            <Detail
+              k="Architecture"
+              v={`${hw.cpu_arch.architecture}${
+                hw.cpu_arch.generation && hw.cpu_arch.generation !== hw.cpu_arch.architecture
+                  ? ` · ${hw.cpu_arch.generation}`
+                  : ""
+              }`}
+            />
+          )}
           <Detail k="Logical cores" v={hw.cpu_cores_logical} />
           <Detail k="Physical cores" v={hw.cpu_cores_physical} />
           <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />

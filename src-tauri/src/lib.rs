@@ -69,6 +69,14 @@ struct WindowsVersionInfo {
     product_name: String,    // Composed display string, e.g. "Windows 11 Pro 23H2"
 }
 
+#[derive(Serialize, Clone, Default)]
+struct CpuArchInfo {
+    vendor: String,       // "AMD" | "Intel" | "ARM" | "Other"
+    family_label: String, // e.g. "Ryzen 7 7800X3D" or "Core i7-13700K"
+    architecture: String, // e.g. "Zen 4" | "Raptor Lake" | "Alder Lake"
+    generation: String,   // e.g. "Zen 4" | "13th Gen" | "7000 series"
+}
+
 #[derive(Deserialize)]
 #[serde(rename = "Win32_PhysicalMemory")]
 #[serde(rename_all = "PascalCase")]
@@ -128,6 +136,7 @@ struct HardwareInfo {
     display: Option<DisplayInfo>,
     memory_modules: Vec<MemoryModuleInfo>,
     windows_version: Option<WindowsVersionInfo>,
+    cpu_arch: Option<CpuArchInfo>,
 }
 
 #[derive(Serialize)]
@@ -535,6 +544,169 @@ fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
         .collect()
 }
 
+// Parse the CPU brand string sysinfo gives us and derive vendor + arch +
+// generation. Recognizes mainstream desktop SKUs from the last ~7 years —
+// good enough for the "Sentinel knows my CPU" moment and to drive vendor /
+// generation-specific recs (PBO on AMD, E-core handling on Intel 12+).
+fn parse_cpu_arch(brand: &str) -> Option<CpuArchInfo> {
+    let trimmed = brand.trim();
+    let lower = trimmed.to_lowercase();
+
+    // ── AMD Ryzen ───────────────────────────────────────────────────────
+    if lower.contains("ryzen") {
+        // Match "Ryzen <N> <model> ..."
+        let words: Vec<&str> = trimmed.split_whitespace().collect();
+        for (i, w) in words.iter().enumerate() {
+            if w.eq_ignore_ascii_case("Ryzen") && i + 2 < words.len() {
+                let tier = words[i + 1]; // "3" / "5" / "7" / "9" / "Threadripper"
+                let model = words[i + 2]; // "7800X3D" / "5600X" / etc.
+                let first = model.chars().next()?;
+                let arch = match first {
+                    '1' => "Zen",
+                    '2' => "Zen+",
+                    '3' => "Zen 2",
+                    '4' => "Zen 3 (mobile)",
+                    '5' => "Zen 3",
+                    '6' => "Zen 3+ (mobile)",
+                    '7' => "Zen 4",
+                    '8' => "Zen 4 (mobile)",
+                    '9' => "Zen 5",
+                    _ => return None,
+                };
+                let family_label = format!("Ryzen {} {}", tier, model);
+                let series_digit = first;
+                let generation = format!("{}000 series", series_digit);
+                return Some(CpuArchInfo {
+                    vendor: "AMD".into(),
+                    family_label,
+                    architecture: arch.into(),
+                    generation,
+                });
+            }
+        }
+    }
+
+    // ── Intel — explicit "Nth Gen" prefix ───────────────────────────────
+    if let Some(first_word) = trimmed.split_whitespace().next() {
+        let digits: String = first_word
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
+        if !digits.is_empty() && trimmed.contains("Gen") && lower.contains("intel") {
+            if let Ok(gen) = digits.parse::<u32>() {
+                let (arch, gen_label) = intel_arch_for_gen(gen);
+                let family_label = intel_family_label(trimmed);
+                return Some(CpuArchInfo {
+                    vendor: "Intel".into(),
+                    family_label,
+                    architecture: arch.into(),
+                    generation: gen_label,
+                });
+            }
+        }
+    }
+
+    // ── Intel — inferred from model number "iN-NNNN[K|F|...]" ───────────
+    if lower.contains("intel") && (lower.contains("core") || lower.contains("xeon")) {
+        for part in trimmed.split(|c: char| c == ' ' || c == '@') {
+            // Find an "iN-NNNN" pattern; could also be "i9-285K" (15th gen).
+            if let Some(dash) = part.find('-') {
+                let suffix = &part[dash + 1..];
+                let digits: String = suffix
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                if digits.is_empty() {
+                    continue;
+                }
+                // Heuristic: leading 1-2 digits of a 4-5 digit model = generation.
+                // Handle both 4-digit (1st-9th gen) and 5-digit (10th+ gen).
+                let gen = if digits.len() >= 5 {
+                    digits[..2].parse::<u32>().ok()
+                } else if digits.len() == 4 {
+                    digits[..1].parse::<u32>().ok()
+                } else if digits.len() == 3 {
+                    // Ultra "i9-285K" → "2" → ambiguous; fall through
+                    digits[..1].parse::<u32>().ok().map(|n| {
+                        // 15th gen Ultra family ships with 3-digit numbers like 285
+                        if n == 2 {
+                            15
+                        } else {
+                            n
+                        }
+                    })
+                } else {
+                    None
+                };
+
+                if let Some(gen) = gen {
+                    if (6..=15).contains(&gen) {
+                        let (arch, gen_label) = intel_arch_for_gen(gen);
+                        let family_label = intel_family_label(trimmed);
+                        return Some(CpuArchInfo {
+                            vendor: "Intel".into(),
+                            family_label,
+                            architecture: arch.into(),
+                            generation: gen_label,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn intel_arch_for_gen(gen: u32) -> (&'static str, String) {
+    let arch = match gen {
+        15 => "Arrow Lake",
+        14 => "Raptor Lake Refresh",
+        13 => "Raptor Lake",
+        12 => "Alder Lake",
+        11 => "Rocket Lake / Tiger Lake",
+        10 => "Comet Lake / Ice Lake",
+        9 => "Coffee Lake Refresh",
+        8 => "Coffee Lake",
+        7 => "Kaby Lake",
+        6 => "Skylake",
+        _ => "Unknown",
+    };
+    let label = format!("{}{} Gen", gen, match gen % 10 {
+        1 if gen % 100 != 11 => "st",
+        2 if gen % 100 != 12 => "nd",
+        3 if gen % 100 != 13 => "rd",
+        _ => "th",
+    });
+    (arch, label)
+}
+
+fn intel_family_label(brand: &str) -> String {
+    // Strip "(R)" / "(TM)" decoration and the "@ X.YY GHz" suffix to leave
+    // just the human-readable family name + model. Example:
+    //   "13th Gen Intel(R) Core(TM) i7-13700K"  ->  "Core i7-13700K"
+    //   "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz" -> "Core i7-9700K"
+    let cleaned = brand
+        .replace("(R)", "")
+        .replace("(TM)", "")
+        .replace("Intel", "")
+        .replace("CPU", "")
+        .replace("Processor", "");
+    let cleaned = cleaned
+        .split('@')
+        .next()
+        .unwrap_or("")
+        .trim();
+    // Drop a leading "Nth Gen" if present
+    let cleaned = if let Some(idx) = cleaned.find("Gen") {
+        cleaned[idx + 3..].trim_start()
+    } else {
+        cleaned
+    };
+    let collapsed: String = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+    collapsed
+}
+
 fn detect_windows_version() -> Option<WindowsVersionInfo> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let key = hklm
@@ -724,6 +896,7 @@ fn collect_hardware() -> HardwareInfo {
         .map(|c| c.brand().trim().to_string())
         .unwrap_or_else(|| "Unknown CPU".into());
     let cpu_frequency_mhz = sys.cpus().first().map(|c| c.frequency()).unwrap_or(0);
+    let cpu_arch = parse_cpu_arch(&cpu_brand);
 
     let disks = Disks::new_with_refreshed_list()
         .iter()
@@ -747,6 +920,7 @@ fn collect_hardware() -> HardwareInfo {
         os_version: System::os_version().unwrap_or_else(|| "unknown".into()),
         kernel_version: System::kernel_version().unwrap_or_else(|| "unknown".into()),
         hostname: System::host_name().unwrap_or_else(|| "unknown".into()),
+        cpu_arch,
         disks,
         gpus: detect_gpus(),
         physical_disks: detect_physical_disks(),
