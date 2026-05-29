@@ -137,6 +137,7 @@ struct HardwareInfo {
     memory_modules: Vec<MemoryModuleInfo>,
     windows_version: Option<WindowsVersionInfo>,
     cpu_arch: Option<CpuArchInfo>,
+    has_active_wired_ethernet: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -213,6 +214,7 @@ enum Condition {
     DisplayUnderdriven { min_gap_hz: u32 },
     OldGpuDriverDays { min_days: i64 },
     StorageBelowFreePercent { mount_prefix: String, percent: f64 },
+    HasActiveWiredEthernet,
 }
 
 fn load_baseline_rules() -> RulesFile {
@@ -272,6 +274,7 @@ fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
                 pct < *percent
             })
         }
+        Condition::HasActiveWiredEthernet => hw.has_active_wired_ethernet,
     }
 }
 
@@ -297,6 +300,9 @@ fn check_state_kind(kind: &str, params: &Option<serde_json::Value>, _hw: &Hardwa
         "game-bar-disabled" => game_bar_disabled(),
         "fast-startup-disabled" => fast_startup_state() == Some(0),
         "reserved-storage-disabled" => !reserved_storage_enabled(),
+        "usb-selective-suspend-off-on-ac" => usb_selective_suspend_off_on_ac(),
+        "pcie-aspm-off-on-ac" => pcie_aspm_off_on_ac(),
+        "eee-disabled-on-eligible-adapters" => eee_disabled_on_any_eligible_adapter(),
         _ => false,
     }
 }
@@ -1120,7 +1126,40 @@ fn collect_hardware() -> HardwareInfo {
         display: detect_display_info(),
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
+        has_active_wired_ethernet: detect_has_active_wired_ethernet(),
     }
+}
+
+// Win32_NetworkAdapter query: returns true iff there is at least one
+// physical, non-virtual, Ethernet-typed, connected adapter. Used to gate
+// the EEE rec — Wi-Fi / Bluetooth / virtual adapters are excluded.
+#[derive(Deserialize)]
+#[serde(rename = "Win32_NetworkAdapter")]
+#[serde(rename_all = "PascalCase")]
+struct Win32NetworkAdapter {
+    adapter_type: Option<String>,
+    physical_adapter: Option<bool>,
+    net_connection_status: Option<u16>,
+}
+
+fn detect_has_active_wired_ethernet() -> bool {
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let conn = match WMIConnection::new(com) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let results: Vec<Win32NetworkAdapter> = conn.query().unwrap_or_default();
+    results.iter().any(|a| {
+        a.physical_adapter == Some(true)
+            && a.net_connection_status == Some(2) // 2 = Connected
+            && a.adapter_type
+                .as_deref()
+                .map(|t| t.to_lowercase().contains("ethernet"))
+                .unwrap_or(false)
+    })
 }
 
 #[tauri::command]
@@ -1608,6 +1647,9 @@ enum AppliedAction {
     DisableNagleOnActiveNics,
     DisableFastStartup,
     DisableReservedStorage,
+    DisableUsbSelectiveSuspendOnAc,
+    DisablePcieAspmOnAc,
+    DisableEnergyEfficientEthernet,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1623,6 +1665,11 @@ enum RollbackAction {
     RestoreNagleNicsFromSnapshot,
     RestoreFastStartupFromSnapshot,
     RestoreReservedStorageFromSnapshot,
+    // USB SS + PCIe ASPM share this variant. The Snapshot::PowerPlanSetting
+    // carries the subgroup + setting GUIDs plus the prior AC/DC values, so
+    // a single typed rollback handler covers both rec ids.
+    RestorePowerPlanSettingFromSnapshot,
+    RestoreEnergyEfficientEthernetFromSnapshot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1663,6 +1710,22 @@ enum Snapshot {
     ReservedStorage {
         prior_enabled: bool,
     },
+    // Generic power-plan setting snapshot — used by USB Selective Suspend
+    // and PCIe ASPM (both follow the same powercfg /setacvalueindex shape).
+    // Snapshots both AC and DC values plus the active plan GUID for context.
+    PowerPlanSetting {
+        plan_guid: String,
+        subgroup_guid: String,
+        setting_guid: String,
+        prior_ac_value: u32,
+        prior_dc_value: u32,
+    },
+    // Per-adapter Energy Efficient Ethernet property. Each adapter has a
+    // potentially different vendor-named property (EEE / Green Ethernet /
+    // Advanced EEE / etc.) — snapshot stores the resolved name per adapter.
+    EeeNicProperty {
+        adapters: Vec<EeeNicSnapshot>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1670,6 +1733,13 @@ struct NagleInterfaceSnapshot {
     interface: String,
     prior_ack: Option<u32>,
     prior_nodelay: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct EeeNicSnapshot {
+    adapter_name: String,
+    property_display_name: String,
+    prior_value: String,
 }
 
 // What an apply_* function produces. Carries the full rollback contract
@@ -1742,6 +1812,9 @@ fn check_change_active(c: &AppliedChange) -> bool {
         "windows-search-disable" => !service_running("WSearch"),
         "fast-startup-off" => fast_startup_state() == Some(0),
         "reserved-storage-off" => !reserved_storage_enabled(),
+        "usb-selective-suspend-off" => usb_selective_suspend_off_on_ac(),
+        "pcie-aspm-off" => pcie_aspm_off_on_ac(),
+        "eee-disable" => eee_disabled_on_any_eligible_adapter(),
         _ => true, // unknown rec → assume still active rather than hide rollback
     }
 }
@@ -2023,6 +2096,233 @@ fn rollback_reserved_storage_off_typed(prior_enabled: bool) -> Result<(), String
     let state = if prior_enabled { "Enabled" } else { "Disabled" };
     run_elevated_powershell(&format!("Set-WindowsReservedStorageState -State {}", state))?;
     Ok(())
+}
+
+// ─── Power-plan setting subgroups (USB Selective Suspend, PCIe ASPM) ─────
+//
+// Both follow the same powercfg /setacvalueindex shape: a subgroup GUID,
+// a setting GUID, and a new value (0 = the "off" position for both
+// USB Selective Suspend and PCIe Link State Power Management).
+//
+// Snapshot captures the prior AC AND DC values plus the active plan GUID
+// so rollback is bit-exact and stays consistent even if the user later
+// switches power plans. Per the cross-LLM review, we never mutate the
+// DC (battery) value on apply — laptop battery behavior stays alone.
+
+const PWR_SUBGROUP_USB: &str = "2a737441-1930-4402-8d77-b2bebba308a3";
+const PWR_SETTING_USB_SELECTIVE_SUSPEND: &str = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226";
+const PWR_SUBGROUP_PCIE: &str = "501a4d13-42af-4429-9fd1-a8218c268e20";
+const PWR_SETTING_PCIE_ASPM: &str = "ee12f906-d277-404b-b6da-e5fa1a576df5";
+
+// Returns (ac_value, dc_value) by parsing `powercfg /query SCHEME_CURRENT
+// <subgroup> <setting>`. Returns None if the call fails or output can't
+// be parsed.
+fn query_power_setting_ac_dc(subgroup: &str, setting: &str) -> Option<(u32, u32)> {
+    let output = Command::new("powercfg")
+        .args(["/query", "SCHEME_CURRENT", subgroup, setting])
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut ac_value: Option<u32> = None;
+    let mut dc_value: Option<u32> = None;
+    for line in stdout.lines() {
+        let lower = line.to_lowercase();
+        if lower.contains("current ac power setting index:") {
+            if let Some(tok) = line.split_whitespace().last() {
+                let stripped = tok.trim_start_matches("0x");
+                ac_value = u32::from_str_radix(stripped, 16).ok();
+            }
+        } else if lower.contains("current dc power setting index:") {
+            if let Some(tok) = line.split_whitespace().last() {
+                let stripped = tok.trim_start_matches("0x");
+                dc_value = u32::from_str_radix(stripped, 16).ok();
+            }
+        }
+    }
+    Some((ac_value?, dc_value.unwrap_or(0)))
+}
+
+fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Result<ApplyResult, String> {
+    // Snapshot first — both AC and DC current values.
+    let (prior_ac_value, prior_dc_value) =
+        query_power_setting_ac_dc(subgroup, setting).unwrap_or((1, 1));
+    let plan_guid = current_power_plan_guid().unwrap_or_default();
+
+    // Apply AC = 0 only. DC stays untouched (laptop battery behavior preserved).
+    let cmd = format!(
+        "powercfg /setacvalueindex SCHEME_CURRENT {} {} 0; powercfg /setactive SCHEME_CURRENT",
+        subgroup, setting
+    );
+    run_elevated_powershell(&cmd)?;
+
+    let applied_action = if setting == PWR_SETTING_USB_SELECTIVE_SUSPEND {
+        AppliedAction::DisableUsbSelectiveSuspendOnAc
+    } else {
+        AppliedAction::DisablePcieAspmOnAc
+    };
+
+    Ok(ApplyResult {
+        applied_action,
+        rollback_action: RollbackAction::RestorePowerPlanSettingFromSnapshot,
+        snapshot: Snapshot::PowerPlanSetting {
+            plan_guid,
+            subgroup_guid: subgroup.to_string(),
+            setting_guid: setting.to_string(),
+            prior_ac_value,
+            prior_dc_value,
+        },
+        elevation_used: true,
+    })
+}
+
+fn apply_usb_selective_suspend_off() -> Result<ApplyResult, String> {
+    apply_power_setting_off_on_ac(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND)
+}
+
+fn apply_pcie_aspm_off() -> Result<ApplyResult, String> {
+    apply_power_setting_off_on_ac(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM)
+}
+
+fn rollback_power_plan_setting_typed(
+    subgroup_guid: &str,
+    setting_guid: &str,
+    prior_ac_value: u32,
+    prior_dc_value: u32,
+) -> Result<(), String> {
+    // Restore both AC and DC to exactly their pre-apply values.
+    let cmd = format!(
+        "powercfg /setacvalueindex SCHEME_CURRENT {0} {1} {2}; \
+         powercfg /setdcvalueindex SCHEME_CURRENT {0} {1} {3}; \
+         powercfg /setactive SCHEME_CURRENT",
+        subgroup_guid, setting_guid, prior_ac_value, prior_dc_value
+    );
+    run_elevated_powershell(&cmd)?;
+    Ok(())
+}
+
+// ─── Energy Efficient Ethernet off (active wired NIC, vendor naming) ─────
+//
+// EEE shows up under many vendor-driver display names: "Energy Efficient
+// Ethernet" (standard), "Energy-Efficient Ethernet", "Green Ethernet"
+// (Realtek), "Advanced EEE" (some Realtek), "EEE" (Intel/Killer), etc.
+// We use a regex match on the property display name to handle this without
+// hardcoding the per-vendor list.
+//
+// Eligibility filter (per cross-LLM review):
+//   - Status -eq 'Up'                      (link is actually up)
+//   - PhysicalMediaType -eq '802.3'        (wired Ethernet, not Wi-Fi)
+//   - Property must actually exist          (Get-NetAdapterAdvancedProperty)
+// Wi-Fi, Bluetooth, virtual adapters, and adapters where no EEE-shaped
+// property exists are all excluded automatically.
+
+fn enumerate_eee_eligible_adapters() -> Vec<EeeNicSnapshot> {
+    let ps = r#"
+$adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+    $_.Status -eq 'Up' -and $_.PhysicalMediaType -eq '802.3'
+}
+foreach ($a in $adapters) {
+    $props = Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -match 'Energy[- ]?Efficient[- ]?Ethernet|Green Ethernet|Advanced EEE|^EEE$|EEE PHY' }
+    foreach ($p in $props) {
+        Write-Output ($a.Name + '|' + $p.DisplayName + '|' + $p.DisplayValue)
+    }
+}
+"#;
+    let output = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
+        .output();
+    let stdout = match output {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Err(_) => return Vec::new(),
+    };
+    stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(3, '|').collect();
+            if parts.len() != 3 {
+                return None;
+            }
+            Some(EeeNicSnapshot {
+                adapter_name: parts[0].trim().to_string(),
+                property_display_name: parts[1].trim().to_string(),
+                prior_value: parts[2].trim().to_string(),
+            })
+        })
+        .collect()
+}
+
+fn apply_eee_disable() -> Result<ApplyResult, String> {
+    let adapters = enumerate_eee_eligible_adapters();
+    if adapters.is_empty() {
+        return Err(
+            "No active wired Ethernet adapter with an Energy Efficient Ethernet property was found. Sentinel only modifies adapters where the property already exists."
+                .into(),
+        );
+    }
+
+    // Build the apply script — set every eligible (adapter, property) pair
+    // to "Disabled". -NoRestart keeps the link up across the change so we
+    // don't bounce the user's connection.
+    let mut ps = String::new();
+    for a in &adapters {
+        ps.push_str(&format!(
+            "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue 'Disabled' -NoRestart -ErrorAction SilentlyContinue; ",
+            a.adapter_name.replace('\'', "''"),
+            a.property_display_name.replace('\'', "''"),
+        ));
+    }
+    run_elevated_powershell(&ps)?;
+
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableEnergyEfficientEthernet,
+        rollback_action: RollbackAction::RestoreEnergyEfficientEthernetFromSnapshot,
+        snapshot: Snapshot::EeeNicProperty { adapters },
+        elevation_used: true,
+    })
+}
+
+fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<(), String> {
+    if adapters.is_empty() {
+        return Err("snapshot had no EEE adapters to roll back".into());
+    }
+    let mut ps = String::new();
+    for a in adapters {
+        ps.push_str(&format!(
+            "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue '{}' -NoRestart -ErrorAction SilentlyContinue; ",
+            a.adapter_name.replace('\'', "''"),
+            a.property_display_name.replace('\'', "''"),
+            a.prior_value.replace('\'', "''"),
+        ));
+    }
+    run_elevated_powershell(&ps)?;
+    Ok(())
+}
+
+// State-detection helpers consumed by check_state_kind / check_change_active.
+
+fn usb_selective_suspend_off_on_ac() -> bool {
+    query_power_setting_ac_dc(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND)
+        .map(|(ac, _)| ac == 0)
+        .unwrap_or(false)
+}
+
+fn pcie_aspm_off_on_ac() -> bool {
+    query_power_setting_ac_dc(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM)
+        .map(|(ac, _)| ac == 0)
+        .unwrap_or(false)
+}
+
+fn eee_disabled_on_any_eligible_adapter() -> bool {
+    let entries = enumerate_eee_eligible_adapters();
+    if entries.is_empty() {
+        return false;
+    }
+    // ON (in the recommended sense — EEE off) iff EVERY eligible adapter
+    // is Disabled. If any eligible adapter still has EEE enabled, the rec
+    // is NOT in the recommended state.
+    entries
+        .iter()
+        .all(|e| e.prior_value.to_lowercase().contains("disab"))
 }
 
 // ─── Fast Startup off (HKLM, admin) ──────────────────────────────────────
@@ -2386,6 +2686,24 @@ fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) -> Result<(),
         (R::RestoreReservedStorageFromSnapshot, S::ReservedStorage { prior_enabled }) => {
             rollback_reserved_storage_off_typed(*prior_enabled)
         }
+        (
+            R::RestorePowerPlanSettingFromSnapshot,
+            S::PowerPlanSetting {
+                subgroup_guid,
+                setting_guid,
+                prior_ac_value,
+                prior_dc_value,
+                ..
+            },
+        ) => rollback_power_plan_setting_typed(
+            subgroup_guid,
+            setting_guid,
+            *prior_ac_value,
+            *prior_dc_value,
+        ),
+        (R::RestoreEnergyEfficientEthernetFromSnapshot, S::EeeNicProperty { adapters }) => {
+            rollback_eee_disable_typed(adapters)
+        }
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
             action
@@ -2597,6 +2915,9 @@ fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChan
         "windows-search-disable" => apply_service_disable(KnownService::WSearch)?,
         "fast-startup-off" => apply_fast_startup_off()?,
         "reserved-storage-off" => apply_reserved_storage_off()?,
+        "usb-selective-suspend-off" => apply_usb_selective_suspend_off()?,
+        "pcie-aspm-off" => apply_pcie_aspm_off()?,
+        "eee-disable" => apply_eee_disable()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
     let snapshot_json = serde_json::to_value(&result.snapshot)

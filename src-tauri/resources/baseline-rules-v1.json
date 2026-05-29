@@ -97,6 +97,45 @@
       "conditions": [],
       "apply_kind": "nagle-disable",
       "state_kind": "nagle-disabled-any-nic"
+    },
+    {
+      "id": "usb-selective-suspend-off",
+      "title": "Disable USB Selective Suspend (AC power)",
+      "category": "Power",
+      "severity": "safe",
+      "description": "Windows lets the USB stack put your peripherals into a low-power state when idle. For wired gaming mice, keyboards, headsets, and USB audio interfaces this can cause micro-stutters at the worst moments (right when you click after a brief idle). Sentinel disables this only for AC power — laptop battery behavior stays exactly as Windows configured it.",
+      "impact": "Removes a known cause of mouse/keyboard micro-stutter and audio crackle right after idle",
+      "downside": "Slightly higher idle USB power draw on AC. Battery behavior unchanged.",
+      "applies_to_template": "Active power plan, AC profile only",
+      "conditions": [],
+      "apply_kind": "usb-selective-suspend-off",
+      "state_kind": "usb-selective-suspend-off-on-ac"
+    },
+    {
+      "id": "pcie-aspm-off",
+      "title": "Disable PCIe Link State Power Management (AC power)",
+      "category": "Power",
+      "severity": "safe",
+      "description": "Windows lets PCIe devices (your GPU, NVMe SSDs, sound cards) negotiate down to a lower power state when idle. Coming back out of that low-power state during gameplay introduces tens-to-hundreds of microseconds of latency at unpredictable moments — most notably as a stutter when assets stream in. Sentinel disables this only for AC; battery behavior is preserved.",
+      "impact": "Removes a documented cause of stutter during asset streaming and GPU/NVMe wake-up",
+      "downside": "Slightly higher idle PCIe power draw on AC. Battery behavior unchanged.",
+      "applies_to_template": "Active power plan, AC profile only — affects GPU and NVMe SSD link states",
+      "conditions": [],
+      "apply_kind": "pcie-aspm-off",
+      "state_kind": "pcie-aspm-off-on-ac"
+    },
+    {
+      "id": "eee-disable",
+      "title": "Disable Energy Efficient Ethernet on the gaming NIC",
+      "category": "Network",
+      "severity": "safe",
+      "description": "Energy Efficient Ethernet (EEE / Green Ethernet / similar names) lets your wired NIC dim down when traffic is idle. The downside is a small but real latency variance every time the link wakes back up — the kind of thing you feel as inconsistent ping in competitive shooters. Sentinel only modifies adapters that are wired Ethernet, link-up, and have the property exposed by their driver. Wi-Fi, virtual, and Bluetooth adapters are left alone.",
+      "impact": "More consistent latency on the wired gaming NIC; reduces ping variance",
+      "downside": "Slightly higher idle network power draw on the adapter (a fraction of a watt).",
+      "applies_to_template": "Active wired Ethernet adapter with an EEE-shaped property exposed by the driver",
+      "conditions": [{ "kind": "has-active-wired-ethernet" }],
+      "apply_kind": "eee-disable",
+      "state_kind": "eee-disabled-on-eligible-adapters"
     }
   ]
 }
