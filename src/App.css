@@ -1041,3 +1041,114 @@ html, body, #root {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* ─── FPS / frametime panel ────────────────────────────────────────────── */
+.fps-panel {
+  border-color: rgba(106, 169, 255, 0.35);
+}
+
+.btn-primary { /* alias of .btn (accent-filled); kept for intent clarity */ }
+
+.btn-small {
+  padding: 5px 12px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-small:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-small:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.fps-intro {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.fps-declined {
+  font-size: 12.5px;
+  color: var(--danger);
+  margin: 0 0 12px;
+}
+.fps-proc {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.fps-readout {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-bottom: 14px;
+}
+.fps-big {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.fps-big-value {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.fps-big-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.fps-stats {
+  display: flex;
+  gap: 24px;
+}
+.fps-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fps-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.fps-stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.frametime-graph {
+  display: block;
+  width: 100%;
+  height: 130px;
+  background: var(--panel-2);
+  border-radius: 6px;
+}
+.frametime-line {
+  stroke: #4ade80;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.frametime-ref {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.frametime-ref-label {
+  fill: var(--muted);
+  font-size: 9px;
+  text-anchor: end;
+}

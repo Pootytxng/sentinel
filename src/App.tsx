@@ -180,6 +180,22 @@ type GpuSensorSnapshot = {
   fan_speed_rpm: number | null; // AMD reports RPM
 };
 
+type FpsSample = {
+  pid: number;
+  process_name: string;
+  fps: number;
+  avg_frametime_ms: number;
+  low1_fps: number;
+  frames_last_sec: number;
+  recent_frametimes_ms: number[];
+};
+
+type FpsStatus = {
+  active: boolean;
+  status: string; // "idle" | "starting" | "stopped" | "declined"
+  sample: FpsSample | null;
+};
+
 type DiagnosticEntry = {
   label: string;
   value: string;
@@ -686,6 +702,8 @@ function MonitoringTab({ active }: { active: boolean }) {
   const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
   const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
   const [hasGpu, setHasGpu] = useState<boolean | null>(null);
+  const [fps, setFps] = useState<FpsStatus | null>(null);
+  const [fpsBusy, setFpsBusy] = useState(false);
 
   // Poll only while the tab is active. When the user switches away we drop
   // the interval so we don't burn cycles on charts that aren't visible. The
@@ -695,12 +713,14 @@ function MonitoringTab({ active }: { active: boolean }) {
     let cancelled = false;
     const tick = async () => {
       try {
-        const [gpuSnap, cpuSnap] = await Promise.all([
+        const [gpuSnap, cpuSnap, fpsStatus] = await Promise.all([
           invoke<GpuSensorSnapshot[]>("get_gpu_sensors"),
           invoke<CpuSensorSnapshot>("get_cpu_sensors"),
+          invoke<FpsStatus>("get_fps_status"),
         ]);
         if (cancelled) return;
         setHasGpu(gpuSnap.length > 0);
+        setFps(fpsStatus);
         setGpuSamples((prev) => {
           const next = [...prev, gpuSnap];
           return next.length > MONITORING_WINDOW
@@ -725,6 +745,26 @@ function MonitoringTab({ active }: { active: boolean }) {
     };
   }, [active]);
 
+  const enableFps = async () => {
+    setFpsBusy(true);
+    try {
+      await invoke("start_fps_capture");
+    } catch {
+      /* surfaced via get_fps_status polling */
+    } finally {
+      setFpsBusy(false);
+    }
+  };
+  const stopFps = async () => {
+    setFpsBusy(true);
+    try {
+      await invoke("stop_fps_capture");
+      setFps((prev) => (prev ? { ...prev, active: false, sample: null } : prev));
+    } finally {
+      setFpsBusy(false);
+    }
+  };
+
   const latestGpu = gpuSamples[gpuSamples.length - 1] ?? [];
   const latestCpu = cpuSamples[cpuSamples.length - 1] ?? null;
   const haveAnything = latestCpu !== null || latestGpu.length > 0;
@@ -741,10 +781,18 @@ function MonitoringTab({ active }: { active: boolean }) {
       </div>
       <p className="section-help">
         Live system telemetry. CPU usage via Windows PDH (built-in, no
-        driver). GPU sensors via NVML (NVIDIA's vendor library). No
-        injection into your games, no kernel driver — anti-cheat
-        compatible. Charts show the last minute.
+        driver). GPU sensors via vendor libraries (NVML / ADLX). FPS &
+        frametime via ETW. No injection into your games, no kernel driver —
+        anti-cheat compatible. Charts show the last minute.
       </p>
+
+      {/* FPS / frametime — headline metric, opt-in (needs admin) */}
+      <FpsPanel
+        fps={fps}
+        busy={fpsBusy}
+        onEnable={enableFps}
+        onStop={stopFps}
+      />
 
       {/* CPU panel — vendor-agnostic, always shows */}
       {latestCpu && (
@@ -781,6 +829,160 @@ function MonitoringTab({ active }: { active: boolean }) {
         <div className="empty">Collecting first sample…</div>
       )}
     </section>
+  );
+}
+
+function FpsPanel({
+  fps,
+  busy,
+  onEnable,
+  onStop,
+}: {
+  fps: FpsStatus | null;
+  busy: boolean;
+  onEnable: () => void;
+  onStop: () => void;
+}) {
+  const active = fps?.active ?? false;
+  const sample = fps?.sample ?? null;
+  const declined = fps?.status === "declined";
+
+  // Not running: invite the user to opt in (this is the one feature that
+  // needs elevation, so it's explicit, never automatic).
+  if (!active) {
+    return (
+      <div className="monitor-panel fps-panel">
+        <div className="monitor-panel-head">
+          <div className="monitor-panel-name">FPS &amp; frametime</div>
+          <div className="monitor-panel-sub">ETW · DX11/DX12</div>
+        </div>
+        <p className="fps-intro">
+          Measures frame rate and per-frame timing by observing your game from
+          the outside — no injection, no kernel driver, anti-cheat safe. It
+          needs Administrator once to start the capture session.
+        </p>
+        {declined && (
+          <p className="fps-declined">
+            Administrator permission was declined. FPS capture can't start
+            without it.
+          </p>
+        )}
+        <button className="btn btn-primary" onClick={onEnable} disabled={busy}>
+          {busy ? "Starting…" : "Enable FPS monitoring (admin)"}
+        </button>
+      </div>
+    );
+  }
+
+  // Active but no fresh sample yet — waiting for a game to present.
+  if (!sample) {
+    return (
+      <div className="monitor-panel fps-panel">
+        <div className="monitor-panel-head">
+          <div className="monitor-panel-name">FPS &amp; frametime</div>
+          <button className="btn btn-small" onClick={onStop} disabled={busy}>
+            Stop
+          </button>
+        </div>
+        <p className="fps-intro">
+          Capturing… launch or focus a DX11/DX12 game to see frames. (Accept
+          the admin prompt if it's still showing. Vulkan/OpenGL titles aren't
+          counted yet.)
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="monitor-panel fps-panel">
+      <div className="monitor-panel-head">
+        <div className="monitor-panel-name">
+          FPS &amp; frametime
+          <span className="fps-proc">{sample.process_name || `pid ${sample.pid}`}</span>
+        </div>
+        <button className="btn btn-small" onClick={onStop} disabled={busy}>
+          Stop
+        </button>
+      </div>
+      <div className="fps-readout">
+        <div className="fps-big">
+          <div className="fps-big-value">{Math.round(sample.fps)}</div>
+          <div className="fps-big-label">FPS</div>
+        </div>
+        <div className="fps-stats">
+          <div className="fps-stat">
+            <span className="fps-stat-label">Frametime</span>
+            <span className="fps-stat-value">
+              {sample.avg_frametime_ms.toFixed(1)} ms
+            </span>
+          </div>
+          <div className="fps-stat">
+            <span className="fps-stat-label">1% low</span>
+            <span className="fps-stat-value">{Math.round(sample.low1_fps)} FPS</span>
+          </div>
+          <div className="fps-stat">
+            <span className="fps-stat-label">Frames/s</span>
+            <span className="fps-stat-value">{sample.frames_last_sec}</span>
+          </div>
+        </div>
+      </div>
+      <FrametimeGraph data={sample.recent_frametimes_ms} />
+    </div>
+  );
+}
+
+// Per-frame frametime line. Each point is one frame's interval in ms; spikes
+// (stutter) show as upward spikes. Lower and flatter is better. Faint
+// reference lines mark common frame budgets (16.7 ms = 60 FPS, 8.3 ms = 120).
+function FrametimeGraph({ data }: { data: number[] }) {
+  const width = 680;
+  const height = 130;
+  const pad = 4;
+  const usableW = width - pad * 2;
+  const usableH = height - pad * 2;
+
+  if (data.length < 2) {
+    return (
+      <svg className="frametime-graph" width="100%" viewBox={`0 0 ${width} ${height}`} />
+    );
+  }
+  // Dynamic Y max: show spikes without flattening normal frames. Clamp to a
+  // sane band so a single huge hitch doesn't squash everything.
+  const maxFt = data.reduce((m, v) => Math.max(m, v), 0);
+  const yMax = Math.min(60, Math.max(20, maxFt * 1.25));
+  const yOf = (ms: number) =>
+    pad + usableH - (Math.min(yMax, Math.max(0, ms)) / yMax) * usableH;
+  const xOf = (i: number) => pad + (i / (data.length - 1)) * usableW;
+
+  let d = "";
+  data.forEach((v, i) => {
+    d += `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)} ${yOf(v).toFixed(1)} `;
+  });
+
+  const refs = [16.7, 8.3].filter((r) => r < yMax);
+  return (
+    <svg
+      className="frametime-graph"
+      width="100%"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+    >
+      {refs.map((r) => (
+        <g key={r}>
+          <line
+            x1={pad}
+            x2={width - pad}
+            y1={yOf(r)}
+            y2={yOf(r)}
+            className="frametime-ref"
+          />
+          <text x={width - pad - 2} y={yOf(r) - 3} className="frametime-ref-label">
+            {r === 16.7 ? "60 FPS" : "120 FPS"}
+          </text>
+        </g>
+      ))}
+      <path d={d} className="frametime-line" fill="none" />
+    </svg>
   );
 }
 

@@ -37,6 +37,9 @@ windows = { version = "0.59", features = [
   # QueryPerformanceFrequency, for converting ETW present-event QPC
   # timestamps into milliseconds in the FPS/frametime capture engine.
   "Win32_System_Performance",
+  # OpenProcess + QueryFullProcessImageNameW, so the elevated FPS helper can
+  # resolve the presenting process's name (it has the rights; the UI doesn't).
+  "Win32_System_Threading",
   "Win32_Foundation",
 ] }
 

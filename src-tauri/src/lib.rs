@@ -2441,6 +2441,143 @@ fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
     out
 }
 
+// ─── FPS / frametime control (elevated helper orchestration) ─────────────
+//
+// The main app runs unelevated; the ETW capture helper must be elevated.
+// We can't kill an elevated process from here, so the lifecycle is managed
+// by a heartbeat file: while monitoring is active a background thread
+// refreshes it every second; the helper self-exits when it goes stale. The
+// helper writes its latest report to a JSON file under LOCALAPPDATA\Sentinel
+// which we read here (same per-user path resolves in both processes).
+
+fn fps_dir() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
+    PathBuf::from(base).join("Sentinel")
+}
+fn fps_out_path() -> PathBuf {
+    fps_dir().join("fps.json")
+}
+fn fps_alive_path() -> PathBuf {
+    fps_dir().join("fps.alive")
+}
+
+fn fps_active() -> &'static std::sync::atomic::AtomicBool {
+    static A: OnceLock<std::sync::atomic::AtomicBool> = OnceLock::new();
+    A.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
+}
+fn fps_status_slot() -> &'static Mutex<String> {
+    static S: OnceLock<Mutex<String>> = OnceLock::new();
+    S.get_or_init(|| Mutex::new("idle".to_string()))
+}
+fn touch_alive() {
+    // The helper checks this file's mtime; the contents don't matter.
+    let _ = std::fs::write(fps_alive_path(), b"alive");
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct FpsSample {
+    pid: u32,
+    process_name: String,
+    fps: f64,
+    avg_frametime_ms: f64,
+    low1_fps: f64,
+    frames_last_sec: usize,
+    recent_frametimes_ms: Vec<f64>,
+}
+
+#[derive(Serialize)]
+struct FpsStatus {
+    active: bool,
+    status: String,
+    sample: Option<FpsSample>,
+}
+
+#[tauri::command]
+fn start_fps_capture() -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    if fps_active().load(Ordering::Acquire) {
+        return Ok(()); // already running
+    }
+    let dir = fps_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not create data dir: {e}"))?;
+    // Drop any stale sample so the UI doesn't briefly show last session's data.
+    let _ = std::fs::remove_file(fps_out_path());
+    touch_alive();
+    fps_active().store(true, Ordering::Release);
+    *fps_status_slot().lock().unwrap() = "starting".into();
+
+    let exe = std::env::current_exe().map_err(|e| format!("cannot find own exe: {e}"))?;
+
+    // Heartbeat: refresh the alive file every second while active; remove it
+    // on stop so the helper self-exits.
+    std::thread::spawn(|| {
+        use std::sync::atomic::Ordering;
+        while fps_active().load(Ordering::Acquire) {
+            touch_alive();
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        let _ = std::fs::remove_file(fps_alive_path());
+    });
+
+    // Spawn the elevated helper. runas .status() blocks for the helper's
+    // lifetime, so run it on a dedicated thread. A declined UAC prompt
+    // returns Err quickly; record it for the UI.
+    let out = fps_out_path().to_string_lossy().to_string();
+    let alive = fps_alive_path().to_string_lossy().to_string();
+    std::thread::spawn(move || {
+        use std::sync::atomic::Ordering;
+        let res = runas::Command::new(exe)
+            .args(&["--fps-capture", "--fps-out", &out, "--fps-alive", &alive])
+            .status();
+        fps_active().store(false, Ordering::Release);
+        let msg = match res {
+            Ok(_) => "stopped",
+            Err(_) => "declined",
+        };
+        *fps_status_slot().lock().unwrap() = msg.into();
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_fps_capture() {
+    use std::sync::atomic::Ordering;
+    fps_active().store(false, Ordering::Release);
+    *fps_status_slot().lock().unwrap() = "idle".into();
+    let _ = std::fs::remove_file(fps_alive_path());
+    let _ = std::fs::remove_file(fps_out_path());
+}
+
+#[tauri::command]
+fn get_fps_status() -> FpsStatus {
+    use std::sync::atomic::Ordering;
+    let active = fps_active().load(Ordering::Acquire);
+    let status = fps_status_slot().lock().unwrap().clone();
+    // Only surface a sample if it's fresh (< 3 s old) — otherwise the helper
+    // has stalled or the game stopped presenting.
+    let sample = (|| {
+        let path = fps_out_path();
+        let meta = std::fs::metadata(&path).ok()?;
+        let fresh = meta
+            .modified()
+            .ok()
+            .and_then(|m| m.elapsed().ok())
+            .map(|e| e < std::time::Duration::from_secs(3))
+            .unwrap_or(false);
+        if !fresh {
+            return None;
+        }
+        let bytes = std::fs::read(&path).ok()?;
+        serde_json::from_slice::<FpsSample>(&bytes).ok()
+    })();
+    FpsStatus {
+        active,
+        status,
+        sample,
+    }
+}
+
 // ─── Diagnostics ─────────────────────────────────────────────────────────
 //
 // The Diagnostics tab is "Sentinel's view of your PC, as raw observations."
@@ -4100,6 +4237,9 @@ pub fn run() {
             get_diagnostics,
             get_gpu_sensors,
             get_cpu_sensors,
+            start_fps_capture,
+            stop_fps_capture,
+            get_fps_status,
             apply_recommendation,
             rollback_change,
             get_applied_changes,

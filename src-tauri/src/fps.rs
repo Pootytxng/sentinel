@@ -64,9 +64,17 @@ struct Tracker {
     samples: Vec<Sample>,
 }
 
+// Cap on the number of per-frame frametimes shipped in each report. At a few
+// hundred FPS this is ~1–2 s of frames — enough for a meaningful frametime
+// line without bloating the IPC file.
+const MAX_FRAMETIME_POINTS: usize = 240;
+
 #[derive(Serialize)]
 struct FpsReport {
     pid: u32,
+    /// Resolved executable name of the presenting process (the game), e.g.
+    /// "Cyberpunk2077.exe". Empty if it couldn't be resolved.
+    process_name: String,
     fps: f64,
     avg_frametime_ms: f64,
     /// "1% low" framerate: 1000 / (99th-percentile frametime). The worst 1%
@@ -74,6 +82,83 @@ struct FpsReport {
     /// stutter the average hides.
     low1_fps: f64,
     frames_last_sec: usize,
+    /// The most recent per-frame frametimes (ms), oldest→newest, capped to
+    /// MAX_FRAMETIME_POINTS. The UI draws this as the frametime line so
+    /// individual spikes are visible, not just a smoothed average.
+    recent_frametimes_ms: Vec<f64>,
+}
+
+/// CLI options parsed from the args after `--fps-capture`.
+struct CaptureOpts {
+    /// Where to write the latest report JSON (atomic). None → stdout only.
+    out_path: Option<String>,
+    /// Heartbeat file the parent refreshes while monitoring is active. When
+    /// it goes stale (or missing) the helper self-exits. None → run until
+    /// killed (console-test mode).
+    alive_path: Option<String>,
+}
+
+fn parse_opts() -> CaptureOpts {
+    let args: Vec<String> = std::env::args().collect();
+    let find = |flag: &str| -> Option<String> {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    CaptureOpts {
+        out_path: find("--fps-out"),
+        alive_path: find("--fps-alive"),
+    }
+}
+
+/// Resolve a PID to its executable file name. The helper is elevated, so
+/// OpenProcess with QUERY_LIMITED_INFORMATION succeeds for game processes.
+fn resolve_process_name(pid: u32) -> String {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    unsafe {
+        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            return String::new();
+        };
+        let mut buf = [0u16; 260];
+        let mut size = buf.len() as u32;
+        let res = QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_WIN32,
+            PWSTR(buf.as_mut_ptr()),
+            &mut size,
+        );
+        let _ = CloseHandle(handle);
+        if res.is_err() {
+            return String::new();
+        }
+        let full = String::from_utf16_lossy(&buf[..size as usize]);
+        full.rsplit(['\\', '/']).next().unwrap_or(&full).to_string()
+    }
+}
+
+fn write_atomic(path: &str, contents: &str) {
+    let tmp = format!("{path}.tmp");
+    if std::fs::write(&tmp, contents).is_ok() {
+        let _ = std::fs::rename(&tmp, path);
+    }
+}
+
+/// True if the heartbeat file is missing or older than ~4 s — the signal that
+/// the parent stopped monitoring (or died), so the helper should exit.
+fn heartbeat_stale(path: &str) -> bool {
+    match std::fs::metadata(path).and_then(|m| m.modified()) {
+        Ok(mtime) => mtime
+            .elapsed()
+            .map(|e| e > Duration::from_secs(4))
+            .unwrap_or(true),
+        Err(_) => true,
+    }
 }
 
 fn perf_frequency() -> i64 {
@@ -91,6 +176,7 @@ fn perf_frequency() -> i64 {
 }
 
 pub fn run_capture() {
+    let opts = parse_opts();
     let freq = perf_frequency() as f64;
     let state: Arc<Mutex<HashMap<u32, Tracker>>> = Arc::new(Mutex::new(HashMap::new()));
     let cb_state = state.clone();
@@ -159,6 +245,16 @@ pub fn run_capture() {
         std::thread::sleep(Duration::from_millis(REPORT_INTERVAL_MS));
         let now = Instant::now();
 
+        // Self-exit when the parent stops refreshing the heartbeat (monitoring
+        // turned off, or the app closed). A non-elevated parent can't kill us,
+        // so this is how we shut the elevated helper down cleanly.
+        if let Some(alive) = &opts.alive_path {
+            if heartbeat_stale(alive) {
+                eprintln!("[sentinel-fps] heartbeat stale — exiting.");
+                break;
+            }
+        }
+
         let Ok(mut map) = state.lock() else {
             continue;
         };
@@ -193,31 +289,50 @@ pub fn run_capture() {
             }
         }
 
-        if let Some((pid, mut frametimes)) = best {
+        if let Some((pid, frametimes)) = best {
             let frames = frametimes.len();
             let avg = frametimes.iter().sum::<f64>() / frames as f64;
-            frametimes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            // Percentile on a sorted copy; keep `frametimes` in chronological
+            // order for the per-frame line graph.
+            let mut sorted = frametimes.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             let p99_idx = (((frames as f64) * 0.99).ceil() as usize)
                 .min(frames)
                 .saturating_sub(1);
-            let p99 = frametimes[p99_idx];
+            let p99 = sorted[p99_idx];
+
+            // Ship at most the most-recent MAX_FRAMETIME_POINTS, chronological.
+            let recent_frametimes_ms: Vec<f64> = if frametimes.len() > MAX_FRAMETIME_POINTS {
+                frametimes[frametimes.len() - MAX_FRAMETIME_POINTS..].to_vec()
+            } else {
+                frametimes.clone()
+            };
 
             let report = FpsReport {
                 pid,
+                process_name: resolve_process_name(pid),
                 fps: if avg > 0.0 { 1000.0 / avg } else { 0.0 },
                 avg_frametime_ms: avg,
                 low1_fps: if p99 > 0.0 { 1000.0 / p99 } else { 0.0 },
                 frames_last_sec: frames,
+                recent_frametimes_ms,
             };
 
             if let Ok(line) = serde_json::to_string(&report) {
+                // File channel for the (unelevated) main app to read across
+                // the elevation boundary.
+                if let Some(out) = &opts.out_path {
+                    write_atomic(out, &line);
+                }
+                // stdout for console testing.
                 let mut handle = stdout.lock();
                 let _ = writeln!(handle, "{line}");
                 let _ = handle.flush();
             }
             eprintln!(
-                "[sentinel-fps] pid {} | {:.1} FPS | {:.2} ms avg | 1% low {:.1} FPS | {} frames/s",
-                report.pid, report.fps, report.avg_frametime_ms, report.low1_fps, frames
+                "[sentinel-fps] {} (pid {}) | {:.1} FPS | {:.2} ms avg | 1% low {:.1} FPS | {} frames/s",
+                report.process_name, report.pid, report.fps, report.avg_frametime_ms, report.low1_fps, frames
             );
         }
     }
