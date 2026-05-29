@@ -834,3 +834,69 @@ html, body, #root {
   border: 1px dashed var(--border);
   border-radius: 10px;
 }
+
+/* ─── Diagnostics tab ──────────────────────────────────────────────────
+   Engineering-honest layout: each section is a panel with a quiet header,
+   each entry is a label / value pair with optional note below. No chrome,
+   no narrative — just the observations the rec engine reads. */
+.diag-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.diag-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.diag-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.diag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.diag-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.diag-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.diag-row-label {
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.diag-row-value {
+  font-size: 13px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  color: var(--accent);
+  text-align: right;
+  word-break: break-word;
+}
+
+.diag-row-note {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 2px;
+}

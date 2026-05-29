@@ -155,13 +155,25 @@ const fmtDriver = (g: GpuInfo) => {
 // and History only appear when they have content.
 const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type RecCategory = (typeof REC_CATEGORIES)[number];
-type Tab = "Overview" | RecCategory | "Startup" | "History";
+type Tab = "Overview" | RecCategory | "Startup" | "Diagnostics" | "History";
+
+type DiagnosticEntry = {
+  label: string;
+  value: string;
+  note?: string;
+};
+
+type DiagnosticSection = {
+  name: string;
+  entries: DiagnosticEntry[];
+};
 
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
   const [startup, setStartup] = useState<StartupEntry[]>([]);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticSection[]>([]);
   const [rulesSource, setRulesSource] = useState<string>("embedded");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -172,17 +184,20 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const [info, recommendations, history, startupEntries, source] = await Promise.all([
-        invoke<HardwareInfo>("get_hardware_info"),
-        invoke<Recommendation[]>("get_recommendations"),
-        invoke<AppliedChange[]>("get_applied_changes"),
-        invoke<StartupEntry[]>("get_startup_entries"),
-        invoke<string>("get_rules_source"),
-      ]);
+      const [info, recommendations, history, startupEntries, diagSections, source] =
+        await Promise.all([
+          invoke<HardwareInfo>("get_hardware_info"),
+          invoke<Recommendation[]>("get_recommendations"),
+          invoke<AppliedChange[]>("get_applied_changes"),
+          invoke<StartupEntry[]>("get_startup_entries"),
+          invoke<DiagnosticSection[]>("get_diagnostics"),
+          invoke<string>("get_rules_source"),
+        ]);
       setHw(info);
       setRecs(recommendations);
       setChanges(history);
       setStartup(startupEntries);
+      setDiagnostics(diagSections);
       setRulesSource(source);
     } catch (e) {
       setError(String(e));
@@ -296,9 +311,14 @@ function App() {
       if ((recCountByCategory[c] ?? 0) > 0) list.push(c);
     });
     if (startup.length > 0) list.push("Startup");
+    // Diagnostics is always visible once we have a hardware scan — it's
+    // "Sentinel's raw view of your PC" and the user should be able to reach
+    // it to spot-check Sentinel's observations even when nothing else
+    // is going on.
+    if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recCountByCategory, startup.length, changes.length]);
+  }, [recCountByCategory, startup.length, diagnostics.length, changes.length]);
 
   // If the currently active tab disappears (e.g. user rolled back the last
   // applied change while History was open), fall back to Overview.
@@ -310,6 +330,7 @@ function App() {
 
   const tabBadgeCount = (tab: Tab): number | null => {
     if (tab === "Overview") return null;
+    if (tab === "Diagnostics") return null;
     if (tab === "Startup") return startup.length;
     if (tab === "History") return changes.length;
     return recCountByCategory[tab] ?? 0;
@@ -391,6 +412,10 @@ function App() {
               busyId={busyId}
               onToggle={toggleStartup}
             />
+          )}
+
+          {activeTab === "Diagnostics" && (
+            <DiagnosticsTab sections={diagnostics} />
           )}
 
           {activeTab === "History" && (
@@ -611,6 +636,40 @@ function StartupTab({
             busy={busyId === `startup:${entry.name}`}
             onToggle={() => onToggle(entry)}
           />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DiagnosticsTab({ sections }: { sections: DiagnosticSection[] }) {
+  return (
+    <section className="tab-pane">
+      <div className="section-header">
+        <h2 className="section-title">Diagnostics</h2>
+      </div>
+      <p className="section-help">
+        Sentinel's raw view of your PC. These are the observations the
+        recommendation engine reads to decide what to surface. If a rec you
+        expect doesn't show up — or one you don't expect does — the answer
+        usually lives here.
+      </p>
+      <div className="diag-sections">
+        {sections.map((section) => (
+          <div key={section.name} className="diag-section">
+            <h3 className="diag-section-title">{section.name}</h3>
+            <div className="diag-list">
+              {section.entries.map((entry, i) => (
+                <div key={i} className="diag-row">
+                  <div className="diag-row-label">{entry.label}</div>
+                  <div className="diag-row-value">{entry.value}</div>
+                  {entry.note && (
+                    <div className="diag-row-note">{entry.note}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
