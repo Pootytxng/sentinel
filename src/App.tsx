@@ -157,6 +157,12 @@ const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Networ
 type RecCategory = (typeof REC_CATEGORIES)[number];
 type Tab = "Overview" | RecCategory | "Startup" | "Monitoring" | "Diagnostics" | "History";
 
+type CpuSensorSnapshot = {
+  usage_overall_pct: number;
+  usage_per_core_pct: number[];
+  frequency_mhz: number;
+};
+
 type GpuSensorSnapshot = {
   index: number;
   name: string;
@@ -674,8 +680,9 @@ const MONITORING_POLL_MS = 1000;
 const MONITORING_WINDOW = 60;
 
 function MonitoringTab({ active }: { active: boolean }) {
-  const [samples, setSamples] = useState<GpuSensorSnapshot[][]>([]);
-  const [hasSensors, setHasSensors] = useState<boolean | null>(null);
+  const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
+  const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
+  const [hasGpu, setHasGpu] = useState<boolean | null>(null);
 
   // Poll only while the tab is active. When the user switches away we drop
   // the interval so we don't burn cycles on charts that aren't visible. The
@@ -685,17 +692,26 @@ function MonitoringTab({ active }: { active: boolean }) {
     let cancelled = false;
     const tick = async () => {
       try {
-        const snap = await invoke<GpuSensorSnapshot[]>("get_gpu_sensors");
+        const [gpuSnap, cpuSnap] = await Promise.all([
+          invoke<GpuSensorSnapshot[]>("get_gpu_sensors"),
+          invoke<CpuSensorSnapshot>("get_cpu_sensors"),
+        ]);
         if (cancelled) return;
-        setHasSensors(snap.length > 0);
-        setSamples((prev) => {
-          const next = [...prev, snap];
+        setHasGpu(gpuSnap.length > 0);
+        setGpuSamples((prev) => {
+          const next = [...prev, gpuSnap];
+          return next.length > MONITORING_WINDOW
+            ? next.slice(-MONITORING_WINDOW)
+            : next;
+        });
+        setCpuSamples((prev) => {
+          const next = [...prev, cpuSnap];
           return next.length > MONITORING_WINDOW
             ? next.slice(-MONITORING_WINDOW)
             : next;
         });
       } catch {
-        if (!cancelled) setHasSensors(false);
+        if (!cancelled) setHasGpu(false);
       }
     };
     tick();
@@ -706,57 +722,118 @@ function MonitoringTab({ active }: { active: boolean }) {
     };
   }, [active]);
 
-  if (hasSensors === false) {
-    return (
-      <section className="tab-pane">
-        <div className="section-header">
-          <h2 className="section-title">Monitoring</h2>
+  const latestGpu = gpuSamples[gpuSamples.length - 1] ?? [];
+  const latestCpu = cpuSamples[cpuSamples.length - 1] ?? null;
+  const haveAnything = latestCpu !== null || latestGpu.length > 0;
+
+  return (
+    <section className="tab-pane">
+      <div className="section-header">
+        <h2 className="section-title">Monitoring</h2>
+        <div className="read-only-pill">
+          {!haveAnything
+            ? "Starting…"
+            : `${cpuSamples.length}s history · 1 Hz`}
         </div>
-        <p className="section-help">
-          GPU sensor readings via NVML (NVIDIA's vendor library — no kernel
-          driver, no game injection, anti-cheat compatible).
-        </p>
+      </div>
+      <p className="section-help">
+        Live system telemetry. CPU usage via Windows PDH (built-in, no
+        driver). GPU sensors via NVML (NVIDIA's vendor library). No
+        injection into your games, no kernel driver — anti-cheat
+        compatible. Charts show the last minute.
+      </p>
+
+      {/* CPU panel — vendor-agnostic, always shows */}
+      {latestCpu && (
+        <CpuMonitorPanel
+          cpu={latestCpu}
+          history={cpuSamples}
+        />
+      )}
+
+      {/* GPU panels — one per detected NVIDIA adapter */}
+      {hasGpu === false ? (
         <div className="empty">
           GPU sensors unavailable. Sentinel reads GPU telemetry from NVML,
           which ships with the NVIDIA driver. AMD (ADLX) and Intel (GPA)
           support is on the roadmap — your GPU will get its own panel here
           once that lands.
         </div>
-      </section>
-    );
-  }
-
-  // Build a per-GPU snapshot map. Each panel renders the rolling history
-  // for one adapter, keyed by NVML index (stable across polls).
-  const latest = samples[samples.length - 1] ?? [];
-  return (
-    <section className="tab-pane">
-      <div className="section-header">
-        <h2 className="section-title">Monitoring</h2>
-        <div className="read-only-pill">
-          {samples.length === 0
-            ? "Starting…"
-            : `${samples.length}s history · 1 Hz`}
-        </div>
-      </div>
-      <p className="section-help">
-        Live GPU telemetry via NVML. No injection into your games, no kernel
-        driver — these are the same readings the NVIDIA driver exposes to
-        every tool that asks politely. Charts show the last minute.
-      </p>
-      {latest.length === 0 ? (
-        <div className="empty">Collecting first sample…</div>
       ) : (
-        latest.map((gpu) => (
+        latestGpu.map((gpu) => (
           <GpuMonitorPanel
             key={gpu.index}
             gpu={gpu}
-            history={samples
+            history={gpuSamples
               .map((snap) => snap.find((g) => g.index === gpu.index) ?? null)}
           />
         ))
       )}
+
+      {!haveAnything && (
+        <div className="empty">Collecting first sample…</div>
+      )}
     </section>
+  );
+}
+
+function CpuMonitorPanel({
+  cpu,
+  history,
+}: {
+  cpu: CpuSensorSnapshot;
+  history: CpuSensorSnapshot[];
+}) {
+  const coreCount = cpu.usage_per_core_pct.length;
+  // First call after process start returns 0% across the board because
+  // sysinfo needs two samples to compute a delta. Surface this honestly:
+  // if every core reads exactly 0 AND we have fewer than 2 samples, label
+  // it as "warming up" instead of pretending the CPU is idle.
+  const warmingUp =
+    history.length < 2 &&
+    cpu.usage_per_core_pct.every((v) => v === 0);
+  return (
+    <div className="monitor-panel">
+      <div className="monitor-panel-head">
+        <div className="monitor-panel-name">CPU</div>
+        <div className="monitor-panel-sub">
+          {coreCount} logical core{coreCount === 1 ? "" : "s"}
+          {cpu.frequency_mhz > 0 && ` · ${fmtGHz(cpu.frequency_mhz)}`}
+        </div>
+      </div>
+      <div className="monitor-metrics">
+        <MetricRow
+          label="Overall CPU usage"
+          value={warmingUp ? null : Math.round(cpu.usage_overall_pct)}
+          unit="%"
+          history={history.map((s) => Math.round(s.usage_overall_pct))}
+          min={0}
+          max={100}
+          color="#6aa9ff"
+          sublabel={warmingUp ? "Warming up — first delta in 1 s" : undefined}
+        />
+      </div>
+      {/* Per-core mini-grid — surfaces uneven core loading at a glance.
+          Useful for spotting single-threaded bottlenecks vs an evenly
+          loaded workload. */}
+      <div className="cpu-core-grid">
+        {cpu.usage_per_core_pct.map((pct, i) => (
+          <CoreBar key={i} index={i} percent={warmingUp ? 0 : pct} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CoreBar({ index, percent }: { index: number; percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <div className="cpu-core" title={`Core ${index}: ${Math.round(percent)}%`}>
+      <div className="cpu-core-bar">
+        <div className="cpu-core-fill" style={{ width: `${clamped}%` }} />
+      </div>
+      <div className="cpu-core-label">{Math.round(percent)}%</div>
+    </div>
   );
 }
 

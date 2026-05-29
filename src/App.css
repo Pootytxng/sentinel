@@ -978,3 +978,44 @@ html, body, #root {
   background: var(--panel-2);
   border-radius: 4px;
 }
+
+/* CPU per-core grid — bottom of the CPU monitor panel. Each cell shows a
+   horizontal fill bar at the core's current load + a small percent label.
+   Layout: auto-fit so the grid wraps gracefully across panel widths. */
+.cpu-core-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.cpu-core {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  color: var(--muted);
+}
+
+.cpu-core-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--panel-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cpu-core-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80 0%, #6aa9ff 60%, #f5c451 90%);
+  transition: width 200ms ease-out;
+}
+
+.cpu-core-label {
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

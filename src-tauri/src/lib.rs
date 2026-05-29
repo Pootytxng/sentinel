@@ -2093,6 +2093,58 @@ fn get_recommendations() -> Vec<Recommendation> {
     build_recommendations(&hw)
 }
 
+// ─── CPU sensors (vendor-agnostic, no kernel driver) ─────────────────────
+//
+// Sentinel-safe CPU monitoring: sysinfo calls PDH (Performance Data Helper,
+// a built-in Windows API) for CPU utilization. No MSR reads, no kernel
+// driver, no CPU temps (those need ring-0 access and are explicitly off
+// the table per the "Sentinel-safe only" decision).
+//
+// Accurate CPU% requires TWO samples taken some time apart so we hold a
+// long-lived sysinfo::System behind a Mutex and refresh it on each poll.
+// First call after process start returns 0% (no baseline yet); the
+// frontend tolerates this — by the next 1 s tick we have a real delta.
+
+#[derive(Serialize, Clone)]
+struct CpuSensorSnapshot {
+    /// Whole-system CPU utilization, 0.0-100.0.
+    usage_overall_pct: f32,
+    /// Per-logical-core utilization in the same units. Length matches the
+    /// number of logical processors at process start.
+    usage_per_core_pct: Vec<f32>,
+    /// Current frequency as reported by sysinfo. Often pegged to base
+    /// clock on Windows because boost behavior isn't reliably exposed
+    /// through PDH — surfaced honestly rather than fake-fluctuated.
+    frequency_mhz: u64,
+}
+
+fn cpu_monitor_state() -> &'static Mutex<System> {
+    static STATE: OnceLock<Mutex<System>> = OnceLock::new();
+    STATE.get_or_init(|| Mutex::new(System::new_all()))
+}
+
+#[tauri::command]
+fn get_cpu_sensors() -> CpuSensorSnapshot {
+    let mut sys = cpu_monitor_state().lock().unwrap();
+    sys.refresh_cpu_usage();
+    let usage_per_core_pct: Vec<f32> = sys.cpus().iter().map(|c| c.cpu_usage()).collect();
+    let usage_overall_pct = if usage_per_core_pct.is_empty() {
+        0.0
+    } else {
+        usage_per_core_pct.iter().sum::<f32>() / usage_per_core_pct.len() as f32
+    };
+    let frequency_mhz = sys
+        .cpus()
+        .first()
+        .map(|c| c.frequency())
+        .unwrap_or(0);
+    CpuSensorSnapshot {
+        usage_overall_pct,
+        usage_per_core_pct,
+        frequency_mhz,
+    }
+}
+
 // ─── GPU sensors (NVML — NVIDIA only for v1) ─────────────────────────────
 //
 // Sentinel-safe monitoring: NVML is NVIDIA's vendor-blessed signed library
@@ -3838,6 +3890,7 @@ pub fn run() {
             get_recommendations,
             get_diagnostics,
             get_gpu_sensors,
+            get_cpu_sensors,
             apply_recommendation,
             rollback_change,
             get_applied_changes,
