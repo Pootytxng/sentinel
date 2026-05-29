@@ -105,6 +105,11 @@ struct DisplayInfo {
     height: u32,
     current_refresh_rate_hz: u32,
     max_refresh_rate_hz: u32,
+    /// True if ANY attached display reports HDR-capable characteristics via
+    /// DXGI (BitsPerColor >= 10 AND MaxLuminance >= 400 nits — HDR400 floor).
+    /// This is strictly capability; does NOT require Windows HDR mode be on.
+    #[serde(default)]
+    hdr_capable: bool,
 }
 
 #[derive(Deserialize)]
@@ -216,6 +221,7 @@ enum Condition {
     StorageBelowFreePercent { mount_prefix: String, percent: f64 },
     HasActiveWiredEthernet,
     MemoryIntegrityOrVbsActive,
+    DisplayHdrCapable,
 }
 
 fn load_baseline_rules_embedded() -> RulesFile {
@@ -644,6 +650,11 @@ fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
         }
         Condition::HasActiveWiredEthernet => hw.has_active_wired_ethernet,
         Condition::MemoryIntegrityOrVbsActive => memory_integrity_or_vbs_active(),
+        Condition::DisplayHdrCapable => hw
+            .display
+            .as_ref()
+            .map(|d| d.hdr_capable)
+            .unwrap_or(false),
     }
 }
 
@@ -760,8 +771,46 @@ fn detect_display_info() -> Option<DisplayInfo> {
             height: ch,
             current_refresh_rate_hz: chz,
             max_refresh_rate_hz: max_hz,
+            hdr_capable: detect_any_hdr_capable_output(),
         })
     }
+}
+
+// Capability probe via DXGI: enumerate all adapter outputs, query IDXGIOutput6
+// for DXGI_OUTPUT_DESC1, and return true if any reports BitsPerColor >= 10
+// AND MaxLuminance >= 400 nits. Using the stricter pair-check avoids false
+// positives on 10-bit-color SDR panels that don't have the brightness range
+// to make HDR content look right. We deliberately do NOT require Windows
+// HDR mode to be active right now — the advisory is about CAPABILITY, so
+// the user can decide whether to enable HDR per-game.
+fn detect_any_hdr_capable_output() -> bool {
+    use windows::core::Interface;
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, IDXGIOutput6};
+
+    unsafe {
+        let factory: IDXGIFactory1 = match CreateDXGIFactory1() {
+            Ok(f) => f,
+            Err(_) => return false,
+        };
+        let mut adapter_idx = 0u32;
+        while let Ok(adapter) = factory.EnumAdapters1(adapter_idx) {
+            adapter_idx += 1;
+            let mut output_idx = 0u32;
+            while let Ok(output) = adapter.EnumOutputs(output_idx) {
+                output_idx += 1;
+                let Ok(output6) = output.cast::<IDXGIOutput6>() else {
+                    continue;
+                };
+                let Ok(desc) = output6.GetDesc1() else {
+                    continue;
+                };
+                if desc.BitsPerColor >= 10 && desc.MaxLuminance >= 400.0 {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn detect_physical_disks_msft() -> Vec<PhysicalDiskInfo> {

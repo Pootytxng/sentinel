@@ -31,6 +31,9 @@ winapi = { version = "0.3", features = ["wingdi", "winuser", "minwindef", "sysin
 windows = { version = "0.59", features = [
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
+  # Gdi feature is required to use DXGI_OUTPUT_DESC1 (which carries HMONITOR
+  # in its body, defined in the Gdi module). Used by HDR capability probe.
+  "Win32_Graphics_Gdi",
   "Win32_Foundation",
 ] }
 # Signed-manifest infra (ARCHITECTURE_LOCKS §1.4).
