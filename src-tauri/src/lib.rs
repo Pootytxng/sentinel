@@ -1256,11 +1256,11 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         id: "power-ultimate".into(),
         title: "Switch to the Ultimate Performance power plan".into(),
         category: "Power".into(),
-        severity: "safe".into(),
+        severity: "moderate".into(),
         description:
-            "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming, slightly higher idle power draw.".into(),
-        impact: "Lower input latency · steadier frame times".into(),
-        downside: Some("Marginally higher idle power use (~5–10 W on most desktops).".into()),
+            "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming. The honest tradeoff: this permanently switches your daily power profile, so the higher power draw is in effect even when you're not gaming. A future Sentinel release will offer a Gaming Mode that automatically switches to high-performance only while a game is running, so your daily profile stays alone — this rec is the manual interim option.".into(),
+        impact: "Lower input latency · steadier frame times (when gaming)".into(),
+        downside: Some("Permanently mutates your daily power profile until you roll back. Higher idle power draw (~5–10 W on most desktops). A smarter game-aware switch is planned.".into()),
         applies_to: if active_plan.is_empty() {
             "Windows desktop".into()
         } else {
@@ -1281,18 +1281,35 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // visual-effects, mouse-accel-off, game-bar-disable, diagtrack-disable,
     // windows-search-disable: all migrated to baseline-rules-v1.json.
 
-    recs.push(Recommendation {
-        id: "reserved-storage-off".into(),
-        title: "Disable Windows Reserved Storage".into(),
-        category: "Storage".into(),
-        severity: "safe".into(),
-        description:
-            "Windows sets aside ~7–10 GB of your C: drive as a working area for major updates. On most modern systems (>= 256 GB) you'll never run into the corner case that justifies it, and reclaiming the space gives you an immediate, visible disk-space win.".into(),
-        impact: "Reclaim ~7–10 GB on C: · no functional impact for most users".into(),
-        downside: Some("If C: gets very full during a feature update, Windows may fail to install it cleanly until you free space manually.".into()),
-        applies_to: "Windows 10 1903+ / Windows 11".into(),
-        currently_applied: !reserved_storage_enabled(),
+    // reserved-storage-off is a SPACE tweak, not a performance tweak. Per the
+    // cross-LLM review (see commit 5221756 doc updates), this should only fire
+    // when reclaiming ~7-10 GB actually matters -- i.e. when C: free space is
+    // already getting tight. On systems with plenty of free space, suggesting
+    // it pollutes the catalog with noise that erodes user trust.
+    let c_drive_free_pct = hw.disks.iter().find_map(|d| {
+        if d.mount_point.starts_with("C:") && d.total_bytes > 0 {
+            Some((d.available_bytes as f64 / d.total_bytes as f64) * 100.0)
+        } else {
+            None
+        }
     });
+    if c_drive_free_pct.map(|pct| pct < 25.0).unwrap_or(false) {
+        recs.push(Recommendation {
+            id: "reserved-storage-off".into(),
+            title: "Disable Windows Reserved Storage (reclaim ~7–10 GB on C:)".into(),
+            category: "Storage".into(),
+            severity: "safe".into(),
+            description:
+                "Windows sets aside ~7–10 GB of your C: drive as a working area for major updates. Your C: drive is getting tight on free space, so reclaiming this is an immediate, visible space win. Only shown when C: is under ~25% free.".into(),
+            impact: "Reclaim ~7–10 GB on C: · no functional impact for most users".into(),
+            downside: Some("If C: gets very full during a feature update, Windows may fail to install it cleanly until you free space manually.".into()),
+            applies_to: format!(
+                "C: at {:.0}% free — reserved storage is worth reclaiming",
+                c_drive_free_pct.unwrap_or(0.0)
+            ),
+            currently_applied: !reserved_storage_enabled(),
+        });
+    }
 
     recs.push(Recommendation {
         id: "fast-startup-off".into(),
