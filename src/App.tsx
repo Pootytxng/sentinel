@@ -191,7 +191,7 @@ function App() {
     const downsideLine = rec.downside ? `\n\nTradeoff: ${rec.downside}` : "";
     if (
       !window.confirm(
-        `Apply: "${rec.title}"?\n\n${rec.description}${downsideLine}\n\nSentinel will record the prior state so you can roll this back at any time.`
+        `Turn ON: "${rec.title}"?\n\n${rec.description}${downsideLine}\n\nSentinel will record the prior state so you can toggle this off at any time.`
       )
     )
       return;
@@ -221,6 +221,37 @@ function App() {
       setError(`Rollback failed: ${e}`);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // Find the most recent still-active applied change for a given rec_id.
+  // Returns undefined if the rec is currently applied but Sentinel didn't
+  // record it (e.g. it was set outside Sentinel) -- in which case toggling
+  // OFF inside Sentinel isn't possible without a rollback contract.
+  const findActiveChangeForRec = (recId: string): AppliedChange | undefined => {
+    return changes
+      .slice()
+      .reverse()
+      .find(
+        (c) =>
+          c.rec_id === recId && c.status === "applied" && c.is_still_active,
+      );
+  };
+
+  const toggleRec = async (rec: Recommendation) => {
+    if (rec.currently_applied) {
+      const active = findActiveChangeForRec(rec.id);
+      if (!active) {
+        // Toggle UI says ON but Sentinel has no rollback record for this
+        // setting — it was applied outside Sentinel before we started watching.
+        setError(
+          `"${rec.title}" is currently on but Sentinel didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.`,
+        );
+        return;
+      }
+      await rollback(active);
+    } else {
+      await apply(rec);
     }
   };
 
@@ -308,7 +339,8 @@ function App() {
               category={activeTab as RecCategory}
               recs={categoryRecs(activeTab as RecCategory)}
               busyId={busyId}
-              onApply={apply}
+              onToggle={toggleRec}
+              hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
             />
           )}
 
@@ -469,12 +501,14 @@ function CategoryTab({
   category,
   recs,
   busyId,
-  onApply,
+  onToggle,
+  hasActiveChange,
 }: {
   category: RecCategory;
   recs: Recommendation[];
   busyId: string | null;
-  onApply: (rec: Recommendation) => void;
+  onToggle: (rec: Recommendation) => void;
+  hasActiveChange: (recId: string) => boolean;
 }) {
   return (
     <section className="tab-pane">
@@ -483,7 +517,7 @@ function CategoryTab({
           {category}
           <span className="count-badge">{recs.length}</span>
         </h2>
-        <div className="read-only-pill">Nothing applied without your approval</div>
+        <div className="read-only-pill">Nothing changes without your approval</div>
       </div>
       <div className="rec-list">
         {recs.map((r) => (
@@ -492,7 +526,8 @@ function CategoryTab({
             rec={r}
             appliable={APPLIABLE_REC_IDS.has(r.id)}
             busy={busyId === r.id}
-            onApply={() => onApply(r)}
+            canToggleOff={hasActiveChange(r.id)}
+            onToggle={() => onToggle(r)}
           />
         ))}
         {recs.length === 0 && (
@@ -606,23 +641,57 @@ function RecCard({
   rec,
   appliable,
   busy,
-  onApply,
+  canToggleOff,
+  onToggle,
 }: {
   rec: Recommendation;
   appliable: boolean;
   busy: boolean;
-  onApply: () => void;
+  canToggleOff: boolean;
+  onToggle: () => void;
 }) {
-  const showApplyButton = appliable && !rec.currently_applied;
+  // The toggle is disabled when:
+  //  - we're mid-operation (busy)
+  //  - the rec isn't appliable at all (informational / advisory)
+  //  - the rec is currently_applied but Sentinel doesn't have a rollback
+  //    record (it was applied outside Sentinel before we started watching;
+  //    user has to undo it where they originally set it)
+  const toggleDisabled =
+    busy || !appliable || (rec.currently_applied && !canToggleOff);
+  const toggleTitle = !appliable
+    ? "This recommendation isn't a single-toggle; follow the description"
+    : rec.currently_applied && !canToggleOff
+    ? "Currently on, but Sentinel didn't apply it — toggle off where you originally set it"
+    : busy
+    ? "Working…"
+    : rec.currently_applied
+    ? "Click to roll back to the prior state"
+    : "Click to apply (Sentinel will record the prior state for rollback)";
+
   return (
-    <div className={`rec rec-${rec.severity} ${rec.currently_applied ? "rec-applied" : ""}`}>
+    <div
+      className={`rec rec-${rec.severity} ${
+        rec.currently_applied ? "rec-on" : "rec-off"
+      }`}
+    >
       <div className="rec-head">
-        <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>{rec.category}</span>
-        {rec.currently_applied ? (
-          <span className="rec-status-applied">✓ Already set</span>
-        ) : (
-          <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
-        )}
+        <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>
+          {rec.category}
+        </span>
+        <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
+        <button
+          className={`toggle rec-toggle ${rec.currently_applied ? "toggle-on" : ""}`}
+          onClick={onToggle}
+          disabled={toggleDisabled}
+          role="switch"
+          aria-checked={rec.currently_applied}
+          aria-label={`${rec.currently_applied ? "Disable" : "Enable"} ${rec.title}`}
+          title={toggleTitle}
+        >
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+        </button>
       </div>
       <h3 className="rec-title">{rec.title}</h3>
       <p className="rec-desc">{rec.description}</p>
@@ -642,16 +711,16 @@ function RecCard({
           <span className="rec-row-value muted">{rec.applies_to}</span>
         </div>
       </div>
-      {showApplyButton && (
+      {!appliable && (
         <div className="rec-actions">
-          <button className="btn btn-apply" onClick={onApply} disabled={busy}>
-            {busy ? "Applying…" : "Apply"}
-          </button>
+          <span className="rec-manual">Manual — follow the description above</span>
         </div>
       )}
-      {!rec.currently_applied && !appliable && (
+      {appliable && rec.currently_applied && !canToggleOff && (
         <div className="rec-actions">
-          <span className="rec-manual">Manual for now · auto-apply coming</span>
+          <span className="rec-manual">
+            On, but applied outside Sentinel — toggle off where you originally set it
+          </span>
         </div>
       )}
     </div>

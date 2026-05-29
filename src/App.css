@@ -343,7 +343,6 @@ html, body, #root {
 .rec-cat-display  { background: #3a1f2e; color: #f0a3c0; }
 
 .rec-sev {
-  margin-left: auto;
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -355,23 +354,24 @@ html, body, #root {
 .rec-sev-moderate { color: #f5c451; background: rgba(245, 196, 81, 0.1); }
 .rec-sev-advanced { color: var(--danger); background: rgba(248, 113, 113, 0.1); }
 
-.rec-status-applied {
+/* Toggle in rec head: pushed to the right, primary on/off indicator */
+.rec-toggle {
   margin-left: auto;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.15);
 }
 
-.rec-applied {
+/* ON: card is "alive" — accent left border + slight inner glow.
+   OFF: card is dim/muted so the contrast is obvious at a glance. */
+.rec-on {
   border-left-color: #4ade80;
-  opacity: 0.7;
+  background: linear-gradient(to right, rgba(74, 222, 128, 0.05), var(--panel) 30%);
 }
-.rec-applied .rec-title { color: var(--muted); }
+.rec-on .rec-title { color: var(--fg); }
+
+.rec-off {
+  opacity: 0.82;
+}
+.rec-off .rec-title { color: var(--fg); }
+.rec-off:hover { opacity: 1; }
 
 .rec-actions {
   display: flex;
