@@ -45,12 +45,30 @@ Nothing in the market combines **hardware-aware**, **safe-by-default**, **plain-
 
 The opportunity: a commercial product that owns the "I want my PC running right but I don't want to risk breaking it" segment, with a credible safety story, a visible Trust Ledger, and a clean UX.
 
+## 2.5 Catalog discipline (the defining product principle)
+
+> The value is not "more tweaks." The value is *fewer recommendations, each defensible, hardware-conditional, reversible, rollback-protected, and plainly explained.*
+
+Sentinel's catalog has a deliberate ceiling: roughly **25–30 safe-baseline recommendations** total. Beyond that ceiling, additions become **advanced mode, diagnostic, problem-specific, or advisory-only** — never default applies.
+
+This is the line between Sentinel and the broader "PC optimizer" category. Most products in that category compete on tweak count and ship registry mega-packs. Sentinel competes on what *isn't* in the catalog.
+
+**Every rec in the safe baseline must clear all five bars:**
+
+1. **Hardware-conditional** — fires only when the user's actual rig benefits. No "universally applicable" tweaks.
+2. **Reversible** — a `RollbackAction` + `Snapshot` exists so the change can be undone without manual cleanup.
+3. **Snapshot-protected** — prior state is captured at apply time, stored in the audit ledger, and never depends on the live catalog being available at rollback time.
+4. **Plain-English** — the description names the actual impact and the actual downside in language a non-technical gamer can act on.
+5. **Not registry folklore** — there's a defensible reason it's measurable, not just "Reddit said so."
+
+The catalog's deliberate exclusions are in [ARCHITECTURE_LOCKS §3](ARCHITECTURE_LOCKS.md#3-baseline-exclusions): HPET, BCDEdit timer tweaks, Defender disable, Spectre/Meltdown mitigation disable, MMCSS edits, global fullscreen-optimizations off, fixed-size pagefile, MPO disable, registry TCP mega-packs, generic NIC offload packs. Most of these are in YouTube/Reddit tweak packs. None are in Sentinel's safe baseline.
+
 ## 3. Goals & Success Metrics
 
 ### Primary goals
 1. **Give every user a measurably better-running PC** without requiring them to learn what they changed.
-2. **Never break a user's system.** Every change is reversible; rollback is one click.
-3. **Be the first optimization tool a gamer's non-technical friend recommends** — driven by trust, not feature count.
+2. **Never break a user's system.** Every change is reversible; rollback is one click and survives Sentinel updates, catalog updates, and CDN outages.
+3. **Be the first optimization tool a gamer's non-technical friend recommends** — driven by trust and a small, audited catalog, not by tweak count.
 
 ### Success metrics (post-launch)
 | Metric | Target (3 mo) | Target (12 mo) |

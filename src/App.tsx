@@ -191,7 +191,7 @@ function App() {
     const downsideLine = rec.downside ? `\n\nTradeoff: ${rec.downside}` : "";
     if (
       !window.confirm(
-        `Turn ON: "${rec.title}"?\n\n${rec.description}${downsideLine}\n\nSentinel will record the prior state so you can toggle this off at any time.`
+        `Apply "${rec.title}"?\n\nThis will change a Windows setting to match Sentinel's recommendation.\n\n${rec.description}${downsideLine}\n\nSentinel will snapshot the prior state so you can roll this back at any time.`
       )
     )
       return;
@@ -650,48 +650,81 @@ function RecCard({
   canToggleOff: boolean;
   onToggle: () => void;
 }) {
-  // The toggle is disabled when:
-  //  - we're mid-operation (busy)
-  //  - the rec isn't appliable at all (informational / advisory)
-  //  - the rec is currently_applied but Sentinel doesn't have a rollback
-  //    record (it was applied outside Sentinel before we started watching;
-  //    user has to undo it where they originally set it)
+  // Distinct truths Sentinel surfaces (per cross-LLM review): the toggle
+  // position must not pretend Sentinel owns Windows state. We show three
+  // separate facts and let the user reason about them:
+  //   1. Recommended state  — what Sentinel thinks (always "On" for these recs;
+  //      they're all framed as "do this thing", so the recommendation is to
+  //      apply)
+  //   2. Current state      — what Windows actually is right now (live)
+  //   3. Applied by Sentinel — did Sentinel make this change, or did the user
+  //      already have it that way / change it externally?
+  //
+  // The toggle reflects the Current state (so flipping it asks Windows to
+  // change). When Current matches Recommended but Sentinel didn't apply it,
+  // we surface that distinction explicitly rather than offering a rollback
+  // we don't actually have a contract for.
+  const currentlyOn = rec.currently_applied;
+  const sentinelOwns = canToggleOff; // we have a still-active applied change
+  const isInfo = !appliable; // advisory / informational only
+
   const toggleDisabled =
-    busy || !appliable || (rec.currently_applied && !canToggleOff);
-  const toggleTitle = !appliable
-    ? "This recommendation isn't a single-toggle; follow the description"
-    : rec.currently_applied && !canToggleOff
-    ? "Currently on, but Sentinel didn't apply it — toggle off where you originally set it"
+    busy || isInfo || (currentlyOn && !sentinelOwns);
+
+  const toggleTitle = isInfo
+    ? "Advisory recommendation — Sentinel can't auto-apply this; follow the description"
     : busy
     ? "Working…"
-    : rec.currently_applied
-    ? "Click to roll back to the prior state"
-    : "Click to apply (Sentinel will record the prior state for rollback)";
+    : currentlyOn && !sentinelOwns
+    ? "Already on, but Sentinel didn't apply it. Toggle off in the original Windows location."
+    : currentlyOn
+    ? "Click to roll back. Sentinel will restore the prior state recorded at apply time."
+    : "Click to apply. Sentinel will snapshot the prior state so you can roll back at any time.";
+
+  // "Applied by Sentinel" status — three-way: Yes / No (advisory) / No (external)
+  const sentinelAppliedLabel = isInfo
+    ? "N/A — advisory recommendation"
+    : sentinelOwns
+    ? "Yes"
+    : currentlyOn
+    ? "No (set outside Sentinel)"
+    : "No (not applied)";
+  const sentinelAppliedClass = sentinelOwns
+    ? "state-on"
+    : currentlyOn && !sentinelOwns
+    ? "state-warn"
+    : "state-muted";
+
+  const stateClass = isInfo
+    ? "rec-info"
+    : currentlyOn
+    ? "rec-on"
+    : "rec-off";
 
   return (
-    <div
-      className={`rec rec-${rec.severity} ${
-        rec.currently_applied ? "rec-on" : "rec-off"
-      }`}
-    >
+    <div className={`rec rec-${rec.severity} ${stateClass}`}>
       <div className="rec-head">
         <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>
           {rec.category}
         </span>
         <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
-        <button
-          className={`toggle rec-toggle ${rec.currently_applied ? "toggle-on" : ""}`}
-          onClick={onToggle}
-          disabled={toggleDisabled}
-          role="switch"
-          aria-checked={rec.currently_applied}
-          aria-label={`${rec.currently_applied ? "Disable" : "Enable"} ${rec.title}`}
-          title={toggleTitle}
-        >
-          <span className="toggle-track">
-            <span className="toggle-thumb" />
-          </span>
-        </button>
+        {isInfo ? (
+          <span className="rec-advisory-pill">Advisory</span>
+        ) : (
+          <button
+            className={`toggle rec-toggle ${currentlyOn ? "toggle-on" : ""}`}
+            onClick={onToggle}
+            disabled={toggleDisabled}
+            role="switch"
+            aria-checked={currentlyOn}
+            aria-label={`${currentlyOn ? "Roll back" : "Apply"} ${rec.title}`}
+            title={toggleTitle}
+          >
+            <span className="toggle-track">
+              <span className="toggle-thumb" />
+            </span>
+          </button>
+        )}
       </div>
       <h3 className="rec-title">{rec.title}</h3>
       <p className="rec-desc">{rec.description}</p>
@@ -711,18 +744,26 @@ function RecCard({
           <span className="rec-row-value muted">{rec.applies_to}</span>
         </div>
       </div>
-      {!appliable && (
-        <div className="rec-actions">
-          <span className="rec-manual">Manual — follow the description above</span>
+      <div className="rec-status">
+        <div className="rec-status-row">
+          <span className="rec-status-label">Recommended</span>
+          <span className="rec-status-value state-on">On</span>
         </div>
-      )}
-      {appliable && rec.currently_applied && !canToggleOff && (
-        <div className="rec-actions">
-          <span className="rec-manual">
-            On, but applied outside Sentinel — toggle off where you originally set it
+        <div className="rec-status-row">
+          <span className="rec-status-label">Current</span>
+          <span
+            className={`rec-status-value ${currentlyOn ? "state-on" : "state-off"}`}
+          >
+            {currentlyOn ? "On" : "Off"}
           </span>
         </div>
-      )}
+        <div className="rec-status-row">
+          <span className="rec-status-label">Applied by Sentinel</span>
+          <span className={`rec-status-value ${sentinelAppliedClass}`}>
+            {sentinelAppliedLabel}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
