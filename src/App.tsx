@@ -155,7 +155,21 @@ const fmtDriver = (g: GpuInfo) => {
 // and History only appear when they have content.
 const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type RecCategory = (typeof REC_CATEGORIES)[number];
-type Tab = "Overview" | RecCategory | "Startup" | "Diagnostics" | "History";
+type Tab = "Overview" | RecCategory | "Startup" | "Monitoring" | "Diagnostics" | "History";
+
+type GpuSensorSnapshot = {
+  index: number;
+  name: string;
+  temperature_c: number | null;
+  utilization_gpu_pct: number | null;
+  utilization_memory_pct: number | null;
+  vram_used_bytes: number | null;
+  vram_total_bytes: number | null;
+  graphics_clock_mhz: number | null;
+  memory_clock_mhz: number | null;
+  power_draw_w: number | null;
+  fan_speed_pct: number | null;
+};
 
 type DiagnosticEntry = {
   label: string;
@@ -311,6 +325,10 @@ function App() {
       if ((recCountByCategory[c] ?? 0) > 0) list.push(c);
     });
     if (startup.length > 0) list.push("Startup");
+    // Monitoring is always visible once we have a hardware scan. On systems
+    // without an NVIDIA GPU (no NVML), the tab itself surfaces the
+    // "sensors unavailable" state rather than hiding the feature entirely.
+    if (hw) list.push("Monitoring");
     // Diagnostics is always visible once we have a hardware scan — it's
     // "Sentinel's raw view of your PC" and the user should be able to reach
     // it to spot-check Sentinel's observations even when nothing else
@@ -318,7 +336,7 @@ function App() {
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recCountByCategory, startup.length, diagnostics.length, changes.length]);
+  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length]);
 
   // If the currently active tab disappears (e.g. user rolled back the last
   // applied change while History was open), fall back to Overview.
@@ -331,6 +349,7 @@ function App() {
   const tabBadgeCount = (tab: Tab): number | null => {
     if (tab === "Overview") return null;
     if (tab === "Diagnostics") return null;
+    if (tab === "Monitoring") return null;
     if (tab === "Startup") return startup.length;
     if (tab === "History") return changes.length;
     return recCountByCategory[tab] ?? 0;
@@ -412,6 +431,10 @@ function App() {
               busyId={busyId}
               onToggle={toggleStartup}
             />
+          )}
+
+          {activeTab === "Monitoring" && (
+            <MonitoringTab active={activeTab === "Monitoring"} />
           )}
 
           {activeTab === "Diagnostics" && (
@@ -639,6 +662,275 @@ function StartupTab({
         ))}
       </div>
     </section>
+  );
+}
+
+// Monitoring poll cadence and rolling-window size. 1 Hz is plenty granular
+// for "is my GPU thermal-throttling" / "is my game CPU-bound" trends; faster
+// rates burn battery and HMR-spam the renderer without insight. The 60-sample
+// window means each chart shows the last minute — long enough to spot a
+// thermal trend, short enough to react to a moment-ago spike.
+const MONITORING_POLL_MS = 1000;
+const MONITORING_WINDOW = 60;
+
+function MonitoringTab({ active }: { active: boolean }) {
+  const [samples, setSamples] = useState<GpuSensorSnapshot[][]>([]);
+  const [hasSensors, setHasSensors] = useState<boolean | null>(null);
+
+  // Poll only while the tab is active. When the user switches away we drop
+  // the interval so we don't burn cycles on charts that aren't visible. The
+  // sample buffer is preserved in state so coming back doesn't lose history.
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const snap = await invoke<GpuSensorSnapshot[]>("get_gpu_sensors");
+        if (cancelled) return;
+        setHasSensors(snap.length > 0);
+        setSamples((prev) => {
+          const next = [...prev, snap];
+          return next.length > MONITORING_WINDOW
+            ? next.slice(-MONITORING_WINDOW)
+            : next;
+        });
+      } catch {
+        if (!cancelled) setHasSensors(false);
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, MONITORING_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [active]);
+
+  if (hasSensors === false) {
+    return (
+      <section className="tab-pane">
+        <div className="section-header">
+          <h2 className="section-title">Monitoring</h2>
+        </div>
+        <p className="section-help">
+          GPU sensor readings via NVML (NVIDIA's vendor library — no kernel
+          driver, no game injection, anti-cheat compatible).
+        </p>
+        <div className="empty">
+          GPU sensors unavailable. Sentinel reads GPU telemetry from NVML,
+          which ships with the NVIDIA driver. AMD (ADLX) and Intel (GPA)
+          support is on the roadmap — your GPU will get its own panel here
+          once that lands.
+        </div>
+      </section>
+    );
+  }
+
+  // Build a per-GPU snapshot map. Each panel renders the rolling history
+  // for one adapter, keyed by NVML index (stable across polls).
+  const latest = samples[samples.length - 1] ?? [];
+  return (
+    <section className="tab-pane">
+      <div className="section-header">
+        <h2 className="section-title">Monitoring</h2>
+        <div className="read-only-pill">
+          {samples.length === 0
+            ? "Starting…"
+            : `${samples.length}s history · 1 Hz`}
+        </div>
+      </div>
+      <p className="section-help">
+        Live GPU telemetry via NVML. No injection into your games, no kernel
+        driver — these are the same readings the NVIDIA driver exposes to
+        every tool that asks politely. Charts show the last minute.
+      </p>
+      {latest.length === 0 ? (
+        <div className="empty">Collecting first sample…</div>
+      ) : (
+        latest.map((gpu) => (
+          <GpuMonitorPanel
+            key={gpu.index}
+            gpu={gpu}
+            history={samples
+              .map((snap) => snap.find((g) => g.index === gpu.index) ?? null)}
+          />
+        ))
+      )}
+    </section>
+  );
+}
+
+function GpuMonitorPanel({
+  gpu,
+  history,
+}: {
+  gpu: GpuSensorSnapshot;
+  history: (GpuSensorSnapshot | null)[];
+}) {
+  const vramUsedPct =
+    gpu.vram_used_bytes && gpu.vram_total_bytes
+      ? Math.round((gpu.vram_used_bytes / gpu.vram_total_bytes) * 100)
+      : null;
+  return (
+    <div className="monitor-panel">
+      <div className="monitor-panel-head">
+        <div className="monitor-panel-name">{gpu.name}</div>
+        <div className="monitor-panel-sub">
+          {gpu.vram_total_bytes
+            ? `${fmtGB(gpu.vram_total_bytes)} VRAM`
+            : "Adapter " + gpu.index}
+        </div>
+      </div>
+      <div className="monitor-metrics">
+        <MetricRow
+          label="GPU temperature"
+          value={gpu.temperature_c}
+          unit="°C"
+          history={history.map((s) => s?.temperature_c ?? null)}
+          min={20}
+          max={95}
+          color="#f87171"
+        />
+        <MetricRow
+          label="GPU utilization"
+          value={gpu.utilization_gpu_pct}
+          unit="%"
+          history={history.map((s) => s?.utilization_gpu_pct ?? null)}
+          min={0}
+          max={100}
+          color="#6aa9ff"
+        />
+        <MetricRow
+          label="VRAM used"
+          value={vramUsedPct}
+          unit="%"
+          history={history.map((s) =>
+            s?.vram_used_bytes && s?.vram_total_bytes
+              ? Math.round((s.vram_used_bytes / s.vram_total_bytes) * 100)
+              : null,
+          )}
+          min={0}
+          max={100}
+          color="#a78bfa"
+          sublabel={
+            gpu.vram_used_bytes && gpu.vram_total_bytes
+              ? `${fmtGB(gpu.vram_used_bytes)} / ${fmtGB(gpu.vram_total_bytes)}`
+              : undefined
+          }
+        />
+        <MetricRow
+          label="Power draw"
+          value={gpu.power_draw_w !== null ? Math.round(gpu.power_draw_w) : null}
+          unit="W"
+          history={history.map((s) =>
+            s?.power_draw_w !== null && s?.power_draw_w !== undefined
+              ? Math.round(s.power_draw_w)
+              : null,
+          )}
+          min={0}
+          max={400}
+          color="#f5c451"
+        />
+        <MetricRow
+          label="Graphics clock"
+          value={gpu.graphics_clock_mhz}
+          unit=" MHz"
+          history={history.map((s) => s?.graphics_clock_mhz ?? null)}
+          min={0}
+          max={3500}
+          color="#4ade80"
+        />
+        <MetricRow
+          label="Fan speed"
+          value={gpu.fan_speed_pct}
+          unit="%"
+          history={history.map((s) => s?.fan_speed_pct ?? null)}
+          min={0}
+          max={100}
+          color="#8a93a8"
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricRow({
+  label,
+  value,
+  unit,
+  history,
+  min,
+  max,
+  color,
+  sublabel,
+}: {
+  label: string;
+  value: number | null;
+  unit: string;
+  history: (number | null)[];
+  min: number;
+  max: number;
+  color: string;
+  sublabel?: string;
+}) {
+  return (
+    <div className="metric-row">
+      <div className="metric-label">
+        <div>{label}</div>
+        {sublabel && <div className="metric-sublabel">{sublabel}</div>}
+      </div>
+      <div className="metric-value" style={{ color }}>
+        {value === null ? "—" : `${value}${unit}`}
+      </div>
+      <Sparkline data={history} min={min} max={max} color={color} />
+    </div>
+  );
+}
+
+function Sparkline({
+  data,
+  min,
+  max,
+  color,
+}: {
+  data: (number | null)[];
+  min: number;
+  max: number;
+  color: string;
+}) {
+  const width = 360;
+  const height = 36;
+  const pad = 2;
+  const usableW = width - pad * 2;
+  const usableH = height - pad * 2;
+
+  // Build the path as a series of M / L commands so null gaps don't draw
+  // straight lines across missing data.
+  const len = data.length;
+  if (len < 2) {
+    return <svg className="sparkline" width={width} height={height} />;
+  }
+  let d = "";
+  let penDown = false;
+  data.forEach((v, i) => {
+    if (v === null) {
+      penDown = false;
+      return;
+    }
+    const x = pad + (i / (len - 1)) * usableW;
+    const clamped = Math.min(max, Math.max(min, v));
+    const y = pad + usableH - ((clamped - min) / (max - min || 1)) * usableH;
+    if (!penDown) {
+      d += `M${x.toFixed(1)} ${y.toFixed(1)} `;
+      penDown = true;
+    } else {
+      d += `L${x.toFixed(1)} ${y.toFixed(1)} `;
+    }
+  });
+  return (
+    <svg className="sparkline" width={width} height={height}>
+      <path d={d} fill="none" stroke={color} strokeWidth={1.5} />
+    </svg>
   );
 }
 

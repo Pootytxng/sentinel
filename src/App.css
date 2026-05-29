@@ -900,3 +900,81 @@ html, body, #root {
   line-height: 1.45;
   margin-top: 2px;
 }
+
+/* ─── Monitoring tab ───────────────────────────────────────────────────
+   Live GPU sensor readings via NVML. One panel per detected adapter.
+   Each metric is label + current value + last-60s sparkline.
+   Anti-cheat-safe: no injection, no kernel driver. */
+.monitor-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.monitor-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.monitor-panel-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.monitor-panel-sub {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.monitor-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto 360px;
+  align-items: center;
+  column-gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.metric-row:last-child {
+  border-bottom: none;
+}
+
+.metric-label {
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.metric-sublabel {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.metric-value {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  text-align: right;
+  min-width: 80px;
+}
+
+.sparkline {
+  display: block;
+  background: var(--panel-2);
+  border-radius: 4px;
+}

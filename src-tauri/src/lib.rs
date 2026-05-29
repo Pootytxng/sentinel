@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -2093,6 +2093,93 @@ fn get_recommendations() -> Vec<Recommendation> {
     build_recommendations(&hw)
 }
 
+// ─── GPU sensors (NVML — NVIDIA only for v1) ─────────────────────────────
+//
+// Sentinel-safe monitoring: NVML is NVIDIA's vendor-blessed signed library
+// for driver-side telemetry (nvml.dll ships with the driver). No injection,
+// no kernel driver, anti-cheat-compatible.
+//
+// On non-NVIDIA systems (or when the NVIDIA driver isn't installed) Nvml::
+// init() returns Err. We cache the Err once via OnceLock so we don't retry
+// init on every poll — the Monitoring tab shows "GPU sensors unavailable"
+// instead.
+//
+// ADLX (AMD) and Intel GPA will land in follow-up commits with the same
+// shape — one Vec<GpuSensorSnapshot> per call regardless of vendor mix.
+
+#[derive(Serialize, Clone)]
+struct GpuSensorSnapshot {
+    /// Adapter index as reported by NVML (0-based). Stable across calls.
+    index: u32,
+    /// Device name as reported by NVML, e.g. "NVIDIA GeForce RTX 4080".
+    name: String,
+    /// GPU die temperature in Celsius. None if the device doesn't report.
+    temperature_c: Option<u32>,
+    /// GPU core utilization, 0-100. None if unavailable.
+    utilization_gpu_pct: Option<u32>,
+    /// Memory controller utilization (NOT VRAM usage), 0-100.
+    utilization_memory_pct: Option<u32>,
+    /// VRAM used / total in bytes.
+    vram_used_bytes: Option<u64>,
+    vram_total_bytes: Option<u64>,
+    /// Graphics clock in MHz.
+    graphics_clock_mhz: Option<u32>,
+    /// Memory clock in MHz.
+    memory_clock_mhz: Option<u32>,
+    /// Instantaneous power draw in watts (NVML reports milliwatts).
+    power_draw_w: Option<f32>,
+    /// Fan speed as a percent of max (some cards report 0 if passive).
+    fan_speed_pct: Option<u32>,
+}
+
+fn nvml_instance() -> &'static Option<nvml_wrapper::Nvml> {
+    static NVML: OnceLock<Option<nvml_wrapper::Nvml>> = OnceLock::new();
+    NVML.get_or_init(|| nvml_wrapper::Nvml::init().ok())
+}
+
+#[tauri::command]
+fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
+    use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
+
+    let Some(nvml) = nvml_instance() else {
+        return Vec::new();
+    };
+    let count = match nvml.device_count() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let device = match nvml.device_by_index(i) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let name = device.name().unwrap_or_else(|_| "NVIDIA GPU".into());
+        let temperature_c = device.temperature(TemperatureSensor::Gpu).ok();
+        let util = device.utilization_rates().ok();
+        let mem = device.memory_info().ok();
+        let graphics_clock_mhz = device.clock_info(Clock::Graphics).ok();
+        let memory_clock_mhz = device.clock_info(Clock::Memory).ok();
+        let power_draw_w = device.power_usage().ok().map(|mw| mw as f32 / 1000.0);
+        let fan_speed_pct = device.fan_speed(0).ok();
+
+        out.push(GpuSensorSnapshot {
+            index: i,
+            name,
+            temperature_c,
+            utilization_gpu_pct: util.as_ref().map(|u| u.gpu),
+            utilization_memory_pct: util.as_ref().map(|u| u.memory),
+            vram_used_bytes: mem.as_ref().map(|m| m.used),
+            vram_total_bytes: mem.as_ref().map(|m| m.total),
+            graphics_clock_mhz,
+            memory_clock_mhz,
+            power_draw_w,
+            fan_speed_pct,
+        });
+    }
+    out
+}
+
 // ─── Diagnostics ─────────────────────────────────────────────────────────
 //
 // The Diagnostics tab is "Sentinel's view of your PC, as raw observations."
@@ -3750,6 +3837,7 @@ pub fn run() {
             get_hardware_info,
             get_recommendations,
             get_diagnostics,
+            get_gpu_sensors,
             apply_recommendation,
             rollback_change,
             get_applied_changes,

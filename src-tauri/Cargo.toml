@@ -48,3 +48,12 @@ windows = { version = "0.59", features = [
 # rollout; the rest of the integrity chain does not change.
 sha2 = "0.10"
 
+# NVIDIA Management Library wrapper. Used by the Monitoring tab to surface
+# GPU temperature, utilization, clocks, power, and VRAM. nvml.dll ships with
+# the NVIDIA driver — when the driver is absent (AMD/Intel-only systems, or
+# NVIDIA driver not installed), Nvml::init() returns Err and the Monitoring
+# tab falls back to "GPU sensors unavailable" instead of crashing. Anti-cheat
+# safe — NVML is a vendor-blessed signed library, no injection, no kernel
+# driver.
+nvml-wrapper = "0.10"
+
