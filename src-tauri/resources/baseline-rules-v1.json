@@ -162,6 +162,32 @@
       "conditions": [],
       "apply_kind": null,
       "state_kind": null
+    },
+    {
+      "id": "vrr-advisory",
+      "title": "Check that Variable Refresh Rate is on (G-SYNC / FreeSync)",
+      "category": "Display",
+      "severity": "safe",
+      "description": "If your monitor supports G-SYNC, G-SYNC Compatible, or FreeSync (and most modern gaming monitors do), Variable Refresh Rate eliminates the screen tearing you'd otherwise get from frame rates that don't match the panel's refresh rate. It also makes frame-rate dips feel less jarring because the panel resyncs each frame instead of holding stale content. Two switches need to be on for it to work: Windows ('Variable refresh rate' in Settings → System → Display → Graphics → Default graphics settings) AND your GPU vendor's control panel (NVIDIA Control Panel → Set up G-SYNC, or AMD Adrenalin → Display → AMD FreeSync). Sentinel doesn't auto-apply because monitor and GPU compatibility varies, and on a small number of older displays VRR can cause flicker — the user should verify it works on their specific hardware.",
+      "impact": "Eliminates tearing · smoother feel during frame-rate dips · no input-lag cost when configured correctly",
+      "downside": "On some panels VRR can cause brightness flicker, especially in dark scenes with big FPS swings. If you see flicker, turn VRR off for that monitor.",
+      "applies_to_template": "Verify monitor + GPU + Windows + vendor control panel all have VRR enabled",
+      "conditions": [],
+      "apply_kind": null,
+      "state_kind": null
+    },
+    {
+      "id": "audio-enhancements-advisory",
+      "title": "Disable audio enhancements on your gaming output device",
+      "category": "Windows",
+      "severity": "moderate",
+      "description": "Windows audio 'enhancements' (Loudness Equalization, Bass Boost, Virtual Surround, Room Correction, Speaker Fill, and similar driver-side effects) sit between the game and your output device. They add a few milliseconds of latency and, more importantly, change the spatial cues competitive shooters rely on for footstep direction. For movies, music, and immersive single-player, the enhancements may sound better and are worth keeping. Sentinel surfaces this as an advisory: open Sound Settings → click your active output device → Device properties → Additional device properties → Enhancements tab → check 'Disable all enhancements' (or 'Disable all sound effects' depending on Windows version). The Spatial sound dropdown on the same screen — Windows Sonic / Dolby Atmos for Headphones — is a separate decision and many competitive players keep one of those on.",
+      "impact": "Tighter audio latency · accurate spatial positioning · footstep direction stays where the game put it",
+      "downside": "Music and movies may lose punch (no bass boost, no loudness EQ). If you mainly play single-player cinematics, leaving enhancements on is reasonable.",
+      "applies_to_template": "Active default output device — change per device if you switch between headphones and speakers",
+      "conditions": [],
+      "apply_kind": null,
+      "state_kind": null
     }
   ]
 }
