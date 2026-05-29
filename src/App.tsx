@@ -76,6 +76,13 @@ type HardwareInfo = {
   cpu_arch: CpuArchInfo | null;
 };
 
+// "Verified"        — Sentinel directly observes the fact this rec claims.
+// "Measured signal" — Third-party benchmarks / community consensus measured it.
+// "Expected impact" — Logical from Windows internals, not benchmarked.
+// Reserved for the synthetic benchmark suite: any rec whose impact reproduces
+// under Sentinel's own benchmark graduates to "verified."
+type Provenance = "verified" | "measured-signal" | "expected-impact";
+
 type Recommendation = {
   id: string;
   title: string;
@@ -86,6 +93,7 @@ type Recommendation = {
   downside: string | null;
   applies_to: string;
   currently_applied: boolean;
+  provenance: Provenance;
 };
 
 type AppliedChange = {
@@ -689,6 +697,23 @@ function Detail({ k, v }: { k: string; v: string | number }) {
   );
 }
 
+const PROVENANCE_LABEL: Record<Provenance, string> = {
+  verified: "Verified",
+  "measured-signal": "Measured signal",
+  "expected-impact": "Expected impact",
+};
+
+// Tooltip text shown when the user hovers the provenance pill. Each one
+// names the honesty level of the rec's IMPACT claim, not the rec itself.
+const PROVENANCE_TITLE: Record<Provenance, string> = {
+  verified:
+    "Sentinel directly observes this fact (e.g., reads the current refresh rate, measures free disk space, checks driver date). The claim IS the measurement.",
+  "measured-signal":
+    "Third-party benchmarks or wide community testing has measured this impact. Sentinel cites established results rather than inventing them.",
+  "expected-impact":
+    "Logical from Windows internals; Sentinel has NOT measured this itself. Honest 'we believe this but haven't verified it under our own benchmark suite.'",
+};
+
 function RecCard({
   rec,
   appliable,
@@ -760,6 +785,12 @@ function RecCard({
           {rec.category}
         </span>
         <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
+        <span
+          className={`rec-provenance rec-provenance-${rec.provenance}`}
+          title={PROVENANCE_TITLE[rec.provenance]}
+        >
+          {PROVENANCE_LABEL[rec.provenance]}
+        </span>
         {isInfo ? (
           <span className="rec-advisory-pill">Advisory</span>
         ) : (

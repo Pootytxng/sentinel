@@ -391,6 +391,36 @@ html, body, #root {
 .rec-sev-moderate { color: #f5c451; background: rgba(245, 196, 81, 0.1); }
 .rec-sev-advanced { color: var(--danger); background: rgba(248, 113, 113, 0.1); }
 
+/* Provenance pill: indicates the honesty tier of the rec's impact claim.
+   Sits inline with the severity pill so the user can read both at a glance.
+   Verified is the strongest (filled), Measured signal is mid (subtle fill),
+   Expected impact is the weakest (outlined only) — the visual weight
+   matches the confidence level. */
+.rec-provenance {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: help;
+}
+.rec-provenance-verified {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.18);
+  border: 1px solid rgba(74, 222, 128, 0.45);
+}
+.rec-provenance-measured-signal {
+  color: #6aa9ff;
+  background: rgba(106, 169, 255, 0.12);
+  border: 1px solid rgba(106, 169, 255, 0.30);
+}
+.rec-provenance-expected-impact {
+  color: #9ca3af;
+  background: transparent;
+  border: 1px dashed rgba(156, 163, 175, 0.45);
+}
+
 /* Toggle in rec head: pushed to the right, primary on/off indicator.
    Per cross-LLM trust-UI feedback, the toggle reflects ONLY the current
    Windows state — not whether Sentinel applied it. The three-row status

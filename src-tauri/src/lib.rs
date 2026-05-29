@@ -145,6 +145,35 @@ struct HardwareInfo {
     has_active_wired_ethernet: bool,
 }
 
+// Provenance is the honesty tier for each rec's *impact* claim. The UI surfaces
+// this as a pill on every rec card so the user can tell at a glance whether
+// the claim is something Sentinel measured itself ("Verified"), something
+// industry/community benchmarks have measured ("Measured signal"), or
+// something Sentinel believes follows from Windows internals but has not
+// itself measured ("Expected impact"). See PRD §2.5.
+//
+// Right now nothing is "Verified" — Sentinel has not run its own benchmarks.
+// That is the honest answer. "Verified" is reserved for recs whose claim is a
+// direct measurement Sentinel *itself* performed (e.g., reading current vs
+// max display Hz is a direct fact; saying "lower latency" because we changed
+// a registry value would be Expected). When the synthetic benchmark suite
+// ships, recs whose impact is reproduced under that suite can graduate to
+// "Verified."
+#[derive(Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+enum Provenance {
+    /// Sentinel directly observes the fact this rec claims (e.g., current
+    /// vs max refresh rate, free disk space, driver age in days). The claim
+    /// is the measurement.
+    Verified,
+    /// Third-party benchmarks or wide community consensus has measured this
+    /// impact. Sentinel is citing established results, not inventing them.
+    MeasuredSignal,
+    /// Logical from Windows internals but not benchmarked. Honest "we
+    /// believe this but have not measured it ourselves."
+    ExpectedImpact,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct Recommendation {
     id: String,
@@ -156,6 +185,7 @@ struct Recommendation {
     downside: Option<String>,
     applies_to: String,
     currently_applied: bool,
+    provenance: Provenance,
 }
 
 // ─── Step B: Rules JSON schema + loader ──────────────────────────────────
@@ -188,6 +218,7 @@ struct RuleSpec {
     severity: String,
     description: String,
     impact: String,
+    provenance: Provenance,
     #[serde(default)]
     downside: Option<String>,
     #[serde(default)]
@@ -728,6 +759,7 @@ fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<Recommendati
         downside: spec.downside.clone(),
         applies_to,
         currently_applied,
+        provenance: spec.provenance,
     })
 }
 
@@ -1751,6 +1783,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             format!("Currently on '{}'", active_plan)
         },
         currently_applied: on_ultimate,
+        provenance: Provenance::MeasuredSignal,
     });
 
     // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
@@ -1792,6 +1825,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 c_drive_free_pct.unwrap_or(0.0)
             ),
             currently_applied: !reserved_storage_enabled(),
+            provenance: Provenance::MeasuredSignal,
         });
     }
 
@@ -1810,6 +1844,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             _ => "Not yet configured".into(),
         },
         currently_applied: fast_startup_state() == Some(0),
+        provenance: Provenance::ExpectedImpact,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -1826,6 +1861,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             downside: Some("GeForce Experience won't auto-update; you can still update manually.".into()),
             applies_to: name.clone(),
             currently_applied: !telemetry_running,
+            provenance: Provenance::ExpectedImpact,
         });
 
         recs.push(Recommendation {
@@ -1839,6 +1875,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             downside: Some("Can slightly reduce maximum FPS in GPU-bound titles.".into()),
             applies_to: "NVIDIA GPU + latency profile".into(),
             currently_applied: false,
+            provenance: Provenance::MeasuredSignal,
         });
     }
 
@@ -1854,6 +1891,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             downside: None,
             applies_to: name,
             currently_applied: false,
+            provenance: Provenance::ExpectedImpact,
         });
     }
 
@@ -1872,6 +1910,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             downside: Some("Slightly higher battery drain on laptops.".into()),
             applies_to: "Hybrid GPU setup detected".into(),
             currently_applied: false,
+            provenance: Provenance::ExpectedImpact,
         });
     }
 
@@ -1893,6 +1932,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 downside: None,
                 applies_to: format!("{} ({:.0}% free)", disk.mount_point, pct_free),
                 currently_applied: false,
+                provenance: Provenance::Verified,
             });
             break;
         }
@@ -1921,6 +1961,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage).".into()),
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
+            provenance: Provenance::ExpectedImpact,
         });
     }
 
@@ -1956,6 +1997,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                     _ => "Modern GPU detected — HAGS not yet configured".into(),
                 },
                 currently_applied: state == Some(2),
+                provenance: Provenance::MeasuredSignal,
             });
         }
     }
@@ -1983,6 +2025,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                     display.max_refresh_rate_hz
                 ),
                 currently_applied: false,
+                provenance: Provenance::Verified,
             });
         }
     }
@@ -2016,6 +2059,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 downside: Some("New drivers occasionally introduce regressions — keep the previous installer in case you need to roll back.".into()),
                 applies_to: format!("{} driver is ~{} months old", vendor, months),
                 currently_applied: false,
+                provenance: Provenance::Verified,
             });
         }
     }
@@ -2033,6 +2077,7 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             downside: Some("Requires a hardware purchase and either a Windows reinstall or a drive clone.".into()),
             applies_to: "Spinning HDDs only — no SSDs detected".into(),
             currently_applied: false,
+            provenance: Provenance::MeasuredSignal,
         });
     }
 
