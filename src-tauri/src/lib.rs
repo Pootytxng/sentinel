@@ -1548,6 +1548,121 @@ fn get_recommendations() -> Vec<Recommendation> {
 }
 
 // ─── Apply / Rollback ────────────────────────────────────────────────────
+//
+// See docs/ARCHITECTURE_LOCKS §2 for the typed-allowlist contract:
+//   AppliedAction   = what was done at apply time (typed enum, allowlist)
+//   RollbackAction  = how to undo using the stored Snapshot (separate enum
+//                     so future apply-path refactors can change AppliedAction
+//                     variants without breaking rollback of historical entries)
+//   Snapshot        = prior machine state, also typed
+//
+// Remote rules can only select among these variants. Unknown variants reject
+// at parse time. Privileged behavior never decodes free-form strings.
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+enum KnownService {
+    SysMain,
+    DiagTrack,
+    WSearch,
+    NvTelemetryContainer,
+}
+
+impl KnownService {
+    fn name(&self) -> &'static str {
+        match self {
+            KnownService::SysMain => "SysMain",
+            KnownService::DiagTrack => "DiagTrack",
+            KnownService::WSearch => "WSearch",
+            KnownService::NvTelemetryContainer => "NvTelemetryContainer",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum AppliedAction {
+    DisableKnownService { service: KnownService },
+    EnableGameMode,
+    DisableMouseAcceleration,
+    DisableGameBarAndDvr,
+    SetVisualEffectsBestPerformance,
+    EnableHardwareGpuScheduling,
+    SetUltimatePerformancePlan,
+    DisableNagleOnActiveNics,
+    DisableFastStartup,
+    DisableReservedStorage,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum RollbackAction {
+    RestoreServiceFromSnapshot { service: KnownService },
+    RestoreGameModeFromSnapshot,
+    RestoreMouseAccelFromSnapshot,
+    RestoreGameBarFromSnapshot,
+    RestoreVisualEffectsFromSnapshot,
+    RestoreHwSchModeFromSnapshot,
+    RestorePowerPlanFromSnapshot,
+    RestoreNagleNicsFromSnapshot,
+    RestoreFastStartupFromSnapshot,
+    RestoreReservedStorageFromSnapshot,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum Snapshot {
+    Service {
+        prior_state: String,
+        prior_start_mode: String,
+    },
+    GameMode {
+        prior_enabled: Option<u32>,
+    },
+    MouseAccel {
+        prior_speed: String,
+        prior_threshold1: String,
+        prior_threshold2: String,
+    },
+    GameBar {
+        prior_capture: Option<u32>,
+        prior_enabled: Option<u32>,
+    },
+    VisualEffects {
+        vfx_setting_prior: Option<u32>,
+        user_prefs_mask_prior: Option<Vec<u8>>,
+    },
+    HwSchMode {
+        prior: Option<u32>,
+    },
+    PowerPlan {
+        prior_guid: String,
+    },
+    NagleNics {
+        interfaces: Vec<NagleInterfaceSnapshot>,
+    },
+    FastStartup {
+        prior_hiberboot: Option<u32>,
+    },
+    ReservedStorage {
+        prior_enabled: bool,
+    },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct NagleInterfaceSnapshot {
+    interface: String,
+    prior_ack: Option<u32>,
+    prior_nodelay: Option<u32>,
+}
+
+// What an apply_* function produces. Carries the full rollback contract
+// independent of the live recommendation catalog.
+struct ApplyResult {
+    applied_action: AppliedAction,
+    rollback_action: RollbackAction,
+    snapshot: Snapshot,
+    elevation_used: bool,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 struct AppliedChange {
@@ -1555,8 +1670,23 @@ struct AppliedChange {
     rec_id: String,
     rec_title: String,
     applied_at: String,
-    snapshot: serde_json::Value,
+    snapshot: serde_json::Value, // for legacy entries: untyped; for new entries: typed Snapshot serialized
     status: String, // "applied" | "rolled_back"
+
+    // Additive per ARCHITECTURE_LOCKS Tier 1: rollback contract captured at
+    // apply time so rollback survives rule deprecation, catalog changes, CDN
+    // outages, and app version mismatches. Optional for compat with old
+    // history.json entries written before these fields existed.
+    #[serde(default)]
+    applied_action: Option<AppliedAction>,
+    #[serde(default)]
+    rollback_action: Option<RollbackAction>,
+    #[serde(default)]
+    app_version_at_apply: Option<String>,
+    #[serde(default)]
+    ruleset_version_at_apply: Option<String>,
+    #[serde(default)]
+    elevation_used: Option<bool>,
 }
 
 // AppliedChange + a freshly-computed `is_still_active` flag. We never persist
@@ -1571,6 +1701,11 @@ struct AppliedChangeView {
     snapshot: serde_json::Value,
     status: String,
     is_still_active: bool,
+    applied_action: Option<AppliedAction>,
+    rollback_action: Option<RollbackAction>,
+    app_version_at_apply: Option<String>,
+    ruleset_version_at_apply: Option<String>,
+    elevation_used: Option<bool>,
 }
 
 fn check_change_active(c: &AppliedChange) -> bool {
@@ -1608,6 +1743,11 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         snapshot: c.snapshot,
         status: c.status,
         is_still_active,
+        applied_action: c.applied_action,
+        rollback_action: c.rollback_action,
+        app_version_at_apply: c.app_version_at_apply,
+        ruleset_version_at_apply: c.ruleset_version_at_apply,
+        elevation_used: c.elevation_used,
     }
 }
 
@@ -1637,25 +1777,30 @@ fn save_history(h: &[AppliedChange]) -> Result<(), String> {
     fs::write(history_path(), json).map_err(|e| e.to_string())
 }
 
-fn apply_game_mode() -> Result<serde_json::Value, String> {
+fn apply_game_mode() -> Result<ApplyResult, String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (key, _) = hkcu
         .create_subkey("Software\\Microsoft\\GameBar")
         .map_err(|e| e.to_string())?;
-    let prior: Option<u32> = key.get_value("AutoGameModeEnabled").ok();
+    let prior_enabled: Option<u32> = key.get_value("AutoGameModeEnabled").ok();
     key.set_value("AutoGameModeEnabled", &1u32)
         .map_err(|e| e.to_string())?;
-    Ok(serde_json::json!({ "key": "AutoGameModeEnabled", "prior": prior }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::EnableGameMode,
+        rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+        snapshot: Snapshot::GameMode { prior_enabled },
+        elevation_used: false,
+    })
 }
 
-fn rollback_game_mode(snapshot: &serde_json::Value) -> Result<(), String> {
+fn rollback_game_mode_typed(prior_enabled: Option<u32>) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let key = hkcu
         .open_subkey_with_flags("Software\\Microsoft\\GameBar", KEY_SET_VALUE | KEY_READ)
         .map_err(|e| e.to_string())?;
-    match snapshot.get("prior").and_then(|v| v.as_u64()) {
+    match prior_enabled {
         Some(v) => key
-            .set_value("AutoGameModeEnabled", &(v as u32))
+            .set_value("AutoGameModeEnabled", &v)
             .map_err(|e| e.to_string())?,
         None => {
             let _ = key.delete_value("AutoGameModeEnabled");
@@ -1667,13 +1812,13 @@ fn rollback_game_mode(snapshot: &serde_json::Value) -> Result<(), String> {
 // Documented "Best Performance" value for HKCU\Control Panel\Desktop\UserPreferencesMask
 const BEST_PERF_USER_PREFS_MASK: [u8; 8] = [0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00];
 
-fn apply_visual_effects() -> Result<serde_json::Value, String> {
+fn apply_visual_effects() -> Result<ApplyResult, String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
     let (vfx_key, _) = hkcu
         .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects")
         .map_err(|e| e.to_string())?;
-    let prior_vfx: Option<u32> = vfx_key.get_value("VisualFXSetting").ok();
+    let vfx_setting_prior: Option<u32> = vfx_key.get_value("VisualFXSetting").ok();
     vfx_key
         .set_value("VisualFXSetting", &2u32)
         .map_err(|e| e.to_string())?;
@@ -1681,7 +1826,7 @@ fn apply_visual_effects() -> Result<serde_json::Value, String> {
     let (desktop_key, _) = hkcu
         .create_subkey("Control Panel\\Desktop")
         .map_err(|e| e.to_string())?;
-    let prior_mask: Option<Vec<u8>> = desktop_key
+    let user_prefs_mask_prior: Option<Vec<u8>> = desktop_key
         .get_raw_value("UserPreferencesMask")
         .ok()
         .map(|v| v.bytes);
@@ -1695,10 +1840,15 @@ fn apply_visual_effects() -> Result<serde_json::Value, String> {
         )
         .map_err(|e| e.to_string())?;
 
-    Ok(serde_json::json!({
-        "vfx_setting_prior": prior_vfx,
-        "user_prefs_mask_prior": prior_mask,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::SetVisualEffectsBestPerformance,
+        rollback_action: RollbackAction::RestoreVisualEffectsFromSnapshot,
+        snapshot: Snapshot::VisualEffects {
+            vfx_setting_prior,
+            user_prefs_mask_prior,
+        },
+        elevation_used: false,
+    })
 }
 
 // ─── Admin-elevation helper ──────────────────────────────────────────────
@@ -1762,40 +1912,36 @@ fn ps_service_startup_for_mode(mode: &str) -> &'static str {
 // Generic "disable a Windows service" — used for SysMain, NVIDIA telemetry,
 // and any future service-shaped rec. Snapshots prior state + start mode so
 // rollback returns the service to exactly where it was.
-fn apply_service_disable(service_name: &str) -> Result<serde_json::Value, String> {
-    let (prior_state, prior_start_mode) = service_info(service_name)
-        .unwrap_or_else(|| ("Running".into(), "Auto".into()));
+fn apply_service_disable(service: KnownService) -> Result<ApplyResult, String> {
+    let (prior_state, prior_start_mode) =
+        service_info(service.name()).unwrap_or_else(|| ("Running".into(), "Auto".into()));
     let cmd = format!(
         "Set-Service -Name {0} -StartupType Disabled; Stop-Service -Name {0} -Force -ErrorAction SilentlyContinue",
-        service_name
+        service.name()
     );
     run_elevated_powershell(&cmd)?;
-    Ok(serde_json::json!({
-        "service": service_name,
-        "prior_state": prior_state,
-        "prior_start_mode": prior_start_mode,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableKnownService {
+            service: service.clone(),
+        },
+        rollback_action: RollbackAction::RestoreServiceFromSnapshot { service },
+        snapshot: Snapshot::Service {
+            prior_state,
+            prior_start_mode,
+        },
+        elevation_used: true,
+    })
 }
 
-fn rollback_service_disable(
-    service_name: &str,
-    snapshot: &serde_json::Value,
+fn rollback_service_disable_typed(
+    service: &KnownService,
+    prior_state: &str,
+    prior_start_mode: &str,
 ) -> Result<(), String> {
-    let prior_start_mode = snapshot
-        .get("prior_start_mode")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Automatic");
-    let prior_state = snapshot
-        .get("prior_state")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Running");
     let startup = ps_service_startup_for_mode(prior_start_mode);
-    let mut cmd = format!(
-        "Set-Service -Name {} -StartupType {}",
-        service_name, startup
-    );
+    let mut cmd = format!("Set-Service -Name {} -StartupType {}", service.name(), startup);
     if prior_state == "Running" {
-        cmd.push_str(&format!("; Start-Service -Name {}", service_name));
+        cmd.push_str(&format!("; Start-Service -Name {}", service.name()));
     }
     run_elevated_powershell(&cmd)?;
     Ok(())
@@ -1819,70 +1965,66 @@ fn current_power_plan_guid() -> Option<String> {
     None
 }
 
-fn apply_power_ultimate() -> Result<serde_json::Value, String> {
+fn apply_power_ultimate() -> Result<ApplyResult, String> {
     let prior_guid = current_power_plan_guid().unwrap_or_default();
-    // Idempotent: reuse existing Ultimate Performance plan if it's already
-    // duplicated; otherwise duplicate from the canonical hidden GUID first.
-    // Either way, /setactive on the resulting GUID.
     let ps = "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; \
               if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; exit 0 } \
               $dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; \
               if ($dup -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { powercfg /setactive $matches[1]; exit 0 } \
               exit 1";
     run_elevated_powershell(ps)?;
-    Ok(serde_json::json!({
-        "prior_plan_guid": prior_guid,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::SetUltimatePerformancePlan,
+        rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
+        snapshot: Snapshot::PowerPlan { prior_guid },
+        elevation_used: true,
+    })
 }
 
-fn rollback_power_ultimate(snapshot: &serde_json::Value) -> Result<(), String> {
-    let prior = snapshot
-        .get("prior_plan_guid")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    if prior.len() != 36 {
+fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), String> {
+    if prior_guid.len() != 36 {
         return Err("no valid prior plan GUID in snapshot".into());
     }
-    run_elevated_powershell(&format!("powercfg /setactive {}", prior))?;
+    run_elevated_powershell(&format!("powercfg /setactive {}", prior_guid))?;
     Ok(())
 }
 
 // ─── Reserved Storage off (PowerShell cmdlet, admin) ─────────────────────
 
-fn apply_reserved_storage_off() -> Result<serde_json::Value, String> {
+fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
     let prior_enabled = reserved_storage_enabled();
     run_elevated_powershell("Set-WindowsReservedStorageState -State Disabled")?;
-    Ok(serde_json::json!({ "prior_enabled": prior_enabled }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableReservedStorage,
+        rollback_action: RollbackAction::RestoreReservedStorageFromSnapshot,
+        snapshot: Snapshot::ReservedStorage { prior_enabled },
+        elevation_used: true,
+    })
 }
 
-fn rollback_reserved_storage_off(snapshot: &serde_json::Value) -> Result<(), String> {
-    let was_enabled = snapshot
-        .get("prior_enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let state = if was_enabled { "Enabled" } else { "Disabled" };
-    run_elevated_powershell(&format!(
-        "Set-WindowsReservedStorageState -State {}",
-        state
-    ))?;
+fn rollback_reserved_storage_off_typed(prior_enabled: bool) -> Result<(), String> {
+    let state = if prior_enabled { "Enabled" } else { "Disabled" };
+    run_elevated_powershell(&format!("Set-WindowsReservedStorageState -State {}", state))?;
     Ok(())
 }
 
 // ─── Fast Startup off (HKLM, admin) ──────────────────────────────────────
 
-fn apply_fast_startup_off() -> Result<serde_json::Value, String> {
-    let prior = fast_startup_state();
+fn apply_fast_startup_off() -> Result<ApplyResult, String> {
+    let prior_hiberboot = fast_startup_state();
     run_elevated_powershell(
         "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord",
     )?;
-    Ok(serde_json::json!({
-        "prior_hiberboot": prior,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableFastStartup,
+        rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
+        snapshot: Snapshot::FastStartup { prior_hiberboot },
+        elevation_used: true,
+    })
 }
 
-fn rollback_fast_startup_off(snapshot: &serde_json::Value) -> Result<(), String> {
-    let prior = snapshot.get("prior_hiberboot").and_then(|v| v.as_u64());
-    let cmd = match prior {
+fn rollback_fast_startup_off_typed(prior_hiberboot: Option<u32>) -> Result<(), String> {
+    let cmd = match prior_hiberboot {
         Some(v) => format!(
             "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value {} -Type DWord",
             v
@@ -1895,7 +2037,7 @@ fn rollback_fast_startup_off(snapshot: &serde_json::Value) -> Result<(), String>
 
 // ─── Game Bar / Game DVR off (HKCU, no admin) ────────────────────────────
 
-fn apply_game_bar_disable() -> Result<serde_json::Value, String> {
+fn apply_game_bar_disable() -> Result<ApplyResult, String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (gd, _) = hkcu
         .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR")
@@ -1911,13 +2053,21 @@ fn apply_game_bar_disable() -> Result<serde_json::Value, String> {
     gcs.set_value("GameDVR_Enabled", &0u32)
         .map_err(|e| e.to_string())?;
 
-    Ok(serde_json::json!({
-        "prior_capture": prior_capture,
-        "prior_enabled": prior_enabled,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableGameBarAndDvr,
+        rollback_action: RollbackAction::RestoreGameBarFromSnapshot,
+        snapshot: Snapshot::GameBar {
+            prior_capture,
+            prior_enabled,
+        },
+        elevation_used: false,
+    })
 }
 
-fn rollback_game_bar_disable(snapshot: &serde_json::Value) -> Result<(), String> {
+fn rollback_game_bar_disable_typed(
+    prior_capture: Option<u32>,
+    prior_enabled: Option<u32>,
+) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
     let gd = hkcu
@@ -1926,9 +2076,9 @@ fn rollback_game_bar_disable(snapshot: &serde_json::Value) -> Result<(), String>
             KEY_SET_VALUE | KEY_READ,
         )
         .map_err(|e| e.to_string())?;
-    match snapshot.get("prior_capture").and_then(|v| v.as_u64()) {
+    match prior_capture {
         Some(v) => gd
-            .set_value("AppCaptureEnabled", &(v as u32))
+            .set_value("AppCaptureEnabled", &v)
             .map_err(|e| e.to_string())?,
         None => {
             let _ = gd.delete_value("AppCaptureEnabled");
@@ -1938,9 +2088,9 @@ fn rollback_game_bar_disable(snapshot: &serde_json::Value) -> Result<(), String>
     let gcs = hkcu
         .open_subkey_with_flags("System\\GameConfigStore", KEY_SET_VALUE | KEY_READ)
         .map_err(|e| e.to_string())?;
-    match snapshot.get("prior_enabled").and_then(|v| v.as_u64()) {
+    match prior_enabled {
         Some(v) => gcs
-            .set_value("GameDVR_Enabled", &(v as u32))
+            .set_value("GameDVR_Enabled", &v)
             .map_err(|e| e.to_string())?,
         None => {
             let _ = gcs.delete_value("GameDVR_Enabled");
@@ -1951,18 +2101,20 @@ fn rollback_game_bar_disable(snapshot: &serde_json::Value) -> Result<(), String>
 
 // ─── HAGS (HKLM, admin) ──────────────────────────────────────────────────
 
-fn apply_hags_enable() -> Result<serde_json::Value, String> {
+fn apply_hags_enable() -> Result<ApplyResult, String> {
     let prior = hags_state();
     run_elevated_powershell(
         "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2 -Type DWord",
     )?;
-    Ok(serde_json::json!({
-        "prior_hwschmode": prior,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::EnableHardwareGpuScheduling,
+        rollback_action: RollbackAction::RestoreHwSchModeFromSnapshot,
+        snapshot: Snapshot::HwSchMode { prior },
+        elevation_used: true,
+    })
 }
 
-fn rollback_hags_enable(snapshot: &serde_json::Value) -> Result<(), String> {
-    let prior = snapshot.get("prior_hwschmode").and_then(|v| v.as_u64());
+fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), String> {
     let cmd = match prior {
         Some(v) => format!(
             "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value {} -Type DWord",
@@ -1976,7 +2128,7 @@ fn rollback_hags_enable(snapshot: &serde_json::Value) -> Result<(), String> {
 
 // ─── Mouse acceleration off (HKCU, no admin) ─────────────────────────────
 
-fn apply_mouse_accel_off() -> Result<serde_json::Value, String> {
+fn apply_mouse_accel_off() -> Result<ApplyResult, String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (key, _) = hkcu
         .create_subkey("Control Panel\\Mouse")
@@ -1984,32 +2136,37 @@ fn apply_mouse_accel_off() -> Result<serde_json::Value, String> {
 
     // All three values are REG_SZ strings, not DWORDs. Windows is weird.
     let prior_speed: String = key.get_value("MouseSpeed").unwrap_or_default();
-    let prior_t1: String = key.get_value("MouseThreshold1").unwrap_or_default();
-    let prior_t2: String = key.get_value("MouseThreshold2").unwrap_or_default();
+    let prior_threshold1: String = key.get_value("MouseThreshold1").unwrap_or_default();
+    let prior_threshold2: String = key.get_value("MouseThreshold2").unwrap_or_default();
 
     let zero = "0".to_string();
     key.set_value("MouseSpeed", &zero).map_err(|e| e.to_string())?;
     key.set_value("MouseThreshold1", &zero).map_err(|e| e.to_string())?;
     key.set_value("MouseThreshold2", &zero).map_err(|e| e.to_string())?;
 
-    Ok(serde_json::json!({
-        "prior_speed": prior_speed,
-        "prior_threshold1": prior_t1,
-        "prior_threshold2": prior_t2,
-    }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableMouseAcceleration,
+        rollback_action: RollbackAction::RestoreMouseAccelFromSnapshot,
+        snapshot: Snapshot::MouseAccel {
+            prior_speed,
+            prior_threshold1,
+            prior_threshold2,
+        },
+        elevation_used: false,
+    })
 }
 
-fn rollback_mouse_accel_off(snapshot: &serde_json::Value) -> Result<(), String> {
+fn rollback_mouse_accel_off_typed(
+    prior_speed: &str,
+    prior_threshold1: &str,
+    prior_threshold2: &str,
+) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let key = hkcu
         .open_subkey_with_flags("Control Panel\\Mouse", KEY_SET_VALUE | KEY_READ)
         .map_err(|e| e.to_string())?;
 
-    let restore = |reg_name: &str, snapshot_key: &str| -> Result<(), String> {
-        let prior = snapshot
-            .get(snapshot_key)
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+    let restore = |reg_name: &str, prior: &str| -> Result<(), String> {
         if prior.is_empty() {
             let _ = key.delete_value(reg_name);
             Ok(())
@@ -2019,22 +2176,22 @@ fn rollback_mouse_accel_off(snapshot: &serde_json::Value) -> Result<(), String> 
         }
     };
 
-    restore("MouseSpeed", "prior_speed")?;
-    restore("MouseThreshold1", "prior_threshold1")?;
-    restore("MouseThreshold2", "prior_threshold2")?;
+    restore("MouseSpeed", prior_speed)?;
+    restore("MouseThreshold1", prior_threshold1)?;
+    restore("MouseThreshold2", prior_threshold2)?;
     Ok(())
 }
 
 // ─── Nagle disable across active NICs ────────────────────────────────────
 
-fn apply_nagle_disable() -> Result<serde_json::Value, String> {
+fn apply_nagle_disable() -> Result<ApplyResult, String> {
     // Snapshot (no admin): walk every Tcpip interface, capture prior values
     // on adapters that have an actual IP. Skip loopback / virtual / inactive.
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let interfaces = hklm
         .open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")
         .map_err(|e| e.to_string())?;
-    let mut snapshots: Vec<serde_json::Value> = Vec::new();
+    let mut nic_snapshots: Vec<NagleInterfaceSnapshot> = Vec::new();
     for adapter_name in interfaces.enum_keys().filter_map(|r| r.ok()) {
         let Ok(adapter) = interfaces.open_subkey(&adapter_name) else {
             continue;
@@ -2046,15 +2203,13 @@ fn apply_nagle_disable() -> Result<serde_json::Value, String> {
         }
         let prior_ack: Option<u32> = adapter.get_value("TcpAckFrequency").ok();
         let prior_nodelay: Option<u32> = adapter.get_value("TCPNoDelay").ok();
-        snapshots.push(serde_json::json!({
-            "interface": adapter_name,
-            "prior_ack": prior_ack,
-            "prior_nodelay": prior_nodelay,
-        }));
+        nic_snapshots.push(NagleInterfaceSnapshot {
+            interface: adapter_name,
+            prior_ack,
+            prior_nodelay,
+        });
     }
 
-    // Apply (admin): write TcpAckFrequency=1 + TCPNoDelay=1 on every NIC
-    // with an IP. PowerShell handles enumeration + the Set-ItemProperty.
     let ps = "$ifs = Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'; \
               foreach ($i in $ifs) { \
                 $hasIp = (Get-ItemProperty -Path $i.PSPath -Name 'DhcpIPAddress' -ErrorAction SilentlyContinue) -or (Get-ItemProperty -Path $i.PSPath -Name 'IPAddress' -ErrorAction SilentlyContinue); \
@@ -2064,28 +2219,32 @@ fn apply_nagle_disable() -> Result<serde_json::Value, String> {
                 } \
               }";
     run_elevated_powershell(ps)?;
-    Ok(serde_json::json!({ "interfaces": snapshots }))
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableNagleOnActiveNics,
+        rollback_action: RollbackAction::RestoreNagleNicsFromSnapshot,
+        snapshot: Snapshot::NagleNics {
+            interfaces: nic_snapshots,
+        },
+        elevation_used: true,
+    })
 }
 
-fn rollback_nagle_disable(snapshot: &serde_json::Value) -> Result<(), String> {
-    let interfaces = snapshot
-        .get("interfaces")
-        .and_then(|v| v.as_array())
-        .ok_or("missing 'interfaces' in snapshot")?;
+fn rollback_nagle_disable_typed(
+    interfaces: &[NagleInterfaceSnapshot],
+) -> Result<(), String> {
     if interfaces.is_empty() {
         return Err("no interfaces recorded in snapshot".into());
     }
     let mut ps = String::new();
     for entry in interfaces {
-        let iface = entry.get("interface").and_then(|v| v.as_str()).unwrap_or("");
-        if iface.is_empty() {
+        if entry.interface.is_empty() {
             continue;
         }
         let path = format!(
             "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
-            iface
+            entry.interface
         );
-        match entry.get("prior_ack").and_then(|v| v.as_u64()) {
+        match entry.prior_ack {
             Some(v) => ps.push_str(&format!(
                 "Set-ItemProperty -Path '{}' -Name 'TcpAckFrequency' -Value {} -Type DWord; ",
                 path, v
@@ -2095,7 +2254,7 @@ fn rollback_nagle_disable(snapshot: &serde_json::Value) -> Result<(), String> {
                 path
             )),
         }
-        match entry.get("prior_nodelay").and_then(|v| v.as_u64()) {
+        match entry.prior_nodelay {
             Some(v) => ps.push_str(&format!(
                 "Set-ItemProperty -Path '{}' -Name 'TCPNoDelay' -Value {} -Type DWord; ",
                 path, v
@@ -2113,7 +2272,10 @@ fn rollback_nagle_disable(snapshot: &serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
-fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
+fn rollback_visual_effects_typed(
+    vfx_setting_prior: Option<u32>,
+    user_prefs_mask_prior: Option<&[u8]>,
+) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
     let vfx_key = hkcu
@@ -2122,9 +2284,9 @@ fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
             KEY_SET_VALUE | KEY_READ,
         )
         .map_err(|e| e.to_string())?;
-    match snapshot.get("vfx_setting_prior").and_then(|v| v.as_u64()) {
+    match vfx_setting_prior {
         Some(v) => vfx_key
-            .set_value("VisualFXSetting", &(v as u32))
+            .set_value("VisualFXSetting", &v)
             .map_err(|e| e.to_string())?,
         None => {
             let _ = vfx_key.delete_value("VisualFXSetting");
@@ -2134,17 +2296,13 @@ fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
     let desktop_key = hkcu
         .open_subkey_with_flags("Control Panel\\Desktop", KEY_SET_VALUE | KEY_READ)
         .map_err(|e| e.to_string())?;
-    match snapshot.get("user_prefs_mask_prior").and_then(|v| v.as_array()) {
-        Some(arr) => {
-            let bytes: Vec<u8> = arr
-                .iter()
-                .filter_map(|n| n.as_u64().map(|v| v as u8))
-                .collect();
+    match user_prefs_mask_prior {
+        Some(bytes) => {
             desktop_key
                 .set_raw_value(
                     "UserPreferencesMask",
                     &winreg::RegValue {
-                        bytes,
+                        bytes: bytes.to_vec(),
                         vtype: winreg::enums::RegType::REG_BINARY,
                     },
                 )
@@ -2157,34 +2315,287 @@ fn rollback_visual_effects(snapshot: &serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+// Dispatches a RollbackAction against its corresponding Snapshot. The match
+// is exhaustive on the (action, snapshot) pair — a mismatch is a contract
+// violation and returns Err rather than performing the wrong rollback.
+fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) -> Result<(), String> {
+    use RollbackAction as R;
+    use Snapshot as S;
+    match (action, snapshot) {
+        (
+            R::RestoreServiceFromSnapshot { service },
+            S::Service { prior_state, prior_start_mode },
+        ) => rollback_service_disable_typed(service, prior_state, prior_start_mode),
+        (R::RestoreGameModeFromSnapshot, S::GameMode { prior_enabled }) => {
+            rollback_game_mode_typed(*prior_enabled)
+        }
+        (
+            R::RestoreVisualEffectsFromSnapshot,
+            S::VisualEffects {
+                vfx_setting_prior,
+                user_prefs_mask_prior,
+            },
+        ) => rollback_visual_effects_typed(
+            *vfx_setting_prior,
+            user_prefs_mask_prior.as_deref(),
+        ),
+        (
+            R::RestoreMouseAccelFromSnapshot,
+            S::MouseAccel {
+                prior_speed,
+                prior_threshold1,
+                prior_threshold2,
+            },
+        ) => rollback_mouse_accel_off_typed(prior_speed, prior_threshold1, prior_threshold2),
+        (
+            R::RestoreGameBarFromSnapshot,
+            S::GameBar {
+                prior_capture,
+                prior_enabled,
+            },
+        ) => rollback_game_bar_disable_typed(*prior_capture, *prior_enabled),
+        (R::RestoreHwSchModeFromSnapshot, S::HwSchMode { prior }) => {
+            rollback_hags_enable_typed(*prior)
+        }
+        (R::RestorePowerPlanFromSnapshot, S::PowerPlan { prior_guid }) => {
+            rollback_power_ultimate_typed(prior_guid)
+        }
+        (R::RestoreNagleNicsFromSnapshot, S::NagleNics { interfaces }) => {
+            rollback_nagle_disable_typed(interfaces)
+        }
+        (R::RestoreFastStartupFromSnapshot, S::FastStartup { prior_hiberboot }) => {
+            rollback_fast_startup_off_typed(*prior_hiberboot)
+        }
+        (R::RestoreReservedStorageFromSnapshot, S::ReservedStorage { prior_enabled }) => {
+            rollback_reserved_storage_off_typed(*prior_enabled)
+        }
+        _ => Err(format!(
+            "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
+            action
+        )),
+    }
+}
+
+// Build a typed (RollbackAction, Snapshot) pair from a legacy AppliedChange
+// (one written by a Sentinel version before the typed-action refactor). The
+// legacy snapshot was a free-form serde_json::Value whose shape was determined
+// by the rec_id; we reconstruct the typed form using the same per-rec_id
+// knowledge.
+fn synthesize_legacy_rollback(
+    rec_id: &str,
+    snapshot: &serde_json::Value,
+) -> Option<(RollbackAction, Snapshot)> {
+    match rec_id {
+        "game-mode" => {
+            let prior_enabled = snapshot
+                .get("prior")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            Some((
+                RollbackAction::RestoreGameModeFromSnapshot,
+                Snapshot::GameMode { prior_enabled },
+            ))
+        }
+        "visual-effects" => {
+            let vfx_setting_prior = snapshot
+                .get("vfx_setting_prior")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            let user_prefs_mask_prior = snapshot
+                .get("user_prefs_mask_prior")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|n| n.as_u64().map(|v| v as u8))
+                        .collect::<Vec<u8>>()
+                });
+            Some((
+                RollbackAction::RestoreVisualEffectsFromSnapshot,
+                Snapshot::VisualEffects {
+                    vfx_setting_prior,
+                    user_prefs_mask_prior,
+                },
+            ))
+        }
+        "sysmain-disable" | "diagtrack-disable" | "windows-search-disable"
+        | "nvidia-telemetry" => {
+            let service = match rec_id {
+                "sysmain-disable" => KnownService::SysMain,
+                "diagtrack-disable" => KnownService::DiagTrack,
+                "windows-search-disable" => KnownService::WSearch,
+                "nvidia-telemetry" => KnownService::NvTelemetryContainer,
+                _ => return None,
+            };
+            let prior_state = snapshot
+                .get("prior_state")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Running")
+                .to_string();
+            let prior_start_mode = snapshot
+                .get("prior_start_mode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Automatic")
+                .to_string();
+            Some((
+                RollbackAction::RestoreServiceFromSnapshot {
+                    service: service.clone(),
+                },
+                Snapshot::Service {
+                    prior_state,
+                    prior_start_mode,
+                },
+            ))
+        }
+        "power-ultimate" => {
+            let prior_guid = snapshot
+                .get("prior_plan_guid")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Some((
+                RollbackAction::RestorePowerPlanFromSnapshot,
+                Snapshot::PowerPlan { prior_guid },
+            ))
+        }
+        "nagle-disable" => {
+            let interfaces = snapshot
+                .get("interfaces")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|entry| {
+                            let iface = entry.get("interface").and_then(|v| v.as_str())?;
+                            Some(NagleInterfaceSnapshot {
+                                interface: iface.to_string(),
+                                prior_ack: entry
+                                    .get("prior_ack")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|v| v as u32),
+                                prior_nodelay: entry
+                                    .get("prior_nodelay")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|v| v as u32),
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            Some((
+                RollbackAction::RestoreNagleNicsFromSnapshot,
+                Snapshot::NagleNics { interfaces },
+            ))
+        }
+        "hags-enable" => {
+            let prior = snapshot
+                .get("prior_hwschmode")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            Some((
+                RollbackAction::RestoreHwSchModeFromSnapshot,
+                Snapshot::HwSchMode { prior },
+            ))
+        }
+        "mouse-accel-off" => {
+            let prior_speed = snapshot
+                .get("prior_speed")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let prior_threshold1 = snapshot
+                .get("prior_threshold1")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let prior_threshold2 = snapshot
+                .get("prior_threshold2")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Some((
+                RollbackAction::RestoreMouseAccelFromSnapshot,
+                Snapshot::MouseAccel {
+                    prior_speed,
+                    prior_threshold1,
+                    prior_threshold2,
+                },
+            ))
+        }
+        "game-bar-disable" => {
+            let prior_capture = snapshot
+                .get("prior_capture")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            let prior_enabled = snapshot
+                .get("prior_enabled")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            Some((
+                RollbackAction::RestoreGameBarFromSnapshot,
+                Snapshot::GameBar {
+                    prior_capture,
+                    prior_enabled,
+                },
+            ))
+        }
+        "fast-startup-off" => {
+            let prior_hiberboot = snapshot
+                .get("prior_hiberboot")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            Some((
+                RollbackAction::RestoreFastStartupFromSnapshot,
+                Snapshot::FastStartup { prior_hiberboot },
+            ))
+        }
+        "reserved-storage-off" => {
+            let prior_enabled = snapshot
+                .get("prior_enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            Some((
+                RollbackAction::RestoreReservedStorageFromSnapshot,
+                Snapshot::ReservedStorage { prior_enabled },
+            ))
+        }
+        _ => None,
+    }
+}
+
 #[tauri::command]
 fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
-    let snapshot = match rec_id.as_str() {
+    let result: ApplyResult = match rec_id.as_str() {
         "game-mode" => apply_game_mode()?,
         "visual-effects" => apply_visual_effects()?,
-        "sysmain-disable" => apply_service_disable("SysMain")?,
-        "nvidia-telemetry" => apply_service_disable("NvTelemetryContainer")?,
+        "sysmain-disable" => apply_service_disable(KnownService::SysMain)?,
+        "nvidia-telemetry" => apply_service_disable(KnownService::NvTelemetryContainer)?,
         "power-ultimate" => apply_power_ultimate()?,
         "nagle-disable" => apply_nagle_disable()?,
         "hags-enable" => apply_hags_enable()?,
         "mouse-accel-off" => apply_mouse_accel_off()?,
         "game-bar-disable" => apply_game_bar_disable()?,
-        "diagtrack-disable" => apply_service_disable("DiagTrack")?,
-        "windows-search-disable" => apply_service_disable("WSearch")?,
+        "diagtrack-disable" => apply_service_disable(KnownService::DiagTrack)?,
+        "windows-search-disable" => apply_service_disable(KnownService::WSearch)?,
         "fast-startup-off" => apply_fast_startup_off()?,
         "reserved-storage-off" => apply_reserved_storage_off()?,
         other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
     };
+    let snapshot_json = serde_json::to_value(&result.snapshot)
+        .map_err(|e| format!("snapshot serialize: {}", e))?;
     let change = AppliedChange {
         id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
         rec_id,
         rec_title,
         applied_at: Utc::now().to_rfc3339(),
-        snapshot,
+        snapshot: snapshot_json,
         status: "applied".into(),
+        applied_action: Some(result.applied_action),
+        rollback_action: Some(result.rollback_action),
+        app_version_at_apply: Some(env!("CARGO_PKG_VERSION").to_string()),
+        ruleset_version_at_apply: Some("1.0.0-baseline".to_string()),
+        elevation_used: Some(result.elevation_used),
     };
     let mut history = load_history();
     history.push(change.clone());
@@ -2206,24 +2617,26 @@ fn rollback_change(change_id: String) -> Result<(), String> {
     if change.status == "rolled_back" {
         return Err("change has already been rolled back".into());
     }
-    match change.rec_id.as_str() {
-        "game-mode" => rollback_game_mode(&change.snapshot)?,
-        "visual-effects" => rollback_visual_effects(&change.snapshot)?,
-        "sysmain-disable" => rollback_service_disable("SysMain", &change.snapshot)?,
-        "nvidia-telemetry" => {
-            rollback_service_disable("NvTelemetryContainer", &change.snapshot)?
-        }
-        "power-ultimate" => rollback_power_ultimate(&change.snapshot)?,
-        "nagle-disable" => rollback_nagle_disable(&change.snapshot)?,
-        "hags-enable" => rollback_hags_enable(&change.snapshot)?,
-        "mouse-accel-off" => rollback_mouse_accel_off(&change.snapshot)?,
-        "game-bar-disable" => rollback_game_bar_disable(&change.snapshot)?,
-        "diagtrack-disable" => rollback_service_disable("DiagTrack", &change.snapshot)?,
-        "windows-search-disable" => rollback_service_disable("WSearch", &change.snapshot)?,
-        "fast-startup-off" => rollback_fast_startup_off(&change.snapshot)?,
-        "reserved-storage-off" => rollback_reserved_storage_off(&change.snapshot)?,
-        other => return Err(format!("'{}' rollback not yet implemented", other)),
-    }
+
+    // Prefer the typed contract stored at apply time (new entries). Fall back
+    // to synthesizing one from rec_id + legacy snapshot JSON (entries written
+    // by older Sentinel versions). Rollback never depends on the live rec
+    // catalog — per ARCHITECTURE_LOCKS §1.5, the history is the source of truth.
+    let (action, snapshot) = if let Some(ra) = change.rollback_action.clone() {
+        let snap: Snapshot = serde_json::from_value(change.snapshot.clone())
+            .map_err(|e| format!("snapshot deserialize: {}", e))?;
+        (ra, snap)
+    } else {
+        synthesize_legacy_rollback(&change.rec_id, &change.snapshot).ok_or_else(|| {
+            format!(
+                "legacy AppliedChange for rec_id '{}' has no typed rollback contract and no legacy synthesizer matched",
+                change.rec_id
+            )
+        })?
+    };
+
+    dispatch_rollback(&action, &snapshot)?;
+
     history[idx].status = "rolled_back".into();
     save_history(&history)?;
     Ok(())
