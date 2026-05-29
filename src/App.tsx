@@ -164,17 +164,20 @@ type CpuSensorSnapshot = {
 };
 
 type GpuSensorSnapshot = {
+  vendor: string; // "NVIDIA" | "AMD"
   index: number;
   name: string;
   temperature_c: number | null;
+  hotspot_temperature_c: number | null; // AMD junction temp; null on NVIDIA
   utilization_gpu_pct: number | null;
-  utilization_memory_pct: number | null;
+  utilization_memory_pct: number | null; // NVIDIA only
   vram_used_bytes: number | null;
   vram_total_bytes: number | null;
   graphics_clock_mhz: number | null;
   memory_clock_mhz: number | null;
   power_draw_w: number | null;
-  fan_speed_pct: number | null;
+  fan_speed_pct: number | null; // NVIDIA reports %
+  fan_speed_rpm: number | null; // AMD reports RPM
 };
 
 type DiagnosticEntry = {
@@ -762,10 +765,14 @@ function MonitoringTab({ active }: { active: boolean }) {
       ) : (
         latestGpu.map((gpu) => (
           <GpuMonitorPanel
-            key={gpu.index}
+            key={`${gpu.vendor}-${gpu.index}`}
             gpu={gpu}
-            history={gpuSamples
-              .map((snap) => snap.find((g) => g.index === gpu.index) ?? null)}
+            history={gpuSamples.map(
+              (snap) =>
+                snap.find(
+                  (g) => g.index === gpu.index && g.vendor === gpu.vendor,
+                ) ?? null,
+            )}
           />
         ))
       )}
@@ -848,10 +855,18 @@ function GpuMonitorPanel({
     gpu.vram_used_bytes && gpu.vram_total_bytes
       ? Math.round((gpu.vram_used_bytes / gpu.vram_total_bytes) * 100)
       : null;
+  // AMD reports fan as RPM, NVIDIA as a percent. Pick whichever this card
+  // actually provides and graph it on an appropriate scale.
+  const fanIsRpm = gpu.fan_speed_rpm !== null;
   return (
     <div className="monitor-panel">
       <div className="monitor-panel-head">
-        <div className="monitor-panel-name">{gpu.name}</div>
+        <div className="monitor-panel-name">
+          <span className={`gpu-vendor-pill gpu-vendor-${gpu.vendor.toLowerCase()}`}>
+            {gpu.vendor}
+          </span>
+          {gpu.name}
+        </div>
         <div className="monitor-panel-sub">
           {gpu.vram_total_bytes
             ? `${fmtGB(gpu.vram_total_bytes)} VRAM`
@@ -859,73 +874,112 @@ function GpuMonitorPanel({
         </div>
       </div>
       <div className="monitor-metrics">
-        <MetricRow
-          label="GPU temperature"
-          value={gpu.temperature_c}
-          unit="°C"
-          history={history.map((s) => s?.temperature_c ?? null)}
-          min={20}
-          max={95}
-          color="#f87171"
-        />
-        <MetricRow
-          label="GPU utilization"
-          value={gpu.utilization_gpu_pct}
-          unit="%"
-          history={history.map((s) => s?.utilization_gpu_pct ?? null)}
-          min={0}
-          max={100}
-          color="#6aa9ff"
-        />
-        <MetricRow
-          label="VRAM used"
-          value={vramUsedPct}
-          unit="%"
-          history={history.map((s) =>
-            s?.vram_used_bytes && s?.vram_total_bytes
-              ? Math.round((s.vram_used_bytes / s.vram_total_bytes) * 100)
-              : null,
-          )}
-          min={0}
-          max={100}
-          color="#a78bfa"
-          sublabel={
-            gpu.vram_used_bytes && gpu.vram_total_bytes
-              ? `${fmtGB(gpu.vram_used_bytes)} / ${fmtGB(gpu.vram_total_bytes)}`
-              : undefined
-          }
-        />
-        <MetricRow
-          label="Power draw"
-          value={gpu.power_draw_w !== null ? Math.round(gpu.power_draw_w) : null}
-          unit="W"
-          history={history.map((s) =>
-            s?.power_draw_w !== null && s?.power_draw_w !== undefined
-              ? Math.round(s.power_draw_w)
-              : null,
-          )}
-          min={0}
-          max={400}
-          color="#f5c451"
-        />
-        <MetricRow
-          label="Graphics clock"
-          value={gpu.graphics_clock_mhz}
-          unit=" MHz"
-          history={history.map((s) => s?.graphics_clock_mhz ?? null)}
-          min={0}
-          max={3500}
-          color="#4ade80"
-        />
-        <MetricRow
-          label="Fan speed"
-          value={gpu.fan_speed_pct}
-          unit="%"
-          history={history.map((s) => s?.fan_speed_pct ?? null)}
-          min={0}
-          max={100}
-          color="#8a93a8"
-        />
+        {gpu.temperature_c !== null && (
+          <MetricRow
+            label="GPU temperature"
+            value={gpu.temperature_c}
+            unit="°C"
+            history={history.map((s) => s?.temperature_c ?? null)}
+            min={20}
+            max={100}
+            color="#f87171"
+          />
+        )}
+        {gpu.hotspot_temperature_c !== null && (
+          <MetricRow
+            label="Hotspot (junction)"
+            value={gpu.hotspot_temperature_c}
+            unit="°C"
+            history={history.map((s) => s?.hotspot_temperature_c ?? null)}
+            min={20}
+            max={110}
+            color="#fb923c"
+            sublabel="Hottest on-die sensor"
+          />
+        )}
+        {gpu.utilization_gpu_pct !== null && (
+          <MetricRow
+            label="GPU utilization"
+            value={gpu.utilization_gpu_pct}
+            unit="%"
+            history={history.map((s) => s?.utilization_gpu_pct ?? null)}
+            min={0}
+            max={100}
+            color="#6aa9ff"
+          />
+        )}
+        {gpu.vram_used_bytes !== null && (
+          <MetricRow
+            label="VRAM used"
+            value={vramUsedPct}
+            unit={vramUsedPct !== null ? "%" : ""}
+            history={history.map((s) =>
+              s?.vram_used_bytes && s?.vram_total_bytes
+                ? Math.round((s.vram_used_bytes / s.vram_total_bytes) * 100)
+                : null,
+            )}
+            min={0}
+            max={100}
+            color="#a78bfa"
+            sublabel={
+              gpu.vram_used_bytes && gpu.vram_total_bytes
+                ? `${fmtGB(gpu.vram_used_bytes)} / ${fmtGB(gpu.vram_total_bytes)}`
+                : gpu.vram_used_bytes
+                ? `${fmtGB(gpu.vram_used_bytes)} used`
+                : undefined
+            }
+          />
+        )}
+        {gpu.power_draw_w !== null && (
+          <MetricRow
+            label="Power draw"
+            value={Math.round(gpu.power_draw_w)}
+            unit="W"
+            history={history.map((s) =>
+              s?.power_draw_w !== null && s?.power_draw_w !== undefined
+                ? Math.round(s.power_draw_w)
+                : null,
+            )}
+            min={0}
+            max={400}
+            color="#f5c451"
+          />
+        )}
+        {gpu.graphics_clock_mhz !== null && (
+          <MetricRow
+            label="Graphics clock"
+            value={gpu.graphics_clock_mhz}
+            unit=" MHz"
+            history={history.map((s) => s?.graphics_clock_mhz ?? null)}
+            min={0}
+            max={3500}
+            color="#4ade80"
+          />
+        )}
+        {gpu.memory_clock_mhz !== null && (
+          <MetricRow
+            label="Memory clock"
+            value={gpu.memory_clock_mhz}
+            unit=" MHz"
+            history={history.map((s) => s?.memory_clock_mhz ?? null)}
+            min={0}
+            max={3000}
+            color="#38bdf8"
+          />
+        )}
+        {(gpu.fan_speed_rpm !== null || gpu.fan_speed_pct !== null) && (
+          <MetricRow
+            label="Fan speed"
+            value={fanIsRpm ? gpu.fan_speed_rpm : gpu.fan_speed_pct}
+            unit={fanIsRpm ? " RPM" : "%"}
+            history={history.map((s) =>
+              fanIsRpm ? s?.fan_speed_rpm ?? null : s?.fan_speed_pct ?? null,
+            )}
+            min={0}
+            max={fanIsRpm ? 3500 : 100}
+            color="#8a93a8"
+          />
+        )}
       </div>
     </div>
   );

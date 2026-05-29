@@ -57,3 +57,14 @@ sha2 = "0.10"
 # driver.
 nvml-wrapper = "0.10"
 
+# AMD GPU telemetry via ADLX (AMD Device Library eXtra). Dynamically loads
+# amdadlx64.dll, which ships with the Adrenalin driver — same model as NVML
+# for NVIDIA, and equally anti-cheat-safe (vendor library, no injection, no
+# kernel driver). Pinned to the exact alpha because the crate is pre-1.0;
+# the API we use (helper -> system -> performance_monitoring_services ->
+# current_gpu_metrics) is stable across the metrics we read. From Traverse
+# Research (maintainers of gpu-allocator). ADLX objects are COM-like and
+# not thread-safe, so Sentinel runs all ADLX calls on a single dedicated
+# poller thread (see amd_poller_loop in lib.rs).
+adlx = "=0.0.0-alpha.1"
+

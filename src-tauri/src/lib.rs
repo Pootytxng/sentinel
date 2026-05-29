@@ -2161,15 +2161,23 @@ fn get_cpu_sensors() -> CpuSensorSnapshot {
 
 #[derive(Serialize, Clone)]
 struct GpuSensorSnapshot {
-    /// Adapter index as reported by NVML (0-based). Stable across calls.
+    /// GPU vendor that produced this snapshot: "NVIDIA" or "AMD". The UI uses
+    /// this (with index) to key panels and pick the right units for fan speed.
+    vendor: String,
+    /// Adapter index within its vendor (0-based). Stable across calls.
     index: u32,
-    /// Device name as reported by NVML, e.g. "NVIDIA GeForce RTX 4080".
+    /// Device name, e.g. "NVIDIA GeForce RTX 4080" or "AMD Radeon RX 9070 XT".
     name: String,
-    /// GPU die temperature in Celsius. None if the device doesn't report.
+    /// GPU die / edge temperature in Celsius. None if the device doesn't report.
     temperature_c: Option<u32>,
+    /// GPU hotspot (junction) temperature in Celsius. AMD-specific — the
+    /// hottest on-die sensor, which RDNA cards expose and enthusiasts watch
+    /// for thermal headroom. None on NVIDIA (NVML doesn't expose it).
+    hotspot_temperature_c: Option<u32>,
     /// GPU core utilization, 0-100. None if unavailable.
     utilization_gpu_pct: Option<u32>,
-    /// Memory controller utilization (NOT VRAM usage), 0-100.
+    /// Memory controller utilization (NOT VRAM usage), 0-100. NVIDIA-only;
+    /// ADLX doesn't expose a directly comparable figure.
     utilization_memory_pct: Option<u32>,
     /// VRAM used / total in bytes.
     vram_used_bytes: Option<u64>,
@@ -2178,10 +2186,15 @@ struct GpuSensorSnapshot {
     graphics_clock_mhz: Option<u32>,
     /// Memory clock in MHz.
     memory_clock_mhz: Option<u32>,
-    /// Instantaneous power draw in watts (NVML reports milliwatts).
+    /// Instantaneous power draw in watts. For AMD this is total board power
+    /// when available (falling back to GPU-only power); for NVIDIA it's the
+    /// board power NVML reports.
     power_draw_w: Option<f32>,
-    /// Fan speed as a percent of max (some cards report 0 if passive).
+    /// Fan speed as a percent of max. NVIDIA reports this directly; AMD
+    /// reports RPM instead (see fan_speed_rpm), so this is None on AMD.
     fan_speed_pct: Option<u32>,
+    /// Fan speed in RPM. AMD/ADLX reports fan speed as RPM; None on NVIDIA.
+    fan_speed_rpm: Option<u32>,
 }
 
 fn nvml_instance() -> &'static Option<nvml_wrapper::Nvml> {
@@ -2189,8 +2202,180 @@ fn nvml_instance() -> &'static Option<nvml_wrapper::Nvml> {
     NVML.get_or_init(|| nvml_wrapper::Nvml::init().ok())
 }
 
-#[tauri::command]
-fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
+// ─── AMD GPU sensors (ADLX) ──────────────────────────────────────────────
+//
+// ADLX objects are COM-like and not thread-safe, and Tauri commands run on a
+// thread pool, so we can't share an AdlxHelper across command invocations.
+// Instead a single dedicated poller thread owns all ADLX state for the life
+// of the process and writes the latest snapshot into a shared Mutex. The
+// get_gpu_sensors command just reads that cache — cheap and thread-safe.
+//
+// The poller starts lazily on the first get_gpu_sensors call. If ADLX init
+// fails (no AMD driver / non-AMD system) the thread exits immediately and the
+// cache stays empty, so AMD simply contributes nothing to the merged result.
+
+fn amd_sensor_cache() -> &'static Mutex<Vec<GpuSensorSnapshot>> {
+    static CACHE: OnceLock<Mutex<Vec<GpuSensorSnapshot>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn ensure_amd_poller_started() {
+    static STARTED: OnceLock<()> = OnceLock::new();
+    STARTED.get_or_init(|| {
+        std::thread::Builder::new()
+            .name("amd-gpu-poller".into())
+            .spawn(amd_poller_loop)
+            .ok();
+    });
+}
+
+// Total VRAM isn't exposed by ADLX's current-metrics snapshot (only used VRAM
+// is), so we read total dedicated VRAM once from DXGI — code we already use
+// for GPU detection — and reuse it for the used/total percentage. Single GPU
+// is the overwhelming common case; for multi-GPU we use the largest adapter's
+// VRAM, which is the discrete card that matters here.
+fn amd_total_vram_bytes() -> Option<u64> {
+    detect_gpus_dxgi()
+        .iter()
+        .map(|g| g.vram_bytes)
+        .filter(|&v| v > 0)
+        .max()
+}
+
+fn amd_poller_loop() {
+    use adlx::helper::AdlxHelper;
+
+    let Ok(helper) = AdlxHelper::new() else {
+        return;
+    };
+    let system = helper.system();
+    let Ok(gpu_list) = system.gpus() else {
+        return;
+    };
+    let Ok(perf) = system.performance_monitoring_services() else {
+        return;
+    };
+    let total_vram = amd_total_vram_bytes();
+    let count = gpu_list.size();
+
+    loop {
+        let mut out = Vec::new();
+        for i in 0..count {
+            let Ok(gpu) = gpu_list.at(i) else { continue };
+            let Ok(metrics) = perf.current_gpu_metrics(&gpu) else {
+                continue;
+            };
+            let name = gpu.name().unwrap_or("AMD GPU").to_string();
+            let support = perf.supported_gpu_metrics(&gpu).ok();
+
+            // Read support flags once (default to "attempt the read" when the
+            // support query itself failed, so we don't silently drop data on
+            // drivers that don't implement the support interface).
+            let (
+                sup_temp,
+                sup_hot,
+                sup_usage,
+                sup_power,
+                sup_tbp,
+                sup_clk,
+                sup_vclk,
+                sup_fan,
+                sup_vram,
+            ) = match &support {
+                Some(s) => (
+                    s.is_supported_gpu_temperature().unwrap_or(false),
+                    s.is_supported_gpu_hotspot_temperature().unwrap_or(false),
+                    s.is_supported_gpu_usage().unwrap_or(false),
+                    s.is_supported_gpu_power().unwrap_or(false),
+                    s.is_supported_gpu_total_board_power().unwrap_or(false),
+                    s.is_supported_gpu_clock_speed().unwrap_or(false),
+                    s.is_supported_gpu_vram_clock_speed().unwrap_or(false),
+                    s.is_supported_gpu_fan_speed().unwrap_or(false),
+                    s.is_supported_gpu_vram().unwrap_or(false),
+                ),
+                None => (true, true, true, true, true, true, true, true, true),
+            };
+
+            let temperature_c = if sup_temp {
+                metrics.temperature().ok().map(|v| v.round() as u32)
+            } else {
+                None
+            };
+            let hotspot_temperature_c = if sup_hot {
+                metrics.hotspot_temperature().ok().map(|v| v.round() as u32)
+            } else {
+                None
+            };
+            let utilization_gpu_pct = if sup_usage {
+                metrics.usage().ok().map(|v| v.round() as u32)
+            } else {
+                None
+            };
+            // Prefer total board power (what gamers compare); fall back to
+            // GPU-only power if TBP isn't supported on this card.
+            let power_draw_w = if sup_tbp {
+                metrics.total_board_power().ok().map(|v| v as f32)
+            } else if sup_power {
+                metrics.power().ok().map(|v| v as f32)
+            } else {
+                None
+            };
+            let graphics_clock_mhz = if sup_clk {
+                metrics.clock_speed().ok().filter(|&v| v >= 0).map(|v| v as u32)
+            } else {
+                None
+            };
+            let memory_clock_mhz = if sup_vclk {
+                metrics
+                    .vram_clock_speed()
+                    .ok()
+                    .filter(|&v| v >= 0)
+                    .map(|v| v as u32)
+            } else {
+                None
+            };
+            let fan_speed_rpm = if sup_fan {
+                metrics.fan_speed().ok().filter(|&v| v >= 0).map(|v| v as u32)
+            } else {
+                None
+            };
+            // ADLX reports VRAM usage in MB.
+            let vram_used_bytes = if sup_vram {
+                metrics
+                    .vram()
+                    .ok()
+                    .filter(|&v| v >= 0)
+                    .map(|mb| mb as u64 * 1024 * 1024)
+            } else {
+                None
+            };
+
+            out.push(GpuSensorSnapshot {
+                vendor: "AMD".into(),
+                index: i,
+                name,
+                temperature_c,
+                hotspot_temperature_c,
+                utilization_gpu_pct,
+                utilization_memory_pct: None,
+                vram_used_bytes,
+                vram_total_bytes: total_vram,
+                graphics_clock_mhz,
+                memory_clock_mhz,
+                power_draw_w,
+                fan_speed_pct: None,
+                fan_speed_rpm,
+            });
+        }
+
+        if let Ok(mut cache) = amd_sensor_cache().lock() {
+            *cache = out;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
+}
+
+fn read_nvml_sensors() -> Vec<GpuSensorSnapshot> {
     use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
 
     let Some(nvml) = nvml_instance() else {
@@ -2216,9 +2401,11 @@ fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
         let fan_speed_pct = device.fan_speed(0).ok();
 
         out.push(GpuSensorSnapshot {
+            vendor: "NVIDIA".into(),
             index: i,
             name,
             temperature_c,
+            hotspot_temperature_c: None,
             utilization_gpu_pct: util.as_ref().map(|u| u.gpu),
             utilization_memory_pct: util.as_ref().map(|u| u.memory),
             vram_used_bytes: mem.as_ref().map(|m| m.used),
@@ -2227,7 +2414,21 @@ fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
             memory_clock_mhz,
             power_draw_w,
             fan_speed_pct,
+            fan_speed_rpm: None,
         });
+    }
+    out
+}
+
+#[tauri::command]
+fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
+    // Start the AMD poller on first call (no-op if already started or if
+    // ADLX init fails). NVML reads inline — it's cheap. AMD data comes from
+    // the background poller's cache, so it appears ~1s after the first call.
+    ensure_amd_poller_started();
+    let mut out = read_nvml_sensors();
+    if let Ok(amd) = amd_sensor_cache().lock() {
+        out.extend(amd.iter().cloned());
     }
     out
 }
