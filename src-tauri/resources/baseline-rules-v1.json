@@ -188,6 +188,19 @@
       "conditions": [],
       "apply_kind": null,
       "state_kind": null
+    },
+    {
+      "id": "game-install-location-advisory",
+      "title": "Check that your most-played games live on your fastest drive",
+      "category": "Storage",
+      "severity": "moderate",
+      "description": "Big modern games (Call of Duty Warzone, Baldur's Gate 3, Cyberpunk 2077, Final Fantasy XIV) stream tens of gigabytes during loading screens and map transitions. On an HDD this turns 8-second loads into 45-second loads and causes mid-match texture pop-in; on a SATA SSD it's tolerable; on an NVMe SSD it's near-instant. The right move is usually NOT 'upgrade your drive' but 'move the 2-3 games you actually play to the fastest drive you already own.' Steam: right-click the game in your library → Properties → Installed Files → Move install folder. Epic: Library → ⋯ → Move. Battle.net: Settings → Game Install/Update → drive picker (then verify integrity). Most launchers move the install without re-downloading. Once moved, the rest of the library on the slower drive can stay there.",
+      "impact": "Map and asset loads measured in seconds instead of tens of seconds · less texture pop-in mid-match · less file-I/O competition between your active game and a background launcher update",
+      "downside": "Time investment (5-30 min per game during the move) and you need enough free space on the target drive. Validate the move worked before deleting the source folder if your launcher leaves both.",
+      "applies_to_template": "Move competitive / most-played titles to your fastest drive; leave large single-player libraries on slower drives",
+      "conditions": [],
+      "apply_kind": null,
+      "state_kind": null
     }
   ]
 }
