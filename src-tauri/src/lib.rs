@@ -317,8 +317,15 @@ fn remote_fetch_enabled() -> bool {
     false
 }
 
+// All fields are part of the schema contract published in
+// docs/ARCHITECTURE_LOCKS §1.4 and used by the consumers of verify_manifest()
+// once remote fetch is enabled. While the cryptographic verifier is stubbed
+// (see Cargo.toml hex/ed25519 note), some fields don't yet have call sites,
+// so we suppress dead_code rather than gate the schema behind cfg flags —
+// the schema is the published interface, not a private implementation detail.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct RulesManifest {
     schema_version: u32,
     ruleset_version: u64,
