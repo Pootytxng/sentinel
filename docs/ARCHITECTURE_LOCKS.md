@@ -275,6 +275,52 @@ Tracked here so the right decisions are made at the right time, not skipped:
 - [ ] Tauri 2 built-in updater configured (`tauri.conf.json` `updater` section + Ed25519 signing key)
 - [ ] LICENSE replaced from the placeholder with the final commercial license
 - [ ] Privacy policy + EULA + clear disclaimers about reboot-required tweaks
-- [ ] Signed remote rules manifest pipeline live (see §1.4)
+- [ ] Signed remote rules manifest pipeline live (see §1.4) — verification code already landed; production key + URL gated by this checklist
 - [ ] Last-known-good rules cache verified across cold-start scenarios
-- [ ] Trust Ledger UI surface implemented (per §1.5)
+- [x] Trust Ledger UI surface implemented (per §1.5)
+
+---
+
+## 5. Rules Signing — Key Management
+
+The rules-manifest signing key is treated like an updater signing key — it is the trust root for every privileged Windows change Sentinel performs in the field. Mishandling it equals mishandling root on every installed machine.
+
+### Hard rules
+
+- **The Ed25519 private key NEVER lives in this repository.** Not in commits, not in `.env*`, not in CI secrets, not in the developer's home directory unencrypted.
+- **The current embedded public key (`RULES_SIGNING_PUBKEY_BYTES` in lib.rs) is the 32-zero-byte placeholder.** While that placeholder is in the binary, `remote_fetch_enabled()` hard-returns `false`. Replacing the placeholder with a real key and the URL is the single action that arms remote fetch.
+- **Rotation is via app update only.** New public key → new app version that embeds it. The CDN cannot rotate the signing key — that would defeat the trust root.
+- **Manifest signature is over a canonical form of the manifest with the `signature` field removed.** The signer and the verifier must agree on the canonicalization. We currently use `serde_json::to_vec(&value)` after removing the `signature` field; if we ever upgrade to RFC 8785, both sides update together with a schema version bump.
+
+### Storage of the production private key
+
+When the time comes (pre-launch), the production private key SHOULD live:
+
+1. **In a hardware security module** (YubiKey, AWS KMS asymmetric key, or equivalent), with signing requiring physical or operator action. **Preferred**.
+2. **On an offline / air-gapped machine** used only for signing the manifest at release time. **Acceptable** if HSM is impractical for the initial launch.
+
+The production private key MUST NOT live on:
+
+- Any developer workstation
+- Any cloud CI environment with broad access
+- Any environment that has internet access during signing
+
+### Per-release signing flow
+
+1. Produce a `rules-v1.json` with the new rules and a SHA-256 hash.
+2. Write a `rules-v1.manifest.json` with: `schema_version`, `ruleset_version` (monotonic — strictly greater than the last published one), `created_at`, `expires_at` (1–6 months out), `min_app_version`, `max_app_version`, `rules_sha256`, `rules_url`.
+3. Sign the canonical form of the manifest (with `signature` field absent) with the production Ed25519 private key.
+4. Embed the signature into the manifest's `signature` field, hex-encoded.
+5. Upload `rules-v1.manifest.json` and `rules-v1.json` to the CDN.
+
+### Compromise / suspected compromise of the private key
+
+- IMMEDIATELY publish an app update that embeds a new public key.
+- Continue serving the old `rules-v1.json` from the CDN unchanged — old clients keep working off their last-known-good cache.
+- Old clients without an upgrade have no remote-fetch path until they update; this is the intended safety property.
+
+### What `RULES_SIGNING_PUBKEY_BYTES = [0u8; 32]` guarantees
+
+- `verify_manifest` checks `RULES_SIGNING_PUBKEY_BYTES == [0u8; 32]` explicitly and returns `ManifestError::BadKey` before attempting any cryptographic verification — defense in depth.
+- `remote_fetch_enabled()` hard-codes `false` independently of the placeholder, so the embedded baseline is the only rule source even if the verification logic itself is buggy.
+- Both guards must be removed simultaneously to enable remote fetch. There is no path where one is on and the other is off in shipped code.

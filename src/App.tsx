@@ -154,6 +154,7 @@ function App() {
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
   const [startup, setStartup] = useState<StartupEntry[]>([]);
+  const [rulesSource, setRulesSource] = useState<string>("embedded");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -163,16 +164,18 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const [info, recommendations, history, startupEntries] = await Promise.all([
+      const [info, recommendations, history, startupEntries, source] = await Promise.all([
         invoke<HardwareInfo>("get_hardware_info"),
         invoke<Recommendation[]>("get_recommendations"),
         invoke<AppliedChange[]>("get_applied_changes"),
         invoke<StartupEntry[]>("get_startup_entries"),
+        invoke<string>("get_rules_source"),
       ]);
       setHw(info);
       setRecs(recommendations);
       setChanges(history);
       setStartup(startupEntries);
+      setRulesSource(source);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -307,6 +310,17 @@ function App() {
   const categoryRecs = (cat: RecCategory): Recommendation[] =>
     (recs ?? []).filter((r) => r.category === cat);
 
+  // Truthful label for the rules source — what's actually driving the
+  // catalog the user sees. Per ARCHITECTURE_LOCKS §1.3 cold-start contract,
+  // "Embedded" is the always-available baseline; "Cached" / "Remote" only
+  // appear once signed remote rules are live.
+  const rulesSourceLabel =
+    rulesSource === "remote"
+      ? "Rules: Remote (signed)"
+      : rulesSource === "cached"
+      ? "Rules: Cached (last-known-good)"
+      : "Rules: Built-in";
+
   return (
     <main className="app">
       <header className="header">
@@ -314,9 +328,17 @@ function App() {
           <h1>Sentinel</h1>
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
-        <button className="btn" onClick={refresh} disabled={loading}>
-          {loading ? "Scanning…" : "Refresh"}
-        </button>
+        <div className="header-right">
+          <span
+            className={`rules-source-pill rules-source-${rulesSource}`}
+            title="Where Sentinel's recommendation catalog came from on this launch"
+          >
+            {rulesSourceLabel}
+          </span>
+          <button className="btn" onClick={refresh} disabled={loading}>
+            {loading ? "Scanning…" : "Refresh"}
+          </button>
+        </div>
       </header>
 
       {error && <div className="error">Error: {error}</div>}

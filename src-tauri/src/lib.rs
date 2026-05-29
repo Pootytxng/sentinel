@@ -217,7 +217,7 @@ enum Condition {
     HasActiveWiredEthernet,
 }
 
-fn load_baseline_rules() -> RulesFile {
+fn load_baseline_rules_embedded() -> RulesFile {
     let file: RulesFile = serde_json::from_slice(BASELINE_RULES_JSON)
         .expect("baseline rules JSON must be valid at compile time");
     assert_eq!(
@@ -226,6 +226,366 @@ fn load_baseline_rules() -> RulesFile {
         file.schema_version, RULES_SCHEMA_VERSION
     );
     file
+}
+
+// Small inline hex codec to avoid pulling the hex crate (which has a known
+// compat issue with the current core::error::Error trait bound on stable).
+fn hex_decode(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(s.len() / 2);
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let high = hex_nybble(bytes[i])?;
+        let low = hex_nybble(bytes[i + 1])?;
+        out.push((high << 4) | low);
+        i += 2;
+    }
+    Some(out)
+}
+
+fn hex_nybble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+fn hex_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(TABLE[(b >> 4) as usize] as char);
+        out.push(TABLE[(b & 0x0f) as usize] as char);
+    }
+    out
+}
+
+// ─── Signed manifest verification (ARCHITECTURE_LOCKS §1.4) ──────────────
+//
+// Remote rules are PRIVILEGED POLICY. SHA-256 alone is not enough — a CDN
+// compromise can replace both the rules JSON and its checksum simultaneously.
+// The integrity chain is:
+//
+//   embedded public key (this binary)  →  verifies signature on  →
+//   manifest (small, signed)           →  whose rules_sha256 must equal
+//   SHA-256(rules JSON)                →  parsed into RulesFile
+//
+// Hard rules (see ARCHITECTURE_LOCKS §1.4):
+//   - Manifest signature MUST verify against the embedded public key
+//   - ruleset_version MUST be monotonic (no rollback attacks: serving an
+//     older valid ruleset is rejected)
+//   - expires_at MUST be in the future (no freeze attacks: serving a stale
+//     valid ruleset past its expiry is rejected)
+//   - min_app_version / max_app_version MUST bracket the current app version
+//   - Rules file size MUST be under a cap (reject oversized DOS)
+//   - Network timeouts MUST be enforced (no hung-fetch DOS)
+//
+// Until `RULES_SIGNING_PUBKEY_BYTES` is replaced with a real production
+// public key, `remote_fetch_enabled()` returns false and `load_rules()`
+// always uses the embedded baseline. This is intentional: shipping a
+// development public key would let a casual binary inspection bypass the
+// integrity chain.
+
+/// 32-byte Ed25519 public key. The current value is all-zeros — a known
+/// invalid key — so signature verification always fails. Replace with the
+/// real production public key (kept in HSM / offline machine, NEVER in this
+/// repo) immediately before enabling remote fetch.
+const RULES_SIGNING_PUBKEY_BYTES: [u8; 32] = [0u8; 32];
+
+/// Hard cap on manifest size. Manifests are a few hundred bytes; 4 KB is
+/// generous.
+const MANIFEST_MAX_BYTES: usize = 4096;
+
+/// Hard cap on rules JSON size. The current baseline is < 20 KB; 1 MB
+/// accommodates growth and any reasonable expansion.
+const RULES_MAX_BYTES: usize = 1024 * 1024;
+
+/// Until the embedded pubkey is replaced with a real production key and a
+/// CDN URL is configured, no remote fetch happens. Hard-coded false.
+fn remote_fetch_enabled() -> bool {
+    // Real production check would be:
+    //   RULES_SIGNING_PUBKEY_BYTES != [0u8; 32]  &&  ENABLE_REMOTE_FETCH cfg gate
+    // Both are intentionally absent so private beta cannot accidentally ship
+    // with remote fetch enabled.
+    false
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+struct RulesManifest {
+    schema_version: u32,
+    ruleset_version: u64,
+    created_at: String,
+    expires_at: String,
+    min_app_version: String,
+    max_app_version: String,
+    /// Hex-encoded SHA-256 of the rules JSON file.
+    rules_sha256: String,
+    /// URL to fetch the rules JSON from. Sentinel will SHA-256 the response
+    /// and verify it matches `rules_sha256`.
+    rules_url: String,
+    /// Hex-encoded Ed25519 signature over the manifest's canonical bytes
+    /// (currently: the bytes of the JSON manifest with this `signature` field
+    /// removed and the resulting object re-serialized in a canonical form).
+    signature: String,
+}
+
+#[derive(Debug, Clone)]
+enum ManifestError {
+    SizeCap,
+    Parse(String),
+    BadSignatureFormat,
+    SignatureInvalid,
+    RulesetVersionRegression { latest: u64, attempted: u64 },
+    Expired,
+    AppVersionOutOfRange,
+    BadKey,
+}
+
+impl std::fmt::Display for ManifestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SizeCap => write!(f, "manifest exceeds {} byte cap", MANIFEST_MAX_BYTES),
+            Self::Parse(e) => write!(f, "manifest parse: {}", e),
+            Self::BadSignatureFormat => write!(f, "manifest signature hex is malformed"),
+            Self::SignatureInvalid => write!(f, "manifest signature did not verify"),
+            Self::RulesetVersionRegression { latest, attempted } => write!(
+                f,
+                "manifest ruleset_version {} is older than last-seen {} (rollback attack rejected)",
+                attempted, latest
+            ),
+            Self::Expired => write!(f, "manifest expires_at is in the past (freeze attack rejected)"),
+            Self::AppVersionOutOfRange => {
+                write!(f, "manifest does not cover the current Sentinel app version")
+            }
+            Self::BadKey => write!(f, "embedded public key is the placeholder all-zeros"),
+        }
+    }
+}
+
+/// Build the bytes that were signed by computing a canonical serialization of
+/// the manifest with the `signature` field removed. The signer must produce
+/// the same canonical form at sign time, so this is the contract that
+/// determines what "the manifest" means cryptographically.
+fn canonical_manifest_payload(raw_json: &[u8]) -> Result<Vec<u8>, ManifestError> {
+    let mut value: serde_json::Value =
+        serde_json::from_slice(raw_json).map_err(|e| ManifestError::Parse(e.to_string()))?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.remove("signature");
+    }
+    // serde_json's `to_writer` is not RFC 8785 canonical, but it is
+    // deterministic given the same `serde_json::Value` (BTreeMap-backed
+    // for objects when the `preserve_order` feature is OFF, which is the
+    // default). That's good enough for our contract — the signer uses the
+    // same serializer.
+    serde_json::to_vec(&value).map_err(|e| ManifestError::Parse(e.to_string()))
+}
+
+fn verify_manifest(raw_json: &[u8]) -> Result<RulesManifest, ManifestError> {
+    if raw_json.len() > MANIFEST_MAX_BYTES {
+        return Err(ManifestError::SizeCap);
+    }
+    if RULES_SIGNING_PUBKEY_BYTES == [0u8; 32] {
+        return Err(ManifestError::BadKey);
+    }
+
+    let manifest: RulesManifest =
+        serde_json::from_slice(raw_json).map_err(|e| ManifestError::Parse(e.to_string()))?;
+
+    // Pre-flight integrity checks that do not depend on the curve25519
+    // signature operation: signature hex is well-formed, the canonical
+    // payload is constructible.
+    let _sig_bytes = hex_decode(&manifest.signature).ok_or(ManifestError::BadSignatureFormat)?;
+    let _payload = canonical_manifest_payload(raw_json)?;
+
+    // ─── Crypto check: STUBBED ──────────────────────────────────────────
+    // Production needs an Ed25519 verify() call here against
+    // RULES_SIGNING_PUBKEY_BYTES + the canonical payload + sig_bytes. The
+    // ed25519-dalek 2.x dependency is currently blocked by a transitive
+    // hex 0.4.3 build issue on the current Rust stable; until that is
+    // resolved or replaced, we return SignatureInvalid so no manifest is
+    // ever accepted. Combined with remote_fetch_enabled() = false, the
+    // embedded baseline stays the only rule source.
+    Err(ManifestError::SignatureInvalid)
+}
+
+/// Verify the integrity chain on a fetched (manifest, rules) pair:
+///   1. manifest signature valid
+///   2. rules SHA-256 matches the manifest's `rules_sha256`
+///   3. manifest's ruleset_version is monotonic against the persisted
+///      last-seen version
+///   4. expires_at is in the future
+///   5. app version sits inside [min_app_version, max_app_version]
+///   6. rules JSON fits the size cap and parses
+///
+/// On success, returns the parsed RulesFile and the new last-seen version
+/// (caller should persist it).
+fn verify_chain(
+    raw_manifest: &[u8],
+    raw_rules: &[u8],
+    last_seen_ruleset_version: u64,
+) -> Result<(RulesManifest, RulesFile), ManifestError> {
+    use sha2::{Digest, Sha256};
+
+    if raw_rules.len() > RULES_MAX_BYTES {
+        return Err(ManifestError::SizeCap);
+    }
+
+    let manifest = verify_manifest(raw_manifest)?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(raw_rules);
+    let computed = hasher.finalize();
+    let expected = hex_decode(&manifest.rules_sha256)
+        .ok_or_else(|| ManifestError::Parse("rules_sha256 hex".into()))?;
+    if computed.as_slice() != expected.as_slice() {
+        return Err(ManifestError::Parse(
+            "rules SHA-256 mismatch against manifest".into(),
+        ));
+    }
+
+    if manifest.ruleset_version < last_seen_ruleset_version {
+        return Err(ManifestError::RulesetVersionRegression {
+            latest: last_seen_ruleset_version,
+            attempted: manifest.ruleset_version,
+        });
+    }
+
+    let now = Utc::now();
+    let expires = chrono::DateTime::parse_from_rfc3339(&manifest.expires_at)
+        .map_err(|e| ManifestError::Parse(format!("expires_at: {}", e)))?;
+    if expires < now {
+        return Err(ManifestError::Expired);
+    }
+
+    let current = env!("CARGO_PKG_VERSION");
+    if !version_in_range(current, &manifest.min_app_version, &manifest.max_app_version) {
+        return Err(ManifestError::AppVersionOutOfRange);
+    }
+
+    let rules: RulesFile = serde_json::from_slice(raw_rules)
+        .map_err(|e| ManifestError::Parse(format!("rules JSON: {}", e)))?;
+    Ok((manifest, rules))
+}
+
+fn version_in_range(current: &str, min: &str, max: &str) -> bool {
+    // Permissive lexicographic check is fine for "0.1.0"-style strings; for
+    // SemVer-correct compares we'd swap in the `semver` crate later.
+    current >= min && current <= max
+}
+
+// ─── Rules source tracking + last-known-good cache ───────────────────────
+
+#[derive(Serialize, Clone, Copy, Debug)]
+#[serde(rename_all = "kebab-case")]
+enum RulesSource {
+    /// Loaded from the binary's embedded baseline (cold start, no network,
+    /// remote fetch disabled, or all remote attempts failed).
+    Embedded,
+    /// Loaded from %APPDATA%\Sentinel\cached-rules.json (a prior successful
+    /// remote fetch survived a restart).
+    Cached,
+    /// Just fetched from the configured remote URL and passed every gate.
+    Remote,
+}
+
+fn cached_manifest_path() -> PathBuf {
+    sentinel_data_dir().join("cached-manifest.json")
+}
+fn cached_rules_path() -> PathBuf {
+    sentinel_data_dir().join("cached-rules.json")
+}
+fn last_seen_version_path() -> PathBuf {
+    sentinel_data_dir().join("last-seen-ruleset-version.txt")
+}
+
+fn load_last_seen_ruleset_version() -> u64 {
+    fs::read_to_string(last_seen_version_path())
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+fn save_last_seen_ruleset_version(v: u64) {
+    let _ = fs::create_dir_all(sentinel_data_dir());
+    let _ = fs::write(last_seen_version_path(), v.to_string());
+}
+
+fn load_cached_rules() -> Option<(RulesManifest, RulesFile)> {
+    if !remote_fetch_enabled() {
+        return None;
+    }
+    let raw_manifest = fs::read(cached_manifest_path()).ok()?;
+    let raw_rules = fs::read(cached_rules_path()).ok()?;
+    let last_seen = load_last_seen_ruleset_version();
+    verify_chain(&raw_manifest, &raw_rules, last_seen).ok()
+}
+
+fn save_cached_rules(raw_manifest: &[u8], raw_rules: &[u8]) -> Result<(), String> {
+    fs::create_dir_all(sentinel_data_dir()).map_err(|e| e.to_string())?;
+    fs::write(cached_manifest_path(), raw_manifest).map_err(|e| e.to_string())?;
+    fs::write(cached_rules_path(), raw_rules).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Stub for the eventual HTTP fetch. Intentionally returns None — no remote
+/// fetch happens until `remote_fetch_enabled()` is true AND a real CDN URL
+/// is configured. See ARCHITECTURE_LOCKS §1.4 — unsigned remote rules MUST
+/// NOT ship, including in private beta.
+fn fetch_remote_rules() -> Option<(Vec<u8>, Vec<u8>)> {
+    if !remote_fetch_enabled() {
+        return None;
+    }
+    // Future: HTTP GET <manifest_url>, then HTTP GET manifest.rules_url,
+    // both with 5 s timeout and the size caps enforced by reqwest::Response::
+    // bytes_with_limit (or equivalent).
+    None
+}
+
+/// Single entry point for loading rules. Tries remote → cached → embedded
+/// in order, returns whichever succeeded plus a source tag. Never panics;
+/// the embedded baseline is always a valid fallback.
+fn load_rules() -> (RulesFile, RulesSource) {
+    // Remote path (currently a no-op until production key + URL are wired).
+    if remote_fetch_enabled() {
+        if let Some((raw_manifest, raw_rules)) = fetch_remote_rules() {
+            let last_seen = load_last_seen_ruleset_version();
+            match verify_chain(&raw_manifest, &raw_rules, last_seen) {
+                Ok((manifest, rules)) => {
+                    let _ = save_cached_rules(&raw_manifest, &raw_rules);
+                    save_last_seen_ruleset_version(manifest.ruleset_version);
+                    return (rules, RulesSource::Remote);
+                }
+                Err(_e) => {
+                    // Fall through to cached / embedded. Production would log
+                    // the verification failure for support.
+                }
+            }
+        }
+    }
+
+    // Cached path (only meaningful once remote has succeeded at least once).
+    if let Some((_manifest, rules)) = load_cached_rules() {
+        return (rules, RulesSource::Cached);
+    }
+
+    // Embedded baseline — always works, no network required.
+    (load_baseline_rules_embedded(), RulesSource::Embedded)
+}
+
+#[tauri::command]
+fn get_rules_source() -> &'static str {
+    match load_rules().1 {
+        RulesSource::Embedded => "embedded",
+        RulesSource::Cached => "cached",
+        RulesSource::Remote => "remote",
+    }
 }
 
 fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
@@ -1280,7 +1640,11 @@ fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     // ── Step B: rules loaded from the embedded baseline JSON ──────────
     // Currently empty in commit B; first rec (game-mode) migrates over in C.
-    let baseline = load_baseline_rules();
+    // Per ARCHITECTURE_LOCKS §1.3 — cold-start contract is to always be
+    // usable. `load_rules()` returns the embedded baseline if no validated
+    // remote / cached rules are available. Remote fetch is currently hard-
+    // disabled (see `remote_fetch_enabled()`).
+    let (baseline, _source) = load_rules();
     for spec in &baseline.rules {
         if let Some(rec) = evaluate_rule_spec(spec, hw) {
             recs.push(rec);
@@ -3064,6 +3428,7 @@ pub fn run() {
             get_applied_changes,
             get_startup_entries,
             set_startup_entry_enabled,
+            get_rules_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

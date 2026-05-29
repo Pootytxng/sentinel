@@ -33,4 +33,15 @@ windows = { version = "0.59", features = [
   "Win32_Graphics_Dxgi_Common",
   "Win32_Foundation",
 ] }
+# Signed-manifest infra (ARCHITECTURE_LOCKS §1.4).
+#
+# ed25519-dalek pulls a transitive `signature`/`hex 0.4.3` chain that has a
+# known std::error::Error / Display bound incompatibility on the current
+# Rust stable. Since remote_fetch_enabled() is hard-coded false until a
+# production key is wired, the verifier currently returns a "crypto-stubbed"
+# error path. The verification contract (types, sequencing, gating) is
+# fully designed -- only the curve25519 signature check is stubbed. Swap
+# in ed25519-dalek (or a compatible crate) when wiring the production
+# rollout; the rest of the integrity chain does not change.
+sha2 = "0.10"
 
