@@ -96,6 +96,14 @@ type AppliedChange = {
   snapshot: unknown;
   status: "applied" | "rolled_back";
   is_still_active: boolean;
+  // Trust Ledger fields (per ARCHITECTURE_LOCKS §1.5 — captured at apply
+  // time so rollback survives rule updates / CDN outages / app upgrades).
+  // Optional because pre-typed-action entries don't have them yet.
+  applied_action?: Record<string, unknown> | null;
+  rollback_action?: Record<string, unknown> | null;
+  app_version_at_apply?: string | null;
+  ruleset_version_at_apply?: string | null;
+  elevation_used?: boolean | null;
 };
 
 type StartupEntry = {
@@ -588,24 +596,43 @@ function HistoryTab({
   busyId: string | null;
   onRollback: (change: AppliedChange) => void;
 }) {
+  // Trust Ledger preface: explain to the user what this view is and why
+  // they should rely on it. Per the cross-LLM "anti-scam differentiator"
+  // framing -- this is where Sentinel proves it's not a tweak pack.
   return (
     <section className="tab-pane">
-      <h2 className="section-title">
-        Applied changes
-        <span className="count-badge">{changes.length}</span>
-      </h2>
+      <div className="section-header">
+        <h2 className="section-title">
+          Trust Ledger
+          <span className="count-badge">{changes.length}</span>
+        </h2>
+        <div className="read-only-pill">Audit trail · click any row to expand</div>
+      </div>
+      <p className="section-help">
+        Every change Sentinel has applied to your machine, with the data needed to
+        roll it back independently of the live recommendation catalog. This is
+        the receipt — Sentinel can prove what it changed, when, with which
+        version, and whether your machine still reflects the change.
+      </p>
       <div className="change-list">
-        {changes
-          .slice()
-          .reverse()
-          .map((c) => (
-            <ChangeRow
-              key={c.id}
-              change={c}
-              busy={busyId === c.id}
-              onRollback={() => onRollback(c)}
-            />
-          ))}
+        {changes.length === 0 ? (
+          <div className="empty">
+            No applied changes yet. Anything Sentinel applies will appear here
+            with a full rollback record.
+          </div>
+        ) : (
+          changes
+            .slice()
+            .reverse()
+            .map((c) => (
+              <ChangeRow
+                key={c.id}
+                change={c}
+                busy={busyId === c.id}
+                onRollback={() => onRollback(c)}
+              />
+            ))
+        )}
       </div>
     </section>
   );
@@ -811,27 +838,137 @@ function ChangeRow({
   busy: boolean;
   onRollback: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const when = new Date(change.applied_at).toLocaleString();
   const stale = change.status === "applied" && !change.is_still_active;
   const stateClass = stale ? "change-stale" : `change-${change.status}`;
 
+  const actionKind = (change.applied_action as { kind?: string } | null | undefined)
+    ?.kind;
+  const rollbackKind = (change.rollback_action as { kind?: string } | null | undefined)
+    ?.kind;
+  const snapshot = change.snapshot as
+    | { kind?: string; [k: string]: unknown }
+    | null
+    | undefined;
+
   return (
-    <div className={`change ${stateClass}`}>
-      <div className="change-main">
-        <div className="change-title">{change.rec_title}</div>
-        <div className="change-when">
-          {when}
-          {stale && <span className="change-note"> · reverted outside Sentinel</span>}
+    <div
+      className={`change ${stateClass} ${expanded ? "change-expanded" : ""}`}
+      data-rec-id={change.rec_id}
+    >
+      <div
+        className="change-header"
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
+      >
+        <div className="change-main">
+          <div className="change-title">
+            <span className="change-chevron" aria-hidden="true">
+              {expanded ? "▾" : "▸"}
+            </span>
+            {change.rec_title}
+          </div>
+          <div className="change-when">
+            {when}
+            {stale && <span className="change-note"> · reverted outside Sentinel</span>}
+          </div>
+        </div>
+        <div className="change-action-area" onClick={(e) => e.stopPropagation()}>
+          {change.status === "rolled_back" ? (
+            <span className="change-status">✓ Rolled back</span>
+          ) : stale ? (
+            <span className="change-status change-status-stale">No longer active</span>
+          ) : (
+            <button className="btn btn-rollback" onClick={onRollback} disabled={busy}>
+              {busy ? "Rolling back…" : "Roll back"}
+            </button>
+          )}
         </div>
       </div>
-      {change.status === "rolled_back" ? (
-        <span className="change-status">✓ Rolled back</span>
-      ) : stale ? (
-        <span className="change-status change-status-stale">No longer active</span>
-      ) : (
-        <button className="btn btn-rollback" onClick={onRollback} disabled={busy}>
-          {busy ? "Rolling back…" : "Roll back"}
-        </button>
+
+      {expanded && (
+        <div className="change-details">
+          <div className="ledger-grid">
+            <div className="ledger-row">
+              <span className="ledger-label">Rule id</span>
+              <span className="ledger-value mono">{change.rec_id}</span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Change id</span>
+              <span className="ledger-value mono">{change.id}</span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Applied at</span>
+              <span className="ledger-value">{when}</span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Status</span>
+              <span className="ledger-value">
+                {change.status === "rolled_back"
+                  ? "Rolled back by Sentinel"
+                  : stale
+                  ? "Applied, but no longer matches current Windows state"
+                  : "Applied — Sentinel-owned"}
+              </span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Sentinel app version</span>
+              <span className="ledger-value mono">
+                {change.app_version_at_apply ?? "(pre-versioning entry)"}
+              </span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Ruleset version</span>
+              <span className="ledger-value mono">
+                {change.ruleset_version_at_apply ?? "(pre-versioning entry)"}
+              </span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">UAC elevation</span>
+              <span className="ledger-value">
+                {change.elevation_used == null
+                  ? "Unknown (pre-versioning entry)"
+                  : change.elevation_used
+                  ? "Yes — required admin"
+                  : "No — ran as standard user"}
+              </span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Action performed</span>
+              <span className="ledger-value mono">
+                {actionKind ?? "(legacy: untyped, dispatched by rec_id)"}
+              </span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Rollback action</span>
+              <span className="ledger-value mono">
+                {rollbackKind ?? "(legacy: synthesized from rec_id at rollback time)"}
+              </span>
+            </div>
+            <div className="ledger-row">
+              <span className="ledger-label">Prior state snapshot</span>
+              <span className="ledger-value mono ledger-snapshot">
+                {snapshot
+                  ? JSON.stringify(snapshot, null, 2)
+                  : "(none recorded)"}
+              </span>
+            </div>
+          </div>
+          <div className="ledger-footer">
+            This row is the rollback contract. Sentinel can restore the prior
+            state from the snapshot above, independently of whether this rule
+            still exists in the active recommendation catalog.
+          </div>
+        </div>
       )}
     </div>
   );
