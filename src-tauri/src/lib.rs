@@ -3,6 +3,14 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
+mod fps;
+
+/// Entry point for the elevated FPS-capture helper process
+/// (`sentinel.exe --fps-capture`). See fps.rs for the full rationale.
+pub fn run_fps_capture() {
+    fps::run_capture();
+}
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};

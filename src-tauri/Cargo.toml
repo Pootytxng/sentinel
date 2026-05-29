@@ -34,8 +34,19 @@ windows = { version = "0.59", features = [
   # Gdi feature is required to use DXGI_OUTPUT_DESC1 (which carries HMONITOR
   # in its body, defined in the Gdi module). Used by HDR capability probe.
   "Win32_Graphics_Gdi",
+  # QueryPerformanceFrequency, for converting ETW present-event QPC
+  # timestamps into milliseconds in the FPS/frametime capture engine.
+  "Win32_System_Performance",
   "Win32_Foundation",
 ] }
+
+# ETW (Event Tracing for Windows) consumer for FPS / frametime capture.
+# Sentinel's --fps-capture helper subscribes to the Microsoft-Windows-DXGI
+# provider's present events to derive frame timing from OUTSIDE the game —
+# no DLL injection, the same anti-cheat-safe mechanism Intel PresentMon uses.
+# Creating a real-time ETW session requires elevation, so this runs in an
+# elevated helper process (see fps.rs).
+ferrisetw = "1.2"
 # Signed-manifest infra (ARCHITECTURE_LOCKS §1.4).
 #
 # ed25519-dalek pulls a transitive `signature`/`hex 0.4.3` chain that has a
