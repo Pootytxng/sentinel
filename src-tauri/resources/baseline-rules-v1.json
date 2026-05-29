@@ -136,6 +136,32 @@
       "conditions": [{ "kind": "has-active-wired-ethernet" }],
       "apply_kind": "eee-disable",
       "state_kind": "eee-disabled-on-eligible-adapters"
+    },
+    {
+      "id": "memory-integrity-vbs-advisory",
+      "title": "Memory Integrity / VBS is active — measurable FPS cost in some games",
+      "category": "Windows",
+      "severity": "moderate",
+      "description": "Memory Integrity (also called HVCI) and the broader Virtualization-Based Security stack run kernel-mode code under a hypervisor for stronger isolation. This is excellent against certain malware classes (DMA attacks, exploits via vulnerable signed drivers, kernel-mode rootkits), but it has a measurable cost in some workloads — including a handful of games, where it can shave 5–15% off frame rate in CPU-bound scenes. Sentinel surfaces this as an advisory, NOT a one-click apply: disabling Memory Integrity weakens real security guarantees, so the choice belongs to you, not to a default. If you decide it's worth it for your competitive use, the switch is in Settings → Privacy & security → Windows Security → Device security → Core isolation details → Memory integrity.",
+      "impact": "Restoring 5–15% FPS in CPU-bound scenes if you choose to disable",
+      "downside": "Real security regression: lower protection against DMA attacks, vulnerable-signed-driver exploits, and kernel-mode rootkits. Some kernel-mode anti-cheat (Valorant Vanguard, some Easy Anti-Cheat / BattlEye configurations) may also require it.",
+      "applies_to_template": "Memory Integrity / VBS is currently engaged on this machine",
+      "conditions": [{ "kind": "memory-integrity-or-vbs-active" }],
+      "apply_kind": null,
+      "state_kind": null
+    },
+    {
+      "id": "defender-game-folder-exclusions-advisory",
+      "title": "Add your game install folders to Defender's exclusion list",
+      "category": "Storage",
+      "severity": "moderate",
+      "description": "Microsoft Defender real-time scanning hits game folders harder than most other paths: large updates trigger heavy I/O during patching, shader caches get rebuilt and rewritten constantly, and asset streaming during play hits files Defender has already scanned. Adding your game install roots (Steam library folders, Epic's installation directory, Riot, Battle.net, etc.) to Defender's exclusion list removes that overhead. Sentinel won't auto-apply this — exclusion is a security-tradeoff decision you should make once you understand it, not a default. The control is in Settings → Privacy & security → Windows Security → Virus & threat protection → Manage settings → Exclusions.",
+      "impact": "Smoother game installs and updates · faster shader compilation · fewer mid-game stutters from background scans",
+      "downside": "Files in the excluded folders are not scanned in real-time. Only exclude folders that ONLY contain game data you trust — never your Downloads folder, never your Desktop, never anywhere you save attachments.",
+      "applies_to_template": "All Windows installs running Microsoft Defender",
+      "conditions": [],
+      "apply_kind": null,
+      "state_kind": null
     }
   ]
 }

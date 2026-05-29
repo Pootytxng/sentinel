@@ -215,6 +215,7 @@ enum Condition {
     OldGpuDriverDays { min_days: i64 },
     StorageBelowFreePercent { mount_prefix: String, percent: f64 },
     HasActiveWiredEthernet,
+    MemoryIntegrityOrVbsActive,
 }
 
 fn load_baseline_rules_embedded() -> RulesFile {
@@ -635,6 +636,7 @@ fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
             })
         }
         Condition::HasActiveWiredEthernet => hw.has_active_wired_ethernet,
+        Condition::MemoryIntegrityOrVbsActive => memory_integrity_or_vbs_active(),
     }
 }
 
@@ -1566,6 +1568,29 @@ fn visual_effects_for_best_performance() -> bool {
         .and_then(|k| k.get_value::<u32, _>("VisualFXSetting"))
         .map(|v| v == 2)
         .unwrap_or(false)
+}
+
+// Memory Integrity (HVCI / hypervisor-enforced code integrity) is the
+// gaming-relevant VBS scenario. Reading both the HVCI subkey and the parent
+// VBS toggle covers the common configurations: some systems have VBS off but
+// HVCI on, some have VBS on without HVCI explicitly toggled. We report
+// "active" if either flag indicates protection is engaged, because the FPS
+// cost path applies in both cases.
+fn memory_integrity_or_vbs_active() -> bool {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let hvci_on = hklm
+        .open_subkey(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+        )
+        .and_then(|k| k.get_value::<u32, _>("Enabled"))
+        .map(|v| v == 1)
+        .unwrap_or(false);
+    let vbs_on = hklm
+        .open_subkey("SYSTEM\\CurrentControlSet\\Control\\DeviceGuard")
+        .and_then(|k| k.get_value::<u32, _>("EnableVirtualizationBasedSecurity"))
+        .map(|v| v == 1)
+        .unwrap_or(false);
+    hvci_on || vbs_on
 }
 
 fn reserved_storage_enabled() -> bool {
