@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import "./App.css";
+import "./Onboarding.css";
 
 type DiskInfo = {
   mount_point: string;
@@ -218,6 +220,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => localStorage.getItem(ONBOARDED_KEY) !== "1",
+  );
 
   const refresh = async () => {
     setLoading(true);
@@ -396,6 +401,9 @@ function App() {
 
   return (
     <main className="app">
+      {showOnboarding && (
+        <Onboarding onDone={() => setShowOnboarding(false)} />
+      )}
       <header className="header">
         <div>
           <h1>Sentinel</h1>
@@ -477,7 +485,10 @@ function App() {
       )}
 
       <footer className="footer">
-        Sentinel never changes anything without your explicit approval.
+        <span>Sentinel never changes anything without your explicit approval.</span>
+        <button className="footer-link" onClick={() => setShowOnboarding(true)}>
+          Replay intro
+        </button>
       </footer>
     </main>
   );

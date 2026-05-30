@@ -175,6 +175,22 @@ html, body, #root {
   font-size: 12px;
   text-align: center;
   border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.footer-link {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.footer-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 .gpu-block {
