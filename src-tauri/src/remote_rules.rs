@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use crate::{load_baseline_rules_embedded, sentinel_data_dir, RulesFile};
+use crate::recommendations::{load_baseline_rules_embedded, RulesFile};
+use crate::sentinel_data_dir;
 
 // Small inline hex codec to avoid pulling the hex crate (which has a known
 // compat issue with the current core::error::Error trait bound on stable).
