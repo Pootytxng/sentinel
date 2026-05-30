@@ -2564,25 +2564,71 @@ fn start_fps_capture() -> Result<(), String> {
         let _ = std::fs::remove_file(fps_alive_path());
     });
 
-    // Spawn the elevated helper. runas .status() blocks for the helper's
-    // lifetime, so run it on a dedicated thread. A declined UAC prompt
-    // returns Err quickly; record it for the UI.
     let out = fps_out_path().to_string_lossy().to_string();
     let alive = fps_alive_path().to_string_lossy().to_string();
-    std::thread::spawn(move || {
-        use std::sync::atomic::Ordering;
-        let res = runas::Command::new(exe)
-            .args(&["--fps-capture", "--fps-out", &out, "--fps-alive", &alive])
-            .status();
-        fps_active().store(false, Ordering::Release);
-        let msg = match res {
-            Ok(_) => "stopped",
-            Err(_) => "declined",
-        };
-        *fps_status_slot().lock().unwrap() = msg.into();
-    });
+
+    // Launch path depends on UAC. When UAC is fully disabled (EnableLUA=0),
+    // the ShellExecute "runas" verb can't elevate — it silently fails, so the
+    // helper never starts. But with UAC off + an admin account, this process
+    // already carries a full admin token, so we can launch the helper DIRECTLY
+    // and it inherits the rights needed to open the ETW session. With UAC on,
+    // we use runas to elevate (prompt or auto-approve per policy).
+    if uac_disabled() {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        match std::process::Command::new(&exe)
+            .args([
+                "--fps-capture",
+                "--fps-out",
+                out.as_str(),
+                "--fps-alive",
+                alive.as_str(),
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+        {
+            Ok(mut child) => {
+                *fps_status_slot().lock().unwrap() = "running".into();
+                // Reflect helper exit (self-exit on heartbeat stale, or crash).
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                    fps_active().store(false, Ordering::Release);
+                    *fps_status_slot().lock().unwrap() = "stopped".into();
+                });
+            }
+            Err(e) => {
+                fps_active().store(false, Ordering::Release);
+                *fps_status_slot().lock().unwrap() = format!("failed to launch helper: {e}");
+            }
+        }
+    } else {
+        // runas .status() blocks for the helper's lifetime, so run it on a
+        // dedicated thread. A declined UAC prompt returns Err quickly.
+        std::thread::spawn(move || {
+            let res = runas::Command::new(exe)
+                .args(&["--fps-capture", "--fps-out", &out, "--fps-alive", &alive])
+                .status();
+            fps_active().store(false, Ordering::Release);
+            let msg = match res {
+                Ok(_) => "stopped",
+                Err(_) => "declined",
+            };
+            *fps_status_slot().lock().unwrap() = msg.into();
+        });
+    }
 
     Ok(())
+}
+
+// True when UAC is fully disabled (EnableLUA=0). In that state the "runas"
+// elevation verb doesn't work, but an admin user's processes already run with
+// a full admin token — so we launch the FPS helper directly instead.
+fn uac_disabled() -> bool {
+    RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System")
+        .and_then(|k| k.get_value::<u32, _>("EnableLUA"))
+        .map(|v| v == 0)
+        .unwrap_or(false)
 }
 
 #[tauri::command]

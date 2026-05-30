@@ -43,6 +43,24 @@ use serde::Serialize;
 const DXGI_PROVIDER_GUID: &str = "CA11C036-0102-4A2D-A6AD-F03CFED5D3C9";
 const PRESENT_START_EVENT_ID: u16 = 42;
 
+// Our real-time ETW session name. Must be stable so we can stop a leftover
+// one on startup (see run_capture).
+const SESSION_NAME: &str = "Sentinel-FPS";
+
+// Processes that present frames but are NOT "the game": the desktop compositor
+// (which composites borderless windows, so it presents at the game's rate),
+// the shell, and Sentinel's own webview windows. Excluded from the
+// dominant-presenter pick so we report the actual game, not the compositor.
+const PRESENTER_DENYLIST: &[&str] = &[
+    "dwm.exe",
+    "explorer.exe",
+    "sentinel.exe",
+    "applicationframehost.exe",
+    "searchhost.exe",
+    "startmenuexperiencehost.exe",
+    "textinputhost.exe",
+];
+
 // How far back the per-second stats window looks, and how often we report.
 const REPORT_INTERVAL_MS: u64 = 500;
 const STATS_WINDOW: Duration = Duration::from_secs(1);
@@ -218,8 +236,17 @@ pub fn run_capture() {
         })
         .build();
 
+    // Stop any leftover session of our name from a previous run that didn't
+    // clean up (e.g. was hard-killed — ferrisetw only stops the session on a
+    // clean Drop). Without this, StartTrace fails with AlreadyExist and FPS
+    // capture can never start again until reboot. logman is built into
+    // Windows; ignore its result (no session => harmless error).
+    let _ = std::process::Command::new("logman")
+        .args(["stop", SESSION_NAME, "-ets"])
+        .output();
+
     let trace = UserTrace::new()
-        .named("Sentinel-FPS".to_string())
+        .named(SESSION_NAME.to_string())
         .enable(provider)
         .start_and_process();
 
@@ -267,9 +294,11 @@ pub fn run_capture() {
         });
 
         // The "game" is the process presenting the most frames in the last
-        // second (a fullscreen game dominates; DWM only wins when nothing
-        // else is rendering).
-        let mut best: Option<(u32, Vec<f64>)> = None;
+        // second, EXCLUDING the compositor/shell (dwm.exe et al.). In borderless
+        // mode DWM composites at the game's rate and would otherwise win the
+        // "most frames" race and get mislabelled as the game. We resolve each
+        // candidate's name here and skip the denylist.
+        let mut best: Option<(u32, String, Vec<f64>)> = None;
         for (pid, tr) in map.iter() {
             let recent: Vec<f64> = tr
                 .samples
@@ -280,16 +309,23 @@ pub fn run_capture() {
             if recent.len() < 2 {
                 continue;
             }
+            let name = resolve_process_name(*pid);
+            if PRESENTER_DENYLIST
+                .iter()
+                .any(|d| name.eq_ignore_ascii_case(d))
+            {
+                continue;
+            }
             let take = match &best {
-                Some((_, b)) => recent.len() > b.len(),
+                Some((_, _, b)) => recent.len() > b.len(),
                 None => true,
             };
             if take {
-                best = Some((*pid, recent));
+                best = Some((*pid, name, recent));
             }
         }
 
-        if let Some((pid, frametimes)) = best {
+        if let Some((pid, process_name, frametimes)) = best {
             let frames = frametimes.len();
             let avg = frametimes.iter().sum::<f64>() / frames as f64;
 
@@ -311,7 +347,7 @@ pub fn run_capture() {
 
             let report = FpsReport {
                 pid,
-                process_name: resolve_process_name(pid),
+                process_name,
                 fps: if avg > 0.0 { 1000.0 / avg } else { 0.0 },
                 avg_frametime_ms: avg,
                 low1_fps: if p99 > 0.0 { 1000.0 / p99 } else { 0.0 },
