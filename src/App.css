@@ -275,6 +275,15 @@ html, body, #root {
   margin-bottom: 12px;
 }
 .section-header .section-title { margin-bottom: 0; }
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-small-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .count-badge {
   display: inline-flex;

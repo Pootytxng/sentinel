@@ -1,0 +1,48 @@
+/* Overlay window: the entire window must be transparent so only the HUD pill
+   is visible on top of the game. The main app's App.css sets a solid body
+   background, so force transparency here when the document is in overlay mode
+   (class set in main.tsx). */
+html.overlay-mode,
+html.overlay-mode body,
+html.overlay-mode #root {
+  background: transparent !important;
+  overflow: hidden;
+  margin: 0;
+}
+
+.ovl {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  background: rgba(8, 10, 14, 0.72);
+  border: 1px solid rgba(106, 169, 255, 0.28);
+  border-radius: 8px;
+  padding: 8px 11px;
+  color: #e6e9ef;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: max-content;
+  min-width: 150px;
+  /* Click-through is enforced at the window level, but disable selection too. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ovl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  font-size: 12px;
+}
+.ovl-k {
+  color: #8a93a8;
+}
+.ovl-v {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.ovl-fps .ovl-v {
+  color: #6aa9ff;
+  font-size: 19px;
+  line-height: 1;
+}

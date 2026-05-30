@@ -704,6 +704,27 @@ function MonitoringTab({ active }: { active: boolean }) {
   const [hasGpu, setHasGpu] = useState<boolean | null>(null);
   const [fps, setFps] = useState<FpsStatus | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
+  const [overlayOn, setOverlayOn] = useState(false);
+
+  // Sync the overlay toggle with the actual window state on mount (e.g. the
+  // overlay may already be open from earlier in this app session).
+  useEffect(() => {
+    invoke<boolean>("overlay_visible").then(setOverlayOn).catch(() => {});
+  }, []);
+
+  const toggleOverlay = async () => {
+    try {
+      if (overlayOn) {
+        await invoke("hide_overlay");
+        setOverlayOn(false);
+      } else {
+        await invoke("show_overlay");
+        setOverlayOn(true);
+      }
+    } catch {
+      /* ignore — leave toggle as-is */
+    }
+  };
 
   // Poll only while the tab is active. When the user switches away we drop
   // the interval so we don't burn cycles on charts that aren't visible. The
@@ -773,17 +794,27 @@ function MonitoringTab({ active }: { active: boolean }) {
     <section className="tab-pane">
       <div className="section-header">
         <h2 className="section-title">Monitoring</h2>
-        <div className="read-only-pill">
-          {!haveAnything
-            ? "Starting…"
-            : `${cpuSamples.length}s history · 1 Hz`}
+        <div className="section-header-actions">
+          <button
+            className={`btn-small ${overlayOn ? "btn-small-on" : ""}`}
+            onClick={toggleOverlay}
+            title="Show a compact always-on-top HUD over borderless/windowed games"
+          >
+            {overlayOn ? "Hide overlay" : "Show overlay"}
+          </button>
+          <div className="read-only-pill">
+            {!haveAnything
+              ? "Starting…"
+              : `${cpuSamples.length}s history · 1 Hz`}
+          </div>
         </div>
       </div>
       <p className="section-help">
         Live system telemetry. CPU usage via Windows PDH (built-in, no
         driver). GPU sensors via vendor libraries (NVML / ADLX). FPS &
         frametime via ETW. No injection into your games, no kernel driver —
-        anti-cheat compatible. Charts show the last minute.
+        anti-cheat compatible. The overlay draws over borderless/windowed
+        games (not exclusive fullscreen). Charts show the last minute.
       </p>
 
       {/* FPS / frametime — headline metric, opt-in (needs admin) */}

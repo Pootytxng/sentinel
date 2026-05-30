@@ -2578,6 +2578,59 @@ fn get_fps_status() -> FpsStatus {
     }
 }
 
+// ─── Telemetry overlay window ────────────────────────────────────────────
+//
+// A second always-on-top, transparent, click-through window that renders the
+// live telemetry (FPS, frametime, GPU temp/usage, CPU usage) compactly in a
+// screen corner. It loads the same frontend bundle at the #overlay route.
+//
+// Sentinel-safe constraint: this is a normal top-level window, so it draws
+// over BORDERLESS / WINDOWED games but NOT exclusive fullscreen (only injected
+// overlays can do that, which we deliberately don't do). The UI states this.
+
+#[tauri::command]
+fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("overlay") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let win = tauri::WebviewWindowBuilder::new(
+        &app,
+        "overlay",
+        tauri::WebviewUrl::App("index.html#overlay".into()),
+    )
+    .title("Sentinel Overlay")
+    .inner_size(230.0, 140.0)
+    .position(24.0, 24.0)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .focused(false)
+    .build()
+    .map_err(|e| format!("could not create overlay window: {e}"))?;
+    // Click-through so the overlay never steals input from the game.
+    let _ = win.set_ignore_cursor_events(true);
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_overlay(app: tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("overlay") {
+        let _ = w.close();
+    }
+}
+
+#[tauri::command]
+fn overlay_visible(app: tauri::AppHandle) -> bool {
+    use tauri::Manager;
+    app.get_webview_window("overlay").is_some()
+}
+
 // ─── Diagnostics ─────────────────────────────────────────────────────────
 //
 // The Diagnostics tab is "Sentinel's view of your PC, as raw observations."
@@ -4240,6 +4293,9 @@ pub fn run() {
             start_fps_capture,
             stop_fps_capture,
             get_fps_status,
+            show_overlay,
+            hide_overlay,
+            overlay_visible,
             apply_recommendation,
             rollback_change,
             get_applied_changes,
