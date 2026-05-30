@@ -74,6 +74,8 @@ No remote fetch ships, **including in private or closed beta**, until all of the
 
 Private beta with the embedded baseline only is fine and recommended for feedback velocity. Private beta with unsigned remote fetch is not. The remote control plane does not get smuggled in under "we'll add signing later."
 
+**Status (2026-05-30): the verification machinery is BUILT and tested, not stubbed.** Real Ed25519 verification is wired via `ed25519-compact` (`verify_manifest_with_key` / `verify_chain_with_key` in `lib.rs`), covering every gate above: signature, SHA-256 binding, monotonic `ruleset_version`, `expires_at`, app-version range, size caps. 11 unit tests (`manifest_tests`) prove valid bundles verify and that tampering, wrong-key, malformed-signature, rollback, freeze, and out-of-range app version are all rejected. The offline signer (`src-tauri/examples/sign_manifest.rs`) produces app-verifiable manifests. **Remote fetch remains disabled** — three independent things still gate it: (1) `RULES_SIGNING_PUBKEY_BYTES` is still the all-zeros placeholder, (2) `remote_fetch_enabled()` hard-returns `false`, (3) no CDN URL is configured. Arming remote fetch = generate a production keypair offline, embed its public key, configure the URL, and flip the flag — a deliberate, reviewable change, not an accident.
+
 ### 1.5 Rollback is independent of the live catalog
 
 A user must always be able to roll back any applied change, even if:
@@ -307,11 +309,26 @@ The production private key MUST NOT live on:
 
 ### Per-release signing flow
 
-1. Produce a `rules-v1.json` with the new rules and a SHA-256 hash.
-2. Write a `rules-v1.manifest.json` with: `schema_version`, `ruleset_version` (monotonic — strictly greater than the last published one), `created_at`, `expires_at` (1–6 months out), `min_app_version`, `max_app_version`, `rules_sha256`, `rules_url`.
-3. Sign the canonical form of the manifest (with `signature` field absent) with the production Ed25519 private key.
-4. Embed the signature into the manifest's `signature` field, hex-encoded.
-5. Upload `rules-v1.manifest.json` and `rules-v1.json` to the CDN.
+Use the offline signer `src-tauri/examples/sign_manifest.rs` on the HSM/air-gapped machine — it automates steps 1–4 and self-verifies its own output before writing:
+
+```
+# one-time, offline: generate the production keypair
+cargo run --example sign_manifest -- --gen-key
+#   → store the SEED on the HSM/offline machine; embed the PUBLIC KEY in
+#     RULES_SIGNING_PUBKEY_BYTES (it prints a ready-to-paste array).
+
+# each release, offline:
+cargo run --example sign_manifest -- \
+    --seed seed.hex --rules rules-v1.json \
+    --rules-url https://cdn.example.com/rules/v1.json \
+    --ruleset-version <strictly greater than last> \
+    --expires-days <30..180> --min-app 0.1.0 --max-app 99.0.0 \
+    --out rules-v1.manifest.json
+```
+
+The tool computes the rules SHA-256, builds the manifest, signs the canonical form (manifest with `signature` absent — identical to `canonical_manifest_payload` in lib.rs), embeds the hex signature, and aborts unless its output re-verifies against the public key. Then: upload `rules-v1.manifest.json` and `rules-v1.json` to the CDN.
+
+The private seed is passed by path and is never stored in the repo. `--gen-key`'s seed output must go straight to the HSM/offline store.
 
 ### Compromise / suspected compromise of the private key
 
@@ -321,6 +338,6 @@ The production private key MUST NOT live on:
 
 ### What `RULES_SIGNING_PUBKEY_BYTES = [0u8; 32]` guarantees
 
-- `verify_manifest` checks `RULES_SIGNING_PUBKEY_BYTES == [0u8; 32]` explicitly and returns `ManifestError::BadKey` before attempting any cryptographic verification — defense in depth.
+- `verify_chain` checks `RULES_SIGNING_PUBKEY_BYTES == [0u8; 32]` explicitly and returns `ManifestError::BadKey` before any cryptographic verification — defense in depth. (The real verify lives in `verify_chain_with_key` / `verify_manifest_with_key`, which the production path only reaches with the embedded key after that guard.)
 - `remote_fetch_enabled()` hard-codes `false` independently of the placeholder, so the embedded baseline is the only rule source even if the verification logic itself is buggy.
 - Both guards must be removed simultaneously to enable remote fetch. There is no path where one is on and the other is off in shipped code.
