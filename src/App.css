@@ -1026,6 +1026,17 @@ html, body, #root {
   border-radius: 4px;
 }
 
+/* Small explanatory footnote inside a monitor panel (e.g. why there's no
+   CPU temperature). Frames a deliberate absence as a trust statement. */
+.monitor-note {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* CPU per-core grid — bottom of the CPU monitor panel. Each cell shows a
    horizontal fill bar at the core's current load + a small percent label.
    Layout: auto-fit so the grid wraps gracefully across panel widths. */

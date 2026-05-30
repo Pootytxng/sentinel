@@ -1090,6 +1090,12 @@ function CpuMonitorPanel({
           <CoreBar key={i} index={i} percent={warmingUp ? 0 : pct} />
         ))}
       </div>
+      <div className="monitor-note">
+        No CPU temperature by design: reading it requires a kernel-level driver,
+        and Sentinel won't install one. GPU temperature comes from the vendor's
+        user-mode library, so it's safe to show — CPU temperature has no
+        equivalent without going to the kernel.
+      </div>
     </div>
   );
 }
