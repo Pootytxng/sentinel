@@ -363,11 +363,12 @@ fn remote_fetch_enabled() -> bool {
 }
 
 // All fields are part of the schema contract published in
-// docs/ARCHITECTURE_LOCKS §1.4 and used by the consumers of verify_manifest()
-// once remote fetch is enabled. While the cryptographic verifier is stubbed
-// (see Cargo.toml hex/ed25519 note), some fields don't yet have call sites,
-// so we suppress dead_code rather than gate the schema behind cfg flags —
-// the schema is the published interface, not a private implementation detail.
+// docs/ARCHITECTURE_LOCKS §1.4. Signature, rules_sha256, ruleset_version,
+// expires_at, and min/max_app_version are consumed by the (now real)
+// verification chain; created_at, schema_version, and rules_url are only
+// consumed once remote fetch is enabled, so we keep #[allow(dead_code)]
+// rather than gate the schema behind cfg flags — the schema is the published
+// interface, not a private implementation detail.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 #[allow(dead_code)]
@@ -440,32 +441,40 @@ fn canonical_manifest_payload(raw_json: &[u8]) -> Result<Vec<u8>, ManifestError>
     serde_json::to_vec(&value).map_err(|e| ManifestError::Parse(e.to_string()))
 }
 
-fn verify_manifest(raw_json: &[u8]) -> Result<RulesManifest, ManifestError> {
+/// Real Ed25519 verification against an explicit public key. The production
+/// flow reaches this through `verify_chain` (which applies the all-zeros
+/// placeholder guard first); tests call it directly with an ephemeral key, so
+/// the cryptographic path is exercised without ever embedding a key in the repo.
+///
+/// Steps: enforce the size cap, parse the manifest, decode the hex signature,
+/// build the canonical signed payload (manifest minus `signature`), and run
+/// the curve25519 verify. Any failure yields a specific ManifestError; only a
+/// cryptographically valid signature over the exact canonical bytes returns Ok.
+fn verify_manifest_with_key(
+    raw_json: &[u8],
+    pubkey_bytes: &[u8; 32],
+) -> Result<RulesManifest, ManifestError> {
+    use ed25519_compact::{PublicKey, Signature};
+
     if raw_json.len() > MANIFEST_MAX_BYTES {
         return Err(ManifestError::SizeCap);
-    }
-    if RULES_SIGNING_PUBKEY_BYTES == [0u8; 32] {
-        return Err(ManifestError::BadKey);
     }
 
     let manifest: RulesManifest =
         serde_json::from_slice(raw_json).map_err(|e| ManifestError::Parse(e.to_string()))?;
 
-    // Pre-flight integrity checks that do not depend on the curve25519
-    // signature operation: signature hex is well-formed, the canonical
-    // payload is constructible.
-    let _sig_bytes = hex_decode(&manifest.signature).ok_or(ManifestError::BadSignatureFormat)?;
-    let _payload = canonical_manifest_payload(raw_json)?;
+    let sig_bytes = hex_decode(&manifest.signature).ok_or(ManifestError::BadSignatureFormat)?;
+    let signature =
+        Signature::from_slice(&sig_bytes).map_err(|_| ManifestError::BadSignatureFormat)?;
+    let public_key = PublicKey::from_slice(pubkey_bytes).map_err(|_| ManifestError::BadKey)?;
 
-    // ─── Crypto check: STUBBED ──────────────────────────────────────────
-    // Production needs an Ed25519 verify() call here against
-    // RULES_SIGNING_PUBKEY_BYTES + the canonical payload + sig_bytes. The
-    // ed25519-dalek 2.x dependency is currently blocked by a transitive
-    // hex 0.4.3 build issue on the current Rust stable; until that is
-    // resolved or replaced, we return SignatureInvalid so no manifest is
-    // ever accepted. Combined with remote_fetch_enabled() = false, the
-    // embedded baseline stays the only rule source.
-    Err(ManifestError::SignatureInvalid)
+    let payload = canonical_manifest_payload(raw_json)?;
+
+    public_key
+        .verify(&payload, &signature)
+        .map_err(|_| ManifestError::SignatureInvalid)?;
+
+    Ok(manifest)
 }
 
 /// Verify the integrity chain on a fetched (manifest, rules) pair:
@@ -484,13 +493,34 @@ fn verify_chain(
     raw_rules: &[u8],
     last_seen_ruleset_version: u64,
 ) -> Result<(RulesManifest, RulesFile), ManifestError> {
+    if RULES_SIGNING_PUBKEY_BYTES == [0u8; 32] {
+        return Err(ManifestError::BadKey);
+    }
+    verify_chain_with_key(
+        raw_manifest,
+        raw_rules,
+        last_seen_ruleset_version,
+        &RULES_SIGNING_PUBKEY_BYTES,
+    )
+}
+
+/// Full integrity chain against an explicit public key (testable variant of
+/// `verify_chain`). All the non-signature gates (SHA-256 binding, monotonic
+/// ruleset_version, expiry, app-version range, size cap, parse) live here so
+/// they can be exercised end-to-end in tests with a valid ephemeral signature.
+fn verify_chain_with_key(
+    raw_manifest: &[u8],
+    raw_rules: &[u8],
+    last_seen_ruleset_version: u64,
+    pubkey_bytes: &[u8; 32],
+) -> Result<(RulesManifest, RulesFile), ManifestError> {
     use sha2::{Digest, Sha256};
 
     if raw_rules.len() > RULES_MAX_BYTES {
         return Err(ManifestError::SizeCap);
     }
 
-    let manifest = verify_manifest(raw_manifest)?;
+    let manifest = verify_manifest_with_key(raw_manifest, pubkey_bytes)?;
 
     let mut hasher = Sha256::new();
     hasher.update(raw_rules);
@@ -4393,4 +4423,191 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ─── Signed-manifest verification tests ──────────────────────────────────
+//
+// These exercise the real Ed25519 path using EPHEMERAL keypairs generated at
+// test time. No private (or public) key is ever embedded or committed — the
+// production `RULES_SIGNING_PUBKEY_BYTES` placeholder is untouched. The tests
+// prove: a correctly-signed manifest verifies; any tampering, wrong key, or
+// malformed signature is rejected; and the full chain enforces SHA-256
+// binding, monotonic versioning, expiry, and app-version range.
+#[cfg(test)]
+mod manifest_tests {
+    use super::*;
+    use ed25519_compact::KeyPair;
+    use sha2::{Digest, Sha256};
+
+    const VALID_RULES: &[u8] = br#"{"schema_version":1,"rules":[]}"#;
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        let mut h = Sha256::new();
+        h.update(bytes);
+        hex_encode(&h.finalize())
+    }
+
+    /// Build a fully-signed manifest JSON, signed by `kp` over the canonical
+    /// payload (manifest minus `signature`), exactly as the verifier expects.
+    fn signed_manifest(
+        kp: &KeyPair,
+        ruleset_version: u64,
+        expires_at: &str,
+        min_app: &str,
+        max_app: &str,
+        rules_sha256: &str,
+    ) -> Vec<u8> {
+        let mut obj = serde_json::json!({
+            "schema_version": 1,
+            "ruleset_version": ruleset_version,
+            "created_at": "2026-01-01T00:00:00Z",
+            "expires_at": expires_at,
+            "min_app_version": min_app,
+            "max_app_version": max_app,
+            "rules_sha256": rules_sha256,
+            "rules_url": "https://example.invalid/rules.json",
+            "signature": ""
+        });
+        let raw = serde_json::to_vec(&obj).unwrap();
+        // canonical_manifest_payload strips `signature`, so signing this (with
+        // an empty signature) produces the exact bytes the verifier rebuilds.
+        let payload = canonical_manifest_payload(&raw).unwrap();
+        let sig = kp.sk.sign(&payload, None);
+        obj["signature"] = serde_json::Value::String(hex_encode(&sig[..]));
+        serde_json::to_vec(&obj).unwrap()
+    }
+
+    fn future() -> String {
+        (Utc::now() + chrono::Duration::days(30)).to_rfc3339()
+    }
+
+    #[test]
+    fn valid_manifest_verifies() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        let m = signed_manifest(&kp, 5, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        let manifest = verify_manifest_with_key(&m, &pk).expect("should verify");
+        assert_eq!(manifest.ruleset_version, 5);
+    }
+
+    #[test]
+    fn tampered_payload_is_rejected() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        let m = signed_manifest(&kp, 5, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        // Flip a field AFTER signing — signature no longer matches the payload.
+        let s = String::from_utf8(m).unwrap().replace(
+            "https://example.invalid/rules.json",
+            "https://evil.invalid/rules.json",
+        );
+        let err = verify_manifest_with_key(s.as_bytes(), &pk).unwrap_err();
+        assert!(matches!(err, ManifestError::SignatureInvalid));
+    }
+
+    #[test]
+    fn wrong_key_is_rejected() {
+        let signer = KeyPair::generate();
+        let other = KeyPair::generate();
+        let m = signed_manifest(&signer, 5, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        let err = verify_manifest_with_key(&m, &*other.pk).unwrap_err();
+        assert!(matches!(err, ManifestError::SignatureInvalid));
+    }
+
+    #[test]
+    fn malformed_signature_is_rejected() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        let m = signed_manifest(&kp, 5, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        // Replace the signature with non-hex / wrong length.
+        let s = serde_json::to_string(&{
+            let mut v: serde_json::Value = serde_json::from_slice(&m).unwrap();
+            v["signature"] = serde_json::Value::String("zzzz".into());
+            v
+        })
+        .unwrap();
+        let err = verify_manifest_with_key(s.as_bytes(), &pk).unwrap_err();
+        assert!(matches!(err, ManifestError::BadSignatureFormat));
+    }
+
+    #[test]
+    fn oversized_manifest_is_rejected() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        // Pad rules_url so the raw manifest exceeds MANIFEST_MAX_BYTES.
+        let big = "x".repeat(MANIFEST_MAX_BYTES + 100);
+        let m = signed_manifest(&kp, 5, &future(), "0.0.0", "99.0.0", &big);
+        let err = verify_manifest_with_key(&m, &pk).unwrap_err();
+        assert!(matches!(err, ManifestError::SizeCap));
+    }
+
+    #[test]
+    fn placeholder_key_hard_fails() {
+        // The production entry point (verify_chain, with the embedded key) must
+        // reject everything while that key is the all-zeros placeholder.
+        let kp = KeyPair::generate();
+        let m = signed_manifest(&kp, 5, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        assert!(matches!(
+            verify_chain(&m, VALID_RULES, 0),
+            Err(ManifestError::BadKey)
+        ));
+    }
+
+    #[test]
+    fn full_chain_accepts_valid() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        let m = signed_manifest(&kp, 10, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        let (manifest, rules) = verify_chain_with_key(&m, VALID_RULES, 9, &pk).expect("chain ok");
+        assert_eq!(manifest.ruleset_version, 10);
+        assert!(rules.rules.is_empty());
+    }
+
+    #[test]
+    fn chain_rejects_sha256_mismatch() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        // Manifest commits to the hash of VALID_RULES, but we serve different bytes.
+        let m = signed_manifest(&kp, 10, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        let tampered = br#"{"schema_version":1,"rules":[],"x":1}"#;
+        assert!(matches!(
+            verify_chain_with_key(&m, tampered, 9, &pk),
+            Err(ManifestError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn chain_rejects_version_rollback() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        let m = signed_manifest(&kp, 3, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        // last_seen is 7 — serving version 3 is a rollback.
+        assert!(matches!(
+            verify_chain_with_key(&m, VALID_RULES, 7, &pk),
+            Err(ManifestError::RulesetVersionRegression { .. })
+        ));
+    }
+
+    #[test]
+    fn chain_rejects_expired() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        let past = (Utc::now() - chrono::Duration::days(1)).to_rfc3339();
+        let m = signed_manifest(&kp, 10, &past, "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
+        assert!(matches!(
+            verify_chain_with_key(&m, VALID_RULES, 0, &pk),
+            Err(ManifestError::Expired)
+        ));
+    }
+
+    #[test]
+    fn chain_rejects_app_version_out_of_range() {
+        let kp = KeyPair::generate();
+        let pk: [u8; 32] = *kp.pk;
+        // Require an app version far above the current one.
+        let m = signed_manifest(&kp, 10, &future(), "99.0.0", "100.0.0", &sha256_hex(VALID_RULES));
+        assert!(matches!(
+            verify_chain_with_key(&m, VALID_RULES, 0, &pk),
+            Err(ManifestError::AppVersionOutOfRange)
+        ));
+    }
 }

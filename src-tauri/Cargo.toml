@@ -52,14 +52,15 @@ windows = { version = "0.59", features = [
 ferrisetw = "1.2"
 # Signed-manifest infra (ARCHITECTURE_LOCKS §1.4).
 #
-# ed25519-dalek pulls a transitive `signature`/`hex 0.4.3` chain that has a
-# known std::error::Error / Display bound incompatibility on the current
-# Rust stable. Since remote_fetch_enabled() is hard-coded false until a
-# production key is wired, the verifier currently returns a "crypto-stubbed"
-# error path. The verification contract (types, sequencing, gating) is
-# fully designed -- only the curve25519 signature check is stubbed. Swap
-# in ed25519-dalek (or a compatible crate) when wiring the production
-# rollout; the rest of the integrity chain does not change.
+# Ed25519 signature verification for remote rules manifests. We use
+# `ed25519-compact` rather than `ed25519-dalek`: it's pure-Rust with a tiny
+# dependency tree and crucially does NOT pull the transitive
+# `signature`/`hex 0.4.3` chain that broke the dalek build on current stable.
+# Verification is now REAL (see verify_manifest_with_key in lib.rs); remote
+# fetch stays disabled (remote_fetch_enabled()=false) until a production
+# public key replaces the all-zeros placeholder. sha2 provides the SHA-256
+# used to bind the rules file to the signed manifest.
+ed25519-compact = "2"
 sha2 = "0.10"
 
 # NVIDIA Management Library wrapper. Used by the Monitoring tab to surface
