@@ -438,7 +438,12 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
     // Snapshot first — both AC and DC current values.
     let (prior_ac_value, prior_dc_value) =
         query_power_setting_ac_dc(subgroup, setting).unwrap_or((1, 1));
-    let plan_guid = current_power_plan_guid().unwrap_or_default();
+    // Capture the EXACT plan this is applied to. Refuse to apply if we can't —
+    // a change whose target plan we don't know is a change we can't honestly
+    // roll back, and rollback-first beats applying-anyway.
+    let plan_guid = current_power_plan_guid().ok_or_else(|| {
+        "could not determine the active power plan; refusing to apply a change that could not be rolled back".to_string()
+    })?;
 
     // Apply AC = 0 only. DC stays untouched (laptop battery behavior preserved).
     let cmd = format!(
@@ -475,18 +480,85 @@ pub(crate) fn apply_pcie_aspm_off() -> Result<ApplyResult, String> {
     apply_power_setting_off_on_ac(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM)
 }
 
+/// True if `guid` is a currently-installed power scheme. Read-only `powercfg
+/// /list`, no elevation — so we can fail safe before ever prompting for UAC.
+fn power_plan_exists(guid: &str) -> bool {
+    let g = guid.trim();
+    if g.is_empty() {
+        return false;
+    }
+    Command::new("powercfg")
+        .args(["/list"])
+        .output()
+        .ok()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .to_lowercase()
+                .contains(&g.to_lowercase())
+        })
+        .unwrap_or(false)
+}
+
+/// Pure: build the powercfg restore command for one power-plan setting,
+/// targeting the EXACT stored plan GUID (never SCHEME_CURRENT, which may be a
+/// different plan at rollback time). `reactivate` re-commits the change live
+/// only when that plan is the active one — restoring a non-active plan writes
+/// its saved value without yanking the user onto it.
+fn build_power_setting_restore_cmd(
+    plan_guid: &str,
+    subgroup_guid: &str,
+    setting_guid: &str,
+    prior_ac_value: u32,
+    prior_dc_value: u32,
+    reactivate: bool,
+) -> String {
+    let mut cmd = format!(
+        "powercfg /setacvalueindex {0} {1} {2} {3}; \
+         powercfg /setdcvalueindex {0} {1} {2} {4}",
+        plan_guid, subgroup_guid, setting_guid, prior_ac_value, prior_dc_value
+    );
+    if reactivate {
+        cmd.push_str(&format!("; powercfg /setactive {}", plan_guid));
+    }
+    cmd
+}
+
 pub(crate) fn rollback_power_plan_setting_typed(
+    plan_guid: &str,
     subgroup_guid: &str,
     setting_guid: &str,
     prior_ac_value: u32,
     prior_dc_value: u32,
 ) -> Result<(), String> {
-    // Restore both AC and DC to exactly their pre-apply values.
-    let cmd = format!(
-        "powercfg /setacvalueindex SCHEME_CURRENT {0} {1} {2}; \
-         powercfg /setdcvalueindex SCHEME_CURRENT {0} {1} {3}; \
-         powercfg /setactive SCHEME_CURRENT",
-        subgroup_guid, setting_guid, prior_ac_value, prior_dc_value
+    // Restore AC/DC to the EXACT plan this was applied to. If that plan no
+    // longer exists (deleted, or never captured), fail safe with a clear
+    // message — we will NOT silently restore the value onto whatever plan
+    // happens to be active now (e.g. after the user switched plans, or rolled
+    // back Ultimate Performance first). Restoring to the wrong plan would make
+    // the snapshot a quiet lie.
+    if !power_plan_exists(plan_guid) {
+        return Err(format!(
+            "cannot roll this back: the power plan it was applied to ({}) no longer exists. \
+             Sentinel will not restore the value to a different plan — reselect or recreate that \
+             plan and try again.",
+            if plan_guid.trim().is_empty() {
+                "unknown".to_string()
+            } else {
+                plan_guid.to_string()
+            }
+        ));
+    }
+    // Only re-activate (commit live) if the restored plan is the active one.
+    let reactivate = current_power_plan_guid()
+        .map(|g| g.eq_ignore_ascii_case(plan_guid.trim()))
+        .unwrap_or(false);
+    let cmd = build_power_setting_restore_cmd(
+        plan_guid,
+        subgroup_guid,
+        setting_guid,
+        prior_ac_value,
+        prior_dc_value,
+        reactivate,
     );
     run_elevated_powershell(&cmd)?;
     Ok(())
@@ -955,13 +1027,14 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
         (
             R::RestorePowerPlanSettingFromSnapshot,
             S::PowerPlanSetting {
+                plan_guid,
                 subgroup_guid,
                 setting_guid,
                 prior_ac_value,
                 prior_dc_value,
-                ..
             },
         ) => rollback_power_plan_setting_typed(
+            plan_guid,
             subgroup_guid,
             setting_guid,
             *prior_ac_value,
@@ -1317,6 +1390,75 @@ mod rollback_tests {
         assert!(
             resolve_rollback(&change).is_err(),
             "garbled typed snapshot must not resolve"
+        );
+    }
+
+    // ── Power-plan rollback fidelity (restore the EXACT plan, never SCHEME_CURRENT) ──
+
+    #[test]
+    fn power_setting_snapshot_carries_plan_guid() {
+        // The plan GUID the setting was applied to must survive in the snapshot —
+        // it is what rollback targets.
+        let s = Snapshot::PowerPlanSetting {
+            plan_guid: "PLAN-GUID-123".into(),
+            subgroup_guid: "SUB".into(),
+            setting_guid: "SET".into(),
+            prior_ac_value: 1,
+            prior_dc_value: 1,
+        };
+        let back: Snapshot = serde_json::from_value(serde_json::to_value(&s).unwrap()).unwrap();
+        match back {
+            Snapshot::PowerPlanSetting { plan_guid, .. } => assert_eq!(plan_guid, "PLAN-GUID-123"),
+            _ => panic!("variant changed on round-trip"),
+        }
+    }
+
+    #[test]
+    fn power_setting_restore_targets_stored_plan_never_scheme_current() {
+        let cmd = build_power_setting_restore_cmd("PLAN-GUID-123", "SUB", "SET", 5, 7, true);
+        assert!(cmd.contains("PLAN-GUID-123"), "must target the stored plan GUID");
+        assert!(
+            !cmd.contains("SCHEME_CURRENT"),
+            "must never fall back to SCHEME_CURRENT"
+        );
+        assert!(cmd.contains("setacvalueindex") && cmd.contains(" 5"));
+        assert!(cmd.contains("setdcvalueindex") && cmd.contains(" 7"));
+        assert!(
+            cmd.contains("setactive PLAN-GUID-123"),
+            "the active plan should be re-committed"
+        );
+
+        // Restoring a NON-active plan must not switch the user onto it.
+        let cmd2 = build_power_setting_restore_cmd("PLAN-GUID-123", "SUB", "SET", 5, 7, false);
+        assert!(
+            !cmd2.contains("setactive"),
+            "must not switch active plan when restoring a non-active plan"
+        );
+        assert!(!cmd2.contains("SCHEME_CURRENT"));
+    }
+
+    #[test]
+    fn rollback_power_setting_fails_safe_when_plan_missing() {
+        // A bogus/deleted plan GUID must produce a clean error, NOT a silent
+        // restore onto whatever plan is current. The all-zeros GUID is never a
+        // real scheme, so this resolves to Err before any elevation is attempted.
+        let bogus = "00000000-0000-0000-0000-000000000000";
+        let result = rollback_power_plan_setting_typed(bogus, "SUB", "SET", 1, 1);
+        assert!(result.is_err(), "missing plan GUID must fail safe");
+        let msg = result.unwrap_err().to_lowercase();
+        assert!(
+            msg.contains("no longer exists") || msg.contains("plan"),
+            "error should explain the missing plan: {msg}"
+        );
+    }
+
+    #[test]
+    fn power_plan_exists_rejects_empty_and_bogus() {
+        assert!(!power_plan_exists(""), "empty GUID is not a plan");
+        assert!(!power_plan_exists("   "), "whitespace GUID is not a plan");
+        assert!(
+            !power_plan_exists("00000000-0000-0000-0000-000000000000"),
+            "all-zeros GUID is not a real plan"
         );
     }
 }
