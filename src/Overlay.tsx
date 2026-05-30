@@ -16,6 +16,21 @@ type FpsLite = {
   sample: { fps: number; avg_frametime_ms: number } | null;
 };
 
+// A system can expose more than one GPU — AM5 desktop CPUs (incl. X3D) ship
+// an integrated GPU alongside the discrete card, so ADLX enumerates both. The
+// overlay shows one line, so pick the discrete gaming GPU: the adapter actually
+// reporting a temperature wins (the iGPU usually reports none), then the busier
+// one. Falls back to the first entry.
+function pickPrimaryGpu(list: GpuLite[]): GpuLite | null {
+  if (list.length === 0) return null;
+  return [...list].sort((a, b) => {
+    const at = a.temperature_c ?? -1;
+    const bt = b.temperature_c ?? -1;
+    if (bt !== at) return bt - at;
+    return (b.utilization_gpu_pct ?? -1) - (a.utilization_gpu_pct ?? -1);
+  })[0];
+}
+
 // Compact always-on-top HUD rendered in the transparent overlay window. It
 // only displays — start/stop of FPS capture lives in the main window. GPU and
 // CPU readouts work with no elevation; FPS shows once capture is enabled.
@@ -34,7 +49,7 @@ export default function Overlay() {
           invoke<FpsLite>("get_fps_status"),
         ]);
         if (cancelled) return;
-        setGpu(g[0] ?? null);
+        setGpu(pickPrimaryGpu(g));
         setCpu(Math.round(c.usage_overall_pct));
         setFps(f);
       } catch {
@@ -56,20 +71,20 @@ export default function Overlay() {
         <span className="ovl-k">FPS</span>
         <span className="ovl-v">{sample ? Math.round(sample.fps) : "—"}</span>
       </div>
-      {sample && (
-        <div className="ovl-row">
-          <span className="ovl-k">frametime</span>
-          <span className="ovl-v">{sample.avg_frametime_ms.toFixed(1)} ms</span>
-        </div>
-      )}
-      {gpu && (
-        <div className="ovl-row">
-          <span className="ovl-k">GPU</span>
-          <span className="ovl-v">
-            {gpu.utilization_gpu_pct ?? "—"}% · {gpu.temperature_c ?? "—"}°C
-          </span>
-        </div>
-      )}
+      <div className="ovl-row">
+        <span className="ovl-k">frametime</span>
+        <span className="ovl-v">
+          {sample ? `${sample.avg_frametime_ms.toFixed(1)} ms` : "—"}
+        </span>
+      </div>
+      <div className="ovl-row">
+        <span className="ovl-k">GPU</span>
+        <span className="ovl-v">
+          {gpu
+            ? `${gpu.utilization_gpu_pct ?? "—"}% · ${gpu.temperature_c ?? "—"}°C`
+            : "—"}
+        </span>
+      </div>
       <div className="ovl-row">
         <span className="ovl-k">CPU</span>
         <span className="ovl-v">{cpu ?? "—"}%</span>
