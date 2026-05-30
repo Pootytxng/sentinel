@@ -1184,3 +1184,139 @@ pub(crate) fn synthesize_legacy_rollback(
     }
 }
 
+
+// ─── Rollback resolution / legacy synthesis tests ────────────────────────
+//
+// Release-gate QA: lock the PURE half of the rollback contract that the module
+// extraction touched — the rec_id -> (RollbackAction, Snapshot) mapping used to
+// undo changes from local history alone. These never mutate Windows; the actual
+// powercfg/registry restore is covered by the manual smoke pass.
+#[cfg(test)]
+mod rollback_tests {
+    use super::*;
+    use serde_json::json;
+
+    // Every rec_id that existed before the typed-action refactor must still
+    // synthesize a rollback from a legacy (untyped) snapshot, mapped to the
+    // correct action+snapshot variant pair — otherwise an upgrade would silently
+    // strip rollback from changes already sitting in users' history.json. Each
+    // pair asserted here is one dispatch_rollback handles (1:1 with its arms).
+    #[test]
+    fn synthesize_legacy_maps_each_rec_to_correct_rollback() {
+        use RollbackAction as R;
+        use Snapshot as S;
+
+        let (a, s) = synthesize_legacy_rollback("game-mode", &json!({"prior": 1})).unwrap();
+        assert!(matches!(a, R::RestoreGameModeFromSnapshot) && matches!(s, S::GameMode { .. }));
+
+        let (a, s) =
+            synthesize_legacy_rollback("visual-effects", &json!({"vfx_setting_prior": 1})).unwrap();
+        assert!(
+            matches!(a, R::RestoreVisualEffectsFromSnapshot) && matches!(s, S::VisualEffects { .. })
+        );
+
+        for svc in [
+            "sysmain-disable",
+            "diagtrack-disable",
+            "windows-search-disable",
+            "nvidia-telemetry",
+        ] {
+            let (a, s) = synthesize_legacy_rollback(
+                svc,
+                &json!({"prior_state": "Running", "prior_start_mode": "Automatic"}),
+            )
+            .unwrap();
+            assert!(
+                matches!(a, R::RestoreServiceFromSnapshot { .. }) && matches!(s, S::Service { .. }),
+                "service rec {svc}"
+            );
+        }
+
+        let (a, s) =
+            synthesize_legacy_rollback("power-ultimate", &json!({"prior_plan_guid": "G"})).unwrap();
+        assert!(matches!(a, R::RestorePowerPlanFromSnapshot) && matches!(s, S::PowerPlan { .. }));
+
+        let (a, s) =
+            synthesize_legacy_rollback("nagle-disable", &json!({"interfaces": []})).unwrap();
+        assert!(matches!(a, R::RestoreNagleNicsFromSnapshot) && matches!(s, S::NagleNics { .. }));
+
+        let (a, s) =
+            synthesize_legacy_rollback("hags-enable", &json!({"prior_hwschmode": 0})).unwrap();
+        assert!(matches!(a, R::RestoreHwSchModeFromSnapshot) && matches!(s, S::HwSchMode { .. }));
+
+        let (a, s) =
+            synthesize_legacy_rollback("mouse-accel-off", &json!({"prior_speed": "10"})).unwrap();
+        assert!(matches!(a, R::RestoreMouseAccelFromSnapshot) && matches!(s, S::MouseAccel { .. }));
+
+        let (a, s) = synthesize_legacy_rollback(
+            "game-bar-disable",
+            &json!({"prior_capture": 1, "prior_enabled": 1}),
+        )
+        .unwrap();
+        assert!(matches!(a, R::RestoreGameBarFromSnapshot) && matches!(s, S::GameBar { .. }));
+
+        let (a, s) =
+            synthesize_legacy_rollback("fast-startup-off", &json!({"prior_hiberboot": 1})).unwrap();
+        assert!(
+            matches!(a, R::RestoreFastStartupFromSnapshot) && matches!(s, S::FastStartup { .. })
+        );
+
+        let (a, s) =
+            synthesize_legacy_rollback("reserved-storage-off", &json!({"prior_enabled": true}))
+                .unwrap();
+        assert!(
+            matches!(a, R::RestoreReservedStorageFromSnapshot)
+                && matches!(s, S::ReservedStorage { .. })
+        );
+    }
+
+    // The three power/NIC recs added WITH the typed contract have no legacy
+    // synthesizer (no pre-typed history entry can exist for them); an unknown
+    // rec_id likewise yields None. resolve_rollback then returns a clean error
+    // instead of guessing and restoring the wrong thing.
+    #[test]
+    fn synthesize_legacy_returns_none_for_post_typed_and_unknown_recs() {
+        for rec in [
+            "usb-selective-suspend-off",
+            "pcie-aspm-off",
+            "eee-disable",
+            "totally-unknown-rec",
+        ] {
+            assert!(
+                synthesize_legacy_rollback(rec, &json!({})).is_none(),
+                "expected None for {rec}"
+            );
+        }
+    }
+
+    fn typed_change(action: RollbackAction, snapshot: serde_json::Value) -> AppliedChange {
+        AppliedChange {
+            id: "id".into(),
+            rec_id: "any".into(),
+            rec_title: "t".into(),
+            applied_at: "2026-01-01T00:00:00Z".into(),
+            snapshot,
+            status: "applied".into(),
+            applied_action: None,
+            rollback_action: Some(action),
+            app_version_at_apply: None,
+            ruleset_version_at_apply: None,
+            elevation_used: None,
+        }
+    }
+
+    // A typed entry whose stored snapshot JSON doesn't match its action (corrupt
+    // or tampered history) must fail safe: resolve_rollback returns Err, never
+    // panics and never silently falls through to a different action/snapshot.
+    #[test]
+    fn resolve_rollback_rejects_garbled_typed_snapshot() {
+        let change = typed_change(
+            RollbackAction::RestoreGameModeFromSnapshot,
+            json!({"not": "a snapshot"}),
+        );
+        assert!(
+            resolve_rollback(&change).is_err(),
+            "garbled typed snapshot must not resolve"
+        );
+    }
+}
