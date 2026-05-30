@@ -2596,10 +2596,13 @@ fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
         let _ = w.set_focus();
         return Ok(());
     }
+    // Load a clean index.html — the frontend detects overlay mode by this
+    // window's label ("overlay"), NOT a URL hash. (A "#overlay" fragment in
+    // the path gets percent-encoded to %23 and 404s to a blank white page.)
     let win = tauri::WebviewWindowBuilder::new(
         &app,
         "overlay",
-        tauri::WebviewUrl::App("index.html#overlay".into()),
+        tauri::WebviewUrl::App("index.html".into()),
     )
     .title("Sentinel Overlay")
     .inner_size(230.0, 140.0)
