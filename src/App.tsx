@@ -962,7 +962,7 @@ function FpsPanel({
           </div>
           <div className="fps-stat">
             <span className="fps-stat-label">1% low</span>
-            <span className="fps-stat-value">{Math.round(sample.low1_fps)} FPS</span>
+            <span className="fps-stat-value">~{Math.round(sample.low1_fps)} FPS</span>
           </div>
           <div className="fps-stat">
             <span className="fps-stat-label">Frames/s</span>
@@ -971,6 +971,12 @@ function FpsPanel({
         </div>
       </div>
       <FrametimeGraph data={sample.recent_frametimes_ms} />
+      <p className="fps-disclaimer">
+        Live estimates from DirectX present events (not injected). FPS and
+        average frametime track closely; <strong>1% low is a session signal</strong>,
+        not a benchmark-grade figure — Sentinel isn't a CapFrameX/PresentMon
+        replacement.
+      </p>
     </div>
   );
 }
