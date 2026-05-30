@@ -2358,6 +2358,23 @@ fn amd_poller_loop() {
                 None
             };
 
+            // Skip phantom / non-functional adapters. On this machine ADLX
+            // also enumerates a "Microsoft Basic Display Adapter" (the Windows
+            // software fallback) that reports no telemetry — it shouldn't show
+            // up as a GPU. Filter by the known basic/render driver names, and
+            // defensively drop any adapter that reports NO usable metric at all
+            // (a real GPU like the RX 9070 XT consistently reports temperature).
+            let is_basic_adapter = name.contains("Basic Display")
+                || name.contains("Basic Render")
+                || name.contains("Microsoft Basic");
+            let has_no_telemetry = temperature_c.is_none()
+                && utilization_gpu_pct.is_none()
+                && graphics_clock_mhz.is_none()
+                && vram_used_bytes.is_none();
+            if is_basic_adapter || has_no_telemetry {
+                continue;
+            }
+
             out.push(GpuSensorSnapshot {
                 vendor: "AMD".into(),
                 index: i,
