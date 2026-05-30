@@ -2602,6 +2602,12 @@ fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
     w.show().map_err(|e| e.to_string())?;
     // Click-through so the overlay never steals input from the game.
     let _ = w.set_ignore_cursor_events(true);
+    // Force a fresh load of the bundle. The config-declared overlay window
+    // loads once at startup and does NOT reliably receive frontend updates in
+    // dev (HMR targets the main window), so without this it can run stale code
+    // (e.g. an old GPU-selection that picked the wrong adapter). Harmless in
+    // release — it just reloads the same bundled page.
+    let _ = w.eval("window.location.reload()");
     Ok(())
 }
 
