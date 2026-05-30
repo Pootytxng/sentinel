@@ -1255,6 +1255,28 @@ fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) -> Result<(),
 // legacy snapshot was a free-form serde_json::Value whose shape was determined
 // by the rec_id; we reconstruct the typed form using the same per-rec_id
 // knowledge.
+/// Resolve the rollback contract for an AppliedChange using ONLY the stored
+/// history — never the live recommendation catalog (ARCHITECTURE_LOCKS §1.5).
+/// Prefers the typed contract captured at apply time; falls back to
+/// synthesizing one from rec_id + legacy snapshot JSON for entries written by
+/// older Sentinel versions. This is the core of "Sentinel can undo what it did
+/// from local history alone" — extracted so it's unit-testable without
+/// mutating Windows.
+fn resolve_rollback(change: &AppliedChange) -> Result<(RollbackAction, Snapshot), String> {
+    if let Some(ra) = change.rollback_action.clone() {
+        let snap: Snapshot = serde_json::from_value(change.snapshot.clone())
+            .map_err(|e| format!("snapshot deserialize: {}", e))?;
+        Ok((ra, snap))
+    } else {
+        synthesize_legacy_rollback(&change.rec_id, &change.snapshot).ok_or_else(|| {
+            format!(
+                "legacy AppliedChange for rec_id '{}' has no typed rollback contract and no legacy synthesizer matched",
+                change.rec_id
+            )
+        })
+    }
+}
+
 fn synthesize_legacy_rollback(
     rec_id: &str,
     snapshot: &serde_json::Value,
@@ -1495,22 +1517,7 @@ fn rollback_change(change_id: String) -> Result<(), String> {
         return Err("change has already been rolled back".into());
     }
 
-    // Prefer the typed contract stored at apply time (new entries). Fall back
-    // to synthesizing one from rec_id + legacy snapshot JSON (entries written
-    // by older Sentinel versions). Rollback never depends on the live rec
-    // catalog — per ARCHITECTURE_LOCKS §1.5, the history is the source of truth.
-    let (action, snapshot) = if let Some(ra) = change.rollback_action.clone() {
-        let snap: Snapshot = serde_json::from_value(change.snapshot.clone())
-            .map_err(|e| format!("snapshot deserialize: {}", e))?;
-        (ra, snap)
-    } else {
-        synthesize_legacy_rollback(&change.rec_id, &change.snapshot).ok_or_else(|| {
-            format!(
-                "legacy AppliedChange for rec_id '{}' has no typed rollback contract and no legacy synthesizer matched",
-                change.rec_id
-            )
-        })?
-    };
+    let (action, snapshot) = resolve_rollback(&change)?;
 
     dispatch_rollback(&action, &snapshot)?;
 
@@ -1618,3 +1625,213 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+
+// ─── Apply / rollback safety-contract tests ──────────────────────────────
+//
+// These PIN the existing safety model before any module movement (revised
+// plan: tests first). They prove the contract is real — that Sentinel can undo
+// what it did from LOCAL HISTORY ALONE — without mutating Windows. The actual
+// mutation (dispatch_apply / dispatch_rollback running powercfg/registry edits)
+// is covered by the manual release-gate QA checklist, not unit tests; here we
+// prove the typed allowlist, snapshot fidelity, and history-only resolution.
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn roundtrips<T>(v: &T) -> bool
+    where
+        T: serde::Serialize + for<'de> serde::Deserialize<'de>,
+    {
+        let j = serde_json::to_value(v).unwrap();
+        let back: T = serde_json::from_value(j.clone()).unwrap();
+        j == serde_json::to_value(&back).unwrap()
+    }
+
+    fn change_with(
+        rollback_action: Option<RollbackAction>,
+        snapshot: serde_json::Value,
+        rec_id: &str,
+    ) -> AppliedChange {
+        AppliedChange {
+            id: "id-1".into(),
+            rec_id: rec_id.into(),
+            rec_title: "title".into(),
+            applied_at: "2026-01-01T00:00:00Z".into(),
+            snapshot,
+            status: "applied".into(),
+            applied_action: None,
+            rollback_action,
+            app_version_at_apply: None,
+            ruleset_version_at_apply: None,
+            elevation_used: None,
+        }
+    }
+
+    #[test]
+    fn snapshot_variants_roundtrip() {
+        assert!(roundtrips(&Snapshot::GameMode { prior_enabled: Some(1) }));
+        assert!(roundtrips(&Snapshot::Service {
+            prior_state: "Running".into(),
+            prior_start_mode: "Automatic".into()
+        }));
+        assert!(roundtrips(&Snapshot::PowerPlan { prior_guid: "g".into() }));
+        assert!(roundtrips(&Snapshot::NagleNics {
+            interfaces: vec![NagleInterfaceSnapshot {
+                interface: "if".into(),
+                prior_ack: None,
+                prior_nodelay: Some(1)
+            }]
+        }));
+        assert!(roundtrips(&Snapshot::EeeNicProperty {
+            adapters: vec![EeeNicSnapshot {
+                adapter_name: "Ethernet".into(),
+                property_display_name: "Energy Efficient Ethernet".into(),
+                prior_value: "Enabled".into()
+            }]
+        }));
+    }
+
+    #[test]
+    fn applied_and_rollback_action_roundtrip() {
+        assert!(roundtrips(&AppliedAction::DisableKnownService {
+            service: KnownService::SysMain
+        }));
+        assert!(roundtrips(&AppliedAction::DisableUsbSelectiveSuspendOnAc));
+        assert!(roundtrips(&RollbackAction::RestoreServiceFromSnapshot {
+            service: KnownService::WSearch
+        }));
+        assert!(roundtrips(&RollbackAction::RestorePowerPlanSettingFromSnapshot));
+    }
+
+    #[test]
+    fn typed_allowlist_rejects_unknown_actions() {
+        // The typed allowlist (deny_unknown_fields + tagged enum) stops a
+        // hostile/garbled history entry from selecting an arbitrary action.
+        assert!(serde_json::from_value::<AppliedAction>(json!({"kind": "format-c-drive"})).is_err());
+        assert!(serde_json::from_value::<RollbackAction>(json!({"kind": "rm-rf-system32"})).is_err());
+    }
+
+    #[test]
+    fn known_service_roundtrip_and_rejects_unknown() {
+        assert!(roundtrips(&KnownService::NvTelemetryContainer));
+        assert_eq!(
+            serde_json::from_value::<KnownService>(json!("SysMain")).unwrap(),
+            KnownService::SysMain
+        );
+        assert!(serde_json::from_value::<KnownService>(json!("EvilService")).is_err());
+    }
+
+    #[test]
+    fn applied_change_stores_full_contract() {
+        let change = AppliedChange {
+            id: "game-mode-123".into(),
+            rec_id: "game-mode".into(),
+            rec_title: "Enable Game Mode".into(),
+            applied_at: "2026-01-01T00:00:00Z".into(),
+            snapshot: serde_json::to_value(&Snapshot::GameMode { prior_enabled: Some(0) }).unwrap(),
+            status: "applied".into(),
+            applied_action: Some(AppliedAction::EnableGameMode),
+            rollback_action: Some(RollbackAction::RestoreGameModeFromSnapshot),
+            app_version_at_apply: Some("0.1.0".into()),
+            ruleset_version_at_apply: Some("1.0.0-baseline".into()),
+            elevation_used: Some(true),
+        };
+        let back: AppliedChange =
+            serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();
+        assert!(back.applied_action.is_some());
+        assert!(back.rollback_action.is_some());
+        assert_eq!(back.app_version_at_apply.as_deref(), Some("0.1.0"));
+        assert_eq!(back.ruleset_version_at_apply.as_deref(), Some("1.0.0-baseline"));
+        assert_eq!(back.elevation_used, Some(true));
+        assert!(!back.snapshot.is_null());
+    }
+
+    #[test]
+    fn legacy_history_without_new_fields_still_deserializes() {
+        // Old history.json entries lacked the typed-contract fields. They must
+        // still load (serde default -> None), or upgrades would brick history.
+        let legacy = json!({
+            "id": "game-mode-1",
+            "rec_id": "game-mode",
+            "rec_title": "Enable Game Mode",
+            "applied_at": "2025-01-01T00:00:00Z",
+            "snapshot": {"prior": 1},
+            "status": "applied"
+        });
+        let c: AppliedChange = serde_json::from_value(legacy).unwrap();
+        assert!(c.applied_action.is_none());
+        assert!(c.rollback_action.is_none());
+        assert!(c.app_version_at_apply.is_none());
+    }
+
+    #[test]
+    fn rollback_resolves_from_history_alone_even_for_removed_rec() {
+        // Typed contract stored at apply time; rec_id is NOT in the live
+        // catalog. Rollback must still resolve — proving independence from the
+        // live recommendation set (ARCHITECTURE_LOCKS §1.5).
+        let snap = serde_json::to_value(&Snapshot::GameMode { prior_enabled: Some(0) }).unwrap();
+        let change = change_with(
+            Some(RollbackAction::RestoreGameModeFromSnapshot),
+            snap,
+            "a-rec-that-no-longer-exists",
+        );
+        let (action, snapshot) = resolve_rollback(&change).expect("resolve from history alone");
+        assert!(matches!(action, RollbackAction::RestoreGameModeFromSnapshot));
+        assert!(matches!(snapshot, Snapshot::GameMode { prior_enabled: Some(0) }));
+    }
+
+    #[test]
+    fn rollback_synthesizes_from_legacy_snapshot() {
+        // No typed contract (old entry) -> synthesize from rec_id + legacy JSON.
+        let change = change_with(None, json!({"prior": 1}), "game-mode");
+        let (action, snapshot) = resolve_rollback(&change).expect("legacy synthesis");
+        assert!(matches!(action, RollbackAction::RestoreGameModeFromSnapshot));
+        assert!(matches!(snapshot, Snapshot::GameMode { prior_enabled: Some(1) }));
+    }
+
+    #[test]
+    fn registry_snapshot_distinguishes_missing_from_existing() {
+        // missing-vs-existing is the difference between "delete on rollback" and
+        // "restore to X". It must survive serialization.
+        let missing = serde_json::to_value(&Snapshot::HwSchMode { prior: None }).unwrap();
+        let existing = serde_json::to_value(&Snapshot::HwSchMode { prior: Some(0) }).unwrap();
+        assert_ne!(missing, existing);
+        assert!(matches!(
+            serde_json::from_value::<Snapshot>(missing).unwrap(),
+            Snapshot::HwSchMode { prior: None }
+        ));
+        assert!(matches!(
+            serde_json::from_value::<Snapshot>(existing).unwrap(),
+            Snapshot::HwSchMode { prior: Some(0) }
+        ));
+    }
+
+    #[test]
+    fn power_setting_snapshot_preserves_ac_dc_and_guids() {
+        let s = Snapshot::PowerPlanSetting {
+            plan_guid: "PLAN".into(),
+            subgroup_guid: "SUB".into(),
+            setting_guid: "SET".into(),
+            prior_ac_value: 1,
+            prior_dc_value: 2,
+        };
+        let back: Snapshot = serde_json::from_value(serde_json::to_value(&s).unwrap()).unwrap();
+        match back {
+            Snapshot::PowerPlanSetting {
+                plan_guid,
+                subgroup_guid,
+                setting_guid,
+                prior_ac_value,
+                prior_dc_value,
+            } => {
+                assert_eq!(plan_guid, "PLAN");
+                assert_eq!(subgroup_guid, "SUB");
+                assert_eq!(setting_guid, "SET");
+                assert_eq!(prior_ac_value, 1);
+                assert_eq!(prior_dc_value, 2);
+            }
+            _ => panic!("variant changed on round-trip"),
+        }
+    }
+}
