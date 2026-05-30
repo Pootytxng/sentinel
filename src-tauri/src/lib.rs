@@ -2596,14 +2596,25 @@ fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
         let _ = w.set_focus();
         return Ok(());
     }
-    // Load a clean index.html — the frontend detects overlay mode by this
-    // window's label ("overlay"), NOT a URL hash. (A "#overlay" fragment in
-    // the path gets percent-encoded to %23 and 404s to a blank white page.)
-    let win = tauri::WebviewWindowBuilder::new(
-        &app,
-        "overlay",
-        tauri::WebviewUrl::App("index.html".into()),
-    )
+    // URL selection: runtime-created secondary windows are NOT routed through
+    // the Vite dev server the way the main window is, so WebviewUrl::App loads
+    // a blank white page in dev (known Tauri issue: tauri-apps/tauri#13963,
+    // #9601). In a dev build, load the configured dev URL explicitly (same
+    // origin the main window uses); in release, use the bundled assets. The
+    // frontend detects overlay mode by this window's LABEL ("overlay"), so
+    // the URL form doesn't affect routing.
+    #[cfg(debug_assertions)]
+    let url = app
+        .config()
+        .build
+        .dev_url
+        .clone()
+        .map(tauri::WebviewUrl::External)
+        .unwrap_or_else(|| tauri::WebviewUrl::App("index.html".into()));
+    #[cfg(not(debug_assertions))]
+    let url = tauri::WebviewUrl::App("index.html".into());
+
+    let win = tauri::WebviewWindowBuilder::new(&app, "overlay", url)
     .title("Sentinel Overlay")
     .inner_size(230.0, 140.0)
     .position(24.0, 24.0)
