@@ -163,6 +163,8 @@ type CpuSensorSnapshot = {
   usage_overall_pct: number;
   usage_per_core_pct: number[];
   frequency_mhz: number;
+  ram_used_bytes: number;
+  ram_total_bytes: number;
 };
 
 type GpuSensorSnapshot = {
@@ -1063,6 +1065,22 @@ function CpuMonitorPanel({
           color="#6aa9ff"
           sublabel={warmingUp ? "Warming up — first delta in 1 s" : undefined}
         />
+        {cpu.ram_total_bytes > 0 && (
+          <MetricRow
+            label="Memory used"
+            value={Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100)}
+            unit="%"
+            history={history.map((s) =>
+              s.ram_total_bytes > 0
+                ? Math.round((s.ram_used_bytes / s.ram_total_bytes) * 100)
+                : 0,
+            )}
+            min={0}
+            max={100}
+            color="#a78bfa"
+            sublabel={`${fmtGB(cpu.ram_used_bytes)} / ${fmtGB(cpu.ram_total_bytes)}`}
+          />
+        )}
       </div>
       {/* Per-core mini-grid — surfaces uneven core loading at a glance.
           Useful for spotting single-threaded bottlenecks vs an evenly

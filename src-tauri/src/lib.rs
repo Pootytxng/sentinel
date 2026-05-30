@@ -2101,56 +2101,84 @@ fn get_recommendations() -> Vec<Recommendation> {
     build_recommendations(&hw)
 }
 
-// ─── CPU sensors (vendor-agnostic, no kernel driver) ─────────────────────
+// ─── CPU + memory sensors (vendor-agnostic, no kernel driver) ────────────
 //
-// Sentinel-safe CPU monitoring: sysinfo calls PDH (Performance Data Helper,
-// a built-in Windows API) for CPU utilization. No MSR reads, no kernel
-// driver, no CPU temps (those need ring-0 access and are explicitly off
-// the table per the "Sentinel-safe only" decision).
+// Sentinel-safe: sysinfo calls PDH (Performance Data Helper, a built-in
+// Windows API) for CPU utilization. No MSR reads, no kernel driver.
 //
-// Accurate CPU% requires TWO samples taken some time apart so we hold a
-// long-lived sysinfo::System behind a Mutex and refresh it on each poll.
-// First call after process start returns 0% (no baseline yet); the
-// frontend tolerates this — by the next 1 s tick we have a real delta.
+// NO CPU TEMPERATURE. We verified empirically on AMD hardware that every
+// user-mode source is unavailable: MSAcpi_ThermalZoneTemperature returns
+// "operation not supported", and the ThermalZone perf counter and
+// Win32_TemperatureProbe are empty. Real CPU die temp requires ring-0 MSR/SMU
+// access via a kernel driver, which is explicitly off the table.
+//
+// A dedicated background poller owns ONE sysinfo::System and refreshes it on a
+// steady 1 s cadence, writing a snapshot to a cache. Every window's
+// get_cpu_sensors call reads that cache. This is important: CPU% is a delta
+// between two refreshes, so if multiple windows each refreshed a shared System
+// at slightly different times they'd compute deltas over tiny, inconsistent
+// intervals and read erratic/near-zero usage. One poller = one stable delta.
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Default)]
 struct CpuSensorSnapshot {
     /// Whole-system CPU utilization, 0.0-100.0.
     usage_overall_pct: f32,
-    /// Per-logical-core utilization in the same units. Length matches the
-    /// number of logical processors at process start.
+    /// Per-logical-core utilization in the same units.
     usage_per_core_pct: Vec<f32>,
-    /// Current frequency as reported by sysinfo. Often pegged to base
-    /// clock on Windows because boost behavior isn't reliably exposed
-    /// through PDH — surfaced honestly rather than fake-fluctuated.
+    /// Current frequency as reported by sysinfo (often the base clock on
+    /// Windows; boost isn't reliably exposed through PDH).
     frequency_mhz: u64,
+    /// Physical memory used / total in bytes.
+    ram_used_bytes: u64,
+    ram_total_bytes: u64,
 }
 
-fn cpu_monitor_state() -> &'static Mutex<System> {
-    static STATE: OnceLock<Mutex<System>> = OnceLock::new();
-    STATE.get_or_init(|| Mutex::new(System::new_all()))
+fn cpu_sensor_cache() -> &'static Mutex<CpuSensorSnapshot> {
+    static CACHE: OnceLock<Mutex<CpuSensorSnapshot>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(CpuSensorSnapshot::default()))
+}
+
+fn ensure_cpu_poller_started() {
+    static STARTED: OnceLock<()> = OnceLock::new();
+    STARTED.get_or_init(|| {
+        std::thread::Builder::new()
+            .name("cpu-sensor-poller".into())
+            .spawn(|| {
+                let mut sys = System::new_all();
+                loop {
+                    sys.refresh_cpu_usage();
+                    sys.refresh_memory();
+                    let usage_per_core_pct: Vec<f32> =
+                        sys.cpus().iter().map(|c| c.cpu_usage()).collect();
+                    let usage_overall_pct = if usage_per_core_pct.is_empty() {
+                        0.0
+                    } else {
+                        usage_per_core_pct.iter().sum::<f32>() / usage_per_core_pct.len() as f32
+                    };
+                    let frequency_mhz = sys.cpus().first().map(|c| c.frequency()).unwrap_or(0);
+                    let snap = CpuSensorSnapshot {
+                        usage_overall_pct,
+                        usage_per_core_pct,
+                        frequency_mhz,
+                        ram_used_bytes: sys.used_memory(),
+                        ram_total_bytes: sys.total_memory(),
+                    };
+                    if let Ok(mut cache) = cpu_sensor_cache().lock() {
+                        *cache = snap;
+                    }
+                    // 1 s cadence also satisfies sysinfo's minimum CPU refresh
+                    // interval, so each reading is a clean ~1 s delta.
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            })
+            .ok();
+    });
 }
 
 #[tauri::command]
 fn get_cpu_sensors() -> CpuSensorSnapshot {
-    let mut sys = cpu_monitor_state().lock().unwrap();
-    sys.refresh_cpu_usage();
-    let usage_per_core_pct: Vec<f32> = sys.cpus().iter().map(|c| c.cpu_usage()).collect();
-    let usage_overall_pct = if usage_per_core_pct.is_empty() {
-        0.0
-    } else {
-        usage_per_core_pct.iter().sum::<f32>() / usage_per_core_pct.len() as f32
-    };
-    let frequency_mhz = sys
-        .cpus()
-        .first()
-        .map(|c| c.frequency())
-        .unwrap_or(0);
-    CpuSensorSnapshot {
-        usage_overall_pct,
-        usage_per_core_pct,
-        frequency_mhz,
-    }
+    ensure_cpu_poller_started();
+    cpu_sensor_cache().lock().map(|c| c.clone()).unwrap_or_default()
 }
 
 // ─── GPU sensors (NVML — NVIDIA only for v1) ─────────────────────────────
