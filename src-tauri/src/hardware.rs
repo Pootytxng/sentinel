@@ -13,7 +13,7 @@ use winreg::enums::HKEY_LOCAL_MACHINE;
 use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Default)]
 pub(crate) struct DiskInfo {
     pub(crate) mount_point: String,
     pub(crate) total_bytes: u64,
@@ -123,7 +123,7 @@ pub(crate) struct MsftPhysicalDisk {
     pub(crate) size: Option<u64>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Default)]
 pub(crate) struct HardwareInfo {
     pub(crate) cpu_brand: String,
     pub(crate) cpu_cores_logical: usize,

@@ -624,3 +624,186 @@ pub(crate) fn get_recommendations() -> Vec<Recommendation> {
     let hw = collect_hardware();
     build_recommendations(&hw)
 }
+
+// ─── Recommendation condition + catalog tests ────────────────────────────
+//
+// Cover the rec engine's pure decision logic: hardware-gating conditions and
+// catalog integrity. These do NOT exercise apply/rollback mutation (that's the
+// actions+rollback step). condition_matches is pure over a HardwareInfo, so we
+// build fixtures and assert which gates fire. build_recommendations reads the
+// real system's state probes for `currently_applied`, but ID-uniqueness holds
+// regardless of which recs apply.
+#[cfg(test)]
+mod rec_tests {
+    use super::*;
+    use crate::hardware::{DiskInfo, DisplayInfo, GpuInfo, HardwareInfo, PhysicalDiskInfo};
+
+    fn pdisk(media: &str, bus: &str) -> PhysicalDiskInfo {
+        PhysicalDiskInfo {
+            media_type: media.into(),
+            bus_type: bus.into(),
+            ..Default::default()
+        }
+    }
+    fn gpu(name: &str) -> GpuInfo {
+        GpuInfo {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn all_hdd_gates_windows_search_indexer() {
+        let mut h = HardwareInfo::default();
+        h.physical_disks = vec![pdisk("HDD", "SATA"), pdisk("HDD", "SATA")];
+        assert!(condition_matches(&Condition::AllHdd, &h), "all spinning -> gate fires");
+        h.physical_disks.push(pdisk("SSD", "NVMe"));
+        assert!(
+            !condition_matches(&Condition::AllHdd, &h),
+            "any SSD present -> not all-HDD"
+        );
+        assert!(
+            !condition_matches(&Condition::AllHdd, &HardwareInfo::default()),
+            "no disks detected -> false (never gate on empty)"
+        );
+    }
+
+    #[test]
+    fn fast_storage_present_gates_sysmain() {
+        let mut nvme = HardwareInfo::default();
+        nvme.physical_disks = vec![pdisk("Unknown", "NVMe")];
+        assert!(condition_matches(&Condition::FastStoragePresent, &nvme));
+        let mut ssd = HardwareInfo::default();
+        ssd.physical_disks = vec![pdisk("SSD", "SATA")];
+        assert!(condition_matches(&Condition::FastStoragePresent, &ssd));
+        let mut hdd = HardwareInfo::default();
+        hdd.physical_disks = vec![pdisk("HDD", "SATA")];
+        assert!(!condition_matches(&Condition::FastStoragePresent, &hdd));
+    }
+
+    #[test]
+    fn ram_threshold_gating() {
+        let mut h = HardwareInfo::default();
+        h.ram_total_bytes = 16 * 1024 * 1024 * 1024;
+        assert!(condition_matches(&Condition::RamGbAtLeast { min_gb: 16 }, &h));
+        h.ram_total_bytes = 8 * 1024 * 1024 * 1024;
+        assert!(!condition_matches(&Condition::RamGbAtLeast { min_gb: 16 }, &h));
+    }
+
+    #[test]
+    fn modern_discrete_gpu_gates_hags() {
+        let mut amd = HardwareInfo::default();
+        amd.gpus = vec![gpu("AMD Radeon RX 9070 XT")];
+        assert!(condition_matches(&Condition::HasModernDiscreteGpu, &amd));
+        let mut nv = HardwareInfo::default();
+        nv.gpus = vec![gpu("NVIDIA GeForce RTX 4080")];
+        assert!(condition_matches(&Condition::HasModernDiscreteGpu, &nv));
+        let mut old = HardwareInfo::default();
+        old.gpus = vec![gpu("Intel HD Graphics 4000")];
+        assert!(!condition_matches(&Condition::HasModernDiscreteGpu, &old));
+    }
+
+    #[test]
+    fn active_wired_ethernet_gates_eee() {
+        let mut h = HardwareInfo::default();
+        h.has_active_wired_ethernet = true;
+        assert!(condition_matches(&Condition::HasActiveWiredEthernet, &h));
+        h.has_active_wired_ethernet = false;
+        assert!(!condition_matches(&Condition::HasActiveWiredEthernet, &h));
+    }
+
+    #[test]
+    fn gpu_vendor_match_condition() {
+        let mut h = HardwareInfo::default();
+        h.gpus = vec![gpu("AMD Radeon RX 9070 XT")];
+        assert!(condition_matches(
+            &Condition::GpuVendor { vendor: "amd".into() },
+            &h
+        ));
+        assert!(!condition_matches(
+            &Condition::GpuVendor { vendor: "nvidia".into() },
+            &h
+        ));
+    }
+
+    #[test]
+    fn display_underdriven_and_hdr() {
+        let mut h = HardwareInfo::default();
+        h.display = Some(DisplayInfo {
+            width: 2560,
+            height: 1440,
+            current_refresh_rate_hz: 60,
+            max_refresh_rate_hz: 144,
+            hdr_capable: true,
+        });
+        assert!(condition_matches(
+            &Condition::DisplayUnderdriven { min_gap_hz: 24 },
+            &h
+        ));
+        assert!(condition_matches(&Condition::DisplayHdrCapable, &h));
+        // At max already -> not underdriven.
+        h.display.as_mut().unwrap().current_refresh_rate_hz = 144;
+        assert!(!condition_matches(
+            &Condition::DisplayUnderdriven { min_gap_hz: 24 },
+            &h
+        ));
+    }
+
+    #[test]
+    fn storage_below_free_percent_gating() {
+        let mut h = HardwareInfo::default();
+        h.disks = vec![DiskInfo {
+            mount_point: "C:".into(),
+            total_bytes: 1000,
+            available_bytes: 100, // 10% free
+            file_system: "NTFS".into(),
+        }];
+        assert!(condition_matches(
+            &Condition::StorageBelowFreePercent {
+                mount_prefix: "C:".into(),
+                percent: 25.0
+            },
+            &h
+        ));
+        h.disks[0].available_bytes = 500; // 50% free
+        assert!(!condition_matches(
+            &Condition::StorageBelowFreePercent {
+                mount_prefix: "C:".into(),
+                percent: 25.0
+            },
+            &h
+        ));
+    }
+
+    #[test]
+    fn embedded_catalog_ids_unique_and_metadata_sane() {
+        let file = load_baseline_rules_embedded();
+        assert!(!file.rules.is_empty(), "baseline catalog must not be empty");
+        let mut seen = std::collections::HashSet::new();
+        for r in &file.rules {
+            assert!(seen.insert(&r.id), "duplicate rule id in baseline: {}", r.id);
+            assert!(!r.id.trim().is_empty(), "empty rule id");
+            assert!(!r.title.trim().is_empty(), "empty title for {}", r.id);
+            assert!(!r.category.trim().is_empty(), "empty category for {}", r.id);
+            assert!(!r.severity.trim().is_empty(), "empty severity for {}", r.id);
+            assert!(!r.impact.trim().is_empty(), "empty impact for {}", r.id);
+        }
+    }
+
+    #[test]
+    fn build_recommendations_produces_unique_ids() {
+        // Rich fixture so many gates fire; build_recommendations also reads the
+        // real machine's state probes for currently_applied — IDs must be
+        // unique across JSON + code recs regardless.
+        let mut h = HardwareInfo::default();
+        h.ram_total_bytes = 32 * 1024 * 1024 * 1024;
+        h.gpus = vec![gpu("AMD Radeon RX 9070 XT")];
+        h.physical_disks = vec![pdisk("SSD", "NVMe")];
+        h.has_active_wired_ethernet = true;
+        let recs = build_recommendations(&h);
+        let mut seen = std::collections::HashSet::new();
+        for r in &recs {
+            assert!(seen.insert(r.id.clone()), "duplicate rec id: {}", r.id);
+        }
+    }
+}
