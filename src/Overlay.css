@@ -1,27 +1,29 @@
-/* Overlay window: the entire window must be transparent so only the HUD pill
-   is visible on top of the game. The main app's App.css sets a solid body
-   background, so force transparency here when the document is in overlay mode
-   (class set in main.tsx). */
+/* Overlay window. NOTE: currently using a SOLID dark background rather than a
+   transparent window. WebView2 transparent windows on Windows can render white
+   and are finicky; a solid HUD is reliable and still useful. Transparency is a
+   later refinement once the window reliably renders. The whole small window is
+   the HUD. */
 html.overlay-mode,
 html.overlay-mode body,
 html.overlay-mode #root {
-  background: transparent !important;
+  background: #0b0d12 !important;
   overflow: hidden;
   margin: 0;
+  height: 100%;
 }
 
 .ovl {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  background: rgba(8, 10, 14, 0.72);
+  background: #0b0d12;
   border: 1px solid rgba(106, 169, 255, 0.28);
   border-radius: 8px;
-  padding: 8px 11px;
+  padding: 10px 12px;
   color: #e6e9ef;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  width: max-content;
-  min-width: 150px;
+  gap: 4px;
+  height: 100%;
+  box-sizing: border-box;
   /* Click-through is enforced at the window level, but disable selection too. */
   user-select: none;
   -webkit-user-select: none;

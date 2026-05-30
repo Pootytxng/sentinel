@@ -2588,46 +2588,20 @@ fn get_fps_status() -> FpsStatus {
 // over BORDERLESS / WINDOWED games but NOT exclusive fullscreen (only injected
 // overlays can do that, which we deliberately don't do). The UI states this.
 
+// The overlay window is DECLARED STATICALLY in tauri.conf.json (label
+// "overlay", visible:false) rather than created at runtime. Runtime-created
+// secondary windows aren't routed through the Vite dev server in dev and load
+// a blank white page (tauri-apps/tauri#13963, #9601); config-declared windows
+// get the same routing the main window does. So we just show/hide it here.
 #[tauri::command]
 fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
-    if let Some(w) = app.get_webview_window("overlay") {
-        let _ = w.show();
-        let _ = w.set_focus();
-        return Ok(());
-    }
-    // URL selection: runtime-created secondary windows are NOT routed through
-    // the Vite dev server the way the main window is, so WebviewUrl::App loads
-    // a blank white page in dev (known Tauri issue: tauri-apps/tauri#13963,
-    // #9601). In a dev build, load the configured dev URL explicitly (same
-    // origin the main window uses); in release, use the bundled assets. The
-    // frontend detects overlay mode by this window's LABEL ("overlay"), so
-    // the URL form doesn't affect routing.
-    #[cfg(debug_assertions)]
-    let url = app
-        .config()
-        .build
-        .dev_url
-        .clone()
-        .map(tauri::WebviewUrl::External)
-        .unwrap_or_else(|| tauri::WebviewUrl::App("index.html".into()));
-    #[cfg(not(debug_assertions))]
-    let url = tauri::WebviewUrl::App("index.html".into());
-
-    let win = tauri::WebviewWindowBuilder::new(&app, "overlay", url)
-    .title("Sentinel Overlay")
-    .inner_size(230.0, 140.0)
-    .position(24.0, 24.0)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(false)
-    .focused(false)
-    .build()
-    .map_err(|e| format!("could not create overlay window: {e}"))?;
+    let w = app
+        .get_webview_window("overlay")
+        .ok_or_else(|| "overlay window not found".to_string())?;
+    w.show().map_err(|e| e.to_string())?;
     // Click-through so the overlay never steals input from the game.
-    let _ = win.set_ignore_cursor_events(true);
+    let _ = w.set_ignore_cursor_events(true);
     Ok(())
 }
 
@@ -2635,14 +2609,17 @@ fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
 fn hide_overlay(app: tauri::AppHandle) {
     use tauri::Manager;
     if let Some(w) = app.get_webview_window("overlay") {
-        let _ = w.close();
+        // Hide (not close) — the window is config-owned and reused.
+        let _ = w.hide();
     }
 }
 
 #[tauri::command]
 fn overlay_visible(app: tauri::AppHandle) -> bool {
     use tauri::Manager;
-    app.get_webview_window("overlay").is_some()
+    app.get_webview_window("overlay")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
 }
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────
