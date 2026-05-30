@@ -828,6 +828,11 @@ function MonitoringTab({ active }: { active: boolean }) {
         frametime via ETW. No injection into your games, no kernel driver —
         anti-cheat compatible. The overlay draws over borderless/windowed
         games (not exclusive fullscreen). Charts show the last minute.
+        <br />
+        <span className="coverage-note">
+          GPU sensor coverage: <strong>AMD — verified</strong> · NVIDIA —
+          implemented, not yet hardware-verified · Intel — planned.
+        </span>
       </p>
 
       {/* FPS / frametime — headline metric, opt-in (needs admin) */}
@@ -1140,6 +1145,14 @@ function GpuMonitorPanel({
             {gpu.vendor}
           </span>
           {gpu.name}
+          {gpu.vendor.toUpperCase() === "NVIDIA" && (
+            <span
+              className="gpu-unverified"
+              title="NVIDIA sensor readings come from NVML but haven't been verified on real NVIDIA hardware yet. Treat values as provisional."
+            >
+              unverified
+            </span>
+          )}
         </div>
         <div className="monitor-panel-sub">
           {gpu.vram_total_bytes

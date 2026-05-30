@@ -974,6 +974,28 @@ html, body, #root {
   background: rgba(248, 113, 113, 0.12);
   border: 1px solid rgba(248, 113, 113, 0.3);
 }
+.gpu-unverified {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #f5c451;
+  background: rgba(245, 196, 81, 0.12);
+  border: 1px solid rgba(245, 196, 81, 0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: help;
+}
+.coverage-note {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.coverage-note strong {
+  color: #4ade80;
+}
 
 .monitor-panel-sub {
   font-size: 12px;
