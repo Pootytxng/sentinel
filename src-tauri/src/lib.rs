@@ -1,18 +1,18 @@
-use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
 
 mod actions;
 mod diagnostics;
 mod fps;
 mod hardware;
+mod history;
 mod monitoring;
 mod recommendations;
 mod remote_rules;
 use actions::*;
 use diagnostics::*;
 use hardware::*;
+use history::*;
 use monitoring::*;
 use recommendations::*;
 
@@ -22,12 +22,10 @@ pub fn run_fps_capture() {
     fps::run_capture();
 }
 
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 use winreg::RegKey;
 
-static HISTORY_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn current_power_plan_name() -> Option<String> {
     let output = Command::new("powercfg").args(["/getactivescheme"]).output().ok()?;
@@ -156,124 +154,12 @@ pub(crate) fn nagle_disabled_on_any_nic() -> bool {
 
 
 
-// pub(crate): actions::resolve_rollback reads rec_id/snapshot/rollback_action
-// to resolve undo from history alone. History persistence stays in lib for now;
-// the whole record will move to a history module in the next step.
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct AppliedChange {
-    pub(crate) id: String,
-    pub(crate) rec_id: String,
-    pub(crate) rec_title: String,
-    pub(crate) applied_at: String,
-    pub(crate) snapshot: serde_json::Value, // legacy entries: untyped; new entries: typed Snapshot serialized
-    pub(crate) status: String, // "applied" | "rolled_back"
-
-    // Additive per ARCHITECTURE_LOCKS Tier 1: rollback contract captured at
-    // apply time so rollback survives rule deprecation, catalog changes, CDN
-    // outages, and app version mismatches. Optional for compat with old
-    // history.json entries written before these fields existed.
-    #[serde(default)]
-    pub(crate) applied_action: Option<AppliedAction>,
-    #[serde(default)]
-    pub(crate) rollback_action: Option<RollbackAction>,
-    #[serde(default)]
-    pub(crate) app_version_at_apply: Option<String>,
-    #[serde(default)]
-    pub(crate) ruleset_version_at_apply: Option<String>,
-    #[serde(default)]
-    pub(crate) elevation_used: Option<bool>,
-}
-
-// AppliedChange + a freshly-computed `is_still_active` flag. We never persist
-// this flag (state changes outside Sentinel can revert what we applied), so it
-// has to be recomputed every time history is read.
-#[derive(Serialize)]
-struct AppliedChangeView {
-    id: String,
-    rec_id: String,
-    rec_title: String,
-    applied_at: String,
-    snapshot: serde_json::Value,
-    status: String,
-    is_still_active: bool,
-    applied_action: Option<AppliedAction>,
-    rollback_action: Option<RollbackAction>,
-    app_version_at_apply: Option<String>,
-    ruleset_version_at_apply: Option<String>,
-    elevation_used: Option<bool>,
-}
-
-fn check_change_active(c: &AppliedChange) -> bool {
-    match c.rec_id.as_str() {
-        "game-mode" => game_mode_enabled(),
-        "visual-effects" => visual_effects_for_best_performance(),
-        "sysmain-disable" => !service_running("SysMain"),
-        "nvidia-telemetry" => !service_running("NvTelemetryContainer"),
-        "power-ultimate" => current_power_plan_name()
-            .map(|p| p.to_lowercase().contains("ultimate"))
-            .unwrap_or(false),
-        "nagle-disable" => nagle_disabled_on_any_nic(),
-        "hags-enable" => hags_state() == Some(2),
-        "mouse-accel-off" => mouse_accel_disabled(),
-        "game-bar-disable" => game_bar_disabled(),
-        "diagtrack-disable" => !service_running("DiagTrack"),
-        "windows-search-disable" => !service_running("WSearch"),
-        "fast-startup-off" => fast_startup_state() == Some(0),
-        "reserved-storage-off" => !reserved_storage_enabled(),
-        "usb-selective-suspend-off" => usb_selective_suspend_off_on_ac(),
-        "pcie-aspm-off" => pcie_aspm_off_on_ac(),
-        "eee-disable" => eee_disabled_on_any_eligible_adapter(),
-        _ => true, // unknown rec → assume still active rather than hide rollback
-    }
-}
-
-fn into_view(c: AppliedChange) -> AppliedChangeView {
-    let is_still_active = if c.status == "applied" {
-        check_change_active(&c)
-    } else {
-        false
-    };
-    AppliedChangeView {
-        id: c.id,
-        rec_id: c.rec_id,
-        rec_title: c.rec_title,
-        applied_at: c.applied_at,
-        snapshot: c.snapshot,
-        status: c.status,
-        is_still_active,
-        applied_action: c.applied_action,
-        rollback_action: c.rollback_action,
-        app_version_at_apply: c.app_version_at_apply,
-        ruleset_version_at_apply: c.ruleset_version_at_apply,
-        elevation_used: c.elevation_used,
-    }
-}
 
 pub(crate) fn sentinel_data_dir() -> PathBuf {
     let app_data = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Temp".into());
     PathBuf::from(app_data).join("Sentinel")
 }
 
-fn history_path() -> PathBuf {
-    sentinel_data_dir().join("history.json")
-}
-
-fn load_history() -> Vec<AppliedChange> {
-    let path = history_path();
-    if !path.exists() {
-        return Vec::new();
-    }
-    fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
-}
-
-fn save_history(h: &[AppliedChange]) -> Result<(), String> {
-    fs::create_dir_all(sentinel_data_dir()).map_err(|e| e.to_string())?;
-    let json = serde_json::to_string_pretty(h).map_err(|e| e.to_string())?;
-    fs::write(history_path(), json).map_err(|e| e.to_string())
-}
 
 // State-detection helpers consumed by check_state_kind / check_change_active.
 
@@ -302,79 +188,6 @@ pub(crate) fn eee_disabled_on_any_eligible_adapter() -> bool {
         .all(|e| e.prior_value.to_lowercase().contains("disab"))
 }
 
-#[tauri::command]
-fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
-    let result: ApplyResult = match rec_id.as_str() {
-        "game-mode" => apply_game_mode()?,
-        "visual-effects" => apply_visual_effects()?,
-        "sysmain-disable" => apply_service_disable(KnownService::SysMain)?,
-        "nvidia-telemetry" => apply_service_disable(KnownService::NvTelemetryContainer)?,
-        "power-ultimate" => apply_power_ultimate()?,
-        "nagle-disable" => apply_nagle_disable()?,
-        "hags-enable" => apply_hags_enable()?,
-        "mouse-accel-off" => apply_mouse_accel_off()?,
-        "game-bar-disable" => apply_game_bar_disable()?,
-        "diagtrack-disable" => apply_service_disable(KnownService::DiagTrack)?,
-        "windows-search-disable" => apply_service_disable(KnownService::WSearch)?,
-        "fast-startup-off" => apply_fast_startup_off()?,
-        "reserved-storage-off" => apply_reserved_storage_off()?,
-        "usb-selective-suspend-off" => apply_usb_selective_suspend_off()?,
-        "pcie-aspm-off" => apply_pcie_aspm_off()?,
-        "eee-disable" => apply_eee_disable()?,
-        other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
-    };
-    let snapshot_json = serde_json::to_value(&result.snapshot)
-        .map_err(|e| format!("snapshot serialize: {}", e))?;
-    let change = AppliedChange {
-        id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
-        rec_id,
-        rec_title,
-        applied_at: Utc::now().to_rfc3339(),
-        snapshot: snapshot_json,
-        status: "applied".into(),
-        applied_action: Some(result.applied_action),
-        rollback_action: Some(result.rollback_action),
-        app_version_at_apply: Some(env!("CARGO_PKG_VERSION").to_string()),
-        ruleset_version_at_apply: Some("1.0.0-baseline".to_string()),
-        elevation_used: Some(result.elevation_used),
-    };
-    let mut history = load_history();
-    history.push(change.clone());
-    save_history(&history)?;
-    Ok(into_view(change))
-}
-
-#[tauri::command]
-fn rollback_change(change_id: String) -> Result<(), String> {
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history();
-    let idx = history
-        .iter()
-        .position(|c| c.id == change_id)
-        .ok_or_else(|| format!("change '{}' not found in history", change_id))?;
-    let change = history[idx].clone();
-    if change.status == "rolled_back" {
-        return Err("change has already been rolled back".into());
-    }
-
-    let (action, snapshot) = resolve_rollback(&change)?;
-
-    dispatch_rollback(&action, &snapshot)?;
-
-    history[idx].status = "rolled_back".into();
-    save_history(&history)?;
-    Ok(())
-}
-
-#[tauri::command]
-fn get_applied_changes() -> Vec<AppliedChangeView> {
-    load_history().into_iter().map(into_view).collect()
-}
 
 // ─── Startup apps (HKCU Run) ─────────────────────────────────────────────
 //

@@ -18,7 +18,7 @@ use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VAL
 use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
 
-use crate::AppliedChange;
+use crate::history::AppliedChange;
 // State probes stay in lib (least-wrong place until a cleaner seam); some
 // apply_* fns read them to snapshot prior state before mutating.
 use crate::{fast_startup_state, hags_state, reserved_storage_enabled};
