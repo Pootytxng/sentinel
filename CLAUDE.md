@@ -128,8 +128,11 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
 ### 🚧 Remaining release gates (NOT mutation-QA — these still gate beta/public release)
 - **Packaging/signing:** plan + audit in `docs/PACKAGING_SIGNING_PLAN.md`. Config verified good
   (identity/icons/capabilities/updater-off). **Beta route DECIDED (2026-05-31): unsigned + invite-only
-  direct download + fully local-only (no telemetry, no new code).** Private beta unblocked — next is
-  `npm run tauri build` + §6 install/upgrade/persistence checks + §7 beta QA. CSP stays `null` for the
+  direct download + fully local-only (no telemetry, no new code).** **Build VERIFIED 2026-05-31:**
+  `npm run tauri build` → `Sentinel_0.1.0_x64_en-US.msi` (3.5 MB) + `Sentinel_0.1.0_x64-setup.exe`
+  (2.3 MB) in `src-tauri/target/release/bundle/`; identity baked in, NotSigned (expected), no updater.
+  Remaining (user-run — mutates / needs clean machine): §6 install/uninstall/upgrade + AppData &
+  Trust-Ledger persistence, §7 beta click-through QA. CSP stays `null` for the
   trusted beta; tighten+test before public. PUBLIC release still gated on signing route + legal
   (license model + jurisdiction).
 - **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction

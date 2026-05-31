@@ -86,8 +86,12 @@ beta (local app, no remote content); tighten + test it before any public release
 
 ## 6. Pre-package checks (before any beta installer)
 
-- [ ] `cargo test` green · `cargo build` zero warnings · `npm run build` clean
-- [ ] `npm run tauri build` produces MSI + NSIS without error
+- [x] `cargo test` green (68/68) · `cargo build` zero warnings · `npm run build` clean
+- [x] `npm run tauri build` produces MSI + NSIS without error — **VERIFIED 2026-05-31**:
+  `Sentinel_0.1.0_x64_en-US.msi` (3.5 MB) + `Sentinel_0.1.0_x64-setup.exe` (2.3 MB) in
+  `src-tauri/target/release/bundle/`. Identity baked into the binary (ProductName Sentinel, Company
+  Pootytxng, v0.1.0, © 2026 Pootytxng); signature **NotSigned** (expected); no updater artifacts.
+  WiX + NSIS auto-fetched on first build.
 - [ ] **Fresh install** test (clean machine/VM)
 - [ ] **Uninstall** test (removes app; note whether it leaves `%APPDATA%\Sentinel`)
 - [ ] **Upgrade / install-over-existing** test
