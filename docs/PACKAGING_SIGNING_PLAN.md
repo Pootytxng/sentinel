@@ -48,13 +48,22 @@ rules key.
 
 ## 4. Required owner decisions
 
-- **Distribution method:** GitHub Releases vs. direct download vs. private invite link.
-- **Code-signing route:** none-for-beta now, and which cert for public (Trusted Signing / EV / OV).
-- **License model:** (fills `EULA.md` §2 — e.g. free-for-personal-use; is the source separately licensed?).
+**DECIDED (owner, 2026-05-31):**
+- **Code-signing route:** **none for the private beta** (unsigned → expected SmartScreen warning).
+  Public-release signing route still TBD (recommend Azure Trusted Signing).
+- **Distribution:** **private invite link / direct download.**
+- **Beta access:** **invite-only.**
+- **Crash/log collection:** **fully local-only / manual** — no telemetry, no auto-collection; the
+  Export report is the manual share mechanism. (No new code; zero-telemetry promise intact.)
+
+⇒ The private beta is **unblocked**: no cert, no hosting setup, no new code. Remaining packaging
+work is the §6 build/pre-package checks + §7 beta QA. CSP stays `null` for the trusted invite-only
+beta (local app, no remote content); tighten + test it before any public release.
+
+**Still pending — LEGAL track, gates PUBLIC release only (not the private beta):**
+- **License model** (fills `EULA.md` §2).
 - **Governing law / jurisdiction** for the EULA.
-- **Beta access:** invite-only vs. open link.
-- **Crash/log collection:** confirm it stays **fully manual + local-only** (current stance — no
-  telemetry; the Export report is the manual share mechanism).
+- Public-release **code-signing route** (Trusted Signing / EV / OV).
 
 ## 5. Tauri config audit (status)
 
