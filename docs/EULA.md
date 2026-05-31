@@ -2,7 +2,8 @@
 
 **Status: DRAFT v0.1 (2026-05-31).** Starting-point draft reflecting how the software works
 today. **Not legal advice.** The owner should review/adapt this (and have it reviewed by a
-qualified professional) before distribution. Placeholders in `[BRACKETS]` need owner input.
+qualified professional) before distribution. Owner/contact identity is set (Pootytxng; GitHub
+issues); still open before public distribution: final license model and governing-law/jurisdiction.
 
 ---
 
@@ -21,8 +22,9 @@ applies reversible from a local history that does not depend on the internet.
 
 Subject to these terms, you are granted a personal, non-exclusive, non-transferable license to
 install and use the Software on PCs you own or control. You may not resell, sublicense, or
-distribute the Software except as permitted by the owner. [CONFIRM final license model — e.g.
-free for personal use; specify if open-source license applies to source.]
+distribute the Software except as permitted by the owner. *(Private beta. The final license
+model — e.g. free for personal use, and whether a separate open-source license governs the
+source code — is to be confirmed by the owner before public distribution.)*
 
 ## 3. Beta software
 
@@ -89,5 +91,7 @@ your use of that build.
 
 ## 12. Governing law / contact
 
-[GOVERNING LAW / JURISDICTION]. Contact: [OWNER / PROJECT NAME] — [CONTACT EMAIL OR URL].
+Governing law / jurisdiction: *to be confirmed by the owner before public distribution.*
+Contact: **Pootytxng** (Sentinel) — via the project's GitHub issues page:
+https://github.com/Pootytxng/sentinel/issues
 Project: https://github.com/Pootytxng/sentinel

@@ -2,7 +2,8 @@
 
 **Status: DRAFT v0.1 (2026-05-31).** This is a starting-point draft that reflects how the
 software currently behaves. It is **not legal advice** — the owner should review/adapt it
-(and have it reviewed) before publishing. Placeholders in `[BRACKETS]` need owner input.
+(and have it reviewed) before publishing. Owner/contact identity is set (Pootytxng; GitHub
+issues); no other placeholders remain.
 
 ---
 
@@ -85,5 +86,6 @@ with the corresponding version.
 
 ## Contact
 
-[OWNER / PROJECT NAME] — [CONTACT EMAIL OR URL]
+**Pootytxng** (Sentinel). Privacy questions or concerns: please open an issue on the
+project's GitHub issues page — https://github.com/Pootytxng/sentinel/issues
 Project: https://github.com/Pootytxng/sentinel

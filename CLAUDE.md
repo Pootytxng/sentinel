@@ -98,9 +98,12 @@ remote-fetch *planning* (NOT enabling). **Not allowed yet:** public beta, declar
 release-ready, signing/distribution, remote-fetch enablement, new tweak-catalog expansion,
 major architecture churn.
 
-Packaging-prep findings logged: placeholder identifier `com.sentinel.app`, lowercase
-`productName`, no publisher/copyright/license, no code-signing config, `csp: null`.
-Privacy policy + EULA drafted: `docs/PRIVACY.md`, `docs/EULA.md` (DRAFTS, owner/legal review needed).
+Packaging metadata DONE (identity, not signing): `productName` "Sentinel", identifier
+`io.github.pootytxng.sentinel`, publisher/copyright "Pootytxng", category Utility, homepage,
+short/long description in `tauri.conf.json` (schema-validated). Privacy + EULA drafted with
+identity filled: `docs/PRIVACY.md`, `docs/EULA.md` (still DRAFTS — owner/legal review needed).
+Remaining packaging gaps (NOT done, intentionally): no code-signing config, `csp: null`,
+EULA license-model + governing-law TBD before public distribution.
 
 **Caveat:** all QA so far is in the **dev (debug)** build. The helper-window issue was
 debug-only (console subsystem); a packaged **release** build still warrants a final pass.
