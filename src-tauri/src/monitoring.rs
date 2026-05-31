@@ -410,8 +410,11 @@ pub(crate) fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
 // which we read here (same per-user path resolves in both processes).
 
 pub(crate) fn fps_dir() -> PathBuf {
-    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-    PathBuf::from(base).join("Sentinel")
+    // Runtime IPC files (fps.json / fps.alive) live in a dedicated `runtime/`
+    // subdir under the app data root — NOT %LOCALAPPDATA%\Sentinel, which is the
+    // NSIS install dir, so runtime files never land beside the installed binaries.
+    // The Trust Ledger stays directly in the data root (sentinel_data_dir).
+    crate::sentinel_data_dir().join("runtime")
 }
 pub(crate) fn fps_out_path() -> PathBuf {
     fps_dir().join("fps.json")
