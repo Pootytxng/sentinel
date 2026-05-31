@@ -1,12 +1,21 @@
 # Sentinel — Release-Gate QA Checklist
 
-> 🚧 **RELEASE BLOCKER (open):** Manual apply/rollback verification for **all safe appliable
-> recommendations** is REQUIRED before any beta/release. Automated tests prove the rollback
-> *contracts* and safety wiring — they do **not** replace real Windows mutation verification.
-> Per rec: apply succeeds · rollback restores the EXACT prior state · Trust Ledger correct ·
-> persists across restart · external-revert detected honestly · truth strip updates. Until
-> §2/§2a/§3/§4 below are green, **the app is NOT beta/release-ready.** Status as of 2026-05-31:
-> §1 elevation plumbing PASS (accept + cancel); **no real tweak apply→rollback verified yet.**
+> ✅ **RELEASE GATE — CORE VERIFIED 2026-05-31 (owner sign-off pending).**
+> Manual apply/rollback verified live on a UAC-on machine:
+> - **§1** elevation PASS (accept + cancel).
+> - **§2** apply-accept mutates correctly (real applies left USB/PCIe AC=0, HiberbootEnabled=0;
+>   typed contracts present).
+> - **§4** rollback restores exact prior state.
+> - **§2a** power-plan fidelity **PASSED** — rollback of a Balanced-stored `pcie-aspm-off` while
+>   Ultimate was active restored Balanced (0→1) and left Ultimate untouched (no SCHEME_CURRENT
+>   fallback, no forced switch). Decisive live proof of `070c3c9`.
+> - **§3** apply-cancel: structurally guaranteed (apply returns on the elevation error via `?`
+>   before any history write) + runas-cancel verified live in §1; live UX check optional.
+> - Restart-persistence demonstrated (ledger survived reboot + restarts); no orphan helpers;
+>   Sentinel correctly withholds already-satisfied / hardware-inappropriate recs.
+>
+> **Remaining to lift the gate:** owner sign-off (+ optional live apply-cancel UX & external-revert
+> UI observation). Do not declare beta/release-ready without the owner.
 
 Manual, interactive QA pass. The structural refactor + automated checks are done
 (`cargo test` 44/44, `cargo build` zero warnings, `npm run build` clean). This

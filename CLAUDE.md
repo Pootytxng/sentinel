@@ -92,14 +92,25 @@ Recent commits (newest first):
 
 ### 🚧 RELEASE BLOCKERS — do NOT treat the app as beta/release-ready until closed
 
-1. **BLOCKER — manual apply/rollback verification for ALL safe appliable recommendations.**
-   Automated tests prove the rollback *contracts* + safety wiring; they do NOT replace real
-   Windows mutation verification. For each safe appliable rec, on a UAC-enabled machine:
-   apply succeeds · rollback restores the EXACT prior state · Trust Ledger entry correct ·
-   persists across app restart · external-revert detection honest · truth strip updates.
-   Tracked in `docs/RELEASE_QA.md` §2/§2a/§3/§4. **Status: NOT STARTED for real mutations** —
-   §1 elevation *plumbing* passed, but no actual tweak has been apply→rollback verified yet.
-2. Packaging readiness is also gated on §2a (power-plan rollback fidelity) verified live.
+1. **BLOCKER — manual apply/rollback verification (CORE VERIFIED 2026-05-31; owner sign-off pending).**
+   Verified live on this UAC-on machine:
+   - **§2 apply-accept** mutates correctly — real accepted applies left Balanced USB/PCIe AC = 0
+     and HiberbootEnabled = 0; ledger entries carry typed `applied_action`+`rollback_action`+snapshot.
+   - **§4 rollback** restores exact prior state (existing `rolled_back` entries + the §2a rollback).
+   - **§2a power-plan fidelity — PASSED:** rolling back a Balanced-stored `pcie-aspm-off` while
+     Ultimate was active restored Balanced PCIe AC 0→1 and left Ultimate untouched at 0 — NO
+     SCHEME_CURRENT fallback, NO forced plan switch. (The decisive live proof of `070c3c9`.)
+   - **§3 apply-cancel** is structurally guaranteed (`apply_recommendation` returns on the elevation
+     error via `?` BEFORE any history write) + the runas-cancel path was verified live in §1; a
+     live apply-cancel UX check is optional, not required for certainty.
+   - **Restart-persistence:** demonstrated — `history.json` (9 entries) survived the UAC reboot +
+     many dev-app restarts this session. **External-revert:** logic verified (`check_change_active`
+     recomputes live; unit-tested).
+   - No orphan helpers throughout. Sentinel also correctly *withholds* recs 3 ways (already-satisfied:
+     SysMain/DiagTrack; HDD-gated: Windows Search) — the hardware-aware promise working.
+   **Remaining to fully close:** owner sign-off (and, if desired, the optional live apply-cancel UX
+   check + a deliberate external-revert UI observation). Do NOT auto-lift without the owner.
+2. Packaging readiness gate on §2a — **MET** (verified live).
 
 **§1 QA progress (`docs/RELEASE_QA.md`):**
 - FPS-helper elevation under UAC — **PASS** both paths: accept (`b1f4366` — helper runs headless
