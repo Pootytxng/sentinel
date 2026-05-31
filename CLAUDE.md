@@ -90,7 +90,10 @@ score, no mutation. 8 unit tests. (Centralized `APPLIABLE_REC_IDS` into history.
 
 **Read-only upward-feature track (F2–F5) COMPLETE.** **Next:** F1 Gaming Mode is the only remaining
 planned feature and stays gated (session-scoped MUTATION → its own apply/rollback + crash-safe-restore
-QA). Otherwise: packaging/signing + legal finalization (separate gates).
+QA). **Design done (planning only, no code): `docs/GAMING_MODE_PLAN.md`** — v1 = power-plan-switch-only
+(reuses the `070c3c9` exact-stored-plan restore + Trust Ledger "restore from local state alone" +
+FPS-helper heartbeat lifecycle as the crash-safe template); session file + startup recovery prompt;
+consent-gated; 7-state machine; its own QA gate. Otherwise: packaging/signing + legal finalization (separate gates).
 
 Recent commits (newest first):
 - `(F4)` feat(priorities): Priority Ranking surface (read-only/advisory)
