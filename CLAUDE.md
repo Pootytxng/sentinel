@@ -60,13 +60,22 @@ Fully **AMD**: **Radeon RX 9070 XT (RDNA4)** GPU, Ryzen X3D-class CPU, 16 logica
 2026-05-30** so the `runas` elevation path can be tested. `uac_disabled()` now returns false →
 the real `runas` branch is live (not the direct-spawn fallback). To revert: set `EnableLUA=0` + reboot.
 
-## CURRENT STATE — Release-gate QA (as of 2026-05-31, last commit `8dda3de`)
+## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
 
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
-`cargo test` **44/44**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
+`cargo test` **49/49**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
 (`origin/main` in sync).
 
+**F2 Per-game Readiness — SHIPPED** (read-only, no gate, per `docs/PRODUCT_DIRECTION.md`):
+new `readiness.rs` module + `get_game_readiness` command + "Readiness" tab. Pure
+`evaluate_readiness` (8 checks: monitor refresh, install drive, GPU driver age, VRR-advisory,
+HDR-advisory, power profile, FPS-monitoring readiness, applied-changes) composes existing
+detection only — mutates nothing. 5 unit tests. Next read-only upward features per the plan:
+F3 session summary → F5 export → F4 priority ranking; F1 Gaming Mode (mutating) stays behind
+the QA blocker.
+
 Recent commits (newest first):
+- `(F2)` feat(readiness): per-game Game Readiness surface (read-only/advisory)
 - `8dda3de` fix(monitoring): report UAC-cancelled FPS elevation as "declined" (not "stopped")
 - `4a94d75` docs: add CLAUDE.md (this file) — portable in-repo failsafe
 - `b1f4366` fix(monitoring): launch elevated FPS helper hidden (`.show(false)`/SW_HIDE) under UAC

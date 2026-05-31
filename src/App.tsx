@@ -157,7 +157,7 @@ const fmtDriver = (g: GpuInfo) => {
 // and History only appear when they have content.
 const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type RecCategory = (typeof REC_CATEGORIES)[number];
-type Tab = "Overview" | RecCategory | "Startup" | "Monitoring" | "Diagnostics" | "History";
+type Tab = "Overview" | "Readiness" | RecCategory | "Startup" | "Monitoring" | "Diagnostics" | "History";
 
 type CpuSensorSnapshot = {
   usage_overall_pct: number;
@@ -211,6 +211,74 @@ type DiagnosticSection = {
   entries: DiagnosticEntry[];
 };
 
+// Game Readiness (F2): a read-only advisory surface. Mirrors the Rust
+// GameReadiness shape from readiness.rs (status strings are kebab-case).
+type ReadinessStatus = "ready" | "attention" | "unknown";
+
+type ReadinessCheck = {
+  id: string;
+  label: string;
+  status: ReadinessStatus;
+  detail: string;
+  value: string | null;
+};
+
+type GameReadiness = {
+  checks: ReadinessCheck[];
+  ready_count: number;
+  attention_count: number;
+  unknown_count: number;
+  advisory: string;
+};
+
+function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
+  if (!readiness) {
+    return (
+      <section className="tab-pane">
+        <p className="muted">Run a scan to see game readiness.</p>
+      </section>
+    );
+  }
+  const statusLabel: Record<ReadinessStatus, string> = {
+    ready: "Ready",
+    attention: "Attention",
+    unknown: "Unknown",
+  };
+  return (
+    <section className="tab-pane readiness-pane">
+      <div className="readiness-head">
+        <h2>Game Readiness</h2>
+        <div className="readiness-summary">
+          <span className="readiness-pill readiness-ready">
+            {readiness.ready_count} Ready
+          </span>
+          <span className="readiness-pill readiness-attention">
+            {readiness.attention_count} Attention
+          </span>
+          <span className="readiness-pill readiness-unknown">
+            {readiness.unknown_count} Unknown
+          </span>
+        </div>
+      </div>
+      <p className="readiness-advisory">{readiness.advisory}</p>
+      <ul className="readiness-list">
+        {readiness.checks.map((c) => (
+          <li key={c.id} className={`readiness-row readiness-row-${c.status}`}>
+            <div className="readiness-row-head">
+              <span className={`readiness-badge readiness-${c.status}`}>
+                {statusLabel[c.status]}
+              </span>
+              <span className="readiness-label">{c.label}</span>
+              {c.value && <span className="readiness-value">{c.value}</span>}
+            </div>
+            <p className="readiness-detail">{c.detail}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
@@ -222,6 +290,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
+  const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -230,7 +299,7 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const [info, recommendations, history, startupEntries, diagSections, source] =
+      const [info, recommendations, history, startupEntries, diagSections, source, gameReadiness] =
         await Promise.all([
           invoke<HardwareInfo>("get_hardware_info"),
           invoke<Recommendation[]>("get_recommendations"),
@@ -238,6 +307,7 @@ function App() {
           invoke<StartupEntry[]>("get_startup_entries"),
           invoke<DiagnosticSection[]>("get_diagnostics"),
           invoke<string>("get_rules_source"),
+          invoke<GameReadiness>("get_game_readiness"),
         ]);
       setHw(info);
       setRecs(recommendations);
@@ -245,6 +315,7 @@ function App() {
       setStartup(startupEntries);
       setDiagnostics(diagSections);
       setRulesSource(source);
+      setReadiness(gameReadiness);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -353,6 +424,7 @@ function App() {
   // Build the ordered list of tabs that have content
   const visibleTabs: Tab[] = useMemo(() => {
     const list: Tab[] = ["Overview"];
+    if (readiness) list.push("Readiness");
     REC_CATEGORIES.forEach((c) => {
       if ((recCountByCategory[c] ?? 0) > 0) list.push(c);
     });
@@ -368,7 +440,7 @@ function App() {
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length]);
+  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length, readiness]);
 
   // If the currently active tab disappears (e.g. user rolled back the last
   // applied change while History was open), fall back to Overview.
@@ -382,6 +454,7 @@ function App() {
     if (tab === "Overview") return null;
     if (tab === "Diagnostics") return null;
     if (tab === "Monitoring") return null;
+    if (tab === "Readiness") return readiness?.attention_count ?? null;
     if (tab === "Startup") return startup.length;
     if (tab === "History") return changes.length;
     return recCountByCategory[tab] ?? 0;
@@ -449,6 +522,8 @@ function App() {
           </nav>
 
           {activeTab === "Overview" && <OverviewTab hw={hw} />}
+
+          {activeTab === "Readiness" && <ReadinessTab readiness={readiness} />}
 
           {REC_CATEGORIES.includes(activeTab as RecCategory) && (
             <CategoryTab

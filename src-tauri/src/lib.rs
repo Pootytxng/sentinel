@@ -7,6 +7,7 @@ mod fps;
 mod hardware;
 mod history;
 mod monitoring;
+mod readiness;
 mod recommendations;
 mod remote_rules;
 use actions::*;
@@ -14,6 +15,7 @@ use diagnostics::*;
 use hardware::*;
 use history::*;
 use monitoring::*;
+use readiness::*;
 use recommendations::*;
 
 /// Entry point for the elevated FPS-capture helper process
@@ -278,6 +280,7 @@ pub fn run() {
             get_startup_entries,
             set_startup_entry_enabled,
             get_rules_source,
+            get_game_readiness,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -223,6 +223,33 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     load_history().into_iter().map(into_view).collect()
 }
 
+/// Read-only roll-up of the Trust Ledger for surfaces that need counts rather
+/// than the full view (e.g. Game Readiness). `active` = applied AND still active;
+/// `externally_reverted` = applied but the live system no longer matches (changed
+/// outside Sentinel). Computed from local history alone, like everything else here.
+#[derive(serde::Serialize, Clone, Debug, Default)]
+pub(crate) struct AppliedChangesSummary {
+    pub(crate) total: usize,
+    pub(crate) active: usize,
+    pub(crate) rolled_back: usize,
+    pub(crate) externally_reverted: usize,
+}
+
+pub(crate) fn applied_changes_summary() -> AppliedChangesSummary {
+    let mut s = AppliedChangesSummary::default();
+    for c in load_history() {
+        s.total += 1;
+        if c.status == "rolled_back" {
+            s.rolled_back += 1;
+        } else if check_change_active(&c) {
+            s.active += 1;
+        } else {
+            s.externally_reverted += 1;
+        }
+    }
+    s
+}
+
 // ─── Trust Ledger tests ──────────────────────────────────────────────────
 //
 // History-owned behavior: the recomputed ledger view and the on-disk round
