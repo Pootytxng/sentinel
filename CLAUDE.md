@@ -63,8 +63,8 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 ## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
 
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
-`cargo test` **55/55**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
-(`origin/main` in sync).
+`cargo test` **60/60**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
+(`origin/main` in sync). Manual-mutation QA blocker **LIFTED** (see below).
 
 **F2 Per-game Readiness — SHIPPED** (read-only): `readiness.rs` + `get_game_readiness` + a
 "Readiness" tab; pure `evaluate_readiness`, 8 advisory checks, 5 unit tests, mutates nothing.
@@ -76,12 +76,19 @@ summary (avg FPS/frametime, 1%-low ESTIMATE, peak GPU temp/usage, peak RAM, acti
 count) and persists it on stop — only if a game actually presented. "Sessions" tab; 6 unit tests.
 Mutates nothing.
 
-**Next per owner directive:** RETURN to the manual-mutation QA blocker (real apply/rollback
-verification, `docs/RELEASE_QA.md`) before F5 export / F4 priority ranking. F1 Gaming Mode
-(mutating) stays behind the QA blocker.
+**F5 Export Snapshot — SHIPPED** (read-only): `export.rs` (pure `build_markdown_report` from each
+source's serialized JSON → decoupled + graceful-on-missing; `export_report` writes Markdown + JSON
+to `%APPDATA%\Sentinel\exports\`; `open_export_folder`) and an "Export report" header button +
+preview modal. Composes hardware / recs / Trust Ledger / readiness / sessions + privacy note;
+sessions labeled live-estimate. 5 unit tests. Mutates nothing.
+
+**Next per owner directive:** **F4 Priority Ranking** (read-only/advisory — "what matters most for
+this rig"). F1 Gaming Mode (session-scoped mutation) stays behind its own apply/rollback QA.
 
 Recent commits (newest first):
-- `(F3)` feat(sessions): per-session summary surface (read-only/advisory)
+- `(F5)` feat(export): local Export Snapshot report (read-only)
+- `33413a2` feat(sessions): per-session summary surface (read-only/advisory)
+- `ac9d505` feat(readiness): per-game Game Readiness surface (read-only/advisory)
 - `ac9d505` feat(readiness): per-game Game Readiness surface (read-only/advisory)
 - `8dda3de` fix(monitoring): report UAC-cancelled FPS elevation as "declined" (not "stopped")
 - `4a94d75` docs: add CLAUDE.md (this file) — portable in-repo failsafe

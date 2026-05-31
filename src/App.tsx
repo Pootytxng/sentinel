@@ -375,6 +375,42 @@ function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
   );
 }
 
+// Export Snapshot (F5): read-only local report. Mirrors the Rust ExportResult.
+type ExportResult = { path: string; json_path: string; markdown: string };
+
+function ReportModal({
+  report,
+  onClose,
+  onOpenFolder,
+}: {
+  report: ExportResult;
+  onClose: () => void;
+  onOpenFolder: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Report exported</h2>
+          <button className="btn btn-small" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <p className="muted modal-path">Saved to {report.path}</p>
+        <pre className="report-preview">{report.markdown}</pre>
+        <div className="modal-actions">
+          <button className="btn" onClick={onOpenFolder}>
+            Open folder
+          </button>
+          <button className="btn btn-small" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
@@ -388,9 +424,23 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [report, setReport] = useState<ExportResult | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
+
+  const onExport = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      setReport(await invoke<ExportResult>("export_report"));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -588,6 +638,15 @@ function App() {
       {showOnboarding && (
         <Onboarding onDone={() => setShowOnboarding(false)} />
       )}
+      {report && (
+        <ReportModal
+          report={report}
+          onClose={() => setReport(null)}
+          onOpenFolder={() => {
+            invoke("open_export_folder").catch((e) => setError(String(e)));
+          }}
+        />
+      )}
       <header className="header">
         <div>
           <h1>Sentinel</h1>
@@ -600,6 +659,9 @@ function App() {
           >
             {rulesSourceLabel}
           </span>
+          <button className="btn" onClick={onExport} disabled={exporting}>
+            {exporting ? "Exporting…" : "Export report"}
+          </button>
           <button className="btn" onClick={refresh} disabled={loading}>
             {loading ? "Scanning…" : "Refresh"}
           </button>

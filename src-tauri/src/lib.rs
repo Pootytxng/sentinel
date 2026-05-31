@@ -3,6 +3,7 @@ use std::process::Command;
 
 mod actions;
 mod diagnostics;
+mod export;
 mod fps;
 mod hardware;
 mod history;
@@ -13,6 +14,7 @@ mod remote_rules;
 mod sessions;
 use actions::*;
 use diagnostics::*;
+use export::*;
 use hardware::*;
 use history::*;
 use monitoring::*;
@@ -284,6 +286,8 @@ pub fn run() {
             get_rules_source,
             get_game_readiness,
             get_session_summaries,
+            export_report,
+            open_export_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
