@@ -157,7 +157,7 @@ const fmtDriver = (g: GpuInfo) => {
 // and History only appear when they have content.
 const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type RecCategory = (typeof REC_CATEGORIES)[number];
-type Tab = "Overview" | "Readiness" | RecCategory | "Startup" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
+type Tab = "Overview" | "Readiness" | "Priorities" | RecCategory | "Startup" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
 
 type CpuSensorSnapshot = {
   usage_overall_pct: number;
@@ -411,6 +411,80 @@ function ReportModal({
   );
 }
 
+// Priority Ranking (F4): read-only/advisory. Mirrors the Rust Priorities shape.
+type PriorityStatus = "ready" | "attention" | "unknown";
+type Confidence = "high" | "medium" | "low";
+type PriorityItem = {
+  id: string;
+  title: string;
+  reason: string;
+  linked: string | null;
+  confidence: Confidence;
+  status: PriorityStatus;
+};
+type Priorities = {
+  limiters: PriorityItem[];
+  already_fine: PriorityItem[];
+  not_worth_touching: PriorityItem[];
+  session_hint: string | null;
+};
+
+function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
+  if (!priorities) {
+    return (
+      <section className="tab-pane">
+        <p className="muted">Run a scan to see priorities.</p>
+      </section>
+    );
+  }
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const row = (i: PriorityItem) => (
+    <li key={i.id} className={`readiness-row readiness-row-${i.status}`}>
+      <div className="readiness-row-head">
+        <span className={`readiness-badge readiness-${i.status}`}>{cap(i.status)}</span>
+        <span className="readiness-label">{i.title}</span>
+        <span className="priority-confidence">{cap(i.confidence)} confidence</span>
+      </div>
+      <p className="readiness-detail">{i.reason}</p>
+    </li>
+  );
+  return (
+    <section className="tab-pane">
+      <div className="readiness-head">
+        <h2>Priorities — what matters most</h2>
+      </div>
+      <p className="readiness-advisory">
+        Advisory, ranked by transparent rules — not a score. Based on your hardware,
+        readiness, recommendations, and most recent session.
+      </p>
+      {priorities.session_hint && (
+        <p className="priority-session-hint">{priorities.session_hint}</p>
+      )}
+
+      <h3 className="priorities-group">Your biggest likely limiters</h3>
+      {priorities.limiters.length === 0 ? (
+        <p className="muted">Nothing major flagged — nice.</p>
+      ) : (
+        <ul className="readiness-list">{priorities.limiters.map(row)}</ul>
+      )}
+
+      <h3 className="priorities-group">Already fine</h3>
+      {priorities.already_fine.length === 0 ? (
+        <p className="muted">—</p>
+      ) : (
+        <ul className="readiness-list">{priorities.already_fine.map(row)}</ul>
+      )}
+
+      <h3 className="priorities-group">Not worth touching</h3>
+      {priorities.not_worth_touching.length === 0 ? (
+        <p className="muted">—</p>
+      ) : (
+        <ul className="readiness-list">{priorities.not_worth_touching.map(row)}</ul>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
@@ -425,6 +499,7 @@ function App() {
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [report, setReport] = useState<ExportResult | null>(null);
+  const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
@@ -455,6 +530,7 @@ function App() {
         source,
         gameReadiness,
         sessionList,
+        prioritiesData,
       ] = await Promise.all([
         invoke<HardwareInfo>("get_hardware_info"),
         invoke<Recommendation[]>("get_recommendations"),
@@ -464,6 +540,7 @@ function App() {
         invoke<string>("get_rules_source"),
         invoke<GameReadiness>("get_game_readiness"),
         invoke<SessionSummary[]>("get_session_summaries"),
+        invoke<Priorities>("get_priorities"),
       ]);
       setHw(info);
       setRecs(recommendations);
@@ -473,6 +550,7 @@ function App() {
       setRulesSource(source);
       setReadiness(gameReadiness);
       setSessions(sessionList);
+      setPriorities(prioritiesData);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -582,6 +660,7 @@ function App() {
   const visibleTabs: Tab[] = useMemo(() => {
     const list: Tab[] = ["Overview"];
     if (readiness) list.push("Readiness");
+    if (priorities) list.push("Priorities");
     REC_CATEGORIES.forEach((c) => {
       if ((recCountByCategory[c] ?? 0) > 0) list.push(c);
     });
@@ -598,7 +677,7 @@ function App() {
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length]);
+  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities]);
 
   // If the currently active tab disappears (e.g. user rolled back the last
   // applied change while History was open), fall back to Overview.
@@ -613,6 +692,7 @@ function App() {
     if (tab === "Diagnostics") return null;
     if (tab === "Monitoring") return null;
     if (tab === "Readiness") return readiness?.attention_count ?? null;
+    if (tab === "Priorities") return priorities ? priorities.limiters.length : null;
     if (tab === "Sessions") return sessions.length;
     if (tab === "Startup") return startup.length;
     if (tab === "History") return changes.length;
@@ -695,6 +775,8 @@ function App() {
           {activeTab === "Overview" && <OverviewTab hw={hw} />}
 
           {activeTab === "Readiness" && <ReadinessTab readiness={readiness} />}
+
+          {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
 
           {REC_CATEGORIES.includes(activeTab as RecCategory) && (
             <CategoryTab

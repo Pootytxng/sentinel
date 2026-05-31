@@ -8,6 +8,7 @@ mod fps;
 mod hardware;
 mod history;
 mod monitoring;
+mod priorities;
 mod readiness;
 mod recommendations;
 mod remote_rules;
@@ -18,6 +19,7 @@ use export::*;
 use hardware::*;
 use history::*;
 use monitoring::*;
+use priorities::*;
 use readiness::*;
 use recommendations::*;
 use sessions::*;
@@ -206,7 +208,7 @@ pub(crate) fn eee_disabled_on_any_eligible_adapter() -> bool {
 // to toggle — we'll add that when we re-use the UAC elevation pattern.
 
 #[derive(Serialize, Clone)]
-struct StartupEntry {
+pub(crate) struct StartupEntry {
     name: String,
     command: String,
     enabled: bool,
@@ -214,6 +216,12 @@ struct StartupEntry {
 
 #[tauri::command]
 fn get_startup_entries() -> Vec<StartupEntry> {
+    startup_entries()
+}
+
+// Plain helper (no #[tauri::command]) so other modules (priorities) can read
+// startup entries without referencing the command fn.
+pub(crate) fn startup_entries() -> Vec<StartupEntry> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let Ok(run_key) = hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run") else {
         return Vec::new();
@@ -288,6 +296,7 @@ pub fn run() {
             get_session_summaries,
             export_report,
             open_export_folder,
+            get_priorities,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

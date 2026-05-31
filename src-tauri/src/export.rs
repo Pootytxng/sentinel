@@ -14,28 +14,8 @@ use std::fmt::Write as _;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+use crate::history::APPLIABLE_REC_IDS;
 use crate::sentinel_data_dir;
-
-/// Mirrors `apply_recommendation`'s dispatch (history.rs) and the frontend's
-/// APPLIABLE_REC_IDS — recs not in this set are advisory (no one-click apply).
-const APPLIABLE_REC_IDS: &[&str] = &[
-    "game-mode",
-    "visual-effects",
-    "sysmain-disable",
-    "nvidia-telemetry",
-    "power-ultimate",
-    "nagle-disable",
-    "hags-enable",
-    "mouse-accel-off",
-    "game-bar-disable",
-    "diagtrack-disable",
-    "windows-search-disable",
-    "fast-startup-off",
-    "reserved-storage-off",
-    "usb-selective-suspend-off",
-    "pcie-aspm-off",
-    "eee-disable",
-];
 
 #[derive(Serialize)]
 pub(crate) struct ExportResult {

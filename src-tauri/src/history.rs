@@ -28,6 +28,29 @@ use crate::{
 // writes of history.json.
 static HISTORY_LOCK: Mutex<()> = Mutex::new(());
 
+/// The rec_ids `apply_recommendation` can one-click apply (anything else is
+/// advisory-only). Single backend source of truth — `export` and `priorities`
+/// reuse it. MUST stay in sync with the dispatch match in `apply_recommendation`
+/// below (and the frontend's APPLIABLE_REC_IDS).
+pub(crate) const APPLIABLE_REC_IDS: &[&str] = &[
+    "game-mode",
+    "visual-effects",
+    "sysmain-disable",
+    "nvidia-telemetry",
+    "power-ultimate",
+    "nagle-disable",
+    "hags-enable",
+    "mouse-accel-off",
+    "game-bar-disable",
+    "diagtrack-disable",
+    "windows-search-disable",
+    "fast-startup-off",
+    "reserved-storage-off",
+    "usb-selective-suspend-off",
+    "pcie-aspm-off",
+    "eee-disable",
+];
+
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct AppliedChange {
     pub(crate) id: String,
