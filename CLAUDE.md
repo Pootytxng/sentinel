@@ -126,7 +126,10 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
 *cancel*-message UX check; (2) external-revert "no longer active" UI observation.
 
 ### 🚧 Remaining release gates (NOT mutation-QA — these still gate beta/public release)
-- **Packaging/signing:** no code-signing config, `csp: null`; identity metadata done.
+- **Packaging/signing:** plan + config audit in `docs/PACKAGING_SIGNING_PLAN.md`. Identity/icons/
+  capabilities/updater-off all verified good. Open: code-signing route (recommend Azure Trusted
+  Signing for public; none for private beta = SmartScreen warning), tighten `csp: null` (needs a
+  build+test cycle — candidate CSP in the plan), then build a private-beta MSI/NSIS + run §6/§7 QA.
 - **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction
   TBD before public distribution.
 - **Remote fetch:** stays disabled (`docs/REMOTE_FETCH_ARMING_PLAN.md`); not a beta gate.
