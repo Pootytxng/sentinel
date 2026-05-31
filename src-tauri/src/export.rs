@@ -139,11 +139,9 @@ pub(crate) fn build_markdown_report(
         _ => "—".into(),
     };
     let _ = writeln!(o, "- **RAM:** {ram}");
-    let disks = obj_arr(hardware, "physical_disks");
-    if disks.is_empty() {
-        let _ = writeln!(o, "- **Storage:** —");
-    } else {
-        for d in disks {
+    let phys = obj_arr(hardware, "physical_disks");
+    if !phys.is_empty() {
+        for d in phys {
             let size = vu64(d, "size_bytes").map(gib).unwrap_or_else(|| "—".into());
             let _ = writeln!(
                 o,
@@ -152,6 +150,23 @@ pub(crate) fn build_markdown_report(
                 vstr(d, "media_type"),
                 vstr(d, "bus_type"),
             );
+        }
+    } else {
+        // Fallback: MSFT_PhysicalDisk returned nothing — report logical volumes so
+        // we don't show "—" when drives clearly exist (drive type unavailable here).
+        let logical = obj_arr(hardware, "disks");
+        if logical.is_empty() {
+            let _ = writeln!(o, "- **Storage:** —");
+        } else {
+            for d in logical {
+                let total = vu64(d, "total_bytes").map(gib).unwrap_or_else(|| "—".into());
+                let _ = writeln!(
+                    o,
+                    "- **Storage:** {} — {} ({total} total, drive type unavailable)",
+                    vstr(d, "mount_point"),
+                    vstr(d, "file_system"),
+                );
+            }
         }
     }
     if let Some(disp) = hardware.get("display").filter(|d| !d.is_null()) {
@@ -388,6 +403,21 @@ mod export_tests {
         assert!(s.starts_with('\u{FEFF}'));
         assert_eq!(&s.as_bytes()[0..3], &[0xEF, 0xBB, 0xBF]); // UTF-8 BOM bytes
         assert!(s.trim_start_matches('\u{FEFF}').starts_with("# Sentinel Report"));
+    }
+
+    #[test]
+    fn storage_falls_back_to_logical_disks_when_physical_empty() {
+        // physical_disks empty but a logical C: volume present → report it, not "—".
+        let hw = json!({
+            "physical_disks": [],
+            "disks": [{ "mount_point": "C:\\", "total_bytes": 999000000000u64,
+                        "available_bytes": 200000000000u64, "file_system": "NTFS" }]
+        });
+        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), "embedded", "t");
+        assert!(md.contains("C:\\"), "should list the logical volume");
+        assert!(md.contains("NTFS"));
+        assert!(md.contains("drive type unavailable"));
+        assert!(!md.contains("- **Storage:** —"), "must not show the dash when a drive exists");
     }
 
     #[test]

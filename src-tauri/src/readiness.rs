@@ -123,13 +123,27 @@ pub(crate) fn evaluate_readiness(
             b.contains("NVME") || m.contains("SSD") || m == "SCM"
         });
         let c = if hw.physical_disks.is_empty() {
-            check(
-                "install-drive",
-                "Game install drive",
-                ReadinessStatus::Unknown,
-                "No physical disks were detected, so drive speed can't be assessed.",
-                None,
-            )
+            // Fallback: MSFT_PhysicalDisk returned nothing. If Windows still reports
+            // logical volumes, acknowledge them (drive type unavailable) rather than
+            // claiming no storage exists; otherwise truly unknown.
+            if hw.disks.is_empty() {
+                check(
+                    "install-drive",
+                    "Game install drive",
+                    ReadinessStatus::Unknown,
+                    "No drives were detected, so drive speed can't be assessed.",
+                    None,
+                )
+            } else {
+                check(
+                    "install-drive",
+                    "Game install drive",
+                    ReadinessStatus::Unknown,
+                    "Drive type couldn't be read (physical-disk info unavailable), but Windows \
+                     reports drives present. Keep games on your fastest drive.",
+                    Some(format!("{} volume(s) detected", hw.disks.len())),
+                )
+            }
         } else if has_fast {
             check(
                 "install-drive",
@@ -384,6 +398,28 @@ mod readiness_tests {
             physical_disks: disks,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn install_drive_falls_back_to_logical_disks_when_physical_empty() {
+        use crate::hardware::DiskInfo;
+        let hw = HardwareInfo {
+            physical_disks: vec![],
+            disks: vec![DiskInfo {
+                mount_point: "C:\\".into(),
+                total_bytes: 999_000_000_000,
+                available_bytes: 200_000_000_000,
+                file_system: "NTFS".into(),
+            }],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let c = find(&r, "install-drive");
+        // No physical-disk info, but logical volumes exist → still Unknown (can't
+        // assess SSD-vs-HDD) yet acknowledges the drives rather than "no drives".
+        assert_eq!(c.status, ReadinessStatus::Unknown);
+        assert!(c.detail.to_lowercase().contains("drives present"));
+        assert!(c.value.as_deref().unwrap_or("").contains("volume"));
     }
 
     #[test]
