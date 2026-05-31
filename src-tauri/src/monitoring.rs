@@ -691,3 +691,28 @@ pub(crate) fn overlay_visible(app: tauri::AppHandle) -> bool {
         .and_then(|w| w.is_visible().ok())
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod runtime_dir_tests {
+    use super::*;
+
+    #[test]
+    fn fps_runtime_dir_is_separate_from_install_dir() {
+        let d = fps_dir();
+        // Dedicated runtime/ subdir, under the app data root (same root as the
+        // Trust Ledger) but distinct from the bare data dir — so it is never the
+        // install dir (%LOCALAPPDATA%\Sentinel) nor beside the installed binaries.
+        assert!(d.ends_with("runtime"), "fps_dir should be a dedicated runtime dir: {d:?}");
+        assert!(
+            d.starts_with(crate::sentinel_data_dir()),
+            "fps_dir should be under the data root"
+        );
+        assert_ne!(
+            d,
+            crate::sentinel_data_dir(),
+            "runtime dir must be distinct from the ledger dir"
+        );
+        assert!(fps_out_path().starts_with(&d));
+        assert!(fps_alive_path().starts_with(&d));
+    }
+}
