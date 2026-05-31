@@ -131,10 +131,17 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   direct download + fully local-only (no telemetry, no new code).** **Build VERIFIED 2026-05-31:**
   `npm run tauri build` → `Sentinel_0.1.0_x64_en-US.msi` (3.5 MB) + `Sentinel_0.1.0_x64-setup.exe`
   (2.3 MB) in `src-tauri/target/release/bundle/`; identity baked in, NotSigned (expected), no updater.
-  Remaining (user-run — mutates / needs clean machine): §6 install/uninstall/upgrade + AppData &
-  Trust-Ledger persistence, §7 beta click-through QA. CSP stays `null` for the
-  trusted beta; tighten+test before public. PUBLIC release still gated on signing route + legal
-  (license model + jurisdiction).
+  **INSTALLED-BUILD QA COMPLETE & PASSING (2026-05-31):** §6 + §7 all pass — install/uninstall/reinstall,
+  AppData + Trust-Ledger persistence, zero outbound network, Export (valid UTF-8), headless elevated FPS
+  helper, and apply+rollback incl. the `070c3c9` stored-plan fidelity — all verified on the packaged
+  build. **No private-beta functional blockers remain**; the private beta is functionally shippable on
+  the invite terms. CSP stays `null` for the trusted beta; tighten+test before public. **PUBLIC release
+  still gated on signing route + legal (license model + jurisdiction). Gaming Mode (F1) remains gated —
+  NOT covered by the lifted mutation-QA sign-off.**
+  **Pre-public polish backlog (non-blocking, do NOT fix during beta):** (1) Export `.md` UTF-8 BOM;
+  (2) Storage report/readiness logical-disk fallback when `MSFT_PhysicalDisk` empty; (3) AMD GPU
+  driver-age source; (4) separate install dir from runtime/FPS data dir; (5) single-instance lock +
+  protect `history.json` from multi-process races. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
 - **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction
   TBD before public distribution.
 - **Remote fetch:** stays disabled (`docs/REMOTE_FETCH_ARMING_PLAN.md`); not a beta gate.

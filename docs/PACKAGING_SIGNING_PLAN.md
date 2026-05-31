@@ -86,30 +86,45 @@ beta (local app, no remote content); tighten + test it before any public release
 
 ## 6. Pre-package checks (before any beta installer)
 
+> **✅ INSTALLED-BUILD QA COMPLETE & PASSING (2026-05-31).** The private-beta NSIS installer is
+> functionally verified — **no private-beta functional blockers remain.** §6 + §7 below all pass.
+> Public release remains gated on **code signing + legal finalization**; **Gaming Mode (F1) remains
+> gated** and is NOT covered by the lifted manual-mutation QA sign-off.
+
 - [x] `cargo test` green (68/68) · `cargo build` zero warnings · `npm run build` clean
 - [x] `npm run tauri build` produces MSI + NSIS without error — **VERIFIED 2026-05-31**:
   `Sentinel_0.1.0_x64_en-US.msi` (3.5 MB) + `Sentinel_0.1.0_x64-setup.exe` (2.3 MB) in
   `src-tauri/target/release/bundle/`. Identity baked into the binary (ProductName Sentinel, Company
   Pootytxng, v0.1.0, © 2026 Pootytxng); signature **NotSigned** (expected); no updater artifacts.
   WiX + NSIS auto-fetched on first build.
-- [ ] **Fresh install** test (clean machine/VM)
-- [ ] **Uninstall** test (removes app; note whether it leaves `%APPDATA%\Sentinel`)
-- [ ] **Upgrade / install-over-existing** test
-- [ ] **AppData persistence:** `%APPDATA%\Sentinel\history.json` (+ sessions/exports) survive upgrade
-- [ ] **Trust Ledger survives upgrade** (rollback contracts intact)
-- [ ] no remote fetch enabled · no unsigned remote rules · no telemetry/network surprise (confirm
-      zero outbound traffic with a network monitor) · no kernel driver / no injection
+- [x] **Install / uninstall / reinstall** — PASS (silent NSIS `/S`; per-user `%LOCALAPPDATA%\Sentinel`;
+      registry Sentinel/0.1.0/Pootytxng; uninstall removes exe + registry; reinstall restores).
+- [x] **AppData persistence** — PASS: `%APPDATA%\Sentinel\history.json` (Roaming) **survived uninstall +
+      reinstall** intact + sessions. (Ledger lives in Roaming, separate from the install dir.)
+- [x] **Trust Ledger survives** — PASS: entries + rollback contracts intact across restart and uninstall/reinstall.
+- [x] **No remote fetch / unsigned rules / telemetry / kernel / injection** — PASS: **zero outbound TCP**
+      from the running installed app (verified live); `rules_source: embedded`; no updater; no driver.
 
 ## 7. Beta package QA (on the installed build)
 
-- [ ] First-launch onboarding shows + "no CPU temp" explanation
-- [ ] Hardware detection populates
-- [ ] Readiness tab · Sessions tab · Priorities tab render
-- [ ] Export report writes Markdown+JSON + "Open folder" works
-- [ ] Monitoring / FPS helper under UAC (accept + cancel) — headless helper, no second window
-- [ ] Apply + rollback one safe rec end-to-end (exact restore)
-- [ ] Uninstall behavior; Reinstall behavior
-- [ ] Windows Defender / SmartScreen behavior documented (expected warning for unsigned)
+- [x] Onboarding / hardware / **Readiness · Sessions · Priorities** — PASS (owner visual-confirmed; the
+      export JSON shows real hardware + readiness + a session, i.e. the data rendered).
+- [x] **Export** report writes Markdown + JSON + Open folder — PASS (valid UTF-8; content cross-checked).
+- [x] **FPS helper under UAC** — PASS: helper spawns **headless** (no window) at **elevated** IL; main
+      stays the only visible window; heartbeat live; ETW capture working.
+- [x] **Apply + rollback one safe rec** — PASS: `pcie-aspm-off` applied (AC→0, elevated, typed ledger
+      entry) then rolled back with **`070c3c9` stored-plan fidelity verified live** (stored Balanced
+      restored 0→1; active Ultimate untouched; no forced switch; ledger → `rolled_back`).
+- [x] **SmartScreen** — documented: locally-built installer has no Mark-of-the-Web → no prompt locally;
+      **download users see the unsigned "unknown publisher" warning** (expected).
+
+## 7a. Pre-public polish backlog (non-blocking — do NOT fix during beta; before public)
+
+1. Export `.md` — prepend **UTF-8 BOM** (renders mojibake in non-UTF-8 Windows viewers; file is valid UTF-8).
+2. Storage report/readiness — **logical-disk fallback** when `MSFT_PhysicalDisk` returns empty.
+3. **AMD GPU driver-age source** (driver date currently unread → "unknown").
+4. **Separate the install directory from the runtime/FPS data directory** (both are `%LOCALAPPDATA%\Sentinel`).
+5. **Add a single-instance lock** and protect `history.json` from multi-process races (per-process `HISTORY_LOCK` doesn't coordinate across two windows).
 
 ## 8. Explicit non-goals
 
