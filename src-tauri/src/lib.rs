@@ -10,6 +10,7 @@ mod monitoring;
 mod readiness;
 mod recommendations;
 mod remote_rules;
+mod sessions;
 use actions::*;
 use diagnostics::*;
 use hardware::*;
@@ -17,6 +18,7 @@ use history::*;
 use monitoring::*;
 use readiness::*;
 use recommendations::*;
+use sessions::*;
 
 /// Entry point for the elevated FPS-capture helper process
 /// (`sentinel.exe --fps-capture`). See fps.rs for the full rationale.
@@ -281,6 +283,7 @@ pub fn run() {
             set_startup_entry_enabled,
             get_rules_source,
             get_game_readiness,
+            get_session_summaries,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -157,7 +157,7 @@ const fmtDriver = (g: GpuInfo) => {
 // and History only appear when they have content.
 const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type RecCategory = (typeof REC_CATEGORIES)[number];
-type Tab = "Overview" | "Readiness" | RecCategory | "Startup" | "Monitoring" | "Diagnostics" | "History";
+type Tab = "Overview" | "Readiness" | RecCategory | "Startup" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
 
 type CpuSensorSnapshot = {
   usage_overall_pct: number;
@@ -279,6 +279,102 @@ function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
   );
 }
 
+// Session summaries (F3): read-only post-session metrics. Mirrors the Rust
+// SessionSummary shape. Metrics are live estimates, not benchmark-grade proof.
+type SessionSummary = {
+  started_at: string;
+  duration_secs: number;
+  process_name: string;
+  samples: number;
+  avg_fps: number;
+  avg_frametime_ms: number;
+  low1_fps_est: number;
+  peak_gpu_temp_c: number | null;
+  peak_gpu_usage_pct: number | null;
+  peak_ram_used_bytes: number | null;
+  ram_total_bytes: number | null;
+  sentinel_changes_active: number;
+};
+
+function SessionMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="session-metric">
+      <span className="session-metric-label">{label}</span>
+      <span className="session-metric-value">{value}</span>
+    </div>
+  );
+}
+
+function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
+  if (sessions.length === 0) {
+    return (
+      <section className="tab-pane">
+        <p className="muted">
+          No game sessions recorded yet. Enable FPS monitoring while playing a
+          borderless/windowed game; when you stop, a summary appears here.
+        </p>
+      </section>
+    );
+  }
+  const fmtDuration = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  };
+  const fmtGiB = (b: number | null) =>
+    b == null ? "—" : `${(b / 1024 ** 3).toFixed(1)} GB`;
+  return (
+    <section className="tab-pane sessions-pane">
+      <div className="readiness-head">
+        <h2>Session Summaries</h2>
+      </div>
+      <p className="readiness-advisory">
+        Live estimates sampled about once per second while monitoring was active
+        — not benchmark-grade proof.
+      </p>
+      <ul className="sessions-list">
+        {sessions.map((s, i) => (
+          <li key={`${s.started_at}-${i}`} className="session-card">
+            <div className="session-card-head">
+              <span className="session-game">
+                {s.process_name || "Unknown game"}
+              </span>
+              <span className="session-meta">
+                {fmtDuration(s.duration_secs)} ·{" "}
+                {new Date(s.started_at).toLocaleString()}
+              </span>
+            </div>
+            <div className="session-metrics">
+              <SessionMetric label="Avg FPS" value={s.avg_fps.toFixed(1)} />
+              <SessionMetric
+                label="Avg frametime"
+                value={`${s.avg_frametime_ms.toFixed(1)} ms`}
+              />
+              <SessionMetric label="1% low (est)" value={s.low1_fps_est.toFixed(1)} />
+              <SessionMetric
+                label="Peak GPU temp"
+                value={s.peak_gpu_temp_c == null ? "—" : `${s.peak_gpu_temp_c}°C`}
+              />
+              <SessionMetric
+                label="Peak GPU usage"
+                value={
+                  s.peak_gpu_usage_pct == null ? "—" : `${s.peak_gpu_usage_pct}%`
+                }
+              />
+              <SessionMetric label="Peak RAM" value={fmtGiB(s.peak_ram_used_bytes)} />
+              <SessionMetric
+                label="Sentinel changes active"
+                value={String(s.sentinel_changes_active)}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
@@ -291,6 +387,7 @@ function App() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -299,16 +396,25 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const [info, recommendations, history, startupEntries, diagSections, source, gameReadiness] =
-        await Promise.all([
-          invoke<HardwareInfo>("get_hardware_info"),
-          invoke<Recommendation[]>("get_recommendations"),
-          invoke<AppliedChange[]>("get_applied_changes"),
-          invoke<StartupEntry[]>("get_startup_entries"),
-          invoke<DiagnosticSection[]>("get_diagnostics"),
-          invoke<string>("get_rules_source"),
-          invoke<GameReadiness>("get_game_readiness"),
-        ]);
+      const [
+        info,
+        recommendations,
+        history,
+        startupEntries,
+        diagSections,
+        source,
+        gameReadiness,
+        sessionList,
+      ] = await Promise.all([
+        invoke<HardwareInfo>("get_hardware_info"),
+        invoke<Recommendation[]>("get_recommendations"),
+        invoke<AppliedChange[]>("get_applied_changes"),
+        invoke<StartupEntry[]>("get_startup_entries"),
+        invoke<DiagnosticSection[]>("get_diagnostics"),
+        invoke<string>("get_rules_source"),
+        invoke<GameReadiness>("get_game_readiness"),
+        invoke<SessionSummary[]>("get_session_summaries"),
+      ]);
       setHw(info);
       setRecs(recommendations);
       setChanges(history);
@@ -316,6 +422,7 @@ function App() {
       setDiagnostics(diagSections);
       setRulesSource(source);
       setReadiness(gameReadiness);
+      setSessions(sessionList);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -433,6 +540,7 @@ function App() {
     // without an NVIDIA GPU (no NVML), the tab itself surfaces the
     // "sensors unavailable" state rather than hiding the feature entirely.
     if (hw) list.push("Monitoring");
+    if (sessions.length > 0) list.push("Sessions");
     // Diagnostics is always visible once we have a hardware scan — it's
     // "Sentinel's raw view of your PC" and the user should be able to reach
     // it to spot-check Sentinel's observations even when nothing else
@@ -440,7 +548,7 @@ function App() {
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length, readiness]);
+  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length]);
 
   // If the currently active tab disappears (e.g. user rolled back the last
   // applied change while History was open), fall back to Overview.
@@ -455,6 +563,7 @@ function App() {
     if (tab === "Diagnostics") return null;
     if (tab === "Monitoring") return null;
     if (tab === "Readiness") return readiness?.attention_count ?? null;
+    if (tab === "Sessions") return sessions.length;
     if (tab === "Startup") return startup.length;
     if (tab === "History") return changes.length;
     return recCountByCategory[tab] ?? 0;
@@ -546,6 +655,8 @@ function App() {
           {activeTab === "Monitoring" && (
             <MonitoringTab active={activeTab === "Monitoring"} />
           )}
+
+          {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
 
           {activeTab === "Diagnostics" && (
             <DiagnosticsTab sections={diagnostics} />

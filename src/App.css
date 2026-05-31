@@ -1322,3 +1322,56 @@ html, body, #root {
   line-height: 1.5;
   color: var(--muted);
 }
+
+/* ─── Session summaries (F3): read-only post-session metric cards ─────────── */
+.sessions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.session-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.session-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.session-game {
+  font-weight: 600;
+  font-size: 14px;
+}
+.session-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.session-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+.session-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.session-metric-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.session-metric-value {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

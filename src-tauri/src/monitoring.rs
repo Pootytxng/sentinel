@@ -546,6 +546,47 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
         });
     }
 
+    // Session summary aggregator (F3, READ-ONLY): while monitoring is active,
+    // fold the FPS helper's per-second output + existing GPU/CPU/RAM sensors
+    // into a per-session record, then persist a summary on stop. Samples nothing
+    // new and mutates nothing. A session is only saved if a game actually
+    // presented frames (so cancelled/idle starts leave no empty record).
+    {
+        let started_at = chrono::Utc::now().to_rfc3339();
+        let active_changes = crate::history::applied_changes_summary().active;
+        std::thread::spawn(move || {
+            use std::sync::atomic::Ordering;
+            let mut acc = crate::sessions::SessionAccumulator::new(started_at, active_changes);
+            let start = std::time::Instant::now();
+            while fps_active().load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                if !fps_active().load(Ordering::Acquire) {
+                    break;
+                }
+                if let Ok(txt) = std::fs::read_to_string(fps_out_path()) {
+                    if let Ok(s) = serde_json::from_str::<FpsSample>(&txt) {
+                        if s.fps > 0.0 {
+                            acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps);
+                        }
+                    }
+                }
+                let gpus = get_gpu_sensors();
+                let gpu_temp = gpus.iter().filter_map(|g| g.temperature_c).max();
+                let gpu_usage = gpus.iter().filter_map(|g| g.utilization_gpu_pct).max();
+                let cpu = get_cpu_sensors();
+                acc.record_sensors(
+                    gpu_temp,
+                    gpu_usage,
+                    Some(cpu.ram_used_bytes),
+                    Some(cpu.ram_total_bytes),
+                );
+            }
+            if acc.has_data() {
+                let _ = crate::sessions::save_session(acc.finalize(start.elapsed().as_secs()));
+            }
+        });
+    }
+
     Ok(())
 }
 

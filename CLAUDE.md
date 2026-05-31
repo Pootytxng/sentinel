@@ -63,19 +63,26 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 ## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
 
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
-`cargo test` **49/49**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
+`cargo test` **55/55**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
 (`origin/main` in sync).
 
-**F2 Per-game Readiness — SHIPPED** (read-only, no gate, per `docs/PRODUCT_DIRECTION.md`):
-new `readiness.rs` module + `get_game_readiness` command + "Readiness" tab. Pure
-`evaluate_readiness` (8 checks: monitor refresh, install drive, GPU driver age, VRR-advisory,
-HDR-advisory, power profile, FPS-monitoring readiness, applied-changes) composes existing
-detection only — mutates nothing. 5 unit tests. Next read-only upward features per the plan:
-F3 session summary → F5 export → F4 priority ranking; F1 Gaming Mode (mutating) stays behind
-the QA blocker.
+**F2 Per-game Readiness — SHIPPED** (read-only): `readiness.rs` + `get_game_readiness` + a
+"Readiness" tab; pure `evaluate_readiness`, 8 advisory checks, 5 unit tests, mutates nothing.
+
+**F3 Session Summary — SHIPPED** (read-only): `sessions.rs` (pure `SessionAccumulator` +
+last-20 `sessions.json` store + `get_session_summaries`) and a 1 s aggregator thread wired into
+`monitoring::start_fps_capture` that folds the FPS helper output + GPU/CPU/RAM into a per-session
+summary (avg FPS/frametime, 1%-low ESTIMATE, peak GPU temp/usage, peak RAM, active-changes
+count) and persists it on stop — only if a game actually presented. "Sessions" tab; 6 unit tests.
+Mutates nothing.
+
+**Next per owner directive:** RETURN to the manual-mutation QA blocker (real apply/rollback
+verification, `docs/RELEASE_QA.md`) before F5 export / F4 priority ranking. F1 Gaming Mode
+(mutating) stays behind the QA blocker.
 
 Recent commits (newest first):
-- `(F2)` feat(readiness): per-game Game Readiness surface (read-only/advisory)
+- `(F3)` feat(sessions): per-session summary surface (read-only/advisory)
+- `ac9d505` feat(readiness): per-game Game Readiness surface (read-only/advisory)
 - `8dda3de` fix(monitoring): report UAC-cancelled FPS elevation as "declined" (not "stopped")
 - `4a94d75` docs: add CLAUDE.md (this file) — portable in-repo failsafe
 - `b1f4366` fix(monitoring): launch elevated FPS helper hidden (`.show(false)`/SW_HIDE) under UAC
