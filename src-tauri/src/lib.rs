@@ -273,6 +273,19 @@ fn set_startup_entry_enabled(name: String, enabled: bool) -> Result<(), String> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Single-instance MUST be the first plugin. A second launch focuses the
+        // existing main window instead of opening another process — so only one
+        // main process ever mutates history.json (no cross-process race). The
+        // elevated --fps-capture helper returns from main.rs before this builder,
+        // so it never registers here and is unaffected.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            use tauri::Manager;
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_hardware_info,
