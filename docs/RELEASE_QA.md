@@ -1,7 +1,7 @@
 # Sentinel — Release-Gate QA Checklist
 
-> ✅ **RELEASE GATE — CORE VERIFIED 2026-05-31 (owner sign-off pending).**
-> Manual apply/rollback verified live on a UAC-on machine:
+> ✅ **MANUAL-MUTATION QA — LIFTED 2026-05-31 (owner sign-off APPROVED).**
+> This blocker is closed. Verified live on a UAC-on machine:
 > - **§1** elevation PASS (accept + cancel).
 > - **§2** apply-accept mutates correctly (real applies left USB/PCIe AC=0, HiberbootEnabled=0;
 >   typed contracts present).
@@ -14,8 +14,11 @@
 > - Restart-persistence demonstrated (ledger survived reboot + restarts); no orphan helpers;
 >   Sentinel correctly withholds already-satisfied / hardware-inappropriate recs.
 >
-> **Remaining to lift the gate:** owner sign-off (+ optional live apply-cancel UX & external-revert
-> UI observation). Do not declare beta/release-ready without the owner.
+> **Non-blocking follow-ups (optional):** live elevated-apply UAC cancel-message UX check;
+> external-revert "no longer active" UI observation.
+> **Still gates beta/public release (separate from mutation QA):** code-signing config, legal
+> finalization (license model + jurisdiction in PRIVACY/EULA), and per-feature QA for any new
+> mutating feature (e.g. F1 Gaming Mode). Remote fetch stays disabled. F5/F4 (read-only) unblocked.
 
 Manual, interactive QA pass. The structural refactor + automated checks are done
 (`cargo test` 44/44, `cargo build` zero warnings, `npm run build` clean). This

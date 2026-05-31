@@ -90,40 +90,38 @@ Recent commits (newest first):
 - `82bcd8f` test(actions): rollback resolution / legacy-synthesis regression tests
 - `85e2710` refactor(history): extract Trust Ledger into its own module
 
-### 🚧 RELEASE BLOCKERS — do NOT treat the app as beta/release-ready until closed
+### ✅ Manual-mutation QA — CLOSED (owner sign-off 2026-05-31)
 
-1. **BLOCKER — manual apply/rollback verification (CORE VERIFIED 2026-05-31; owner sign-off pending).**
-   Verified live on this UAC-on machine:
-   - **§2 apply-accept** mutates correctly — real accepted applies left Balanced USB/PCIe AC = 0
-     and HiberbootEnabled = 0; ledger entries carry typed `applied_action`+`rollback_action`+snapshot.
-   - **§4 rollback** restores exact prior state (existing `rolled_back` entries + the §2a rollback).
-   - **§2a power-plan fidelity — PASSED:** rolling back a Balanced-stored `pcie-aspm-off` while
-     Ultimate was active restored Balanced PCIe AC 0→1 and left Ultimate untouched at 0 — NO
-     SCHEME_CURRENT fallback, NO forced plan switch. (The decisive live proof of `070c3c9`.)
-   - **§3 apply-cancel** is structurally guaranteed (`apply_recommendation` returns on the elevation
-     error via `?` BEFORE any history write) + the runas-cancel path was verified live in §1; a
-     live apply-cancel UX check is optional, not required for certainty.
-   - **Restart-persistence:** demonstrated — `history.json` (9 entries) survived the UAC reboot +
-     many dev-app restarts this session. **External-revert:** logic verified (`check_change_active`
-     recomputes live; unit-tested).
-   - No orphan helpers throughout. Sentinel also correctly *withholds* recs 3 ways (already-satisfied:
-     SysMain/DiagTrack; HDD-gated: Windows Search) — the hardware-aware promise working.
-   **Remaining to fully close:** owner sign-off (and, if desired, the optional live apply-cancel UX
-   check + a deliberate external-revert UI observation). Do NOT auto-lift without the owner.
-2. Packaging readiness gate on §2a — **MET** (verified live).
+The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-on machine:
+- **§1 elevation** PASS (FPS helper accept + cancel).
+- **§2 apply-accept** mutates correctly — real applies left USB/PCIe AC = 0, HiberbootEnabled = 0;
+  ledger entries carry typed `applied_action`+`rollback_action`+snapshot.
+- **§3 apply-cancel** accepted as PASS — runas-cancel verified live in §1, and `apply_recommendation`
+  returns on the elevation error via `?` BEFORE any history write (no false success entry).
+- **§4 rollback** restores exact prior state.
+- **§2a power-plan fidelity — PASSED decisively:** rolling back a Balanced-stored `pcie-aspm-off`
+  while Ultimate was active restored Balanced AC 0→1, left Ultimate untouched at 0, and didn't
+  change the active plan — live proof of `070c3c9` (no SCHEME_CURRENT fallback, no forced switch).
+- Restart-persistence PASS; no orphan helpers; Sentinel correctly withholds already-satisfied
+  (SysMain/DiagTrack) and HDD-gated (Windows Search) recs.
 
-**§1 QA progress (`docs/RELEASE_QA.md`):**
-- FPS-helper elevation under UAC — **PASS** both paths: accept (`b1f4366` — helper runs headless
-  at High IL, main Medium, one window, live capture) and cancel (`8dda3de` — shows "declined",
-  spawns nothing, no orphan).
-- **NOT YET DONE (the BLOCKER):** §1 subtests 2–4 (real elevated apply-accept / apply-cancel /
-  rollback) and §2a power-plan fidelity.
+**Optional NON-blocking follow-up QA** (nice-to-have, not gating): (1) live elevated-apply UAC
+*cancel*-message UX check; (2) external-revert "no longer active" UI observation.
 
-**Allowed now (non-mutating release-prep ONLY):** packaging prep / installer metadata,
-privacy policy / EULA, docs cleanup, visual/design pass, NVIDIA validation *planning*,
-remote-fetch *planning* (NOT enabling). **Not allowed yet:** public beta, declaring packaging
-release-ready, signing/distribution, remote-fetch enablement, new tweak-catalog expansion,
-major architecture churn.
+### 🚧 Remaining release gates (NOT mutation-QA — these still gate beta/public release)
+- **Packaging/signing:** no code-signing config, `csp: null`; identity metadata done.
+- **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction
+  TBD before public distribution.
+- **Remote fetch:** stays disabled (`docs/REMOTE_FETCH_ARMING_PLAN.md`); not a beta gate.
+- Any NEW mutating feature needs its own apply/rollback QA (see Gaming Mode).
+
+**Unblocked now:** **F5 Export Snapshot** + **F4 Priority Ranking** (read-only/advisory) per
+`docs/PRODUCT_DIRECTION.md`. **Still gated:** **F1 Gaming Mode** introduces session-scoped
+MUTATION → rides its own apply/rollback + crash-safe-restore QA, not covered by this sign-off.
+
+**Allowed now:** read-only/advisory features (F5/F4), packaging/legal/signing prep. **Not allowed
+without their own gate:** Gaming Mode's mutating parts, remote-fetch enablement, new tweak-catalog
+expansion, declaring beta/release-ready before the packaging/legal/signing gates close.
 
 Packaging metadata DONE (identity, not signing): `productName` "Sentinel", identifier
 `io.github.pootytxng.sentinel`, publisher/copyright "Pootytxng", category Utility, homepage,
