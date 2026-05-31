@@ -302,6 +302,13 @@ pub(crate) fn build_markdown_report(
     o
 }
 
+/// The `.md` file is written with a leading UTF-8 BOM so Windows viewers
+/// (Notepad, etc.) decode it as UTF-8 instead of mojibake. The in-app preview
+/// stays BOM-free; the JSON export is left BOM-free (JSON parsers may reject a BOM).
+fn markdown_with_bom(markdown: &str) -> String {
+    format!("\u{FEFF}{markdown}")
+}
+
 #[tauri::command]
 pub(crate) fn export_report() -> Result<ExportResult, String> {
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -330,7 +337,8 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create export folder: {e}"))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let md_path = dir.join(format!("sentinel-report-{stamp}.md"));
-    std::fs::write(&md_path, &markdown).map_err(|e| format!("could not write report: {e}"))?;
+    std::fs::write(&md_path, markdown_with_bom(&markdown))
+        .map_err(|e| format!("could not write report: {e}"))?;
 
     // JSON export comes for free — the assembled source Values + metadata.
     let json_path = dir.join(format!("sentinel-report-{stamp}.json"));
@@ -373,6 +381,14 @@ pub(crate) fn open_export_folder() -> Result<(), String> {
 mod export_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn markdown_file_is_written_with_utf8_bom() {
+        let s = markdown_with_bom("# Sentinel Report\n");
+        assert!(s.starts_with('\u{FEFF}'));
+        assert_eq!(&s.as_bytes()[0..3], &[0xEF, 0xBB, 0xBF]); // UTF-8 BOM bytes
+        assert!(s.trim_start_matches('\u{FEFF}').starts_with("# Sentinel Report"));
+    }
 
     #[test]
     fn report_is_graceful_with_empty_data() {
