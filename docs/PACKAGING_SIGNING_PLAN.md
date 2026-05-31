@@ -118,13 +118,22 @@ beta (local app, no remote content); tighten + test it before any public release
 - [x] **SmartScreen** — documented: locally-built installer has no Mark-of-the-Web → no prompt locally;
       **download users see the unsigned "unknown publisher" warning** (expected).
 
-## 7a. Pre-public polish backlog (non-blocking — do NOT fix during beta; before public)
+## 7a. Pre-public polish backlog — ✅ CLEARED (2026-05-31)
 
-1. Export `.md` — prepend **UTF-8 BOM** (renders mojibake in non-UTF-8 Windows viewers; file is valid UTF-8).
-2. Storage report/readiness — **logical-disk fallback** when `MSFT_PhysicalDisk` returns empty.
-3. **AMD GPU driver-age source** (driver date currently unread → "unknown").
-4. **Separate the install directory from the runtime/FPS data directory** (both are `%LOCALAPPDATA%\Sentinel`).
-5. **Add a single-instance lock** and protect `history.json` from multi-process races (per-process `HISTORY_LOCK` doesn't coordinate across two windows).
+All five resolved during the polish pass — read-only / safety fixes only; no app behavior, signing,
+legal, remote-fetch, updater, recommendation-catalog, or Gaming-Mode changes. `cargo test` 72/72.
+
+1. ✅ Export `.md` **UTF-8 BOM** prepended so non-UTF-8 Windows viewers don't render mojibake (`ac9c70d`).
+2. ✅ Storage **logical-disk fallback** when `MSFT_PhysicalDisk` is empty — Export + readiness report the
+   logical volumes (e.g. `C:` NTFS) instead of "—" / "no disks" (`514ca0e`).
+3. ✅ **AMD GPU driver-age** — **VERIFIED NOT A BUG**; the premise was stale. Live `detect_gpus()` on the
+   AMD Radeon RX 9070 XT reads `driver_date 2026-05-12`, `driver_age_days Some(19)` via the existing
+   DXGI↔WMI name-matched merge (the DXGI and WMI names are byte-identical, so the date attaches). No code
+   change; no registry fallback added.
+4. ✅ **Install dir vs runtime dir** separated — FPS runtime IPC (`fps.json` / `fps.alive`) moved to
+   `%APPDATA%\Sentinel\runtime`, out of the `%LOCALAPPDATA%\Sentinel` install dir (`e87ecdd` + test `512dd11`).
+5. ✅ **Single-instance lock** added (`tauri-plugin-single-instance`) — a 2nd launch focuses the existing
+   window, so only one main process ever mutates `history.json` (`75e4681`).
 
 ## 8. Explicit non-goals
 
