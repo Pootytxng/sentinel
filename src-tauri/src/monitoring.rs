@@ -518,9 +518,17 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     } else {
         // runas .status() blocks for the helper's lifetime, so run it on a
         // dedicated thread. A declined UAC prompt returns Err quickly.
+        //
+        // .show(false) => SW_HIDE: launch the elevated helper HIDDEN. The helper
+        // never creates a Tauri window (main.rs returns into run_fps_capture
+        // before tauri::Builder), but in a debug build sentinel.exe is a
+        // console-subsystem app, so the default SW_NORMAL would pop a visible
+        // console running the capture loop. The direct-spawn path above gets the
+        // same effect via CREATE_NO_WINDOW; this is the runas equivalent.
         std::thread::spawn(move || {
             let res = runas::Command::new(exe)
                 .args(&["--fps-capture", "--fps-out", &out, "--fps-alive", &alive])
+                .show(false)
                 .status();
             fps_active().store(false, Ordering::Release);
             let msg = match res {
