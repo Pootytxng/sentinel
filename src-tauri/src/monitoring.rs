@@ -531,9 +531,16 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 .show(false)
                 .status();
             fps_active().store(false, Ordering::Release);
+            // Distinguish a cancelled/failed elevation from a clean stop. The
+            // runas crate ALWAYS returns Ok on Windows (even on UAC cancel it
+            // returns Ok with a non-zero/!0 exit status), so the old `Err(_)`
+            // arm was dead and a cancel was reported as a normal "stopped".
+            // A successfully-run helper exits 0; a cancel yields a non-zero
+            // status -> "declined", which the UI surfaces as a clear "permission
+            // was declined" message.
             let msg = match res {
-                Ok(_) => "stopped",
-                Err(_) => "declined",
+                Ok(s) if s.success() => "stopped",
+                _ => "declined",
             };
             *fps_status_slot().lock().unwrap() = msg.into();
         });
