@@ -60,32 +60,47 @@ Fully **AMD**: **Radeon RX 9070 XT (RDNA4)** GPU, Ryzen X3D-class CPU, 16 logica
 2026-05-30** so the `runas` elevation path can be tested. `uac_disabled()` now returns false →
 the real `runas` branch is live (not the direct-spawn fallback). To revert: set `EnableLUA=0` + reboot.
 
-## CURRENT STATE — Release-gate QA (as of 2026-05-30, last commit `b1f4366`)
+## CURRENT STATE — Release-gate QA (as of 2026-05-31, last commit `8dda3de`)
 
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
-`cargo test` **44/44**, `cargo build` zero warnings, `npm run build` clean.
+`cargo test` **44/44**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
+(`origin/main` in sync).
 
 Recent commits (newest first):
+- `8dda3de` fix(monitoring): report UAC-cancelled FPS elevation as "declined" (not "stopped")
+- `4a94d75` docs: add CLAUDE.md (this file) — portable in-repo failsafe
 - `b1f4366` fix(monitoring): launch elevated FPS helper hidden (`.show(false)`/SW_HIDE) under UAC
-- `c086f34` docs: release-gate manual QA checklist (`docs/RELEASE_QA.md`)
 - `070c3c9` fix(actions): roll back power settings to the exact stored plan GUID (not SCHEME_CURRENT)
 - `82bcd8f` test(actions): rollback resolution / legacy-synthesis regression tests
 - `85e2710` refactor(history): extract Trust Ledger into its own module
 
-**QA progress (`docs/RELEASE_QA.md` is the live checklist):**
-- §1 FPS-helper elevation under UAC: **PASS** (prompt → accept → helper runs headless at
-  High IL, main stays Medium, only one window, live capture confirmed). Fixed via `b1f4366`.
-- **OPEN — §1 cancel-message finding:** on UAC *cancel*, the `runas` path reports generic
-  `"stopped"`, not a distinct `"declined"` — because the `runas` crate always returns `Ok`
-  on Windows (the `Err(_) => "declined"` branch is dead). Safe (no orphan, no fake-enabled),
-  but doesn't meet the "clear cancellation message" bar. Proposed 3-line fix: match on
-  `Ok(s) if s.success()` → "stopped", else "declined". **Decision pending: apply or defer.**
-- **TODO §1:** subtest 2 (elevated apply accept — use `sysmain-disable`, baseline Manual→Disabled),
-  subtest 3 (elevated apply cancel — use `diagtrack-disable`), subtest 4 (rollback `sysmain-disable`).
-- **Next gate after §1:** §2a power-plan rollback fidelity (verify `070c3c9` directly), then the
-  rest of the checklist, then packaging — **packaging is blocked until §1 + §2a pass.**
-- Packaging-prep findings already logged: placeholder identifier `com.sentinel.app`, lowercase
-  `productName`, no publisher/copyright/license, no code-signing config, `csp: null`, no EULA/privacy text.
+### 🚧 RELEASE BLOCKERS — do NOT treat the app as beta/release-ready until closed
+
+1. **BLOCKER — manual apply/rollback verification for ALL safe appliable recommendations.**
+   Automated tests prove the rollback *contracts* + safety wiring; they do NOT replace real
+   Windows mutation verification. For each safe appliable rec, on a UAC-enabled machine:
+   apply succeeds · rollback restores the EXACT prior state · Trust Ledger entry correct ·
+   persists across app restart · external-revert detection honest · truth strip updates.
+   Tracked in `docs/RELEASE_QA.md` §2/§2a/§3/§4. **Status: NOT STARTED for real mutations** —
+   §1 elevation *plumbing* passed, but no actual tweak has been apply→rollback verified yet.
+2. Packaging readiness is also gated on §2a (power-plan rollback fidelity) verified live.
+
+**§1 QA progress (`docs/RELEASE_QA.md`):**
+- FPS-helper elevation under UAC — **PASS** both paths: accept (`b1f4366` — helper runs headless
+  at High IL, main Medium, one window, live capture) and cancel (`8dda3de` — shows "declined",
+  spawns nothing, no orphan).
+- **NOT YET DONE (the BLOCKER):** §1 subtests 2–4 (real elevated apply-accept / apply-cancel /
+  rollback) and §2a power-plan fidelity.
+
+**Allowed now (non-mutating release-prep ONLY):** packaging prep / installer metadata,
+privacy policy / EULA, docs cleanup, visual/design pass, NVIDIA validation *planning*,
+remote-fetch *planning* (NOT enabling). **Not allowed yet:** public beta, declaring packaging
+release-ready, signing/distribution, remote-fetch enablement, new tweak-catalog expansion,
+major architecture churn.
+
+Packaging-prep findings logged: placeholder identifier `com.sentinel.app`, lowercase
+`productName`, no publisher/copyright/license, no code-signing config, `csp: null`.
+Privacy policy + EULA drafted: `docs/PRIVACY.md`, `docs/EULA.md` (DRAFTS, owner/legal review needed).
 
 **Caveat:** all QA so far is in the **dev (debug)** build. The helper-window issue was
 debug-only (console subsystem); a packaged **release** build still warrants a final pass.
@@ -93,7 +108,7 @@ debug-only (console subsystem); a packaged **release** build still warrants a fi
 ## How to resume
 
 1. Read `docs/RELEASE_QA.md` — the checklist with per-subtest expected before/after.
-2. Continue the §1 cancel-fix decision, then subtests 2–4, then §2a.
+2. Resume the BLOCKER: §1 subtests 2–4 (real elevated apply/rollback), then §2a.
 3. I (Claude) verify GUI behavior via the backend: live process/IL queries, `history.json`,
    real Windows service/power state, and `%LOCALAPPDATA%\Sentinel\launch-debug.log`.
 4. Commit after each verified unit. Branch is `main`; push only when asked.

@@ -1,5 +1,13 @@
 # Sentinel — Release-Gate QA Checklist
 
+> 🚧 **RELEASE BLOCKER (open):** Manual apply/rollback verification for **all safe appliable
+> recommendations** is REQUIRED before any beta/release. Automated tests prove the rollback
+> *contracts* and safety wiring — they do **not** replace real Windows mutation verification.
+> Per rec: apply succeeds · rollback restores the EXACT prior state · Trust Ledger correct ·
+> persists across restart · external-revert detected honestly · truth strip updates. Until
+> §2/§2a/§3/§4 below are green, **the app is NOT beta/release-ready.** Status as of 2026-05-31:
+> §1 elevation plumbing PASS (accept + cancel); **no real tweak apply→rollback verified yet.**
+
 Manual, interactive QA pass. The structural refactor + automated checks are done
 (`cargo test` 44/44, `cargo build` zero warnings, `npm run build` clean). This
 covers what only a human at the machine can verify: real Windows mutation,
