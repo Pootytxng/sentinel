@@ -154,6 +154,13 @@ for non-technical gamers; **no fake gamer hype, no scammy boost language, no fak
 ranking, explanations, and which safe actions are surfaced** — it does **not** silently flip settings.
 Any actual mutation still rides the rollback contract + Gaming Mode's gate.
 
+**The user-aims a mode is a lens over (added 2026-06-01):** a gamer opens Sentinel with a *goal*, not just
+a toggle list. The aims to recognize and frame around: **maximum competitive performance · smoother
+frametimes · lower latency · better visual quality · safer / more stable configuration · a cleaner system
+state · confidence before launching a game.** A mode is a lens that re-weights readiness, priorities, and
+explanations toward the chosen aim — it never silently mutates to chase it. (The four modes above are the
+coarse grouping; these aims are the finer "what the user actually wants" the experience should speak to.)
+
 **The "Experience / Design System Pass" (next priority after beta feedback):**
 1. Stronger visual identity. 2. Better dashboard landing view. 3. More premium card styling.
 4. Clearer status language. 5. Better animations/transitions *where useful*. 6. More satisfying
