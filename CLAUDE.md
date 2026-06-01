@@ -145,10 +145,15 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   merge — no code change, no registry fallback; (4) install dir vs runtime dir separated →
   `%APPDATA%\Sentinel\runtime` `e87ecdd`+`512dd11`; (5) single-instance lock (2nd launch focuses existing
   window) `75e4681`. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
-  **⚠️ Installer must be REBUILT to include #1–#4.** The `bundle/` artifacts on disk are the 14:02 build
-  that PREDATES the polish fixes (so the §6/§7 "VERIFIED/QA-passed" build above is now stale w.r.t. the
-  code). Last `npm run tauri build` attempt FAILED — rustc OOM (alloc error) compiling the `windows`
-  crate at release `opt-level=3`; retry with RAM freed / reduced codegen parallelism before distributing.
+  **✅ Installer REBUILT (2026-05-31 17:42) — includes #1–#4.** `npm run tauri build` →
+  `Sentinel_0.1.0_x64_en-US.msi` (3.6 MB) + `Sentinel_0.1.0_x64-setup.exe` (2.4 MB) in
+  `src-tauri/target/release/bundle/`; identity baked in (Sentinel / 0.1.0 / Pootytxng), NotSigned
+  (expected), no updater; single-instance smoke passed on the fresh binary. (First attempt OOM'd
+  compiling the `windows` crate at `opt-level=3` with ~5 GB free RAM; cleared with
+  `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256` — lower peak memory, negligible runtime cost.) NOTE: the
+  full §6/§7 installed-build QA above was run on the earlier *pre-polish* build; the polish fixes are
+  unit-tested (72/72) + single-instance smoke-verified, so a fresh full installed-QA pass on the 17:42
+  build is the only remaining nicety before distributing the invite.
 - **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction
   TBD before public distribution.
 - **Remote fetch:** stays disabled (`docs/REMOTE_FETCH_ARMING_PLAN.md`); not a beta gate.
