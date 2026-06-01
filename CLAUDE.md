@@ -138,10 +138,17 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   the invite terms. CSP stays `null` for the trusted beta; tighten+test before public. **PUBLIC release
   still gated on signing route + legal (license model + jurisdiction). Gaming Mode (F1) remains gated —
   NOT covered by the lifted mutation-QA sign-off.**
-  **Pre-public polish backlog (non-blocking, do NOT fix during beta):** (1) Export `.md` UTF-8 BOM;
-  (2) Storage report/readiness logical-disk fallback when `MSFT_PhysicalDisk` empty; (3) AMD GPU
-  driver-age source; (4) separate install dir from runtime/FPS data dir; (5) single-instance lock +
-  protect `history.json` from multi-process races. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
+  **Pre-public polish backlog — ✅ CLEARED (2026-05-31, tests 72/72):** (1) Export `.md` UTF-8 BOM
+  `ac9c70d`; (2) storage logical-disk fallback when `MSFT_PhysicalDisk` empty, in Export + readiness
+  `514ca0e`; (3) AMD GPU driver-age — **VERIFIED NOT A BUG** via a live `detect_gpus()` run: the RX 9070 XT
+  reads `driver_date 2026-05-12`, `driver_age_days Some(19)` through the existing DXGI↔WMI name-matched
+  merge — no code change, no registry fallback; (4) install dir vs runtime dir separated →
+  `%APPDATA%\Sentinel\runtime` `e87ecdd`+`512dd11`; (5) single-instance lock (2nd launch focuses existing
+  window) `75e4681`. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
+  **⚠️ Installer must be REBUILT to include #1–#4.** The `bundle/` artifacts on disk are the 14:02 build
+  that PREDATES the polish fixes (so the §6/§7 "VERIFIED/QA-passed" build above is now stale w.r.t. the
+  code). Last `npm run tauri build` attempt FAILED — rustc OOM (alloc error) compiling the `windows`
+  crate at release `opt-level=3`; retry with RAM freed / reduced codegen parallelism before distributing.
 - **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction
   TBD before public distribution.
 - **Remote fetch:** stays disabled (`docs/REMOTE_FETCH_ARMING_PLAN.md`); not a beta gate.
