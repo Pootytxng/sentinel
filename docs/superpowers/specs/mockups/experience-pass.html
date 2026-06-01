@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en" data-theme="graphite">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentinel — Experience Pass mockups (static, non-functional)</title>
+<style>
+  /* Tokens lifted from src/App.css :root (graphite). Static mockup only — NOT the app. */
+  :root{
+    --bg:#07080b; --bg-2:#0a0c11; --panel:#12151d; --panel-2:#181c26; --panel-3:#1f242f;
+    --border:#242b39; --border-strong:#313b4e; --hairline:rgba(255,255,255,.06);
+    --fg:#eef1f7; --fg-2:#c4ccda; --muted:#8b95a8; --faint:#5d6679;
+    --accent:#6aa9ff; --accent-bright:#93c1ff; --accent-soft:rgba(106,169,255,.12);
+    --accent-line:rgba(106,169,255,.30); --accent-glow:rgba(106,169,255,.35);
+    --ready:#46d98a; --attention:#f5b740; --danger:#f3716f;
+    --ready-soft:rgba(70,217,138,.12); --attn-soft:rgba(245,183,64,.12);
+    --font-ui:"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono:"Cascadia Mono","JetBrains Mono",Consolas,ui-monospace,monospace;
+    --r-sm:7px; --r:10px; --r-lg:14px; --r-pill:999px;
+    --edge:inset 0 1px 0 rgba(255,255,255,.05);
+    --shadow-1:0 1px 2px rgba(0,0,0,.45); --shadow-2:0 10px 30px -12px rgba(0,0,0,.65);
+    --ease:cubic-bezier(.4,.12,.18,1); --dur:160ms;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(106,169,255,.06), transparent 60%),
+      var(--bg);
+    color:var(--fg);font-family:var(--font-ui);font-size:14px;-webkit-font-smoothing:antialiased;line-height:1.45}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 28px 80px}
+  .legend{border:1px dashed var(--border-strong);border-radius:var(--r);padding:12px 16px;color:var(--muted);
+    background:var(--bg-2);margin-bottom:26px;font-size:12.5px}
+  .legend b{color:var(--fg-2)}
+  h2.screen{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+    margin:38px 0 14px;font-weight:600}
+  /* ── shell: rail + canvas ─────────────────────────────────── */
+  .shell{display:grid;grid-template-columns:208px 1fr;gap:18px;border:1px solid var(--border);
+    border-radius:var(--r-lg);background:linear-gradient(180deg,var(--bg-2),var(--bg));overflow:hidden;box-shadow:var(--shadow-2)}
+  .rail{padding:16px 12px;border-right:1px solid var(--hairline);background:var(--bg-2)}
+  .brand{display:flex;align-items:center;gap:9px;padding:6px 8px 14px;border-bottom:1px solid var(--hairline);margin-bottom:10px}
+  .brand .mark{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--accent),#2f6fd6);
+    box-shadow:0 0 14px var(--accent-glow),var(--edge)}
+  .brand b{font-size:15px;letter-spacing:.02em}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);color:var(--muted);
+    text-decoration:none;font-weight:500;transition:background var(--dur) var(--ease),color var(--dur) var(--ease)}
+  .nav a .ico{width:18px;height:18px;flex:0 0 18px;color:var(--faint)}
+  .nav a:hover{background:var(--panel);color:var(--fg-2)}
+  .nav a.on{background:var(--accent-soft);color:var(--fg);box-shadow:inset 2px 0 0 var(--accent)}
+  .nav a.on .ico{color:var(--accent-bright)}
+  .nav a .badge{margin-left:auto;font-size:11px;background:var(--attn-soft);color:var(--attention);
+    border:1px solid rgba(245,183,64,.3);border-radius:var(--r-pill);padding:0 7px;font-weight:600}
+  .canvas{padding:22px 24px 26px}
+  /* ── posture hero ─────────────────────────────────────────── */
+  .hero{position:relative;border:1px solid var(--border);border-radius:var(--r-lg);padding:22px 24px;
+    background:radial-gradient(900px 240px at 12% -40%,var(--accent-soft),transparent 70%),var(--panel);
+    box-shadow:var(--edge),var(--shadow-1);overflow:hidden}
+  .hero.ready{background:radial-gradient(900px 240px at 12% -40%,var(--ready-soft),transparent 70%),var(--panel)}
+  .hero.attn{background:radial-gradient(900px 240px at 12% -40%,var(--attn-soft),transparent 70%),var(--panel)}
+  .hero-row{display:flex;align-items:center;gap:18px}
+  .orb{width:64px;height:64px;border-radius:50%;flex:0 0 64px;display:grid;place-items:center;
+    border:1px solid var(--hairline)}
+  .orb.ready{background:radial-gradient(circle at 30% 30%,rgba(70,217,138,.35),rgba(70,217,138,.05));
+    box-shadow:0 0 30px rgba(70,217,138,.35),var(--edge)}
+  .orb.attn{background:radial-gradient(circle at 30% 30%,rgba(245,183,64,.35),rgba(245,183,64,.05));
+    box-shadow:0 0 30px rgba(245,183,64,.3),var(--edge)}
+  .orb svg{width:30px;height:30px}
+  .hero h1{margin:0;font-size:25px;letter-spacing:-.01em}
+  .hero .sub{color:var(--muted);margin-top:3px;font-size:13.5px}
+  .hero .why{margin-left:auto;text-align:right;font-size:12px;color:var(--faint)}
+  .hero .why b{display:block;font-size:30px;font-weight:650;font-family:var(--font-mono)}
+  .hero .why .g{color:var(--ready)} .hero .why .a{color:var(--attention)}
+  /* ── grid + cards ─────────────────────────────────────────── */
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin-top:16px}
+  .card{grid-column:span 6;border:1px solid var(--border);border-radius:var(--r);background:var(--panel);
+    padding:16px 17px;box-shadow:var(--edge),var(--shadow-1);transition:transform var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+  .card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
+  .card.span4{grid-column:span 4}.card.span12{grid-column:span 12}.card.span8{grid-column:span 8}
+  .card h3{margin:0 0 3px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .card .lead{color:var(--muted);font-size:12.5px}
+  .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .ch .ico{width:16px;height:16px;color:var(--faint)}
+  /* status pills */
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);padding:3px 10px;
+    font-size:12px;font-weight:600;border:1px solid var(--border-strong);color:var(--fg-2);background:var(--panel-2)}
+  .pill .dot{width:7px;height:7px;border-radius:50%}
+  .pill.ready{color:var(--ready);border-color:rgba(70,217,138,.32);background:var(--ready-soft)} .pill.ready .dot{background:var(--ready)}
+  .pill.attn{color:var(--attention);border-color:rgba(245,183,64,.32);background:var(--attn-soft)} .pill.attn .dot{background:var(--attention)}
+  .pill.prot{color:var(--accent-bright);border-color:var(--accent-line);background:var(--accent-soft)} .pill.prot .dot{background:var(--accent)}
+  .pill.scan{color:var(--muted)} .pill.scan .dot{background:var(--muted);animation:pulse 1.1s var(--ease) infinite}
+  .pill.na{color:var(--faint)} .pill.na .dot{background:var(--faint)}
+  @keyframes pulse{50%{opacity:.3}}
+  /* check rows */
+  .rows{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+  .crow{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:var(--r-sm);
+    background:var(--panel-2);border:1px solid var(--hairline)}
+  .crow .t{font-weight:500}.crow .d{color:var(--faint);font-size:12px;margin-left:2px}
+  .crow .s{margin-left:auto}
+  .crow .tick{width:18px;height:18px;color:var(--ready)} .crow .warn{width:18px;height:18px;color:var(--attention)}
+  /* metric / stat */
+  .stat{display:flex;flex-direction:column;gap:2px}
+  .stat .v{font-family:var(--font-mono);font-size:26px;font-weight:600;letter-spacing:-.02em}
+  .stat .v .u{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px}
+  .stat .l{color:var(--faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em}
+  .stat .v.g{color:var(--ready)} .stat .v.a{color:var(--attention)}
+  .statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  /* trust cue */
+  .trust{display:flex;align-items:center;gap:13px;padding:14px 16px;border-radius:var(--r);
+    border:1px solid var(--accent-line);background:linear-gradient(180deg,var(--accent-soft),transparent)}
+  .trust .shield{width:30px;height:30px;color:var(--accent-bright)}
+  .trust b{font-size:14px}.trust .sub{color:var(--muted);font-size:12.5px}
+  /* gauges (instrument cluster) */
+  .cluster{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .gauge{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px;border-radius:var(--r);
+    background:var(--panel-2);border:1px solid var(--hairline)}
+  .dial{--p:0;--c:var(--accent);width:92px;height:92px;border-radius:50%;display:grid;place-items:center;
+    background:conic-gradient(var(--c) calc(var(--p)*1%),var(--panel-3) 0);
+    -webkit-mask:radial-gradient(circle 31px at 50% 50%,transparent 98%,#000 100%);mask:radial-gradient(circle 31px at 50% 50%,transparent 98%,#000 100%)}
+  .dialwrap{position:relative;width:92px;height:92px;display:grid;place-items:center}
+  .dialval{position:absolute;font-family:var(--font-mono);font-size:18px;font-weight:600}
+  .dialval .u{font-size:10px;color:var(--muted)}
+  .gauge .gl{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+  /* empty state */
+  .empty{text-align:center;padding:34px 20px;color:var(--muted)}
+  .empty .eicon{width:42px;height:42px;color:var(--faint);margin-bottom:10px}
+  .empty b{display:block;color:var(--fg-2);font-size:15px;margin-bottom:4px}
+  .empty .btn{margin-top:14px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--accent-line);background:var(--accent-soft);
+    color:var(--accent-bright);padding:8px 14px;border-radius:var(--r-sm);font-weight:600;font-size:13px;cursor:pointer;
+    transition:transform var(--dur) var(--ease),background var(--dur) var(--ease)}
+  .btn:hover{background:rgba(106,169,255,.2)} .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:transparent;border-color:var(--border-strong);color:var(--fg-2)}
+  /* sparkline */
+  .spark{width:100%;height:42px}
+  .gallerynote{color:var(--faint);font-size:11.5px;margin:2px 0 12px}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .sw{display:flex;flex-direction:column;gap:6px;align-items:center;font-size:11px;color:var(--muted)}
+  .sw i{width:46px;height:30px;border-radius:6px;border:1px solid var(--hairline);display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="legend">
+    <b>Static mockup — not the running app.</b> Hand-built from the real graphite tokens in
+    <code>src/App.css</code> to show the proposed Experience-Pass direction (see the spec in this folder).
+    Illustrative content; numbers are placeholders. Demonstrates: posture hero (dialed-in / attention),
+    premium cards, the status-pill vocabulary, trust cue, instrument-cluster gauges, and an honest empty state.
+  </div>
+
+  <!-- ════════════════ SCREEN 1: Dashboard — Dialed-in ════════════════ -->
+  <h2 class="screen">Screen 1 — Dashboard · "Dialed-in" posture</h2>
+  <div class="shell">
+    <aside class="rail">
+      <div class="brand"><span class="mark"></span><b>Sentinel</b></div>
+      <nav class="nav">
+        <a class="on" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>Dashboard</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z"/><path d="M9 12l2 2 4-4"/></svg>Readiness</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/></svg>Priorities</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/></svg>Optimize</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Monitor</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5.5" y="11" width="3" height="7"/><rect x="10.5" y="7" width="3" height="11"/><rect x="15.5" y="13" width="3" height="5"/></svg>Sessions</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>Ledger</a>
+      </nav>
+    </aside>
+    <main class="canvas">
+      <section class="hero ready">
+        <div class="hero-row">
+          <div class="orb ready"><svg viewBox="0 0 24 24" fill="none" stroke="var(--ready)" stroke-width="2"><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <div>
+            <h1>You're ready to play</h1>
+            <div class="sub">All readiness checks pass · 4 safe changes active &amp; reversible · monitoring online</div>
+          </div>
+          <div class="why"><b class="g">8/8</b>checks clear</div>
+        </div>
+      </section>
+      <div class="grid">
+        <div class="card">
+          <div class="ch"><h3>Readiness</h3><span class="pill ready"><span class="dot"></span>Ready</span></div>
+          <div class="rows">
+            <div class="crow"><span class="t">Monitor at max refresh</span><span class="d">240 Hz</span><span class="s"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l5 5 9-9"/></svg></span></div>
+            <div class="crow"><span class="t">Game on NVMe SSD</span><span class="s"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l5 5 9-9"/></svg></span></div>
+            <div class="crow"><span class="t">GPU driver age</span><span class="d">20 days</span><span class="s"><svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l5 5 9-9"/></svg></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ch"><h3>Priorities</h3><span class="pill ready"><span class="dot"></span>Nothing urgent</span></div>
+          <p class="lead">No big limiters for this rig right now. Your biggest factor — GPU — is already the strongest part of the build. Nothing here is worth touching.</p>
+          <div style="margin-top:12px"><span class="pill na"><span class="dot"></span>3 items reviewed · all fine</span></div>
+        </div>
+        <div class="card span8">
+          <div class="ch"><h3>Last session debrief</h3><span class="pill na">2h ago · Cyberpunk 2077</span></div>
+          <div class="statrow">
+            <div class="stat"><span class="v g">142<span class="u">fps</span></span><span class="l">Average</span></div>
+            <div class="stat"><span class="v">7.0<span class="u">ms</span></span><span class="l">Avg frametime</span></div>
+            <div class="stat"><span class="v">98<span class="u">fps</span></span><span class="l">1% low · estimate</span></div>
+          </div>
+          <svg class="spark" viewBox="0 0 320 42" preserveAspectRatio="none"><polyline fill="none" stroke="var(--accent)" stroke-width="2" points="0,30 20,28 40,31 60,22 80,26 100,18 120,24 140,16 160,20 180,14 200,22 220,12 240,18 260,15 280,20 300,13 320,17"/></svg>
+        </div>
+        <div class="card span4">
+          <div class="trust">
+            <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z"/><path d="M9 12l2 2 4-4"/></svg>
+            <div><b>You're protected</b><div class="sub">4 changes active — every one reversible from the Ledger.</div></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ════════════════ SCREEN 2: Dashboard — Attention ════════════════ -->
+  <h2 class="screen">Screen 2 — Dashboard · "Attention-needed" posture</h2>
+  <div class="shell">
+    <aside class="rail">
+      <div class="brand"><span class="mark"></span><b>Sentinel</b></div>
+      <nav class="nav">
+        <a class="on" href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>Dashboard</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z"/><path d="M9 12l2 2 4-4"/></svg>Readiness<span class="badge">1</span></a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/></svg>Priorities</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/></svg>Optimize</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>Monitor</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5.5" y="11" width="3" height="7"/><rect x="10.5" y="7" width="3" height="11"/><rect x="15.5" y="13" width="3" height="5"/></svg>Sessions</a>
+        <a href="#"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>Ledger</a>
+      </nav>
+    </aside>
+    <main class="canvas">
+      <section class="hero attn">
+        <div class="hero-row">
+          <div class="orb attn"><svg viewBox="0 0 24 24" fill="none" stroke="var(--attention)" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 4.3l-7 12A2 2 0 0 0 5 19.5h14a2 2 0 0 0 1.7-3.2l-7-12a2 2 0 0 0-3.4 0z"/></svg></div>
+          <div>
+            <h1>One thing needs your attention</h1>
+            <div class="sub">Your monitor is running below its max refresh rate — likely costing you smoothness.</div>
+          </div>
+          <div class="why"><b class="a">1</b>to review</div>
+        </div>
+      </section>
+      <div class="grid">
+        <div class="card span8">
+          <div class="ch"><h3>What to look at</h3><span class="pill attn"><span class="dot"></span>Attention</span></div>
+          <div class="rows">
+            <div class="crow"><span class="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5"/><path d="M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg></span><span class="t">Monitor below max refresh</span><span class="d">currently 120 Hz of 240 Hz</span><span class="s"><button class="btn">Open Display settings</button></span></div>
+          </div>
+          <p class="lead" style="margin-top:12px">Sentinel won't change your display for you — this opens the right Windows page so you stay in control. Everything else checks out.</p>
+        </div>
+        <div class="card span4">
+          <div class="trust">
+            <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z"/><path d="M9 12l2 2 4-4"/></svg>
+            <div><b>Still protected</b><div class="sub">2 changes active — all reversible.</div></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ════════════════ SCREEN 3: Primitive & instrument gallery ════════════════ -->
+  <h2 class="screen">Screen 3 — Design-system primitives &amp; instrument cluster</h2>
+  <div class="shell"><main class="canvas" style="grid-column:1/-1">
+    <div class="grid">
+      <div class="card span12">
+        <div class="ch"><h3>Status vocabulary</h3></div>
+        <div class="gallerynote">One honest set of states used everywhere. No fake percentages, no opaque score.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <span class="pill ready"><span class="dot"></span>Ready</span>
+          <span class="pill attn"><span class="dot"></span>Attention</span>
+          <span class="pill prot"><span class="dot"></span>Protected</span>
+          <span class="pill scan"><span class="dot"></span>Scanning…</span>
+          <span class="pill na"><span class="dot"></span>Unavailable</span>
+        </div>
+        <div class="gallerynote" style="margin-top:14px">Palette (graphite, default theme)</div>
+        <div class="swatches">
+          <div class="sw"><i style="background:#07080b"></i>bg</div>
+          <div class="sw"><i style="background:#12151d"></i>panel</div>
+          <div class="sw"><i style="background:#1f242f"></i>panel-3</div>
+          <div class="sw"><i style="background:#6aa9ff"></i>accent</div>
+          <div class="sw"><i style="background:#46d98a"></i>ready</div>
+          <div class="sw"><i style="background:#f5b740"></i>attention</div>
+          <div class="sw"><i style="background:#f3716f"></i>danger</div>
+        </div>
+      </div>
+
+      <div class="card span8">
+        <div class="ch"><h3>Monitoring — instrument cluster</h3><span class="pill ready"><span class="dot"></span>Live · AMD verified</span></div>
+        <div class="cluster">
+          <div class="gauge"><div class="dialwrap"><div class="dial" style="--p:61;--c:var(--ready)"></div><span class="dialval">61<span class="u">°C</span></span></div><span class="gl">GPU temp</span></div>
+          <div class="gauge"><div class="dialwrap"><div class="dial" style="--p:84;--c:var(--accent)"></div><span class="dialval">84<span class="u">%</span></span></div><span class="gl">GPU usage</span></div>
+          <div class="gauge"><div class="dialwrap"><div class="dial" style="--p:47;--c:var(--accent)"></div><span class="dialval">47<span class="u">%</span></span></div><span class="gl">Fan</span></div>
+          <div class="gauge"><div class="dialwrap"><div class="dial" style="--p:66;--c:var(--attention)"></div><span class="dialval">214<span class="u">W</span></span></div><span class="gl">Power</span></div>
+        </div>
+        <div class="statrow" style="margin-top:16px">
+          <div class="stat"><span class="v g">142<span class="u">fps</span></span><span class="l">Now</span></div>
+          <div class="stat"><span class="v">7.0<span class="u">ms</span></span><span class="l">Frametime</span></div>
+          <div class="stat"><span class="v">—<span class="u"></span></span><span class="l">CPU temp · no kernel driver</span></div>
+        </div>
+      </div>
+
+      <div class="card span4">
+        <div class="ch"><h3>Sessions</h3></div>
+        <div class="empty">
+          <svg class="eicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5.5" y="11" width="3" height="7"/><rect x="10.5" y="7" width="3" height="11"/><rect x="15.5" y="13" width="3" height="5"/></svg>
+          <b>No sessions yet</b>
+          Play a game with monitoring on and Sentinel will write a debrief here — avg FPS, frametime, and a 1% low estimate.
+          <div><button class="btn ghost">How monitoring works</button></div>
+        </div>
+      </div>
+    </div>
+  </main></div>
+
+</div>
+</body>
+</html>
