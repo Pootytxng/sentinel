@@ -1,8 +1,8 @@
 # Experience / Design System Pass — Architecture & Scope
 
-**Status:** Design scope (brainstorm output). **Decisions A–F locked by owner 2026-06-01 (§8).**
-No implementation yet — owner chose to HOLD code until green-light (Decision E), ideally informed by
-first private-beta feel-feedback.
+**Status:** Decisions A–F locked (§8). **Implementation GREEN-LIT by owner 2026-06-01** — building
+sub-project #1 (foundation) → #2 (Dashboard) → #3 (SystemPosture). NOTE: building ≠ launching; a
+public *release* stays separately gated on code-signing + legal.
 **Date:** 2026-06-01 · **Owner:** Kuya · **Author:** Claude (persistent work state)
 **Source of truth this serves:** `docs/PRODUCT_DIRECTION.md` → *"Experience direction — the premium
 command-center layer"* (the 7 home-base questions, the 6 surface "feel" metaphors, the aesthetic
@@ -236,8 +236,9 @@ touch `src/` only, and keep `npm run build` clean (no Rust → `cargo test` unaf
   Carbon Ember; **drop neon Synthwave + Viper** as off-thesis. (Removal lands in the relevant
   sub-project, not the foundation.)
 - **D. Modes UI → DEFER** to its own later pass (post-beta).
-- **E. Timing → HOLD IMPLEMENTATION.** Scope + plan are done; no code until owner green-lights,
-  ideally informed by first private-beta feel-feedback.
+- **E. Timing → LIFTED 2026-06-01.** Owner green-lit implementation; building starts with
+  sub-project #1 (foundation) → #2 → #3, committing per task. Public *release* remains separately
+  gated on signing + legal (building ≠ launching).
 - **F. Accent → KEEP** the blue `--accent #6aa9ff` brand accent.
 
 ---
