@@ -521,6 +521,99 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
   );
 }
 
+// Appearance themes — cosmetic palettes applied via the [data-theme] attribute
+// on <html>. "graphite" is the default (no attribute). Swatches drive the
+// in-app picker. Local-only (localStorage); no network.
+const THEMES: { id: string; label: string; swatch: [string, string, string] }[] = [
+  { id: "graphite", label: "Graphite", swatch: ["#0b0d12", "#6aa9ff", "#46d98a"] },
+  { id: "aurora", label: "Aurora Noir", swatch: ["#05080c", "#34e0a8", "#6cf0c4"] },
+  { id: "synthwave", label: "Synthwave", swatch: ["#0c0718", "#ff5cc8", "#43e8e0"] },
+  { id: "ember", label: "Carbon Ember", swatch: ["#0a0807", "#ff8b3d", "#7cd66b"] },
+  { id: "frost", label: "Frost", swatch: ["#060a0d", "#38d6e6", "#46d98a"] },
+  { id: "viper", label: "Viper", swatch: ["#060806", "#9be83f", "#bcf56e"] },
+];
+
+function applyTheme(id: string) {
+  const root = document.documentElement;
+  if (id === "graphite") root.removeAttribute("data-theme");
+  else root.dataset.theme = id;
+  try {
+    localStorage.setItem("sentinel-theme", id);
+  } catch {
+    /* ignore persistence failure — theme still applies for this session */
+  }
+}
+
+function ThemePicker() {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState<string>(
+    () => {
+      try {
+        return localStorage.getItem("sentinel-theme") || "graphite";
+      } catch {
+        return "graphite";
+      }
+    },
+  );
+
+  const choose = (id: string) => {
+    setCurrent(id);
+    applyTheme(id);
+  };
+  const surprise = () => {
+    const others = THEMES.filter((t) => t.id !== current);
+    const pick = others[Math.floor(Math.random() * others.length)];
+    choose(pick.id);
+  };
+  const currentLabel = THEMES.find((t) => t.id === current)?.label ?? "Graphite";
+
+  return (
+    <div className="theme-picker">
+      <button
+        className="theme-trigger"
+        onClick={() => setOpen((v) => !v)}
+        title="Change appearance theme"
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <span className="theme-trigger-dot" aria-hidden="true" />
+        {currentLabel}
+      </button>
+      {open && (
+        <>
+          <div className="theme-backdrop" onClick={() => setOpen(false)} />
+          <div className="theme-pop" role="menu">
+            <div className="theme-pop-head">
+              <span>Appearance</span>
+              <button className="theme-dice" onClick={surprise} title="Surprise me">
+                🎲 Surprise
+              </button>
+            </div>
+            <div className="theme-grid">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  className={`theme-swatch ${current === t.id ? "theme-swatch-on" : ""}`}
+                  onClick={() => choose(t.id)}
+                  role="menuitemradio"
+                  aria-checked={current === t.id}
+                >
+                  <span className="theme-swatch-chips">
+                    <span style={{ background: t.swatch[0] }} />
+                    <span style={{ background: t.swatch[1] }} />
+                    <span style={{ background: t.swatch[2] }} />
+                  </span>
+                  <span className="theme-swatch-label">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
@@ -746,6 +839,7 @@ function App() {
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
         <div className="header-right">
+          <ThemePicker />
           <span
             className={`rules-source-pill rules-source-${rulesSource}`}
             title="Where Sentinel's recommendation catalog came from on this launch"

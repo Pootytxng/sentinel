@@ -18,6 +18,16 @@ if (isOverlay) {
   document.documentElement.classList.add("overlay-mode");
 }
 
+// Apply the saved appearance theme before first paint (avoids a flash of the
+// default palette). Theme is a data-attribute that swaps CSS color tokens;
+// purely cosmetic, local-only (localStorage), no network.
+try {
+  const savedTheme = localStorage.getItem("sentinel-theme");
+  if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+} catch {
+  /* ignore — fall back to the default theme */
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>{isOverlay ? <Overlay /> : <App />}</React.StrictMode>,
 );

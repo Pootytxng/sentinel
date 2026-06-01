@@ -46,6 +46,68 @@
   --dur-slow: 300ms;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEMES — each overrides ONLY color tokens via [data-theme]. All structure,
+   layout, glow mechanics, and motion are shared; only palette/mood changes.
+   Default (no attribute) = Graphite. Offline; selected via the in-app picker.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Synthwave — violet-black, magenta + cyan neon. */
+:root[data-theme="synthwave"] {
+  --bg: #0c0718; --bg-2: #120a22;
+  --panel: #1a1130; --panel-2: #21163d; --panel-3: #2c1d4f;
+  --border: #36275a; --border-strong: #4b357d; --hairline: rgba(255,120,230,0.08);
+  --fg: #fdeeff; --fg-2: #d9c4ee; --muted: #a78cc8; --faint: #6f5a92;
+  --accent: #ff5cc8; --accent-bright: #ff8ad8; --accent-hover: #ff8ad8;
+  --accent-soft: rgba(255,92,200,0.14); --accent-line: rgba(255,92,200,0.34);
+  --accent-glow: rgba(255,92,200,0.45);
+  --ready: #43e8e0; --attention: #ffc24b; --danger: #ff6584;
+}
+/* Carbon Ember — near-black carbon, warm amber/orange (automotive). */
+:root[data-theme="ember"] {
+  --bg: #0a0807; --bg-2: #0f0c0a;
+  --panel: #16110d; --panel-2: #1d1611; --panel-3: #281e16;
+  --border: #322619; --border-strong: #463524; --hairline: rgba(255,170,90,0.07);
+  --fg: #f7eee4; --fg-2: #ddc9b4; --muted: #a8927a; --faint: #6f5e4c;
+  --accent: #ff8b3d; --accent-bright: #ffae6b; --accent-hover: #ffae6b;
+  --accent-soft: rgba(255,139,61,0.13); --accent-line: rgba(255,139,61,0.32);
+  --accent-glow: rgba(255,139,61,0.45);
+  --ready: #7cd66b; --attention: #ffc24b; --danger: #ff6b5e;
+}
+/* Frost — cool slate, icy cyan-teal, crisp. */
+:root[data-theme="frost"] {
+  --bg: #060a0d; --bg-2: #0a1014;
+  --panel: #10181e; --panel-2: #152027; --panel-3: #1d2c35;
+  --border: #233440; --border-strong: #314856; --hairline: rgba(120,220,255,0.07);
+  --fg: #eef7fb; --fg-2: #c2d6e0; --muted: #87a0ad; --faint: #5a727e;
+  --accent: #38d6e6; --accent-bright: #6ee9f5; --accent-hover: #6ee9f5;
+  --accent-soft: rgba(56,214,230,0.12); --accent-line: rgba(56,214,230,0.32);
+  --accent-glow: rgba(56,214,230,0.42);
+  --ready: #46d98a; --attention: #f5c451; --danger: #f3716f;
+}
+/* Viper — black, toxic lime-green. */
+:root[data-theme="viper"] {
+  --bg: #060806; --bg-2: #0a0d0a;
+  --panel: #10140f; --panel-2: #161c14; --panel-3: #1f281c;
+  --border: #25311f; --border-strong: #36482d; --hairline: rgba(170,255,90,0.07);
+  --fg: #f0f7ec; --fg-2: #ccdcc0; --muted: #8ba07e; --faint: #5e7250;
+  --accent: #9be83f; --accent-bright: #bcf56e; --accent-hover: #bcf56e;
+  --accent-soft: rgba(155,232,63,0.13); --accent-line: rgba(155,232,63,0.32);
+  --accent-glow: rgba(155,232,63,0.42);
+  --ready: #9be83f; --attention: #ffc24b; --danger: #ff6b5e;
+}
+/* Aurora Noir — inky blue-black, emerald→teal aurora, luxe. */
+:root[data-theme="aurora"] {
+  --bg: #05080c; --bg-2: #080d13;
+  --panel: #0e151d; --panel-2: #131d28; --panel-3: #1b2a38;
+  --border: #1f3140; --border-strong: #2b4658; --hairline: rgba(80,230,180,0.07);
+  --fg: #eef6f3; --fg-2: #bfd6cf; --muted: #80a097; --faint: #547068;
+  --accent: #34e0a8; --accent-bright: #6cf0c4; --accent-hover: #6cf0c4;
+  --accent-soft: rgba(52,224,168,0.12); --accent-line: rgba(52,224,168,0.32);
+  --accent-glow: rgba(52,224,168,0.42);
+  --ready: #34e0a8; --attention: #f5c451; --danger: #f3716f;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
@@ -2002,6 +2064,78 @@ body::before {
   }
   .shell { gap: 12px; }
 }
+/* ── Theme picker ────────────────────────────────────────────────────────── */
+.theme-picker { position: relative; }
+.theme-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.theme-trigger:hover { border-color: var(--border-strong); color: var(--fg); }
+.theme-trigger-dot {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: conic-gradient(from 210deg, var(--accent), var(--ready), var(--accent-bright), var(--accent));
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.theme-backdrop { position: fixed; inset: 0; z-index: 90; }
+.theme-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 268px;
+  padding: 12px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-pop), var(--edge);
+  animation: pane-in var(--dur) var(--ease) both;
+}
+.theme-pop-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+}
+.theme-dice {
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  font: inherit; font-size: 11px; font-weight: 700;
+  letter-spacing: 0; text-transform: none;
+  cursor: pointer;
+  transition: filter var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.theme-dice:hover { filter: brightness(1.12); box-shadow: 0 0 16px -4px var(--accent-glow); }
+.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.theme-swatch {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 9px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.theme-swatch:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.theme-swatch-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line), 0 0 18px -6px var(--accent-glow); }
+.theme-swatch-chips { display: flex; height: 22px; border-radius: 6px; overflow: hidden; border: 1px solid var(--hairline); }
+.theme-swatch-chips span { flex: 1; }
+.theme-swatch-label { font-size: 11.5px; font-weight: 600; color: var(--fg-2); text-align: left; }
+.theme-swatch-on .theme-swatch-label { color: var(--accent-bright); }
+
 @media (max-width: 720px) {
   .hero { padding: 20px 18px; }
   .hero-headline { font-size: 27px; }
