@@ -575,6 +575,16 @@ function ThemePicker({
   const [open, setOpen] = useState(false);
   const unlocked = THEMES.filter((t) => t.unlockTier <= maxTier);
 
+  // Esc closes the popover (keyboard parity with the click-out backdrop).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const surprise = () => {
     const others = unlocked.filter((t) => t.id !== current);
     if (others.length === 0) return;
@@ -666,16 +676,32 @@ function App() {
     document.documentElement.dataset.tune = tune.tier.key;
   }, [tune.tier.key]);
 
+  // Peak tier ever reached — unlocks (skins) are gated on this, so earned
+  // cosmetics stay unlocked even if the user temporarily de-tunes (standard
+  // progression). The LIVE tier still drives the honest app-wide escalation.
+  const [peakTier, setPeakTier] = useState<number>(() => {
+    try { return Number(localStorage.getItem("sentinel-peak-tier")) || 0; } catch { return 0; }
+  });
+  useEffect(() => {
+    if (readiness != null && tune.tierIndex > peakTier) {
+      setPeakTier(tune.tierIndex);
+      try { localStorage.setItem("sentinel-peak-tier", String(tune.tierIndex)); } catch { /* ignore */ }
+    }
+  }, [tune.tierIndex, readiness, peakTier]);
+
   const changeTheme = (id: string) => {
     setTheme(id);
     applyTheme(id);
   };
-  // If the saved theme is above the current tier (e.g. data reset), fall back.
+  // If the saved theme is above the current tier, fall back — but ONLY after a
+  // real scan has loaded. Before readiness loads, tier reads 0, which would
+  // falsely downgrade a legitimately-unlocked equipped skin on every launch.
   useEffect(() => {
+    if (readiness == null) return; // pre-load: don't punish the saved theme
     const t = THEMES.find((x) => x.id === theme);
-    if (t && t.unlockTier > tune.tierIndex) changeTheme("graphite");
+    if (t && t.unlockTier > peakTier) changeTheme("graphite");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tune.tierIndex]);
+  }, [peakTier, readiness]);
 
   const onExport = async () => {
     setExporting(true);
@@ -884,7 +910,7 @@ function App() {
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
         <div className="header-right">
-          <ThemePicker current={theme} maxTier={tune.tierIndex} onChange={changeTheme} />
+          <ThemePicker current={theme} maxTier={peakTier} onChange={changeTheme} />
           <span
             className={`rules-source-pill rules-source-${rulesSource}`}
             title="Where Sentinel's recommendation catalog came from on this launch"
@@ -948,7 +974,7 @@ function App() {
               )}
               {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
               {activeTab === "Garage" && (
-                <GarageTab tune={tune} theme={theme} onChooseTheme={changeTheme} />
+                <GarageTab tune={tune} peakTier={peakTier} theme={theme} onChooseTheme={changeTheme} />
               )}
               {activeTab === "Diagnostics" && (
                 <DiagnosticsTab sections={diagnostics} />
@@ -1145,7 +1171,10 @@ function CommandHero({
     >
       {celebrate && <div className="levelup-flash" aria-hidden="true">{tune.tier.name.toUpperCase()}</div>}
       <div className="hero-core">
-        <div className="hero-ring-wrap">
+        <div
+          className="hero-ring-wrap"
+          title={`Tune score ${tune.score}/100 — earned from ${tune.readyPart} pts readiness (${tune.readyClear}/${tune.readyTotal} clear) + ${tune.appliedPart} pts optimizations (${tune.appliedCount}/${tune.appliedTotal} applied). Transparent, not a vanity score.`}
+        >
           <svg className="hero-ring" viewBox="0 0 120 120" aria-hidden="true">
             <circle className="hero-ring-track" cx="60" cy="60" r={R} />
             <circle
@@ -1207,10 +1236,12 @@ function CommandHero({
 
 function GarageTab({
   tune,
+  peakTier,
   theme,
   onChooseTheme,
 }: {
   tune: TuneState;
+  peakTier: number;
   theme: string;
   onChooseTheme: (id: string) => void;
 }) {
@@ -1279,10 +1310,10 @@ function GarageTab({
       </div>
 
       {/* Reskins — unlock as you climb. */}
-      <h3 className="priorities-group">Reskins {`(${THEMES.filter((t) => t.unlockTier <= tune.tierIndex).length}/${THEMES.length} unlocked)`}</h3>
+      <h3 className="priorities-group">Reskins {`(${THEMES.filter((t) => t.unlockTier <= peakTier).length}/${THEMES.length} unlocked)`}</h3>
       <div className="garage-skins">
         {THEMES.map((t) => {
-          const locked = t.unlockTier > tune.tierIndex;
+          const locked = t.unlockTier > peakTier;
           const active = theme === t.id;
           return (
             <button
