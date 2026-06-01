@@ -157,7 +157,43 @@ const fmtDriver = (g: GpuInfo) => {
 // and History only appear when they have content.
 const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
 type RecCategory = (typeof REC_CATEGORIES)[number];
-type Tab = "Overview" | "Readiness" | "Priorities" | RecCategory | "Startup" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
+// Top-level sections shown in the left command rail. The six rec categories +
+// Startup are consolidated into one "Optimize" section (filtered inside) so the
+// rail stays short and never needs a horizontal scroll.
+type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
+
+const SECTION_META: Record<Tab, { label: string; icon: string }> = {
+  Overview: { label: "Dashboard", icon: "grid" },
+  Readiness: { label: "Readiness", icon: "shield" },
+  Priorities: { label: "Priorities", icon: "target" },
+  Optimize: { label: "Optimize", icon: "sliders" },
+  Monitoring: { label: "Monitor", icon: "pulse" },
+  Sessions: { label: "Sessions", icon: "chart" },
+  Diagnostics: { label: "Diagnostics", icon: "terminal" },
+  History: { label: "Ledger", icon: "ledger" },
+};
+
+// Inline stroke icons (no icon font/library → offline, zero-outbound).
+const ICONS: Record<string, React.ReactNode> = {
+  grid: (<><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="8" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /></>),
+  shield: (<><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z" /><path d="M9 12l2 2 4-4" /></>),
+  target: (<><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.4" /></>),
+  sliders: (<><line x1="4" y1="8" x2="20" y2="8" /><line x1="4" y1="16" x2="20" y2="16" /><circle cx="9" cy="8" r="2.3" /><circle cx="15" cy="16" r="2.3" /></>),
+  pulse: (<path d="M3 12h4l2-6 4 12 2-6h6" />),
+  chart: (<><line x1="4" y1="20" x2="20" y2="20" /><rect x="5.5" y="11" width="3" height="7" /><rect x="10.5" y="7" width="3" height="11" /><rect x="15.5" y="13" width="3" height="5" /></>),
+  terminal: (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3" /><line x1="13" y1="15" x2="16.5" y2="15" /></>),
+  ledger: (<><rect x="5" y="3" width="14" height="18" rx="2" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></>),
+  chevron: (<path d="M6 9l6 6 6-6" />),
+};
+
+function Icon({ name }: { name: string }) {
+  return (
+    <svg className="ico" viewBox="0 0 24 24" width="18" height="18" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {ICONS[name]}
+    </svg>
+  );
+}
 
 type CpuSensorSnapshot = {
   usage_overall_pct: number;
@@ -648,39 +684,22 @@ function App() {
     refresh();
   }, []);
 
-  const recCountByCategory = useMemo(() => {
-    const counts: Record<string, number> = {};
-    recs?.forEach((r) => {
-      counts[r.category] = (counts[r.category] ?? 0) + 1;
-    });
-    return counts;
-  }, [recs]);
-
-  // Build the ordered list of tabs that have content
+  // Ordered list of sections that have content. The six rec categories +
+  // Startup are consolidated into one "Optimize" section (filtered inside),
+  // so the rail stays short and never needs a horizontal scroll.
   const visibleTabs: Tab[] = useMemo(() => {
     const list: Tab[] = ["Overview"];
     if (readiness) list.push("Readiness");
     if (priorities) list.push("Priorities");
-    REC_CATEGORIES.forEach((c) => {
-      if ((recCountByCategory[c] ?? 0) > 0) list.push(c);
-    });
-    if (startup.length > 0) list.push("Startup");
-    // Monitoring is always visible once we have a hardware scan. On systems
-    // without an NVIDIA GPU (no NVML), the tab itself surfaces the
-    // "sensors unavailable" state rather than hiding the feature entirely.
+    if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
-    // Diagnostics is always visible once we have a hardware scan — it's
-    // "Sentinel's raw view of your PC" and the user should be able to reach
-    // it to spot-check Sentinel's observations even when nothing else
-    // is going on.
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recCountByCategory, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities]);
 
-  // If the currently active tab disappears (e.g. user rolled back the last
-  // applied change while History was open), fall back to Overview.
+  // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
     if (!visibleTabs.includes(activeTab)) {
       setActiveTab("Overview");
@@ -688,19 +707,13 @@ function App() {
   }, [visibleTabs, activeTab]);
 
   const tabBadgeCount = (tab: Tab): number | null => {
-    if (tab === "Overview") return null;
-    if (tab === "Diagnostics") return null;
-    if (tab === "Monitoring") return null;
     if (tab === "Readiness") return readiness?.attention_count ?? null;
     if (tab === "Priorities") return priorities ? priorities.limiters.length : null;
+    if (tab === "Optimize") return recs?.length ?? null;
     if (tab === "Sessions") return sessions.length;
-    if (tab === "Startup") return startup.length;
     if (tab === "History") return changes.length;
-    return recCountByCategory[tab] ?? 0;
+    return null;
   };
-
-  const categoryRecs = (cat: RecCategory): Recommendation[] =>
-    (recs ?? []).filter((r) => r.category === cat);
 
   // Truthful label for the rules source — what's actually driving the
   // catalog the user sees. Per ARCHITECTURE_LOCKS §1.3 cold-start contract,
@@ -753,67 +766,56 @@ function App() {
       {hw && (
         <>
           <CommandHero hw={hw} readiness={readiness} />
-          <nav className="tab-bar" role="tablist">
-            {visibleTabs.map((tab) => {
-              const badge = tabBadgeCount(tab);
-              return (
-                <button
-                  key={tab}
-                  role="tab"
-                  aria-selected={activeTab === tab}
-                  className={`tab ${activeTab === tab ? "tab-active" : ""}`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                  {badge !== null && badge > 0 && (
-                    <span className="tab-count">{badge}</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="shell">
+            <nav className="rail" role="tablist" aria-label="Sections">
+              {visibleTabs.map((tab) => {
+                const badge = tabBadgeCount(tab);
+                const meta = SECTION_META[tab];
+                return (
+                  <button
+                    key={tab}
+                    role="tab"
+                    aria-selected={activeTab === tab}
+                    className={`rail-item ${activeTab === tab ? "rail-item-on" : ""}`}
+                    onClick={() => setActiveTab(tab)}
+                    title={meta.label}
+                  >
+                    <Icon name={meta.icon} />
+                    <span className="rail-label">{meta.label}</span>
+                    {badge !== null && badge > 0 && (
+                      <span className="rail-badge">{badge}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
 
-          {activeTab === "Overview" && <OverviewTab hw={hw} />}
-
-          {activeTab === "Readiness" && <ReadinessTab readiness={readiness} />}
-
-          {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
-
-          {REC_CATEGORIES.includes(activeTab as RecCategory) && (
-            <CategoryTab
-              category={activeTab as RecCategory}
-              recs={categoryRecs(activeTab as RecCategory)}
-              busyId={busyId}
-              onToggle={toggleRec}
-              hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
-            />
-          )}
-
-          {activeTab === "Startup" && (
-            <StartupTab
-              entries={startup}
-              busyId={busyId}
-              onToggle={toggleStartup}
-            />
-          )}
-
-          {activeTab === "Monitoring" && (
-            <MonitoringTab active={activeTab === "Monitoring"} />
-          )}
-
-          {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
-
-          {activeTab === "Diagnostics" && (
-            <DiagnosticsTab sections={diagnostics} />
-          )}
-
-          {activeTab === "History" && (
-            <HistoryTab
-              changes={changes}
-              busyId={busyId}
-              onRollback={rollback}
-            />
-          )}
+            <div className="content">
+              {activeTab === "Overview" && <OverviewTab hw={hw} />}
+              {activeTab === "Readiness" && <ReadinessTab readiness={readiness} />}
+              {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
+              {activeTab === "Optimize" && (
+                <OptimizeTab
+                  recs={recs ?? []}
+                  startup={startup}
+                  busyId={busyId}
+                  onToggleRec={toggleRec}
+                  onToggleStartup={toggleStartup}
+                  hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
+                />
+              )}
+              {activeTab === "Monitoring" && (
+                <MonitoringTab active={activeTab === "Monitoring"} />
+              )}
+              {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
+              {activeTab === "Diagnostics" && (
+                <DiagnosticsTab sections={diagnostics} />
+              )}
+              {activeTab === "History" && (
+                <HistoryTab changes={changes} busyId={busyId} onRollback={rollback} />
+              )}
+            </div>
+          </div>
         </>
       )}
 
@@ -1052,81 +1054,105 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
   );
 }
 
-function CategoryTab({
-  category,
+// Optimize: the six rec categories + Startup, consolidated into one section
+// with an inline segmented filter. Replaces the old per-category tabs so the
+// rail stays short. Behavior (apply/rollback/toggle) is unchanged.
+function OptimizeTab({
   recs,
+  startup,
   busyId,
-  onToggle,
+  onToggleRec,
+  onToggleStartup,
   hasActiveChange,
 }: {
-  category: RecCategory;
   recs: Recommendation[];
+  startup: StartupEntry[];
   busyId: string | null;
-  onToggle: (rec: Recommendation) => void;
+  onToggleRec: (rec: Recommendation) => void;
+  onToggleStartup: (entry: StartupEntry) => void;
   hasActiveChange: (recId: string) => boolean;
 }) {
+  type Filter = "All" | RecCategory | "Startup";
+  const [filter, setFilter] = useState<Filter>("All");
+
+  const catCounts: Record<string, number> = {};
+  recs.forEach((r) => (catCounts[r.category] = (catCounts[r.category] ?? 0) + 1));
+  const activeCats = REC_CATEGORIES.filter((c) => (catCounts[c] ?? 0) > 0);
+
+  const filters: { id: Filter; label: string; count: number }[] = [
+    { id: "All", label: "All", count: recs.length },
+    ...activeCats.map((c) => ({ id: c as Filter, label: c as string, count: catCounts[c] ?? 0 })),
+    ...(startup.length
+      ? [{ id: "Startup" as Filter, label: "Startup", count: startup.length }]
+      : []),
+  ];
+
+  const shownRecs =
+    filter === "All"
+      ? recs
+      : filter === "Startup"
+      ? []
+      : recs.filter((r) => r.category === filter);
+
   return (
     <section className="tab-pane">
       <div className="section-header">
         <h2 className="section-title">
-          {category}
+          Optimize
           <span className="count-badge">{recs.length}</span>
         </h2>
         <div className="read-only-pill">Nothing changes without your approval</div>
       </div>
-      <div className="rec-list">
-        {recs.map((r) => (
-          <RecCard
-            key={r.id}
-            rec={r}
-            appliable={APPLIABLE_REC_IDS.has(r.id)}
-            busy={busyId === r.id}
-            canToggleOff={hasActiveChange(r.id)}
-            onToggle={() => onToggle(r)}
-          />
-        ))}
-        {recs.length === 0 && (
-          <div className="empty">No recommendations in this category right now.</div>
-        )}
-      </div>
-    </section>
-  );
-}
 
-function StartupTab({
-  entries,
-  busyId,
-  onToggle,
-}: {
-  entries: StartupEntry[];
-  busyId: string | null;
-  onToggle: (entry: StartupEntry) => void;
-}) {
-  return (
-    <section className="tab-pane">
-      <div className="section-header">
-        <h2 className="section-title">
-          Startup apps
-          <span className="count-badge">{entries.length}</span>
-        </h2>
-        <div className="read-only-pill">
-          {entries.filter((e) => !e.enabled).length} disabled
-        </div>
-      </div>
-      <p className="section-help">
-        User-scope auto-start entries. Toggle off to keep them from launching with
-        Windows. Re-enable any time — nothing is deleted.
-      </p>
-      <div className="startup-list">
-        {entries.map((entry) => (
-          <StartupRow
-            key={entry.name}
-            entry={entry}
-            busy={busyId === `startup:${entry.name}`}
-            onToggle={() => onToggle(entry)}
-          />
+      <div className="segmented" role="tablist" aria-label="Filter optimizations">
+        {filters.map((f) => (
+          <button
+            key={f.id}
+            role="tab"
+            aria-selected={filter === f.id}
+            className={`seg ${filter === f.id ? "seg-on" : ""}`}
+            onClick={() => setFilter(f.id)}
+          >
+            {f.label}
+            <span className="seg-count">{f.count}</span>
+          </button>
         ))}
       </div>
+
+      {filter === "Startup" ? (
+        <>
+          <p className="section-help">
+            User-scope auto-start entries. Toggle off to keep them from launching
+            with Windows. Re-enable any time — nothing is deleted.
+          </p>
+          <div className="startup-list">
+            {startup.map((entry) => (
+              <StartupRow
+                key={entry.name}
+                entry={entry}
+                busy={busyId === `startup:${entry.name}`}
+                onToggle={() => onToggleStartup(entry)}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="rec-list">
+          {shownRecs.map((r) => (
+            <RecCard
+              key={r.id}
+              rec={r}
+              appliable={APPLIABLE_REC_IDS.has(r.id)}
+              busy={busyId === r.id}
+              canToggleOff={hasActiveChange(r.id)}
+              onToggle={() => onToggleRec(r)}
+            />
+          ))}
+          {shownRecs.length === 0 && (
+            <div className="empty">No recommendations in this group right now.</div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -1969,6 +1995,8 @@ function RecCard({
     ? "state-warn"
     : "state-muted";
 
+  const [open, setOpen] = useState(false);
+
   const stateClass = isInfo
     ? "rec-info"
     : currentlyOn
@@ -2007,43 +2035,53 @@ function RecCard({
         )}
       </div>
       <h3 className="rec-title">{rec.title}</h3>
-      <p className="rec-desc">{rec.description}</p>
-      <div className="rec-meta">
-        <div className="rec-row">
-          <span className="rec-row-label">Impact</span>
-          <span className="rec-row-value impact">{rec.impact}</span>
-        </div>
-        {rec.downside && (
-          <div className="rec-row">
-            <span className="rec-row-label">Tradeoff</span>
-            <span className="rec-row-value downside">{rec.downside}</span>
+      <div className="rec-impact-line">
+        <span className="rec-impact-dot" aria-hidden="true" />
+        <span className="rec-impact-text">{rec.impact}</span>
+      </div>
+      <button
+        className={`rec-details-toggle ${open ? "open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span>{open ? "Hide details" : "Details"}</span>
+        <Icon name="chevron" />
+      </button>
+      {open && (
+        <div className="rec-expand">
+          <p className="rec-desc">{rec.description}</p>
+          <div className="rec-meta">
+            {rec.downside && (
+              <div className="rec-row">
+                <span className="rec-row-label">Tradeoff</span>
+                <span className="rec-row-value downside">{rec.downside}</span>
+              </div>
+            )}
+            <div className="rec-row">
+              <span className="rec-row-label">Why this</span>
+              <span className="rec-row-value muted">{rec.applies_to}</span>
+            </div>
           </div>
-        )}
-        <div className="rec-row">
-          <span className="rec-row-label">Why this</span>
-          <span className="rec-row-value muted">{rec.applies_to}</span>
+          <div className="rec-status">
+            <div className="rec-status-row">
+              <span className="rec-status-label">Recommended</span>
+              <span className="rec-status-value state-on">On</span>
+            </div>
+            <div className="rec-status-row">
+              <span className="rec-status-label">Current</span>
+              <span className={`rec-status-value ${currentlyOn ? "state-on" : "state-off"}`}>
+                {currentlyOn ? "On" : "Off"}
+              </span>
+            </div>
+            <div className="rec-status-row">
+              <span className="rec-status-label">Applied by Sentinel</span>
+              <span className={`rec-status-value ${sentinelAppliedClass}`}>
+                {sentinelAppliedLabel}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="rec-status">
-        <div className="rec-status-row">
-          <span className="rec-status-label">Recommended</span>
-          <span className="rec-status-value state-on">On</span>
-        </div>
-        <div className="rec-status-row">
-          <span className="rec-status-label">Current</span>
-          <span
-            className={`rec-status-value ${currentlyOn ? "state-on" : "state-off"}`}
-          >
-            {currentlyOn ? "On" : "Off"}
-          </span>
-        </div>
-        <div className="rec-status-row">
-          <span className="rec-status-label">Applied by Sentinel</span>
-          <span className={`rec-status-value ${sentinelAppliedClass}`}>
-            {sentinelAppliedLabel}
-          </span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
