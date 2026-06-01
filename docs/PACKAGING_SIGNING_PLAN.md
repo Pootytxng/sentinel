@@ -127,7 +127,7 @@ legal, remote-fetch, updater, recommendation-catalog, or Gaming-Mode changes. `c
 2. ✅ Storage **logical-disk fallback** when `MSFT_PhysicalDisk` is empty — Export + readiness report the
    logical volumes (e.g. `C:` NTFS) instead of "—" / "no disks" (`514ca0e`).
 3. ✅ **AMD GPU driver-age** — **VERIFIED NOT A BUG**; the premise was stale. Live `detect_gpus()` on the
-   AMD Radeon RX 9070 XT reads `driver_date 2026-05-12`, `driver_age_days Some(19)` via the existing
+   AMD Radeon RX 9070 XT reads `driver_date 2026-05-12`, `driver_age_days Some(20)` (value at check; `2026-05-12` is the stable fact) via the existing
    DXGI↔WMI name-matched merge (the DXGI and WMI names are byte-identical, so the date attaches). No code
    change; no registry fallback added.
 4. ✅ **Install dir vs runtime dir** separated — FPS runtime IPC (`fps.json` / `fps.alive`) moved to
