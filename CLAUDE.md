@@ -145,8 +145,8 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   merge — no code change, no registry fallback; (4) install dir vs runtime dir separated →
   `%APPDATA%\Sentinel\runtime` `e87ecdd`+`512dd11`; (5) single-instance lock (2nd launch focuses existing
   window) `75e4681`. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
-  **✅ Installer REBUILT (2026-05-31 17:42) — includes #1–#4.** `npm run tauri build` →
-  `Sentinel_0.1.0_x64_en-US.msi` (3.6 MB) + `Sentinel_0.1.0_x64-setup.exe` (2.4 MB) in
+  **✅ Installer REBUILT (2026-05-31 17:11) — includes #1–#4.** `npm run tauri build` →
+  `Sentinel_0.1.0_x64_en-US.msi` (≈3.4 MB) + `Sentinel_0.1.0_x64-setup.exe` (≈2.2 MB) in
   `src-tauri/target/release/bundle/`; identity baked in (Sentinel / 0.1.0 / Pootytxng), NotSigned
   (expected), no updater; single-instance smoke passed on the fresh binary. (First attempt OOM'd
   compiling the `windows` crate at `opt-level=3` with ~5 GB free RAM; cleared with
