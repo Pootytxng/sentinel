@@ -101,6 +101,73 @@ the path that graduates rec impact claims from "Expected impact" → "Verified" 
    is proven.
 6. **F6 proof layer** — incremental, after F3 has accrued real session data.
 
+## Experience direction — the premium command-center layer
+
+**Set by Kuya, 2026-05-31. This is the next product priority *after* private-beta feedback — NOT
+more catalog expansion.** It refines the thesis above: growing "upward" means a **premium experience
+layer**, not just read-only features stacked plainly.
+
+**The concern is not "Sentinel needs more features."** Sentinel is technically strong, verified,
+rollback-safe, and private-beta ready. The risk is how it *feels* — that an average user experiences it
+as *"here are some light switches; flip them, trust us, performance is better."* That is emotionally too
+close to the generic-optimizer category, even though Sentinel is architecturally far safer. A user who
+flips a few safe switches once and never returns has not received the real value.
+
+**Desired feeling.** Opening Sentinel should feel like stepping into a **serious performance command
+center** — a place that actively helps you *understand, verify, and maximize* your system around what
+*you* care about (FPS, latency, smoothness, quality, stability, thermals, readiness, overall gaming
+confidence). Emotional target: **"This is the place. If Sentinel says I'm good, I don't need to chase
+sketchy Reddit/YouTube tweak packs."** Analogy: a **Ferrari lounge** (offered a glass of wine while
+professionals handle the car), not a **Toyota dealership** where the user feels pressured, confused, and
+unsure whether they got scammed.
+
+**The honesty boundary (non-negotiable).** The feeling of "maximized / dialed-in" must come from
+**clarity, proof, monitoring, and safe recommendations — never from false claims.** Do NOT promise
+"maximum FPS," fabricate guarantees, invent percentages, or show an "optimized score" unless it is
+**transparent and defensible.** Confidence without lying. What Sentinel legitimately delivers: hardware
+checked · obvious misconfigurations surfaced · safe optimizations applied **or intentionally skipped** ·
+system monitored · session results visible · rollback history clear · readiness understandable — so the
+user has **no need to hunt random external tweak guides to feel "fully optimized."**
+
+**Seven questions Sentinel should answer (the home-base test):**
+1. Am I ready to play? 2. What is holding this PC back? 3. What has Sentinel safely improved?
+4. What should I not touch? 5. How did the last session perform? 6. What can I share if I need help?
+7. Am I chasing real performance, or snake oil?
+
+**Make each surface feel *alive without being noisy*:**
+- **Readiness** → a live system check, not a static checklist.
+- **Sessions** → a post-game performance debrief, not a log.
+- **Priorities** → a personal technician ranking what matters for *this* rig, not a flat list.
+- **Export** → a professional diagnostic report, not a text dump.
+- **Trust Ledger** → *proof* you're protected and can undo, not a log dump.
+- **Monitoring** → an instrument cluster, not raw numbers stapled to a window.
+
+**Aesthetic / design language:** futuristic but not childish; high-class performance cockpit, **not RGB
+clownware**; dark/premium — graphite / black / metallic; clean hierarchy; strong cards & panels; clear
+visual grouping; subtle animation + polished transitions + tactile feedback; confident status
+indicators; meaningful empty states; less "settings page," more "performance command center"; readable
+for non-technical gamers; **no fake gamer hype, no scammy boost language, no fake percentages, no opaque
+"optimized score."**
+
+**Intent framing / "modes" (future, guidance-only — must NOT blindly mutate):** Competitive Performance
+· Balanced Gaming · Visual Quality · Stability/Safety. A mode shapes **readiness emphasis, priority
+ranking, explanations, and which safe actions are surfaced** — it does **not** silently flip settings.
+Any actual mutation still rides the rollback contract + Gaming Mode's gate.
+
+**The "Experience / Design System Pass" (next priority after beta feedback):**
+1. Stronger visual identity. 2. Better dashboard landing view. 3. More premium card styling.
+4. Clearer status language. 5. Better animations/transitions *where useful*. 6. More satisfying
+interaction states. 7. Better visual grouping of readiness / monitoring / sessions / priorities /
+rollback. 8. Stronger "you are protected / rollback available" trust cues. 9. A genuinely good
+**"system is dialed in"** state when nothing needs action. 10. A clear **"attention needed"** state when
+something is actually worth fixing.
+
+**Core product rule (the correction):** Do **not** solve perceived "lightness" by adding more tweak
+buttons. Solve it by making Sentinel *feel* like a **performance cockpit · readiness advisor · monitoring
+dashboard · session analyst · rollback-safe control center · premium trust layer over Windows gaming
+configuration.** The product should not become "30 switches" — it should become **"the place a gamer goes
+to know their PC is truly ready."**
+
 ## Locks reaffirmed
 
 - **Tweak catalog stays frozen** (~29 recs; no new risky tweaks; the blocklist above is hard).

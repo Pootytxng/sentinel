@@ -134,7 +134,9 @@ The feedback template in section 10 covers most of this — copy/paste and fill 
 
 ## 10. Feedback template
 
-Copy this, fill it in, and send it back:
+Copy this, fill it in, and send it back. **Beyond bugs, we especially want the "Experience & feel"
+answers** — whether Sentinel feels premium, trustworthy, and like a real command center vs. just a
+settings page:
 
 ```
 Sentinel beta feedback
@@ -159,6 +161,16 @@ Rollback worked: yes/no/not tested
 Bug/issue:
 Steps to reproduce:
 Screenshot/export attached: yes/no
+
+--- Experience & feel (we especially want this) ---
+Does Sentinel feel useful enough: yes/no
+Premium or plain: premium/plain
+Does it feel trustworthy: yes/no
+Real command center, or just a settings app: command center/settings app
+Anything feel too light, empty, or unfinished:
+Did it make your system feel more under control: yes/no
+Did it reduce the urge to look up random tweak guides: yes/no
+What would make it the ONLY place you need for PC gaming readiness:
 Other notes:
 ```
 
