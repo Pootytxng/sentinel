@@ -258,3 +258,33 @@ touch `src/` only, and keep `npm run build` clean (no Rust → `cargo test` unaf
 No backend/Rust changes · no catalog/mutation/rollback changes · no installer/packaging/signing ·
 no remote-fetch/updater · no Gaming Mode · no moving `private-beta-001` refs · no new outbound
 network · no telemetry.
+
+## 11. Theme curation (Decision C) — execution-ready removal steps
+
+Decision C: keep **Graphite** (default) + **Frost** + **Aurora Noir** + **Carbon Ember**; **drop the
+neon Synthwave + Viper** as off-thesis ("RGB clownware"). This lands alongside sub-project #3's
+theme-ungating (same files). Exact steps:
+
+1. **`src/App.css`** — delete the two theme blocks: `:root[data-theme="synthwave"] { … }` and
+   `:root[data-theme="viper"] { … }`. Leave the Graphite default `:root` plus the `frost`, `aurora`,
+   and `ember` blocks intact.
+2. **`src/App.tsx`** — in the `THEMES` array, delete the two entries with `id: "synthwave"` and
+   `id: "viper"` (post-#3 these entries no longer carry `unlockTier`).
+3. **Fall back saved values** — a machine that previously selected synthwave/viper must not try to
+   apply a now-missing theme. Harden `readSavedTheme()`:
+
+```ts
+const VALID = new Set(THEMES.map((t) => t.id));
+function readSavedTheme(): string {
+  try {
+    const saved = localStorage.getItem("sentinel-theme") || "graphite";
+    return VALID.has(saved) ? saved : "graphite";
+  } catch { return "graphite"; }
+}
+```
+
+4. **Verify:** `npm run build` clean; `npm run tauri dev` → the picker shows exactly four themes
+   (Graphite / Frost / Aurora Noir / Carbon Ember); a profile with a stale `synthwave`/`viper` value
+   loads Graphite without error. No other references need touching — `applyTheme(id)` maps any
+   non-graphite id to `data-theme`, so removing the entries + CSS blocks is sufficient.
+5. **Result:** an all-dark/metallic set consistent with the premium-cockpit thesis; no neon.
