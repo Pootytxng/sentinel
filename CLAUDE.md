@@ -62,6 +62,26 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
 
+> **⚠️ DOCS-vs-`main` DRIFT — noted 2026-06-01.** The "CURRENT STATE" notes below describe the
+> repo **as of the `private-beta-001` freeze (`16069fa`)**. **`main` (HEAD `d049d63`) is now 13
+> commits PAST the freeze** — a clean linear descendant (the freeze commit's child is `97a29e1`;
+> beta refs remain pinned at `16069fa` and were NOT moved). Two of those commits are docs; the
+> other **11 are a premium UI/UX layer that is NOT part of `private-beta-001` and has NOT been
+> QA'd**: command-center hero + design-system foundation, command rail + consolidated Optimize,
+> live theme system + picker ("Surprise" randomizer), "Tune Level" evolution (Stock→Apex),
+> app-wide evolution + Garage tab, persisted unlocks, and a **Guided (advisory)** settings section
+> with **safe deep-link buttons**. The ONLY backend change in this layer is
+> `capabilities/default.json`: a **scoped** `opener:allow-open-url` allowlist of exactly three
+> `ms-settings:` URIs (`display-advanced`, `display-advancedgraphics`, `storagesense`) — no
+> fs/shell/http, no new IPC command, no mutation, no catalog/remote-fetch/updater change;
+> `actions.rs` / `recommendations.rs` / `remote_rules.rs` / `history.rs` are untouched. (The beta
+> installer config in `docs/PACKAGING_SIGNING_PLAN.md` predates this allowlist and remains correct
+> for the frozen snapshot.) **Status of this entire post-freeze UI layer:**
+>
+> > **Experimental / not Sentinel-verified. Use at your own discretion.**
+>
+> Do not imply it is beta-verified until it has had its own QA pass.
+
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
 `cargo test` **68/68**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
 (`origin/main` in sync). Manual-mutation QA blocker **LIFTED** (see below).
@@ -95,7 +115,8 @@ QA). **Design done (planning only, no code): `docs/GAMING_MODE_PLAN.md`** — v1
 FPS-helper heartbeat lifecycle as the crash-safe template); session file + startup recovery prompt;
 consent-gated; 7-state machine; its own QA gate. Otherwise: packaging/signing + legal finalization (separate gates).
 
-Recent commits (newest first):
+Recent commits (newest first — this list is the `private-beta-001` line; `main` has since advanced
+13 commits, see the DOCS-vs-`main` DRIFT banner under CURRENT STATE above):
 - `(F4)` feat(priorities): Priority Ranking surface (read-only/advisory)
 - `60c57ce` feat(export): local Export Snapshot report (read-only)
 - `33413a2` feat(sessions): per-session summary surface (read-only/advisory)

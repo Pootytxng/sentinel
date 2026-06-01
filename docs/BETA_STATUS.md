@@ -32,6 +32,20 @@ installed-build smoke passed 2026-05-31.
 behind its own design + QA). NVIDIA monitoring is implemented but **not yet hardware-validated**, so it
 is `Experimental` on NVIDIA GPUs.
 
+## On `main` but NOT in `private-beta-001` (experimental)
+
+`main` has advanced **13 commits past** the frozen snapshot (`16069fa`). Beyond two docs commits,
+this is a premium **UI/UX layer** — command-center / command rail, live theme picker, "Tune Level"
+evolution (Stock→Apex), app-wide evolution + Garage tab, persisted unlocks, and a **Guided
+(advisory)** settings section with safe deep-link buttons (a scoped `ms-settings:` opener allowlist;
+**no** new mutation, IPC command, recommendation, remote-fetch, or updater change). **None of it is
+in `private-beta-001`, and none of it has been QA'd.** Per project rule it is labeled:
+
+> **Experimental / not Sentinel-verified. Use at your own discretion.**
+
+A future beta that wishes to include this layer must cut a new tag (`private-beta-002`) after it
+passes its own QA pass.
+
 ## Tester Warning
 
 Any feature **not** marked `Sentinel-verified` should be treated as experimental and used at the
