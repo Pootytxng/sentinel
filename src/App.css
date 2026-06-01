@@ -2461,6 +2461,58 @@ body::before {
   line-height: 1.5;
 }
 
+/* Honest status chip on guided cards. */
+.guided-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  cursor: help;
+  border: 1px solid transparent;
+}
+.guided-status-dot { width: 7px; height: 7px; border-radius: 50%; }
+.guided-status-needs-action {
+  color: var(--attention);
+  background: color-mix(in srgb, var(--attention) 13%, transparent);
+  border-color: color-mix(in srgb, var(--attention) 38%, transparent);
+}
+.guided-status-needs-action .guided-status-dot { background: var(--attention); box-shadow: 0 0 8px var(--attention); }
+.guided-status-unknown {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border);
+}
+.guided-status-unknown .guided-status-dot { background: var(--faint); }
+
+/* Actions row: "How to" expander + a real "Open it" deep-link button. */
+.guided-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.guided-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.guided-open-btn .ico { width: 14px; height: 14px; }
+.guided-open-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px -4px var(--accent-glow);
+}
+
 /* ── Responsive — narrow / half-screen windows ───────────────────────────── */
 @media (max-width: 900px) {
   .app { padding: 16px; }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import "./App.css";
 import "./Onboarding.css";
@@ -185,6 +186,7 @@ const ICONS: Record<string, React.ReactNode> = {
   terminal: (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3" /><line x1="13" y1="15" x2="16.5" y2="15" /></>),
   ledger: (<><rect x="5" y="3" width="14" height="18" rx="2" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></>),
   engine: (<><rect x="3" y="10" width="11" height="8" rx="1.5" /><path d="M14 12h3l3 3v3h-6" /><line x1="6" y1="10" x2="6" y2="7" /><line x1="10" y1="10" x2="10" y2="7" /><line x1="5" y1="7" x2="11" y2="7" /><line x1="14" y1="6" x2="20" y2="6" /></>),
+  external: (<><path d="M14 4h6v6" /><path d="M20 4l-8 8" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>),
   chevron: (<path d="M6 9l6 6 6-6" />),
 };
 
@@ -1473,12 +1475,29 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
 // "Lead the horse to water AND hold the bendy straw" — for settings Sentinel
 // detects but deliberately won't mutate (they live in a vendor app / a Windows
 // page with no safe, reversible programmatic toggle), we point the user to the
-// exact place to change it themselves. Keyed by rec id. Steps are best-known
-// navigation for each native location; the rec's own description still carries
-// the "why". No automation — guidance only.
-const GUIDED_STEPS: Record<string, { where: string; steps: string[] }> = {
+// exact place to change it AND, where possible, open that place for them.
+//
+// HONESTY: `state` reflects only what Sentinel genuinely knows.
+//  - "needs-action": the rec ONLY appears because Sentinel detected a sub-par
+//    state (e.g. refresh rate below max). Its presence = action available.
+//  - "unknown": Sentinel cannot read this setting's state at all (e.g. a vendor
+//    app's telemetry toggle). We say so plainly rather than fake an indicator.
+//
+// `openUri` is a FIXED, allowlisted ms-settings: deep link (never from data) —
+// opened via the already-permitted opener plugin. Vendor apps (AMD/NVIDIA) have
+// no reliable deep link, so they get steps only, honestly labelled.
+type GuideState = "needs-action" | "unknown";
+type Guide = {
+  where: string;
+  steps: string[];
+  state: GuideState;
+  openUri?: string; // allowlisted ms-settings: target
+  openLabel?: string;
+};
+const GUIDED_STEPS: Record<string, Guide> = {
   "amd-uxp": {
     where: "AMD Software: Adrenalin Edition",
+    state: "unknown",
     steps: [
       "Open AMD Software (right-click desktop → AMD Software, or search the Start menu).",
       "Click the gear / Settings (top-right) → Preferences.",
@@ -1487,6 +1506,7 @@ const GUIDED_STEPS: Record<string, { where: string; steps: string[] }> = {
   },
   "nvidia-low-latency": {
     where: "NVIDIA Control Panel (per-game)",
+    state: "unknown",
     steps: [
       "Right-click the desktop → NVIDIA Control Panel.",
       "Manage 3D settings → Program Settings → pick your game.",
@@ -1495,22 +1515,27 @@ const GUIDED_STEPS: Record<string, { where: string; steps: string[] }> = {
   },
   "gpu-prefer-discrete": {
     where: "Windows Graphics settings",
+    state: "unknown",
+    openUri: "ms-settings:display-advancedgraphics",
+    openLabel: "Open Graphics settings",
     steps: [
-      "Settings → System → Display → Graphics.",
-      "Add or select your game's .exe.",
-      'Set it to "High performance" (your discrete GPU).',
+      "In Graphics settings, add or select your game's .exe.",
+      'Set it to "High performance" (your discrete GPU), then Save.',
     ],
   },
   "monitor-max-refresh": {
-    where: "Windows Display settings",
+    where: "Windows Advanced display",
+    state: "needs-action",
+    openUri: "ms-settings:display-advanced",
+    openLabel: "Open Advanced display",
     steps: [
-      "Settings → System → Display → Advanced display.",
       'Set "Choose a refresh rate" to the highest value your monitor lists.',
-      "If your max isn't shown, check the cable (DisplayPort/HDMI 2.1) and monitor OSD.",
+      "If your max isn't shown, check the cable (DisplayPort / HDMI 2.1) and monitor OSD.",
     ],
   },
   "gpu-driver-update": {
     where: "Your GPU vendor's app",
+    state: "unknown",
     steps: [
       "NVIDIA: NVIDIA App / GeForce Experience → Drivers → Check for updates.",
       "AMD: AMD Software → Home → Check for Updates.",
@@ -1519,14 +1544,18 @@ const GUIDED_STEPS: Record<string, { where: string; steps: string[] }> = {
   },
   "storage-c-low": {
     where: "Windows Storage settings",
+    state: "needs-action",
+    openUri: "ms-settings:storagesense",
+    openLabel: "Open Storage settings",
     steps: [
-      "Settings → System → Storage → run Storage Sense / Cleanup recommendations.",
+      "Run Storage Sense / Cleanup recommendations.",
       "Uninstall unused apps and move large libraries (e.g. game installs) off C:.",
       "Empty the Recycle Bin and Downloads if safe.",
     ],
   },
   "ssd-upgrade-advisory": {
     where: "Hardware (informational)",
+    state: "unknown",
     steps: [
       "This is a hardware suggestion, not a setting — an NVMe/SSD dramatically cuts load times.",
       "If you add one, install Windows or your games on it and keep it as the system/boot drive.",
@@ -1534,18 +1563,40 @@ const GUIDED_STEPS: Record<string, { where: string; steps: string[] }> = {
   },
 };
 
+// Security: only fixed ms-settings: targets defined above may ever be opened.
+const ALLOWED_OPEN_URIS = new Set(
+  Object.values(GUIDED_STEPS).map((g) => g.openUri).filter(Boolean) as string[],
+);
+async function openGuidedUri(uri: string) {
+  if (!ALLOWED_OPEN_URIS.has(uri)) return; // never open anything off the allowlist
+  try {
+    await openUrl(uri);
+  } catch {
+    /* opener unavailable / blocked — the written steps still stand */
+  }
+}
+
 function GuidedCard({ rec }: { rec: Recommendation }) {
   const [open, setOpen] = useState(false);
   const guide = GUIDED_STEPS[rec.id];
+  // Status chip — honest: detected-needs-action vs not-readable.
+  const status = guide?.state ?? "unknown";
+  const statusLabel =
+    status === "needs-action" ? "Action available" : "State not readable";
   return (
     <div className="rec rec-guided">
       <div className="rec-head">
         <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>{rec.category}</span>
         <span
-          className={`rec-provenance rec-provenance-${rec.provenance}`}
-          title={PROVENANCE_TITLE[rec.provenance]}
+          className={`guided-status guided-status-${status}`}
+          title={
+            status === "needs-action"
+              ? "Sentinel detected this is below its recommended state — worth doing."
+              : "Sentinel can't read this setting's current state (it lives in a vendor app / outside what we probe). Check it yourself; skip if it's already set."
+          }
         >
-          {PROVENANCE_LABEL[rec.provenance]}
+          <span className="guided-status-dot" aria-hidden="true" />
+          {statusLabel}
         </span>
         <span className="rec-guided-pill" title="Sentinel guides you to where this lives — it won't change it for you, by design.">
           Guided
@@ -1559,14 +1610,26 @@ function GuidedCard({ rec }: { rec: Recommendation }) {
       <p className="rec-desc">{rec.description}</p>
       {guide && (
         <>
-          <button
-            className={`rec-details-toggle ${open ? "open" : ""}`}
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-          >
-            <span>{open ? "Hide steps" : `Show me where → ${guide.where}`}</span>
-            <Icon name="chevron" />
-          </button>
+          <div className="guided-actions">
+            <button
+              className={`rec-details-toggle ${open ? "open" : ""}`}
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+            >
+              <span>{open ? "Hide steps" : `How to → ${guide.where}`}</span>
+              <Icon name="chevron" />
+            </button>
+            {guide.openUri && (
+              <button
+                className="guided-open-btn"
+                onClick={() => openGuidedUri(guide.openUri!)}
+                title={`Opens ${guide.where} directly`}
+              >
+                <Icon name="external" />
+                {guide.openLabel ?? "Open it"}
+              </button>
+            )}
+          </div>
           {open && (
             <div className="rec-expand">
               <div className="guided-where">Where: <strong>{guide.where}</strong></div>
@@ -1575,9 +1638,15 @@ function GuidedCard({ rec }: { rec: Recommendation }) {
                   <li key={i}>{s}</li>
                 ))}
               </ol>
+              {status === "unknown" && (
+                <p className="guided-note">
+                  Sentinel can't read this one's current state, so check before you
+                  change it — if it's already set the way you want, you're done.
+                </p>
+              )}
               <p className="guided-note">
                 Sentinel won't change this for you — it lives outside what we can
-                safely undo. Following the steps yourself keeps you in control.
+                safely undo. Doing it yourself keeps you in control.
               </p>
             </div>
           )}
