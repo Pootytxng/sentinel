@@ -141,7 +141,7 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   **Pre-public polish backlog — ✅ CLEARED (2026-05-31, tests 72/72):** (1) Export `.md` UTF-8 BOM
   `ac9c70d`; (2) storage logical-disk fallback when `MSFT_PhysicalDisk` empty, in Export + readiness
   `514ca0e`; (3) AMD GPU driver-age — **VERIFIED NOT A BUG** via a live `detect_gpus()` run: the RX 9070 XT
-  reads `driver_date 2026-05-12`, `driver_age_days Some(19)` through the existing DXGI↔WMI name-matched
+  reads `driver_date 2026-05-12`, `driver_age_days Some(20)` (value at check; `2026-05-12` is the stable fact) through the existing DXGI↔WMI name-matched
   merge — no code change, no registry fallback; (4) install dir vs runtime dir separated →
   `%APPDATA%\Sentinel\runtime` `e87ecdd`+`512dd11`; (5) single-instance lock (2nd launch focuses existing
   window) `75e4681`. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
