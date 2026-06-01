@@ -2355,6 +2355,112 @@ body::before {
 }
 .rec-expand .rec-desc { margin: 0; }
 
+/* ── Blocked-toggle tooltip — explain WHY a toggle is locked ─────────────── */
+.toggle-wrap { position: relative; margin-left: auto; display: inline-flex; }
+.toggle-wrap-blocked .rec-toggle { cursor: not-allowed; }
+/* A small amber lock badge on the blocked toggle so it reads as "locked",
+   not "broken". */
+.toggle-wrap-blocked::after {
+  content: "🔒";
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  font-size: 10px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+.toggle-tip {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 50;
+  width: 252px;
+  padding: 11px 13px;
+  border-radius: var(--r);
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  border: 1px solid var(--attention);
+  box-shadow: var(--shadow-pop);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transform-origin: top right;
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.toggle-tip strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--attention);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.toggle-tip em { color: var(--fg); font-style: normal; font-weight: 700; }
+.toggle-tip::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: 16px;
+  width: 9px;
+  height: 9px;
+  background: var(--panel-3);
+  border-left: 1px solid var(--attention);
+  border-top: 1px solid var(--attention);
+  transform: rotate(45deg);
+}
+.toggle-wrap-blocked:hover .toggle-tip,
+.toggle-wrap-blocked:focus-within .toggle-tip {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* ── Guided (advisory) cards — "lead to water + hold the straw" ──────────── */
+.rec-guided { border-left-color: var(--accent); }
+.rec-guided-pill {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  cursor: help;
+}
+.rec-impact-dot-guided { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.guided-where {
+  font-size: 12.5px;
+  color: var(--fg-2);
+  padding: 8px 11px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+.guided-where strong { color: var(--accent-bright); }
+.guided-steps {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  line-height: 1.45;
+}
+.guided-steps li::marker { color: var(--accent); font-weight: 700; }
+.guided-note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 /* ── Responsive — narrow / half-screen windows ───────────────────────────── */
 @media (max-width: 900px) {
   .app { padding: 16px; }

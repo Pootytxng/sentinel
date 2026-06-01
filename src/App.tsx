@@ -1470,6 +1470,123 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
 // Optimize: the six rec categories + Startup, consolidated into one section
 // with an inline segmented filter. Replaces the old per-category tabs so the
 // rail stays short. Behavior (apply/rollback/toggle) is unchanged.
+// "Lead the horse to water AND hold the bendy straw" — for settings Sentinel
+// detects but deliberately won't mutate (they live in a vendor app / a Windows
+// page with no safe, reversible programmatic toggle), we point the user to the
+// exact place to change it themselves. Keyed by rec id. Steps are best-known
+// navigation for each native location; the rec's own description still carries
+// the "why". No automation — guidance only.
+const GUIDED_STEPS: Record<string, { where: string; steps: string[] }> = {
+  "amd-uxp": {
+    where: "AMD Software: Adrenalin Edition",
+    steps: [
+      "Open AMD Software (right-click desktop → AMD Software, or search the Start menu).",
+      "Click the gear / Settings (top-right) → Preferences.",
+      'Find "User Experience Program" and turn it Off.',
+    ],
+  },
+  "nvidia-low-latency": {
+    where: "NVIDIA Control Panel (per-game)",
+    steps: [
+      "Right-click the desktop → NVIDIA Control Panel.",
+      "Manage 3D settings → Program Settings → pick your game.",
+      'Set "Low Latency Mode" to Ultra, then Apply.',
+    ],
+  },
+  "gpu-prefer-discrete": {
+    where: "Windows Graphics settings",
+    steps: [
+      "Settings → System → Display → Graphics.",
+      "Add or select your game's .exe.",
+      'Set it to "High performance" (your discrete GPU).',
+    ],
+  },
+  "monitor-max-refresh": {
+    where: "Windows Display settings",
+    steps: [
+      "Settings → System → Display → Advanced display.",
+      'Set "Choose a refresh rate" to the highest value your monitor lists.',
+      "If your max isn't shown, check the cable (DisplayPort/HDMI 2.1) and monitor OSD.",
+    ],
+  },
+  "gpu-driver-update": {
+    where: "Your GPU vendor's app",
+    steps: [
+      "NVIDIA: NVIDIA App / GeForce Experience → Drivers → Check for updates.",
+      "AMD: AMD Software → Home → Check for Updates.",
+      "Intel: Intel Graphics Software → Drivers.",
+    ],
+  },
+  "storage-c-low": {
+    where: "Windows Storage settings",
+    steps: [
+      "Settings → System → Storage → run Storage Sense / Cleanup recommendations.",
+      "Uninstall unused apps and move large libraries (e.g. game installs) off C:.",
+      "Empty the Recycle Bin and Downloads if safe.",
+    ],
+  },
+  "ssd-upgrade-advisory": {
+    where: "Hardware (informational)",
+    steps: [
+      "This is a hardware suggestion, not a setting — an NVMe/SSD dramatically cuts load times.",
+      "If you add one, install Windows or your games on it and keep it as the system/boot drive.",
+    ],
+  },
+};
+
+function GuidedCard({ rec }: { rec: Recommendation }) {
+  const [open, setOpen] = useState(false);
+  const guide = GUIDED_STEPS[rec.id];
+  return (
+    <div className="rec rec-guided">
+      <div className="rec-head">
+        <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>{rec.category}</span>
+        <span
+          className={`rec-provenance rec-provenance-${rec.provenance}`}
+          title={PROVENANCE_TITLE[rec.provenance]}
+        >
+          {PROVENANCE_LABEL[rec.provenance]}
+        </span>
+        <span className="rec-guided-pill" title="Sentinel guides you to where this lives — it won't change it for you, by design.">
+          Guided
+        </span>
+      </div>
+      <h3 className="rec-title">{rec.title}</h3>
+      <div className="rec-impact-line">
+        <span className="rec-impact-dot rec-impact-dot-guided" aria-hidden="true" />
+        <span className="rec-impact-text">{rec.impact}</span>
+      </div>
+      <p className="rec-desc">{rec.description}</p>
+      {guide && (
+        <>
+          <button
+            className={`rec-details-toggle ${open ? "open" : ""}`}
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+          >
+            <span>{open ? "Hide steps" : `Show me where → ${guide.where}`}</span>
+            <Icon name="chevron" />
+          </button>
+          {open && (
+            <div className="rec-expand">
+              <div className="guided-where">Where: <strong>{guide.where}</strong></div>
+              <ol className="guided-steps">
+                {guide.steps.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ol>
+              <p className="guided-note">
+                Sentinel won't change this for you — it lives outside what we can
+                safely undo. Following the steps yourself keeps you in control.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function OptimizeTab({
   recs,
   startup,
@@ -1485,16 +1602,26 @@ function OptimizeTab({
   onToggleStartup: (entry: StartupEntry) => void;
   hasActiveChange: (recId: string) => boolean;
 }) {
-  type Filter = "All" | RecCategory | "Startup";
+  type Filter = "All" | RecCategory | "Guided" | "Startup";
   const [filter, setFilter] = useState<Filter>("All");
 
+  // Split appliable (Sentinel-owned toggles) from advisory/guided (Sentinel
+  // detects but directs you elsewhere to change). The "All" view shows
+  // appliable recs; guided ones live in their own segment so the toggle list
+  // stays clean and the guidance is intentional, not a dead switch.
+  const appliableRecs = recs.filter((r) => APPLIABLE_REC_IDS.has(r.id));
+  const guidedRecs = recs.filter((r) => !APPLIABLE_REC_IDS.has(r.id));
+
   const catCounts: Record<string, number> = {};
-  recs.forEach((r) => (catCounts[r.category] = (catCounts[r.category] ?? 0) + 1));
+  appliableRecs.forEach((r) => (catCounts[r.category] = (catCounts[r.category] ?? 0) + 1));
   const activeCats = REC_CATEGORIES.filter((c) => (catCounts[c] ?? 0) > 0);
 
   const filters: { id: Filter; label: string; count: number }[] = [
-    { id: "All", label: "All", count: recs.length },
+    { id: "All", label: "All", count: appliableRecs.length },
     ...activeCats.map((c) => ({ id: c as Filter, label: c as string, count: catCounts[c] ?? 0 })),
+    ...(guidedRecs.length
+      ? [{ id: "Guided" as Filter, label: "Guided", count: guidedRecs.length }]
+      : []),
     ...(startup.length
       ? [{ id: "Startup" as Filter, label: "Startup", count: startup.length }]
       : []),
@@ -1502,17 +1629,17 @@ function OptimizeTab({
 
   const shownRecs =
     filter === "All"
-      ? recs
-      : filter === "Startup"
+      ? appliableRecs
+      : filter === "Startup" || filter === "Guided"
       ? []
-      : recs.filter((r) => r.category === filter);
+      : appliableRecs.filter((r) => r.category === filter);
 
   return (
     <section className="tab-pane">
       <div className="section-header">
         <h2 className="section-title">
           Optimize
-          <span className="count-badge">{recs.length}</span>
+          <span className="count-badge">{appliableRecs.length}</span>
         </h2>
         <div className="read-only-pill">Nothing changes without your approval</div>
       </div>
@@ -1532,7 +1659,21 @@ function OptimizeTab({
         ))}
       </div>
 
-      {filter === "Startup" ? (
+      {filter === "Guided" ? (
+        <>
+          <p className="section-help">
+            Settings Sentinel detected but <strong>won't change for you</strong> —
+            they live in a vendor app or a Windows page with no safe, reversible
+            switch Sentinel can own. Instead of a dead toggle, here's exactly where
+            to find each one so you stay in control.
+          </p>
+          <div className="rec-list">
+            {guidedRecs.map((r) => (
+              <GuidedCard key={r.id} rec={r} />
+            ))}
+          </div>
+        </>
+      ) : filter === "Startup" ? (
         <>
           <p className="section-help">
             User-scope auto-start entries. Toggle off to keep them from launching
@@ -2444,21 +2585,44 @@ function RecCard({
           {PROVENANCE_LABEL[rec.provenance]}
         </span>
         {isInfo ? (
-          <span className="rec-advisory-pill">Advisory</span>
+          <span className="rec-advisory-pill">Guided</span>
         ) : (
-          <button
-            className={`toggle rec-toggle ${currentlyOn ? "toggle-on" : ""}`}
-            onClick={onToggle}
-            disabled={toggleDisabled}
-            role="switch"
-            aria-checked={currentlyOn}
-            aria-label={`${currentlyOn ? "Roll back" : "Apply"} ${rec.title}`}
-            title={toggleTitle}
-          >
-            <span className="toggle-track">
-              <span className="toggle-thumb" />
-            </span>
-          </button>
+          (() => {
+            // Blocked = ON but Sentinel didn't apply it, so there's no rollback
+            // contract to flip it off safely. Surface a clear hover tooltip
+            // explaining why (instead of just a bare "no" cursor).
+            const blockedExternal = currentlyOn && !sentinelOwns;
+            return (
+              <span
+                className={`toggle-wrap ${blockedExternal ? "toggle-wrap-blocked" : ""}`}
+                data-tip={
+                  blockedExternal
+                    ? "Already on, but you (or Windows) enabled this — not Sentinel. Sentinel has no rollback record for changes it didn't make, so it won't flip it off and risk being unable to restore. Turn it off in its original Windows location if you want it off."
+                    : undefined
+                }
+              >
+                <button
+                  className={`toggle rec-toggle ${currentlyOn ? "toggle-on" : ""}`}
+                  onClick={onToggle}
+                  disabled={toggleDisabled}
+                  role="switch"
+                  aria-checked={currentlyOn}
+                  aria-label={`${currentlyOn ? "Roll back" : "Apply"} ${rec.title}`}
+                  title={toggleTitle}
+                >
+                  <span className="toggle-track">
+                    <span className="toggle-thumb" />
+                  </span>
+                </button>
+                {blockedExternal && (
+                  <span className="toggle-tip" role="tooltip">
+                    <strong>Locked for your safety</strong>
+                    Already on, but <em>you</em> or Windows set it — not Sentinel. With no rollback record, Sentinel won't flip it off and risk not being able to put it back. Change it in its own Windows location instead.
+                  </span>
+                )}
+              </span>
+            );
+          })()
         )}
       </div>
       <h3 className="rec-title">{rec.title}</h3>
