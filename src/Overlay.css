@@ -2,28 +2,30 @@
    transparent window. WebView2 transparent windows on Windows can render white
    and are finicky; a solid HUD is reliable and still useful. Transparency is a
    later refinement once the window reliably renders. The whole small window is
-   the HUD. */
+   the HUD. Colors mirror the main app's command-center palette — this window
+   does not load App.css's :root tokens, so the values are inlined here. */
 html.overlay-mode,
 html.overlay-mode body,
 html.overlay-mode #root {
-  background: #0b0d12 !important;
+  background: #07080b !important;
   overflow: hidden;
   margin: 0;
   height: 100%;
 }
 
 .ovl {
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  background: #0b0d12;
-  border: 1px solid rgba(106, 169, 255, 0.28);
+  font-family: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  background: linear-gradient(180deg, #0d1018, #0a0c11);
+  border: 1px solid rgba(106, 169, 255, 0.30);
   border-radius: 8px;
   padding: 10px 12px;
-  color: #e6e9ef;
+  color: #eef1f7;
   display: flex;
   flex-direction: column;
   gap: 4px;
   height: 100%;
   box-sizing: border-box;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   /* Click-through is enforced at the window level, but disable selection too. */
   user-select: none;
   -webkit-user-select: none;
@@ -37,14 +39,15 @@ html.overlay-mode #root {
   font-size: 12px;
 }
 .ovl-k {
-  color: #8a93a8;
+  color: #8b95a8;
 }
 .ovl-v {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 .ovl-fps .ovl-v {
-  color: #6aa9ff;
+  color: #93c1ff;
   font-size: 19px;
   line-height: 1;
+  text-shadow: 0 0 14px rgba(106, 169, 255, 0.5);
 }

@@ -104,3 +104,20 @@
   align-items: center;
   gap: 12px;
 }
+
+/* ── Experience layer (2026-06-01) — match the command-center identity ───── */
+.onb-backdrop { background: rgba(3, 4, 7, 0.7); backdrop-filter: blur(4px); }
+.onb-card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border-color: var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop), var(--edge);
+}
+.onb-brand {
+  color: var(--accent-bright);
+  letter-spacing: -0.01em;
+  font-size: 15px;
+}
+.onb-tag { font-family: var(--font-mono); letter-spacing: 0.06em; }
+.onb-dot-on { box-shadow: 0 0 10px var(--accent-glow); }
+.onb-body strong { color: #fff; }
