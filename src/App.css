@@ -1,13 +1,49 @@
 :root {
-  --bg: #0b0d12;
-  --panel: #141823;
-  --panel-2: #1b2030;
-  --border: #232a3b;
-  --fg: #e6e9ef;
-  --muted: #8a93a8;
+  /* ── Core palette — graphite / black / metallic (premium cockpit) ──────── */
+  --bg: #07080b;
+  --bg-2: #0a0c11;
+  --panel: #12151d;     /* surface 1 — cards, panels */
+  --panel-2: #181c26;   /* surface 2 — insets, sparklines, tab counts */
+  --panel-3: #1f242f;   /* surface 3 — elevated / hover */
+  --border: #242b39;
+  --border-strong: #313b4e;
+  --hairline: rgba(255, 255, 255, 0.06);
+  --fg: #eef1f7;
+  --fg-2: #c4ccda;
+  --muted: #8b95a8;
+  --faint: #5d6679;
   --accent: #6aa9ff;
+  --accent-bright: #93c1ff;
   --accent-hover: #8bbcff;
-  --danger: #f87171;
+  --accent-soft: rgba(106, 169, 255, 0.12);
+  --accent-line: rgba(106, 169, 255, 0.30);
+  --accent-glow: rgba(106, 169, 255, 0.35);
+  --ready: #46d98a;
+  --attention: #f5b740;
+  --danger: #f3716f;
+
+  /* ── Type — native, premium, offline-safe (no remote fonts) ───────────── */
+  --font-ui: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI",
+    system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", "JetBrains Mono", Consolas,
+    ui-monospace, monospace;
+
+  /* ── Geometry ─────────────────────────────────────────────────────────── */
+  --r-sm: 7px;
+  --r: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  /* ── Material & elevation ─────────────────────────────────────────────── */
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 10px 30px -12px rgba(0, 0, 0, 0.65);
+  --shadow-pop: 0 18px 50px -16px rgba(0, 0, 0, 0.7);
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ease: cubic-bezier(0.4, 0.12, 0.18, 1);
+  --dur: 160ms;
+  --dur-slow: 300ms;
 }
 
 * { box-sizing: border-box; }
@@ -1456,4 +1492,210 @@ html, body, #root {
   border: 1px solid rgba(106, 169, 255, 0.25);
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXPERIENCE LAYER — premium instrument-grade cockpit (2026-06-01)
+   Pure presentation, layered over the structural rules above. No layout
+   skeleton, data flow, or behavior changes — this elevates material, depth,
+   typography, motion, and the confidence of status indicators. The base rules
+   still stand; these refine them via later-cascade overrides + new tokens.
+   Honors prefers-reduced-motion. No remote resources (offline / zero-outbound).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html, body, #root {
+  font-family: var(--font-ui);
+  letter-spacing: 0.01em;
+}
+
+/* Atmospheric, layered graphite — depth, not a flat fill. */
+body {
+  background:
+    radial-gradient(1100px 620px at 78% -8%, rgba(106, 169, 255, 0.07), transparent 60%),
+    radial-gradient(820px 520px at 2% 4%, rgba(106, 169, 255, 0.035), transparent 55%),
+    linear-gradient(180deg, var(--bg-2), var(--bg));
+  background-attachment: fixed;
+}
+
+::selection { background: rgba(106, 169, 255, 0.28); color: #fff; }
+
+/* Thin instrument scrollbars + confident focus ring. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: #3c465c; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 5px; }
+
+.app { max-width: 1140px; }
+
+/* ── Header → wordmark + live indicator + hairline divider ──────────────── */
+.header {
+  position: relative;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--hairline);
+}
+.header h1 {
+  font-size: 30px;
+  letter-spacing: -0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: #fff; /* fallback if background-clip:text is unsupported */
+  background: linear-gradient(180deg, #ffffff, #b8c4d8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header h1::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ready);
+  -webkit-text-fill-color: initial;
+  box-shadow: 0 0 0 3px rgba(70, 217, 138, 0.16), 0 0 12px rgba(70, 217, 138, 0.6);
+  animation: live-pulse 3.2s var(--ease) infinite;
+}
+.tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes pane-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+/* ── Buttons → tactile, metallic ────────────────────────────────────────── */
+.btn {
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    filter var(--dur) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2), 0 0 0 1px var(--accent-line);
+}
+.btn:active:not(:disabled) { transform: translateY(0); filter: brightness(0.97); }
+
+/* ── Cards & panels → layered material, metallic edge, hover lift ───────── */
+.card, .monitor-panel, .diag-section {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1), var(--edge);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.card:hover, .monitor-panel:hover, .diag-section:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-2), var(--edge);
+}
+.card-value { font-size: 18px; letter-spacing: -0.01em; }
+.card-label, .section-title, .diag-section-title { color: var(--faint); }
+
+/* ── Tabs → tactile, with a glowing active state + pane entrance ────────── */
+.tab-bar { gap: 4px; border-bottom-color: var(--hairline); }
+.tab { border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }
+.tab:hover { background: var(--accent-soft); }
+.tab-active { color: var(--accent-bright); border-bottom-color: var(--accent); box-shadow: 0 1px 0 var(--accent); }
+.tab-pane { animation: pane-in var(--dur-slow) var(--ease) both; }
+
+/* ── Toggle → smoother, glows when on ───────────────────────────────────── */
+.toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: background var(--dur-slow) var(--ease), box-shadow var(--dur-slow) var(--ease);
+}
+.toggle-thumb { width: 18px; height: 18px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.toggle-on .toggle-track {
+  background: linear-gradient(180deg, rgba(70, 217, 138, 0.55), rgba(70, 217, 138, 0.32));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 12px rgba(70, 217, 138, 0.4);
+}
+.toggle-on .toggle-thumb { transform: translateX(18px); background: var(--ready); }
+
+/* ── Status confidence — readiness reads like an instrument check ───────── */
+.readiness-row {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 70%);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.readiness-row-ready { background: linear-gradient(90deg, rgba(70, 217, 138, 0.06), transparent 72%); }
+.readiness-row-attention { background: linear-gradient(90deg, rgba(245, 183, 64, 0.06), transparent 72%); }
+.readiness-badge.readiness-ready { box-shadow: 0 0 12px rgba(70, 217, 138, 0.45); }
+.readiness-badge.readiness-attention { box-shadow: 0 0 12px rgba(245, 183, 64, 0.4); }
+.readiness-pill { backdrop-filter: blur(2px); }
+
+/* ── FPS readout → speedometer / instrument cluster ─────────────────────── */
+.fps-panel { background: linear-gradient(180deg, rgba(106, 169, 255, 0.05), var(--panel)); }
+.fps-big-value {
+  font-family: var(--font-mono);
+  font-size: 52px;
+  letter-spacing: -0.02em;
+  color: var(--accent-bright);
+  text-shadow: 0 0 26px var(--accent-glow);
+}
+
+/* ── Trust Ledger → proof, not a log ────────────────────────────────────── */
+.change { transition: border-color var(--dur) var(--ease); }
+.change-expanded { box-shadow: 0 0 0 1px var(--accent-line), var(--shadow-2); }
+.change-status { text-shadow: 0 0 10px rgba(70, 217, 138, 0.35); }
+
+/* ── Sessions → debrief cards with material ─────────────────────────────── */
+.session-card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border-color: var(--border);
+  box-shadow: var(--shadow-1), var(--edge);
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.session-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+
+/* ── Meaningful empty states ────────────────────────────────────────────── */
+.empty {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent);
+  border-color: var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 32px 24px;
+  line-height: 1.6;
+}
+
+/* ── Modal → premium glass pop ──────────────────────────────────────────── */
+.modal {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+}
+.modal-backdrop { backdrop-filter: blur(4px); background: rgba(3, 4, 7, 0.6); }
+
+/* ── Footer trust line ──────────────────────────────────────────────────── */
+.footer { border-top-color: var(--hairline); }
+
+/* ── Data numerals everywhere → tabular mono (instrument feel) ──────────── */
+.metric-value, .session-metric-value, .fps-stat-value, .readiness-value,
+.cpu-core-label, .tab-count, .count-badge {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Respect reduced-motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .card:hover, .monitor-panel:hover, .diag-section:hover, .session-card:hover,
+  .btn:hover:not(:disabled) { transform: none; }
 }
