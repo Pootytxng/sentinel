@@ -1,7 +1,8 @@
 # Experience / Design System Pass — Architecture & Scope
 
-**Status:** Design scope (brainstorm output). No implementation yet. Implementation is gated
-behind owner approval + the post-beta-feedback timing in `docs/PRODUCT_DIRECTION.md`.
+**Status:** Design scope (brainstorm output). **Decisions A–F locked by owner 2026-06-01 (§8).**
+No implementation yet — owner chose to HOLD code until green-light (Decision E), ideally informed by
+first private-beta feel-feedback.
 **Date:** 2026-06-01 · **Owner:** Kuya · **Author:** Claude (persistent work state)
 **Source of truth this serves:** `docs/PRODUCT_DIRECTION.md` → *"Experience direction — the premium
 command-center layer"* (the 7 home-base questions, the 6 surface "feel" metaphors, the aesthetic
@@ -133,7 +134,8 @@ Unavailable**. Rules baked in: estimates labeled "estimate" (1%-low), unavailabl
 (no CPU temp = no kernel driver), no "boost/turbo/maximize FPS" verbs, no fabricated percentages,
 no opaque score. Confidence comes from clarity and proof.
 
-### 3.7 Intent framing / modes (design the lens; do NOT wire mutation)
+### 3.7 Intent framing / modes (design the lens; do NOT wire mutation) — DEFERRED (Decision D)
+> Deferred to its own later pass (post-beta). Retained here as forward context.
 Design a guidance-only mode selector (Competitive / Balanced / Visual Quality / Stability) that
 **re-weights readiness emphasis, priority ordering, and explanations** — purely presentational.
 It must not flip any setting. (Scope decision in §8 — may be deferred to its own pass.)
@@ -159,8 +161,8 @@ direction's non-negotiable: *no opaque "optimized score" unless transparent and 
 gamer hype.* Locking **functional polish (themes) behind a progress grind** also fights "premium /
 not childish."
 
-This is the single biggest design decision and it's **yours** (§8, Decision A). My recommendation,
-for reference:
+This is the single biggest design decision. **Decision A (owner, 2026-06-01): reframe to honest
+posture** — the approach below is now the plan, not a suggestion:
 - **Reframe, don't delete the intent.** Replace the "tier/evolution/cylinders" framing with the
   transparent **`SystemPosture`** (§3.2): Dialed-in / Attention, always click-through to the exact
   facts. Keep the *satisfaction* of "my system is dialed in" — earned honestly from explainable
@@ -224,20 +226,19 @@ touch `src/` only, and keep `npm run build` clean (no Rust → `cargo test` unaf
 
 ---
 
-## 8. Decisions for you (the batch — these are deferred, not assumed)
-- **A. Gamification fate** (biggest): reframe to honest posture + ungate themes (my rec) · keep
-  Tune/Garage but make the score fully transparent · cut entirely · hold until beta feel-feedback.
-- **B. Decomposition scope**: full `App.tsx`/`App.css` carve now · primitives + Dashboard first,
-  carve the rest incrementally (my rec) · minimal (style in place, no carve).
-- **C. Theme set**: keep all 6 · curate to a premium dark/metallic set and drop the neon ones
-  (Synthwave/Viper) as "RGB-clownware"-adjacent (lean toward curate) · keep all but make neon ones
-  clearly "fun/optional."
-- **D. Modes UI**: design+build the guidance lens in this pass · defer to its own later pass
-  (my rec: defer; it's the largest net-new surface and benefits from beta feedback).
-- **E. Timing**: scope+plan now (done) and **hold implementation** until you green-light, ideally
-  informed by first beta feel-feedback (my rec) · start implementation now from sub-project #1.
-- **F. Accent direction**: keep the current blue `--accent #6aa9ff` as the brand accent · or move
-  to a more "metallic/instrument" accent. (Low-stakes; default = keep.)
+## 8. Decisions — RESOLVED (owner, 2026-06-01)
+- **A. Gamification fate → REFRAME TO HONEST POSTURE.** Replace the Tune tier (Stock→Apex) / Garage
+  / unlock-gated themes / Surprise randomizer with the transparent `SystemPosture` state (§3.2).
+  Ungate themes; drop the dice + emoji. (Detail in §4 — now the plan, not a suggestion.)
+- **B. Decomposition scope → PRIMITIVES + DASHBOARD FIRST.** Build the design-system foundation
+  (sub-project #1), then redo the Dashboard onto it (#3); carve remaining surfaces incrementally.
+- **C. Theme set → CURATE TO A PREMIUM SET.** Keep Graphite (default) + Frost + Aurora Noir +
+  Carbon Ember; **drop neon Synthwave + Viper** as off-thesis. (Removal lands in the relevant
+  sub-project, not the foundation.)
+- **D. Modes UI → DEFER** to its own later pass (post-beta).
+- **E. Timing → HOLD IMPLEMENTATION.** Scope + plan are done; no code until owner green-lights,
+  ideally informed by first private-beta feel-feedback.
+- **F. Accent → KEEP** the blue `--accent #6aa9ff` brand accent.
 
 ---
 

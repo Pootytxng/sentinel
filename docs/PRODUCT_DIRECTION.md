@@ -169,6 +169,16 @@ rollback. 8. Stronger "you are protected / rollback available" trust cues. 9. A 
 **"system is dialed in"** state when nothing needs action. 10. A clear **"attention needed"** state when
 something is actually worth fixing.
 
+**Scoped + decided 2026-06-01:** the architecture for this pass is designed and the key calls are
+locked — see `docs/superpowers/specs/2026-06-01-experience-design-system-pass-design.md` (spec +
+mockups) and `docs/superpowers/plans/2026-06-01-experience-pass-design-system-foundation.md` (the
+decision-independent foundation plan). Locked decisions: the gamified "Tune tier / Garage /
+unlock-gated themes / Surprise" is **reframed to a transparent `SystemPosture`** (Dialed-in /
+Attention — honest, click-through, no opaque score); themes **curated to a premium set** (keep
+Graphite/Frost/Aurora/Ember, drop neon Synthwave/Viper); intent **modes deferred** to a later pass;
+brand accent kept. **Implementation is HELD** until owner green-light, ideally informed by first
+private-beta feel-feedback. (This refines, not relaxes, the locks below.)
+
 **Core product rule (the correction):** Do **not** solve perceived "lightness" by adding more tweak
 buttons. Solve it by making Sentinel *feel* like a **performance cockpit · readiness advisor · monitoring
 dashboard · session analyst · rollback-safe control center · premium trust layer over Windows gaming
