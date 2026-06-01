@@ -1,3 +1,5 @@
+@import "./design/tokens.css";
+
 :root {
   /* ── Core palette — graphite / black / metallic (premium cockpit) ──────── */
   --bg: #07080b;
