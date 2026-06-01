@@ -160,7 +160,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
+type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Garage" | "Diagnostics" | "History";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -169,6 +169,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Optimize: { label: "Optimize", icon: "sliders" },
   Monitoring: { label: "Monitor", icon: "pulse" },
   Sessions: { label: "Sessions", icon: "chart" },
+  Garage: { label: "Garage", icon: "engine" },
   Diagnostics: { label: "Diagnostics", icon: "terminal" },
   History: { label: "Ledger", icon: "ledger" },
 };
@@ -183,6 +184,7 @@ const ICONS: Record<string, React.ReactNode> = {
   chart: (<><line x1="4" y1="20" x2="20" y2="20" /><rect x="5.5" y="11" width="3" height="7" /><rect x="10.5" y="7" width="3" height="11" /><rect x="15.5" y="13" width="3" height="5" /></>),
   terminal: (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3" /><line x1="13" y1="15" x2="16.5" y2="15" /></>),
   ledger: (<><rect x="5" y="3" width="14" height="18" rx="2" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></>),
+  engine: (<><rect x="3" y="10" width="11" height="8" rx="1.5" /><path d="M14 12h3l3 3v3h-6" /><line x1="6" y1="10" x2="6" y2="7" /><line x1="10" y1="10" x2="10" y2="7" /><line x1="5" y1="7" x2="11" y2="7" /><line x1="14" y1="6" x2="20" y2="6" /></>),
   chevron: (<path d="M6 9l6 6 6-6" />),
 };
 
@@ -522,15 +524,22 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
 }
 
 // Appearance themes — cosmetic palettes applied via the [data-theme] attribute
-// on <html>. "graphite" is the default (no attribute). Swatches drive the
-// in-app picker. Local-only (localStorage); no network.
-const THEMES: { id: string; label: string; swatch: [string, string, string] }[] = [
-  { id: "graphite", label: "Graphite", swatch: ["#0b0d12", "#6aa9ff", "#46d98a"] },
-  { id: "aurora", label: "Aurora Noir", swatch: ["#05080c", "#34e0a8", "#6cf0c4"] },
-  { id: "synthwave", label: "Synthwave", swatch: ["#0c0718", "#ff5cc8", "#43e8e0"] },
-  { id: "ember", label: "Carbon Ember", swatch: ["#0a0807", "#ff8b3d", "#7cd66b"] },
-  { id: "frost", label: "Frost", swatch: ["#060a0d", "#38d6e6", "#46d98a"] },
-  { id: "viper", label: "Viper", swatch: ["#060806", "#9be83f", "#bcf56e"] },
+// on <html>. "graphite" is the default (no attribute). Each reskin UNLOCKS at a
+// Tune tier, so climbing the evolution ladder earns new looks. Local-only
+// (localStorage); no network.
+type Theme = {
+  id: string;
+  label: string;
+  swatch: [string, string, string];
+  unlockTier: number; // Tune tier index required (0 = always available)
+};
+const THEMES: Theme[] = [
+  { id: "graphite", label: "Graphite", swatch: ["#0b0d12", "#6aa9ff", "#46d98a"], unlockTier: 0 },
+  { id: "frost", label: "Frost", swatch: ["#060a0d", "#38d6e6", "#46d98a"], unlockTier: 1 },
+  { id: "aurora", label: "Aurora Noir", swatch: ["#05080c", "#34e0a8", "#6cf0c4"], unlockTier: 2 },
+  { id: "ember", label: "Carbon Ember", swatch: ["#0a0807", "#ff8b3d", "#7cd66b"], unlockTier: 2 },
+  { id: "synthwave", label: "Synthwave", swatch: ["#0c0718", "#ff5cc8", "#43e8e0"], unlockTier: 3 },
+  { id: "viper", label: "Viper", swatch: ["#060806", "#9be83f", "#bcf56e"], unlockTier: 4 },
 ];
 
 function applyTheme(id: string) {
@@ -544,26 +553,32 @@ function applyTheme(id: string) {
   }
 }
 
-function ThemePicker() {
-  const [open, setOpen] = useState(false);
-  const [current, setCurrent] = useState<string>(
-    () => {
-      try {
-        return localStorage.getItem("sentinel-theme") || "graphite";
-      } catch {
-        return "graphite";
-      }
-    },
-  );
+function readSavedTheme(): string {
+  try {
+    return localStorage.getItem("sentinel-theme") || "graphite";
+  } catch {
+    return "graphite";
+  }
+}
 
-  const choose = (id: string) => {
-    setCurrent(id);
-    applyTheme(id);
-  };
+// Header theme picker — controlled by App so it stays in sync with the Garage.
+// Locked themes (above the current Tune tier) are shown but not selectable.
+function ThemePicker({
+  current,
+  maxTier,
+  onChange,
+}: {
+  current: string;
+  maxTier: number;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const unlocked = THEMES.filter((t) => t.unlockTier <= maxTier);
+
   const surprise = () => {
-    const others = THEMES.filter((t) => t.id !== current);
-    const pick = others[Math.floor(Math.random() * others.length)];
-    choose(pick.id);
+    const others = unlocked.filter((t) => t.id !== current);
+    if (others.length === 0) return;
+    onChange(others[Math.floor(Math.random() * others.length)].id);
   };
   const currentLabel = THEMES.find((t) => t.id === current)?.label ?? "Graphite";
 
@@ -590,22 +605,29 @@ function ThemePicker() {
               </button>
             </div>
             <div className="theme-grid">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  className={`theme-swatch ${current === t.id ? "theme-swatch-on" : ""}`}
-                  onClick={() => choose(t.id)}
-                  role="menuitemradio"
-                  aria-checked={current === t.id}
-                >
-                  <span className="theme-swatch-chips">
-                    <span style={{ background: t.swatch[0] }} />
-                    <span style={{ background: t.swatch[1] }} />
-                    <span style={{ background: t.swatch[2] }} />
-                  </span>
-                  <span className="theme-swatch-label">{t.label}</span>
-                </button>
-              ))}
+              {THEMES.map((t) => {
+                const locked = t.unlockTier > maxTier;
+                return (
+                  <button
+                    key={t.id}
+                    className={`theme-swatch ${current === t.id ? "theme-swatch-on" : ""} ${locked ? "theme-swatch-locked" : ""}`}
+                    onClick={() => !locked && onChange(t.id)}
+                    disabled={locked}
+                    role="menuitemradio"
+                    aria-checked={current === t.id}
+                    title={locked ? `Unlocks at ${TUNE_TIERS[t.unlockTier].name}` : t.label}
+                  >
+                    <span className="theme-swatch-chips">
+                      <span style={{ background: t.swatch[0] }} />
+                      <span style={{ background: t.swatch[1] }} />
+                      <span style={{ background: t.swatch[2] }} />
+                    </span>
+                    <span className="theme-swatch-label">
+                      {locked ? `🔒 ${TUNE_TIERS[t.unlockTier].name}` : t.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </>
@@ -630,9 +652,30 @@ function App() {
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [theme, setTheme] = useState<string>(readSavedTheme);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
+
+  // App-wide Tune tier — the "evolution" level. Computed from the same honest
+  // facts as the hero (readiness cleared + safe optimizations applied). Stamped
+  // on <html> as data-tune so the ENTIRE app escalates per tier (every surface
+  // gains presence — the "two more cylinders" feel), and gates theme unlocks.
+  const tune = useMemo(() => computeTuneState(readiness, changes), [readiness, changes]);
+  useEffect(() => {
+    document.documentElement.dataset.tune = tune.tier.key;
+  }, [tune.tier.key]);
+
+  const changeTheme = (id: string) => {
+    setTheme(id);
+    applyTheme(id);
+  };
+  // If the saved theme is above the current tier (e.g. data reset), fall back.
+  useEffect(() => {
+    const t = THEMES.find((x) => x.id === theme);
+    if (t && t.unlockTier > tune.tierIndex) changeTheme("graphite");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tune.tierIndex]);
 
   const onExport = async () => {
     setExporting(true);
@@ -787,10 +830,12 @@ function App() {
     if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
+    // Garage (the customization + evolution tab) unlocks once you leave Stock.
+    if (tune.tierIndex >= 1) list.push("Garage");
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, tune.tierIndex]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -839,7 +884,7 @@ function App() {
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
         <div className="header-right">
-          <ThemePicker />
+          <ThemePicker current={theme} maxTier={tune.tierIndex} onChange={changeTheme} />
           <span
             className={`rules-source-pill rules-source-${rulesSource}`}
             title="Where Sentinel's recommendation catalog came from on this launch"
@@ -902,6 +947,9 @@ function App() {
                 <MonitoringTab active={activeTab === "Monitoring"} />
               )}
               {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
+              {activeTab === "Garage" && (
+                <GarageTab tune={tune} theme={theme} onChooseTheme={changeTheme} />
+              )}
               {activeTab === "Diagnostics" && (
                 <DiagnosticsTab sections={diagnostics} />
               )}
@@ -1147,6 +1195,114 @@ function CommandHero({
         <Vital label="GPU" value={gpu} />
         <Vital label="Memory" value={ram} />
         <Vital label="Display" value={disp} />
+      </div>
+    </section>
+  );
+}
+
+// ─── Garage — the evolution + customization tab ────────────────────────────
+// Unlocks at Tuned. Shows the "engine" visibly gaining cylinders per tier, the
+// tier ladder (what you've earned / what's next), and reskins that unlock as
+// you climb. Pure cosmetic/read-only; the tier is the honest Tune score.
+
+function GarageTab({
+  tune,
+  theme,
+  onChooseTheme,
+}: {
+  tune: TuneState;
+  theme: string;
+  onChooseTheme: (id: string) => void;
+}) {
+  // Cylinders earned grow with tier: Stock 4 → Tuned 6 → Calibrated 8 →
+  // Dialed In 10 → Apex 12 (the "two more cylinders per evolution" feel).
+  const cylinders = 4 + tune.tierIndex * 2;
+  const maxCyl = 4 + (TUNE_TIERS.length - 1) * 2;
+
+  return (
+    <section className="tab-pane garage">
+      <div className="section-header">
+        <h2 className="section-title">
+          Garage
+          <span className="count-badge">{tune.tier.name}</span>
+        </h2>
+        <div className="read-only-pill">Cosmetic — earned by real tuning</div>
+      </div>
+      <p className="section-help">
+        Your build evolves as you tune. Each tier you earn — by clearing readiness
+        checks and applying safe optimizations — drops a bigger engine in and
+        unlocks new looks. It's cosmetic; the level reflects your real config.
+      </p>
+
+      {/* Engine bay — cylinders light up per tier. */}
+      <div className={`engine-bay engine-${tune.tier.key}`}>
+        <div className="engine-head">
+          <span className="engine-spec">{cylinders}-cyl</span>
+          <span className="engine-tier">{tune.tier.name}</span>
+        </div>
+        <div className="engine-block">
+          {Array.from({ length: maxCyl }).map((_, i) => (
+            <span
+              key={i}
+              className={`cyl ${i < cylinders ? "cyl-on" : "cyl-off"}`}
+              style={{ animationDelay: `${i * 70}ms` }}
+            />
+          ))}
+        </div>
+        <div className="engine-readout">
+          <div className="engine-score">{tune.score}<span className="engine-score-max">/100</span></div>
+          <div className="engine-blurb">{tune.tier.blurb}</div>
+        </div>
+      </div>
+
+      {/* Tier ladder — progress through the evolution. */}
+      <h3 className="priorities-group">Evolution path</h3>
+      <div className="tier-ladder">
+        {TUNE_TIERS.map((t, i) => {
+          const earned = i <= tune.tierIndex;
+          const current = i === tune.tierIndex;
+          return (
+            <div key={t.key} className={`tier-step ${earned ? "earned" : "locked"} ${current ? "current" : ""}`}>
+              <div className="tier-step-cyl">{4 + i * 2}<span>cyl</span></div>
+              <div className="tier-step-body">
+                <div className="tier-step-name">
+                  {t.name}
+                  {current && <span className="tier-step-here">You are here</span>}
+                  {earned && !current && <span className="tier-step-done">✓</span>}
+                </div>
+                <div className="tier-step-blurb">{t.blurb}</div>
+              </div>
+              <div className="tier-step-min">{t.min}+</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Reskins — unlock as you climb. */}
+      <h3 className="priorities-group">Reskins {`(${THEMES.filter((t) => t.unlockTier <= tune.tierIndex).length}/${THEMES.length} unlocked)`}</h3>
+      <div className="garage-skins">
+        {THEMES.map((t) => {
+          const locked = t.unlockTier > tune.tierIndex;
+          const active = theme === t.id;
+          return (
+            <button
+              key={t.id}
+              className={`skin-card ${active ? "skin-active" : ""} ${locked ? "skin-locked" : ""}`}
+              onClick={() => !locked && onChooseTheme(t.id)}
+              disabled={locked}
+            >
+              <span className="skin-chips">
+                <span style={{ background: t.swatch[0] }} />
+                <span style={{ background: t.swatch[1] }} />
+                <span style={{ background: t.swatch[2] }} />
+              </span>
+              <span className="skin-name">{t.label}</span>
+              <span className="skin-state">
+                {active ? "Equipped" : locked ? `🔒 ${TUNE_TIERS[t.unlockTier].name}` : "Equip"}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

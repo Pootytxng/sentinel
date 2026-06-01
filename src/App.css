@@ -1761,7 +1761,7 @@ body {
   .card:hover, .monitor-panel:hover, .diag-section:hover, .session-card:hover,
   .btn:hover:not(:disabled) { transform: none; }
   .hero.tune-apex, .hero.tune-apex::after, .hero.tune-dialed .hero-ring-wrap::after,
-  .levelup-flash, .rec-powerup, .rec-powerup .rec-impact-dot { animation: none !important; }
+  .levelup-flash, .rec-powerup, .rec-powerup .rec-impact-dot, .cyl-on { animation: none !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2051,6 +2051,153 @@ body::before {
   100% { opacity: 0; transform: scale(1.05); }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   APP-WIDE EVOLUTION — [data-tune] on <html> escalates the ENTIRE app per tier.
+   "Two more cylinders" feel: as the tier climbs, cards/rail/panels gain edge
+   definition, accent presence, and glow. Subtle at Stock, muscular at Apex.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Borders gain accent tint + cards gain glow as the tier climbs. */
+:root[data-tune="tuned"] .card, :root[data-tune="tuned"] .monitor-panel,
+:root[data-tune="tuned"] .diag-section, :root[data-tune="tuned"] .rail,
+:root[data-tune="tuned"] .session-card {
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
+}
+:root[data-tune="calibrated"] .card, :root[data-tune="calibrated"] .monitor-panel,
+:root[data-tune="calibrated"] .diag-section, :root[data-tune="calibrated"] .rail,
+:root[data-tune="calibrated"] .session-card {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: var(--shadow-1), 0 0 22px -16px var(--accent-glow), var(--edge);
+}
+:root[data-tune="dialed"] .card, :root[data-tune="dialed"] .monitor-panel,
+:root[data-tune="dialed"] .diag-section, :root[data-tune="dialed"] .rail,
+:root[data-tune="dialed"] .session-card {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  box-shadow: var(--shadow-1), 0 0 30px -14px var(--accent-glow), var(--edge);
+}
+:root[data-tune="apex"] .card, :root[data-tune="apex"] .monitor-panel,
+:root[data-tune="apex"] .diag-section, :root[data-tune="apex"] .rail,
+:root[data-tune="apex"] .session-card {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  box-shadow: var(--shadow-2), 0 0 40px -12px var(--accent-glow), var(--edge);
+}
+
+/* The wordmark dot + rail active marker intensify with tier. */
+:root[data-tune="dialed"] .header h1::before,
+:root[data-tune="apex"] .header h1::before { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
+:root[data-tune="apex"] .rail { background: linear-gradient(180deg, var(--panel-3), var(--panel)); }
+
+/* Atmosphere swells with tier — the room gets more charged. */
+:root[data-tune="calibrated"] body::before { opacity: 1.15; }
+:root[data-tune="dialed"] body::before { opacity: 1.4; }
+:root[data-tune="apex"] body::before { opacity: 1.7; filter: blur(30px); }
+
+/* ── Garage — engine bay + tier ladder + reskins ─────────────────────────── */
+.engine-bay {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-strong);
+  background:
+    radial-gradient(520px 200px at 50% -40%, var(--accent-soft), transparent 70%),
+    linear-gradient(180deg, var(--panel-2), var(--panel));
+  padding: 20px 22px;
+  box-shadow: var(--shadow-2), var(--edge);
+  overflow: hidden;
+}
+.engine-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+.engine-spec { font-family: var(--font-mono); font-size: 26px; font-weight: 800; color: var(--accent-bright); letter-spacing: -0.02em; text-shadow: 0 0 22px var(--accent-glow); }
+.engine-tier { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); }
+.engine-block {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--r);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--hairline);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.cyl {
+  height: 46px;
+  border-radius: 7px 7px 5px 5px;
+  position: relative;
+  border: 1px solid var(--hairline);
+}
+.cyl::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: -5px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: var(--panel-3);
+}
+.cyl-off { background: linear-gradient(180deg, var(--panel-2), var(--panel)); opacity: 0.5; }
+.cyl-on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 55%, #000), var(--accent));
+  box-shadow: 0 0 14px -2px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.25);
+  animation: cyl-fire 520ms var(--ease) both;
+}
+.cyl-on::before { background: var(--accent-bright); box-shadow: 0 0 8px var(--accent-glow); }
+@keyframes cyl-fire { 0% { opacity: 0; transform: translateY(8px); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+.engine-readout { display: flex; align-items: baseline; gap: 14px; margin-top: 16px; }
+.engine-score { font-family: var(--font-mono); font-size: 30px; font-weight: 800; color: var(--fg); }
+.engine-score-max { font-size: 15px; color: var(--faint); font-weight: 600; }
+.engine-blurb { font-size: 13px; color: var(--fg-2); }
+
+.tier-ladder { display: flex; flex-direction: column; gap: 7px; }
+.tier-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  transition: border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.tier-step.locked { opacity: 0.5; }
+.tier-step.earned { border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
+.tier-step.current {
+  border-color: var(--accent);
+  background: linear-gradient(90deg, var(--accent-soft), transparent 88%);
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 22px -8px var(--accent-glow);
+}
+.tier-step-cyl {
+  flex-shrink: 0;
+  width: 52px; text-align: center;
+  font-family: var(--font-mono); font-size: 18px; font-weight: 800; color: var(--accent-bright);
+}
+.tier-step-cyl span { display: block; font-size: 9px; font-weight: 600; color: var(--faint); letter-spacing: 0.1em; }
+.tier-step.locked .tier-step-cyl { color: var(--muted); }
+.tier-step-body { flex: 1; min-width: 0; }
+.tier-step-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+.tier-step-here { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-bright); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--r-pill); padding: 2px 8px; }
+.tier-step-done { color: var(--ready); font-weight: 800; }
+.tier-step-blurb { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tier-step-min { font-family: var(--font-mono); font-size: 12px; color: var(--faint); flex-shrink: 0; }
+
+.garage-skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.skin-card {
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 12px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.skin-card:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--border-strong); }
+.skin-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line), 0 0 20px -8px var(--accent-glow); }
+.skin-locked { opacity: 0.55; cursor: not-allowed; }
+.skin-chips { display: flex; height: 30px; border-radius: 6px; overflow: hidden; border: 1px solid var(--hairline); }
+.skin-chips span { flex: 1; }
+.skin-name { font-size: 13px; font-weight: 700; color: var(--fg); }
+.skin-state { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--muted); }
+.skin-active .skin-state { color: var(--accent-bright); }
+
 /* ── Power-up pulse — fires when a setting flips on ──────────────────────── */
 .rec-powerup { animation: powerup 900ms var(--ease) both; }
 @keyframes powerup {
@@ -2296,6 +2443,8 @@ body::before {
 .theme-swatch-chips span { flex: 1; }
 .theme-swatch-label { font-size: 11.5px; font-weight: 600; color: var(--fg-2); text-align: left; }
 .theme-swatch-on .theme-swatch-label { color: var(--accent-bright); }
+.theme-swatch-locked { opacity: 0.5; cursor: not-allowed; }
+.theme-swatch-locked:hover { transform: none; border-color: var(--border); }
 
 @media (max-width: 720px) {
   .hero { padding: 20px 18px; }
