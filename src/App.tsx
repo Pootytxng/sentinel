@@ -752,6 +752,7 @@ function App() {
 
       {hw && (
         <>
+          <CommandHero hw={hw} readiness={readiness} />
           <nav className="tab-bar" role="tablist">
             {visibleTabs.map((tab) => {
               const badge = tabBadgeCount(tab);
@@ -823,6 +824,103 @@ function App() {
         </button>
       </footer>
     </main>
+  );
+}
+
+// ─── Command hero ─────────────────────────────────────────────────────────
+// The at-a-glance verdict the user sees the instant Sentinel opens: a glowing
+// readiness gauge + a confident status headline + live system vitals. Read-only
+// — derives entirely from the already-loaded hardware + readiness data; changes
+// nothing. This is the "are I dialed in / do I need to look elsewhere" answer.
+
+function Vital({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="vital">
+      <div className="vital-label">{label}</div>
+      <div className="vital-value" title={value}>{value}</div>
+    </div>
+  );
+}
+
+function CommandHero({
+  hw,
+  readiness,
+}: {
+  hw: HardwareInfo;
+  readiness: GameReadiness | null;
+}) {
+  const total = readiness
+    ? readiness.ready_count + readiness.attention_count + readiness.unknown_count
+    : 0;
+  const ready = readiness?.ready_count ?? 0;
+  const attention = readiness?.attention_count ?? 0;
+  const frac = total > 0 ? ready / total : 0;
+  const allClear =
+    readiness != null && attention === 0 && readiness.unknown_count === 0;
+
+  const state =
+    readiness == null ? "scanning" : attention > 0 ? "attention" : "ready";
+  const headline =
+    readiness == null
+      ? "Scanning…"
+      : attention > 0
+      ? "Action available"
+      : allClear
+      ? "Dialed in"
+      : "Ready to play";
+  const subline =
+    readiness == null
+      ? "Reading your system"
+      : attention > 0
+      ? `${attention} ${attention === 1 ? "check wants" : "checks want"} your attention`
+      : `${ready} of ${total} readiness checks clear — you're good to go`;
+
+  // Readiness ring geometry (SVG circle, fraction stroked, glowing).
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  const dash = C * frac;
+
+  const cpu = hw.cpu_arch?.family_label || hw.cpu_brand || "—";
+  const gpu = hw.gpus[0]?.name ?? "—";
+  const ram = hw.ram_total_bytes > 0 ? fmtGB(hw.ram_total_bytes) : "—";
+  const disp =
+    hw.display && hw.display.width > 0
+      ? `${hw.display.current_refresh_rate_hz} Hz`
+      : "—";
+
+  return (
+    <section className={`hero hero-${state}`}>
+      <div className="hero-core">
+        <div className="hero-ring-wrap">
+          <svg className="hero-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle className="hero-ring-track" cx="60" cy="60" r={R} />
+            <circle
+              className="hero-ring-fill"
+              cx="60"
+              cy="60"
+              r={R}
+              strokeDasharray={`${dash} ${C}`}
+              transform="rotate(-90 60 60)"
+            />
+          </svg>
+          <div className="hero-ring-center">
+            <div className="hero-ring-num">{readiness ? ready : "—"}</div>
+            <div className="hero-ring-den">{readiness ? `/ ${total}` : "scan"}</div>
+          </div>
+        </div>
+        <div className="hero-verdict">
+          <div className="hero-eyebrow">System status</div>
+          <div className="hero-headline">{headline}</div>
+          <div className="hero-subline">{subline}</div>
+        </div>
+      </div>
+      <div className="hero-vitals">
+        <Vital label="CPU" value={cpu} />
+        <Vital label="GPU" value={gpu} />
+        <Vital label="Memory" value={ram} />
+        <Vital label="Display" value={disp} />
+      </div>
+    </section>
   );
 }
 
