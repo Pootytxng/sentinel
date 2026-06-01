@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import "./App.css";
@@ -859,7 +859,7 @@ function App() {
 
       {hw && (
         <>
-          <CommandHero hw={hw} readiness={readiness} />
+          <CommandHero hw={hw} readiness={readiness} changes={changes} sessions={sessions} />
           <div className="shell">
             <nav className="rail" role="tablist" aria-label="Sections">
               {visibleTabs.map((tab) => {
@@ -938,43 +938,142 @@ function Vital({ label, value }: { label: string; value: string }) {
   );
 }
 
+// ─── Tune Level — the honest "evolution" system ────────────────────────────
+// As the user tunes their PC, the app visibly levels up (Stock → Apex). The
+// level is NOT a fake score: it's derived ONLY from real, transparent facts —
+// readiness checks cleared + safe optimizations Sentinel actually applied — and
+// the exact breakdown is shown. A measured personal-best session FPS rides
+// along as a labeled flourish (never as a guarantee). Earning a tier feels
+// good *because* it reflects real configuration progress, not a vanity meter.
+
+type TuneTier = {
+  key: string;
+  name: string;
+  min: number; // inclusive lower bound (0–100)
+  blurb: string;
+};
+
+// Five tiers. The thresholds are deliberate, transparent breakpoints.
+const TUNE_TIERS: TuneTier[] = [
+  { key: "stock", name: "Stock", min: 0, blurb: "Factory state — let's tune it." },
+  { key: "tuned", name: "Tuned", min: 25, blurb: "First gains locked in." },
+  { key: "calibrated", name: "Calibrated", min: 50, blurb: "Coming together nicely." },
+  { key: "dialed", name: "Dialed In", min: 75, blurb: "Seriously sharp setup." },
+  { key: "apex", name: "Apex", min: 100, blurb: "Maxed. Nothing left on the table." },
+];
+
+type TuneState = {
+  score: number; // 0–100, transparent
+  tier: TuneTier;
+  tierIndex: number;
+  next: TuneTier | null;
+  toNext: number; // points to next tier (0 if at apex)
+  readyPart: number; // points from readiness
+  appliedPart: number; // points from applied optimizations
+  readyClear: number;
+  readyTotal: number;
+  appliedCount: number;
+  appliedTotal: number;
+};
+
+// Score = 60% readiness-cleared + 40% safe-optimizations-applied. Both are
+// facts Sentinel directly observes. Apex (100) requires every readiness check
+// clear AND every appliable optimization Sentinel owns being active.
+function computeTuneState(
+  readiness: GameReadiness | null,
+  changes: AppliedChange[],
+): TuneState {
+  const readyTotal = readiness
+    ? readiness.ready_count + readiness.attention_count + readiness.unknown_count
+    : 0;
+  const readyClear = readiness?.ready_count ?? 0;
+  const readyFrac = readyTotal > 0 ? readyClear / readyTotal : 0;
+
+  const appliedTotal = APPLIABLE_REC_IDS.size;
+  const appliedActive = new Set(
+    changes
+      .filter((c) => c.status === "applied" && c.is_still_active && APPLIABLE_REC_IDS.has(c.rec_id))
+      .map((c) => c.rec_id),
+  );
+  const appliedCount = appliedActive.size;
+  const appliedFrac = appliedTotal > 0 ? appliedCount / appliedTotal : 0;
+
+  const readyPart = Math.round(readyFrac * 60);
+  const appliedPart = Math.round(appliedFrac * 40);
+  const score = Math.max(0, Math.min(100, readyPart + appliedPart));
+
+  let tierIndex = 0;
+  for (let i = TUNE_TIERS.length - 1; i >= 0; i--) {
+    if (score >= TUNE_TIERS[i].min) {
+      tierIndex = i;
+      break;
+    }
+  }
+  const tier = TUNE_TIERS[tierIndex];
+  const next = tierIndex < TUNE_TIERS.length - 1 ? TUNE_TIERS[tierIndex + 1] : null;
+  const toNext = next ? next.min - score : 0;
+
+  return {
+    score, tier, tierIndex, next, toNext,
+    readyPart, appliedPart, readyClear, readyTotal, appliedCount, appliedTotal,
+  };
+}
+
+const PB_FPS_KEY = "sentinel-pb-fps";
+
 function CommandHero({
   hw,
   readiness,
+  changes,
+  sessions,
 }: {
   hw: HardwareInfo;
   readiness: GameReadiness | null;
+  changes: AppliedChange[];
+  sessions: SessionSummary[];
 }) {
-  const total = readiness
-    ? readiness.ready_count + readiness.attention_count + readiness.unknown_count
-    : 0;
-  const ready = readiness?.ready_count ?? 0;
   const attention = readiness?.attention_count ?? 0;
-  const frac = total > 0 ? ready / total : 0;
-  const allClear =
-    readiness != null && attention === 0 && readiness.unknown_count === 0;
+
+  const tune = computeTuneState(readiness, changes);
+
+  // Personal-best FPS — measured, persisted, labeled as an estimate. Sessions
+  // hold avg_fps; track the best ever seen across runs.
+  const bestSessionFps = sessions.reduce((m, s) => Math.max(m, s.avg_fps || 0), 0);
+  const [pbFps, setPbFps] = useState<number>(() => {
+    try { return Number(localStorage.getItem(PB_FPS_KEY)) || 0; } catch { return 0; }
+  });
+  useEffect(() => {
+    if (bestSessionFps > pbFps) {
+      setPbFps(bestSessionFps);
+      try { localStorage.setItem(PB_FPS_KEY, String(bestSessionFps)); } catch { /* ignore */ }
+    }
+  }, [bestSessionFps, pbFps]);
+
+  // Celebrate a tier-up: when the tier index climbs past what we last saw,
+  // flash the hero. Persisted so it only fires on genuine progress.
+  const [celebrate, setCelebrate] = useState(false);
+  useEffect(() => {
+    if (readiness == null) return;
+    let seen = -1;
+    try { seen = Number(localStorage.getItem("sentinel-tune-tier") ?? "-1"); } catch { /* ignore */ }
+    if (tune.tierIndex > seen) {
+      if (seen >= 0) {
+        setCelebrate(true);
+        const t = setTimeout(() => setCelebrate(false), 2200);
+        try { localStorage.setItem("sentinel-tune-tier", String(tune.tierIndex)); } catch { /* ignore */ }
+        return () => clearTimeout(t);
+      }
+      try { localStorage.setItem("sentinel-tune-tier", String(tune.tierIndex)); } catch { /* ignore */ }
+    }
+  }, [tune.tierIndex, readiness]);
 
   const state =
     readiness == null ? "scanning" : attention > 0 ? "attention" : "ready";
-  const headline =
-    readiness == null
-      ? "Scanning…"
-      : attention > 0
-      ? "Action available"
-      : allClear
-      ? "Dialed in"
-      : "Ready to play";
-  const subline =
-    readiness == null
-      ? "Reading your system"
-      : attention > 0
-      ? `${attention} ${attention === 1 ? "check wants" : "checks want"} your attention`
-      : `${ready} of ${total} readiness checks clear — you're good to go`;
 
-  // Readiness ring geometry (SVG circle, fraction stroked, glowing).
+  // Ring shows the Tune score (the evolution metric), not just readiness.
   const R = 52;
   const C = 2 * Math.PI * R;
-  const dash = C * frac;
+  const dash = C * (tune.score / 100);
 
   const cpu = hw.cpu_arch?.family_label || hw.cpu_brand || "—";
   const gpu = hw.gpus[0]?.name ?? "—";
@@ -984,30 +1083,63 @@ function CommandHero({
       ? `${hw.display.current_refresh_rate_hz} Hz`
       : "—";
 
+  const subline =
+    readiness == null
+      ? "Reading your system"
+      : tune.next
+      ? `${tune.toNext} ${tune.toNext === 1 ? "point" : "points"} to ${tune.next.name}`
+      : "Maxed — nothing left on the table";
+
   return (
-    <section className={`hero hero-${state}`}>
+    <section
+      className={`hero hero-${state} tune-${tune.tier.key} ${celebrate ? "hero-levelup" : ""}`}
+      data-tier={tune.tierIndex}
+    >
+      {celebrate && <div className="levelup-flash" aria-hidden="true">{tune.tier.name.toUpperCase()}</div>}
       <div className="hero-core">
         <div className="hero-ring-wrap">
           <svg className="hero-ring" viewBox="0 0 120 120" aria-hidden="true">
             <circle className="hero-ring-track" cx="60" cy="60" r={R} />
             <circle
               className="hero-ring-fill"
-              cx="60"
-              cy="60"
-              r={R}
+              cx="60" cy="60" r={R}
               strokeDasharray={`${dash} ${C}`}
               transform="rotate(-90 60 60)"
             />
           </svg>
           <div className="hero-ring-center">
-            <div className="hero-ring-num">{readiness ? ready : "—"}</div>
-            <div className="hero-ring-den">{readiness ? `/ ${total}` : "scan"}</div>
+            <div className="hero-ring-num">{readiness ? tune.score : "—"}</div>
+            <div className="hero-ring-den">{readiness ? "tune" : "scan"}</div>
           </div>
         </div>
         <div className="hero-verdict">
-          <div className="hero-eyebrow">System status</div>
-          <div className="hero-headline">{headline}</div>
+          <div className="hero-eyebrow">
+            Tune level
+            <span className="tier-chip">{tune.tier.name}</span>
+          </div>
+          <div className="hero-headline">{readiness == null ? "Scanning…" : tune.tier.name}</div>
           <div className="hero-subline">{subline}</div>
+          {readiness != null && (
+            <div className="tune-progress" title={`${tune.score}/100`}>
+              <div className="tune-progress-fill" style={{ width: `${tune.score}%` }} />
+              {TUNE_TIERS.slice(1).map((t) => (
+                <span key={t.key} className="tune-tick" style={{ left: `${t.min}%` }} />
+              ))}
+            </div>
+          )}
+          {readiness != null && (
+            <div className="tune-breakdown">
+              Readiness {tune.readyClear}/{tune.readyTotal}
+              <span className="tune-dot">·</span>
+              Optimizations {tune.appliedCount}/{tune.appliedTotal}
+              {pbFps > 0 && (
+                <>
+                  <span className="tune-dot">·</span>
+                  <span className="tune-pb">PB {Math.round(pbFps)} fps<span className="tune-pb-est"> est</span></span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="hero-vitals">
@@ -2091,6 +2223,20 @@ function RecCard({
 
   const [open, setOpen] = useState(false);
 
+  // Power-up pulse: when this rec flips off → on, flash a brief "energize"
+  // animation. Tracks the previous applied state across renders.
+  const [poweredUp, setPoweredUp] = useState(false);
+  const prevOn = useRef(currentlyOn);
+  useEffect(() => {
+    if (currentlyOn && !prevOn.current) {
+      setPoweredUp(true);
+      const t = setTimeout(() => setPoweredUp(false), 900);
+      prevOn.current = currentlyOn;
+      return () => clearTimeout(t);
+    }
+    prevOn.current = currentlyOn;
+  }, [currentlyOn]);
+
   const stateClass = isInfo
     ? "rec-info"
     : currentlyOn
@@ -2098,7 +2244,7 @@ function RecCard({
     : "rec-off";
 
   return (
-    <div className={`rec rec-${rec.severity} ${stateClass}`}>
+    <div className={`rec rec-${rec.severity} ${stateClass} ${poweredUp ? "rec-powerup" : ""}`}>
       <div className="rec-head">
         <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>
           {rec.category}
