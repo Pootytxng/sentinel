@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code — local autopilot hook (machine-local, personal automation; not shared)
+.claude/settings.local.json
+.claude/autopilot.json
+.claude/hooks/
