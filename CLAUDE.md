@@ -150,10 +150,13 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   `src-tauri/target/release/bundle/`; identity baked in (Sentinel / 0.1.0 / Pootytxng), NotSigned
   (expected), no updater; single-instance smoke passed on the fresh binary. (First attempt OOM'd
   compiling the `windows` crate at `opt-level=3` with ~5 GB free RAM; cleared with
-  `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256` — lower peak memory, negligible runtime cost.) NOTE: the
-  full §6/§7 installed-build QA above was run on the earlier *pre-polish* build; the polish fixes are
-  unit-tested (72/72) + single-instance smoke-verified, so a fresh full installed-QA pass on the 17:42
-  build is the only remaining nicety before distributing the invite.
+  `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256` — lower peak memory, negligible runtime cost.)
+  **✅ POST-POLISH INSTALLED-BUILD SMOKE = PASS (2026-05-31)** on the 17:11 NSIS build: install/identity,
+  single-instance (no respawn), Export BOM (`EF BB BF`), FPS runtime-dir separation + headless + clean
+  exit (real ETW data), AMD driver-age, apply/rollback (ledger 12→13, `status: rolled_back`), 0 outbound
+  network, and uninstall/reinstall with Trust-Ledger persistence — all green (see PACKAGING §7b). ⇒
+  **Private beta is READY for invite-only, unsigned, direct-download / local-share distribution.** PUBLIC
+  release stays gated on signing + legal; Gaming Mode (F1) stays gated; remote fetch + updater stay off.
 - **Legal:** `docs/PRIVACY.md` / `docs/EULA.md` are DRAFTS — license model + governing-law/jurisdiction
   TBD before public distribution.
 - **Remote fetch:** stays disabled (`docs/REMOTE_FETCH_ARMING_PLAN.md`); not a beta gate.
