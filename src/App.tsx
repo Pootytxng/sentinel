@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
+import { deriveSystemPosture } from "./surfaces/system-posture";
+import { activeChangeCount } from "./surfaces/dashboard-data";
 import "./App.css";
 import "./Onboarding.css";
 
@@ -932,7 +934,7 @@ function App() {
 
       {hw && (
         <>
-          <CommandHero hw={hw} readiness={readiness} changes={changes} sessions={sessions} />
+          <CommandHero hw={hw} readiness={readiness} changes={changes} />
           <div className="shell">
             <nav className="rail" role="tablist" aria-label="Sections">
               {visibleTabs.map((tab) => {
@@ -1095,61 +1097,34 @@ function computeTuneState(
   };
 }
 
-const PB_FPS_KEY = "sentinel-pb-fps";
-
 function CommandHero({
   hw,
   readiness,
   changes,
-  sessions,
 }: {
   hw: HardwareInfo;
   readiness: GameReadiness | null;
   changes: AppliedChange[];
-  sessions: SessionSummary[];
 }) {
-  const attention = readiness?.attention_count ?? 0;
-
-  const tune = computeTuneState(readiness, changes);
-
-  // Personal-best FPS — measured, persisted, labeled as an estimate. Sessions
-  // hold avg_fps; track the best ever seen across runs.
-  const bestSessionFps = sessions.reduce((m, s) => Math.max(m, s.avg_fps || 0), 0);
-  const [pbFps, setPbFps] = useState<number>(() => {
-    try { return Number(localStorage.getItem(PB_FPS_KEY)) || 0; } catch { return 0; }
+  // Honest, transparent posture — derived from real readiness facts + active
+  // changes. No opaque "tune score", no tier ladder, no level-up flourish.
+  const posture = deriveSystemPosture({
+    readiness,
+    activeChanges: activeChangeCount(changes),
+    monitoringAvailable: true,
   });
-  useEffect(() => {
-    if (bestSessionFps > pbFps) {
-      setPbFps(bestSessionFps);
-      try { localStorage.setItem(PB_FPS_KEY, String(bestSessionFps)); } catch { /* ignore */ }
-    }
-  }, [bestSessionFps, pbFps]);
-
-  // Celebrate a tier-up: when the tier index climbs past what we last saw,
-  // flash the hero. Persisted so it only fires on genuine progress.
-  const [celebrate, setCelebrate] = useState(false);
-  useEffect(() => {
-    if (readiness == null) return;
-    let seen = -1;
-    try { seen = Number(localStorage.getItem("sentinel-tune-tier") ?? "-1"); } catch { /* ignore */ }
-    if (tune.tierIndex > seen) {
-      if (seen >= 0) {
-        setCelebrate(true);
-        const t = setTimeout(() => setCelebrate(false), 2200);
-        try { localStorage.setItem("sentinel-tune-tier", String(tune.tierIndex)); } catch { /* ignore */ }
-        return () => clearTimeout(t);
-      }
-      try { localStorage.setItem("sentinel-tune-tier", String(tune.tierIndex)); } catch { /* ignore */ }
-    }
-  }, [tune.tierIndex, readiness]);
-
   const state =
-    readiness == null ? "scanning" : attention > 0 ? "attention" : "ready";
+    posture.state === "attention" ? "attention"
+    : posture.state === "dialed-in" ? "ready"
+    : "scanning";
 
-  // Ring shows the Tune score (the evolution metric), not just readiness.
+  // Ring shows the fraction of readiness checks cleared — a real, explainable
+  // count, NOT a synthesized score.
+  const total = readiness ? readiness.checks.length : 0;
+  const clear = readiness?.ready_count ?? 0;
   const R = 52;
   const C = 2 * Math.PI * R;
-  const dash = C * (tune.score / 100);
+  const dash = C * (total > 0 ? clear / total : 0);
 
   const cpu = hw.cpu_arch?.family_label || hw.cpu_brand || "—";
   const gpu = hw.gpus[0]?.name ?? "—";
@@ -1159,23 +1134,12 @@ function CommandHero({
       ? `${hw.display.current_refresh_rate_hz} Hz`
       : "—";
 
-  const subline =
-    readiness == null
-      ? "Reading your system"
-      : tune.next
-      ? `${tune.toNext} ${tune.toNext === 1 ? "point" : "points"} to ${tune.next.name}`
-      : "Maxed — nothing left on the table";
-
   return (
-    <section
-      className={`hero hero-${state} tune-${tune.tier.key} ${celebrate ? "hero-levelup" : ""}`}
-      data-tier={tune.tierIndex}
-    >
-      {celebrate && <div className="levelup-flash" aria-hidden="true">{tune.tier.name.toUpperCase()}</div>}
+    <section className={`hero hero-${state}`}>
       <div className="hero-core">
         <div
           className="hero-ring-wrap"
-          title={`Tune score ${tune.score}/100 — earned from ${tune.readyPart} pts readiness (${tune.readyClear}/${tune.readyTotal} clear) + ${tune.appliedPart} pts optimizations (${tune.appliedCount}/${tune.appliedTotal} applied). Transparent, not a vanity score.`}
+          title={readiness ? `${clear}/${total} readiness checks clear` : "Scanning…"}
         >
           <svg className="hero-ring" viewBox="0 0 120 120" aria-hidden="true">
             <circle className="hero-ring-track" cx="60" cy="60" r={R} />
@@ -1187,38 +1151,14 @@ function CommandHero({
             />
           </svg>
           <div className="hero-ring-center">
-            <div className="hero-ring-num">{readiness ? tune.score : "—"}</div>
-            <div className="hero-ring-den">{readiness ? "tune" : "scan"}</div>
+            <div className="hero-ring-num">{readiness ? `${clear}/${total}` : "—"}</div>
+            <div className="hero-ring-den">{readiness ? "ready" : "scan"}</div>
           </div>
         </div>
         <div className="hero-verdict">
-          <div className="hero-eyebrow">
-            Tune level
-            <span className="tier-chip">{tune.tier.name}</span>
-          </div>
-          <div className="hero-headline">{readiness == null ? "Scanning…" : tune.tier.name}</div>
-          <div className="hero-subline">{subline}</div>
-          {readiness != null && (
-            <div className="tune-progress" title={`${tune.score}/100`}>
-              <div className="tune-progress-fill" style={{ width: `${tune.score}%` }} />
-              {TUNE_TIERS.slice(1).map((t) => (
-                <span key={t.key} className="tune-tick" style={{ left: `${t.min}%` }} />
-              ))}
-            </div>
-          )}
-          {readiness != null && (
-            <div className="tune-breakdown">
-              Readiness {tune.readyClear}/{tune.readyTotal}
-              <span className="tune-dot">·</span>
-              Optimizations {tune.appliedCount}/{tune.appliedTotal}
-              {pbFps > 0 && (
-                <>
-                  <span className="tune-dot">·</span>
-                  <span className="tune-pb">PB {Math.round(pbFps)} fps<span className="tune-pb-est"> est</span></span>
-                </>
-              )}
-            </div>
-          )}
+          <div className="hero-eyebrow">System status</div>
+          <div className="hero-headline">{posture.headline}</div>
+          <div className="hero-subline">{posture.sub}</div>
         </div>
       </div>
       <div className="hero-vitals">
