@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentinel · Sync — concept mockup</title>
+<!--
+  CONCEPT MOCKUP — not wired into the app. Lives in the benchmark lane as a design
+  artifact so the owner can SEE the "Sync" idea we specced in words.
+  Sync = an honest, collaborative progress standing (you + Sentinel) layered on
+  SystemPosture. Resting state is calm; the level-up is the one rare "woah" moment.
+  Palette echoes src/design/tokens.css (ready-green / attention-amber) + a Sync aqua.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070a0e;
+    --bg-2:#0b1016;
+    --panel:#0e141c;
+    --panel-2:#121a24;
+    --line:rgba(255,255,255,.07);
+    --line-2:rgba(255,255,255,.12);
+    --ink:#eef4f2;
+    --ink-dim:#9bb0ad;
+    --ink-faint:#5d6f6e;
+
+    --ready:#46d98a;          /* posture / "on your own" wins */
+    --ready-soft:rgba(70,217,138,.12);
+    --attention:#f5b740;
+    --attention-soft:rgba(245,183,64,.12);
+    --sync:#3fe6e0;           /* Sync energy / "with Sentinel" */
+    --sync-soft:rgba(63,230,224,.12);
+    --calm:#6db5ff;           /* peace-of-mind */
+    --calm-soft:rgba(109,181,255,.12);
+    --gold:#ffd479;           /* reserved: the level-up sparkle ONLY */
+
+    --r:18px;
+    --dur:.6s;
+    --ease:cubic-bezier(.2,.7,.2,1);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(120% 90% at 82% -10%, rgba(63,230,224,.10), transparent 55%),
+      radial-gradient(90% 70% at -5% 0%, rgba(70,217,138,.08), transparent 50%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"Geist", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:.1px;
+    min-height:100%;
+    padding:48px 24px 80px;
+    position:relative;
+    overflow-x:hidden;
+  }
+  /* faint grid + grain atmosphere */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+    background-size:64px 64px;
+    mask-image:radial-gradient(120% 100% at 50% 0%, #000 30%, transparent 80%);
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+    mix-blend-mode:overlay;
+  }
+
+  .wrap{max-width:980px;margin:0 auto;position:relative;z-index:1}
+
+  /* ── top bar ─────────────────────────────────────────── */
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;
+    opacity:0;animation:rise var(--dur) var(--ease) .05s forwards}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:600}
+  .mark{width:26px;height:26px;border-radius:8px;position:relative;
+    background:conic-gradient(from 210deg, var(--sync), var(--ready) 60%, var(--sync));
+    box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 6px 22px rgba(63,230,224,.25)}
+  .mark::after{content:"";position:absolute;inset:6px;border-radius:4px;background:var(--bg-2)}
+  .brand b{font-family:"Bricolage Grotesque";font-weight:800;letter-spacing:-.2px}
+  .brand .tag{color:var(--ink-faint);font-weight:500;font-size:13px;margin-left:2px}
+  .concept{font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:1.5px;color:var(--ink-faint);
+    border:1px solid var(--line);padding:7px 10px;border-radius:999px;text-transform:uppercase}
+
+  /* ── hero card ───────────────────────────────────────── */
+  .card{
+    background:linear-gradient(180deg, var(--panel) 0%, var(--bg-2) 100%);
+    border:1px solid var(--line);border-radius:24px;
+    box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 30px 80px -40px rgba(0,0,0,.9);
+    overflow:hidden;position:relative;
+  }
+  .card .sheen{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(80% 60% at 78% -10%, rgba(63,230,224,.10), transparent 60%)}
+
+  .hero{display:grid;grid-template-columns:300px 1fr;gap:8px;padding:30px 32px 26px;
+    border-bottom:1px solid var(--line)}
+  @media(max-width:760px){.hero{grid-template-columns:1fr}}
+
+  /* sync dial */
+  .dial{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    opacity:0;animation:rise var(--dur) var(--ease) .15s forwards}
+  .ring{position:relative;width:212px;height:212px}
+  .ring svg{transform:rotate(-90deg);display:block}
+  .ring .track{stroke:rgba(255,255,255,.06);}
+  .ring .prog{stroke:url(#g);stroke-linecap:round;
+    stroke-dasharray:534;stroke-dashoffset:534;
+    transition:stroke-dashoffset 1.5s var(--ease) .35s;
+    filter:drop-shadow(0 0 8px rgba(63,230,224,.45))}
+  body.loaded .ring .prog{stroke-dashoffset:150;} /* ~72% of 534 */
+  .ring .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .tierno{font:700 12px/1 "JetBrains Mono",monospace;letter-spacing:2px;color:var(--sync)}
+  .tiername{font-family:"Bricolage Grotesque";font-weight:800;font-size:30px;letter-spacing:-.6px;margin-top:5px}
+  .tierhint{font-size:11.5px;color:var(--ink-faint);margin-top:6px;letter-spacing:.3px}
+  .nexttier{font:500 12px/1.4 "Geist";color:var(--ink-dim);text-align:center}
+  .nexttier b{color:var(--sync);font-weight:600}
+
+  /* posture + headline */
+  .posture{display:flex;flex-direction:column;justify-content:center;padding:6px 4px 6px 22px;
+    border-left:1px solid var(--line);
+    opacity:0;animation:rise var(--dur) var(--ease) .22s forwards}
+  @media(max-width:760px){.posture{border-left:none;padding-left:4px;border-top:1px solid var(--line);padding-top:22px;margin-top:6px}}
+  .pstate{display:inline-flex;align-items:center;gap:9px;font:600 12px/1 "JetBrains Mono",monospace;
+    letter-spacing:1.2px;text-transform:uppercase;color:var(--ready)}
+  .pdot{width:9px;height:9px;border-radius:50%;background:var(--ready);box-shadow:0 0 0 4px var(--ready-soft);
+    animation:pulse 2.6s var(--ease) infinite}
+  .headline{font-family:"Bricolage Grotesque";font-weight:800;font-size:34px;line-height:1.04;
+    letter-spacing:-.8px;margin:14px 0 8px}
+  .sub{color:var(--ink-dim);font-size:14.5px;line-height:1.5;max-width:42ch}
+  .sub .ok{color:var(--ready)}
+
+  .heroactions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .btn{appearance:none;border:1px solid var(--line-2);background:var(--panel-2);color:var(--ink);
+    font:600 13px/1 "Geist";padding:11px 15px;border-radius:12px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;transition:transform .12s var(--ease),border-color .2s,background .2s}
+  .btn:hover{transform:translateY(-2px);border-color:var(--line-2);background:#16202b}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{border-color:transparent;background:linear-gradient(180deg,#16ededcc,#10b8b3);
+    color:#04201f;box-shadow:0 10px 30px -12px rgba(63,230,224,.7)}
+  .btn.primary:hover{background:linear-gradient(180deg,#2af6f0,#13c8c2)}
+  .btn .spark{font-size:14px}
+
+  /* ── teamwork breakdown ──────────────────────────────── */
+  .panel{padding:26px 32px 30px;opacity:0;animation:rise var(--dur) var(--ease) .3s forwards}
+  .phead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  .phead h3{font-family:"Bricolage Grotesque";font-weight:700;font-size:18px;letter-spacing:-.3px;margin:0}
+  .phead .note{font-size:12px;color:var(--ink-faint)}
+
+  .split{display:flex;gap:6px;margin:16px 0 22px;height:12px;border-radius:999px;overflow:hidden;
+    background:rgba(255,255,255,.05);border:1px solid var(--line)}
+  .split .seg{height:100%;position:relative;transition:flex-grow 1s var(--ease) .4s}
+  .split .seg.sentinel{flex:0 0 0;background:linear-gradient(90deg,var(--sync),#27c9c4)}
+  .split .seg.self{flex:0 0 0;background:linear-gradient(90deg,#2fbf78,var(--ready))}
+  body.loaded .split .seg.sentinel{flex-grow:56}
+  body.loaded .split .seg.self{flex-grow:44}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:680px){.cols{grid-template-columns:1fr}}
+  .col h4{display:flex;align-items:center;gap:9px;font:600 12px/1 "JetBrains Mono",monospace;
+    letter-spacing:1px;text-transform:uppercase;margin:0 0 14px;color:var(--ink-dim)}
+  .col h4 .swatch{width:10px;height:10px;border-radius:3px}
+  .col.sentinel h4 .swatch{background:var(--sync);box-shadow:0 0 10px var(--sync)}
+  .col.self h4 .swatch{background:var(--ready);box-shadow:0 0 10px var(--ready)}
+  .col h4 .count{margin-left:auto;color:var(--ink-faint);font-weight:500}
+
+  .item{display:flex;align-items:flex-start;gap:11px;padding:11px 12px;border-radius:12px;
+    border:1px solid transparent;cursor:default;transition:background .2s,border-color .2s,transform .12s}
+  .item:hover{background:var(--panel-2);border-color:var(--line);transform:translateX(2px)}
+  .ic{width:22px;height:22px;border-radius:7px;flex:none;display:grid;place-items:center;font-size:12px;
+    background:var(--sync-soft);color:var(--sync);margin-top:1px}
+  .self .ic{background:var(--ready-soft);color:var(--ready)}
+  .it-main{font-size:13.5px;font-weight:500}
+  .it-sub{font-size:11.5px;color:var(--ink-faint);margin-top:2px;display:flex;align-items:center;gap:6px}
+  .rev{color:var(--ready);font:600 10px/1 "JetBrains Mono",monospace;letter-spacing:.4px;
+    border:1px solid var(--ready-soft);padding:3px 6px;border-radius:6px;background:var(--ready-soft)}
+
+  /* ── intents ─────────────────────────────────────────── */
+  .intents{padding:22px 32px;border-top:1px solid var(--line);background:rgba(255,255,255,.012);
+    opacity:0;animation:rise var(--dur) var(--ease) .38s forwards}
+  .intents .lbl{font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--ink-faint);margin-bottom:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:9px}
+  .chip{border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);
+    font:600 13px/1 "Geist";padding:9px 13px;border-radius:999px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px;transition:all .18s var(--ease);user-select:none}
+  .chip .d{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.55}
+  .chip:hover{border-color:var(--line-2);color:var(--ink)}
+  .chip.on{color:#04201f;background:var(--sync);border-color:transparent;
+    box-shadow:0 8px 22px -10px rgba(63,230,224,.8)}
+  .chip.on .d{opacity:1;background:#04201f}
+  .chip.calm.on{background:var(--calm);box-shadow:0 8px 22px -10px rgba(109,181,255,.8);color:#04142b}
+  .chip.calm.on .d{background:#04142b}
+
+  .calmnote{margin-top:16px;border:1px solid var(--calm-soft);background:var(--calm-soft);
+    border-radius:14px;padding:15px 16px;display:none;gap:13px;align-items:flex-start}
+  body.calmmode .calmnote{display:flex;animation:rise .4s var(--ease) forwards}
+  .calmnote .ci{width:30px;height:30px;border-radius:9px;background:rgba(109,181,255,.16);color:var(--calm);
+    display:grid;place-items:center;flex:none;font-size:15px}
+  .calmnote h5{margin:0 0 4px;font:700 14px "Bricolage Grotesque";letter-spacing:-.2px;color:#cfe4ff}
+  .calmnote p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+  .calmnote b{color:var(--calm)}
+
+  /* honesty footer */
+  .foot{padding:16px 32px 22px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;
+    font-size:12px;color:var(--ink-faint);opacity:0;animation:rise var(--dur) var(--ease) .46s forwards}
+  .foot .lock{color:var(--ready)}
+  .caption{max-width:980px;margin:18px auto 0;color:var(--ink-faint);font-size:12px;text-align:center;
+    opacity:0;animation:rise var(--dur) var(--ease) .5s forwards}
+
+  /* ── LEVEL-UP moment (the one "woah") ────────────────── */
+  .levelup{position:fixed;inset:0;z-index:50;display:grid;place-items:center;
+    background:radial-gradient(60% 60% at 50% 45%, rgba(8,16,18,.6), rgba(4,7,9,.92));
+    backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
+  body.celebrate .levelup{opacity:1;pointer-events:auto}
+  .lucard{position:relative;text-align:center;padding:42px 46px;border-radius:26px;
+    background:linear-gradient(180deg,#0d161e,#0a1014);border:1px solid var(--line-2);
+    box-shadow:0 40px 120px -40px #000, 0 0 0 1px rgba(255,212,121,.12);
+    transform:scale(.9) translateY(10px);opacity:0;transition:transform .5s var(--ease),opacity .4s}
+  body.celebrate .lucard{transform:scale(1) translateY(0);opacity:1}
+  .lukicker{font:700 12px/1 "JetBrains Mono",monospace;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
+  .lutitle{font-family:"Bricolage Grotesque";font-weight:800;font-size:46px;letter-spacing:-1.4px;margin:14px 0 6px;
+    background:linear-gradient(90deg,#fff,#bdeeec 40%,var(--sync));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lusub{color:var(--ink-dim);font-size:14.5px}
+  .unlock{margin-top:22px;display:inline-flex;align-items:center;gap:12px;padding:13px 18px;border-radius:14px;
+    border:1px solid rgba(255,212,121,.3);background:rgba(255,212,121,.07)}
+  .unlock .uswatch{width:34px;height:34px;border-radius:10px;
+    background:conic-gradient(from 200deg,#7b5cff,#33d6ff,#46d98a,#ffd479,#7b5cff);
+    box-shadow:0 0 18px rgba(99,230,224,.5)}
+  .unlock .utxt{text-align:left}
+  .unlock .utxt b{font-family:"Bricolage Grotesque";font-weight:700;font-size:15px}
+  .unlock .utxt span{display:block;font-size:11.5px;color:var(--ink-faint);margin-top:2px}
+  .ludismiss{margin-top:24px;font-size:12px;color:var(--ink-faint)}
+  /* sparks */
+  .spark-i{position:absolute;width:7px;height:7px;border-radius:2px;opacity:0;top:50%;left:50%}
+  body.celebrate .spark-i{animation:burst 1.1s var(--ease) forwards}
+
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 4px var(--ready-soft)}50%{box-shadow:0 0 0 7px rgba(70,217,138,0)}}
+  @keyframes burst{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(.3)}}
+
+  @media(prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+    body.loaded .ring .prog{stroke-dashoffset:150}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand"><span class="mark"></span><b>Sentinel</b><span class="tag">/ Sync</span></div>
+      <div class="concept">Concept mockup · not wired in</div>
+    </div>
+
+    <div class="card">
+      <div class="sheen"></div>
+
+      <!-- HERO -->
+      <div class="hero">
+        <div class="dial">
+          <div class="ring">
+            <svg width="212" height="212" viewBox="0 0 212 212">
+              <defs>
+                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#3fe6e0"/>
+                  <stop offset="1" stop-color="#46d98a"/>
+                </linearGradient>
+              </defs>
+              <circle class="track" cx="106" cy="106" r="85" fill="none" stroke-width="14"/>
+              <circle class="prog"  cx="106" cy="106" r="85" fill="none" stroke-width="14"/>
+            </svg>
+            <div class="center">
+              <div class="tierno">TIER 03</div>
+              <div class="tiername">Dialed</div>
+              <div class="tierhint">72% to next</div>
+            </div>
+          </div>
+          <div class="nexttier">Next: <b>Locked-In</b> — keep 2 more wins active</div>
+        </div>
+
+        <div class="posture">
+          <div class="pstate"><span class="pdot"></span>Dialed-in</div>
+          <div class="headline">You're ready to play —<br>and it shows.</div>
+          <div class="sub">All readiness checks pass · <span class="ok">5 safe changes active &amp; reversible</span>. Your Sync standing reflects the work you and Sentinel have done together.</div>
+          <div class="heroactions">
+            <button class="btn primary" id="celebrate"><span class="spark">✦</span> Preview a level-up</button>
+            <button class="btn" id="calmtoggle">Peace-of-mind view</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEAMWORK BREAKDOWN -->
+      <div class="panel">
+        <div class="phead">
+          <h3>Built together</h3>
+          <div class="note">every point traces to a real, verified state</div>
+        </div>
+        <div class="split" title="56% with Sentinel · 44% on your own">
+          <div class="seg sentinel"></div>
+          <div class="seg self"></div>
+        </div>
+
+        <div class="cols">
+          <div class="col sentinel">
+            <h4><span class="swatch"></span>With Sentinel <span class="count">3 active</span></h4>
+            <div class="item"><div class="ic">✓</div><div><div class="it-main">USB Selective Suspend off (AC)</div><div class="it-sub">stops idle-wake micro-stutter <span class="rev">REVERSIBLE</span></div></div></div>
+            <div class="item"><div class="ic">✓</div><div><div class="it-main">Fast Startup disabled</div><div class="it-sub">clean shutdowns, fresh drivers <span class="rev">REVERSIBLE</span></div></div></div>
+            <div class="item"><div class="ic">✓</div><div><div class="it-main">Game Mode on</div><div class="it-sub">fewer background interruptions <span class="rev">REVERSIBLE</span></div></div></div>
+          </div>
+          <div class="col self">
+            <h4><span class="swatch"></span>On your own <span class="count">3 detected</span></h4>
+            <div class="item"><div class="ic">★</div><div><div class="it-main">Mouse acceleration off</div><div class="it-sub">you set this — Sentinel sees it &amp; credits you</div></div></div>
+            <div class="item"><div class="ic">★</div><div><div class="it-main">Hardware GPU Scheduling on</div><div class="it-sub">you enabled this yourself</div></div></div>
+            <div class="item"><div class="ic">★</div><div><div class="it-main">Display running at 144 Hz</div><div class="it-sub">at its max — nicely done</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INTENTS -->
+      <div class="intents">
+        <div class="lbl">What you care about — weights your standing</div>
+        <div class="chips">
+          <span class="chip on"><span class="d"></span>Latency</span>
+          <span class="chip on"><span class="d"></span>Smoothness</span>
+          <span class="chip"><span class="d"></span>FPS</span>
+          <span class="chip"><span class="d"></span>Thermals</span>
+          <span class="chip"><span class="d"></span>Quality</span>
+          <span class="chip calm" id="calmchip"><span class="d"></span>Peace of mind</span>
+        </div>
+
+        <div class="calmnote">
+          <div class="ci">🛡</div>
+          <div>
+            <h5>Peace-of-mind mode</h5>
+            <p>For when you just want reassurance, not tweaks. Your standing climbs by <b>confirming</b> your PC is healthy &amp; safe — <b>rollback safety intact</b>, drivers current, thermals nominal, no risky misconfigurations — so you can reach a high standing <b>without changing a thing</b>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot"><span class="lock">⬡</span> Sentinel never shows a number it can't explain — tap any item above to see exactly what it means.</div>
+    </div>
+
+    <div class="caption">Concept only. Final visuals, naming, and wiring are the design lane's — this just turns the spec into something you can see.</div>
+  </div>
+
+  <!-- LEVEL-UP OVERLAY -->
+  <div class="levelup" id="levelup">
+    <div class="lucard" id="lucard">
+      <div class="lukicker">✦ Sync · Tier up ✦</div>
+      <div class="lutitle">Locked-In</div>
+      <div class="lusub">You kept your wins active and crossed into Tier 04. Earned, not given.</div>
+      <div class="unlock">
+        <span class="uswatch"></span>
+        <div class="utxt"><b>Aurora accent unlocked</b><span>a new look, because you earned it</span></div>
+      </div>
+      <div class="ludismiss">click anywhere to dismiss</div>
+    </div>
+  </div>
+
+<script>
+  // load reveal + ring/bar fill
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.add('loaded')));
+
+  // intent chips toggle
+  document.querySelectorAll('.chip:not(.calm)').forEach(c=>{
+    c.addEventListener('click',()=>c.classList.toggle('on'));
+  });
+
+  // peace-of-mind: chip + button both toggle the calm reframe
+  const calmChip = document.getElementById('calmchip');
+  function toggleCalm(){
+    const on = document.body.classList.toggle('calmmode');
+    calmChip.classList.toggle('on', on);
+  }
+  calmChip.addEventListener('click', toggleCalm);
+  document.getElementById('calmtoggle').addEventListener('click', toggleCalm);
+
+  // LEVEL-UP — the one "woah" moment, on demand
+  const body = document.body, levelup = document.getElementById('levelup');
+  function spawnSparks(){
+    const card = document.getElementById('lucard');
+    card.querySelectorAll('.spark-i').forEach(s=>s.remove());
+    const colors=['#ffd479','#3fe6e0','#46d98a','#ffffff'];
+    for(let i=0;i<28;i++){
+      const s=document.createElement('span'); s.className='spark-i';
+      const a=Math.random()*Math.PI*2, d=120+Math.random()*220;
+      s.style.setProperty('--tx',Math.cos(a)*d+'px');
+      s.style.setProperty('--ty',Math.sin(a)*d+'px');
+      s.style.background=colors[i%colors.length];
+      s.style.animationDelay=(Math.random()*.15)+'s';
+      card.appendChild(s);
+    }
+  }
+  document.getElementById('celebrate').addEventListener('click',()=>{
+    body.classList.add('celebrate'); spawnSparks();
+  });
+  levelup.addEventListener('click',()=>body.classList.remove('celebrate'));
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')body.classList.remove('celebrate')});
+</script>
+</body>
+</html>
