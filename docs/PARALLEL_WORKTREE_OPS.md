@@ -8,7 +8,7 @@ rule of the road. **HQ owns this doc.** Any lane: read this before touching the 
 | Lane | Folder | Branch | Domain it may edit |
 |---|---|---|---|
 | **HQ (integration)** | `C:\Users\Kuya\code\sentinel` | `main` | merges, QA, this doc, `CLAUDE.md`, beta-ref guard |
-| **Design** | (parked — gets its own worktree when staffed) | `experience-pass` | `src/` (frontend) + frontend build config |
+| **Design** | (idle — `experience-pass` MERGED 2026-06-02; fresh worktree+branch off `main` when next staffed) | — | `src/` (frontend) + frontend build config |
 | **Backend agent (SPIKE)** | `C:\Users\Kuya\code\sentinel-agent` | `spike/backend-agent` | `src-tauri/` exploration — **speculative, may never merge** |
 | **Benchmark** | `C:\Users\Kuya\code\sentinel-benchmark` | `benchmark` | F6 proof/benchmark **design** (docs first) |
 
@@ -37,16 +37,19 @@ cosmetic-reward-system direction** (the lane's original premise) and is **recons
 for this angle. Honest-proof-only is **NOT** locked. (An earlier "honest-proof-only LOCKED" note was a
 miscommunication and is void.)
 
-**Implication HQ must reconcile when the direction lands:** the design lane already *removed* the
-Tune/Garage cosmetic-reward gamification under Decision A (this is in `experience-pass`, parked). If the
-reward system comes back, it intersects directly with `experience-pass` — HQ reconciles the two once the
-owner's full direction is in hand. Until then: benchmark lane holds.
+**Implication HQ must reconcile when the direction lands:** the Tune/Garage cosmetic-reward gamification
+was removed under Decision A, and that de-gamification is now **MERGED and LIVE on `main`** (`60daf3a`).
+If the reward system comes back, it would *re-introduce* cosmetic UI onto the de-gamified `main` — a
+reversal to reconcile, no longer a parked-branch merge. HQ + owner settle it once the owner's full
+direction is in hand. Until then: benchmark lane holds.
 
-## Status snapshot (2026-06-01)
-- **HQ** = `main` (integration base; backend loose-ends `2b29643` published to origin).
-- **`experience-pass`** @ `514b523` — PUSHED, **PARKED**. The de-gamified honest-hero design pass:
-  CommandHero→SystemPosture, Tune/Garage removed, themes curated, design-system primitives, ~290 lines
-  dead CSS purged. 34 tests, build clean. **Pending before HQ merges it:** owner visual verify + the
-  "drop the hardware grid from Overview?" Dashboard-wiring decision.
-- **`spike/backend-agent`**, **`benchmark`** — fresh off `main`.
+## Status snapshot (2026-06-02)
+- **HQ** = `main` @ `60daf3a` (origin synced).
+- **`experience-pass`** — ✅ **MERGED to `main` 2026-06-02** (ff `fcba42b..60daf3a`); branch + worktree
+  **retired**. The de-gamified honest command-center is now live on `main`: SystemPosture hero,
+  Tune/Garage/theme-unlock/Surprise removed, themes curated, design-system primitives, ~290 lines dead
+  CSS purged. HQ-verified (34 tests, tsc+build clean, npm audit 0, frontend-only diff) + owner sign-off
+  (KEEP Overview hardware grid). The new `Dashboard` surface remains built+tested but **not wired**.
+- **`benchmark`** (PAUSED — see above) and **`spike/backend-agent`** (speculative) — still off `main`
+  in their own worktrees.
 - **Beta** frozen @ `16069fa`.

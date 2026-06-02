@@ -62,42 +62,41 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
 
-> **⚠️ DOCS-vs-`main` DRIFT — noted 2026-06-01.** The "CURRENT STATE" notes below describe the
-> repo **as of the `private-beta-001` freeze (`16069fa`)**. **`main` (HEAD `d049d63`) is now 13
-> commits PAST the freeze** — a clean linear descendant (the freeze commit's child is `97a29e1`;
-> beta refs remain pinned at `16069fa` and were NOT moved). Two of those commits are docs; the
-> other **11 are a premium UI/UX layer that is NOT part of `private-beta-001` and has NOT been
-> QA'd**: command-center hero + design-system foundation, command rail + consolidated Optimize,
-> live theme system + picker ("Surprise" randomizer), "Tune Level" evolution (Stock→Apex),
-> app-wide evolution + Garage tab, persisted unlocks, and a **Guided (advisory)** settings section
-> with **safe deep-link buttons**. The ONLY backend change in this layer is
-> `capabilities/default.json`: a **scoped** `opener:allow-open-url` allowlist of exactly three
-> `ms-settings:` URIs (`display-advanced`, `display-advancedgraphics`, `storagesense`) — no
-> fs/shell/http, no new IPC command, no mutation, no catalog/remote-fetch/updater change;
-> `actions.rs` / `recommendations.rs` / `remote_rules.rs` / `history.rs` are untouched. (The beta
-> installer config in `docs/PACKAGING_SIGNING_PLAN.md` predates this allowlist and remains correct
-> for the frozen snapshot.) **Status of this entire post-freeze UI layer:**
+> **✅ EXPERIENCE PASS LANDED — 2026-06-02 (`main` @ `60daf3a`).** The former post-freeze experimental
+> UI layer (the un-QA'd gamified premium UI, old `main` HEAD `d049d63`) has been **superseded and
+> de-gamified**, then merged to `main` as an HQ-verified, fast-forward integration. `main` is now the
+> **honest command-center**: `CommandHero` → transparent read-only **`SystemPosture`**; the Stock→Apex
+> "Tune Level", Garage tab, level-up flash, theme-unlock grind, and "Surprise" randomizer are all
+> **REMOVED** (Decision A); a design-system layer added (`src/design/` primitives + `src/surfaces/`);
+> themes curated to Graphite/Frost/Aurora/Ember; ~290 lines of dead gamification CSS purged.
+> **QA before merge (frontend-only diff):** `tsc` + `vite build` clean · frontend **34/34** tests ·
+> `npm audit` 0 vulns · diff scanned: **zero** `src-tauri` / installer / gate / updater / remote-fetch
+> touch, no dangerous patterns, no new IPC. Verified live (Tauri dev) + owner visual sign-off (KEEP the
+> Overview hardware grid).
 >
-> > **Experimental / not Sentinel-verified. Use at your own discretion.**
->
-> Do not imply it is beta-verified until it has had its own QA pass.
+> **What REMAINS from the premium layer (legit, kept on purpose):** the **Guided** advisory section —
+> fixed, **allowlisted** `ms-settings:` deep links (`display-advanced`, `display-advancedgraphics`,
+> `storagesense`), built **never from data**, no fs/shell/http, no new IPC, no mutation; backed by the
+> scoped `opener:allow-open-url` allowlist in `src-tauri/capabilities/default.json` (the only backend
+> capability beyond the beta snapshot; `actions.rs`/`recommendations.rs`/`remote_rules.rs`/`history.rs`
+> untouched). The new `Dashboard` surface (`src/surfaces/Dashboard.tsx`) is built + tested but **not yet
+> wired** into a tab — intentionally deferred. **Beta refs remain pinned at `16069fa` (NOT moved).**
 
 > **🛰️ HQ / PARALLEL-OPS UPDATE — 2026-06-01.** Sentinel is now worked by multiple sessions under an
 > **HQ / air-traffic-control model** — see `docs/PARALLEL_WORKTREE_OPS.md` (the rule of the road).
 > **Only HQ (the `main` checkout) merges/pushes `main`;** each lane runs in its own git worktree on its
 > own branch with a disjoint file domain (HQ=`main`; design=`experience-pass`/`src/`;
 > `spike/backend-agent`=`src-tauri/`; `benchmark`=docs). Active state:
-> - **`experience-pass` (parked, pushed `514b523`):** the experimental UI layer above is being **reworked
->   into an honest premium command-center** — `CommandHero` reframed to a transparent read-only
->   **`SystemPosture`** (the Stock→Apex Tune tier, Garage tab, level-up flash, theme-unlock grind, and
->   "Surprise" randomizer are all **REMOVED** per **Decision A**), a design-system layer added
->   (`src/design/` primitives + `src/surfaces/`), themes curated to Graphite/Frost/Aurora/Ember, and
->   ~290 lines of dead gamification CSS purged. Frontend tests **34/34**, build clean. **NOT merged** —
->   pending owner visual verify + a "drop the hardware-grid from Overview?" call. When merged it
->   **supersedes** the experimental UI layer above with the honest version.
+> - **`experience-pass` — ✅ MERGED to `main` 2026-06-02 (`60daf3a`); branch + worktree retired.** The
+>   honest command-center landed (full detail in the EXPERIENCE PASS LANDED banner above): SystemPosture
+>   hero, Tune/Garage/theme-unlock/Surprise removed (Decision A), `src/design/` + `src/surfaces/`,
+>   themes curated, dead CSS purged. HQ-verified ff merge. **Design lane is now idle (no live worktree).**
 > - **Lanes:** `benchmark` (F6 proof layer) is **PAUSED** — owner is reopening the cosmetic-reward-system
 >   direction (reconsidering Decision A for that angle); no design work until the owner's full direction
->   lands. `spike/backend-agent` is a **speculative** backend-agent spike that may never merge.
+>   lands. **Intersection now sharper:** de-gamification is **LIVE on `main`**, so a returning reward
+>   system would *re-introduce* cosmetic UI onto the de-gamified `main` (a reversal to reconcile, no
+>   longer a parked branch) — HQ + owner settle it when the direction lands. `spike/backend-agent` is a
+>   **speculative** backend-agent spike that may never merge.
 > - **Unchanged gates:** F1 Gaming Mode still gated; public release still gated on code-signing + legal;
 >   beta frozen @ `16069fa`; remote-fetch + updater stay off.
 
@@ -135,7 +134,8 @@ FPS-helper heartbeat lifecycle as the crash-safe template); session file + start
 consent-gated; 7-state machine; its own QA gate. Otherwise: packaging/signing + legal finalization (separate gates).
 
 Recent commits (newest first — this list is the `private-beta-001` line; `main` has since advanced
-13 commits, see the DOCS-vs-`main` DRIFT banner under CURRENT STATE above):
+past the freeze and now carries the de-gamified Experience Pass, see the EXPERIENCE PASS LANDED banner
+under CURRENT STATE above):
 - `(F4)` feat(priorities): Priority Ranking surface (read-only/advisory)
 - `60c57ce` feat(export): local Export Snapshot report (read-only)
 - `33413a2` feat(sessions): per-session summary surface (read-only/advisory)
