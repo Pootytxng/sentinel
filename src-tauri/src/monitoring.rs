@@ -95,7 +95,7 @@ pub(crate) fn get_cpu_sensors() -> CpuSensorSnapshot {
     cpu_sensor_cache().lock().map(|c| c.clone()).unwrap_or_default()
 }
 
-// ─── GPU sensors (NVML — NVIDIA only for v1) ─────────────────────────────
+// ─── GPU sensors: NVIDIA path (NVML) ─────────────────────────────────────
 //
 // Sentinel-safe monitoring: NVML is NVIDIA's vendor-blessed signed library
 // for driver-side telemetry (nvml.dll ships with the driver). No injection,
@@ -106,7 +106,8 @@ pub(crate) fn get_cpu_sensors() -> CpuSensorSnapshot {
 // init on every poll — the Monitoring tab shows "GPU sensors unavailable"
 // instead.
 //
-// ADLX (AMD) and Intel GPA will land in follow-up commits with the same
+// AMD is handled separately via ADLX (see the AMD GPU sensors section
+// below); Intel GPA is still planned. Every vendor path returns the same
 // shape — one Vec<GpuSensorSnapshot> per call regardless of vendor mix.
 
 #[derive(Serialize, Clone)]
