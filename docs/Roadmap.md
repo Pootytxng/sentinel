@@ -38,9 +38,9 @@ These are what actually stand between "beta" and "a stranger buys it." Most are 
 - 🔒 **Dashboard surface** — built + tested, currently unwired (you kept the Overview hardware grid); wire it in or leave parked?
 
 ## 🤖 Polish / tech-debt / hardening — I CAN DRIVE SOLO (no decision needed)
-- 🤖 **Clippy / tech-debt sweep** — clear the 4 pre-existing clippy lints → true zero-warnings.
+- ☑ **Clippy / tech-debt sweep — DONE (2026-06-02, `ff0ceda`).** True zero clippy warnings.
 - 🤖 **Legal drafts** — first-pass EULA / Privacy / Disclaimer for your review (see ship gates above).
-- 🤖 **CSP tightening** — the webview CSP is `null` for trusted beta; must be tightened + tested before public release (security gate).
+- ☑ **CSP hardening — DONE (2026-06-02, `a9619ec`).** Strict production `csp` + relaxed `devCsp` (Vite HMR); runtime-verified on a production build (UI renders + IPC works under the policy). One public-release security gate cleared.
 - 🤖 **Test-coverage expansion** — more pure-function + contract tests where thin.
 - 🤖 **Expand appliable-rec coverage** — wire more advisory recs to real apply/rollback (each needs its own mutation QA → semi-gated, but I can build + self-test the reversible ones).
 - ☐🔒 **NVIDIA GPU-sensor hardware verification** — AMD verified; NVIDIA implemented-but-not-hardware-verified. *(Needs an NVIDIA rig — your hardware or a tester's.)*
