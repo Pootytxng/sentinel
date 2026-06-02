@@ -30,13 +30,17 @@ rule of the road. **HQ owns this doc.** Any lane: read this before touching the 
 3. HQ rebases `X` onto latest `main` → runs full verification → merges → pushes `main`.
 4. HQ never merges unverified work, and never promotes a parked/dark feature ahead of its agreed slot.
 
-## ⚠️ Open cross-lane decision (flagged by HQ 2026-06-01)
-The **design lane** removed the scoring/cosmetic-reward gamification (Tune tier / Garage) per **Decision A**
-("no opaque score, not childish"). The **Benchmark lane's** stated premise — *benchmark ↔ scoring/cosmetic
-reward system* — partly contradicts that. **Owner resolution needed:** does the benchmark feed the **honest
-posture/proof layer** (consistent with Decision A), or is Decision A being reconsidered? Until resolved, the
-benchmark lane designs **the honest proof layer only** (real before/after measurement → graduating impact
-claims "Expected → Verified"); it does **not** design a cosmetic-reward grind.
+## Benchmark lane — PAUSED, direction REOPENED (owner, 2026-06-01)
+**The benchmark lane is PAUSED. Do NOT begin any design work — not honest-proof, not anything —
+until the owner delivers the full direction.** The owner is **intentionally reopening the
+cosmetic-reward-system direction** (the lane's original premise) and is **reconsidering Decision A**
+for this angle. Honest-proof-only is **NOT** locked. (An earlier "honest-proof-only LOCKED" note was a
+miscommunication and is void.)
+
+**Implication HQ must reconcile when the direction lands:** the design lane already *removed* the
+Tune/Garage cosmetic-reward gamification under Decision A (this is in `experience-pass`, parked). If the
+reward system comes back, it intersects directly with `experience-pass` — HQ reconciles the two once the
+owner's full direction is in hand. Until then: benchmark lane holds.
 
 ## Status snapshot (2026-06-01)
 - **HQ** = `main` (integration base; backend loose-ends `2b29643` published to origin).
