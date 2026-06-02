@@ -44,7 +44,12 @@ reversal to reconcile, no longer a parked-branch merge. HQ + owner settle it onc
 direction is in hand. Until then: benchmark lane holds.
 
 ## Status snapshot (2026-06-02)
-- **HQ** = `main` @ `60daf3a` (origin synced).
+- **HQ** = `main` @ `1bd2dfb` (origin synced).
+- **F1 Gaming Mode** — ✅ **BUILT + merged to `main` DARK 2026-06-02** behind a default-off
+  `gaming_mode_gate()` (the "Gaming" tab is hidden + the 5 IPC commands refuse). `cargo test` 81/81 ·
+  `npm test` 39/39 · /check + /security clean. **Gated until the owner's mutation QA (spec §7) + sign-off
+  flip the gate.** Built by HQ in a throwaway `sentinel-gaming` worktree (now removed). Spec +
+  plan under `docs/superpowers/`.
 - **`experience-pass`** — ✅ **MERGED to `main` 2026-06-02** (ff `fcba42b..60daf3a`); branch + worktree
   **retired**. The de-gamified honest command-center is now live on `main`: SystemPosture hero,
   Tune/Garage/theme-unlock/Surprise removed, themes curated, design-system primitives, ~290 lines dead

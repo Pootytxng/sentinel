@@ -126,12 +126,22 @@ touching; each row has title/reason/linked/confidence/status; conservative per-s
 hint) + `get_priorities` + a "Priorities" tab. Reuses readiness/recs/startup/last-session; no magic
 score, no mutation. 8 unit tests. (Centralized `APPLIABLE_REC_IDS` into history.rs; export reuses it.)
 
-**Read-only upward-feature track (F2–F5) COMPLETE.** **Next:** F1 Gaming Mode is the only remaining
-planned feature and stays gated (session-scoped MUTATION → its own apply/rollback + crash-safe-restore
-QA). **Design done (planning only, no code): `docs/GAMING_MODE_PLAN.md`** — v1 = power-plan-switch-only
-(reuses the `070c3c9` exact-stored-plan restore + Trust Ledger "restore from local state alone" +
-FPS-helper heartbeat lifecycle as the crash-safe template); session file + startup recovery prompt;
-consent-gated; 7-state machine; its own QA gate. Otherwise: packaging/signing + legal finalization (separate gates).
+**Read-only upward-feature track (F2–F5) COMPLETE.** **F1 Gaming Mode — BUILT + merged to `main` DARK
+(2026-06-02).** The session-scoped mutation feature is implemented behind a default-off
+`gaming_mode_gate()` (returns `false` → the "Gaming" tab never appears + the 5 IPC commands refuse):
+pure `gaming_session.rs` (7-state machine + typed restore contract + fail-safe session-file serde) +
+`gaming_orchestrator.rs` (write-before-mutate start, idempotent fail-loud restore, startup orphan
+detection + user-confirmed recovery) reusing the audited `apply_*`/`dispatch_rollback`. A NEW
+**non-elevated** existing-plan switch/restore keeps the CORE bundle (power-plan max + Windows Game Mode
+on + Game Bar/DVR off) **UAC-free**; opt-in USB-SS/PCIe-ASPM are the elevated advanced tier. Gated React
+surface (`src/surfaces/GamingMode.tsx`: first-use consent modal + always-visible honesty line + recovery
+prompt). `cargo test` **81/81**, `npm test` **39/39**, builds clean, **/check + /security passed** (no new
+vulns/warnings; only pre-existing clippy lints remain). **STILL GATED — does NOT ship / the flag does NOT
+flip until its own mutation QA (spec §7: normal / crash / reboot / UAC-cancel / missing-plan /
+external-change, on a UAC-on machine) passes + explicit owner sign-off.** Spec:
+`docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md` · plan:
+`docs/superpowers/plans/2026-06-02-gaming-mode-f1.md` · broad contract: `docs/GAMING_MODE_PLAN.md`.
+Otherwise: packaging/signing + legal finalization (separate gates).
 
 Recent commits (newest first — this list is the `private-beta-001` line; `main` has since advanced
 past the freeze and now carries the de-gamified Experience Pass, see the EXPERIENCE PASS LANDED banner
