@@ -36,7 +36,16 @@ export function GamingMode() {
     let cancelled = false;
     invoke<GamingSessionFile | null>("get_gaming_session_state")
       .then((s) => {
-        if (!cancelled && s) setRecovery(s);
+        if (cancelled || !s) return;
+        // An "active" session found on (re)mount is the LIVE session — resume it
+        // so the toggle reflects reality and Stop restores (e.g. after a tab
+        // switch). Only non-active statuses (ending / restore-pending /
+        // restore-failed) are a genuinely interrupted restore -> prompt.
+        if (s.status === "active") {
+          setSession(s);
+        } else {
+          setRecovery(s);
+        }
       })
       .catch(() => {});
     return () => {
