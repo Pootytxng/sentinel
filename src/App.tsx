@@ -4,6 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
+import { GamingMode } from "./surfaces/GamingMode";
 import "./App.css";
 import "./Onboarding.css";
 
@@ -163,7 +164,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Diagnostics" | "History";
+type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -174,6 +175,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Sessions: { label: "Sessions", icon: "chart" },
   Diagnostics: { label: "Diagnostics", icon: "terminal" },
   History: { label: "Ledger", icon: "ledger" },
+  Gaming: { label: "Gaming", icon: "engine" },
 };
 
 // Inline stroke icons (no icon font/library → offline, zero-outbound).
@@ -648,6 +650,12 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
+  // Gaming Mode (F1) is gated — the backend returns false until its mutation QA
+  // + owner sign-off, so the tab never appears by default (the surface is dark).
+  const [gamingEnabled, setGamingEnabled] = useState(false);
+  useEffect(() => {
+    invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
+  }, []);
 
   const changeTheme = (id: string) => {
     setTheme(id);
@@ -808,8 +816,9 @@ function App() {
     if (sessions.length > 0) list.push("Sessions");
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
+    if (gamingEnabled) list.push("Gaming");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -927,6 +936,7 @@ function App() {
               {activeTab === "History" && (
                 <HistoryTab changes={changes} busyId={busyId} onRollback={rollback} />
               )}
+              {activeTab === "Gaming" && <GamingMode />}
             </div>
           </div>
         </>

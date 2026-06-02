@@ -1,0 +1,121 @@
+/* Gaming Mode (F1) surface — minimal, leans on the design tokens. */
+
+.gaming-pane .ds-card {
+  margin-top: 14px;
+}
+
+.gaming-card-head {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.gaming-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.gaming-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gaming-honesty {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.gaming-preview {
+  margin-top: 14px;
+}
+
+.gaming-diff-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 10px 0 4px;
+}
+
+.gaming-diff {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.gaming-uac {
+  color: var(--status-attention);
+}
+
+.gaming-advanced {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.gaming-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--status-ready);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.gaming-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--status-danger-line, var(--border-strong));
+  background: var(--status-danger-soft, transparent);
+  color: var(--status-danger, inherit);
+  font-size: 13px;
+}
+
+.gaming-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.gaming-modal {
+  max-width: 460px;
+  width: calc(100% - 48px);
+  background: var(--surface, #14161a);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+}
+
+.gaming-modal h3 {
+  margin: 0 0 10px;
+}
+
+.gaming-guarantee {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 12px;
+}
