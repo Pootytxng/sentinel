@@ -62,6 +62,10 @@ pub(crate) enum AppliedAction {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+// The shared `Restore*` prefix is semantic, not redundant — these variants ARE
+// the restore (rollback) action set. Renaming them would churn the serde tags +
+// dispatch match + the persisted Trust Ledger contract for zero benefit.
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum RollbackAction {
     RestoreServiceFromSnapshot { service: KnownService },
     RestoreGameModeFromSnapshot,

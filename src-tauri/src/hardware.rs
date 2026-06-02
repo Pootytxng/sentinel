@@ -640,7 +640,7 @@ pub(crate) fn parse_cpu_arch(brand: &str) -> Option<CpuArchInfo> {
 
     // ── Intel — inferred from model number "iN-NNNN[K|F|...]" ───────────
     if lower.contains("intel") && (lower.contains("core") || lower.contains("xeon")) {
-        for part in trimmed.split(|c: char| c == ' ' || c == '@') {
+        for part in trimmed.split([' ', '@']) {
             // Find an "iN-NNNN" pattern; could also be "i9-285K" (15th gen).
             if let Some(dash) = part.find('-') {
                 let suffix = &part[dash + 1..];
