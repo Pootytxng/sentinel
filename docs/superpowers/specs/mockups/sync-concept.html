@@ -11,6 +11,9 @@
   animation. Fixed: cached mote sprite via drawImage (no per-frame allocs), accent read
   once, solid card (no backdrop-filter), blur on each composited aurora layer, static
   grid, DPR capped. Goal: water-smooth, GPU-composited. Not wired in.
+  v9 COPY PASS — "front of the box" discipline: first surface stays light + snappy;
+  the bulk reassurance moved behind a "How the score works" details disclosure; hero
+  sub trimmed to facts; peace-of-mind prose tightened. No slogans on the face.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -105,7 +108,13 @@
   .gain:hover{background:rgba(255,255,255,.03);border-color:var(--line);transform:translateX(2px)}
   .pts{font:700 13px/1 "JetBrains Mono",monospace;color:var(--good);min-width:42px}
   .gtext{font-size:13.5px;font-weight:500}.gtext span{color:var(--ink-faint);font-weight:400}
-  .hint{margin-top:14px;font-size:12px;color:var(--ink-faint);line-height:1.55;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02)}.hint b{color:var(--good)}
+  .more{margin-top:14px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);overflow:hidden}
+  .more summary{list-style:none;cursor:pointer;padding:11px 13px;font:600 12px/1 "Geist";color:var(--ink-dim);display:flex;align-items:center;gap:8px;user-select:none}
+  .more summary::-webkit-details-marker{display:none}
+  .more summary::before{content:"›";font:700 13px/1 "JetBrains Mono",monospace;color:var(--ink-faint);transition:transform .2s var(--ease)}
+  .more[open] summary::before{transform:rotate(90deg)}
+  .more summary:hover{color:var(--ink)}
+  .more p{margin:0;padding:2px 13px 13px 31px;font-size:12px;color:var(--ink-faint);line-height:1.55}.more b{color:var(--good)}
 
   .intents{padding:22px 32px;border-top:1px solid var(--line);background:rgba(255,255,255,.012);opacity:0;animation:rise var(--dur) var(--ease) .38s forwards}
   .intents .lbl{font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:13px}
@@ -191,7 +200,7 @@
             <span class="nameplate"><span class="bar"></span><span class="t">Tier 03</span> · <span class="nm">Dialed</span></span>
           </div>
           <div class="headline">You're ready to play —<br>and it shows.</div>
-          <div class="sub">All readiness checks pass · <span class="ok">5 safe changes active &amp; reversible</span>. Your score climbs as your rig gets &amp; stays sharp.</div>
+          <div class="sub">All readiness checks pass · <span class="ok">5 safe changes active &amp; reversible</span>.</div>
           <div class="heroactions">
             <button class="btn primary" id="celebrate">✦ Preview a level-up</button>
             <button class="btn" id="calmtoggle">Peace-of-mind view</button>
@@ -214,7 +223,10 @@
           <div class="gain"><div class="pts" style="color:var(--accent)">+40</div><div class="gtext">Enable Hardware GPU Scheduling <span>· lower GPU latency · reversible</span></div></div>
           <div class="gain"><div class="pts" style="color:var(--accent)">+20</div><div class="gtext">Trim Windows visual effects <span>· a touch more headroom · reversible</span></div></div>
         </div>
-        <div class="hint">Advisories &amp; security trade-offs <b>never</b> count against you — those stay your choice, not a deduction. So there's no “perfect 100” you're failing to hit: you're <b>Dialed-in</b>, with a couple of optional extras left if you want them.</div>
+        <details class="more">
+          <summary>How the score works</summary>
+          <p>It only climbs. Skipped advisories and security trade-offs never cost you points — those stay your call. <b>Dialed-in</b> is the ceiling; the extras above are just if you want them.</p>
+        </details>
       </div>
 
       <div class="intents">
@@ -231,7 +243,7 @@
           <div class="ci">🛡</div>
           <div>
             <h5>Peace-of-mind mode</h5>
-            <p>For when you just want reassurance, not tweaks. Your score climbs by <b>confirming</b> your PC is healthy &amp; safe — <b>rollback safety intact</b>, drivers current, thermals nominal, no risky misconfigurations — so you can reach a high score <b>without changing a thing</b>.</p>
+            <p>Just want reassurance, not tweaks? Your score climbs by <b>confirming</b> your PC is healthy — rollback intact, drivers current, thermals nominal — so you sit high <b>without changing a thing</b>.</p>
           </div>
         </div>
       </div>
