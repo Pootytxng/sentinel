@@ -75,6 +75,7 @@
   .ring .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2}
   .score{font-family:"Bricolage Grotesque";font-weight:800;font-size:80px;line-height:.84;letter-spacing:-3px;color:#fff}
   .score .pct{font-size:26px;font-weight:700;letter-spacing:0;color:var(--accent);margin-left:2px}
+  .kick{margin-bottom:7px;font:700 11px/1 "JetBrains Mono",monospace;letter-spacing:2.5px;color:var(--accent);text-transform:uppercase}
   .scorelabel{margin-top:11px;font:600 10px/1 "JetBrains Mono",monospace;letter-spacing:4px;color:var(--ink-faint);text-transform:uppercase}
   .nexttier{font:500 12px/1.4 "Geist";color:var(--ink-dim);text-align:center}
   .nexttier b{color:var(--accent);font-weight:600}
@@ -104,6 +105,7 @@
   .gain:hover{background:rgba(255,255,255,.03);border-color:var(--line);transform:translateX(2px)}
   .pts{font:700 13px/1 "JetBrains Mono",monospace;color:var(--good);min-width:42px}
   .gtext{font-size:13.5px;font-weight:500}.gtext span{color:var(--ink-faint);font-weight:400}
+  .hint{margin-top:14px;font-size:12px;color:var(--ink-faint);line-height:1.55;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02)}.hint b{color:var(--good)}
 
   .intents{padding:22px 32px;border-top:1px solid var(--line);background:rgba(255,255,255,.012);opacity:0;animation:rise var(--dur) var(--ease) .38s forwards}
   .intents .lbl{font:600 11px/1 "JetBrains Mono",monospace;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:13px}
@@ -175,11 +177,12 @@
               <circle class="prog"  cx="112" cy="112" r="85" fill="none" stroke-width="13"/>
             </svg>
             <div class="center">
-              <div class="score">74<span class="pct">%</span></div>
-              <div class="scorelabel">Sync</div>
+              <div class="kick">Tier 3</div>
+              <div class="score">740</div>
+              <div class="scorelabel">Sync score</div>
             </div>
           </div>
-          <div class="nexttier">6% to <b>Tier 04 · Locked-In</b></div>
+          <div class="nexttier">▲ <b>+60 to Tier 04 · Locked-In</b> — all optional</div>
         </div>
 
         <div class="posture">
@@ -203,6 +206,15 @@
           <div class="gain"><div class="pts">+12</div><div class="gtext">Display running at 144 Hz <span>· at its max</span></div></div>
           <div class="gain"><div class="pts">+10</div><div class="gtext">Fast Startup disabled <span>· clean shutdowns, fresh drivers</span></div></div>
         </div>
+      </div>
+
+      <div class="panel" style="padding-top:4px">
+        <div class="phead"><h3>What would lift it</h3><div class="note">all optional · your call</div></div>
+        <div class="feed">
+          <div class="gain"><div class="pts" style="color:var(--accent)">+40</div><div class="gtext">Enable Hardware GPU Scheduling <span>· lower GPU latency · reversible</span></div></div>
+          <div class="gain"><div class="pts" style="color:var(--accent)">+20</div><div class="gtext">Trim Windows visual effects <span>· a touch more headroom · reversible</span></div></div>
+        </div>
+        <div class="hint">Advisories &amp; security trade-offs <b>never</b> count against you — those stay your choice, not a deduction. So there's no “perfect 100” you're failing to hit: you're <b>Dialed-in</b>, with a couple of optional extras left if you want them.</div>
       </div>
 
       <div class="intents">
