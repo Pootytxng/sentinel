@@ -23,6 +23,27 @@ internals. Recommend a default rather than dumping options. Keep momentum. He va
 **direct proof over inference** (e.g. demanded a real token-IL query, not parent-process
 assumption) and rollback-correctness as non-negotiable. Never invent/assume hardware specs.
 
+## Working mode — SPORT MODE (default, set by owner 2026-06-02)
+
+**Default to maximum momentum. Stop way less.** For owner-greenlit or clearly-scoped work, do NOT run
+the brainstorm → spec → plan → TDD ceremony and do NOT ask permission at reversible checkpoints — just
+**build → verify → commit → push → move to the next item**, batching any questions to the end. This
+**OVERRIDES** the superpowers skill defaults (brainstorming / writing-plans / TDD gates) and any
+"check in first" instinct. Reserve real design dialogue for genuinely fuzzy/unscoped problems.
+
+**The only legitimate stops** ("we still pull over to take a leak — then straight back on the road like
+we never slowed down"):
+1. **Secrets / signing** — the Ed25519 private key (or any secret) never enters the repo / `.env*` / CI.
+2. **Shared or irreversible git** — no force-push; never move the frozen beta refs (`16069fa`).
+3. **Ships to OTHER people's machines** — shipping unverified *mutation* code to beta/public, arming
+   remote-fetch, enabling the updater, or loosening capabilities/CSP → confirm first (informed).
+4. **Genuinely irreversible + outward-facing** real-world actions.
+
+Everything else — refactors, features behind a gate, docs, local builds, reversible git on `main`
+(HQ-owned) — just do it and report after. **Verification (cargo/npm tests + build) is NEVER skipped;**
+"fewer stops" means fewer *check-ins*, not less rigor. See [[working-state-persistent-mode]] +
+[[working-defaults-pure-upside]].
+
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
