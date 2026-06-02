@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Sentinel · Sync — concept mockup</title>
 <!--
-  CONCEPT MOCKUP v6 — motion FIX. v5 looked static because a prefers-reduced-motion
-  guard froze everything (common on Windows) and the motes drifted too slowly to read.
-  Now: living wallpaper animates regardless (it's a motion preview), motes are faster +
-  brighter, aurora drifts wider/quicker, heartbeat is stronger. Diverse templates +
-  clean 74% dial kept. Not wired into the app. Tip: hard-refresh (Ctrl+F5).
+  CONCEPT MOCKUP v7 — SMOOTH motion. v6 was janky from real perf sins: getComputedStyle
+  every frame, a new radial gradient per-mote-per-frame, backdrop-filter blur over the
+  animating bg, blur(64px) on the animating aurora PARENT, and background-position
+  animation. Fixed: cached mote sprite via drawImage (no per-frame allocs), accent read
+  once, solid card (no backdrop-filter), blur on each composited aurora layer, static
+  grid, DPR capped. Goal: water-smooth, GPU-composited. Not wired in.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,19 +31,18 @@
   body{background:var(--bg);color:var(--ink);font-family:"Geist",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;
     letter-spacing:.1px;min-height:100%;padding:44px 24px 96px;position:relative;overflow-x:hidden;transition:background .8s ease}
 
-  /* ── living wallpaper ───────────────────────────── */
+  /* ── living wallpaper (all GPU-composited; nothing repaints per frame) ── */
   .bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
-  .bg-aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;filter:blur(64px) saturate(1.2)}
-  .bg-aurora .b{position:absolute;border-radius:50%;opacity:.72;mix-blend-mode:screen;will-change:transform}
-  .bg-aurora .b1{width:48vw;height:48vw;left:-8vw;top:-14vw;background:radial-gradient(circle,rgba(var(--accent-rgb),.6),transparent 65%);animation:drift1 16s ease-in-out infinite}
-  .bg-aurora .b2{width:44vw;height:44vw;right:-8vw;top:6vh;background:radial-gradient(circle,rgba(95,214,173,.38),transparent 65%);animation:drift2 20s ease-in-out infinite}
-  .bg-aurora .b3{width:54vw;height:54vw;left:16vw;bottom:-26vw;background:radial-gradient(circle,rgba(var(--accent-rgb),.42),transparent 68%);animation:drift3 24s ease-in-out infinite}
-  .bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-    background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
-    background-size:60px 60px;mask-image:radial-gradient(120% 95% at 50% 40%,#000 35%,transparent 86%);animation:gridbreathe 9s ease-in-out infinite}
-  .bg-scan{position:fixed;inset:0;z-index:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px);mask-image:radial-gradient(120% 100% at 50% 50%,#000 60%,transparent 96%)}
-  .bg-grain{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E")}
+  .bg-aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .bg-aurora .b{position:absolute;border-radius:50%;opacity:.6;filter:blur(48px);will-change:transform;transform:translateZ(0)}
+  .bg-aurora .b1{width:46vw;height:46vw;left:-6vw;top:-12vw;background:radial-gradient(circle,rgba(var(--accent-rgb),.7),transparent 66%);animation:drift1 18s ease-in-out infinite}
+  .bg-aurora .b2{width:42vw;height:42vw;right:-6vw;top:6vh;background:radial-gradient(circle,rgba(95,214,173,.45),transparent 66%);animation:drift2 23s ease-in-out infinite}
+  .bg-aurora .b3{width:52vw;height:52vw;left:16vw;bottom:-24vw;background:radial-gradient(circle,rgba(var(--accent-rgb),.5),transparent 68%);animation:drift3 28s ease-in-out infinite}
+  .bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.45;
+    background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+    background-size:60px 60px;mask-image:radial-gradient(120% 95% at 50% 40%,#000 35%,transparent 86%)}
+  .bg-grain{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.35;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E")}
 
   .wrap{max-width:980px;margin:0 auto;position:relative;z-index:2}
 
@@ -54,19 +54,20 @@
   .brand .tag{color:var(--ink-faint);font-weight:500;font-size:13px;margin-left:2px}
   .themes{display:flex;align-items:center;gap:10px}
   .themes .lbl{font:600 10px/1 "JetBrains Mono",monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-faint)}
-  .sw{width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:var(--c);cursor:pointer;padding:0;position:relative;transition:transform .15s var(--ease)}
+  .sw{width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:var(--c);cursor:pointer;padding:0;transition:transform .15s var(--ease)}
   .sw:hover{transform:scale(1.12)}
   .sw.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--c)}
 
-  .card{background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 84%,transparent),color-mix(in srgb,var(--bg-2) 84%,transparent));
-    backdrop-filter:blur(7px);border:1px solid var(--line);border-radius:24px;box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 40px 90px -50px rgba(0,0,0,.95);overflow:hidden;position:relative}
+  /* solid card — no backdrop-filter (that was a major jank source) */
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:24px;
+    box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 40px 90px -50px rgba(0,0,0,.95);overflow:hidden;position:relative}
 
   .hero{display:grid;grid-template-columns:300px 1fr;gap:14px;padding:34px 32px 28px;border-bottom:1px solid var(--line)}
   @media(max-width:760px){.hero{grid-template-columns:1fr}}
 
   .dial{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;opacity:0;animation:rise var(--dur) var(--ease) .15s forwards}
   .ring{position:relative;width:224px;height:224px}
-  .pulse{position:absolute;inset:6px;border-radius:50%;background:radial-gradient(circle,rgba(var(--accent-rgb),.32),transparent 60%);animation:heartbeat 3.4s var(--ease) infinite;z-index:0}
+  .pulse{position:absolute;inset:6px;border-radius:50%;background:radial-gradient(circle,rgba(var(--accent-rgb),.3),transparent 60%);animation:heartbeat 3.4s var(--ease) infinite;z-index:0;will-change:transform,opacity}
   .ring svg{transform:rotate(-90deg);display:block;position:relative;z-index:1}
   .ring .track{stroke:rgba(255,255,255,.05)}
   .ring .prog{stroke:var(--accent);stroke-linecap:round;stroke-dasharray:534;stroke-dashoffset:534;transition:stroke-dashoffset 1.6s var(--ease) .4s;filter:drop-shadow(0 0 6px rgba(var(--accent-rgb),.5))}
@@ -124,7 +125,7 @@
   .foot .lock{color:var(--good)}
   .caption{max-width:980px;margin:18px auto 0;color:var(--ink-faint);font-size:12px;text-align:center;opacity:0;animation:rise var(--dur) var(--ease) .5s forwards}
 
-  .levelup{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:radial-gradient(60% 60% at 50% 50%,rgba(8,14,16,.62),rgba(4,7,9,.93));backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
+  .levelup{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:radial-gradient(60% 60% at 50% 50%,rgba(8,14,16,.62),rgba(4,7,9,.93));opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
   body.celebrate .levelup{opacity:1;pointer-events:auto}
   .lucard{position:relative;text-align:center;padding:42px 46px;border-radius:26px;background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line-2);box-shadow:0 40px 120px -40px #000,0 0 0 1px rgba(var(--accent-rgb),.12);transform:scale(.9) translateY(10px);opacity:0;transition:transform .5s var(--ease),opacity .4s}
   body.celebrate .lucard{transform:scale(1) translateY(0);opacity:1}
@@ -139,11 +140,10 @@
   body.celebrate .spark-i{animation:burst 1.1s var(--ease) forwards}
 
   @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  @keyframes heartbeat{0%,55%,100%{transform:scale(.96);opacity:.4}8%{transform:scale(1.1);opacity:.85}16%{transform:scale(.99);opacity:.55}24%{transform:scale(1.06);opacity:.72}32%{transform:scale(.96);opacity:.4}}
-  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(11%,8%) scale(1.18)}}
-  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-12%,9%) scale(1.13)}}
-  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(9%,-10%) scale(1.15)}}
-  @keyframes gridbreathe{0%,100%{opacity:.35;background-position:0 0}50%{opacity:.6;background-position:0 14px}}
+  @keyframes heartbeat{0%,55%,100%{transform:scale(.97);opacity:.42}8%{transform:scale(1.09);opacity:.82}16%{transform:scale(1);opacity:.56}24%{transform:scale(1.05);opacity:.7}32%{transform:scale(.97);opacity:.42}}
+  @keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(9%,7%,0) scale(1.16)}}
+  @keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-10%,8%,0) scale(1.12)}}
+  @keyframes drift3{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(8%,-9%,0) scale(1.14)}}
   @keyframes burst{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(.3)}}
 </style>
 </head>
@@ -151,7 +151,6 @@
   <canvas class="bg-canvas" id="bgcanvas"></canvas>
   <div class="bg-aurora"><span class="b b1"></span><span class="b b2"></span><span class="b b3"></span></div>
   <div class="bg-grid"></div>
-  <div class="bg-scan"></div>
   <div class="bg-grain"></div>
 
   <div class="wrap">
@@ -245,34 +244,54 @@
   const body=document.body;
   requestAnimationFrame(()=>requestAnimationFrame(()=>body.classList.add('loaded')));
 
+  // living wallpaper — cached sprite, drawImage only, accent read once (smooth)
+  const motesAPI=(function(){
+    const cv=document.getElementById('bgcanvas'),ctx=cv.getContext('2d');
+    const DPR=Math.min(window.devicePixelRatio||1,1.5);
+    let W,H,motes=[],sprite=document.createElement('canvas');
+    function buildSprite(){
+      const rgb=(getComputedStyle(body).getPropertyValue('--accent-rgb').trim())||'51,224,218';
+      const R=48;sprite.width=sprite.height=R*2;const c=sprite.getContext('2d');
+      c.clearRect(0,0,R*2,R*2);
+      const g=c.createRadialGradient(R,R,0,R,R,R);
+      g.addColorStop(0,'rgba('+rgb+',0.9)');g.addColorStop(.5,'rgba('+rgb+',0.25)');g.addColorStop(1,'rgba('+rgb+',0)');
+      c.fillStyle=g;c.beginPath();c.arc(R,R,R,0,6.2832);c.fill();
+    }
+    function resize(){W=cv.width=Math.floor(innerWidth*DPR);H=cv.height=Math.floor(innerHeight*DPR);cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px';}
+    function init(){motes=[];const n=Math.max(36,Math.min(72,Math.round(innerWidth*innerHeight/30000)));
+      for(let i=0;i<n;i++)motes.push({x:Math.random()*W,y:Math.random()*H,s:(7+Math.random()*16)*DPR,vy:-(.35+Math.random()*.8)*DPR,sw:Math.random()*6.28,swv:.004+Math.random()*.004,a:.16+Math.random()*.32});}
+    function frame(){
+      ctx.clearRect(0,0,W,H);ctx.globalCompositeOperation='lighter';
+      for(const m of motes){m.y+=m.vy;m.sw+=m.swv;const x=m.x+Math.sin(m.sw)*9*DPR;
+        if(m.y<-m.s){m.y=H+m.s;m.x=Math.random()*W;}
+        ctx.globalAlpha=m.a;ctx.drawImage(sprite,x-m.s,m.y-m.s,m.s*2,m.s*2);}
+      ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';requestAnimationFrame(frame);
+    }
+    buildSprite();resize();init();frame();
+    addEventListener('resize',()=>{resize();init();});
+    return {retint:buildSprite};
+  })();
+
+  // theme templates
   document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{
     document.querySelectorAll('.sw').forEach(s=>s.classList.remove('on'));b.classList.add('on');
-    body.dataset.theme=b.dataset.set;
+    body.dataset.theme=b.dataset.set;motesAPI.retint();
   }));
 
+  // intents
   document.querySelectorAll('.chip:not(.calm)').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));
   const calmChip=document.getElementById('calmchip');
   function toggleCalm(){const on=body.classList.toggle('calmmode');calmChip.classList.toggle('on',on);}
   calmChip.addEventListener('click',toggleCalm);
   document.getElementById('calmtoggle').addEventListener('click',toggleCalm);
 
+  // level-up
   let AC;function flourish(notes,dur){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const t0=AC.currentTime;notes.forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.type='triangle';o.frequency.value=f;const t=t0+i*0.09;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.1,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+(dur||.5));o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+(dur||.5));});}catch(e){}}
   const levelup=document.getElementById('levelup');
   function spawnSparks(){const card=document.getElementById('lucard');card.querySelectorAll('.spark-i').forEach(s=>s.remove());const c=getComputedStyle(body).getPropertyValue('--accent').trim()||'#33e0da';const colors=[c,'#5fd6ad','#e7b261','#fff'];for(let i=0;i<26;i++){const s=document.createElement('span');s.className='spark-i';const a=Math.random()*Math.PI*2,d=130+Math.random()*220;s.style.setProperty('--tx',Math.cos(a)*d+'px');s.style.setProperty('--ty',Math.sin(a)*d+'px');s.style.background=colors[i%colors.length];s.style.animationDelay=(Math.random()*.15)+'s';card.appendChild(s);}}
   document.getElementById('celebrate').addEventListener('click',()=>{body.classList.add('celebrate');spawnSparks();flourish([659,784,988,1318],.5);});
   levelup.addEventListener('click',()=>body.classList.remove('celebrate'));
   document.addEventListener('keydown',e=>{if(e.key==='Escape')body.classList.remove('celebrate');});
-
-  // living wallpaper — soft drifting light-motes (animates regardless; this is a motion preview)
-  (function(){
-    const cv=document.getElementById('bgcanvas'),ctx=cv.getContext('2d');
-    const DPR=Math.min(window.devicePixelRatio||1,2);let W,H,motes=[];
-    function accent(){return (getComputedStyle(body).getPropertyValue('--accent-rgb').trim())||'51,224,218';}
-    function resize(){W=cv.width=innerWidth*DPR;H=cv.height=innerHeight*DPR;cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px';}
-    function init(){motes=[];const n=Math.max(44,Math.min(96,Math.round(innerWidth*innerHeight/26000)));for(let i=0;i<n;i++)motes.push({x:Math.random()*W,y:Math.random()*H,r:(1.6+Math.random()*3.4)*DPR,vy:-(.45+Math.random()*.95)*DPR,sw:Math.random()*Math.PI*2,a:.22+Math.random()*.4});}
-    function frame(){ctx.clearRect(0,0,W,H);const rgb=accent();for(const m of motes){m.y+=m.vy;m.sw+=.006;const x=m.x+Math.sin(m.sw)*10*DPR;if(m.y<-14){m.y=H+14;m.x=Math.random()*W;}const g=ctx.createRadialGradient(x,m.y,0,x,m.y,m.r*4);g.addColorStop(0,'rgba('+rgb+','+m.a+')');g.addColorStop(1,'rgba('+rgb+',0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,m.y,m.r*4,0,6.3);ctx.fill();}requestAnimationFrame(frame);}
-    resize();init();frame();addEventListener('resize',()=>{resize();init();});
-  })();
 </script>
 </body>
 </html>
