@@ -82,6 +82,25 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >
 > Do not imply it is beta-verified until it has had its own QA pass.
 
+> **🛰️ HQ / PARALLEL-OPS UPDATE — 2026-06-01.** Sentinel is now worked by multiple sessions under an
+> **HQ / air-traffic-control model** — see `docs/PARALLEL_WORKTREE_OPS.md` (the rule of the road).
+> **Only HQ (the `main` checkout) merges/pushes `main`;** each lane runs in its own git worktree on its
+> own branch with a disjoint file domain (HQ=`main`; design=`experience-pass`/`src/`;
+> `spike/backend-agent`=`src-tauri/`; `benchmark`=docs). Active state:
+> - **`experience-pass` (parked, pushed `514b523`):** the experimental UI layer above is being **reworked
+>   into an honest premium command-center** — `CommandHero` reframed to a transparent read-only
+>   **`SystemPosture`** (the Stock→Apex Tune tier, Garage tab, level-up flash, theme-unlock grind, and
+>   "Surprise" randomizer are all **REMOVED** per **Decision A**), a design-system layer added
+>   (`src/design/` primitives + `src/surfaces/`), themes curated to Graphite/Frost/Aurora/Ember, and
+>   ~290 lines of dead gamification CSS purged. Frontend tests **34/34**, build clean. **NOT merged** —
+>   pending owner visual verify + a "drop the hardware-grid from Overview?" call. When merged it
+>   **supersedes** the experimental UI layer above with the honest version.
+> - **Lanes:** `benchmark` (F6 proof layer) is **PAUSED** — owner is reopening the cosmetic-reward-system
+>   direction (reconsidering Decision A for that angle); no design work until the owner's full direction
+>   lands. `spike/backend-agent` is a **speculative** backend-agent spike that may never merge.
+> - **Unchanged gates:** F1 Gaming Mode still gated; public release still gated on code-signing + legal;
+>   beta frozen @ `16069fa`; remote-fetch + updater stay off.
+
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
 `cargo test` **68/68**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
 (`origin/main` in sync). Manual-mutation QA blocker **LIFTED** (see below).
