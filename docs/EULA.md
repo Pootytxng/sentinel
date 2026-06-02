@@ -1,7 +1,8 @@
 # Sentinel — End-User License Agreement & Disclaimer
 
-**Status: DRAFT v0.1 (2026-05-31).** Starting-point draft reflecting how the software works
-today. **Not legal advice.** The owner should review/adapt this (and have it reviewed by a
+**Status: DRAFT v0.2 (2026-06-02).** Starting-point draft reflecting how the software works
+today (v0.2 adds §4's advisory / advanced-manual-tweaks clause covering the Advanced Black Book).
+**Not legal advice.** The owner should review/adapt this (and have it reviewed by a
 qualified professional) before distribution. Owner/contact identity is set (Pootytxng; GitHub
 issues); still open before public distribution: final license model and governing-law/jurisdiction.
 
@@ -43,6 +44,15 @@ significantly between versions. Do not rely on it as your only safeguard for imp
   than guess.
 - **You are responsible for your system.** Maintain your own backups / restore points. You
   apply changes at your own risk.
+- **Advisory & educational content (including the "Advanced Black Book").** Sentinel may present
+  *advisory, educational* information about deeper or riskier system, driver, or firmware (BIOS/UEFI)
+  tweaks that it **does not perform for you.** Any such tweak you choose to make is carried out
+  **manually, by you, outside the Software** — Sentinel does not apply it, monitor it, or roll it back,
+  and these changes fall **entirely outside** the rollback protections described above. Advanced tweaks
+  can carry real risks (instability, boot failure, data loss, reduced security, or third-party /
+  anti-cheat consequences), and reported benefits are often small or hardware-specific. **You undertake
+  any such change entirely at your own risk; the owner and contributors accept no responsibility for the
+  outcome of changes you make manually based on this material.**
 
 ## 5. Administrator access; what Sentinel does NOT do
 
