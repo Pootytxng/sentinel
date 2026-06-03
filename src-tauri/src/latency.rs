@@ -8,16 +8,26 @@
 //! existing typed apply/rollback path, never a new mutation primitive.
 #![allow(dead_code)] // parked/dark: wired by HQ when the latency surface lands.
 
+use std::collections::HashMap;
+
 use serde::Serialize;
 use winreg::enums::HKEY_LOCAL_MACHINE;
 use winreg::RegKey;
 
-/// A PCI device that exposes the MSI setting, and whether MSI is enabled.
+/// A PCI device that exposes the MSI setting, with both the *advertised* config and (when it can be
+/// correlated) the *actually-active* interrupt mode. The owner's catch: `MSISupported=1` only means
+/// MSI is permitted — a device can advertise it and still fall back to a legacy line IRQ. So we keep
+/// the advertised flag but verify against the real allocated IRQ.
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MsiDevice {
     pub name: String,
-    /// true = Message-Signaled Interrupts (generally lower latency); false = legacy line IRQ.
+    /// Advertised MSI support (`MSISupported=1`). NOT proof MSI is in use — see `msi_active`.
     pub msi_on: bool,
+    /// Full PCI instance path (`PCI\VEN_...\...`), uppercased, for correlating with allocated IRQs.
+    pub instance_id: String,
+    /// Whether MSI is ACTUALLY active, from the allocated IRQ (MSI vectors show as 0x8000_0000+,
+    /// i.e. negative as i32). `None` when no IRQ allocation was found → active state undetermined.
+    pub msi_active: Option<bool>,
 }
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -61,10 +71,139 @@ pub(crate) fn read_msi_devices() -> Vec<MsiDevice> {
                 .or_else(|_| ik.get_value::<String, _>("DeviceDesc"))
                 .map(|s| clean_name(&s))
                 .unwrap_or_else(|_| vendev.clone());
-            out.push(MsiDevice { name, msi_on: msi == 1 });
+            let instance_id = format!(r"PCI\{vendev}\{inst}").to_uppercase();
+            out.push(MsiDevice { name, msi_on: msi == 1, instance_id, msi_active: None });
         }
     }
     out
+}
+
+/// An MSI interrupt vector is reported as a value in the 0x8000_0000+ range — Device Manager shows
+/// it as a *negative* IRQ. A legacy line IRQ is a small positive number. This is the real "is MSI
+/// active" signal, distinct from the advertised `MSISupported` flag.
+pub(crate) fn irq_is_msi(irq: u32) -> bool {
+    irq >= 0x8000_0000
+}
+
+/// Pure: pull the IRQ number out of a `Win32_PnPAllocatedResource.Antecedent` ref string, e.g.
+/// `\\HOST\root\cimv2:Win32_IRQResource.IRQNumber=4294967267`. `None` if it isn't an IRQ resource.
+pub(crate) fn parse_irq_number(antecedent: &str) -> Option<u32> {
+    if !antecedent.contains("Win32_IRQResource") {
+        return None;
+    }
+    let rhs = antecedent.rsplit("IRQNumber=").next()?;
+    rhs.trim().trim_matches('"').parse::<u32>().ok()
+}
+
+/// Pure: pull the device instance id out of a `Dependent` ref string, e.g.
+/// `...:Win32_PnPEntity.DeviceID="PCI\\VEN_1022&...\\4&35EC6657&0&0043"`. WMI doubles the
+/// backslashes inside the path; we collapse them and uppercase so it matches the registry walk.
+pub(crate) fn parse_dependent_device_id(dependent: &str) -> Option<String> {
+    let after = dependent.split("DeviceID=").nth(1)?;
+    let inner = after.trim().trim_start_matches('"');
+    let inner = inner.split('"').next().unwrap_or(inner);
+    Some(inner.replace(r"\\", r"\").to_uppercase())
+}
+
+/// Live: map each device instance id → whether it currently holds an MSI IRQ. Reads
+/// `Win32_PnPAllocatedResource` (read-only WMI). A device counts as MSI-active if *any* of its
+/// allocated IRQ vectors is in the MSI range. Degrades to an empty map on any error — never panics.
+pub(crate) fn read_active_msi_map() -> HashMap<String, bool> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename = "Win32_PnPAllocatedResource")]
+    #[serde(rename_all = "PascalCase")]
+    struct Alloc {
+        antecedent: Option<String>,
+        dependent: Option<String>,
+    }
+    let mut map: HashMap<String, bool> = HashMap::new();
+    let Ok(com) = wmi::COMLibrary::new() else { return map };
+    let Ok(conn) = wmi::WMIConnection::new(com) else { return map };
+    let rows: Vec<Alloc> = conn.query().unwrap_or_default();
+    for row in rows {
+        let (Some(ant), Some(dep)) = (row.antecedent, row.dependent) else { continue };
+        let Some(irq) = parse_irq_number(&ant) else { continue }; // only IRQ allocations
+        let Some(dev) = parse_dependent_device_id(&dep) else { continue };
+        let is_msi = irq_is_msi(irq);
+        // OR across a device's vectors: one MSI vector means MSI is active for it.
+        map.entry(dev).and_modify(|v| *v |= is_msi).or_insert(is_msi);
+    }
+    map
+}
+
+/// Pure: stamp the real active-MSI state onto devices by matching instance ids.
+pub(crate) fn annotate_msi_active(devices: &mut [MsiDevice], active: &HashMap<String, bool>) {
+    for d in devices.iter_mut() {
+        d.msi_active = active.get(&d.instance_id).copied();
+    }
+}
+
+/// Live convenience: advertised scan + real active-IRQ verification, fully correlated.
+pub(crate) fn read_verified_msi_devices() -> Vec<MsiDevice> {
+    let mut devices = read_msi_devices();
+    let active = read_active_msi_map();
+    annotate_msi_active(&mut devices, &active);
+    devices
+}
+
+/// Counts that separate advertised support from *verified-active* state.
+#[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct MsiActiveSummary {
+    pub active_on: usize,
+    pub active_off: usize,
+    /// Active state could not be determined (no IRQ allocation correlated).
+    pub unknown: usize,
+    /// The honesty case: devices that advertise MSI support but are actually on a line IRQ.
+    pub advertised_but_inactive: usize,
+}
+
+/// Pure: summarize verified active-MSI state across devices.
+pub(crate) fn summarize_msi_active(devices: &[MsiDevice]) -> MsiActiveSummary {
+    let mut s = MsiActiveSummary::default();
+    for d in devices {
+        match d.msi_active {
+            Some(true) => s.active_on += 1,
+            Some(false) => {
+                s.active_off += 1;
+                if d.msi_on {
+                    s.advertised_but_inactive += 1;
+                }
+            }
+            None => s.unknown += 1,
+        }
+    }
+    s
+}
+
+/// Pure: an advisory built on the *verified* (not advertised) state — the fix for the owner's catch.
+/// Highlights latency-sensitive devices actually running on line interrupts, and calls out the
+/// advertised-but-inactive divergence explicitly. `None` when nothing is verifiably on a line IRQ.
+pub(crate) fn msi_active_advisory(devices: &[MsiDevice]) -> Option<String> {
+    let verified_off: Vec<&MsiDevice> = devices.iter().filter(|d| d.msi_active == Some(false)).collect();
+    if verified_off.is_empty() {
+        return None;
+    }
+    let sensitive: Vec<&str> = verified_off
+        .iter()
+        .filter(|d| is_latency_sensitive(&d.name))
+        .map(|d| d.name.as_str())
+        .collect();
+    let highlight: Vec<&str> =
+        if sensitive.is_empty() { verified_off.iter().map(|d| d.name.as_str()).collect() } else { sensitive };
+    let names = highlight.iter().take(3).copied().collect::<Vec<_>>().join(", ");
+    let advertised_gap = verified_off.iter().filter(|d| d.msi_on).count();
+    let mut msg = format!(
+        "{} device(s) VERIFIED on legacy line interrupts (e.g. {}) — confirmed from the allocated IRQ, not just the advertised setting. ",
+        verified_off.len(),
+        names
+    );
+    if advertised_gap > 0 {
+        msg.push_str(&format!(
+            "{advertised_gap} of them advertise MSI support but aren't actually using it. "
+        ));
+    }
+    msg.push_str("Switching to MSI usually lowers interrupt latency — advisory, reversible.");
+    Some(msg)
 }
 
 /// Convenience the eventual (dark) command would call.
@@ -270,7 +409,11 @@ mod latency_tests {
     use super::*;
 
     fn dev(name: &str, on: bool) -> MsiDevice {
-        MsiDevice { name: name.into(), msi_on: on }
+        MsiDevice { name: name.into(), msi_on: on, instance_id: String::new(), msi_active: None }
+    }
+
+    fn dev_full(name: &str, on: bool, id: &str, active: Option<bool>) -> MsiDevice {
+        MsiDevice { name: name.into(), msi_on: on, instance_id: id.to_uppercase(), msi_active: active }
     }
 
     #[test]
@@ -383,6 +526,95 @@ mod latency_tests {
         let note = sleep_granularity_note(&g, None);
         assert!(note.contains("unavailable"));
         assert!(note.contains("not interrupt/DPC latency"));
+    }
+
+    #[test]
+    fn irq_msi_threshold() {
+        assert!(!irq_is_msi(16)); // a normal line IRQ
+        assert!(!irq_is_msi(0x7FFF_FFFF));
+        assert!(irq_is_msi(0x8000_0000));
+        assert!(irq_is_msi(4_294_967_267)); // 0xFFFF_FFE3 — a real MSI vector seen live
+    }
+
+    #[test]
+    fn parse_irq_number_from_antecedent() {
+        let a = r"\\HOST\root\cimv2:Win32_IRQResource.IRQNumber=4294967267";
+        assert_eq!(parse_irq_number(a), Some(4_294_967_267));
+        // A non-IRQ resource (e.g. memory) must be ignored.
+        assert_eq!(parse_irq_number(r"\\HOST\root\cimv2:Win32_DeviceMemoryAddress.StartingAddress=0"), None);
+    }
+
+    #[test]
+    fn parse_device_id_collapses_backslashes_and_uppercases() {
+        // As the wmi crate hands it back: doubled backslashes, quoted.
+        let d = "\\\\HOST\\root\\cimv2:Win32_PnPEntity.DeviceID=\"PCI\\\\VEN_1022&DEV_15B8&SUBSYS_7E491462&REV_00\\\\4&35EC6657&0&0043\"";
+        assert_eq!(
+            parse_dependent_device_id(d).as_deref(),
+            Some(r"PCI\VEN_1022&DEV_15B8&SUBSYS_7E491462&REV_00\4&35EC6657&0&0043")
+        );
+    }
+
+    #[test]
+    fn annotate_marks_active_from_map() {
+        let mut devs = [
+            dev_full("AMD Radeon RX 9070 XT", true, r"PCI\VEN_1002&DEV_7550\X", None),
+            dev_full("Realtek GbE", true, r"PCI\VEN_10EC&DEV_8168\Y", None),
+            dev_full("Some Bridge", false, r"PCI\VEN_1022&DEV_1234\Z", None),
+        ];
+        let mut map = HashMap::new();
+        map.insert(r"PCI\VEN_1002&DEV_7550\X".to_uppercase(), true); // GPU on MSI
+        map.insert(r"PCI\VEN_10EC&DEV_8168\Y".to_uppercase(), false); // NIC advertises MSI but on line IRQ
+        // bridge absent → stays None
+        annotate_msi_active(&mut devs, &map);
+        assert_eq!(devs[0].msi_active, Some(true));
+        assert_eq!(devs[1].msi_active, Some(false));
+        assert_eq!(devs[2].msi_active, None);
+    }
+
+    #[test]
+    fn summarize_active_counts_and_flags_advertised_gap() {
+        let devs = [
+            dev_full("GPU", true, "A", Some(true)),
+            dev_full("NIC", true, "B", Some(false)), // advertised MSI but inactive → the honesty case
+            dev_full("Audio", false, "C", Some(false)),
+            dev_full("Bridge", true, "D", None),
+        ];
+        let s = summarize_msi_active(&devs);
+        assert_eq!(s.active_on, 1);
+        assert_eq!(s.active_off, 2);
+        assert_eq!(s.unknown, 1);
+        assert_eq!(s.advertised_but_inactive, 1); // only the NIC (advertised + inactive)
+    }
+
+    #[test]
+    fn active_advisory_uses_verified_state_not_advertised() {
+        // GPU advertises MSI but is actually on a line IRQ; NIC genuinely on MSI.
+        let devs = [
+            dev_full("AMD Radeon RX 9070 XT", true, "A", Some(false)),
+            dev_full("Realtek Gaming GbE", true, "B", Some(true)),
+            dev_full("Audio", false, "C", None), // unknown → not asserted
+        ];
+        let a = msi_active_advisory(&devs).expect("advisory present");
+        assert!(a.contains("VERIFIED"));
+        assert!(a.contains("Radeon")); // the verified-off latency-sensitive device
+        assert!(a.contains("advertise MSI support but aren't actually using it"));
+        assert!(!a.contains("Realtek")); // it's actually on MSI — must not be flagged
+    }
+
+    #[test]
+    fn active_advisory_none_when_none_verified_off() {
+        let devs = [dev_full("GPU", true, "A", Some(true)), dev_full("NIC", true, "B", None)];
+        assert!(msi_active_advisory(&devs).is_none());
+    }
+
+    #[test]
+    fn verified_scan_is_internally_consistent() {
+        // Real machine → devices with correlated active state; sandbox → empty. Never panics, and
+        // the active buckets must always partition the device set.
+        let devs = read_verified_msi_devices();
+        let s = summarize_msi_active(&devs);
+        assert_eq!(s.active_on + s.active_off + s.unknown, devs.len());
+        assert!(s.advertised_but_inactive <= s.active_off);
     }
 
     #[test]
