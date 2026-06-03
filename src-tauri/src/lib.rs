@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod actions;
+mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
 mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs + the spec.
 mod diagnostics;
 mod export;

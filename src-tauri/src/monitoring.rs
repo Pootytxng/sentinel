@@ -170,6 +170,14 @@ pub(crate) fn amd_sensor_cache() -> &'static Mutex<Vec<GpuSensorSnapshot>> {
     CACHE.get_or_init(|| Mutex::new(Vec::new()))
 }
 
+/// Latest AMD FreeSync (VRR) state, written by the AMD poller (the only thread allowed to touch
+/// ADLX). `Some(true)` = enabled on a display, `Some(false)` = supported but off, `None` = couldn't
+/// determine (no AMD GPU, FreeSync unsupported/unavailable, or an ADLX error). Readiness reads this.
+pub(crate) fn amd_freesync_cache() -> &'static Mutex<Option<bool>> {
+    static CACHE: OnceLock<Mutex<Option<bool>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
+}
+
 pub(crate) fn ensure_amd_poller_started() {
     static STARTED: OnceLock<()> = OnceLock::new();
     STARTED.get_or_init(|| {
@@ -339,6 +347,15 @@ pub(crate) fn amd_poller_loop() {
         if let Ok(mut cache) = amd_sensor_cache().lock() {
             *cache = out;
         }
+
+        // FreeSync (VRR) on/off — read on this same ADLX thread, reusing the poller's System
+        // (ADLX is single-threaded). Fail-soft to None; the readiness VRR row falls back to its
+        // honest advisory when None.
+        let freesync = crate::amd_freesync::read_freesync(system);
+        if let Ok(mut c) = amd_freesync_cache().lock() {
+            *c = freesync;
+        }
+
         std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 }

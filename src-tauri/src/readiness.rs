@@ -89,6 +89,9 @@ pub(crate) fn evaluate_readiness(
     fps_uac_required: bool,
     fps_running: bool,
     hist: &AppliedChangesSummary,
+    // AMD FreeSync (VRR) state from the GPU poller: Some(true)=on, Some(false)=supported-but-off,
+    // None=undetermined (non-AMD, unsupported/unavailable, or not yet read) → honest advisory.
+    freesync: Option<bool>,
 ) -> GameReadiness {
     let mut checks = Vec::new();
 
@@ -293,33 +296,60 @@ pub(crate) fn evaluate_readiness(
         checks.push(c);
     }
 
-    // 4. Variable refresh rate — no public Windows API exposes VRR on/off, so this
-    //    is an explicit ADVISORY the user verifies, NOT a failed detection. Where
-    //    the display is clearly high-refresh, say it's almost certainly VRR-capable
-    //    (an honest inference from the detected max refresh), and offer a deep-link
-    //    to the Windows VRR setting so the row is actionable, not a dead end.
+    // 4. Variable refresh rate. On AMD we read the real FreeSync state via ADLX (the poller fills
+    //    `freesync`): ON → a verified Ready row; supported-but-off → an actionable advisory. When we
+    //    can't read it (non-AMD, unsupported/unavailable, or no reading yet) we fall back to the
+    //    honest Phase-1 advisory — an inference from the detected max refresh, never a fabricated
+    //    on/off — with a deep-link to the Windows VRR setting so the row is actionable.
     {
-        let vrr_detail = match hw.display.as_ref() {
-            Some(d) if d.max_refresh_rate_hz >= 100 => format!(
-                "Your {} Hz display almost certainly supports VRR (G-SYNC/FreeSync). Windows \
-                 doesn't expose whether it's currently on — verify it's enabled in your GPU \
-                 control panel. It smooths frame pacing and removes tearing.",
-                d.max_refresh_rate_hz
-            ),
-            _ => "If your monitor + GPU support VRR (G-SYNC/FreeSync), enabling it smooths frame \
-                  pacing and removes tearing. Windows doesn't expose its on/off state, so verify \
-                  it in your GPU control panel."
-                .to_string(),
+        let vrr = match freesync {
+            Some(true) => ReadinessCheck {
+                id: "vrr",
+                label: "Variable refresh rate (G-SYNC / FreeSync)",
+                status: ReadinessStatus::Ready,
+                detail: "FreeSync is ON — your AMD GPU reports adaptive sync enabled on a connected \
+                         display. Frame pacing is smoothed and tearing removed."
+                    .to_string(),
+                value: Some("FreeSync: on".into()),
+                action_uri: Some("ms-settings:display-advancedgraphics"),
+                action_label: Some("Open VRR settings"),
+            },
+            Some(false) => ReadinessCheck {
+                id: "vrr",
+                label: "Variable refresh rate (G-SYNC / FreeSync)",
+                status: ReadinessStatus::Advisory,
+                detail: "Your display supports FreeSync but it's currently OFF. Turning it on smooths \
+                         frame pacing and removes tearing."
+                    .to_string(),
+                value: Some("FreeSync: off".into()),
+                action_uri: Some("ms-settings:display-advancedgraphics"),
+                action_label: Some("Turn on VRR"),
+            },
+            None => {
+                let detail = match hw.display.as_ref() {
+                    Some(d) if d.max_refresh_rate_hz >= 100 => format!(
+                        "Your {} Hz display almost certainly supports VRR (G-SYNC/FreeSync). Windows \
+                         doesn't expose whether it's currently on — verify it's enabled in your GPU \
+                         control panel. It smooths frame pacing and removes tearing.",
+                        d.max_refresh_rate_hz
+                    ),
+                    _ => "If your monitor + GPU support VRR (G-SYNC/FreeSync), enabling it smooths \
+                          frame pacing and removes tearing. Windows doesn't expose its on/off state, \
+                          so verify it in your GPU control panel."
+                        .to_string(),
+                };
+                ReadinessCheck {
+                    id: "vrr",
+                    label: "Variable refresh rate (G-SYNC / FreeSync)",
+                    status: ReadinessStatus::Advisory,
+                    detail,
+                    value: Some("Verify in GPU panel".into()),
+                    action_uri: Some("ms-settings:display-advancedgraphics"),
+                    action_label: Some("Open VRR settings"),
+                }
+            }
         };
-        checks.push(ReadinessCheck {
-            id: "vrr",
-            label: "Variable refresh rate (G-SYNC / FreeSync)",
-            status: ReadinessStatus::Advisory,
-            detail: vrr_detail,
-            value: Some("Verify in GPU panel".into()),
-            action_uri: Some("ms-settings:display-advancedgraphics"),
-            action_label: Some("Open VRR settings"),
-        });
+        checks.push(vrr);
     }
 
     // 5. HDR / Auto HDR — gated on an HDR-capable display; advisory.
@@ -475,7 +505,18 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
     let fps_uac_required = !uac_disabled();
     let fps_running = fps_active().load(Ordering::Acquire);
     let hist = applied_changes_summary();
-    evaluate_readiness(&hw, power_plan.as_deref(), fps_uac_required, fps_running, &hist)
+    // Ensure the AMD poller is running (lazy-start), then read its cached FreeSync state. Non-AMD
+    // systems leave this None → the VRR row stays the honest advisory.
+    crate::monitoring::ensure_amd_poller_started();
+    let freesync = crate::monitoring::amd_freesync_cache().lock().ok().and_then(|c| *c);
+    evaluate_readiness(
+        &hw,
+        power_plan.as_deref(),
+        fps_uac_required,
+        fps_running,
+        &hist,
+        freesync,
+    )
 }
 
 #[cfg(test)]
@@ -513,7 +554,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         let c = find(&r, "install-drive");
         // No game library detected and drive types unreadable → honest Unknown.
         assert_eq!(c.status, ReadinessStatus::Unknown);
@@ -536,7 +577,7 @@ mod readiness_tests {
             },
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         let c = find(&r, "install-drive");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(c.detail.to_lowercase().contains("fast storage"));
@@ -558,7 +599,7 @@ mod readiness_tests {
             },
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         let c = find(&r, "install-drive");
         assert_eq!(c.status, ReadinessStatus::Attention);
         assert!(c.detail.contains("HDD"));
@@ -585,7 +626,7 @@ mod readiness_tests {
             }],
             ..Default::default()
         };
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         let c = find(&r, "install-drive");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(c.detail.to_lowercase().contains("all your storage"));
@@ -618,6 +659,7 @@ mod readiness_tests {
             false,
             false,
             &AppliedChangesSummary::default(),
+            None,
         );
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Ready);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Ready);
@@ -646,7 +688,7 @@ mod readiness_tests {
                 ..Default::default()
             }],
         );
-        let r = evaluate_readiness(&hw, Some("Balanced"), true, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, Some("Balanced"), true, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Attention);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Attention);
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Attention);
@@ -657,7 +699,7 @@ mod readiness_tests {
     #[test]
     fn missing_data_is_unknown_not_fabricated() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Unknown);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Unknown);
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Unknown);
@@ -669,13 +711,33 @@ mod readiness_tests {
     #[test]
     fn vrr_is_advisory_with_action_not_unknown() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         let c = find(&r, "vrr");
         assert_eq!(c.status, ReadinessStatus::Advisory);
         assert!(c.action_uri.is_some(), "VRR advisory should offer an action link");
         // Advisory must not be counted as a problem.
         assert_eq!(r.attention_count, 0);
         assert!(r.advisory_count >= 1);
+    }
+
+    #[test]
+    fn freesync_on_makes_vrr_ready() {
+        let hw = hw_with(None, vec![], vec![]);
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(true));
+        let c = find(&r, "vrr");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert_eq!(c.value.as_deref(), Some("FreeSync: on"));
+    }
+
+    #[test]
+    fn freesync_supported_but_off_is_advisory_not_attention() {
+        let hw = hw_with(None, vec![], vec![]);
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(false));
+        let c = find(&r, "vrr");
+        assert_eq!(c.status, ReadinessStatus::Advisory);
+        assert_eq!(c.value.as_deref(), Some("FreeSync: off"));
+        // "Supported but off" is a nudge, never counted as a problem.
+        assert_eq!(r.attention_count, 0);
     }
 
     #[test]
@@ -687,14 +749,14 @@ mod readiness_tests {
             rolled_back: 0,
             externally_reverted: 1,
         };
-        let r = evaluate_readiness(&hw, None, false, false, &hist);
+        let r = evaluate_readiness(&hw, None, false, false, &hist, None);
         assert_eq!(find(&r, "applied-changes").status, ReadinessStatus::Attention);
     }
 
     #[test]
     fn status_counts_cover_every_check() {
         let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
