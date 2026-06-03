@@ -18,6 +18,10 @@
   (grain .35→.2, grid .45→.38) for cleanliness, then added 3 restrained cues: faint
   static CRT scanlines, a soft vignette to focus the eye, and HUD corner ticks on the
   card. All static/GPU-friendly — the existing motion/life is untouched.
+  v11 SMOOTHNESS FIX — v10 regressed motion: the scanline+vignette were two overlay layers
+  at z-index:1 (one masked), creating a sandwiched compositing level above the animated
+  canvas/aurora → jank. Folded into ONE un-promoted static z:0 .bg-fx layer, same treatment
+  as the proven-smooth grid/grain (no mask, no intermediate level). Motion restored.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,12 +54,12 @@
     background-size:60px 60px;mask-image:radial-gradient(120% 95% at 50% 40%,#000 35%,transparent 86%)}
   .bg-grain{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.2;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.045'/%3E%3C/svg%3E")}
-  /* retro lo-fi cyber ambiance — faint CRT scanlines + a soft vignette to focus the eye (static, GPU-cheap) */
-  .bg-scan{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.55;
-    background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px);
-    mask-image:radial-gradient(135% 100% at 50% 30%,#000 55%,transparent 100%)}
-  .bg-vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
-    background:radial-gradient(125% 100% at 50% 32%,transparent 56%,rgba(0,0,0,.42) 100%)}
+  /* retro lo-fi cyber ambiance — faint CRT scanlines + soft vignette, folded into ONE static
+     z:0 layer (same treatment as the smooth grid/grain: no mask, no promotion, no sandwiched
+     intermediate compositing level). Rasterized once; the animated canvas/aurora just blend. */
+  .bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.02) 0 1px,transparent 1px 3px),
+      radial-gradient(125% 100% at 50% 32%,transparent 56%,rgba(0,0,0,.42) 100%)}
 
   .wrap{max-width:980px;margin:0 auto;position:relative;z-index:2}
 
@@ -177,8 +181,7 @@
   <div class="bg-aurora"><span class="b b1"></span><span class="b b2"></span><span class="b b3"></span></div>
   <div class="bg-grid"></div>
   <div class="bg-grain"></div>
-  <div class="bg-scan"></div>
-  <div class="bg-vignette"></div>
+  <div class="bg-fx"></div>
 
   <div class="wrap">
     <div class="top">
