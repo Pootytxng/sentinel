@@ -1,7 +1,9 @@
 # Sentinel Latency Module — design (the edge)
 
 > **Status: PARKED + DARK.** Measurement/diagnostics lane (`sentinel-benchmark`), per the owner's
-> "build next" call. Read-only diagnostics first; the ETW capture core is the big build. **HQ aware**
+> "build next" call. **Stage-4 safe read-only diagnostics are now COMPLETE** (MSI active-verify,
+> MeasureSleep, CPU/CCD topology + affinity gate, USB shared-controller map — all live-verified); the ETW
+> capture core (Stages 1–2) is the next big build, awaiting the owner's dual-session spec. **HQ aware**
 > (flagged in the realignment hand-off) — may be re-homed to its own lane; cheap to move (new dark files).
 
 ## Thesis (owner, 2026-06-03)
@@ -50,29 +52,40 @@ in miniature: *"Your 0.1% low frame at 14:32:07 lines up with an 880µs DPC in y
 audio (tiny buffer → one long DPC starves it → crackle). **Correlation converts a scary graph into a
 decision.** Reuses Stage-5 (efficacy) honesty.
 
-### Stage 4 — Analyze (the finer instruments)
-- **MSI/MSI-X checker + setter.** ✅ checker BUILT (`latency.rs`, exact path the owner cites). **GAP the
-  owner caught (real, I'll fix):** I read `MSISupported` = *advertised* support, **not whether MSI is
-  actually active** — a device can advertise it and still fall back to line-based. **TODO: read the
-  resource descriptor afterward and confirm (active MSI shows as a *negative* IRQ value); verify, don't
-  assume.** The *setter* is a Stage-6 red/amber tweak via the existing apply/rollback path.
-- **Interrupt-affinity mapper.** Which logical core services which device's interrupts. **Matters on
-  multi-CCD / hybrid parts, NOT single-CCD X3D** → the module detects CCD/core topology and **only surfaces
-  affinity tweaks where they're meaningful. Refusing a pointless tweak is itself a credibility feature.**
+### Stage 4 — Analyze (the finer instruments) — ✅ safe read-only set BUILT
+- **MSI/MSI-X checker + setter.** ✅ checker BUILT (`latency.rs`, exact path the owner cites). ✅ **active-
+  verify DONE** (the owner's caught gap): `MSISupported` was only *advertised* support; we now confirm
+  against the **real allocated IRQ** via `Win32_PnPAllocatedResource` — an MSI vector reports as
+  `0x8000_0000+` (Device Manager's *negative* IRQ), a line IRQ as a small positive. `MsiDevice` carries
+  `instance_id` + `msi_active: Option<bool>`; `summarize_msi_active` counts an **advertised-but-inactive**
+  divergence; `msi_active_advisory` is built on verified (not advertised) state. *Verified live: 18 MSI-
+  capable devices, 13 active on MSI, 2 on line IRQ, 0 lying.* The *setter* is a Stage-6 red/amber tweak via
+  the existing apply/rollback path.
+- **Interrupt-affinity mapper.** ✅ **topology + gate BUILT.** `read_cpu_topology` (via
+  `GetLogicalProcessorInformationEx`, read-only) counts physical cores, logical processors, and **L3
+  complexes ≈ CCDs**. `affinity_is_meaningful` / `affinity_advisory` only offer affinity pinning on
+  **multi-CCD** parts and **explicitly refuse it on single-CCD X3D** — *refusing a pointless tweak is itself
+  a credibility feature.* *Verified live on the owner's X3D: 8 cores / 16 threads / 1 L3 → not meaningful,
+  gate correctly stays quiet.* (Per-device → core interrupt *mapping* remains a deeper, likely-elevated step.)
 - **Timer resolution — done honestly.** ✅ read BUILT (`NtQueryTimerResolution`, verified 1.0/0.5/15.625ms)
-  + the per-process honesty framing. **Owner's deeper truth to bake in:**
+  + the per-process honesty framing. ✅ **MeasureSleep DONE.** `measure_sleep_granularity` times back-to-back
+  `Sleep(1)` calls via QPC → min/median/max + jitter; `sleep_granularity_note` is **adaptive**, comparing
+  the measured median against the OS-reported resolution and explaining the divergence rather than asserting
+  a fixed value. *Verified live: OS reports 1.00ms system-wide but this idle process still gets ~15.6ms —
+  the per-process truth surfaced honestly.* Owner's deeper truths baked in:
   - Timer resolution governs **scheduler wake granularity, NOT interrupt/DPC latency** — confusing them is
     "blaming your alarm clock for traffic." What it *does* fix: scheduling granularity + artifacts (e.g. an
     unexplained 64 FPS cap).
   - **Per-process since Win10 2004**; on **Win11** a minimized/occluded window-owner *loses* the guarantee;
     global behavior can be restored on Win11/Server 2022+ via `GlobalTimerResolutionRequests = 1` under
     `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel`.
-  - **TODO: don't blind-force 0.5ms — measure the optimal empirically** (MeasureSleep: sample `Sleep()`
-    deltas; the hardware-rounded sweet spot is often **0.51ms, not 0.50**, and a wrong value can *degrade*).
-    Find the lowest-jitter resolution, explain the per-process/global distinction in plain English.
-- **USB topology mapper.** *(pending)* controller→hub→device tree; flag input devices sharing a host
-  controller; **verify real HID polling rate by measuring report intervals, not trusting the advertised
-  number.**
+  - Don't blind-force 0.5ms — the sweet spot (often **0.51ms, not 0.50**) is **measured**, not assumed.
+- **USB topology mapper.** ✅ **BUILT.** `read_usb_topology` maps host controllers → input devices from WMI
+  (`Win32_USBController` + `Win32_USBControllerDevice` + `Win32_PnPEntity` HID/Keyboard/Mouse), dedups each
+  peripheral by VID&PID, and flags **2+ input devices sharing one host controller** (`is_shared` +
+  low-drama `shared_controller_advisory`). *Verified live: mouse + headset + system-controller correctly
+  grouped on one controller (shared), lone device on another (not).* **TODO (deeper, needs HID device
+  I/O):** verify *real* HID polling rate by measuring report intervals rather than the advertised number.
 
 ### Stage 5 — Verify ✅ (already built — `compute_efficacy`)
 Before/after DPC-duration distributions + frame-time deltas with **STDEV + percentiles + an explicit noise
@@ -95,8 +108,10 @@ All **red-tier**, one-click undo standing by, via the locked rollback-first mode
   the existing typed apply/rollback only.
 
 ## Sequencing
-1. **Safe read-only diagnostics (now):** MSI checker ✅ (+ active-verify TODO), timer read ✅ (+ MeasureSleep
-   TODO), USB topology, interrupt-affinity map. No elevation, no network.
+1. **Safe read-only diagnostics — ✅ DONE (this lane):** MSI checker ✅ + active-verify ✅, timer read ✅ +
+   MeasureSleep ✅, USB topology ✅ (HID polling-rate measurement deferred — needs device I/O),
+   CPU/CCD topology + interrupt-affinity meaningfulness gate ✅. All read-only, no elevation, no network;
+   each verified live on the owner's rig. (`latency.rs`, still DARK — `mod latency;` only, not registered.)
 2. **ETW capture core (the big build):** Stages 1–2 in the elevated helper via `ferrisetw`. **Owner provides
    the dual-session design.**
 3. **Correlate (Stage 3):** gated on HQ landing the §1.7 PresentMon reversal.
