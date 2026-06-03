@@ -114,53 +114,115 @@ pub(crate) fn evaluate_readiness(
         ),
     });
 
-    // 2. Game install drive — no per-game path detection yet, so report the
-    //    storage situation honestly rather than guess where a game lives.
+    // 2. Game install drive — where the user's game libraries (Steam/Epic)
+    //    actually live, and whether those drives are fast (NVMe/SSD) or slow
+    //    (HDD). Falls back to an honest overall storage posture when no library
+    //    is found or a drive's type can't be read — never fabricates a verdict.
     {
-        let has_fast = hw.physical_disks.iter().any(|d| {
+        let gs = &hw.game_storage;
+        let mut drives: Vec<String> =
+            gs.libraries.iter().map(|l| format!("{}:", l.drive)).collect();
+        drives.sort();
+        drives.dedup();
+        let phys_fast = |d: &crate::hardware::PhysicalDiskInfo| {
             let b = d.bus_type.to_uppercase();
             let m = d.media_type.to_uppercase();
             b.contains("NVME") || m.contains("SSD") || m == "SCM"
-        });
-        let c = if hw.physical_disks.is_empty() {
-            // Fallback: MSFT_PhysicalDisk returned nothing. If Windows still reports
-            // logical volumes, acknowledge them (drive type unavailable) rather than
-            // claiming no storage exists; otherwise truly unknown.
-            if hw.disks.is_empty() {
+        };
+        let phys_has_fast = hw.physical_disks.iter().any(phys_fast);
+        let phys_all_fast = !hw.physical_disks.is_empty() && hw.physical_disks.iter().all(phys_fast);
+
+        let c = if gs.libraries.is_empty() {
+            // No launcher library detected — fall back to overall storage posture.
+            if hw.physical_disks.is_empty() {
+                if hw.disks.is_empty() {
+                    check(
+                        "install-drive",
+                        "Game install drive",
+                        ReadinessStatus::Unknown,
+                        "No drives were detected, so drive speed can't be assessed.",
+                        None,
+                    )
+                } else {
+                    check(
+                        "install-drive",
+                        "Game install drive",
+                        ReadinessStatus::Unknown,
+                        "No Steam/Epic game library was detected, and drive types couldn't be \
+                         read. Keep games on your fastest (SSD/NVMe) drive.",
+                        Some("No library detected".into()),
+                    )
+                }
+            } else if phys_has_fast {
                 check(
                     "install-drive",
                     "Game install drive",
                     ReadinessStatus::Unknown,
-                    "No drives were detected, so drive speed can't be assessed.",
-                    None,
+                    "No Steam/Epic game library was detected. You have fast storage available — \
+                     keep games on your SSD/NVMe.",
+                    Some("No library detected".into()),
                 )
             } else {
                 check(
                     "install-drive",
                     "Game install drive",
-                    ReadinessStatus::Unknown,
-                    "Drive type couldn't be read (physical-disk info unavailable), but Windows \
-                     reports drives present. Keep games on your fastest drive.",
-                    Some(format!("{} volume(s) detected", hw.disks.len())),
+                    ReadinessStatus::Attention,
+                    "Only HDD storage was detected. Games load and stream textures much slower on \
+                     an HDD than on an SSD/NVMe drive.",
+                    Some("HDD only".into()),
                 )
             }
-        } else if has_fast {
+        } else if gs.any_slow {
+            let slow: Vec<String> = gs
+                .libraries
+                .iter()
+                .filter(|l| l.media_type == "HDD")
+                .map(|l| format!("{}:", l.drive))
+                .collect();
             check(
                 "install-drive",
                 "Game install drive",
-                ReadinessStatus::Unknown,
-                "You have fast storage (NVMe/SSD) available — keep games on it. Sentinel doesn't \
-                 yet detect which drive a specific game is installed on.",
-                Some("Fast drive available".into()),
+                ReadinessStatus::Attention,
+                format!(
+                    "A game library is on an HDD ({}). Games load and stream textures much slower \
+                     from an HDD — move them to your SSD/NVMe.",
+                    slow.join(", ")
+                ),
+                Some(format!("HDD: {}", slow.join(", "))),
+            )
+        } else if gs.any_fast && gs.libraries.iter().all(|l| l.media_type != "Unknown") {
+            check(
+                "install-drive",
+                "Game install drive",
+                ReadinessStatus::Ready,
+                format!("Your game library is on fast storage ({}).", drives.join(", ")),
+                Some(format!("Fast · {}", drives.join(", "))),
+            )
+        } else if phys_all_fast {
+            // Per-library drive type was unreadable, but every physical disk is
+            // fast — so the games are necessarily on fast storage.
+            check(
+                "install-drive",
+                "Game install drive",
+                ReadinessStatus::Ready,
+                format!(
+                    "Your game library is on drive {} — and all your storage is NVMe/SSD, so your \
+                     games are on fast storage.",
+                    drives.join(", ")
+                ),
+                Some(format!("Fast · {}", drives.join(", "))),
             )
         } else {
             check(
                 "install-drive",
                 "Game install drive",
-                ReadinessStatus::Attention,
-                "Only HDD storage was detected. Games load and stream textures noticeably slower \
-                 on an HDD than on an SSD/NVMe drive.",
-                Some("HDD only".into()),
+                ReadinessStatus::Unknown,
+                format!(
+                    "Found a game library on {} but couldn't read that drive's type. Keep games \
+                     on your SSD/NVMe.",
+                    drives.join(", ")
+                ),
+                Some(drives.join(", ")),
             )
         };
         checks.push(c);
@@ -401,7 +463,7 @@ mod readiness_tests {
     }
 
     #[test]
-    fn install_drive_falls_back_to_logical_disks_when_physical_empty() {
+    fn install_drive_no_library_no_disk_types_is_unknown() {
         use crate::hardware::DiskInfo;
         let hw = HardwareInfo {
             physical_disks: vec![],
@@ -415,11 +477,80 @@ mod readiness_tests {
         };
         let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
         let c = find(&r, "install-drive");
-        // No physical-disk info, but logical volumes exist → still Unknown (can't
-        // assess SSD-vs-HDD) yet acknowledges the drives rather than "no drives".
+        // No game library detected and drive types unreadable → honest Unknown.
         assert_eq!(c.status, ReadinessStatus::Unknown);
-        assert!(c.detail.to_lowercase().contains("drives present"));
-        assert!(c.value.as_deref().unwrap_or("").contains("volume"));
+        assert!(c.detail.to_lowercase().contains("no steam/epic game library"));
+    }
+
+    #[test]
+    fn install_drive_library_on_ssd_is_ready() {
+        use crate::hardware::{GameLibrary, GameStorage};
+        let hw = HardwareInfo {
+            game_storage: GameStorage {
+                libraries: vec![GameLibrary {
+                    launcher: "Steam".into(),
+                    drive: "C".into(),
+                    media_type: "SSD".into(),
+                    bus_type: "NVMe".into(),
+                }],
+                any_fast: true,
+                any_slow: false,
+            },
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let c = find(&r, "install-drive");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.to_lowercase().contains("fast storage"));
+    }
+
+    #[test]
+    fn install_drive_library_on_hdd_is_attention() {
+        use crate::hardware::{GameLibrary, GameStorage};
+        let hw = HardwareInfo {
+            game_storage: GameStorage {
+                libraries: vec![GameLibrary {
+                    launcher: "Steam".into(),
+                    drive: "D".into(),
+                    media_type: "HDD".into(),
+                    bus_type: "SATA".into(),
+                }],
+                any_fast: false,
+                any_slow: true,
+            },
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let c = find(&r, "install-drive");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        assert!(c.detail.contains("HDD"));
+    }
+
+    #[test]
+    fn install_drive_unknown_media_all_disks_fast_is_ready() {
+        use crate::hardware::{GameLibrary, GameStorage, PhysicalDiskInfo};
+        let hw = HardwareInfo {
+            game_storage: GameStorage {
+                libraries: vec![GameLibrary {
+                    launcher: "Steam".into(),
+                    drive: "C".into(),
+                    media_type: "Unknown".into(),
+                    bus_type: String::new(),
+                }],
+                any_fast: false,
+                any_slow: false,
+            },
+            physical_disks: vec![PhysicalDiskInfo {
+                media_type: "SSD".into(),
+                bus_type: "NVMe".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let c = find(&r, "install-drive");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.to_lowercase().contains("all your storage"));
     }
 
     #[test]

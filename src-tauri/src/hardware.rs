@@ -118,6 +118,8 @@ pub(crate) struct DisplayInfo {
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct MsftPhysicalDisk {
     pub(crate) friendly_name: Option<String>,
+    // DeviceId is a string ("0", "1", …) that matches MSFT_Partition.DiskNumber.
+    pub(crate) device_id: Option<String>,
     pub(crate) media_type: Option<u16>,
     pub(crate) bus_type: Option<u16>,
     pub(crate) size: Option<u64>,
@@ -144,6 +146,7 @@ pub(crate) struct HardwareInfo {
     pub(crate) windows_version: Option<WindowsVersionInfo>,
     pub(crate) cpu_arch: Option<CpuArchInfo>,
     pub(crate) has_active_wired_ethernet: bool,
+    pub(crate) game_storage: GameStorage,
 }
 
 // Enumerates the primary display's modes via Win32 GDI to find both the
@@ -918,6 +921,193 @@ pub(crate) fn detect_gpus() -> Vec<GpuInfo> {
     gpus
 }
 
+// ─── Game install storage (F2 readiness) ────────────────────────────────────
+// Detects where the user's game libraries live (Steam + Epic) and whether those
+// drives are fast (NVMe/SSD) or slow (HDD), so Readiness can answer "are my
+// games on fast storage?" instead of only knowing that a fast drive exists
+// somewhere. All reads are local — registry + launcher config files + the
+// Storage WMI namespace. Runs inside collect_hardware (already on the WMI thread).
+
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct GameLibrary {
+    pub(crate) launcher: String,   // "Steam" | "Epic"
+    pub(crate) drive: String,      // "C", "D", …
+    pub(crate) media_type: String, // "SSD" | "HDD" | "SCM" | "Unknown"
+    pub(crate) bus_type: String,   // "NVMe" | "SATA" | "Other" | ""
+}
+
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct GameStorage {
+    pub(crate) libraries: Vec<GameLibrary>,
+    pub(crate) any_fast: bool, // a library on SSD/NVMe/SCM
+    pub(crate) any_slow: bool, // a library on a spinning HDD
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "MSFT_Partition")]
+#[serde(rename_all = "PascalCase")]
+struct MsftPartition {
+    drive_letter: Option<String>,
+    disk_number: Option<u32>,
+}
+
+// Pure: the drive letter at the start of a Windows path ("D:\\Games" -> 'D').
+fn drive_letter_of(path: &str) -> Option<char> {
+    let mut it = path.chars();
+    let c = it.next()?;
+    if c.is_ascii_alphabetic() && it.next() == Some(':') {
+        Some(c.to_ascii_uppercase())
+    } else {
+        None
+    }
+}
+
+// Pure: library paths from a Steam libraryfolders.vdf body. Each library block
+// has a line like:  "path"   "D:\\SteamLibrary"  (backslashes doubled in the VDF).
+fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
+    vdf.lines()
+        .filter_map(|line| {
+            let rest = line.trim().strip_prefix("\"path\"")?;
+            let q1 = rest.find('"')?;
+            let after = &rest[q1 + 1..];
+            let q2 = after.find('"')?;
+            Some(after[..q2].replace("\\\\", "\\"))
+        })
+        .collect()
+}
+
+// drive letter -> (media_type, bus_type) via the Storage namespace. Empty if the
+// namespace is blocked or the shape is unexpected — callers degrade gracefully.
+fn drive_media_map() -> std::collections::HashMap<char, (String, String)> {
+    let mut map = std::collections::HashMap::new();
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return map,
+    };
+    let conn = match WMIConnection::with_namespace_path("ROOT\\Microsoft\\Windows\\Storage", com) {
+        Ok(c) => c,
+        Err(_) => return map,
+    };
+    let disks: Vec<MsftPhysicalDisk> = conn.query().unwrap_or_default();
+    let disk_media: std::collections::HashMap<u32, (String, String)> = disks
+        .iter()
+        .filter_map(|d| {
+            let id = d.device_id.as_deref()?.parse::<u32>().ok()?;
+            let media = match d.media_type {
+                Some(3) => "HDD",
+                Some(4) => "SSD",
+                Some(5) => "SCM",
+                _ => "Unknown",
+            };
+            let bus = match d.bus_type {
+                Some(17) => "NVMe",
+                Some(11) => "SATA",
+                Some(3) => "ATA",
+                Some(7) => "USB",
+                _ => "Other",
+            };
+            Some((id, (media.to_string(), bus.to_string())))
+        })
+        .collect();
+    let parts: Vec<MsftPartition> = conn.query().unwrap_or_default();
+    for p in parts {
+        let Some(dn) = p.disk_number else { continue };
+        let Some(letter) = p
+            .drive_letter
+            .as_deref()
+            .and_then(|s| s.chars().next())
+            .filter(|c| c.is_ascii_alphabetic())
+        else {
+            continue;
+        };
+        if let Some(mb) = disk_media.get(&dn) {
+            map.insert(letter.to_ascii_uppercase(), mb.clone());
+        }
+    }
+    map
+}
+
+fn steam_library_letters() -> Vec<char> {
+    let steam: Option<String> = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey("Software\\Valve\\Steam")
+        .and_then(|k| k.get_value::<String, _>("SteamPath"))
+        .ok();
+    let Some(steam) = steam else {
+        return Vec::new();
+    };
+    let steam = steam.replace('/', "\\");
+    let mut letters = Vec::new();
+    if let Some(l) = drive_letter_of(&steam) {
+        letters.push(l);
+    }
+    let vdf = format!("{}\\steamapps\\libraryfolders.vdf", steam.trim_end_matches('\\'));
+    let body = std::fs::read_to_string(&vdf).unwrap_or_default();
+    for p in parse_steam_library_paths(&body) {
+        if let Some(l) = drive_letter_of(&p) {
+            letters.push(l);
+        }
+    }
+    letters
+}
+
+fn epic_library_letters() -> Vec<char> {
+    let Ok(pd) = std::env::var("ProgramData") else {
+        return Vec::new();
+    };
+    let dir = format!("{}\\Epic\\EpicGamesLauncher\\Data\\Manifests", pd);
+    let mut letters = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return letters;
+    };
+    for e in entries.flatten() {
+        if e.path().extension().and_then(|s| s.to_str()) != Some("item") {
+            continue;
+        }
+        let body = std::fs::read_to_string(e.path()).unwrap_or_default();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
+            if let Some(loc) = v.get("InstallLocation").and_then(|x| x.as_str()) {
+                if let Some(l) = drive_letter_of(loc) {
+                    letters.push(l);
+                }
+            }
+        }
+    }
+    letters
+}
+
+pub(crate) fn detect_game_storage() -> GameStorage {
+    let media_map = drive_media_map();
+    let mut libraries: Vec<GameLibrary> = Vec::new();
+    let mut seen: std::collections::HashSet<(&'static str, char)> = std::collections::HashSet::new();
+
+    for (launcher, letters) in [
+        ("Steam", steam_library_letters()),
+        ("Epic", epic_library_letters()),
+    ] {
+        for l in letters {
+            if !seen.insert((launcher, l)) {
+                continue;
+            }
+            let (media, bus) = media_map
+                .get(&l)
+                .cloned()
+                .unwrap_or_else(|| ("Unknown".to_string(), String::new()));
+            libraries.push(GameLibrary {
+                launcher: launcher.to_string(),
+                drive: l.to_string(),
+                media_type: media,
+                bus_type: bus,
+            });
+        }
+    }
+
+    let any_fast = libraries
+        .iter()
+        .any(|g| matches!(g.media_type.as_str(), "SSD" | "SCM") || g.bus_type == "NVMe");
+    let any_slow = libraries.iter().any(|g| g.media_type == "HDD");
+    GameStorage { libraries, any_fast, any_slow }
+}
+
 /// Run WMI-touching work on a dedicated, freshly-spawned thread.
 ///
 /// `wmi::COMLibrary::new()` requests an MTA apartment (`CoInitializeEx` with
@@ -983,6 +1173,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
         has_active_wired_ethernet: detect_has_active_wired_ethernet(),
+        game_storage: detect_game_storage(),
     }
 }
 
@@ -1030,4 +1221,31 @@ pub(crate) fn gpu_vendor_match(hw: &HardwareInfo, needle: &str) -> Option<String
         .iter()
         .find(|g| g.name.to_uppercase().contains(needle))
         .map(|g| g.name.clone())
+}
+
+#[cfg(test)]
+mod game_storage_tests {
+    use super::{drive_letter_of, parse_steam_library_paths};
+
+    #[test]
+    fn drive_letter_basic() {
+        assert_eq!(drive_letter_of("C:\\Program Files"), Some('C'));
+        assert_eq!(drive_letter_of("d:\\games"), Some('D'));
+        assert_eq!(drive_letter_of("\\\\server\\share"), None);
+        assert_eq!(drive_letter_of(""), None);
+        assert_eq!(drive_letter_of("relative\\path"), None);
+    }
+
+    #[test]
+    fn steam_vdf_paths_parsed() {
+        let vdf = r#"
+        "path"     "C:\\Program Files (x86)\\Steam"
+        "path"     "D:\\SteamLibrary"
+"#;
+        let paths = parse_steam_library_paths(vdf);
+        assert_eq!(
+            paths,
+            vec!["C:\\Program Files (x86)\\Steam", "D:\\SteamLibrary"]
+        );
+    }
 }
