@@ -742,6 +742,168 @@ pub(crate) fn read_usb_topology() -> Vec<UsbControllerLoad> {
     group_input_devices_by_controller(&controllers, &edges, &inputs)
 }
 
+/// Measured HID (mouse) polling rate, from the intervals between real input reports — the design's
+/// "verify the polling rate, don't trust the advertised number." A 1000Hz mouse should land near
+/// 1000Hz with tight jitter; a busy/oversubscribed USB controller can drag the *effective* rate down.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct PollingRate {
+    pub reports: usize,
+    pub median_hz: f64,
+    pub min_interval_ms: f64,
+    pub max_interval_ms: f64,
+    /// Sample standard deviation of the report intervals — the empirical jitter.
+    pub jitter_ms: f64,
+}
+
+/// Pure: reduce a series of report timestamps (ms, monotonic) to a polling-rate summary. Needs ≥2
+/// timestamps (≥1 interval); `None` otherwise so the live capture degrades without inventing a rate.
+pub(crate) fn summarize_polling(timestamps_ms: &[f64]) -> Option<PollingRate> {
+    let mut intervals: Vec<f64> =
+        timestamps_ms.windows(2).map(|w| w[1] - w[0]).filter(|d| *d > 0.0).collect();
+    if intervals.is_empty() {
+        return None;
+    }
+    intervals.sort_by(|a, b| a.total_cmp(b));
+    let n = intervals.len();
+    let median = if n.is_multiple_of(2) {
+        (intervals[n / 2 - 1] + intervals[n / 2]) / 2.0
+    } else {
+        intervals[n / 2]
+    };
+    let mean = intervals.iter().sum::<f64>() / n as f64;
+    let jitter = if n > 1 {
+        (intervals.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / (n - 1) as f64).sqrt()
+    } else {
+        0.0
+    };
+    Some(PollingRate {
+        reports: timestamps_ms.len(),
+        median_hz: if median > 0.0 { 1000.0 / median } else { 0.0 },
+        min_interval_ms: intervals[0],
+        max_interval_ms: intervals[n - 1],
+        jitter_ms: jitter,
+    })
+}
+
+/// Pure: an honest line about a measured mouse polling rate vs a claimed rate (if known).
+pub(crate) fn polling_note(p: &PollingRate, claimed_hz: Option<u32>) -> String {
+    let mut note = format!(
+        "Measured ≈ {:.0} Hz effective ({} reports, interval {:.2}–{:.2}ms, jitter ±{:.2}ms). ",
+        p.median_hz, p.reports, p.min_interval_ms, p.max_interval_ms, p.jitter_ms
+    );
+    match claimed_hz {
+        Some(c) if p.median_hz < (c as f64) * 0.85 => note.push_str(&format!(
+            "That's noticeably below the advertised {c} Hz — the effective rate is what reaches the \
+             game, and it can sag on a busy/shared USB controller. Worth checking.",
+        )),
+        Some(c) => note.push_str(&format!("In line with the advertised {c} Hz.")),
+        None => note.push_str(
+            "This is the effective rate Windows actually delivered — measured from real reports, not \
+             the box number.",
+        ),
+    }
+    note
+}
+
+/// Live: measure the mouse's effective polling rate by observing real input reports for `duration_ms`
+/// via the **Raw Input** API (a passive observer — it does NOT block or alter your actual mouse input,
+/// and it's how mouse-rate checkers work). Read-only, no elevation, no network. Requires the user to
+/// be moving the mouse during the window. `None` if no reports arrive or the window/registration fails.
+#[cfg(target_os = "windows")]
+pub(crate) fn measure_mouse_polling(duration_ms: u32) -> Option<PollingRate> {
+    use std::mem::{size_of, zeroed};
+    use winapi::um::libloaderapi::GetModuleHandleW;
+    use winapi::um::winuser::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, KillTimer,
+        RegisterClassW, RegisterRawInputDevices, SetTimer, TranslateMessage, UnregisterClassW, MSG,
+        RAWINPUTDEVICE, RIDEV_INPUTSINK, RIDEV_REMOVE, WM_INPUT, WM_TIMER, WNDCLASSW,
+    };
+
+    // Unique class name per call so concurrent probes never collide on RegisterClassW.
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static PROBE_SEQ: AtomicUsize = AtomicUsize::new(0);
+    let seq = PROBE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let class_name: Vec<u16> = format!("SentinelHidPollProbe{seq}\0").encode_utf16().collect();
+    let freq = qpc_frequency() as f64;
+    let mut timestamps: Vec<f64> = Vec::new();
+
+    // SAFETY: a self-contained Win32 window + Raw Input session, all on this thread. Every handle is
+    // released before returning; failures bail out early after cleaning up what was created.
+    unsafe {
+        let hinstance = GetModuleHandleW(std::ptr::null());
+        let mut wc: WNDCLASSW = zeroed();
+        wc.lpfnWndProc = Some(DefWindowProcW); // default proc handles WM_INPUT cleanup on dispatch
+        wc.hInstance = hinstance;
+        wc.lpszClassName = class_name.as_ptr();
+        if RegisterClassW(&wc) == 0 {
+            return None;
+        }
+        // A normal top-level window we never show — RIDEV_INPUTSINK delivers input even unfocused.
+        let hwnd = CreateWindowExW(
+            0,
+            class_name.as_ptr(),
+            class_name.as_ptr(),
+            0,
+            0,
+            0,
+            0,
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            hinstance,
+            std::ptr::null_mut(),
+        );
+        if hwnd.is_null() {
+            UnregisterClassW(class_name.as_ptr(), hinstance);
+            return None;
+        }
+
+        let mut rid: RAWINPUTDEVICE = zeroed();
+        rid.usUsagePage = 0x01; // generic desktop
+        rid.usUsage = 0x02; // mouse
+        rid.dwFlags = RIDEV_INPUTSINK;
+        rid.hwndTarget = hwnd;
+        if RegisterRawInputDevices(&rid, 1, size_of::<RAWINPUTDEVICE>() as u32) == 0 {
+            DestroyWindow(hwnd);
+            UnregisterClassW(class_name.as_ptr(), hinstance);
+            return None;
+        }
+
+        // A one-shot timer ends the capture; GetMessageW blocks (no busy-spin) and wakes per report.
+        SetTimer(hwnd, 1, duration_ms, None);
+        let mut msg: MSG = zeroed();
+        loop {
+            let ret = GetMessageW(&mut msg, hwnd, 0, 0);
+            if ret <= 0 {
+                break; // 0 = WM_QUIT, -1 = error
+            }
+            match msg.message {
+                WM_TIMER => break,
+                // We registered mouse-only, so every WM_INPUT is a mouse report — timestamp it.
+                WM_INPUT => {
+                    let t = qpc_now();
+                    if t > 0 {
+                        timestamps.push(t as f64 * 1000.0 / freq);
+                    }
+                }
+                _ => {}
+            }
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg); // routes WM_INPUT to DefWindowProc, which frees the raw data
+        }
+
+        // Cleanup: stop the timer, deregister raw input, destroy the window + class.
+        KillTimer(hwnd, 1);
+        rid.dwFlags = RIDEV_REMOVE;
+        rid.hwndTarget = std::ptr::null_mut();
+        let _ = RegisterRawInputDevices(&rid, 1, size_of::<RAWINPUTDEVICE>() as u32);
+        DestroyWindow(hwnd);
+        UnregisterClassW(class_name.as_ptr(), hinstance);
+    }
+
+    summarize_polling(&timestamps)
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -1070,6 +1232,56 @@ mod latency_tests {
         for l in &loads {
             eprintln!("  {} [shared={}]: {:?}", l.controller_name, l.is_shared(), l.input_devices);
             assert!(!l.input_devices.is_empty());
+        }
+    }
+
+    #[test]
+    fn polling_summary_needs_two_timestamps() {
+        assert!(summarize_polling(&[]).is_none());
+        assert!(summarize_polling(&[5.0]).is_none());
+    }
+
+    #[test]
+    fn polling_summary_computes_rate_and_extents() {
+        // 1ms intervals → 1000 Hz.
+        let p = summarize_polling(&[0.0, 1.0, 2.0, 3.0]).expect("rate");
+        assert_eq!(p.reports, 4);
+        assert!((p.median_hz - 1000.0).abs() < 0.001);
+        assert!((p.min_interval_ms - 1.0).abs() < 0.001);
+        assert!((p.max_interval_ms - 1.0).abs() < 0.001);
+        assert_eq!(p.jitter_ms, 0.0);
+        // 0.125ms intervals → 8000 Hz.
+        let fast = summarize_polling(&[0.0, 0.125, 0.25]).expect("rate");
+        assert!((fast.median_hz - 8000.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn polling_note_flags_underperformance_vs_claim() {
+        let slow = PollingRate { reports: 500, median_hz: 600.0, min_interval_ms: 1.0, max_interval_ms: 3.0, jitter_ms: 0.4 };
+        let n = polling_note(&slow, Some(1000));
+        assert!(n.contains("below the advertised 1000"));
+        let ok = PollingRate { reports: 900, median_hz: 980.0, min_interval_ms: 0.9, max_interval_ms: 1.2, jitter_ms: 0.05 };
+        assert!(polling_note(&ok, Some(1000)).contains("In line with the advertised 1000"));
+        assert!(polling_note(&ok, None).contains("effective rate Windows actually delivered"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn mouse_polling_capture_never_panics() {
+        // Short window with (likely) no movement → None, but the full Win32/Raw-Input path must run
+        // cleanly and tear down without panic. (Some only if the mouse happens to move during it.)
+        let _ = measure_mouse_polling(120);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "interactive: run with --ignored --nocapture and MOVE THE MOUSE during the window"]
+    fn zz_live_mouse_polling() {
+        eprintln!("\n>>> MOVE YOUR MOUSE CONTINUOUSLY for 6 seconds — starting now...");
+        let p = measure_mouse_polling(6000);
+        match p {
+            Some(p) => eprintln!(">>> LIVE polling = {:?}\n>>> {}", p, polling_note(&p, None)),
+            None => eprintln!(">>> LIVE polling = no reports (did the mouse move?)"),
         }
     }
 

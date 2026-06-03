@@ -32,7 +32,17 @@ wmi = "0.14"
 winreg = "0.55"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 runas = "1.2"
-winapi = { version = "0.3", features = ["wingdi", "winuser", "minwindef", "sysinfoapi"] }
+winapi = { version = "0.3", features = [
+  "wingdi",
+  "winuser",
+  "minwindef",
+  "sysinfoapi",
+  # Hidden-window + Raw Input session for the latency module's HID polling-rate probe
+  # (latency.rs). GetModuleHandleW needs libloaderapi; HWND/window handles need windef.
+  # Read-only passive input observation — no injection, no hook, no elevation.
+  "libloaderapi",
+  "windef",
+] }
 windows = { version = "0.59", features = [
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
