@@ -36,6 +36,12 @@ winapi = { version = "0.3", features = ["wingdi", "winuser", "minwindef", "sysin
 windows = { version = "0.59", features = [
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
+  # D3D11 compute + runtime HLSL compile (D3DCompile) for the GPU benchmark
+  # (F6, benchmark.rs). Vendor graphics API, anti-cheat-safe — same class as the
+  # existing DXGI/ADLX usage; no injection, no kernel driver.
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Direct3D_Fxc",
   # Gdi feature is required to use DXGI_OUTPUT_DESC1 (which carries HMONITOR
   # in its body, defined in the Gdi module). Used by HDR capability probe.
   "Win32_Graphics_Gdi",

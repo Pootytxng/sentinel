@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod actions;
+mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs + the spec.
 mod diagnostics;
 mod export;
 mod fps;
@@ -9,6 +10,7 @@ mod gaming_orchestrator;
 mod gaming_session;
 mod hardware;
 mod history;
+mod latency; // PARKED + DARK: compiled, not registered. See latency.rs + the latency spec.
 mod monitoring;
 mod priorities;
 mod readiness;
