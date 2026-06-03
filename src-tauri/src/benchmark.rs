@@ -332,6 +332,11 @@ pub(crate) struct RamRaw {
     pub bandwidth_mb_s: f64,
 }
 
+/// Raw GPU compute throughput in GFLOP/s (D3D11 compute, FMA-heavy kernel).
+pub(crate) struct GpuRaw {
+    pub gflops: f64,
+}
+
 pub(crate) fn bench_ram(cfg: &RunConfig, cancel: &AtomicBool) -> RamRaw {
     let elems = (cfg.ram_mb * 1024 * 1024 / std::mem::size_of::<u64>()).max(1);
     let mut buf = vec![0u64; elems];
@@ -363,10 +368,165 @@ mod refs {
     pub const CPU_SINGLE_KOPS_100: f64 = 200_000.0;
     pub const CPU_MULTI_KOPS_100: f64 = 2_000_000.0;
     pub const RAM_MB_S_100: f64 = 30_000.0;
+    pub const GPU_GFLOPS_100: f64 = 12_000.0;
 }
 
 fn normalize(raw: f64, ref_100: f64) -> u32 {
     ((raw / ref_100) * 100.0).round().clamp(0.0, 100.0) as u32
+}
+
+/// GPU compute benchmark via D3D11 (reuses the `windows` crate — no new heavy dependency,
+/// consistent with the codebase's dep-minimalism). Vendor graphics API, anti-cheat-safe
+/// (no injection, no kernel driver) — same class as the existing DXGI/ADLX usage. The
+/// unsafe is fully self-contained and `Result`-based: any failure (no GPU, headless/RDP
+/// session, driver issue) returns `None` → honest "not measured", never a panic.
+/// Cancellable between dispatch repeats.
+mod gpu {
+    use super::{GpuRaw, RunConfig};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Instant;
+    use windows::core::{s, Result};
+    use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
+    use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, ID3DBlob};
+    use windows::Win32::Graphics::Direct3D11::*;
+    use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN;
+
+    // FMA-heavy kernel: each thread runs 2048 iterations of two fused multiply-adds.
+    const SHADER: &str = "RWStructuredBuffer<float> Out : register(u0);\n\
+        [numthreads(64,1,1)]\n\
+        void main(uint3 tid : SV_DispatchThreadID){\n\
+        float a = float(tid.x)*0.0001 + 1.0; float b = 1.0;\n\
+        [loop] for(int i=0;i<2048;i++){ b = mad(b,1.0000001,a); a = mad(a,0.9999999,b); }\n\
+        Out[tid.x] = a + b; }";
+
+    const ITERS_PER_THREAD: u64 = 2048;
+    const FLOPS_PER_ITER: u64 = 4; // two mad = 4 flops
+    const GROUPS: u32 = 256; // × 64 threads/group
+    const REPEATS: u32 = 64;
+
+    pub(super) fn bench_gpu(_cfg: &RunConfig, cancel: &AtomicBool) -> Option<GpuRaw> {
+        match unsafe { run(cancel) } {
+            Ok(gflops) if gflops.is_finite() && gflops > 0.0 => Some(GpuRaw { gflops }),
+            _ => None,
+        }
+    }
+
+    unsafe fn run(cancel: &AtomicBool) -> Result<f64> {
+        let mut device: Option<ID3D11Device> = None;
+        let mut context: Option<ID3D11DeviceContext> = None;
+        D3D11CreateDevice(
+            None,
+            D3D_DRIVER_TYPE_HARDWARE,
+            HMODULE::default(),
+            D3D11_CREATE_DEVICE_FLAG(0),
+            None,
+            D3D11_SDK_VERSION,
+            Some(&mut device),
+            None,
+            Some(&mut context),
+        )?;
+        let device = device.ok_or_else(windows::core::Error::from_win32)?;
+        let context = context.ok_or_else(windows::core::Error::from_win32)?;
+
+        // compile the compute shader at runtime (d3dcompiler ships with Windows)
+        let src = SHADER.as_bytes();
+        let mut code: Option<ID3DBlob> = None;
+        let mut errors: Option<ID3DBlob> = None;
+        D3DCompile(
+            src.as_ptr() as *const _,
+            src.len(),
+            s!("bench.hlsl"),
+            None,
+            None,
+            s!("main"),
+            s!("cs_5_0"),
+            0,
+            0,
+            &mut code,
+            Some(&mut errors),
+        )?;
+        let code = code.ok_or_else(windows::core::Error::from_win32)?;
+        let bytecode =
+            std::slice::from_raw_parts(code.GetBufferPointer() as *const u8, code.GetBufferSize());
+
+        let mut shader: Option<ID3D11ComputeShader> = None;
+        device.CreateComputeShader(bytecode, None, Some(&mut shader))?;
+        let shader = shader.ok_or_else(windows::core::Error::from_win32)?;
+
+        let elem_count = (GROUPS * 64) as usize;
+        let byte_width = (elem_count * 4) as u32;
+
+        let buf_desc = D3D11_BUFFER_DESC {
+            ByteWidth: byte_width,
+            Usage: D3D11_USAGE_DEFAULT,
+            BindFlags: D3D11_BIND_UNORDERED_ACCESS.0 as u32,
+            CPUAccessFlags: 0,
+            MiscFlags: D3D11_RESOURCE_MISC_BUFFER_STRUCTURED.0 as u32,
+            StructureByteStride: 4,
+        };
+        let mut buffer: Option<ID3D11Buffer> = None;
+        device.CreateBuffer(&buf_desc, None, Some(&mut buffer))?;
+        let buffer = buffer.ok_or_else(windows::core::Error::from_win32)?;
+
+        let uav_desc = D3D11_UNORDERED_ACCESS_VIEW_DESC {
+            Format: DXGI_FORMAT_UNKNOWN,
+            ViewDimension: D3D11_UAV_DIMENSION_BUFFER,
+            Anonymous: D3D11_UNORDERED_ACCESS_VIEW_DESC_0 {
+                Buffer: D3D11_BUFFER_UAV {
+                    FirstElement: 0,
+                    NumElements: elem_count as u32,
+                    Flags: 0,
+                },
+            },
+        };
+        let mut uav: Option<ID3D11UnorderedAccessView> = None;
+        device.CreateUnorderedAccessView(&buffer, Some(&uav_desc), Some(&mut uav))?;
+        let uav = uav.ok_or_else(windows::core::Error::from_win32)?;
+
+        let staging_desc = D3D11_BUFFER_DESC {
+            ByteWidth: byte_width,
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+            MiscFlags: 0,
+            StructureByteStride: 4,
+        };
+        let mut staging: Option<ID3D11Buffer> = None;
+        device.CreateBuffer(&staging_desc, None, Some(&mut staging))?;
+        let staging = staging.ok_or_else(windows::core::Error::from_win32)?;
+
+        context.CSSetShader(&shader, None);
+        context.CSSetUnorderedAccessViews(0, 1, Some(&Some(uav)), None);
+
+        // warm-up dispatch (first-use allocation / shader residency), not timed
+        context.Dispatch(GROUPS, 1, 1);
+        context.Flush();
+
+        let start = Instant::now();
+        let mut done: u32 = 0;
+        for _ in 0..REPEATS {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            context.Dispatch(GROUPS, 1, 1);
+            done += 1;
+        }
+        // force GPU completion: copy to a staging buffer and map it (Map blocks until done)
+        context.CopyResource(&staging, &buffer);
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        context.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))?;
+        let first = *(mapped.pData as *const f32);
+        context.Unmap(&staging, 0);
+        let secs = start.elapsed().as_secs_f64().max(1e-6);
+        std::hint::black_box(first);
+
+        if done == 0 {
+            return Ok(0.0); // cancelled before any timed work
+        }
+        let total_flops = done as u64 * elem_count as u64 * ITERS_PER_THREAD * FLOPS_PER_ITER;
+        Ok(total_flops as f64 / secs / 1e9)
+    }
 }
 
 /// Run the available native components (CPU, RAM) → normalized `ComponentScore`s. Disk +
@@ -377,6 +537,14 @@ pub(crate) fn run_components(cfg: &RunConfig, cancel: &AtomicBool) -> Vec<Compon
         + normalize(cpu.multi_kops, refs::CPU_MULTI_KOPS_100))
         / 2;
     let ram = bench_ram(cfg, cancel);
+    let gpu = match gpu::bench_gpu(cfg, cancel) {
+        Some(g) => ComponentScore {
+            component: Component::Gpu,
+            score: normalize(g.gflops, refs::GPU_GFLOPS_100),
+            measured: true,
+        },
+        None => ComponentScore { component: Component::Gpu, score: 0, measured: false },
+    };
     vec![
         ComponentScore { component: Component::Cpu, score: cpu_score, measured: true },
         ComponentScore {
@@ -384,6 +552,7 @@ pub(crate) fn run_components(cfg: &RunConfig, cancel: &AtomicBool) -> Vec<Compon
             score: normalize(ram.bandwidth_mb_s, refs::RAM_MB_S_100),
             measured: true,
         },
+        gpu,
     ]
 }
 
@@ -572,16 +741,28 @@ mod benchmark_tests {
     }
 
     #[test]
-    fn run_components_covers_cpu_and_ram_and_feeds_scorer() {
+    fn run_components_covers_native_set_and_feeds_scorer() {
         let cancel = AtomicBool::new(false);
         let comps = run_components(&RunConfig::tiny(), &cancel);
-        assert_eq!(comps.len(), 2);
-        assert!(comps.iter().all(|c| c.measured));
+        assert_eq!(comps.len(), 3); // cpu, ram, gpu
+        // cpu + ram always measured; gpu measured only if a device was available
+        assert!(comps.iter().filter(|c| c.measured).count() >= 2);
         assert!(comps.iter().all(|c| c.score <= 100));
-        // end-to-end: measured components feed the pure scorer
+        let measured = comps.iter().filter(|c| c.measured).count();
+        // end-to-end: measured components feed the pure scorer with honest coverage
         let s = compute_standing(&StandingInputs { components: comps, ..Default::default() });
-        assert_eq!(s.measured_components, 2);
+        assert_eq!(s.measured_components, measured);
+        assert_eq!(s.total_components, 3);
         assert!(s.tier >= 1);
+    }
+
+    #[test]
+    fn gpu_runner_is_graceful_never_panics() {
+        let cancel = AtomicBool::new(false);
+        // Either a real GPU result (positive GFLOP/s) or None — must never panic.
+        if let Some(raw) = gpu::bench_gpu(&RunConfig::tiny(), &cancel) {
+            assert!(raw.gflops > 0.0);
+        }
     }
 
     #[test]
