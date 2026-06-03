@@ -72,6 +72,63 @@ pub(crate) fn msi_report() -> MsiSummary {
     summarize_msi(&read_msi_devices())
 }
 
+fn is_latency_sensitive(name: &str) -> bool {
+    let n = name.to_lowercase();
+    ["geforce", "radeon", "nvidia", "ethernet", "gbe", "network", "wi-fi", "wifi", "nvme", "wireless"]
+        .iter()
+        .any(|k| n.contains(k))
+}
+
+/// Pure: an actionable advisory from the MSI scan — which devices are on legacy line interrupts,
+/// prioritizing latency-sensitive ones (GPU/NIC/NVMe). Advisory only; flipping MSI would go through
+/// the existing apply/rollback path, never auto-applied.
+pub(crate) fn msi_advisory(devices: &[MsiDevice]) -> Option<String> {
+    let legacy: Vec<&str> = devices.iter().filter(|d| !d.msi_on).map(|d| d.name.as_str()).collect();
+    if legacy.is_empty() {
+        return None;
+    }
+    let sensitive: Vec<&str> = legacy.iter().copied().filter(|n| is_latency_sensitive(n)).collect();
+    let highlight = if sensitive.is_empty() { &legacy } else { &sensitive };
+    let names = highlight.iter().take(3).copied().collect::<Vec<_>>().join(", ");
+    Some(format!(
+        "{} device(s) on legacy line interrupts (e.g. {}). MSI usually lowers interrupt latency — advisory, reversible.",
+        legacy.len(),
+        names
+    ))
+}
+
+/// System timer resolution, as Windows reports it (100-ns units).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TimerResolution {
+    pub coarsest_100ns: u32,
+    pub finest_100ns: u32,
+    pub current_100ns: u32,
+}
+
+impl TimerResolution {
+    pub fn current_ms(&self) -> f64 {
+        self.current_100ns as f64 / 10_000.0
+    }
+}
+
+#[allow(non_snake_case)]
+extern "system" {
+    fn NtQueryTimerResolution(min: *mut u32, max: *mut u32, current: *mut u32) -> i32;
+}
+
+/// Read the system timer resolution (read-only). Note: recent Windows applies requested timer
+/// resolution **per-process**, so the old global "force 0.5ms" registry hack no longer behaves the
+/// way the forums insist — surfacing this honestly out-credibles the tweak guides. None on failure.
+pub(crate) fn read_timer_resolution() -> Option<TimerResolution> {
+    let (mut min, mut max, mut cur) = (0u32, 0u32, 0u32);
+    // SAFETY: ntdll is always present; the call only writes the three out-params.
+    let status = unsafe { NtQueryTimerResolution(&mut min, &mut max, &mut cur) };
+    if status != 0 {
+        return None;
+    }
+    Some(TimerResolution { coarsest_100ns: min, finest_100ns: max, current_100ns: cur })
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -103,5 +160,33 @@ mod latency_tests {
     fn reader_never_panics() {
         // Real machine → devices; any sandbox → empty. Must never panic.
         let _ = read_msi_devices();
+    }
+
+    #[test]
+    fn advisory_none_when_all_msi_on() {
+        assert!(msi_advisory(&[dev("GPU", true), dev("NIC", true)]).is_none());
+    }
+
+    #[test]
+    fn advisory_flags_legacy_and_prioritizes_sensitive() {
+        let devs = [
+            dev("High Definition Audio Bus", false),
+            dev("Realtek Gaming GbE Family", false),
+            dev("AMD Radeon RX 9070 XT", false),
+        ];
+        let a = msi_advisory(&devs).expect("advisory present");
+        assert!(a.contains("3 device"));
+        // a latency-sensitive device (NIC/GPU) is named ahead of the audio bus
+        assert!(a.contains("Radeon") || a.contains("GbE"));
+        assert!(!a.contains("Audio"));
+    }
+
+    #[test]
+    fn timer_resolution_reads_or_degrades() {
+        // Real machine → Some (finest ≤ current ≤ coarsest); sandbox → None. Never panics.
+        if let Some(t) = read_timer_resolution() {
+            assert!(t.finest_100ns <= t.coarsest_100ns);
+            assert!(t.current_ms() > 0.0);
+        }
     }
 }
