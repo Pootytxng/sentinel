@@ -769,6 +769,16 @@ fn verdict_for(delta_pct: f64, floor: f64) -> Verdict {
     }
 }
 
+/// Conservative default significance threshold (%). A delta must clear this (plus the
+/// low-confidence widening) to count as real — we'd rather report "no measurable change"
+/// than overclaim a win. Tunable later; conservative on purpose (owner-approved default).
+pub(crate) const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
+
+/// Convenience: efficacy with the conservative default threshold.
+pub(crate) fn measure_efficacy(before: &RunReport, after: &RunReport) -> Efficacy {
+    compute_efficacy(before, after, DEFAULT_NOISE_FLOOR_PCT)
+}
+
 /// Compare two benchmark runs and emit an honest per-component + overall efficacy verdict.
 /// Only components measured in **both** runs are compared. The delta is reference-independent
 /// (normalization cancels), so it's meaningful even while absolute baselines are placeholders.
@@ -1107,6 +1117,15 @@ mod benchmark_tests {
         let e = compute_efficacy(&before, &after, 3.0);
         assert_eq!(e.per_component.len(), 1); // GPU unmeasured in `before` → skipped
         assert_eq!(e.per_component[0].component, Component::Cpu);
+    }
+
+    #[test]
+    fn default_floor_is_conservative() {
+        let b = report(RunConfidence::Clean, &[(Component::Cpu, 100, true)]);
+        let near = report(RunConfidence::Clean, &[(Component::Cpu, 102, true)]); // +2% < 3% default
+        let real = report(RunConfidence::Clean, &[(Component::Cpu, 105, true)]); // +5% > 3% default
+        assert_eq!(measure_efficacy(&b, &near).overall, Verdict::NoMeasurableChange);
+        assert_eq!(measure_efficacy(&b, &real).overall, Verdict::Improved);
     }
 
     #[test]
