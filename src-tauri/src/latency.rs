@@ -547,6 +547,181 @@ pub(crate) fn read_cpu_topology() -> Option<CpuTopology> {
     Some(CpuTopology { logical_processors, physical_cores, l3_complexes })
 }
 
+/// A USB host controller and the distinct input devices it's hosting. The latency-relevant fact:
+/// devices sharing one host controller share its bandwidth/interrupt servicing, so a chatty device
+/// can add jitter to another's polling. We only *surface* it — never fear-monger; it's usually fine.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct UsbControllerLoad {
+    pub controller_name: String,
+    pub controller_id: String,
+    /// Distinct input devices (deduped by VID&PID) on this controller, by friendly name.
+    pub input_devices: Vec<String>,
+}
+
+impl UsbControllerLoad {
+    /// Two or more input devices on one controller — the "shared controller" condition.
+    pub fn is_shared(&self) -> bool {
+        self.input_devices.len() >= 2
+    }
+}
+
+/// Internal: a resolved input device awaiting controller attribution.
+struct InputDevice {
+    device_id: String,
+    name: String,
+    vid_pid: Option<String>,
+}
+
+fn is_input_pnp_class(class: &str) -> bool {
+    matches!(class, "HIDClass" | "Keyboard" | "Mouse")
+}
+
+/// A physical peripheral exposes several HID collections (mouse, consumer-control, vendor-defined…)
+/// all sharing one VID&PID. When deduping we prefer the collection with a meaningful name (e.g.
+/// "HID-compliant mouse") over these generic/secondary-collection names.
+fn is_generic_input_name(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.starts_with("usb input")
+        || n == "hid-compliant device"
+        || n.contains("vendor-defined")
+        || n.contains("consumer control")
+}
+
+/// Pure: extract `VID_xxxx&PID_yyyy` (uppercased) from a device instance id so multiple nodes of
+/// one physical device (its USB node + each HID collection) collapse to a single logical device.
+pub(crate) fn parse_vid_pid(device_id: &str) -> Option<String> {
+    fn hex_after(s: &str, key: &str) -> Option<String> {
+        let start = s.find(key)? + key.len();
+        let frag = s.get(start..start + 4)?;
+        frag.chars().all(|c| c.is_ascii_hexdigit()).then(|| frag.to_uppercase())
+    }
+    let up = device_id.to_uppercase();
+    Some(format!("VID_{}&PID_{}", hex_after(&up, "VID_")?, hex_after(&up, "PID_")?))
+}
+
+/// Pure: attribute input devices to their host controllers and dedup per controller by VID&PID,
+/// preferring a descriptive name over a generic "USB Input Device". Returns controllers hosting at
+/// least one input device, most-loaded first. This is the testable core of the USB topology map.
+fn group_input_devices_by_controller(
+    controllers: &HashMap<String, String>,
+    edges: &HashMap<String, String>,
+    inputs: &[InputDevice],
+) -> Vec<UsbControllerLoad> {
+    // controller id -> (vid_pid -> chosen friendly name)
+    let mut by_ctrl: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for dev in inputs {
+        let Some(vid_pid) = &dev.vid_pid else { continue };
+        let Some(ctrl) = edges.get(&dev.device_id) else { continue }; // not attributable → skip
+        let slot = by_ctrl.entry(ctrl.clone()).or_default();
+        slot.entry(vid_pid.clone())
+            .and_modify(|existing| {
+                if is_generic_input_name(existing) && !is_generic_input_name(&dev.name) {
+                    *existing = dev.name.clone();
+                }
+            })
+            .or_insert_with(|| dev.name.clone());
+    }
+    let mut loads: Vec<UsbControllerLoad> = by_ctrl
+        .into_iter()
+        .map(|(ctrl, devs)| {
+            let mut names: Vec<String> = devs.into_values().collect();
+            names.sort();
+            UsbControllerLoad {
+                controller_name: controllers.get(&ctrl).cloned().unwrap_or_else(|| ctrl.clone()),
+                controller_id: ctrl,
+                input_devices: names,
+            }
+        })
+        .collect();
+    // Most-loaded first, then by name for stable ordering.
+    loads.sort_by(|a, b| {
+        b.input_devices.len().cmp(&a.input_devices.len()).then_with(|| a.controller_name.cmp(&b.controller_name))
+    });
+    loads
+}
+
+/// Pure: an honest advisory when input devices share a host controller. `None` if none are shared.
+/// Deliberately low-drama — this is "worth knowing", not a problem to scare anyone about.
+pub(crate) fn shared_controller_advisory(loads: &[UsbControllerLoad]) -> Option<String> {
+    let busiest = loads.iter().filter(|l| l.is_shared()).max_by_key(|l| l.input_devices.len())?;
+    let names = busiest.input_devices.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+    Some(format!(
+        "{} input devices share one USB host controller ({}): {}. Usually fine — but if one floods \
+         the bus it can add jitter to another's polling, which matters if you run 1000Hz+ \
+         peripherals. Worth knowing, not a problem to fix.",
+        busiest.input_devices.len(),
+        busiest.controller_name,
+        names
+    ))
+}
+
+/// Live: build the USB-controller → input-device map (read-only WMI: `Win32_USBController`,
+/// `Win32_USBControllerDevice`, `Win32_PnPEntity`). No elevation, no network. Empty on any error.
+///
+/// TODO (deeper increment): verify *real* HID polling rate by timing report intervals rather than
+/// trusting the advertised rate — that needs opening the HID device, so it's a separate step.
+pub(crate) fn read_usb_topology() -> Vec<UsbControllerLoad> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename = "Win32_USBController")]
+    #[serde(rename_all = "PascalCase")]
+    struct Ctrl {
+        device_id: Option<String>,
+        name: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename = "Win32_USBControllerDevice")]
+    #[serde(rename_all = "PascalCase")]
+    struct CtrlDev {
+        antecedent: Option<String>,
+        dependent: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename = "Win32_PnPEntity")]
+    #[serde(rename_all = "PascalCase")]
+    struct Pnp {
+        device_id: Option<String>,
+        name: Option<String>,
+        #[serde(rename = "PNPClass")]
+        pnp_class: Option<String>,
+    }
+
+    let Ok(com) = wmi::COMLibrary::new() else { return Vec::new() };
+    let Ok(conn) = wmi::WMIConnection::new(com) else { return Vec::new() };
+
+    let mut controllers: HashMap<String, String> = HashMap::new();
+    for c in conn.query::<Ctrl>().unwrap_or_default() {
+        if let Some(id) = c.device_id {
+            controllers.insert(id.to_uppercase(), c.name.unwrap_or_else(|| id.clone()));
+        }
+    }
+
+    let mut edges: HashMap<String, String> = HashMap::new();
+    for e in conn.query::<CtrlDev>().unwrap_or_default() {
+        let (Some(ant), Some(dep)) = (e.antecedent, e.dependent) else { continue };
+        let (Some(ctrl), Some(dev)) = (parse_dependent_device_id(&ant), parse_dependent_device_id(&dep))
+        else {
+            continue;
+        };
+        edges.insert(dev, ctrl);
+    }
+
+    let q = "SELECT DeviceID, Name, PNPClass FROM Win32_PnPEntity \
+             WHERE PNPClass = 'HIDClass' OR PNPClass = 'Keyboard' OR PNPClass = 'Mouse'";
+    let inputs: Vec<InputDevice> = conn
+        .raw_query::<Pnp>(q)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|p| p.pnp_class.as_deref().map(is_input_pnp_class).unwrap_or(false))
+        .filter_map(|p| {
+            let device_id = p.device_id?.to_uppercase();
+            let vid_pid = parse_vid_pid(&device_id);
+            Some(InputDevice { name: p.name.unwrap_or_else(|| device_id.clone()), vid_pid, device_id })
+        })
+        .collect();
+
+    group_input_devices_by_controller(&controllers, &edges, &inputs)
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -791,6 +966,90 @@ mod latency_tests {
             assert!(t.physical_cores >= 1);
             assert!(t.logical_processors >= t.physical_cores); // SMT ≥ cores
             assert!(t.l3_complexes >= 1);
+        }
+    }
+
+    fn input(id: &str, name: &str) -> InputDevice {
+        let id = id.to_uppercase();
+        InputDevice { vid_pid: parse_vid_pid(&id), name: name.into(), device_id: id }
+    }
+
+    #[test]
+    fn vid_pid_extracts_and_uppercases() {
+        assert_eq!(parse_vid_pid(r"HID\VID_1532&PID_00b8&MI_00\A&1").as_deref(), Some("VID_1532&PID_00B8"));
+        assert_eq!(parse_vid_pid(r"USB\VID_046d&PID_c33a\X").as_deref(), Some("VID_046D&PID_C33A"));
+        assert_eq!(parse_vid_pid(r"USB\ROOT_HUB30\5&1723FB54&0&0"), None); // a hub, no VID/PID
+    }
+
+    #[test]
+    fn input_pnp_classes() {
+        assert!(is_input_pnp_class("HIDClass"));
+        assert!(is_input_pnp_class("Keyboard"));
+        assert!(is_input_pnp_class("Mouse"));
+        assert!(!is_input_pnp_class("Net"));
+        assert!(!is_input_pnp_class("USB"));
+    }
+
+    #[test]
+    fn group_dedups_by_vidpid_attributes_and_prefers_specific_name() {
+        let controllers = HashMap::from([
+            ("PCIA".to_string(), "AMD USB 3.10".to_string()),
+            ("PCIB".to_string(), "ASMedia USB 3.20".to_string()),
+        ]);
+        let edges = HashMap::from([
+            (r"USB\VID_1532&PID_00B8&MI_00\X".to_uppercase(), "PCIA".to_string()),
+            (r"HID\VID_1532&PID_00B8&MI_00\Y".to_uppercase(), "PCIA".to_string()),
+            (r"HID\VID_046D&PID_C33A\Z".to_uppercase(), "PCIA".to_string()),
+            (r"HID\VID_AAAA&PID_BBBB\W".to_uppercase(), "PCIB".to_string()),
+        ]);
+        let inputs = [
+            input(r"USB\VID_1532&PID_00B8&MI_00\X", "USB Input Device"), // generic
+            input(r"HID\VID_1532&PID_00B8&MI_00\Y", "HID-compliant mouse"), // specific, same device
+            input(r"HID\VID_046D&PID_C33A\Z", "HID Keyboard Device"),
+            input(r"HID\VID_AAAA&PID_BBBB\W", "Lonely Pad"),
+        ];
+        let loads = group_input_devices_by_controller(&controllers, &edges, &inputs);
+        assert_eq!(loads.len(), 2);
+        // Most-loaded first.
+        assert_eq!(loads[0].controller_id, "PCIA");
+        assert_eq!(loads[0].input_devices.len(), 2); // mouse + keyboard, mouse deduped to one
+        assert!(loads[0].is_shared());
+        assert!(loads[0].input_devices.contains(&"HID-compliant mouse".to_string())); // specific wins
+        assert!(!loads[0].input_devices.contains(&"USB Input Device".to_string()));
+        // The single-device controller is not shared.
+        assert_eq!(loads[1].controller_id, "PCIB");
+        assert!(!loads[1].is_shared());
+    }
+
+    #[test]
+    fn shared_advisory_fires_only_when_shared() {
+        let shared = vec![UsbControllerLoad {
+            controller_name: "AMD USB 3.10".into(),
+            controller_id: "PCIA".into(),
+            input_devices: vec!["HID-compliant mouse".into(), "HID Keyboard Device".into()],
+        }];
+        let a = shared_controller_advisory(&shared).expect("advisory present");
+        assert!(a.contains("2 input devices share"));
+        assert!(a.contains("AMD USB 3.10"));
+        assert!(a.contains("Worth knowing")); // low-drama framing
+
+        let not_shared = vec![UsbControllerLoad {
+            controller_name: "Solo".into(),
+            controller_id: "PCIB".into(),
+            input_devices: vec!["Lonely Pad".into()],
+        }];
+        assert!(shared_controller_advisory(&not_shared).is_none());
+    }
+
+    #[test]
+    fn usb_topology_reads_without_panic() {
+        // Real machine → controllers with input devices; sandbox → empty. Must never panic, and
+        // every reported device list is non-empty (we only include controllers hosting inputs).
+        let loads = read_usb_topology();
+        eprintln!("LIVE usb topology = {} controller(s) hosting input devices", loads.len());
+        for l in &loads {
+            eprintln!("  {} [shared={}]: {:?}", l.controller_name, l.is_shared(), l.input_devices);
+            assert!(!l.input_devices.is_empty());
         }
     }
 
