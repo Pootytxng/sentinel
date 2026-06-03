@@ -1120,6 +1120,118 @@ pub(crate) fn measure_mouse(duration_ms: u32) -> Option<MouseMeasurement> {
     Some(MouseMeasurement { polling, note })
 }
 
+// ── Stage 1-2: Capture core (processing) ─────────────────────────────────────────────────────────
+// The elevated ETW kernel session (DPC/ISR + image-load via ferrisetw, fps.rs-helper pattern) is the
+// data SOURCE: it produces raw `DpcSample`s + the trace's `LoadedModule` ranges. The logic below is
+// the dual-session PROCESSING — pure + testable, no elevation:
+//   • always-on-light → `tally_drivers`: per-driver counts + max/total durations, integer-only work.
+//   • spike-triggered-heavy → `collect_spikes`: attributed `LatencyEvent`s for stutter-class samples,
+//     which feed the Stage-3 Correlate engine directly.
+// The elevated session that emits the samples slots onto HQ's helper as the integration step (it
+// needs admin + the shared entry point); this core is built + verified ahead of it.
+
+/// Authored dual-session tunables (the "capture spec"). Defaults chosen here, documented.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CaptureConfig {
+    /// A DPC/ISR at or above this is "stutter-class" → recorded in heavy detail. 500µs default
+    /// (a 0.5ms+ interrupt routine is a real frame-time risk even at high refresh).
+    pub spike_threshold_us: f64,
+    /// Upper bound on heavy-detail events retained for correlation (the ring-buffer size).
+    pub heavy_ring_capacity: usize,
+}
+
+impl Default for CaptureConfig {
+    fn default() -> Self {
+        Self { spike_threshold_us: 500.0, heavy_ring_capacity: 4096 }
+    }
+}
+
+/// A raw DPC/ISR sample, as the ETW callback hands it over (before attribution).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct DpcSample {
+    pub timestamp_ms: f64,
+    pub duration_us: f64,
+    /// Return address of the routine that ran — resolved to a module via image-load ranges.
+    pub return_address: u64,
+}
+
+/// A loaded driver/module image range, from the trace's image-load events. Name only (no symbols).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct LoadedModule {
+    pub name: String,
+    pub base: u64,
+    pub size: u64,
+}
+
+/// Per-driver tally — the always-on-light output.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct DriverLatencyStat {
+    pub driver: String,
+    pub count: usize,
+    pub max_us: f64,
+    pub total_us: f64,
+}
+
+/// Pure: resolve a return address to its owning module (address in `[base, base+size)`). The design's
+/// "builder's gift" — image-load events give the module NAME, so we skip the symbol-server rabbit hole.
+pub(crate) fn attribute_module(return_address: u64, modules: &[LoadedModule]) -> Option<String> {
+    modules
+        .iter()
+        .find(|m| return_address >= m.base && return_address < m.base.saturating_add(m.size))
+        .map(|m| m.name.clone())
+}
+
+/// Pure: the spike trigger — is this sample stutter-class (worth heavy detail)?
+pub(crate) fn is_spike(sample: &DpcSample, cfg: &CaptureConfig) -> bool {
+    sample.duration_us >= cfg.spike_threshold_us
+}
+
+/// Pure: the always-on-light view — per-driver counts + max/total durations, worst (max) first.
+/// Samples whose address matches no known module tally under "(unknown)".
+pub(crate) fn tally_drivers(samples: &[DpcSample], modules: &[LoadedModule]) -> Vec<DriverLatencyStat> {
+    let mut by: HashMap<String, DriverLatencyStat> = HashMap::new();
+    for s in samples {
+        let driver = attribute_module(s.return_address, modules).unwrap_or_else(|| "(unknown)".into());
+        let e = by
+            .entry(driver.clone())
+            .or_insert(DriverLatencyStat { driver, count: 0, max_us: 0.0, total_us: 0.0 });
+        e.count += 1;
+        e.total_us += s.duration_us;
+        if s.duration_us > e.max_us {
+            e.max_us = s.duration_us;
+        }
+    }
+    let mut out: Vec<DriverLatencyStat> = by.into_values().collect();
+    out.sort_by(|a, b| b.max_us.total_cmp(&a.max_us).then(b.total_us.total_cmp(&a.total_us)));
+    out
+}
+
+/// Pure: bridge a sample into a `LatencyEvent` for the Stage-3 Correlate engine.
+pub(crate) fn sample_to_latency_event(sample: &DpcSample, modules: &[LoadedModule]) -> LatencyEvent {
+    LatencyEvent {
+        timestamp_ms: sample.timestamp_ms,
+        duration_us: sample.duration_us,
+        driver: attribute_module(sample.return_address, modules).unwrap_or_else(|| "(unknown)".into()),
+    }
+}
+
+/// Pure: the spike-triggered-heavy view — attributed `LatencyEvent`s for stutter-class samples,
+/// worst-first and bounded to the ring capacity. This is the bridge that feeds `correlate_stutters`.
+pub(crate) fn collect_spikes(
+    samples: &[DpcSample],
+    modules: &[LoadedModule],
+    cfg: &CaptureConfig,
+) -> Vec<LatencyEvent> {
+    let mut spikes: Vec<LatencyEvent> = samples
+        .iter()
+        .filter(|s| is_spike(s, cfg))
+        .map(|s| sample_to_latency_event(s, modules))
+        .collect();
+    spikes.sort_by(|a, b| b.duration_us.total_cmp(&a.duration_us));
+    spikes.truncate(cfg.heavy_ring_capacity);
+    spikes
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -1503,6 +1615,89 @@ mod latency_tests {
 
     fn ev(t: f64, us: f64, drv: &str) -> LatencyEvent {
         LatencyEvent { timestamp_ms: t, duration_us: us, driver: drv.into() }
+    }
+
+    fn modules() -> Vec<LoadedModule> {
+        vec![
+            LoadedModule { name: "rtwlane.sys".into(), base: 0x1000, size: 0x1000 }, // [0x1000,0x2000)
+            LoadedModule { name: "nvlddmkm.sys".into(), base: 0x5000, size: 0x2000 }, // [0x5000,0x7000)
+        ]
+    }
+
+    fn dpc(t: f64, us: f64, addr: u64) -> DpcSample {
+        DpcSample { timestamp_ms: t, duration_us: us, return_address: addr }
+    }
+
+    #[test]
+    fn attribute_maps_address_to_module_with_exclusive_end() {
+        let m = modules();
+        assert_eq!(attribute_module(0x1000, &m).as_deref(), Some("rtwlane.sys")); // base inclusive
+        assert_eq!(attribute_module(0x1FFF, &m).as_deref(), Some("rtwlane.sys"));
+        assert_eq!(attribute_module(0x2000, &m), None); // base+size exclusive
+        assert_eq!(attribute_module(0x6000, &m).as_deref(), Some("nvlddmkm.sys"));
+        assert_eq!(attribute_module(0x9999, &m), None); // no module
+    }
+
+    #[test]
+    fn spike_trigger_respects_threshold() {
+        let cfg = CaptureConfig::default(); // 500µs
+        assert!(!is_spike(&dpc(0.0, 499.0, 0x1000), &cfg));
+        assert!(is_spike(&dpc(0.0, 500.0, 0x1000), &cfg)); // boundary is stutter-class
+        assert!(is_spike(&dpc(0.0, 900.0, 0x1000), &cfg));
+    }
+
+    #[test]
+    fn tally_aggregates_per_driver_worst_first_with_unknown_bucket() {
+        let m = modules();
+        let samples = [
+            dpc(0.0, 200.0, 0x1100), // rtwlane
+            dpc(1.0, 900.0, 0x1100), // rtwlane (max 900, total 1100, count 2)
+            dpc(2.0, 600.0, 0x6000), // nvlddmkm (max 600)
+            dpc(3.0, 50.0, 0xDEAD),  // unattributed
+        ];
+        let stats = tally_drivers(&samples, &m);
+        assert_eq!(stats.len(), 3);
+        assert_eq!(stats[0].driver, "rtwlane.sys"); // worst max first
+        assert_eq!(stats[0].count, 2);
+        assert_eq!(stats[0].max_us, 900.0);
+        assert_eq!(stats[0].total_us, 1100.0);
+        assert!(stats.iter().any(|s| s.driver == "(unknown)" && s.count == 1));
+    }
+
+    #[test]
+    fn collect_spikes_filters_attributes_sorts_and_bounds() {
+        let m = modules();
+        let samples = [
+            dpc(10.0, 300.0, 0x1100), // below threshold → dropped
+            dpc(11.0, 700.0, 0x1100), // rtwlane
+            dpc(12.0, 1500.0, 0x6000), // nvlddmkm (biggest)
+        ];
+        let cfg = CaptureConfig { spike_threshold_us: 500.0, heavy_ring_capacity: 10 };
+        let spikes = collect_spikes(&samples, &m, &cfg);
+        assert_eq!(spikes.len(), 2); // the 300µs one filtered out
+        assert_eq!(spikes[0].driver, "nvlddmkm.sys"); // worst first
+        assert_eq!(spikes[0].duration_us, 1500.0);
+        // capacity bound
+        let tiny = CaptureConfig { spike_threshold_us: 500.0, heavy_ring_capacity: 1 };
+        assert_eq!(collect_spikes(&samples, &m, &tiny).len(), 1);
+    }
+
+    #[test]
+    fn end_to_end_capture_to_correlate_names_the_culprit() {
+        // The full pure pipeline: raw DPC samples + modules → spikes → correlate with a frame stutter
+        // → headline culprit. Proves Stage 1-2 feeds Stage 3 cleanly.
+        let m = modules();
+        let samples = [
+            dpc(96.0, 880.0, 0x1100),  // rtwlane, 880µs, just before the frame
+            dpc(50.0, 120.0, 0x6000),  // small, far away
+        ];
+        let cfg = CaptureConfig::default();
+        let events = collect_spikes(&samples, &m, &cfg); // → LatencyEvents
+        let spikes = [FrameSpike { timestamp_ms: 100.0, frame_ms: 20.0 }];
+        let causes = correlate_stutters(&spikes, &events, 6.0);
+        let (driver, count) = top_stutter_culprit(&causes).expect("a culprit");
+        assert_eq!(driver, "rtwlane.sys");
+        assert_eq!(count, 1);
     }
 
     #[test]
