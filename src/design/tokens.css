@@ -1,0 +1,32 @@
+/* Design-system token contract. Additive over App.css :root. Semantic names so
+   every surface reads status + motion from one place. Theme blocks already in
+   App.css continue to drive the raw --ready/--attention/--accent values. */
+:root {
+  /* Status map — value + soft fill + line, keyed by semantic status. */
+  --status-ready: var(--ready);
+  --status-ready-soft: rgba(70, 217, 138, 0.12);
+  --status-ready-line: rgba(70, 217, 138, 0.32);
+  --status-attention: var(--attention);
+  --status-attention-soft: rgba(245, 183, 64, 0.12);
+  --status-attention-line: rgba(245, 183, 64, 0.32);
+  --status-danger: var(--danger);
+  --status-danger-soft: rgba(243, 113, 111, 0.12);
+  --status-danger-line: rgba(243, 113, 111, 0.32);
+  --status-protected: var(--accent);
+  --status-protected-soft: var(--accent-soft);
+  --status-protected-line: var(--accent-line);
+  --status-unknown: var(--faint);
+
+  /* Named interaction/motion tokens (durations/eases already exist in App.css). */
+  --dur-tap: 90ms;
+  --lift-hover: -2px;
+  --press: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

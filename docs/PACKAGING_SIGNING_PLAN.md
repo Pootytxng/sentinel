@@ -16,8 +16,9 @@ already beta-worthy; packaging is now the safer critical path. Gaming Mode (F1) 
 - capabilities: **tight** — `core:default` + `opener:default` only; no fs/shell/http exposed to
   the webview (windows: `main`, `overlay`) ✓
 - updater: **not configured** ✓ (no `tauri-plugin-updater`, no `createUpdaterArtifacts`)
-- **code signing: NOT configured** — needs a cert + owner decision.
-- **CSP: `null`** — works, but should be tightened before public release (needs a build+test cycle).
+- **code signing: NOT configured** — needs a cert + owner decision. **Pipeline is now cert-ready — see §3a.**
+- **CSP: ✅ DONE (2026-06-02, `a9619ec`)** — strict production policy + relaxed `devCsp` shipped and
+  **runtime-verified on a production build** (UI renders + IPC works under the policy). No longer a gate.
 - legal: `PRIVACY.md` / `EULA.md` drafts exist; **license model + jurisdiction still pending**.
 
 ## 2. Distribution target
@@ -45,6 +46,46 @@ already beta-worthy; packaging is now the safer critical path. Gaming Mode (F1) 
 **Azure Trusted Signing** (good reputation, CI-friendly, no hardware token) or an EV cert. **Never
 put a private signing key/cert in the repo, `.env`, or unprotected CI** — same rule as the Ed25519
 rules key.
+
+## 3a. Cert-ready pipeline — activate when the cert/account exists
+
+The build is **cert-ready**: the moment you have a signing identity, signing is a paste-in config + one
+build. **Do NOT add these blocks until the cert/account actually exists** — Tauri tries to sign on every
+build and will fail without it (that's why they live here, not yet in `tauri.conf.json`). Pick ONE route:
+
+### Route A — Azure Trusted Signing (recommended; CI-friendly, no hardware token)
+1. Create an Azure Trusted Signing account + Certificate Profile (identity validation takes ~days).
+2. Install the signer (e.g. `trusted-signing-cli` or AzureSignTool).
+3. Add to `src-tauri/tauri.conf.json` → `bundle.windows`:
+   ```json
+   "signCommand": {
+     "cmd": "trusted-signing-cli",
+     "args": ["-e", "<ENDPOINT>", "-a", "<ACCOUNT>", "-c", "<CERT-PROFILE>", "%1"]
+   }
+   ```
+   Tauri passes each artifact path as `%1`. Auth via Azure env vars / service principal —
+   **never hardcode secrets**; local `az login`, CI via OIDC or a guarded secret.
+
+### Route B — Traditional OV/EV cert (cert in the Windows cert store)
+   ```json
+   "bundle": { "windows": {
+     "certificateThumbprint": "<THUMBPRINT>",
+     "digestAlgorithm": "sha256",
+     "timestampUrl": "http://timestamp.digicert.com"
+   } }
+   ```
+   - **OV** → import the `.pfx`, reference by thumbprint; reputation builds over downloads.
+   - **EV** → hardware token; `signtool` prompts for the token PIN → **not CI-friendly** (manual signing).
+   - The `.pfx` / key / password **NEVER** enter the repo / `.env` / unprotected CI (same rule as the Ed25519 rules key).
+
+### Then
+`npm run tauri build` → **signed** MSI/NSIS in `target/release/bundle/`. Verify with
+`signtool verify /pa /v <artifact>` (valid chain + timestamp). SmartScreen reputation is instant-ish on
+EV/Trusted Signing, builds over downloads on OV.
+
+**CHECKPOINT (owner):** acquire the cert / Trusted-Signing account, then either paste the chosen block
+(I'll also wire a CI signing step) or hand me the identity details and I configure + test-build it. Until
+then the beta ships unsigned (decided — SmartScreen "unknown publisher" is expected for invite-only).
 
 ## 4. Required owner decisions
 

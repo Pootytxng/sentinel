@@ -1,3 +1,5 @@
+@import "./design/tokens.css";
+
 :root {
   /* ── Core palette — graphite / black / metallic (premium cockpit) ──────── */
   --bg: #07080b;
@@ -52,17 +54,6 @@
    Default (no attribute) = Graphite. Offline; selected via the in-app picker.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Synthwave — violet-black, magenta + cyan neon. */
-:root[data-theme="synthwave"] {
-  --bg: #0c0718; --bg-2: #120a22;
-  --panel: #1a1130; --panel-2: #21163d; --panel-3: #2c1d4f;
-  --border: #36275a; --border-strong: #4b357d; --hairline: rgba(255,120,230,0.08);
-  --fg: #fdeeff; --fg-2: #d9c4ee; --muted: #a78cc8; --faint: #6f5a92;
-  --accent: #ff5cc8; --accent-bright: #ff8ad8; --accent-hover: #ff8ad8;
-  --accent-soft: rgba(255,92,200,0.14); --accent-line: rgba(255,92,200,0.34);
-  --accent-glow: rgba(255,92,200,0.45);
-  --ready: #43e8e0; --attention: #ffc24b; --danger: #ff6584;
-}
 /* Carbon Ember — near-black carbon, warm amber/orange (automotive). */
 :root[data-theme="ember"] {
   --bg: #0a0807; --bg-2: #0f0c0a;
@@ -84,17 +75,6 @@
   --accent-soft: rgba(56,214,230,0.12); --accent-line: rgba(56,214,230,0.32);
   --accent-glow: rgba(56,214,230,0.42);
   --ready: #46d98a; --attention: #f5c451; --danger: #f3716f;
-}
-/* Viper — black, toxic lime-green. */
-:root[data-theme="viper"] {
-  --bg: #060806; --bg-2: #0a0d0a;
-  --panel: #10140f; --panel-2: #161c14; --panel-3: #1f281c;
-  --border: #25311f; --border-strong: #36482d; --hairline: rgba(170,255,90,0.07);
-  --fg: #f0f7ec; --fg-2: #ccdcc0; --muted: #8ba07e; --faint: #5e7250;
-  --accent: #9be83f; --accent-bright: #bcf56e; --accent-hover: #bcf56e;
-  --accent-soft: rgba(155,232,63,0.13); --accent-line: rgba(155,232,63,0.32);
-  --accent-glow: rgba(155,232,63,0.42);
-  --ready: #9be83f; --attention: #ffc24b; --danger: #ff6b5e;
 }
 /* Aurora Noir — inky blue-black, emerald→teal aurora, luxe. */
 :root[data-theme="aurora"] {
@@ -1350,7 +1330,11 @@ html, body, #root {
   color: var(--muted);
   border-color: rgba(138, 147, 168, 0.4);
 }
-.readiness-advisory {
+.readiness-pill.readiness-advisory {
+  color: #7cc4ff;
+  border-color: rgba(124, 196, 255, 0.4);
+}
+.readiness-blurb {
   margin: 8px 0 14px;
   font-size: 12px;
   color: var(--muted);
@@ -1379,6 +1363,32 @@ html, body, #root {
 .readiness-row-unknown {
   border-left-color: var(--muted);
 }
+.readiness-row-advisory {
+  border-left-color: #60a5fa;
+}
+.readiness-action {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7cc4ff;
+  background: rgba(124, 196, 255, 0.08);
+  border: 1px solid rgba(124, 196, 255, 0.35);
+  border-radius: 6px;
+  padding: 6px 11px;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.readiness-action:hover {
+  background: rgba(124, 196, 255, 0.16);
+  border-color: rgba(124, 196, 255, 0.6);
+}
+.readiness-action .ico {
+  width: 14px;
+  height: 14px;
+}
 .readiness-row-head {
   display: flex;
   align-items: center;
@@ -1404,6 +1414,10 @@ html, body, #root {
 .readiness-badge.readiness-unknown {
   color: #11151f;
   background: #9ca3af;
+}
+.readiness-badge.readiness-advisory {
+  color: #04121f;
+  background: #7cc4ff;
 }
 .readiness-label {
   font-weight: 600;
@@ -1695,6 +1709,8 @@ body {
 }
 .readiness-row-ready { background: linear-gradient(90deg, rgba(70, 217, 138, 0.06), transparent 72%); }
 .readiness-row-attention { background: linear-gradient(90deg, rgba(245, 183, 64, 0.06), transparent 72%); }
+.readiness-row-advisory { background: linear-gradient(90deg, rgba(124, 196, 255, 0.06), transparent 72%); }
+.readiness-badge.readiness-advisory { box-shadow: 0 0 12px rgba(124, 196, 255, 0.4); }
 .readiness-badge.readiness-ready { box-shadow: 0 0 12px rgba(70, 217, 138, 0.45); }
 .readiness-badge.readiness-attention { box-shadow: 0 0 12px rgba(245, 183, 64, 0.4); }
 .readiness-pill { backdrop-filter: blur(2px); }
@@ -1760,8 +1776,7 @@ body {
   }
   .card:hover, .monitor-panel:hover, .diag-section:hover, .session-card:hover,
   .btn:hover:not(:disabled) { transform: none; }
-  .hero.tune-apex, .hero.tune-apex::after, .hero.tune-dialed .hero-ring-wrap::after,
-  .levelup-flash, .rec-powerup, .rec-powerup .rec-impact-dot, .cyl-on { animation: none !important; }
+  .rec-powerup, .rec-powerup .rec-impact-dot { animation: none !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1906,297 +1921,9 @@ body::before {
 @keyframes hero-rise { from { opacity: 0; transform: translateY(16px) scale(0.99); } to { opacity: 1; transform: none; } }
 @keyframes hero-sheen { 0% { transform: translateX(-100%); } 16%, 100% { transform: translateX(100%); } }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   TUNE LEVEL — the honest evolution system. The hero visibly upgrades as the
-   tune score climbs (Stock → Apex): richer ring, more glow, escalating frame.
-   Score is transparent (readiness cleared + optimizations applied); breakdown
-   shown below. Power-up pulse on apply; level-up flash on tier-up.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Tier chip beside the eyebrow. */
+/* Hero eyebrow row (status label above the headline). */
 .hero-eyebrow { display: flex; align-items: center; gap: 9px; }
-.tier-chip {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 8px;
-  border-radius: var(--r-pill);
-  color: var(--hero-accent);
-  background: color-mix(in srgb, var(--hero-accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--hero-accent) 34%, transparent);
-}
 
-/* Transparent progress bar with tier ticks. */
-.tune-progress {
-  position: relative;
-  height: 7px;
-  margin-top: 12px;
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.07);
-  overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-.tune-progress-fill {
-  height: 100%;
-  border-radius: var(--r-pill);
-  background: linear-gradient(90deg, var(--hero-accent), color-mix(in srgb, var(--hero-accent) 55%, #fff));
-  box-shadow: 0 0 14px var(--hero-glow);
-  transition: width 900ms var(--ease);
-}
-.tune-tick {
-  position: absolute;
-  top: -2px;
-  width: 2px;
-  height: 11px;
-  background: rgba(255, 255, 255, 0.22);
-  transform: translateX(-1px);
-}
-.tune-breakdown {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 9px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-}
-.tune-dot { opacity: 0.5; }
-.tune-pb { color: var(--hero-accent); font-weight: 700; }
-.tune-pb-est { color: var(--faint); font-weight: 400; }
-
-/* ── Per-tier hero escalation — the "gundam tuning kit" ──────────────────── */
-/* Stock: muted, minimal glow. Each tier adds presence; Apex is fully lit. */
-.hero.tune-stock { filter: saturate(0.82); }
-.hero.tune-stock .hero-headline { color: var(--fg-2); text-shadow: none; }
-.hero.tune-stock .hero-ring-fill { filter: none; }
-
-.hero.tune-tuned { border-color: color-mix(in srgb, var(--hero-accent) 22%, var(--border)); }
-
-.hero.tune-calibrated {
-  border-color: color-mix(in srgb, var(--hero-accent) 32%, var(--border));
-  box-shadow: var(--shadow-2), 0 0 30px -16px var(--hero-glow), var(--edge);
-}
-
-.hero.tune-dialed {
-  border-color: color-mix(in srgb, var(--hero-accent) 45%, var(--border));
-  box-shadow: var(--shadow-2), 0 0 44px -14px var(--hero-glow), var(--edge);
-}
-.hero.tune-dialed .hero-ring-wrap::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--hero-accent) 40%, transparent);
-  animation: ring-spin 14s linear infinite;
-}
-
-/* Apex: animated conic aura ring + breathing glow — the final evolution. */
-.hero.tune-apex {
-  border-color: transparent;
-  box-shadow: var(--shadow-2), 0 0 60px -12px var(--hero-glow), var(--edge);
-  animation: hero-rise 620ms var(--ease) both, apex-breathe 4s var(--ease) 0.7s infinite;
-}
-.hero.tune-apex::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: var(--r-lg);
-  padding: 1.5px;
-  background: conic-gradient(from 0deg, var(--hero-accent), transparent 25%, var(--hero-accent) 50%, transparent 75%, var(--hero-accent));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: ring-spin 8s linear infinite;
-  pointer-events: none;
-}
-.hero.tune-apex .hero-headline { letter-spacing: -0.01em; }
-.hero.tune-apex .tier-chip { box-shadow: 0 0 14px var(--hero-glow); }
-
-@keyframes ring-spin { to { transform: rotate(360deg); } }
-@keyframes apex-breathe {
-  0%, 100% { box-shadow: var(--shadow-2), 0 0 52px -14px var(--hero-glow), var(--edge); }
-  50% { box-shadow: var(--shadow-2), 0 0 74px -8px var(--hero-glow), var(--edge); }
-}
-
-/* ── Level-up flash — fires once when a new tier is reached ──────────────── */
-.hero-levelup { animation: hero-rise 620ms var(--ease) both, levelup-jolt 700ms var(--ease) both; }
-@keyframes levelup-jolt {
-  0% { transform: scale(1); }
-  30% { transform: scale(1.012); }
-  100% { transform: scale(1); }
-}
-.levelup-flash {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: clamp(34px, 9vw, 78px);
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--hero-accent);
-  text-shadow: 0 0 40px var(--hero-glow);
-  background: radial-gradient(circle at center, var(--hero-glow), transparent 62%);
-  pointer-events: none;
-  animation: levelup-flash 2.2s var(--ease) both;
-}
-@keyframes levelup-flash {
-  0% { opacity: 0; transform: scale(0.7); letter-spacing: 0.4em; }
-  18% { opacity: 1; transform: scale(1); }
-  72% { opacity: 1; }
-  100% { opacity: 0; transform: scale(1.05); }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   APP-WIDE EVOLUTION — [data-tune] on <html> escalates the ENTIRE app per tier.
-   "Two more cylinders" feel: as the tier climbs, cards/rail/panels gain edge
-   definition, accent presence, and glow. Subtle at Stock, muscular at Apex.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Borders gain accent tint + cards gain glow as the tier climbs. */
-:root[data-tune="tuned"] .card, :root[data-tune="tuned"] .monitor-panel,
-:root[data-tune="tuned"] .diag-section, :root[data-tune="tuned"] .rail,
-:root[data-tune="tuned"] .session-card {
-  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
-}
-:root[data-tune="calibrated"] .card, :root[data-tune="calibrated"] .monitor-panel,
-:root[data-tune="calibrated"] .diag-section, :root[data-tune="calibrated"] .rail,
-:root[data-tune="calibrated"] .session-card {
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
-  box-shadow: var(--shadow-1), 0 0 22px -16px var(--accent-glow), var(--edge);
-}
-:root[data-tune="dialed"] .card, :root[data-tune="dialed"] .monitor-panel,
-:root[data-tune="dialed"] .diag-section, :root[data-tune="dialed"] .rail,
-:root[data-tune="dialed"] .session-card {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
-  box-shadow: var(--shadow-1), 0 0 30px -14px var(--accent-glow), var(--edge);
-}
-:root[data-tune="apex"] .card, :root[data-tune="apex"] .monitor-panel,
-:root[data-tune="apex"] .diag-section, :root[data-tune="apex"] .rail,
-:root[data-tune="apex"] .session-card {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  box-shadow: var(--shadow-2), 0 0 40px -12px var(--accent-glow), var(--edge);
-}
-
-/* The wordmark dot + rail active marker intensify with tier. */
-:root[data-tune="dialed"] .header h1::before,
-:root[data-tune="apex"] .header h1::before { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 18px var(--accent-glow); }
-:root[data-tune="apex"] .rail { background: linear-gradient(180deg, var(--panel-3), var(--panel)); }
-
-/* Atmosphere swells with tier — the room gets more charged. */
-:root[data-tune="calibrated"] body::before { opacity: 1.15; }
-:root[data-tune="dialed"] body::before { opacity: 1.4; }
-:root[data-tune="apex"] body::before { opacity: 1.7; filter: blur(30px); }
-
-/* ── Garage — engine bay + tier ladder + reskins ─────────────────────────── */
-.engine-bay {
-  position: relative;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--border-strong);
-  background:
-    radial-gradient(520px 200px at 50% -40%, var(--accent-soft), transparent 70%),
-    linear-gradient(180deg, var(--panel-2), var(--panel));
-  padding: 20px 22px;
-  box-shadow: var(--shadow-2), var(--edge);
-  overflow: hidden;
-}
-.engine-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
-.engine-spec { font-family: var(--font-mono); font-size: 26px; font-weight: 800; color: var(--accent-bright); letter-spacing: -0.02em; text-shadow: 0 0 22px var(--accent-glow); }
-.engine-tier { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint); }
-.engine-block {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--r);
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--hairline);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-.cyl {
-  height: 46px;
-  border-radius: 7px 7px 5px 5px;
-  position: relative;
-  border: 1px solid var(--hairline);
-}
-.cyl::before {
-  content: "";
-  position: absolute;
-  left: 50%; top: -5px;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  transform: translateX(-50%);
-  background: var(--panel-3);
-}
-.cyl-off { background: linear-gradient(180deg, var(--panel-2), var(--panel)); opacity: 0.5; }
-.cyl-on {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 55%, #000), var(--accent));
-  box-shadow: 0 0 14px -2px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.25);
-  animation: cyl-fire 520ms var(--ease) both;
-}
-.cyl-on::before { background: var(--accent-bright); box-shadow: 0 0 8px var(--accent-glow); }
-@keyframes cyl-fire { 0% { opacity: 0; transform: translateY(8px); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
-.engine-readout { display: flex; align-items: baseline; gap: 14px; margin-top: 16px; }
-.engine-score { font-family: var(--font-mono); font-size: 30px; font-weight: 800; color: var(--fg); }
-.engine-score-max { font-size: 15px; color: var(--faint); font-weight: 600; }
-.engine-blurb { font-size: 13px; color: var(--fg-2); }
-
-.tier-ladder { display: flex; flex-direction: column; gap: 7px; }
-.tier-step {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: var(--r);
-  border: 1px solid var(--border);
-  background: var(--panel);
-  transition: border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
-}
-.tier-step.locked { opacity: 0.5; }
-.tier-step.earned { border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
-.tier-step.current {
-  border-color: var(--accent);
-  background: linear-gradient(90deg, var(--accent-soft), transparent 88%);
-  box-shadow: 0 0 0 1px var(--accent-line), 0 0 22px -8px var(--accent-glow);
-}
-.tier-step-cyl {
-  flex-shrink: 0;
-  width: 52px; text-align: center;
-  font-family: var(--font-mono); font-size: 18px; font-weight: 800; color: var(--accent-bright);
-}
-.tier-step-cyl span { display: block; font-size: 9px; font-weight: 600; color: var(--faint); letter-spacing: 0.1em; }
-.tier-step.locked .tier-step-cyl { color: var(--muted); }
-.tier-step-body { flex: 1; min-width: 0; }
-.tier-step-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
-.tier-step-here { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-bright); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--r-pill); padding: 2px 8px; }
-.tier-step-done { color: var(--ready); font-weight: 800; }
-.tier-step-blurb { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.tier-step-min { font-family: var(--font-mono); font-size: 12px; color: var(--faint); flex-shrink: 0; }
-
-.garage-skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.skin-card {
-  display: flex; flex-direction: column; gap: 9px;
-  padding: 12px;
-  border-radius: var(--r);
-  border: 1px solid var(--border);
-  background: var(--panel);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-.skin-card:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--border-strong); }
-.skin-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line), 0 0 20px -8px var(--accent-glow); }
-.skin-locked { opacity: 0.55; cursor: not-allowed; }
-.skin-chips { display: flex; height: 30px; border-radius: 6px; overflow: hidden; border: 1px solid var(--hairline); }
-.skin-chips span { flex: 1; }
-.skin-name { font-size: 13px; font-weight: 700; color: var(--fg); }
-.skin-state { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--muted); }
-.skin-active .skin-state { color: var(--accent-bright); }
 
 /* ── Power-up pulse — fires when a setting flips on ──────────────────────── */
 .rec-powerup { animation: powerup 900ms var(--ease) both; }
@@ -2573,18 +2300,6 @@ body::before {
   font-family: var(--font-mono);
   font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
 }
-.theme-dice {
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-bright);
-  border-radius: var(--r-pill);
-  padding: 4px 10px;
-  font: inherit; font-size: 11px; font-weight: 700;
-  letter-spacing: 0; text-transform: none;
-  cursor: pointer;
-  transition: filter var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-.theme-dice:hover { filter: brightness(1.12); box-shadow: 0 0 16px -4px var(--accent-glow); }
 .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .theme-swatch {
   display: flex; flex-direction: column; gap: 7px;
@@ -2601,8 +2316,6 @@ body::before {
 .theme-swatch-chips span { flex: 1; }
 .theme-swatch-label { font-size: 11.5px; font-weight: 600; color: var(--fg-2); text-align: left; }
 .theme-swatch-on .theme-swatch-label { color: var(--accent-bright); }
-.theme-swatch-locked { opacity: 0.5; cursor: not-allowed; }
-.theme-swatch-locked:hover { transform: none; border-color: var(--border); }
 
 @media (max-width: 720px) {
   .hero { padding: 20px 18px; }

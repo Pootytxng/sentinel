@@ -32,19 +32,26 @@ installed-build smoke passed 2026-05-31.
 behind its own design + QA). NVIDIA monitoring is implemented but **not yet hardware-validated**, so it
 is `Experimental` on NVIDIA GPUs.
 
-## On `main` but NOT in `private-beta-001` (experimental)
+## On `main` but NOT in `private-beta-001` (candidate for a future `private-beta-002`)
 
-`main` has advanced **13 commits past** the frozen snapshot (`16069fa`). Beyond two docs commits,
-this is a premium **UI/UX layer** — command-center / command rail, live theme picker, "Tune Level"
-evolution (Stock→Apex), app-wide evolution + Garage tab, persisted unlocks, and a **Guided
-(advisory)** settings section with safe deep-link buttons (a scoped `ms-settings:` opener allowlist;
-**no** new mutation, IPC command, recommendation, remote-fetch, or updater change). **None of it is
-in `private-beta-001`, and none of it has been QA'd.** Per project rule it is labeled:
+Since the `16069fa` snapshot the picture **changed from the earlier note**: the old gamified premium UI
+(Tune Level / Garage / theme-unlock) was **superseded and de-gamified**. Current `main` carries:
+- the **honest command-center UI** (Experience Pass merged) — SystemPosture hero, design-system, curated
+  themes, Guided advisory deep-links (scoped `ms-settings:` opener allowlist) — **no gamification**;
+- a **hardened production CSP** (runtime-verified, `a9619ec`);
+- **F1 Gaming Mode built but DARK** behind `gaming_mode_gate()` (tab hidden, commands refuse) — its own
+  QA (`docs/GAMING_MODE_QA.md`) gates flipping it on;
+- zero clippy warnings; EULA Black-Book advisory clause.
 
-> **Experimental / not Sentinel-verified. Use at your own discretion.**
+None of this is in `private-beta-001`. **A `private-beta-002` cut from current `main` would showcase the
+new command-center UI** (which the tester feedback template already targets) but must first pass its own
+installed-build smoke (re-run §6/§7 of `PACKAGING_SIGNING_PLAN.md`). Gaming Mode stays gated even in
+beta-002 until `GAMING_MODE_QA.md` passes.
 
-A future beta that wishes to include this layer must cut a new tag (`private-beta-002`) after it
-passes its own QA pass.
+**CHECKPOINT (owner) — closed beta:** (1) ship the frozen **beta-001** (known-good, older UI) **or** cut
+**beta-002** from current `main` (new UI + CSP; needs a re-smoke I can run); (2) host / share the
+installer; (3) invite your ~10–20 testers. The kit (`BETA_TESTER_README.md` + `BETA_INVITE_MESSAGE.md`)
+is ready for either.
 
 ## Tester Warning
 

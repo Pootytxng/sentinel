@@ -16,7 +16,7 @@ use crate::sentinel_data_dir;
 // Small inline hex codec to avoid pulling the hex crate (which has a known
 // compat issue with the current core::error::Error trait bound on stable).
 fn hex_decode(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     let mut out = Vec::with_capacity(s.len() / 2);

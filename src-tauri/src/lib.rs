@@ -6,6 +6,8 @@ mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs +
 mod diagnostics;
 mod export;
 mod fps;
+mod gaming_orchestrator;
+mod gaming_session;
 mod hardware;
 mod history;
 mod latency; // PARKED + DARK: compiled, not registered. See latency.rs + the latency spec.
@@ -170,6 +172,58 @@ pub(crate) fn sentinel_data_dir() -> PathBuf {
     PathBuf::from(app_data).join("Sentinel")
 }
 
+// ─── Gaming Mode (F1) — GATED ────────────────────────────────────────────
+// Mutation feature; ships DARK until its own mutation QA passes on a UAC-on
+// machine + explicit owner sign-off. While this is false the commands refuse
+// and the frontend hides the entire surface (existing behavior unchanged).
+// DO NOT flip without sign-off. Spec: docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md §7.
+// Implemented as a fn (not a const) so the guarded orchestrator calls stay
+// reachable / warning-free until the flag flips. Flip `gaming_mode_gate` to
+// `true` ONLY after the mutation QA passes + owner sign-off.
+fn gaming_mode_gate() -> bool {
+    false
+}
+
+#[tauri::command]
+fn gaming_mode_enabled() -> bool {
+    gaming_mode_gate()
+}
+
+#[tauri::command]
+fn start_gaming_session(
+    opts: gaming_orchestrator::StartOptions,
+) -> Result<gaming_session::SessionFile, String> {
+    if !gaming_mode_gate() {
+        return Err("Gaming Mode is gated".into());
+    }
+    gaming_orchestrator::start(opts)
+}
+
+#[tauri::command]
+fn stop_gaming_session() -> Result<(), String> {
+    if !gaming_mode_gate() {
+        return Err("Gaming Mode is gated".into());
+    }
+    gaming_orchestrator::stop()
+}
+
+#[tauri::command]
+fn get_gaming_session_state() -> Option<gaming_session::SessionFile> {
+    if !gaming_mode_gate() {
+        return None;
+    }
+    // Prefer an orphaned (uncleanly-ended) session so the UI prompts to recover.
+    gaming_orchestrator::detect_orphan().or_else(gaming_session::load_session)
+}
+
+#[tauri::command]
+fn recover_gaming_session(confirm: bool) -> Result<(), String> {
+    if !gaming_mode_gate() {
+        return Err("Gaming Mode is gated".into());
+    }
+    gaming_orchestrator::recover(confirm)
+}
+
 
 // State-detection helpers consumed by check_state_kind / check_change_active.
 
@@ -249,7 +303,7 @@ pub(crate) fn startup_entries() -> Vec<StartupEntry> {
             enabled,
         });
     }
-    entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    entries.sort_by_key(|a| a.name.to_lowercase());
     entries
 }
 
@@ -312,6 +366,11 @@ pub fn run() {
             export_report,
             open_export_folder,
             get_priorities,
+            gaming_mode_enabled,
+            start_gaming_session,
+            stop_gaming_session,
+            get_gaming_session_state,
+            recover_gaming_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

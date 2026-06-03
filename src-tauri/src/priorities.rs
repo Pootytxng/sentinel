@@ -222,24 +222,23 @@ pub(crate) fn build_priorities(
                 || title.contains("vbs")
         }) {
             let applied = r.get("currently_applied").and_then(Value::as_bool).unwrap_or(false);
-            let title = r
-                .get("title")
-                .and_then(Value::as_str)
-                .unwrap_or("Memory Integrity / VBS")
-                .to_string();
+            // Use a neutral, state-agnostic title — the recommendation's own title
+            // reads "…is active", which contradicts the row when VBS is actually
+            // off. Sentinel DOES know the state (read from the registry), so this
+            // is a real, decided advisory — never "Unknown".
             tagged.push((
                 Bucket::NotWorth,
                 PriorityItem {
                     id: "memory-integrity",
-                    title,
+                    title: "Memory Integrity / VBS".to_string(),
                     reason: if applied {
                         "Memory Integrity / VBS is ON. It can cost a few % in some games, but it's a security feature — advisory only, your call.".into()
                     } else {
-                        "Memory Integrity / VBS is off. Leaving it off can help some games; this is an advisory security tradeoff, not a Sentinel-applied change.".into()
+                        "Memory Integrity / VBS is off — nothing to do. (Leaving it off can help a few games; turning it on is a security/FPS tradeoff Sentinel never changes for you.)".into()
                     },
                     linked: r.get("id").and_then(Value::as_str).map(str::to_string),
                     confidence: Confidence::Low,
-                    status: PriorityStatus::Unknown,
+                    status: PriorityStatus::Ready,
                 },
             ));
         }

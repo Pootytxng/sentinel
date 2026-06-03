@@ -259,12 +259,31 @@ pub(crate) struct AppliedChangesSummary {
 }
 
 pub(crate) fn applied_changes_summary() -> AppliedChangesSummary {
+    summarize_history(&load_history())
+}
+
+// Collapse history to the LATEST entry per rec_id, then summarize current state.
+// Readiness reflects each setting's CURRENT effective state — not every historical
+// apply/rollback — so re-applying OR rolling back a setting actually resolves it.
+//
+// Previously this counted every entry: applying one setting several times, or an
+// old "applied" entry later superseded by a rollback of the same setting, lingered
+// forever as an unclearable "externally reverted" count. That trapped the user
+// below a clean readiness state with no way out (the append-only ledger never lets
+// you edit those old records). The full per-entry history still lives in the Trust
+// Ledger for audit; readiness just stops being held hostage by it.
+fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
+    let mut latest: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (i, c) in history.iter().enumerate() {
+        latest.insert(c.rec_id.as_str(), i); // later entries overwrite earlier → newest wins
+    }
     let mut s = AppliedChangesSummary::default();
-    for c in load_history() {
+    for &i in latest.values() {
+        let c = &history[i];
         s.total += 1;
         if c.status == "rolled_back" {
             s.rolled_back += 1;
-        } else if check_change_active(&c) {
+        } else if check_change_active(c) {
             s.active += 1;
         } else {
             s.externally_reverted += 1;
@@ -317,6 +336,35 @@ mod history_tests {
         // live system — honest history regardless of current machine state.
         let v = into_view(record("game-mode", "rolled_back"));
         assert!(!v.is_still_active);
+    }
+
+    #[test]
+    fn summary_collapses_multiple_applies_of_one_rec() {
+        // The same setting applied twice is ONE setting — not two "active" counts.
+        // Unknown rec_id → check_change_active defaults to active.
+        let history = vec![record("unknown-x", "applied"), record("unknown-x", "applied")];
+        let s = summarize_history(&history);
+        assert_eq!(s.total, 1);
+        assert_eq!(s.active, 1);
+        assert_eq!(s.externally_reverted, 0);
+    }
+
+    #[test]
+    fn summary_latest_rollback_supersedes_old_applies() {
+        // THE loop fix: an old "applied" entry superseded by a later rollback of
+        // the same setting must NOT count as "externally reverted" — the setting's
+        // latest intent is rolled_back. So re-applying or rolling back always
+        // resolves the readiness item, and a clean state is always reachable.
+        let history = vec![
+            record("unknown-x", "applied"),
+            record("unknown-x", "applied"),
+            record("unknown-x", "rolled_back"),
+        ];
+        let s = summarize_history(&history);
+        assert_eq!(s.total, 1);
+        assert_eq!(s.rolled_back, 1);
+        assert_eq!(s.active, 0);
+        assert_eq!(s.externally_reverted, 0);
     }
 
     #[test]

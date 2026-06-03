@@ -62,6 +62,10 @@ pub(crate) enum AppliedAction {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+// The shared `Restore*` prefix is semantic, not redundant — these variants ARE
+// the restore (rollback) action set. Renaming them would churn the serde tags +
+// dispatch match + the persisted Trust Ledger contract for zero benefit.
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum RollbackAction {
     RestoreServiceFromSnapshot { service: KnownService },
     RestoreGameModeFromSnapshot,
@@ -271,15 +275,20 @@ pub(crate) struct Win32Service {
 }
 
 pub(crate) fn service_info(name: &str) -> Option<(String, String)> {
-    let com = COMLibrary::new().ok()?;
-    let wmi_conn = WMIConnection::new(com).ok()?;
-    let query = format!("SELECT * FROM Win32_Service WHERE Name='{}'", name);
-    let results: Vec<Win32Service> = wmi_conn.raw_query(&query).ok()?;
-    let svc = results.into_iter().next()?;
-    Some((
-        svc.state.unwrap_or_else(|| "Unknown".into()),
-        svc.start_mode.unwrap_or_else(|| "Unknown".into()),
-    ))
+    // WMI must run on a clean MTA thread; the Tauri command/UI thread is STA
+    // (see hardware::on_wmi_thread). Own the name so the closure is 'static.
+    let name = name.to_string();
+    crate::hardware::on_wmi_thread(move || {
+        let com = COMLibrary::new().ok()?;
+        let wmi_conn = WMIConnection::new(com).ok()?;
+        let query = format!("SELECT * FROM Win32_Service WHERE Name='{}'", name);
+        let results: Vec<Win32Service> = wmi_conn.raw_query(&query).ok()?;
+        let svc = results.into_iter().next()?;
+        Some((
+            svc.state.unwrap_or_else(|| "Unknown".into()),
+            svc.start_mode.unwrap_or_else(|| "Unknown".into()),
+        ))
+    })
 }
 
 pub(crate) fn ps_service_startup_for_mode(mode: &str) -> &'static str {
@@ -478,6 +487,134 @@ pub(crate) fn apply_usb_selective_suspend_off() -> Result<ApplyResult, String> {
 
 pub(crate) fn apply_pcie_aspm_off() -> Result<ApplyResult, String> {
     apply_power_setting_off_on_ac(PWR_SUBGROUP_PCIE, PWR_SETTING_PCIE_ASPM)
+}
+
+// ─── Non-elevated power-plan switch/restore for Gaming Mode (session core) ─
+//
+// `powercfg /setactive <existing-guid>` does NOT require admin for an already-
+// installed scheme — so the Gaming Mode CORE tier stays UAC-free. We NEVER
+// create/duplicate a plan here (that needs elevation): if no high-perf plan
+// exists, we skip with no error. Rollback-first: if we can't capture a valid
+// prior plan GUID, we don't switch at all (a change we can't restore is a
+// change we don't make).
+
+/// PURE. Pick the best existing high-perf plan GUID from `powercfg /list`
+/// stdout: Ultimate Performance > High performance > None.
+pub(crate) fn select_best_existing_high_perf_plan(list_stdout: &str) -> Option<String> {
+    let mut high: Option<String> = None;
+    for line in list_stdout.lines() {
+        let lower = line.to_lowercase();
+        let guid = line.find("GUID:").and_then(|i| {
+            line[i + 5..]
+                .split_whitespace()
+                .next()
+                .map(|g| g.trim().to_string())
+        });
+        let Some(g) = guid.filter(|g| g.len() == 36) else {
+            continue;
+        };
+        if lower.contains("ultimate performance") {
+            return Some(g); // best — return immediately
+        }
+        if lower.contains("high performance") && high.is_none() {
+            high = Some(g);
+        }
+    }
+    high
+}
+
+fn list_power_plans_stdout() -> Option<String> {
+    let out = Command::new("powercfg").args(["/list"]).output().ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// NON-ELEVATED `powercfg /setactive`. A non-zero exit (which is what happens
+/// if the OS unexpectedly requires elevation) surfaces as Err — we never
+/// silently elevate.
+fn powercfg_setactive_unelevated(guid: &str) -> Result<(), String> {
+    let out = Command::new("powercfg")
+        .args(["/setactive", guid])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "powercfg /setactive failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ))
+    }
+}
+
+/// CORE (UAC-free) power-plan switch. Switches to the best existing high-perf
+/// plan, capturing the prior GUID for an exact restore. Returns Ok(None) — a
+/// clean skip, no error — when there's no valid prior plan to restore to, no
+/// existing high-perf plan to switch to, or we're already on it.
+pub(crate) fn apply_power_plan_switch_core() -> Result<Option<ApplyResult>, String> {
+    let prior_guid = current_power_plan_guid().unwrap_or_default();
+    if prior_guid.trim().len() != 36 {
+        return Ok(None); // can't capture a restorable prior plan -> don't switch
+    }
+    let list = list_power_plans_stdout().ok_or("powercfg /list failed")?;
+    let Some(target) = select_best_existing_high_perf_plan(&list) else {
+        return Ok(None); // no existing high-perf plan -> skip, stay UAC-free
+    };
+    if target.eq_ignore_ascii_case(prior_guid.trim()) {
+        return Ok(None); // already active -> nothing to change or restore
+    }
+    powercfg_setactive_unelevated(&target)?;
+    Ok(Some(ApplyResult {
+        applied_action: AppliedAction::SetUltimatePerformancePlan,
+        rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
+        snapshot: Snapshot::PowerPlan { prior_guid },
+        elevation_used: false,
+    }))
+}
+
+/// NON-ELEVATED restore of the prior plan. Fails loudly if the plan vanished;
+/// never silently elevates, never falls back to SCHEME_CURRENT.
+pub(crate) fn restore_power_plan_unelevated(prior_guid: &str) -> Result<(), String> {
+    let g = prior_guid.trim();
+    if g.len() != 36 {
+        return Err("no valid prior plan GUID in snapshot".into());
+    }
+    if !power_plan_exists(g) {
+        return Err(format!("prior power plan {} no longer exists", g));
+    }
+    powercfg_setactive_unelevated(g)
+}
+
+#[cfg(test)]
+mod gaming_power_tests {
+    use super::select_best_existing_high_perf_plan;
+
+    #[test]
+    fn selects_ultimate_over_high_performance() {
+        let list = "Existing Power Schemes (* Active)\n\
+Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n\
+Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n\
+Power Scheme GUID: e9a42b02-d5df-448d-aa00-03f14749eb61  (Ultimate Performance)\n";
+        assert_eq!(
+            select_best_existing_high_perf_plan(list).as_deref(),
+            Some("e9a42b02-d5df-448d-aa00-03f14749eb61")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_high_performance() {
+        let list = "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n\
+Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
+        assert_eq!(
+            select_best_existing_high_perf_plan(list).as_deref(),
+            Some("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
+        );
+    }
+
+    #[test]
+    fn none_when_only_balanced() {
+        let list = "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n";
+        assert_eq!(select_best_existing_high_perf_plan(list), None);
+    }
 }
 
 /// True if `guid` is a currently-installed power scheme. Read-only `powercfg

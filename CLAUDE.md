@@ -23,6 +23,27 @@ internals. Recommend a default rather than dumping options. Keep momentum. He va
 **direct proof over inference** (e.g. demanded a real token-IL query, not parent-process
 assumption) and rollback-correctness as non-negotiable. Never invent/assume hardware specs.
 
+## Working mode — SPORT MODE (default, set by owner 2026-06-02)
+
+**Default to maximum momentum. Stop way less.** For owner-greenlit or clearly-scoped work, do NOT run
+the brainstorm → spec → plan → TDD ceremony and do NOT ask permission at reversible checkpoints — just
+**build → verify → commit → push → move to the next item**, batching any questions to the end. This
+**OVERRIDES** the superpowers skill defaults (brainstorming / writing-plans / TDD gates) and any
+"check in first" instinct. Reserve real design dialogue for genuinely fuzzy/unscoped problems.
+
+**The only legitimate stops** ("we still pull over to take a leak — then straight back on the road like
+we never slowed down"):
+1. **Secrets / signing** — the Ed25519 private key (or any secret) never enters the repo / `.env*` / CI.
+2. **Shared or irreversible git** — no force-push; never move the frozen beta refs (`16069fa`).
+3. **Ships to OTHER people's machines** — shipping unverified *mutation* code to beta/public, arming
+   remote-fetch, enabling the updater, or loosening capabilities/CSP → confirm first (informed).
+4. **Genuinely irreversible + outward-facing** real-world actions.
+
+Everything else — refactors, features behind a gate, docs, local builds, reversible git on `main`
+(HQ-owned) — just do it and report after. **Verification (cargo/npm tests + build) is NEVER skipped;**
+"fewer stops" means fewer *check-ins*, not less rigor. See [[working-state-persistent-mode]] +
+[[working-defaults-pure-upside]].
+
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
@@ -62,25 +83,43 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
 
-> **⚠️ DOCS-vs-`main` DRIFT — noted 2026-06-01.** The "CURRENT STATE" notes below describe the
-> repo **as of the `private-beta-001` freeze (`16069fa`)**. **`main` (HEAD `d049d63`) is now 13
-> commits PAST the freeze** — a clean linear descendant (the freeze commit's child is `97a29e1`;
-> beta refs remain pinned at `16069fa` and were NOT moved). Two of those commits are docs; the
-> other **11 are a premium UI/UX layer that is NOT part of `private-beta-001` and has NOT been
-> QA'd**: command-center hero + design-system foundation, command rail + consolidated Optimize,
-> live theme system + picker ("Surprise" randomizer), "Tune Level" evolution (Stock→Apex),
-> app-wide evolution + Garage tab, persisted unlocks, and a **Guided (advisory)** settings section
-> with **safe deep-link buttons**. The ONLY backend change in this layer is
-> `capabilities/default.json`: a **scoped** `opener:allow-open-url` allowlist of exactly three
-> `ms-settings:` URIs (`display-advanced`, `display-advancedgraphics`, `storagesense`) — no
-> fs/shell/http, no new IPC command, no mutation, no catalog/remote-fetch/updater change;
-> `actions.rs` / `recommendations.rs` / `remote_rules.rs` / `history.rs` are untouched. (The beta
-> installer config in `docs/PACKAGING_SIGNING_PLAN.md` predates this allowlist and remains correct
-> for the frozen snapshot.) **Status of this entire post-freeze UI layer:**
+> **✅ EXPERIENCE PASS LANDED — 2026-06-02 (`main` @ `60daf3a`).** The former post-freeze experimental
+> UI layer (the un-QA'd gamified premium UI, old `main` HEAD `d049d63`) has been **superseded and
+> de-gamified**, then merged to `main` as an HQ-verified, fast-forward integration. `main` is now the
+> **honest command-center**: `CommandHero` → transparent read-only **`SystemPosture`**; the Stock→Apex
+> "Tune Level", Garage tab, level-up flash, theme-unlock grind, and "Surprise" randomizer are all
+> **REMOVED** (Decision A); a design-system layer added (`src/design/` primitives + `src/surfaces/`);
+> themes curated to Graphite/Frost/Aurora/Ember; ~290 lines of dead gamification CSS purged.
+> **QA before merge (frontend-only diff):** `tsc` + `vite build` clean · frontend **34/34** tests ·
+> `npm audit` 0 vulns · diff scanned: **zero** `src-tauri` / installer / gate / updater / remote-fetch
+> touch, no dangerous patterns, no new IPC. Verified live (Tauri dev) + owner visual sign-off (KEEP the
+> Overview hardware grid).
 >
-> > **Experimental / not Sentinel-verified. Use at your own discretion.**
->
-> Do not imply it is beta-verified until it has had its own QA pass.
+> **What REMAINS from the premium layer (legit, kept on purpose):** the **Guided** advisory section —
+> fixed, **allowlisted** `ms-settings:` deep links (`display-advanced`, `display-advancedgraphics`,
+> `storagesense`), built **never from data**, no fs/shell/http, no new IPC, no mutation; backed by the
+> scoped `opener:allow-open-url` allowlist in `src-tauri/capabilities/default.json` (the only backend
+> capability beyond the beta snapshot; `actions.rs`/`recommendations.rs`/`remote_rules.rs`/`history.rs`
+> untouched). The new `Dashboard` surface (`src/surfaces/Dashboard.tsx`) is built + tested but **not yet
+> wired** into a tab — intentionally deferred. **Beta refs remain pinned at `16069fa` (NOT moved).**
+
+> **🛰️ HQ / PARALLEL-OPS UPDATE — 2026-06-01.** Sentinel is now worked by multiple sessions under an
+> **HQ / air-traffic-control model** — see `docs/PARALLEL_WORKTREE_OPS.md` (the rule of the road).
+> **Only HQ (the `main` checkout) merges/pushes `main`;** each lane runs in its own git worktree on its
+> own branch with a disjoint file domain (HQ=`main`; design=`experience-pass`/`src/`;
+> `spike/backend-agent`=`src-tauri/`; `benchmark`=docs). Active state:
+> - **`experience-pass` — ✅ MERGED to `main` 2026-06-02 (`60daf3a`); branch + worktree retired.** The
+>   honest command-center landed (full detail in the EXPERIENCE PASS LANDED banner above): SystemPosture
+>   hero, Tune/Garage/theme-unlock/Surprise removed (Decision A), `src/design/` + `src/surfaces/`,
+>   themes curated, dead CSS purged. HQ-verified ff merge. **Design lane is now idle (no live worktree).**
+> - **Lanes:** `benchmark` (F6 proof layer) is **PAUSED** — owner is reopening the cosmetic-reward-system
+>   direction (reconsidering Decision A for that angle); no design work until the owner's full direction
+>   lands. **Intersection now sharper:** de-gamification is **LIVE on `main`**, so a returning reward
+>   system would *re-introduce* cosmetic UI onto the de-gamified `main` (a reversal to reconcile, no
+>   longer a parked branch) — HQ + owner settle it when the direction lands. `spike/backend-agent` is a
+>   **speculative** backend-agent spike that may never merge.
+> - **Unchanged gates:** F1 Gaming Mode still gated; public release still gated on code-signing + legal;
+>   beta frozen @ `16069fa`; remote-fetch + updater stay off.
 
 Structural refactor is **complete** — stop module carving; remaining work is feature/QA.
 `cargo test` **68/68**, `cargo build` zero warnings, `npm run build` clean. Pushed to GitHub
@@ -108,15 +147,26 @@ touching; each row has title/reason/linked/confidence/status; conservative per-s
 hint) + `get_priorities` + a "Priorities" tab. Reuses readiness/recs/startup/last-session; no magic
 score, no mutation. 8 unit tests. (Centralized `APPLIABLE_REC_IDS` into history.rs; export reuses it.)
 
-**Read-only upward-feature track (F2–F5) COMPLETE.** **Next:** F1 Gaming Mode is the only remaining
-planned feature and stays gated (session-scoped MUTATION → its own apply/rollback + crash-safe-restore
-QA). **Design done (planning only, no code): `docs/GAMING_MODE_PLAN.md`** — v1 = power-plan-switch-only
-(reuses the `070c3c9` exact-stored-plan restore + Trust Ledger "restore from local state alone" +
-FPS-helper heartbeat lifecycle as the crash-safe template); session file + startup recovery prompt;
-consent-gated; 7-state machine; its own QA gate. Otherwise: packaging/signing + legal finalization (separate gates).
+**Read-only upward-feature track (F2–F5) COMPLETE.** **F1 Gaming Mode — BUILT + merged to `main` DARK
+(2026-06-02).** The session-scoped mutation feature is implemented behind a default-off
+`gaming_mode_gate()` (returns `false` → the "Gaming" tab never appears + the 5 IPC commands refuse):
+pure `gaming_session.rs` (7-state machine + typed restore contract + fail-safe session-file serde) +
+`gaming_orchestrator.rs` (write-before-mutate start, idempotent fail-loud restore, startup orphan
+detection + user-confirmed recovery) reusing the audited `apply_*`/`dispatch_rollback`. A NEW
+**non-elevated** existing-plan switch/restore keeps the CORE bundle (power-plan max + Windows Game Mode
+on + Game Bar/DVR off) **UAC-free**; opt-in USB-SS/PCIe-ASPM are the elevated advanced tier. Gated React
+surface (`src/surfaces/GamingMode.tsx`: first-use consent modal + always-visible honesty line + recovery
+prompt). `cargo test` **81/81**, `npm test` **39/39**, builds clean, **/check + /security passed** (no new
+vulns/warnings; only pre-existing clippy lints remain). **STILL GATED — does NOT ship / the flag does NOT
+flip until its own mutation QA (spec §7: normal / crash / reboot / UAC-cancel / missing-plan /
+external-change, on a UAC-on machine) passes + explicit owner sign-off.** Spec:
+`docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md` · plan:
+`docs/superpowers/plans/2026-06-02-gaming-mode-f1.md` · broad contract: `docs/GAMING_MODE_PLAN.md`.
+Otherwise: packaging/signing + legal finalization (separate gates).
 
 Recent commits (newest first — this list is the `private-beta-001` line; `main` has since advanced
-13 commits, see the DOCS-vs-`main` DRIFT banner under CURRENT STATE above):
+past the freeze and now carries the de-gamified Experience Pass, see the EXPERIENCE PASS LANDED banner
+under CURRENT STATE above):
 - `(F4)` feat(priorities): Priority Ranking surface (read-only/advisory)
 - `60c57ce` feat(export): local Export Snapshot report (read-only)
 - `33413a2` feat(sessions): per-session summary surface (read-only/advisory)

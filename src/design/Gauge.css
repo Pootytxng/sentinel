@@ -1,0 +1,11 @@
+.ds-gauge{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px;
+  border-radius:var(--r);background:var(--panel-2);border:1px solid var(--hairline);}
+.ds-gauge .ds-dialwrap{position:relative;width:92px;height:92px;display:grid;place-items:center;}
+.ds-gauge .ds-dial{width:92px;height:92px;border-radius:50%;
+  background:conic-gradient(var(--gc,var(--accent)) calc(var(--p,0)*1%),var(--panel-3) 0);
+  -webkit-mask:radial-gradient(circle 31px at 50% 50%,transparent 98%,#000 100%);
+  mask:radial-gradient(circle 31px at 50% 50%,transparent 98%,#000 100%);
+  transition:background var(--dur-slow) var(--ease);}
+.ds-gauge .ds-dialval{position:absolute;font-family:var(--font-mono);font-size:18px;font-weight:600;}
+.ds-gauge .ds-dialval .ds-u{font-size:10px;color:var(--muted);}
+.ds-gauge .ds-gl{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.07em;}

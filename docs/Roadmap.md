@@ -1,93 +1,56 @@
-# Roadmap — Sentinel
+# Roadmap — Sentinel · Road to Public 1.0
 
-Companion to [PRD.md](PRD.md). Phased plan from zero to launched.
+Companion to [PRD.md](PRD.md) + [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md). **Source of truth for live
+state is the repo [`CLAUDE.md`](../CLAUDE.md);** this file is the durable *forward* map — what's shipped vs
+what stands between us and "a stranger can buy it, install it, optimize their PC, and recommend it."
 
-**Legend:** ☐ not started · ◐ in progress · ☑ done
+**Legend:** ☑ done · ◐ in progress / built-but-gated · ☐ not started · 🔒 owner-gated (decision/outward) · 🤖 Claude can drive solo
 
----
-
-## Phase 0 — Discovery & Definition
-
-**Goal:** Finish PRD and INTAKE so we know what we're building.
-
-- ☑ Write the one-sentence description in `INTAKE.md` §1.
-- ☑ Fill in PRD §1 Overview and §2 Problem & Opportunity.
-- ☑ Decide on the stack — **Tauri (Rust + React/TypeScript)** chosen 2026-05-27.
-
-**Exit criteria:** PRD §1–§6 are real (no `____` placeholders). ✅ Met.
+**Last refreshed 2026-06-02.** Private beta `private-beta-001` is **FROZEN + shippable** @ `16069fa`
+(do not move). `main` has since added the de-gamified Experience Pass + F1 Gaming Mode (dark).
 
 ---
 
-## Phase 1 — Foundation
-
-**Goal:** Native Windows app scaffolded with Tauri, hardware detection working end-to-end, dev loop running.
-
-- ☑ Install Windows toolchain (Rust, Node, Git, VS Build Tools, WebView2 already present).
-- ☑ Scaffold Tauri 2 React+TS project at `C:\Users\Kuya\code\sentinel\`.
-- ☑ Wire `sysinfo` crate for CPU / RAM / disk / OS detection.
-- ☑ Build minimal dashboard UI showing live hardware on first launch.
-- ◐ First successful `tauri dev` run with the window opening and showing real hardware.
-- ☐ First commit to git on `main`.
-
-**Exit criteria:** `npm run tauri dev` from `C:\Users\Kuya\code\sentinel\` opens a window displaying the user's actual CPU, RAM, OS, and disks — no placeholder data.
+## ☑ Shipped baseline (the private beta + post-beta `main`)
+- ☑ Tauri 2 app; hardware detection (CPU/RAM/GPU/disk/monitor) end-to-end.
+- ☑ **Rollback-first mutation engine** — typed Snapshot/RollbackAction, apply→verify→rollback, Trust Ledger, power-plan exact-GUID restore. **Manual-mutation QA signed off (2026-05-31).**
+- ☑ Recommendation catalog (~29 recs, **frozen**), provenance pills, signed-manifest verify wired (remote fetch hard-off).
+- ☑ Read-only upward features: **F2 Readiness · F3 Sessions · F5 Export · F4 Priorities.**
+- ☑ Monitoring (NVML/ADLX/PDH/ETW FPS) + overlay; onboarding flow.
+- ☑ **Experience Pass** — de-gamified honest command-center UI (merged to `main`).
+- ◐ **F1 Gaming Mode** — built + merged **DARK** behind `gaming_mode_gate()`; awaiting its own mutation QA + sign-off.
 
 ---
 
-## Phase 2 — Hardware coverage expansion
+## 🔒 The road to 1.0 — OWNER-GATED (the real bottleneck; needs your decision / $ / hands)
+These are what actually stand between "beta" and "a stranger buys it." Most are *not* code.
+- 🔒 **F1 Gaming Mode QA → flip the gate.** Run spec §7 (normal / crash / reboot / UAC-cancel / missing-plan) on your UAC-on rig → sign off → I flip `gaming_mode_gate()`. *(I can't crash/reboot your PC for you.)*
+- 🔒 **Code signing.** Acquire an **EV (or OV) code-signing cert** (your $ + identity) → integrate into the build pipeline. Unsigned = SmartScreen scares every new user. Plan in `PACKAGING_SIGNING_PLAN.md`. *(🤖 I can wire the pipeline; you buy/own the cert + key — and the key NEVER enters the repo.)*
+- 🔒 **Legal.** EULA · Privacy Policy · liability disclaimers (incl. the Black Book one). *(🤖 I can draft all three — Sentinel's local-only / no-telemetry / rollback-first story is a strong one — you/a lawyer own final sign-off + jurisdiction.)*
+- 🔒 **Monetization.** Model (one-time / sub / freemium?) → license-key validation + payment processor. *(Your business call; I build once decided.)*
+- 🔒 **Distribution.** Direct download vs Microsoft Store vs Steam (each changes signing/packaging/revenue cut). *(Your call.)*
+- 🔒 **Landing page + buy button.** *(🤖 I can draft copy/structure; you own brand + payment hookup.)*
+- 🔒 **Closed beta with ~10–20 real gamers** → gather feedback → iterate. The single highest-signal step before charging money.
 
-**Goal:** Detect everything we'll need to make recommendations.
+## 🔒 Feature direction — needs YOUR call
+- 🔒 **F6 Benchmark / cosmetic-reward** — lane PAUSED; awaiting your full direction (reopened cosmetic-reward angle).
+- 🔒 **Advanced Black Book** — researched + designed (`ADVANCED_PERFORMANCE_BLACK_BOOK.md`); promote to a gated advisory feature, or leave as reference?
+- 🔒 **Dashboard surface** — built + tested, currently unwired (you kept the Overview hardware grid); wire it in or leave parked?
 
-- ☐ GPU detection: vendor (NVIDIA/AMD/Intel), model, VRAM, driver version. Likely needs WMI queries + vendor SDKs (NVAPI, ADL).
-- ☐ Monitor detection: refresh rate, resolution, HDR capability.
-- ☐ Motherboard + BIOS version (for compatibility-aware recommendations).
-- ☐ Installed games detection: scan Steam/Epic/Xbox/EA libraries.
-- ☐ Installed apps detection: registry uninstall keys + AppX.
-
-**Exit criteria:** A "Hardware Report" view that gives the user a complete picture of what Sentinel sees about their rig.
-
----
-
-## Phase 3 — Recommendation engine (read-only)
-
-**Goal:** Generate ranked recommendations based on detected hardware, but do not apply anything yet.
-
-- ☐ Define recommendation data model (name, category, description, impact, downside, prerequisites, snapshot strategy).
-- ☐ Seed v1 rule set:
-  - Windows debloat (preinstalled apps, telemetry services)
-  - GPU driver settings (vendor-specific)
-  - Game-specific profiles (latency / max FPS / fidelity) for top ~20 titles
-  - Common-app debloat (Discord, Chrome, Steam, OBS)
-- ☐ Recommendation UI: ranked list, plain-English descriptions, category filters.
-
-**Exit criteria:** Run Sentinel on a real gaming PC, see a list of meaningful, hardware-aware recommendations. Nothing applied yet.
+## 🤖 Polish / tech-debt / hardening — I CAN DRIVE SOLO (no decision needed)
+- ☑ **Clippy / tech-debt sweep — DONE (2026-06-02, `ff0ceda`).** True zero clippy warnings.
+- 🤖 **Legal drafts** — first-pass EULA / Privacy / Disclaimer for your review (see ship gates above).
+- ☑ **CSP hardening — DONE (2026-06-02, `a9619ec`).** Strict production `csp` + relaxed `devCsp` (Vite HMR); runtime-verified on a production build (UI renders + IPC works under the policy). One public-release security gate cleared.
+- 🤖 **Test-coverage expansion** — more pure-function + contract tests where thin.
+- 🤖 **Expand appliable-rec coverage** — wire more advisory recs to real apply/rollback (each needs its own mutation QA → semi-gated, but I can build + self-test the reversible ones).
+- ☐🔒 **NVIDIA GPU-sensor hardware verification** — AMD verified; NVIDIA implemented-but-not-hardware-verified. *(Needs an NVIDIA rig — your hardware or a tester's.)*
+- ☐ **Overlay transparency** — deferred (WebView2 transparent-window quirk; needs live visual verify).
+- ☐🔒 **Remote-rules arming** — post-beta; needs a CDN + a production Ed25519 keypair (key offline, never in repo). Stays hard-off until then.
 
 ---
 
-## Phase 4 — Apply + Rollback
-
-**Goal:** Per-change approval flow, snapshotting, and one-click rollback.
-
-- ◐ Snapshot system: registry-value snapshots wired for HKCU changes (prior value captured, including "didn't exist"). Service-state and file-backup snapshots still to do.
-- ◐ Apply flow: per-recommendation confirm dialog with description + tradeoff before action. Batch approval with per-item toggles still to do.
-- ☑ Audit log: changes persisted to `%APPDATA%\Sentinel\history.json` with id, rec_id, rec_title, applied_at (ISO 8601), snapshot blob, status.
-- ◐ Rollback: per-change rollback wired for `game-mode`; named/group snapshots still to do.
-- ◐ Wire more recommendations end-to-end: only `game-mode` is appliable today. Next batch (HKCU-scope, no admin): `visual-effects`, `amd-uxp`, `startup-debloat`.
-- ☐ Admin elevation pattern for HKLM / service / power-plan changes.
-
-**Exit criteria:** Apply a debloat, verify the change took effect, roll it back, verify it's restored. Cycle works without manual cleanup. ✅ Met for `game-mode`; expand coverage.
-
----
-
-## Phase 5 — Launch readiness
-
-**Goal:** Ship-quality polish and distribution.
-
-- ☐ EV code-signing cert acquired and integrated into build pipeline.
-- ☐ Installer (MSI) tested on clean Windows 10 + Windows 11 VMs.
-- ☐ Privacy policy + EULA + disclaimers drafted.
-- ☐ Monetization wired (license key validation, payment processor).
-- ☐ Distribution decided: direct download / Microsoft Store / Steam.
-- ☐ Landing page + buy button.
-- ☐ Closed beta with ~10-20 real gamers, gather feedback, iterate.
-
-**Exit criteria:** A stranger can buy Sentinel from the website, install it, optimize their PC, and recommend it to a friend.
+## Honest summary
+Sentinel **works** and has a frozen, shippable private beta. The gap to **public 1.0** is mostly
+**business + legal + your QA + a closed beta** — decisions and outward steps, not more core code. The
+engineering that *remains* is polish, hardening (CSP), drafts, and gated features awaiting your direction.
+**Claude can independently drive the 🤖 items now;** the 🔒 items need you.
