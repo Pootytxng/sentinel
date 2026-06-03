@@ -1,0 +1,114 @@
+.lat-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 860px;
+}
+
+.lat-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  color: var(--fg);
+}
+
+.lat-muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 6px 0 0;
+}
+
+.lat-stat {
+  color: var(--fg);
+  font-size: 0.9rem;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.lat-stat strong {
+  color: var(--accent-bright, var(--accent));
+}
+
+.lat-advisory {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+}
+
+.lat-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lat-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: var(--fg);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.lat-list li:last-child {
+  border-bottom: none;
+}
+
+.lat-ctrl {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.lat-devs {
+  color: var(--fg);
+  flex: 1 1 auto;
+}
+
+.lat-shared {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--attention, #f5b740);
+  border: 1px solid var(--status-attention-line, rgba(245, 183, 64, 0.32));
+  background: var(--status-attention-soft, rgba(245, 183, 64, 0.12));
+  padding: 1px 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.lat-btn {
+  margin-top: 12px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background var(--dur-tap, 90ms) ease, border-color var(--dur-tap, 90ms) ease;
+}
+
+.lat-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-hover, var(--accent));
+}
+
+.lat-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.lat-btn-ghost {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+}

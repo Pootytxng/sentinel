@@ -36,3 +36,28 @@ export type SessionSummary = {
   peak_ram_used_bytes: number | null;
   ram_total_bytes: number | null;
 };
+
+// ── Latency / Diagnostics (mirrors src-tauri/src/latency.rs serde, snake_case) ──
+export type MsiDevice = { name: string; msi_on: boolean; instance_id: string; msi_active: boolean | null };
+export type MsiSummary = { total: number; msi_on: number; msi_off: number };
+export type MsiActiveSummary = { active_on: number; active_off: number; unknown: number; advertised_but_inactive: number };
+export type TimerResolution = { coarsest_100ns: number; finest_100ns: number; current_100ns: number };
+export type SleepGranularity = { samples: number; min_ms: number; median_ms: number; max_ms: number; jitter_ms: number };
+export type CpuTopology = { logical_processors: number; physical_cores: number; l3_complexes: number };
+export type UsbControllerLoad = { controller_name: string; controller_id: string; input_devices: string[] };
+export type PollingRate = { reports: number; median_hz: number; min_interval_ms: number; max_interval_ms: number; jitter_ms: number };
+
+export type LatencyReport = {
+  msi_devices: MsiDevice[];
+  msi: MsiSummary;
+  msi_active: MsiActiveSummary;
+  msi_advisory: string | null;
+  timer: TimerResolution | null;
+  timer_current_ms: number | null;
+  cpu: CpuTopology | null;
+  cpu_affinity_advisory: string | null;
+  usb: UsbControllerLoad[];
+  usb_advisory: string | null;
+};
+export type WakeMeasurement = { granularity: SleepGranularity; note: string };
+export type MouseMeasurement = { polling: PollingRate; note: string };

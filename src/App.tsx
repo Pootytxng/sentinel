@@ -5,6 +5,7 @@ import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
+import { LatencyTab } from "./surfaces/Latency";
 import "./App.css";
 import "./Onboarding.css";
 
@@ -164,7 +165,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Latency" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -173,6 +174,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Optimize: { label: "Optimize", icon: "sliders" },
   Monitoring: { label: "Monitor", icon: "pulse" },
   Sessions: { label: "Sessions", icon: "chart" },
+  Latency: { label: "Latency", icon: "pulse" },
   Diagnostics: { label: "Diagnostics", icon: "terminal" },
   History: { label: "Ledger", icon: "ledger" },
   Gaming: { label: "Gaming", icon: "engine" },
@@ -833,6 +835,7 @@ function App() {
     if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
+    if (hw) list.push("Latency");
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     if (gamingEnabled) list.push("Gaming");
@@ -949,6 +952,7 @@ function App() {
                 <MonitoringTab active={activeTab === "Monitoring"} />
               )}
               {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
+              {activeTab === "Latency" && <LatencyTab />}
               {activeTab === "Diagnostics" && (
                 <DiagnosticsTab sections={diagnostics} />
               )}
