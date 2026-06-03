@@ -90,3 +90,21 @@ export type BenchmarkState = {
   efficacy: Efficacy | null;
   error: string | null;
 };
+
+// Live trial / verdict engine (mirrors benchmark_verdict.rs serde; this Verdict is the
+// game-frametime Keep/Revert/Inconclusive one — distinct from the synthetic-benchmark Verdict).
+export type TrialVerdict =
+  | { verdict: "keep"; effect_pct: number; ci_lo_pct: number; ci_hi_pct: number; metric: string }
+  | { verdict: "revert"; effect_pct: number; ci_lo_pct: number; ci_hi_pct: number; metric: string }
+  | { verdict: "inconclusive"; reason: string };
+
+export type TrialState = {
+  running: boolean;
+  kind: string;
+  status: string;
+  collected: number;
+  target: number;
+  verdict: TrialVerdict | null;
+  noise_floor_pct: number | null;
+  error: string | null;
+};

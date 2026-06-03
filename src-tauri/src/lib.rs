@@ -6,6 +6,7 @@ mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX displa
 mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs + the spec.
 mod benchmark_verdict; // [A] verdict engine (P1/P2) — science core + trial orchestration. DARK.
 mod benchmark_scoreboard; // [B] scoreboard (P3) — verified-result-only awards, firewalled. DARK.
+mod benchmark_trial; // live trial runner — calibration over the real frametime stream.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;
@@ -319,6 +320,23 @@ fn get_cpu_temp() -> Option<cpu_temp::CpuTemp> {
     cpu_temp::read_cpu_temp()
 }
 
+// Live calibration trial: measure the rig's run-to-run noise on the running game (read-only;
+// no tweak, no mutation). Validates the whole capture -> window -> verdict pipeline.
+#[tauri::command]
+fn start_calibration() {
+    benchmark_trial::start_calibration();
+}
+
+#[tauri::command]
+fn cancel_trial() {
+    benchmark_trial::cancel_trial();
+}
+
+#[tauri::command]
+fn get_trial_state() -> benchmark_trial::TrialState {
+    benchmark_trial::trial_state()
+}
+
 #[tauri::command]
 fn get_benchmark_state() -> benchmark::BenchmarkState {
     benchmark::benchmark_state()
@@ -431,6 +449,9 @@ pub fn run() {
             start_benchmark,
             cancel_benchmark,
             get_cpu_temp,
+            start_calibration,
+            cancel_trial,
+            get_trial_state,
             get_benchmark_state,
             set_benchmark_baseline,
             clear_benchmark_baseline,

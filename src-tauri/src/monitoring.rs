@@ -631,6 +631,26 @@ pub(crate) fn stop_fps_capture() {
     let _ = std::fs::remove_file(fps_out_path());
 }
 
+/// Latest captured frametimes for the active game (process name + per-frame ms), if the FPS
+/// helper is running and a fresh (<3 s) sample exists. The benchmark trial runner reads this to
+/// build MetricWindows. `None` when nothing is being captured (no game / capture off).
+pub(crate) fn latest_frametimes() -> Option<(String, Vec<f64>)> {
+    let path = fps_out_path();
+    let meta = std::fs::metadata(&path).ok()?;
+    let fresh = meta
+        .modified()
+        .ok()
+        .and_then(|m| m.elapsed().ok())
+        .map(|e| e < std::time::Duration::from_secs(3))
+        .unwrap_or(false);
+    if !fresh {
+        return None;
+    }
+    let bytes = std::fs::read(&path).ok()?;
+    let s: FpsSample = serde_json::from_slice(&bytes).ok()?;
+    Some((s.process_name, s.recent_frametimes_ms))
+}
+
 #[tauri::command]
 pub(crate) fn get_fps_status() -> FpsStatus {
     use std::sync::atomic::Ordering;

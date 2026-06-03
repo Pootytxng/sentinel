@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
 import { componentLabel, verdictLabel, verdictTone, fmtDelta } from "./benchmark-view";
-import type { BenchmarkState, RunReport, Efficacy, AppliedChange } from "../types";
+import type { BenchmarkState, RunReport, Efficacy, AppliedChange, TrialState } from "../types";
 import "./Benchmark.css";
 
 const POLL_MS = 700;
@@ -13,17 +13,20 @@ const POLL_MS = 700;
 export function BenchmarkTab() {
   const [state, setState] = useState<BenchmarkState | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
+  const [trial, setTrial] = useState<TrialState | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [s, ch] = await Promise.all([
+      const [s, ch, t] = await Promise.all([
         invoke<BenchmarkState>("get_benchmark_state"),
         invoke<AppliedChange[]>("get_applied_changes").catch(() => [] as AppliedChange[]),
+        invoke<TrialState>("get_trial_state").catch(() => null),
       ]);
       setState(s);
       setChanges(ch);
+      if (t) setTrial(t);
     } catch {
       /* leave prior state */
     }
@@ -39,6 +42,31 @@ export function BenchmarkTab() {
     const id = setInterval(refresh, POLL_MS);
     return () => clearInterval(id);
   }, [state?.running, refresh]);
+
+  // Poll while a live trial (calibration) is running.
+  useEffect(() => {
+    if (!trial?.running) return;
+    const id = setInterval(refresh, POLL_MS);
+    return () => clearInterval(id);
+  }, [trial?.running, refresh]);
+
+  const calibrate = async () => {
+    try {
+      await invoke("start_calibration");
+    } catch {
+      /* surfaced via trial state */
+    }
+    refresh();
+  };
+
+  const cancelTrial = async () => {
+    try {
+      await invoke("cancel_trial");
+    } catch {
+      /* ignore */
+    }
+    refresh();
+  };
 
   const run = async () => {
     setErr(null);
@@ -168,6 +196,44 @@ export function BenchmarkTab() {
             </button>
           </>
         )}
+      </Card>
+
+      <Card>
+        <SectionHeader
+          title="Measure on a live game"
+          right={trial?.running ? <StatusPill status="scanning" label="Measuring" /> : undefined}
+        />
+        <p className="bench-muted">
+          Turn on FPS monitoring (Monitoring tab) with a game running, then calibrate — Sentinel
+          measures your rig's run-to-run noise from real frametimes (1% lows). That's the floor: a
+          change smaller than it can't be told apart from noise, so we won't claim it.
+        </p>
+        {trial?.running ? (
+          <>
+            <p className="bench-stat">
+              {trial.status}
+              {trial.target ? ` · ${trial.collected}/${trial.target}` : ""}
+            </p>
+            <button className="bench-btn bench-btn-ghost" onClick={cancelTrial}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button className="bench-btn" onClick={calibrate}>
+            Calibrate (measure my run-to-run noise)
+          </button>
+        )}
+        {!trial?.running && trial?.noise_floor_pct != null && (
+          <p className="bench-stat">
+            Run-to-run noise: <strong>±{trial.noise_floor_pct.toFixed(1)}%</strong>
+            {trial.verdict &&
+            trial.verdict.verdict === "inconclusive" &&
+            trial.verdict.reason === "within-noise"
+              ? " · pipeline check passed (no phantom change across identical runs)"
+              : ""}
+          </p>
+        )}
+        {!trial?.running && trial?.error && <p className="bench-err">{trial.error}</p>}
       </Card>
 
       <ol className="bench-steps">
