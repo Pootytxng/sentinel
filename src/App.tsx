@@ -1518,6 +1518,8 @@ function OptimizeTab({
 const MONITORING_POLL_MS = 1000;
 const MONITORING_WINDOW = 60;
 
+type CpuTemp = { temp_c: number; source: string; label: string };
+
 function MonitoringTab({ active }: { active: boolean }) {
   const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
   const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
@@ -1525,6 +1527,7 @@ function MonitoringTab({ active }: { active: boolean }) {
   const [fps, setFps] = useState<FpsStatus | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
   const [overlayOn, setOverlayOn] = useState(false);
+  const [cpuTemp, setCpuTemp] = useState<CpuTemp | null>(null);
 
   // Sync the overlay toggle with the actual window state on mount (e.g. the
   // overlay may already be open from earlier in this app session).
@@ -1554,14 +1557,16 @@ function MonitoringTab({ active }: { active: boolean }) {
     let cancelled = false;
     const tick = async () => {
       try {
-        const [gpuSnap, cpuSnap, fpsStatus] = await Promise.all([
+        const [gpuSnap, cpuSnap, fpsStatus, temp] = await Promise.all([
           invoke<GpuSensorSnapshot[]>("get_gpu_sensors"),
           invoke<CpuSensorSnapshot>("get_cpu_sensors"),
           invoke<FpsStatus>("get_fps_status"),
+          invoke<CpuTemp | null>("get_cpu_temp").catch(() => null),
         ]);
         if (cancelled) return;
         setHasGpu(gpuSnap.length > 0);
         setFps(fpsStatus);
+        setCpuTemp(temp);
         setGpuSamples((prev) => {
           const next = [...prev, gpuSnap];
           return next.length > MONITORING_WINDOW
@@ -1641,6 +1646,19 @@ function MonitoringTab({ active }: { active: boolean }) {
           implemented, not yet hardware-verified · Intel — planned.
         </span>
       </p>
+
+      {cpuTemp ? (
+        <p className="section-help">
+          <strong>CPU temp: {Math.round(cpuTemp.temp_c)}°C</strong> · {cpuTemp.label} · via{" "}
+          {cpuTemp.source}
+        </p>
+      ) : (
+        <p className="section-help coverage-note">
+          CPU temperature needs ring-0 (a kernel driver) to read — which Sentinel won't install, to
+          stay anti-cheat-safe. If you already run <strong>LibreHardwareMonitor</strong> or
+          OpenHardwareMonitor, Sentinel will read and show its CPU temp here (no driver of our own).
+        </p>
+      )}
 
       {/* FPS / frametime — headline metric, opt-in (needs admin) */}
       <FpsPanel

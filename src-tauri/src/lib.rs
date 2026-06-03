@@ -5,6 +5,7 @@ mod actions;
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
 mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs + the spec.
 mod benchmark_verdict; // [A] verdict engine (P1) — pure science core; wired in P2/P3. DARK.
+mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;
 mod fps;
@@ -310,6 +311,13 @@ fn cancel_benchmark() {
     benchmark::cancel_benchmark();
 }
 
+// CPU temp via interop with a user-installed monitor (LHM/OHM). None when none is running —
+// Sentinel never reads it directly (no kernel driver). See cpu_temp.rs.
+#[tauri::command]
+fn get_cpu_temp() -> Option<cpu_temp::CpuTemp> {
+    cpu_temp::read_cpu_temp()
+}
+
 #[tauri::command]
 fn get_benchmark_state() -> benchmark::BenchmarkState {
     benchmark::benchmark_state()
@@ -421,6 +429,7 @@ pub fn run() {
             latency_measure_mouse,
             start_benchmark,
             cancel_benchmark,
+            get_cpu_temp,
             get_benchmark_state,
             set_benchmark_baseline,
             clear_benchmark_baseline,
