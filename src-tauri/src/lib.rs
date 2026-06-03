@@ -4,7 +4,8 @@ use std::process::Command;
 mod actions;
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
 mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs + the spec.
-mod benchmark_verdict; // [A] verdict engine (P1) — pure science core; wired in P2/P3. DARK.
+mod benchmark_verdict; // [A] verdict engine (P1/P2) — science core + trial orchestration. DARK.
+mod benchmark_scoreboard; // [B] scoreboard (P3) — verified-result-only awards, firewalled. DARK.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;

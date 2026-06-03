@@ -339,6 +339,71 @@ fn col(ws: &[MetricWindow], f: impl Fn(&MetricWindow) -> f64) -> Vec<f64> {
     ws.iter().map(f).collect()
 }
 
+// ── Trial orchestration core (P2) ─────────────────────────────────────────────
+// Pure bookkeeping for an INTERLEAVED A-B trial. The live driver (the integration layer that
+// reads the fps.rs frametime stream and toggles the tweak through the transaction system) feeds
+// windows here as they arrive, labelling the first windows after each toggle as `Warmup`
+// (shader compile / thermal ramp) so they're discarded. This core decides when both sides have
+// enough samples to judge and produces the verdict — it never captures or toggles anything
+// itself, so it's fully unit-testable without a game.
+
+/// Which side of the A-B comparison a captured window belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Phase {
+    /// Discarded — settling after a toggle (shader compile / thermal ramp).
+    Warmup,
+    /// Tweak OFF.
+    Baseline,
+    /// Tweak ON.
+    Treatment,
+}
+
+pub(crate) struct TrialBuilder {
+    target_per_side: usize,
+    baseline: Vec<MetricWindow>,
+    treatment: Vec<MetricWindow>,
+}
+
+impl TrialBuilder {
+    pub fn new(target_per_side: usize) -> Self {
+        Self {
+            target_per_side: target_per_side.max(MIN_WINDOWS),
+            baseline: Vec::new(),
+            treatment: Vec::new(),
+        }
+    }
+
+    /// Add a captured window; warmup windows are dropped.
+    pub fn push(&mut self, phase: Phase, window: MetricWindow) {
+        match phase {
+            Phase::Warmup => {}
+            Phase::Baseline => self.baseline.push(window),
+            Phase::Treatment => self.treatment.push(window),
+        }
+    }
+
+    pub fn counts(&self) -> (usize, usize) {
+        (self.baseline.len(), self.treatment.len())
+    }
+
+    /// Enough samples on both sides to attempt a verdict?
+    pub fn ready(&self) -> bool {
+        self.baseline.len() >= self.target_per_side && self.treatment.len() >= self.target_per_side
+    }
+
+    pub fn into_trial(self) -> Trial {
+        Trial { baseline: self.baseline, treatment: self.treatment }
+    }
+
+    /// Verdict once both sides have enough samples; `None` until then (keep collecting).
+    pub fn verdict_if_ready(&self) -> Option<Verdict> {
+        if !self.ready() {
+            return None;
+        }
+        Some(Trial { baseline: self.baseline.clone(), treatment: self.treatment.clone() }.verdict())
+    }
+}
+
 #[cfg(test)]
 mod verdict_tests {
     use super::*;
@@ -476,5 +541,40 @@ mod verdict_tests {
         let b = [100.0, 101.0, 99.0, 100.0, 102.0];
         let t = [130.0, 131.0, 129.0, 130.0, 132.0];
         assert_eq!(bootstrap_median_pct_change(&b, &t), bootstrap_median_pct_change(&b, &t));
+    }
+
+    // ── Trial orchestration core ──
+    #[test]
+    fn trial_builder_discards_warmup_and_collects() {
+        let mut tb = TrialBuilder::new(5);
+        for _ in 0..3 {
+            tb.push(Phase::Warmup, win(100.0, 85.0)); // dropped
+        }
+        assert_eq!(tb.counts(), (0, 0));
+        assert!(!tb.ready());
+        for &p1 in &[100.0, 101.0, 99.0, 100.0, 102.0] {
+            tb.push(Phase::Baseline, win(p1, 85.0));
+        }
+        for &p1 in &[130.0, 131.0, 129.0, 130.0, 132.0] {
+            tb.push(Phase::Treatment, win(p1, 110.0));
+        }
+        assert_eq!(tb.counts(), (5, 5));
+        assert!(tb.ready());
+    }
+
+    #[test]
+    fn trial_builder_verdict_only_when_ready() {
+        let mut tb = TrialBuilder::new(5);
+        for &p1 in &[100.0, 101.0, 99.0] {
+            tb.push(Phase::Baseline, win(p1, 85.0));
+        }
+        assert!(tb.verdict_if_ready().is_none(), "not enough samples yet");
+        for &p1 in &[100.0, 102.0] {
+            tb.push(Phase::Baseline, win(p1, 85.0));
+        }
+        for &p1 in &[130.0, 131.0, 129.0, 130.0, 132.0] {
+            tb.push(Phase::Treatment, win(p1, 110.0));
+        }
+        assert!(matches!(tb.verdict_if_ready(), Some(Verdict::Keep { .. })));
     }
 }
