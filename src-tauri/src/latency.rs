@@ -129,6 +129,142 @@ pub(crate) fn read_timer_resolution() -> Option<TimerResolution> {
     Some(TimerResolution { coarsest_100ns: min, finest_100ns: max, current_100ns: cur })
 }
 
+/// Empirically-measured scheduler wake granularity, from sampling real `Sleep(1)` durations.
+///
+/// The design's "MeasureSleep" instrument: instead of blindly *forcing* 0.5ms (the cargo-cult
+/// tweak), we **measure** what the machine actually delivers. The hardware-rounded sweet spot is
+/// frequently ~0.51ms, not a clean 0.50 — and a wrong forced value can *degrade* timing. The
+/// median here ≈ the effective wake granularity a `Sleep`/timer-driven loop sees; `jitter_ms`
+/// (sample stdev) is the run-to-run spread that actually matters for stutter.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SleepGranularity {
+    pub samples: usize,
+    pub min_ms: f64,
+    pub median_ms: f64,
+    pub max_ms: f64,
+    /// Sample standard deviation of the per-sleep deltas — the empirical jitter.
+    pub jitter_ms: f64,
+}
+
+/// Pure: reduce a set of measured `Sleep(1)` deltas (ms) to a granularity summary. `None` on empty
+/// input so the live reader can degrade without inventing numbers. Testable without sleeping.
+pub(crate) fn summarize_sleep_samples(deltas_ms: &[f64]) -> Option<SleepGranularity> {
+    if deltas_ms.is_empty() {
+        return None;
+    }
+    let mut sorted = deltas_ms.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let n = sorted.len();
+    let median =
+        if n.is_multiple_of(2) { (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0 } else { sorted[n / 2] };
+    let mean = sorted.iter().sum::<f64>() / n as f64;
+    let jitter = if n > 1 {
+        let var = sorted.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / (n - 1) as f64;
+        var.sqrt()
+    } else {
+        0.0
+    };
+    Some(SleepGranularity {
+        samples: n,
+        min_ms: sorted[0],
+        median_ms: median,
+        max_ms: sorted[n - 1],
+        jitter_ms: jitter,
+    })
+}
+
+/// QPC frequency (ticks/sec) for converting `Sleep` deltas to milliseconds. Mirrors `fps.rs`:
+/// falls back to the common 10 MHz QPC rate if the query somehow fails.
+fn qpc_frequency() -> i64 {
+    use windows::Win32::System::Performance::QueryPerformanceFrequency;
+    let mut f = 0i64;
+    // SAFETY: writes a single i64 the API fully initializes.
+    unsafe {
+        let _ = QueryPerformanceFrequency(&mut f);
+    }
+    if f == 0 {
+        10_000_000
+    } else {
+        f
+    }
+}
+
+fn qpc_now() -> i64 {
+    use windows::Win32::System::Performance::QueryPerformanceCounter;
+    let mut t = 0i64;
+    // SAFETY: writes a single i64 the API fully initializes.
+    unsafe {
+        let _ = QueryPerformanceCounter(&mut t);
+    }
+    t
+}
+
+/// Live: measure the real wake granularity by timing `samples` back-to-back `Sleep(1)` calls with
+/// QPC. **Read-only** — it only sleeps and reads a counter (no mutation, no elevation, no network).
+/// `samples` is clamped to a sane range so the call stays sub-second. `None` if QPC is unusable.
+pub(crate) fn measure_sleep_granularity(samples: usize) -> Option<SleepGranularity> {
+    use windows::Win32::System::Threading::Sleep;
+    let n = samples.clamp(20, 1000);
+    let freq = qpc_frequency() as f64;
+    let mut deltas = Vec::with_capacity(n);
+    for _ in 0..n {
+        let start = qpc_now();
+        // SAFETY: Sleep just yields the thread for the requested milliseconds.
+        unsafe { Sleep(1) };
+        let end = qpc_now();
+        let ticks = (end - start) as f64;
+        if ticks > 0.0 {
+            deltas.push(ticks * 1000.0 / freq);
+        }
+    }
+    summarize_sleep_samples(&deltas)
+}
+
+/// Pure: an honest, plain-English note about the measured wake granularity — the "measure, don't
+/// blind-force 0.5ms" stance. The teaching moment is the **divergence** between the OS-reported
+/// system-wide resolution and what *this* process actually experiences: since Win10 2004 timer
+/// resolution is per-process, so a global "1ms" figure does NOT mean an idle/occluded process
+/// receives it. We classify the reading rather than asserting a fixed "0.51ms" that may be wrong.
+pub(crate) fn sleep_granularity_note(g: &SleepGranularity, timer: Option<&TimerResolution>) -> String {
+    let mut note = format!(
+        "Measured wake granularity ≈ {:.2}ms (jitter ±{:.2}ms over {} samples). ",
+        g.median_ms, g.jitter_ms, g.samples
+    );
+    match timer {
+        // A global high-res request is in effect AND this process is actually getting it
+        // (measured ≈ reported, within scheduling slack).
+        Some(t) if g.median_ms <= (t.current_ms() * 3.0).max(2.0) => {
+            note.push_str(&format!(
+                "This process IS receiving the high-resolution timer (OS-reported {:.2}ms). The \
+                 lowest-jitter value is the one your hardware rounds to — often ~0.51ms, not a clean \
+                 0.50 — measured here rather than blindly forced. ",
+                t.current_ms()
+            ));
+        }
+        // The classic Win11 trap: the OS reports a fine resolution (another app raised it), but
+        // THIS process still sleeps at the coarse default tick — per-process resolution in action.
+        Some(t) => {
+            note.push_str(&format!(
+                "Windows reports {:.2}ms system-wide, but this idle process still gets ~{:.1}ms — \
+                 because since Win10 2004 timer resolution is PER-PROCESS, so a global figure does \
+                 not mean your game receives it (on Win11 a minimized/occluded window even loses it). \
+                 A foreground app that requests a high-res timer would see closer to {:.2}ms. ",
+                t.current_ms(),
+                g.median_ms,
+                t.current_ms()
+            ));
+        }
+        None => {
+            note.push_str("OS timer resolution unavailable; this is the raw measured value only. ");
+        }
+    }
+    note.push_str(
+        "Timer resolution governs scheduling granularity, not interrupt/DPC latency — confusing the \
+         two is blaming the alarm clock for traffic.",
+    );
+    note
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -187,6 +323,75 @@ mod latency_tests {
         if let Some(t) = read_timer_resolution() {
             assert!(t.finest_100ns <= t.coarsest_100ns);
             assert!(t.current_ms() > 0.0);
+        }
+    }
+
+    #[test]
+    fn summarize_sleep_empty_is_none() {
+        assert!(summarize_sleep_samples(&[]).is_none());
+    }
+
+    #[test]
+    fn summarize_sleep_odd_median_and_extents() {
+        let g = summarize_sleep_samples(&[0.50, 2.0, 0.51]).expect("samples present");
+        assert_eq!(g.samples, 3);
+        assert_eq!(g.min_ms, 0.50);
+        assert_eq!(g.max_ms, 2.0);
+        assert_eq!(g.median_ms, 0.51); // sorted middle, not insertion order
+        assert!(g.jitter_ms > 0.0);
+    }
+
+    #[test]
+    fn summarize_sleep_even_median_averages_middle_pair() {
+        let g = summarize_sleep_samples(&[1.0, 2.0, 3.0, 4.0]).expect("samples present");
+        assert_eq!(g.median_ms, 2.5);
+    }
+
+    #[test]
+    fn summarize_sleep_single_sample_zero_jitter() {
+        let g = summarize_sleep_samples(&[0.51]).expect("one sample");
+        assert_eq!(g.jitter_ms, 0.0);
+        assert_eq!(g.median_ms, 0.51);
+    }
+
+    #[test]
+    fn sleep_note_high_res_in_effect_names_sweet_spot() {
+        // OS reports 0.50ms AND this process measured ~0.51ms → high-res actually in effect.
+        let g = SleepGranularity { samples: 100, min_ms: 0.49, median_ms: 0.51, max_ms: 1.2, jitter_ms: 0.08 };
+        let timer = TimerResolution { coarsest_100ns: 156250, finest_100ns: 5000, current_100ns: 5000 };
+        let note = sleep_granularity_note(&g, Some(&timer));
+        assert!(note.contains("0.51")); // measured median surfaced
+        assert!(note.contains("0.50")); // names the cargo-cult value it warns against
+        assert!(note.contains("not interrupt/DPC latency")); // the honesty correction
+    }
+
+    #[test]
+    fn sleep_note_flags_per_process_divergence() {
+        // The real live reading: OS reports 1.00ms, but this idle process still gets ~16ms.
+        let g = SleepGranularity { samples: 200, min_ms: 13.1, median_ms: 16.0, max_ms: 17.1, jitter_ms: 0.42 };
+        let timer = TimerResolution { coarsest_100ns: 156250, finest_100ns: 5000, current_100ns: 10000 };
+        let note = sleep_granularity_note(&g, Some(&timer));
+        assert!(note.contains("PER-PROCESS")); // explains the divergence
+        assert!(note.contains("16.0")); // measured value surfaced
+        assert!(!note.contains("0.51")); // must NOT assert the sweet spot when it doesn't apply
+        assert!(note.contains("not interrupt/DPC latency"));
+    }
+
+    #[test]
+    fn sleep_note_handles_missing_timer() {
+        let g = SleepGranularity { samples: 50, min_ms: 0.5, median_ms: 0.6, max_ms: 1.0, jitter_ms: 0.1 };
+        let note = sleep_granularity_note(&g, None);
+        assert!(note.contains("unavailable"));
+        assert!(note.contains("not interrupt/DPC latency"));
+    }
+
+    #[test]
+    fn measure_sleep_reads_or_degrades() {
+        // Real machine → Some plausible granularity; sandbox without QPC → None. Never panics.
+        if let Some(g) = measure_sleep_granularity(30) {
+            assert!(g.samples >= 20); // clamped floor
+            assert!(g.min_ms >= 0.0 && g.median_ms >= 0.0);
+            assert!(g.max_ms >= g.min_ms);
         }
     }
 }
