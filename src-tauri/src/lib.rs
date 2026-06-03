@@ -8,6 +8,7 @@ mod export;
 mod fps;
 mod hardware;
 mod history;
+mod latency; // PARKED + DARK: compiled, not registered. See latency.rs + the latency spec.
 mod monitoring;
 mod priorities;
 mod readiness;
