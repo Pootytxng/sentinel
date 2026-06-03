@@ -1052,7 +1052,17 @@ pub(crate) struct LatencyReport {
 /// Gather the fast read-only latency diagnostics. Each underlying reader degrades
 /// gracefully (empty/None) rather than inventing data, so a partial environment
 /// still yields an honest partial report.
+///
+/// Runs on a dedicated MTA worker thread: `read_verified_msi_devices` and
+/// `read_usb_topology` open WMI (`COMLibrary::new` → `CoInitializeEx(MULTITHREADED)`),
+/// which fails with `RPC_E_CHANGED_MODE` on the WebView2 **STA** thread that Tauri
+/// sync commands run on — the exact trap `hardware.rs` solves the same way. The
+/// non-WMI reads (timer FFI, CPU topology, registry MSI) run fine there too.
 pub(crate) fn gather_latency_report() -> LatencyReport {
+    crate::hardware::on_wmi_thread(gather_latency_report_inner)
+}
+
+fn gather_latency_report_inner() -> LatencyReport {
     let msi_devices = read_verified_msi_devices();
     let msi = summarize_msi(&msi_devices);
     let msi_active = summarize_msi_active(&msi_devices);
@@ -1088,7 +1098,9 @@ pub(crate) struct WakeMeasurement {
 /// `None` if no samples could be taken.
 pub(crate) fn measure_wake() -> Option<WakeMeasurement> {
     let timer = read_timer_resolution();
-    let granularity = measure_sleep_granularity(200)?;
+    // 128 samples is plenty for a stable median/jitter while bounding how long this
+    // sync command holds the thread (Sleep(1) ≈ wake-granularity per sample).
+    let granularity = measure_sleep_granularity(128)?;
     let note = sleep_granularity_note(&granularity, timer.as_ref());
     Some(WakeMeasurement { granularity, note })
 }
