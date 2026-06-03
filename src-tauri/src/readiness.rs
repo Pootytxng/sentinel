@@ -379,12 +379,13 @@ pub(crate) fn evaluate_readiness(
                 "Applied Sentinel changes",
                 ReadinessStatus::Attention,
                 format!(
-                    "{} change(s) Sentinel applied are no longer active — something outside \
-                     Sentinel changed them. Review the Trust Ledger; rollbacks remain available.",
+                    "{} setting(s) you turned on with Sentinel are currently off — changed \
+                     outside Sentinel (by Windows, another app, or you). Not an error: turn them \
+                     back on in Optimize, or roll them back in the Ledger — either one clears this.",
                     hist.externally_reverted
                 ),
                 Some(format!(
-                    "{} active / {} reverted",
+                    "{} on / {} drifted",
                     hist.active, hist.externally_reverted
                 )),
             )
@@ -393,7 +394,7 @@ pub(crate) fn evaluate_readiness(
                 "applied-changes",
                 "Applied Sentinel changes",
                 ReadinessStatus::Ready,
-                "No Sentinel changes have been applied yet.",
+                "No Sentinel changes applied yet — nothing to track.",
                 Some("0".into()),
             )
         } else {
@@ -402,7 +403,7 @@ pub(crate) fn evaluate_readiness(
                 "Applied Sentinel changes",
                 ReadinessStatus::Ready,
                 format!(
-                    "{} Sentinel change(s) active; all reversible from the Trust Ledger.",
+                    "{} setting(s) active and reversible from the Trust Ledger.",
                     hist.active
                 ),
                 Some(format!("{} active", hist.active)),
