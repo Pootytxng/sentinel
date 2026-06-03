@@ -716,6 +716,98 @@ pub(crate) fn run_benchmark(cfg: &RunConfig, cancel: &AtomicBool) -> RunReport {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Efficacy — the soul: Measure → Change → Re-measure → honest verdict.
+// Compares two `RunReport`s (before/after a tweak) and reports the measured delta
+// per component + overall. A delta that doesn't clear the run-to-run noise floor is
+// reported as `NoMeasurableChange` — never spun as a win. This is what makes Sentinel
+// an honest instrument instead of a faith healer with a registry editor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Verdict {
+    Improved,
+    NoMeasurableChange,
+    Regressed,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct ComponentEfficacy {
+    pub component: Component,
+    pub before: u32,
+    pub after: u32,
+    pub delta_pct: f64,
+    pub verdict: Verdict,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct Efficacy {
+    pub per_component: Vec<ComponentEfficacy>,
+    pub overall: Verdict,
+    /// The significance threshold actually used (%), after any low-confidence widening.
+    pub noise_floor_pct: f64,
+}
+
+/// Significance threshold: a base %, **widened** if either run was low-confidence — a noisy
+/// run can't support a tight claim, so marginal deltas correctly read as "no change."
+fn noise_floor(before: RunConfidence, after: RunConfidence, base_pct: f64) -> f64 {
+    if before == RunConfidence::Low || after == RunConfidence::Low {
+        base_pct.max(8.0)
+    } else {
+        base_pct
+    }
+}
+
+fn verdict_for(delta_pct: f64, floor: f64) -> Verdict {
+    if delta_pct.abs() <= floor {
+        Verdict::NoMeasurableChange
+    } else if delta_pct > 0.0 {
+        Verdict::Improved
+    } else {
+        Verdict::Regressed
+    }
+}
+
+/// Compare two benchmark runs and emit an honest per-component + overall efficacy verdict.
+/// Only components measured in **both** runs are compared. The delta is reference-independent
+/// (normalization cancels), so it's meaningful even while absolute baselines are placeholders.
+pub(crate) fn compute_efficacy(before: &RunReport, after: &RunReport, base_floor_pct: f64) -> Efficacy {
+    let floor = noise_floor(before.confidence, after.confidence, base_floor_pct);
+    let mut per_component = Vec::new();
+    for b in &before.components {
+        if !b.measured {
+            continue;
+        }
+        let Some(a) = after.components.iter().find(|x| x.component == b.component) else {
+            continue;
+        };
+        if !a.measured {
+            continue;
+        }
+        let delta_pct = if b.score == 0 {
+            0.0
+        } else {
+            (a.score as f64 - b.score as f64) / b.score as f64 * 100.0
+        };
+        per_component.push(ComponentEfficacy {
+            component: b.component,
+            before: b.score,
+            after: a.score,
+            delta_pct,
+            verdict: verdict_for(delta_pct, floor),
+        });
+    }
+    // Overall: average the measured component deltas, then the same significance test.
+    let overall = if per_component.is_empty() {
+        Verdict::NoMeasurableChange
+    } else {
+        let avg = per_component.iter().map(|c| c.delta_pct).sum::<f64>() / per_component.len() as f64;
+        verdict_for(avg, floor)
+    };
+    Efficacy { per_component, overall, noise_floor_pct: floor }
+}
+
 #[cfg(test)]
 mod benchmark_tests {
     use super::*;
@@ -957,6 +1049,64 @@ mod benchmark_tests {
         let leftover = std::fs::read_dir(&dir).map(|it| it.count()).unwrap_or(0);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(leftover, 0, "disk runner left a temp file behind");
+    }
+
+    // ── efficacy (the soul) ──
+    fn report(confidence: RunConfidence, comps: &[(Component, u32, bool)]) -> RunReport {
+        RunReport {
+            components: comps
+                .iter()
+                .map(|&(component, score, measured)| ComponentScore { component, score, measured })
+                .collect(),
+            confidence,
+            notes: vec![],
+        }
+    }
+
+    #[test]
+    fn efficacy_flags_real_improvement() {
+        let before = report(RunConfidence::Clean, &[(Component::Cpu, 50, true)]);
+        let after = report(RunConfidence::Clean, &[(Component::Cpu, 60, true)]);
+        let e = compute_efficacy(&before, &after, 3.0);
+        assert_eq!(e.per_component[0].verdict, Verdict::Improved);
+        assert_eq!(e.overall, Verdict::Improved);
+    }
+
+    #[test]
+    fn efficacy_calls_a_tiny_delta_no_measurable_change() {
+        let before = report(RunConfidence::Clean, &[(Component::Cpu, 100, true)]);
+        let after = report(RunConfidence::Clean, &[(Component::Cpu, 102, true)]); // +2% < 3% floor
+        let e = compute_efficacy(&before, &after, 3.0);
+        assert_eq!(e.per_component[0].verdict, Verdict::NoMeasurableChange);
+        assert_eq!(e.overall, Verdict::NoMeasurableChange);
+    }
+
+    #[test]
+    fn efficacy_flags_regression() {
+        let before = report(RunConfidence::Clean, &[(Component::Gpu, 80, true)]);
+        let after = report(RunConfidence::Clean, &[(Component::Gpu, 60, true)]);
+        let e = compute_efficacy(&before, &after, 3.0);
+        assert_eq!(e.per_component[0].verdict, Verdict::Regressed);
+        assert_eq!(e.overall, Verdict::Regressed);
+    }
+
+    #[test]
+    fn low_confidence_widens_the_noise_floor() {
+        // +6% would be "Improved" at a 3% floor, but a noisy run widens it to 8% → no claim.
+        let before = report(RunConfidence::Low, &[(Component::Cpu, 100, true)]);
+        let after = report(RunConfidence::Clean, &[(Component::Cpu, 106, true)]);
+        let e = compute_efficacy(&before, &after, 3.0);
+        assert!(e.noise_floor_pct >= 8.0);
+        assert_eq!(e.per_component[0].verdict, Verdict::NoMeasurableChange);
+    }
+
+    #[test]
+    fn efficacy_skips_components_not_measured_in_both_runs() {
+        let before = report(RunConfidence::Clean, &[(Component::Cpu, 50, true), (Component::Gpu, 0, false)]);
+        let after = report(RunConfidence::Clean, &[(Component::Cpu, 60, true), (Component::Gpu, 70, true)]);
+        let e = compute_efficacy(&before, &after, 3.0);
+        assert_eq!(e.per_component.len(), 1); // GPU unmeasured in `before` → skipped
+        assert_eq!(e.per_component[0].component, Component::Cpu);
     }
 
     #[test]

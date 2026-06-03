@@ -1,180 +1,180 @@
-# Sentinel Benchmark + Score — engine design (local-first, leaderboard-later)
+# Sentinel Benchmark + Efficacy — engine design (measured-instrument soul)
 
-> **Status: PARKED + DARK.** F6 benchmark lane. Designed/built **in isolation**, stays **parked**
-> (not merged to `main`) and **dark** (default-off gate, no live UI) until the owner un-parks.
+> **Status: PARKED + DARK.** F6 benchmark lane. Built **in isolation**, stays **parked** (not merged to
+> `main`) and **dark** (default-off gate, no live UI) until the owner un-parks.
 >
-> **This spec is the ENGINE design. The merge contract is HQ's `docs/BENCHMARK_INTEGRATION_PLAN.md`
-> (on `main`, owner-confirmed).** Where they overlap, that doc wins; this one fills in the benchmark +
-> score internals. **Additive, not a reversal:** the score/reward/leaderboard live **only inside a new
-> gated "Benchmark" tab** and never touch the de-gamified `CommandHero` / `SystemPosture` hero, so
-> Decision A survives untouched (per the integration plan §1/§4).
+> ### ⚠️ REALIGNED 2026-06-03 — soul changed from "vanity score" to "measured instrument."
+> Owner adopted the *scientific-instrument* roadmap: **"be a scientific instrument with an undo button,
+> not a magic potion."** The spine is **Measure → Change → Re-measure → Keep / Revert**, with **real
+> per-tweak measured deltas** and an honest **"this did nothing measurable"** verdict. This **demotes** the
+> earlier UserBenchmark-style **vanity composite score / tiers / cosmetic-reward / competitive leaderboard**
+> direction. Real measurement (the runners) is kept; the *framing* is now efficacy, not a "/100" ranking.
 >
-> **Supersedes** the 2026-06-01 "Sync collaborative progress engine" framing — its honest score model,
-> intents, peace-of-mind face, level events, and pure-consumer architecture fold in here, now anchored on
-> a **real local benchmark**.
+> **HQ reconciliation REQUIRED:** HQ's `docs/BENCHMARK_INTEGRATION_PLAN.md` (on `main`) still frames this
+> lane as *"scoring / cosmetic-reward + UserBenchmark-style leaderboard."* **That framing is superseded by
+> this realignment** — HQ must update the integration plan. The *mechanics* HQ specified (gated tab, own
+> `benchmark.json` store, network-in-Rust-only, no-mutation) all still hold; only the *purpose* changes
+> (efficacy proof, not cosmetic rewards). Decision A (de-gamified hero) is still preserved — efficacy lives
+> in its own Benchmark tab.
 
-## 0. Owner direction (2026-06-02)
+## 0. The spine (this is the whole moat)
 
-The lane is "benchmark" because the score/reward comes from a **real benchmarking tool in the app**,
-UserBenchmark-style (run real tests → score each part → compare), with **cosmetic rewards that unlock as
-you score** and (later) a **leaderboard of other Sentinel users**. Owner decision via clarifying question:
-**"Local first, leaderboard later."**
+Every mainstream "optimizer" is snake oil because it's *all scalpel, no x-ray* — it flips switches and never
+checks the pulse before or after. Sentinel's differentiator is the loop no one does honestly:
 
-- **Phase 1 (this spec's core):** real local benchmark + tangible score + local cosmetic-reward unlocks +
-  "is my hardware underperforming vs typical?" — **zero telemetry, no backend, no accounts.** Fully inside
-  the locked privacy posture (`PRODUCT_DIRECTION.md` *"local-only / zero telemetry"*; `PRIVACY.md`/`EULA.md`;
-  the frozen beta's *"zero outbound TCP"*).
-- **Phase 2 (designed-for, NOT built now):** **opt-in, anonymous, Rust-isolated** online leaderboard
-  (integration plan §2). Default off; non-opted users stay fully local.
+**Measure → Change → Re-measure → Keep or Revert.**
 
-**UserBenchmark caution (owner-flagged):** take the *mechanic*, not the *reputation* (UB is banned from
-r/hardware/r/AMD/r/Intel for biased weightings + editorializing). Real tests + **transparent, published
-methodology** + same-part percentile; no opaque weighting, no vendor bias, don't lean on the UB name.
+- **Measure** — a real local benchmark (the runners below) records a baseline.
+- **Change** — exactly one tweak, via the **existing typed apply/rollback path** (`APPLIABLE_REC_IDS`). The
+  benchmark never mutates anything itself.
+- **Re-measure** — run the same benchmark again.
+- **Verdict** — show the **measured delta**, and if it's **within the noise floor, say "no measurable
+  change" out loud.** That honesty is the product.
+- **Keep or Revert** — one-click, per-tweak (the locked rollback-first Trust Ledger already does this).
 
-## 1. Two honest pillars (load-bearing)
+This lane owns **Measure + Verdict**. The Change/Revert half is the existing mutation/rollback system (HQ /
+the live app); the loop is wired at integration.
 
-The benchmark makes two *different* claims with *different* honesty cost:
+## 1. Two honest pillars
 
-1. **Absolute score + measured before/after delta — needs NO external data, fully honest.** Run → number.
-   Apply a Sentinel rec (or the user's own tweak) → re-run → report the **measured** change. *"Re-benchmarked
-   after the fix: +6% CPU multi-core, measured on your machine."* Primary driver of the score. Provenance =
-   **Measured-signal** (`ARCHITECTURE_LOCKS.md §1.7`); **never** an FPS claim.
-2. **Same-part percentile ("is my 3070 underperforming?") — needs a reference dataset, caveated.** Compare
-   the user's component score to *typical* for that exact part → exposes throttling / power plan / driver /
-   cooling → ties into our recommendations. Phase 1 ships **approximate "seed" baselines** (labeled
-   approximate); Phase 2 opt-in makes percentiles real.
+1. **Measured per-tweak efficacy (THE SOUL).** Baseline → apply one tweak → re-measure → **delta with a
+   significance test**. Provenance = **Measured-signal**. Three honest verdicts: **Improved / No measurable
+   change / Regressed**, each with the number *and* whether it cleared the noise floor. Never an
+   unmeasured FPS claim.
+2. **Same-part health ("is my 3070 underperforming?").** Compare a component's measured score to *typical*
+   for that exact part → exposes throttling / power plan / driver / cooling → feeds the recommendations
+   ("you're 20% low for this card → here's the misconfig"). Phase 1 ships **approximate seed baselines**
+   (labeled approximate); the opt-in efficacy network (§8) makes it real later.
 
-> **Design rule: the score + rewards never depend on pillar 2's accuracy.** They're anchored on absolute +
-> measured-delta (pillar 1), so nothing the user is rewarded on is ever "a fabricated number." Percentile is
-> a secondary, clearly-caveated signal in Phase 1.
+> **Demoted (was the old soul):** a composite "Sentinel score /100", tiers, cosmetic-reward unlocks, and a
+> competitive vanity leaderboard. The roadmap's own line — *"real benchmarks, not a made-up score /100"* —
+> is the rejection of exactly that. An honest **aggregate health summary** may still exist as a secondary
+> glance ("your rig is performing to spec"), but it is **not** the centerpiece and is **never** a ranked
+> vanity number.
 
 ## 2. Honesty + safety stance
 
-- **Measured-signal, not a performance promise.** Synthetic scores are health/config signals, never "improved
-  FPS by X%." (PresentMon/ETW frame capture stays out of v1.)
-- **Variance disclosed, not hidden.** Scores move with background load / thermals / power plan → surface a
-  confidence note, "close other apps," best-of-N, detect dirty runs.
+- **Honest nulls are mandatory.** If a tweak's delta doesn't clear the run-to-run noise floor (the
+  best-of-N variance we already compute), the verdict is **"no measurable change"** — full stop. This is
+  what makes Sentinel the only non-charlatan in the room.
+- **Significance from real variance.** The noise floor = the spread across best-of-N repeats (already built,
+  `high_variance`). A delta inside that band is noise, not a win.
+- **Measured-signal, never a promise.** Synthetic scores are health/efficacy signals, never "improved FPS by
+  X%" out of thin air.
 - **New behavior class (compute/disk load) but still NOT mutation.** The benchmark *runs work*, so it isn't
-  read-only like the rest of the app — but it stays inside the locked safety model: **no kernel driver, no
-  game injection, no config mutation, no admin.** User-initiated only, **cancellable**, short thermally-safe
-  bursts; disk test = modest temp file in `sentinel_data_dir()`, **fsync'd then deleted**, never user files.
-- **"Apply best settings, then measure" — only via the existing typed apply/rollback path** (`APPLIABLE_REC_IDS`
-  in `history.rs`), **never a new mutation primitive** (integration plan §4). The benchmark itself never mutates.
-- **Layered on `SystemPosture`, never replacing it.** SystemPosture (honest hero) says what's true; the
-  Benchmark tab *measures* it and rewards real crossings — in its own room.
+  read-only — but it stays in the locked safety model: **no kernel, no injection, no config mutation, no
+  admin.** User-initiated, **cancellable**, short bursts; disk test = temp file, fsync'd then **deleted**,
+  never user files.
+- **"Apply then measure" only via the existing apply/rollback path** (`APPLIABLE_REC_IDS`), never a new
+  mutation primitive. **Layered on `SystemPosture`, never replacing it.**
 
-## 3. Benchmark engine — components & runner
+## 3. Benchmark engine — runners (BUILT, kept) ✅
 
-Each test → normalized sub-score + raw metrics + run-quality. Overall = **published** weighting (no hidden formula).
+Native, real, verified. Each test → normalized 0–100 sub-score + raw metric + run-quality.
 
-| Component | Measures | Runs in | Honesty notes |
+| Component | Measures | Runs in | Status |
 |---|---|---|---|
-| **CPU** | single + multi-thread compute | native Rust (rayon) | report **both** — never collapse to one Intel-favoring number |
-| **RAM** | bandwidth + latency | native Rust | sensitive to XMP/EXPO off → ties to that rec |
-| **Disk** | sequential + random R/W on a temp file | native Rust | temp file fsync'd + deleted; modest size; cancellable |
-| **GPU** | compute/render throughput | **OPEN** — WebGPU/WebGL in webview, or `wgpu` in Rust | a *measured* cross-vendor workload (more honest than vendor APIs); cross-driver comparability is fuzzy → flag |
+| **CPU** | multi-thread integer compute | native Rust | ✅ built |
+| **RAM** | bandwidth sweep | native Rust | ✅ built |
+| **GPU** | D3D11 compute (FMA kernel) | `windows` crate (no new deps) | ✅ built — verified ~6.8 TFLOPS on real HW |
+| **Disk** | seq write/read, temp file, auto-cleaned | native Rust | ✅ built |
 
-- **Run protocol:** warm-up, best-of-N, discard outliers, median + spread; detect dirty run (heavy background,
-  on battery, thermal throttle) and warn.
-- **Provenance:** every sub-score tagged Measured-signal; raw metrics inspectable ("tap to see what was measured").
+- **Run protocol:** warm-up, **best-of-N** (keep best), variance → **Clean / Low** confidence. ✅ built.
+- **Normalization:** PLACEHOLDER reference constants (clearly labeled) — only meaningful once tuned, but the
+  **efficacy delta does NOT depend on absolute normalization** (a delta of the same measure cancels the
+  reference out), so the soul works *today*.
 
-## 4. Score + cosmetic rewards — "you + Sentinel, measured"
+## 4. Efficacy model — the centerpiece (to build, dark)
 
-Teamwork framing stays (the hook), now anchored on measurements:
+The new heart. Pure + testable, like the runners.
 
-- **Baseline** = first clean benchmark.
-- **Guided gains** = measured improvement after applying a Sentinel rec that's still active (Trust Ledger
-  `history::applied_changes_summary` / `check_change_active`) → "Sentinel suggested, you decided, it stuck,
-  **and here's the measured lift**."
-- **Self-directed gains** = improvement where the user changed something themselves (rec `state_kind` probe
-  satisfied, no matching active apply) → "you did this; we measured it; credit."
-- **Standing** = absolute score + tier; **breakdown** = guided vs self-directed vs by-intent, all inspectable.
-  Climbs on real wins; **regresses** if a change is reverted (honest).
-- **Cosmetic rewards (the arcade hook the owner wants):** crossing a tier **unlocks a cosmetic** — a theme/
-  look — **stored locally**, reusing the existing theme mechanism (`THEMES` / `applyTheme` / `localStorage`,
-  `src/App.tsx:531-564`). **No reward depends on the network** (integration plan §1/§4). This is the "level-up,
-  show your friends" feeling — earned by real measured progress, living only in the Benchmark tab.
-- **Intents** (FPS / Latency / Smoothness / Thermals / Quality / **Peace-of-mind**) weight the standing.
-  Peace-of-mind is **one face of the same real number**: reassurance users see *"your parts perform as expected
-  for their model — checked, healthy"* (pillar-2 "within normal range", no tweaks needed); competitive users see
-  *rank + percentile + unlocks*. Same measurement, different surface.
+- `Measurement` = a snapshot of component raw metrics + run-confidence + timestamp.
+- `compute_efficacy(before, after, noise_floor) -> Efficacy` where
+  `Efficacy { per_component: [{component, before, after, delta_pct, verdict}], overall_verdict }`
+  and `verdict ∈ { Improved, NoMeasurableChange, Regressed }` — `NoMeasurableChange` when `|delta| ≤
+  noise_floor` (from best-of-N variance).
+- **Keep/Revert support:** the loop surfaces the verdict; the actual keep = leave the applied change,
+  revert = the existing rollback path. The efficacy module only *informs*, never mutates.
+- **Honest framing in copy:** "We measured before and after. CPU multi-core: **+0.4% — within noise, no
+  measurable change.** Want to keep it anyway, or revert?"
 
-## 5. Levels + event contract (seam to the design lane)
+## 5. Aggregate health summary (demoted, optional)
 
-- ~4 tiers; thresholds are **data**; names are the design lane's.
-- A typed event fires **only on a tier crossing**, debounced once-per-crossing (structurally enforces "no
-  sensory overload"). The design lane subscribes and owns the single tasteful cosmetic shift per crossing.
+A secondary, honestly-framed "is my rig performing to spec" glance — **not** a ranked vanity score. The old
+`compute_standing` (composite + tiers + crossing events) is **kept in code** (tested) but **re-cast** as
+this optional health summary; the tier-crossing **cosmetic-reward celebration is dropped** (that was the
+gamification the roadmap rejects). No "level up, show your friends." If a glanceable number exists, it reads
+*"healthy / underperforming"*, sourced from §1 pillar 2.
 
-```
-SyncLevelEvent { from_level:u8, to_level:u8, direction:"up"|"down", reason:String, intents_satisfied:Vec<Intent> }
-```
+## 6. Same-part comparison (pillar 2 detail) — kept
 
-## 6. Same-part comparison (pillar 2 detail)
+- **Reference baselines** ship as versioned data keyed by normalized part id; **approximate** in Phase 1.
+- **Underperformance → recommendation hook:** the benchmark *finds* problems the catalog already solves —
+  the most product-defining tie-in, and pure scientific-instrument behavior.
 
-- **Reference baselines** ship as versioned **data** keyed by normalized part id (GPU/CPU model); source = our
-  own runs across representative hardware + publicly-correlated medians; **labeled approximate** in Phase 1.
-- **Underperformance → recommendation hook:** "your <part> scored bottom-Nth-percentile for that exact model —
-  likely <throttling / power plan / driver / XMP off>; here's the fix." The benchmark *finds* problems the catalog
-  already solves — the most product-defining tie-in.
-- **Phase 2** replaces approximate baselines with real opt-in aggregates.
+## 7. Architecture (dark) — conforms to integration plan mechanics
 
-## 7. Architecture (built later, dark) — conforms to integration plan §1/§4
+- **`src-tauri/src/benchmark.rs`** — runners ✅ + `compute_standing` (now health summary) ✅ + **new efficacy
+  module** (`Measurement`, `compute_efficacy`, verdicts) + Phase-2 bounded network commands.
+- **IPC (dark, not registered):** `run_benchmark()`, `measure_efficacy(before,after)`, `benchmark_enabled()`
+  gate. Default-off gate — Gaming Mode precedent.
+- **Separate store:** `benchmark.json` under `sentinel_data_dir()` — never `history.json`/`sessions.json`.
+- **Reuses (pure consumers):** `history.rs`, `recommendations.rs`, `readiness.rs`, `diagnostics.rs`/
+  `hardware.rs`. **No changes to `actions.rs` / mutation paths.**
+- **Frontend (design lane / HQ):** new files only; existing `Tab`/`SECTION_META`/`visibleTabs` seam; **do
+  NOT touch** `CommandHero`/`SystemPosture`.
 
-- **Rust module `src-tauri/src/benchmark.rs`** — the runner + score + (Phase 2) the bounded network commands.
-  Sub-areas: `run` (cancellable workloads → `BenchResult`), `score` (pure `compute_standing(history, applied/
-  self-directed states, intents, baselines) -> Standing` + `SyncLevelEvent`s — tested like `priorities`/`readiness`),
-  `baselines` (shipped data), and **Phase 2 only** `submit_benchmark_score` / `get_leaderboard` (`reqwest`).
-- **IPC commands:** `run_benchmark()` (streams progress, cancellable), `get_standing(intents)`,
-  `benchmark_enabled()` gate. **Default-off gate, NOT registered live** until un-parked — Gaming Mode precedent
-  (`gaming_mode_gate()`).
-- **Separate data store:** `benchmark.json` under `sentinel_data_dir()` — **never** `history.json` / `sessions.json`
-  (integration plan §4). Holds benchmark history (for deltas/trend), unlocked cosmetics, last-seen tier.
-- **Reuses (pure consumers):** `history.rs` (Trust Ledger), `recommendations.rs` (+ `check_state_kind`),
-  `readiness.rs`, `diagnostics.rs`/`hardware.rs` (part identity for baselines; thermal/power state for run-quality).
-  **No changes to `actions.rs` / mutation paths.**
-- **Frontend (design lane / HQ):** new files only — `src/surfaces/BenchmarkSurface.tsx` + `src/surfaces/benchmark.ts`
-  (pure helpers + tests); wire via the existing `Tab` / `SECTION_META` / `visibleTabs` seam (`src/App.tsx:167,169,
-  810-821,939`). **Do NOT touch** `CommandHero` / `deriveSystemPosture` / `system-posture.ts`.
+## 8. The real long-game moat — opt-in measured-efficacy data (reframed leaderboard)
 
-## 8. Phase 2 — opt-in leaderboard (designed-for, NOT built) — per integration plan §2
+The leaderboard is **no longer a vanity ranking**. It becomes the roadmap's moat: **opt-in, anonymized,
+aggregated measured deltas** — *"on rigs like yours (9800X3D-class), this tweak improved 1% lows by an
+average of X%."* This is the honest, unique, compounding flywheel a CCleaner can never retrofit, and it's
+**far more defensible** than another UserBenchmark clone.
 
-- **Strictly opt-in, default OFF, zero network** until an explicit *"Submit to leaderboard"* action.
-- **Minimal anonymous payload:** score + hardware *class* + a **user-chosen handle**. No PII, no telemetry, no
-  system inventory — documented in plain language at the opt-in.
-- **Network isolated to Rust**, one bounded command (`reqwest` in `benchmark.rs`). Webview gets **no** network
-  primitive: **no `http:`/`shell:`/`fs:` capability added; production CSP `connect-src 'self' ipc:` unchanged.**
-  The single invariant that changes: the Rust core gains its **first outbound HTTPS call** — gated, opt-in, isolated.
-- **Score integrity:** sign submissions (reuse repo `ed25519-compact` pattern) and/or server-side sanity bounds,
-  or the board fills with spoofed scores.
-- **Docs/security delta when it ships:** add an *"optional online leaderboard"* section to `PRIVACY.md` + `EULA.md`;
-  re-baseline the `/security` "expect 0 network" rule → *"0 unless leaderboard explicitly opted in,"* documented.
+- Same privacy model as before: **strictly opt-in, default OFF, zero network** until an explicit submit;
+  **minimal anonymous payload** (tweak id, hardware class, measured delta — no PII, no inventory); **network
+  isolated to Rust**, one bounded command (no webview network primitive, CSP unchanged); **signed
+  submissions + server-side sanity bounds** for integrity.
+- **Free to host at launch scale** (Cloudflare Workers + D1 / Supabase free tiers); cost only at real scale.
+- **Docs/security delta when it ships:** `PRIVACY.md` + `EULA.md` "optional online efficacy data" section;
+  re-baseline `/security` "expect 0 network" → "0 unless opted in."
 
 ## 9. Failure posture
 
-- Component can't run (no GPU API, locked disk) → "not measured," never panics; score uses what it has, honestly
-  noting partial coverage.
-- Dirty run → flagged low-confidence, not silently scored.
-- Missing baseline for a part → absolute score only, omit percentile ("no reference yet").
+- Component can't run → "not measured", never panics; honest partial coverage. ✅
+- Dirty/noisy run → Low confidence, widens the noise floor (so marginal deltas correctly read as "no change").
+- Missing baseline → omit percentile ("no reference yet"); efficacy delta still works (it's self-relative).
 
 ## 10. Testing
 
-Pure unit tests for the score fns (fixtures of bench results + ledger states + intents → standing, breakdown
-split, tier, crossing events incl. downward-on-revert + peace-of-mind "within normal range"). Runner tests:
-determinism of *shape* (not absolute timing) + cancellation + temp-file cleanup. No mutation → nothing to
-integration-test against system config.
+Pure unit tests: efficacy verdicts (improve/regress/within-noise → correct verdict using the noise floor),
+runner shape + cancellation + cleanup ✅. No mutation → nothing to integration-test against system config.
 
-## 11. Out of scope
+## 11. Cross-lane / locked decisions — FLAGGED for HQ + owner (NOT acted on from this lane)
 
-- No `src/` edits / final UI / naming from this lane — that's design lane + HQ via the integration plan.
-- No mutation, kernel, injection, admin. No live command registration until un-parked.
-- No PresentMon/ETW FPS proof (separate out-of-v1 tier).
-- **No telemetry / online leaderboard in Phase 1** (opt-in Phase 2 only).
+The realignment touches things outside this lane's authority. **This lane does not change them** — it flags:
 
-## 12. Open product calls (for the owner)
+1. **`BENCHMARK_INTEGRATION_PLAN.md` is superseded** (cosmetic-reward/vanity-leaderboard → measured-efficacy).
+   HQ updates it; mechanics unchanged.
+2. **PresentMon / `ARCHITECTURE_LOCKS §1.7` (the big one).** The roadmap wants **real game frame-time deltas**
+   (PresentMon: frame times, 1%/0.1% lows, GPU-busy) as the *ultimate* proof — the most honest possible
+   "Measure". Sentinel **already has the ETW capture machinery** (`ferrisetw`, the elevated `fps.rs`
+   `--fps-capture` helper). But §1.7 currently puts frame capture **out of v1**. Promoting it to the
+   centerpiece is a **conscious lock reversal = HQ + owner decision.** *Recommendation: pursue it — it's the
+   roadmap's strongest measurement and the machinery exists — but consciously, with HQ.* The synthetic
+   runners (this lane) remain the "is-my-hardware-to-spec" instrument; PresentMon becomes the "did-this-help-
+   my-game" instrument. Complementary, not a replacement.
+3. **The whole-product menu** (DPC/ISR latency analyzer, MSI/USB/timer-resolution honesty, network
+   bufferbloat, crash correlation via WHEA, per-app auto-switching profiles, **"undo bad optimization / PC
+   paramedic" repair mode**) is **whole-product + HQ/locks territory, beyond this benchmark lane.** Strong
+   ideas; sequence them; the latency module + "PC paramedic" positioning are the highest-differentiation,
+   lowest-mutation-risk places to grow.
 
-1. **GPU benchmark approach** — WebGPU/WebGL (webview, variable) vs `wgpu` (Rust, heavier), or ship CPU/RAM/disk
-   first + GPU fast-follow. *Recommend:* CPU/RAM/disk first, GPU fast-follow.
-2. **Overall weighting** — publish it; CPU vs GPU vs RAM vs disk shares of the "Sentinel score."
-3. **Seed baseline coverage** — how many parts at launch + how to honestly label "approximate."
-4. **Cosmetic reward set** — which looks/themes unlock at which tiers (reuse existing theme system).
-5. **Tier count + names** (~4; names design-lane's) and **confirm the 6 intents**.
+## 12. Open calls (for the owner)
+
+1. **Significance threshold** — what delta counts as "real" vs noise (default: must exceed best-of-N
+   variance; tune later).
+2. **PresentMon decision** (§11.2) — promote frame-capture to the core proof? *(Rec: yes, with HQ.)*
+3. **Confirm the leaderboard is now measured-efficacy data** (§8), not a vanity ranking. *(Rec: yes.)*
+4. **Aggregate health summary** — keep the demoted glance at all, or drop it entirely for pure per-tweak
+   efficacy?
