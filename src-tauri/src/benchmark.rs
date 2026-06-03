@@ -613,14 +613,14 @@ mod gpu {
 /// GPU are later increments, so coverage is honestly partial. Cancellable; no side effects.
 /// Honest run-confidence: a `Clean` run is presentable; `Low` means components varied
 /// enough between repeats that the number shouldn't be trusted as-is.
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum RunConfidence {
     Clean,
     Low,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub(crate) struct RunReport {
     pub components: Vec<ComponentScore>,
     pub confidence: RunConfidence,
@@ -816,6 +816,129 @@ pub(crate) fn compute_efficacy(before: &RunReport, after: &RunReport, base_floor
         verdict_for(avg, floor)
     };
     Efficacy { per_component, overall, noise_floor_pct: floor }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live runner — orchestration around the pure engine above.
+//
+// `run_benchmark` is multi-second and CPU/GPU/disk-heavy, so a command can't run it
+// inline without freezing the UI. `start_benchmark` kicks off a dedicated thread (the
+// FPS-monitoring pattern) that writes into a cached `BenchmarkState`; the UI polls
+// `benchmark_state`. Only the **baseline** persists (`benchmark.json`) so a
+// Measure → Change → Re-measure comparison survives across runs and restarts. The runner
+// changes NO system state — it only measures and stores its own results.
+// ─────────────────────────────────────────────────────────────────────────────
+
+use std::sync::{Mutex, OnceLock};
+
+/// What the UI sees (serialized to the frontend; never deserialized as a whole).
+#[derive(Serialize, Clone, Debug, Default)]
+pub(crate) struct BenchmarkState {
+    pub running: bool,
+    pub latest: Option<RunReport>,
+    pub latest_at: Option<String>,
+    pub baseline: Option<RunReport>,
+    pub baseline_at: Option<String>,
+    /// Efficacy of latest vs baseline (Measure → Change → Re-measure), when both exist.
+    pub efficacy: Option<Efficacy>,
+    pub error: Option<String>,
+}
+
+/// Only the baseline persists; the latest run + efficacy are transient (in-memory).
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+struct BenchmarkStore {
+    baseline: Option<RunReport>,
+    baseline_at: Option<String>,
+}
+
+fn store_path() -> std::path::PathBuf {
+    crate::sentinel_data_dir().join("benchmark.json")
+}
+
+fn load_store() -> BenchmarkStore {
+    std::fs::read_to_string(store_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_store(store: &BenchmarkStore) -> Result<(), String> {
+    std::fs::create_dir_all(crate::sentinel_data_dir()).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    std::fs::write(store_path(), json).map_err(|e| e.to_string())
+}
+
+fn state_cache() -> &'static Mutex<BenchmarkState> {
+    static CACHE: OnceLock<Mutex<BenchmarkState>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        // Hydrate the persisted baseline on first access.
+        let store = load_store();
+        Mutex::new(BenchmarkState {
+            baseline: store.baseline,
+            baseline_at: store.baseline_at,
+            ..Default::default()
+        })
+    })
+}
+
+/// Recompute `efficacy` from the current baseline + latest (both must exist).
+fn recompute_efficacy(state: &mut BenchmarkState) {
+    state.efficacy = match (&state.baseline, &state.latest) {
+        (Some(b), Some(a)) => Some(compute_efficacy(b, a, DEFAULT_NOISE_FLOOR_PCT)),
+        _ => None,
+    };
+}
+
+/// Current benchmark state for the UI.
+pub(crate) fn benchmark_state() -> BenchmarkState {
+    state_cache().lock().map(|s| s.clone()).unwrap_or_default()
+}
+
+/// Kick off a benchmark run on a background thread (no-op if one is already running).
+/// The lock is NOT held during the multi-second run, so `benchmark_state` stays responsive.
+pub(crate) fn start_benchmark() {
+    {
+        let Ok(mut s) = state_cache().lock() else { return };
+        if s.running {
+            return;
+        }
+        s.running = true;
+        s.error = None;
+    }
+    let _ = std::thread::Builder::new()
+        .name("benchmark-run".into())
+        .spawn(|| {
+            let cancel = AtomicBool::new(false);
+            let report = run_benchmark(&RunConfig::default(), &cancel);
+            if let Ok(mut s) = state_cache().lock() {
+                s.latest = Some(report);
+                s.latest_at = Some(chrono::Utc::now().to_rfc3339());
+                s.running = false;
+                recompute_efficacy(&mut s);
+            }
+        });
+}
+
+/// Save the latest run as the baseline (persisted). Errors if there's no run yet.
+pub(crate) fn set_baseline() -> Result<(), String> {
+    let mut s = state_cache().lock().map_err(|_| "benchmark state lock poisoned".to_string())?;
+    let Some(latest) = s.latest.clone() else {
+        return Err("Run a benchmark first, then set it as the baseline.".into());
+    };
+    let at = s.latest_at.clone().unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+    s.baseline = Some(latest.clone());
+    s.baseline_at = Some(at.clone());
+    recompute_efficacy(&mut s); // latest == baseline → all NoMeasurableChange (honest)
+    save_store(&BenchmarkStore { baseline: Some(latest), baseline_at: Some(at) })
+}
+
+/// Clear the saved baseline (memory + disk).
+pub(crate) fn clear_baseline() -> Result<(), String> {
+    let mut s = state_cache().lock().map_err(|_| "benchmark state lock poisoned".to_string())?;
+    s.baseline = None;
+    s.baseline_at = None;
+    s.efficacy = None;
+    save_store(&BenchmarkStore::default())
 }
 
 #[cfg(test)]

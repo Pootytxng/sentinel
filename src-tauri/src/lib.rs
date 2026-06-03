@@ -295,6 +295,30 @@ fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasurement> 
     latency::measure_mouse(duration_ms)
 }
 
+// ── Benchmark / measured-efficacy (read-only; measures, never mutates) ──
+// The engine is multi-second, so `start_benchmark` runs it on a background thread and
+// the UI polls `get_benchmark_state`. The baseline persists; efficacy = latest vs baseline
+// (Measure → Change → Re-measure → honest verdict).
+#[tauri::command]
+fn start_benchmark() {
+    benchmark::start_benchmark();
+}
+
+#[tauri::command]
+fn get_benchmark_state() -> benchmark::BenchmarkState {
+    benchmark::benchmark_state()
+}
+
+#[tauri::command]
+fn set_benchmark_baseline() -> Result<(), String> {
+    benchmark::set_baseline()
+}
+
+#[tauri::command]
+fn clear_benchmark_baseline() -> Result<(), String> {
+    benchmark::clear_baseline()
+}
+
 // Plain helper (no #[tauri::command]) so other modules (priorities) can read
 // startup entries without referencing the command fn.
 pub(crate) fn startup_entries() -> Vec<StartupEntry> {
@@ -389,6 +413,10 @@ pub fn run() {
             get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,
+            start_benchmark,
+            get_benchmark_state,
+            set_benchmark_baseline,
+            clear_benchmark_baseline,
             gaming_mode_enabled,
             start_gaming_session,
             stop_gaming_session,
