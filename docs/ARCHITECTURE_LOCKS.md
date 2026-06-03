@@ -100,7 +100,9 @@ Sentinel does not promise FPS gains, latency reductions, or other measured impro
 - **Measured signal** — a probe was run (memory latency, network jitter, storage random-read latency). This is a signal, not proof of gaming improvement.
 - **Expected impact** — theoretical impact described in the rule's text. Never displayed as a measured number.
 
-Synthetic microbenchmarks may be exposed as health signals. They may not be presented as "this tweak improved your FPS by X%." Real before/after gaming proof requires PresentMon/ETW frame-pacing capture and stays out of v1.
+Synthetic microbenchmarks may be exposed as health signals. They may not be presented as "this tweak improved your FPS by X%." Real before/after gaming proof requires PresentMon/ETW frame-pacing capture.
+
+**Scope update (2026-06-03, owner-approved).** PresentMon/ETW frame-time capture is **promoted from "out of v1" to the core efficacy "Measure"** — real per-tweak before/after frame-pacing deltas (frame times, 1%/0.1% lows) are the ultimate proof the measured-efficacy direction is built on. This reuses the **already-shipping, read-only, anti-cheat-safe** elevated `fps.rs --fps-capture` ETW helper (no new capability, no mutation, no injection — the same mechanism the Monitoring tab already uses). **The honesty invariant above is unchanged and reinforced:** a measured delta must still clear the run-to-run **noise floor** (default 3%) or be reported as an explicit **"no measurable change"**; synthetic runners stay labeled health signals ("is-my-hardware-to-spec"), kept distinct from PresentMon's "did-this-help-my-game" proof. Building the PresentMon→`compute_efficacy` seam stays gated behind the dark `benchmark_enabled()` until it ships and is QA'd.
 
 ---
 

@@ -133,10 +133,11 @@ A checklist to build against:
   bolt-on, never a v1 gate.
 
 **Still open / HQ-gated:**
-1. **PresentMon / `ARCHITECTURE_LOCKS §1.7`** — the lane hand-off records this as owner-approved (promote
-   real game frame-time deltas to the core "Measure"). It **reverses an architecture lock and leans on the
-   elevated capture path**, so HQ will **confirm directly with the owner before actioning it** — it is
-   **not** part of the dark engine merge.
+1. **PresentMon / `ARCHITECTURE_LOCKS §1.7` — ✅ ACTIONED (HQ, 2026-06-03, owner-confirmed).** §1.7's
+   "out of v1" deferral on PresentMon/ETW frame-capture is lifted; frame-time before/after deltas are now
+   the **core efficacy Measure**, reusing the already-shipping read-only anti-cheat-safe `fps.rs
+   --fps-capture` helper. §1.7's honesty invariant (no fake FPS claims; noise-floor "no measurable change")
+   is preserved and reinforced. **Building** the PresentMon→`compute_efficacy` seam remains dark/gated work.
 2. **If efficacy-sharing ships:** who hosts it, and how are submissions kept honest (signed via the
    existing `ed25519-compact` pattern / server-side bounds)?
 3. **Identity model for sharing:** anonymous token only *(recommended — preserves the no-account ethos)*,
