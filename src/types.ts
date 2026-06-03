@@ -61,3 +61,32 @@ export type LatencyReport = {
 };
 export type WakeMeasurement = { granularity: SleepGranularity; note: string };
 export type MouseMeasurement = { polling: PollingRate; note: string };
+
+// ── Benchmark / measured-efficacy (mirrors src-tauri/src/benchmark.rs serde) ──
+export type BenchComponent = "cpu" | "ram" | "gpu" | "disk";
+export type RunConfidence = "clean" | "low";
+export type Verdict = "improved" | "no-measurable-change" | "regressed";
+
+export type ComponentScore = { component: BenchComponent; score: number; measured: boolean };
+export type RunReport = { components: ComponentScore[]; confidence: RunConfidence; notes: string[] };
+export type ComponentEfficacy = {
+  component: BenchComponent;
+  before: number;
+  after: number;
+  delta_pct: number;
+  verdict: Verdict;
+};
+export type Efficacy = {
+  per_component: ComponentEfficacy[];
+  overall: Verdict;
+  noise_floor_pct: number;
+};
+export type BenchmarkState = {
+  running: boolean;
+  latest: RunReport | null;
+  latest_at: string | null;
+  baseline: RunReport | null;
+  baseline_at: string | null;
+  efficacy: Efficacy | null;
+  error: string | null;
+};

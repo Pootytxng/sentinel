@@ -1,0 +1,184 @@
+.bench-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 860px;
+}
+
+.bench-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  color: var(--fg);
+}
+
+.bench-muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+
+.bench-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bench-btn {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background var(--dur-tap, 90ms) ease, border-color var(--dur-tap, 90ms) ease;
+}
+
+.bench-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-hover, var(--accent));
+}
+
+.bench-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bench-btn-primary {
+  font-size: 0.95rem;
+  padding: 11px 20px;
+}
+
+.bench-btn-ghost {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  margin-top: 10px;
+}
+
+.bench-err {
+  color: var(--danger, #f3716f);
+  font-size: 0.85rem;
+}
+
+/* Run result bars */
+.bench-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.bench-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+
+.bench-bar-label {
+  color: var(--muted);
+  flex: 0 0 64px;
+}
+
+.bench-bar-track {
+  flex: 1 1 auto;
+  height: 8px;
+  background: var(--panel-2, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bench-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 240ms ease;
+}
+
+.bench-bar-val {
+  color: var(--fg);
+  flex: 0 0 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-bar-na {
+  color: var(--faint);
+  font-size: 0.8rem;
+  flex: 1 1 auto;
+}
+
+.bench-fine {
+  color: var(--faint);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.bench-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 6px 0 0;
+  padding: 8px 11px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+}
+
+/* Efficacy rows */
+.bench-eff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bench-eff-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.bench-eff-row:last-child {
+  border-bottom: none;
+}
+
+.bench-eff-label {
+  color: var(--muted);
+  flex: 0 0 64px;
+}
+
+.bench-eff-delta {
+  flex: 0 0 64px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.bench-eff-delta.is-ready {
+  color: var(--ready, #46d98a);
+}
+
+.bench-eff-delta.is-danger {
+  color: var(--danger, #f3716f);
+}
+
+.bench-eff-delta.is-unknown {
+  color: var(--faint);
+}
+
+.bench-steps {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}

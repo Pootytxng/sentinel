@@ -6,6 +6,7 @@ import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
+import { BenchmarkTab } from "./surfaces/Benchmark";
 import "./App.css";
 import "./Onboarding.css";
 
@@ -165,7 +166,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Latency" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -175,6 +176,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Monitoring: { label: "Monitor", icon: "pulse" },
   Sessions: { label: "Sessions", icon: "chart" },
   Latency: { label: "Latency", icon: "pulse" },
+  Benchmark: { label: "Benchmark", icon: "chart" },
   Diagnostics: { label: "Diagnostics", icon: "terminal" },
   History: { label: "Ledger", icon: "ledger" },
   Gaming: { label: "Gaming", icon: "engine" },
@@ -836,6 +838,7 @@ function App() {
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
     if (hw) list.push("Latency");
+    if (hw) list.push("Benchmark");
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     if (gamingEnabled) list.push("Gaming");
@@ -953,6 +956,7 @@ function App() {
               )}
               {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
               {activeTab === "Latency" && <LatencyTab />}
+              {activeTab === "Benchmark" && <BenchmarkTab />}
               {activeTab === "Diagnostics" && (
                 <DiagnosticsTab sections={diagnostics} />
               )}
