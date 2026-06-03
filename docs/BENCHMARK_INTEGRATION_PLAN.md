@@ -1,13 +1,23 @@
 # Benchmark — Integration Plan (HQ merge contract)
 
-**Status: PLAN (2026-06-02).** The benchmark is being built in its own lane/worktree (`benchmark`
-branch). This doc is the contract HQ and the benchmark lane both build against so that, when the
-benchmark is done, it merges into `main` **cleanly and without betraying Sentinel's identity.** No code
-here — this is the seam + the rules.
+**Status: MERGED DARK (2026-06-03).** The benchmark engine merged into `main` on 2026-06-03 — compiled
+but **unwired** (`mod benchmark;` only, no IPC command, no tab; nothing user-facing changed). This doc is
+the contract HQ and the benchmark lane both build against so that, when the benchmark is wired up, it does
+so **cleanly and without betraying Sentinel's identity.** No code here — this is the seam + the rules.
 
-**What the benchmark is (owner-confirmed):** a **scoring / cosmetic-reward** feature in **its own
-section**, with a **leaderboard of other Sentinel users** (UserBenchmark-style, but purely score-vs-
-other-users). Cosmetic rewards unlock as you score.
+> **PURPOSE REALIGNED 2026-06-03 (owner).** The original *"scoring / cosmetic-reward + UserBenchmark-style
+> leaderboard"* framing is **dead.** The benchmark's soul is now a **scientific instrument with an undo
+> button**: **Measure → Change → Re-measure → honest verdict**, with real per-tweak measured deltas and an
+> explicit **"no measurable change"** when a delta doesn't clear the run-to-run noise floor (default 3%).
+> **Every mechanic in this doc still holds** (gated tab, own `benchmark.json`, network-only-in-Rust,
+> no-mutation, additive own-tab → Decision A preserved) — **only the purpose changes.**
+
+**What the benchmark is (owner-confirmed 2026-06-03):** a **measured-efficacy instrument** in **its own
+gated section** — it benchmarks the rig (CPU/RAM/GPU/disk, real runners), then proves whether a change
+actually helped by re-measuring and reporting an honest verdict (**Improved / No measurable change /
+Regressed**). A quiet **"performing-to-spec / underperforming" health summary** is kept (ranking
+stripped). The former leaderboard is reframed to **opt-in, anonymized measured-efficacy data** — "on rigs
+like yours, this tweak improved X%" — not a vanity score ranking. **No cosmetic-reward grind.**
 
 ---
 
@@ -16,14 +26,14 @@ other-users). Cosmetic rewards unlock as you score.
 - **The merge is the easy part.** "Its own section" is the clean path: the benchmark slots in as a
   **gated tab**, exactly like Gaming Mode did — new files, a default-off gate, and it **never touches the
   honest command-center hero.** Decision A (de-gamified `SystemPosture`) survives untouched because the
-  score/reward lives *inside* the Benchmark tab, not in the global hero. That's a conflict-free additive
-  merge.
-- **The leaderboard is the one real decision.** A leaderboard vs other users needs three things Sentinel
-  has **never** had — **network egress, a user identity, and a server someone runs.** That crosses the
-  **local-only / no-account / no-telemetry** line the EULA, `PRIVACY.md`, the monetization story, and the
-  `/security` audit are all built on. Not a blocker — a deliberate product decision. Done as a
-  **strictly opt-in, anonymous, Rust-isolated** feature, the local-only promise stays intact for everyone
-  who never opts in.
+  efficacy verdict + health summary live *inside* the Benchmark tab, not in the global hero. That's a
+  conflict-free additive merge. *(Engine merged dark 2026-06-03; tab not yet wired.)*
+- **Cross-user efficacy sharing is the one real decision.** Pooling anonymized measured-efficacy data
+  across users needs three things Sentinel has **never** had — **network egress, an (anonymous) identity,
+  and a server someone runs.** That crosses the **local-only / no-account / no-telemetry** line the EULA,
+  `PRIVACY.md`, the monetization story, and the `/security` audit are all built on. Not a blocker — a
+  deliberate product decision. Done as a **strictly opt-in, anonymous, Rust-isolated** feature, the
+  local-only promise stays intact for everyone who never opts in.
 
 ---
 
@@ -46,39 +56,42 @@ The benchmark **tab** reuses the established gated-section seam — no `App.tsx`
 - **Separate data store.** Benchmark results/rewards persist to their **own** JSON under
   `sentinel_data_dir()` (e.g. `benchmark.json`) — **never** the Trust Ledger (`history.json`) or
   `sessions.json`. Same isolation discipline Gaming Mode used (`gaming-session.json`).
-- **Cosmetic rewards reuse what's already local.** The theme system (`THEMES` / `applyTheme` /
-  `localStorage`, `src/App.tsx:531-564`) is already cosmetic, local-only, no-network. A reward that
-  unlocks a theme should reuse that mechanism and **store the unlock locally** — no reward should depend
-  on the network being up.
+- **No cosmetic-reward grind.** The vanity score / tiers / unlock layer is dropped (purpose realignment).
+  The tab surfaces a **measured verdict** + an optional local **health summary**; any cosmetic flourish
+  (if ever added) must reuse the existing local theme system (`THEMES` / `applyTheme` / `localStorage`,
+  `src/App.tsx:531-564`) and **store locally** — never gate value behind the network being up.
 
-## 2. The one real fork — the leaderboard (network + identity + a server)
+## 2. The one real fork — cross-user efficacy sharing (network + identity + a server)
 
-Plain-language: a leaderboard comparing you to other Sentinel users requires three firsts:
+Plain-language: pooling **measured-efficacy data across users** ("on rigs like yours, this tweak improved
+X%") requires the same three firsts a leaderboard would — they're properties of *any* cross-user data,
+vanity or not:
 
-1. **Network.** The app uploads your score and downloads others'. Today Sentinel makes **0** outbound
-   calls (a hard invariant `/security` checks for). This is the first one ever.
-2. **An identity.** "Ranked vs other users" needs at least a **handle** to show on the board. Today:
-   no account, by design.
-3. **A server someone runs.** To store, rank, and serve scores — infra to host, secure, pay for, and
-   **moderate.** UserBenchmark-style boards get **spammed with spoofed scores**, so it needs
-   score-integrity or the board is noise.
+1. **Network.** The app uploads your anonymized efficacy delta and downloads the aggregate. Today Sentinel
+   makes **0** outbound calls (a hard invariant `/security` checks for). This is the first one ever.
+2. **An identity.** Even anonymous aggregation needs at least a **stable anonymous token** (dedupe, abuse
+   control). Today: no account, by design — and the design here stays no-handle, no-PII.
+3. **A server someone runs.** To store, aggregate, and serve the efficacy data — infra to host, secure,
+   pay for, and **moderate.** Open aggregates get **poisoned with spoofed submissions**, so it needs
+   submission-integrity or the data is noise.
 
 **This is a product decision, not a bug.** The clean way to add it without betraying the identity:
 
 - **Strictly opt-in.** Default = **fully local, zero network.** The local-only promise holds for everyone
-  who never opts in. Only an explicit *"Submit to leaderboard"* action sends anything.
-- **Minimal, anonymous payload.** Score + a hardware *class* + a **user-chosen handle**. No PII, no
-  telemetry, no system inventory. Documented exactly, in plain language, at the opt-in.
+  who never opts in. Only an explicit *"Share efficacy data"* action sends anything.
+- **Minimal, anonymous payload.** The measured efficacy delta (e.g. "tweak X: +Y% GPU throughput,
+  confidence: clean") + a hardware *class* + an anonymous token. No handle, no PII, no telemetry, no
+  system inventory. Documented exactly, in plain language, at the opt-in.
 - **Network isolated to Rust, behind one bounded command.** Put the call in `benchmark.rs` (`reqwest`),
-  exposed as e.g. `submit_benchmark_score` / `get_leaderboard`. The **webview never gets a network
+  exposed as e.g. `submit_efficacy` / `get_efficacy_aggregate`. The **webview never gets a network
   primitive**, so:
   - `capabilities/default.json` stays tight — **no `http:` / `shell:` / `fs:` permission added.**
   - the production **CSP `connect-src 'self' ipc:` stays as-is** — CSP only governs *webview* fetches; a
     Rust-side call isn't one. (See `src-tauri/tauri.conf.json` — do not widen it.)
   - The single invariant that genuinely changes: **the Rust core gains its first outbound HTTPS call** —
     gated, opt-in, isolated to this module. That's the line to cross deliberately, with eyes open.
-- **Score integrity.** Sign submissions (reuse the repo's existing `ed25519-compact` pattern) and/or
-  server-side sanity bounds — otherwise the board fills with fakes.
+- **Submission integrity.** Sign submissions (reuse the repo's existing `ed25519-compact` pattern) and/or
+  server-side sanity bounds — otherwise the aggregate fills with fakes.
 
 ## 3. Merge mechanics (HQ runs this when the benchmark is done)
 
@@ -92,8 +105,8 @@ Plain-language: a leaderboard comparing you to other Sentinel users requires thr
 
 A checklist to build against:
 
-- [ ] Score/reward/leaderboard UI lives **only** in the Benchmark tab. **Never** touch
-      `CommandHero` / `SystemPosture` / the global hero. *(Preserves Decision A.)*
+- [ ] Benchmark / efficacy-verdict / health-summary UI lives **only** in the Benchmark tab. **Never**
+      touch `CommandHero` / `SystemPosture` / the global hero. *(Preserves Decision A.)*
 - [ ] Ship behind a **default-off `benchmark_enabled()` gate** (dark until ready) — Gaming Mode precedent.
 - [ ] **New files** for the surface + a new Rust module; reuse the `Tab` / `SECTION_META` / `visibleTabs`
       seam — don't restructure `App.tsx`.
@@ -103,23 +116,36 @@ A checklist to build against:
       apply/rollback path** (`APPLIABLE_REC_IDS`) — never a new mutation primitive.
 - [ ] **Network (if any) only in Rust, opt-in, behind a bounded command.** Do **not** add `http:` /
       `shell:` / `fs:` to capabilities; do **not** widen the production CSP.
-- [ ] **Cosmetic unlocks stored locally**; reuse the existing theme mechanism; no reward depends on the
-      network.
-- [ ] **If the leaderboard ships:** update `PRIVACY.md` + `EULA.md` with an *"optional online
-      leaderboard"* section, and re-baseline the `/security` "expect 0 network" rule to *"0 unless
-      leaderboard explicitly opted in,"* documented.
+- [ ] **No cosmetic-reward grind** (dropped in the realignment); any optional local flourish reuses the
+      existing theme mechanism and stores locally — never gate value behind the network.
+- [ ] **If cross-user efficacy sharing ships:** update `PRIVACY.md` + `EULA.md` with an *"optional
+      anonymized efficacy sharing"* section, and re-baseline the `/security` "expect 0 network" rule to
+      *"0 unless efficacy sharing explicitly opted in,"* documented.
 
-## 5. Owner decisions (when you're ready)
+## 5. Owner decisions
 
-1. **Leaderboard in v1, or local-first?** Shipping benchmark + score + cosmetic rewards **fully local
-   first** carries **zero** identity/network risk and is a clean additive merge; the leaderboard is a
-   later bolt-on. *(Recommended: local-first, leaderboard second.)*
-2. **If leaderboard:** who hosts it, and how are scores kept honest (signed submissions / server bounds)?
-3. **Identity model:** anonymous chosen handle only, or anything more? *(Anonymous handle preserves the
-   no-account ethos best.)*
+**Settled 2026-06-03 (owner):**
+- **Soul = measured efficacy**, not a vanity score. Significance threshold = conservative **3%** noise
+  floor default (`DEFAULT_NOISE_FLOOR_PCT`; retune later).
+- **Health summary = KEEP** as a quiet "performing-to-spec / underperforming" glance (ranking stripped).
+- **Leaderboard = opt-in anonymized measured-efficacy data** (confirmed — not a vanity ranking).
+- **Local-first.** Default = fully local, zero network; the efficacy-sharing pool is a later opt-in
+  bolt-on, never a v1 gate.
+
+**Still open / HQ-gated:**
+1. **PresentMon / `ARCHITECTURE_LOCKS §1.7`** — the lane hand-off records this as owner-approved (promote
+   real game frame-time deltas to the core "Measure"). It **reverses an architecture lock and leans on the
+   elevated capture path**, so HQ will **confirm directly with the owner before actioning it** — it is
+   **not** part of the dark engine merge.
+2. **If efficacy-sharing ships:** who hosts it, and how are submissions kept honest (signed via the
+   existing `ed25519-compact` pattern / server-side bounds)?
+3. **Identity model for sharing:** anonymous token only *(recommended — preserves the no-account ethos)*,
+   or anything more?
 
 ---
 
-**Bottom line:** the benchmark *tab* is a clean, low-risk additive merge whenever it's done. The only
-thing that needs a deliberate decision is the **leaderboard's network + identity** — and done opt-in /
-anonymous / Rust-isolated, it can ship **without** breaking the local-only promise for anyone else.
+**Bottom line:** the benchmark engine is **merged dark** and wires up later as a clean, low-risk additive
+gated tab. Its soul is **measured efficacy** — honest "did this actually help?" verdicts, not a vanity
+score. The only thing that needs a deliberate decision is **cross-user efficacy sharing's network +
+identity** — and done opt-in / anonymous / Rust-isolated, it can ship **without** breaking the local-only
+promise for anyone else.
