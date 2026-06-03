@@ -654,8 +654,10 @@ mod rec_tests {
 
     #[test]
     fn all_hdd_gates_windows_search_indexer() {
-        let mut h = HardwareInfo::default();
-        h.physical_disks = vec![pdisk("HDD", "SATA"), pdisk("HDD", "SATA")];
+        let mut h = HardwareInfo {
+            physical_disks: vec![pdisk("HDD", "SATA"), pdisk("HDD", "SATA")],
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::AllHdd, &h), "all spinning -> gate fires");
         h.physical_disks.push(pdisk("SSD", "NVMe"));
         assert!(
@@ -670,21 +672,29 @@ mod rec_tests {
 
     #[test]
     fn fast_storage_present_gates_sysmain() {
-        let mut nvme = HardwareInfo::default();
-        nvme.physical_disks = vec![pdisk("Unknown", "NVMe")];
+        let nvme = HardwareInfo {
+            physical_disks: vec![pdisk("Unknown", "NVMe")],
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::FastStoragePresent, &nvme));
-        let mut ssd = HardwareInfo::default();
-        ssd.physical_disks = vec![pdisk("SSD", "SATA")];
+        let ssd = HardwareInfo {
+            physical_disks: vec![pdisk("SSD", "SATA")],
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::FastStoragePresent, &ssd));
-        let mut hdd = HardwareInfo::default();
-        hdd.physical_disks = vec![pdisk("HDD", "SATA")];
+        let hdd = HardwareInfo {
+            physical_disks: vec![pdisk("HDD", "SATA")],
+            ..Default::default()
+        };
         assert!(!condition_matches(&Condition::FastStoragePresent, &hdd));
     }
 
     #[test]
     fn ram_threshold_gating() {
-        let mut h = HardwareInfo::default();
-        h.ram_total_bytes = 16 * 1024 * 1024 * 1024;
+        let mut h = HardwareInfo {
+            ram_total_bytes: 16 * 1024 * 1024 * 1024,
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::RamGbAtLeast { min_gb: 16 }, &h));
         h.ram_total_bytes = 8 * 1024 * 1024 * 1024;
         assert!(!condition_matches(&Condition::RamGbAtLeast { min_gb: 16 }, &h));
@@ -692,21 +702,29 @@ mod rec_tests {
 
     #[test]
     fn modern_discrete_gpu_gates_hags() {
-        let mut amd = HardwareInfo::default();
-        amd.gpus = vec![gpu("AMD Radeon RX 9070 XT")];
+        let amd = HardwareInfo {
+            gpus: vec![gpu("AMD Radeon RX 9070 XT")],
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::HasModernDiscreteGpu, &amd));
-        let mut nv = HardwareInfo::default();
-        nv.gpus = vec![gpu("NVIDIA GeForce RTX 4080")];
+        let nv = HardwareInfo {
+            gpus: vec![gpu("NVIDIA GeForce RTX 4080")],
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::HasModernDiscreteGpu, &nv));
-        let mut old = HardwareInfo::default();
-        old.gpus = vec![gpu("Intel HD Graphics 4000")];
+        let old = HardwareInfo {
+            gpus: vec![gpu("Intel HD Graphics 4000")],
+            ..Default::default()
+        };
         assert!(!condition_matches(&Condition::HasModernDiscreteGpu, &old));
     }
 
     #[test]
     fn active_wired_ethernet_gates_eee() {
-        let mut h = HardwareInfo::default();
-        h.has_active_wired_ethernet = true;
+        let mut h = HardwareInfo {
+            has_active_wired_ethernet: true,
+            ..Default::default()
+        };
         assert!(condition_matches(&Condition::HasActiveWiredEthernet, &h));
         h.has_active_wired_ethernet = false;
         assert!(!condition_matches(&Condition::HasActiveWiredEthernet, &h));
@@ -714,8 +732,10 @@ mod rec_tests {
 
     #[test]
     fn gpu_vendor_match_condition() {
-        let mut h = HardwareInfo::default();
-        h.gpus = vec![gpu("AMD Radeon RX 9070 XT")];
+        let h = HardwareInfo {
+            gpus: vec![gpu("AMD Radeon RX 9070 XT")],
+            ..Default::default()
+        };
         assert!(condition_matches(
             &Condition::GpuVendor { vendor: "amd".into() },
             &h
@@ -728,14 +748,16 @@ mod rec_tests {
 
     #[test]
     fn display_underdriven_and_hdr() {
-        let mut h = HardwareInfo::default();
-        h.display = Some(DisplayInfo {
-            width: 2560,
-            height: 1440,
-            current_refresh_rate_hz: 60,
-            max_refresh_rate_hz: 144,
-            hdr_capable: true,
-        });
+        let mut h = HardwareInfo {
+            display: Some(DisplayInfo {
+                width: 2560,
+                height: 1440,
+                current_refresh_rate_hz: 60,
+                max_refresh_rate_hz: 144,
+                hdr_capable: true,
+            }),
+            ..Default::default()
+        };
         assert!(condition_matches(
             &Condition::DisplayUnderdriven { min_gap_hz: 24 },
             &h
@@ -751,13 +773,15 @@ mod rec_tests {
 
     #[test]
     fn storage_below_free_percent_gating() {
-        let mut h = HardwareInfo::default();
-        h.disks = vec![DiskInfo {
-            mount_point: "C:".into(),
-            total_bytes: 1000,
-            available_bytes: 100, // 10% free
-            file_system: "NTFS".into(),
-        }];
+        let mut h = HardwareInfo {
+            disks: vec![DiskInfo {
+                mount_point: "C:".into(),
+                total_bytes: 1000,
+                available_bytes: 100, // 10% free
+                file_system: "NTFS".into(),
+            }],
+            ..Default::default()
+        };
         assert!(condition_matches(
             &Condition::StorageBelowFreePercent {
                 mount_prefix: "C:".into(),
@@ -795,11 +819,13 @@ mod rec_tests {
         // Rich fixture so many gates fire; build_recommendations also reads the
         // real machine's state probes for currently_applied — IDs must be
         // unique across JSON + code recs regardless.
-        let mut h = HardwareInfo::default();
-        h.ram_total_bytes = 32 * 1024 * 1024 * 1024;
-        h.gpus = vec![gpu("AMD Radeon RX 9070 XT")];
-        h.physical_disks = vec![pdisk("SSD", "NVMe")];
-        h.has_active_wired_ethernet = true;
+        let h = HardwareInfo {
+            ram_total_bytes: 32 * 1024 * 1024 * 1024,
+            gpus: vec![gpu("AMD Radeon RX 9070 XT")],
+            physical_disks: vec![pdisk("SSD", "NVMe")],
+            has_active_wired_ethernet: true,
+            ..Default::default()
+        };
         let recs = build_recommendations(&h);
         let mut seen = std::collections::HashSet::new();
         for r in &recs {

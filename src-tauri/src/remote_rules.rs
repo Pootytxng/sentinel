@@ -486,7 +486,7 @@ mod manifest_tests {
         let signer = KeyPair::generate();
         let other = KeyPair::generate();
         let m = signed_manifest(&signer, 5, &future(), "0.0.0", "99.0.0", &sha256_hex(VALID_RULES));
-        let err = verify_manifest_with_key(&m, &*other.pk).unwrap_err();
+        let err = verify_manifest_with_key(&m, &other.pk).unwrap_err();
         assert!(matches!(err, ManifestError::SignatureInvalid));
     }
 
