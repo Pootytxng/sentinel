@@ -870,7 +870,19 @@ pub(crate) fn measure_mouse_polling(duration_ms: u32) -> Option<PollingRate> {
         }
 
         // A one-shot timer ends the capture; GetMessageW blocks (no busy-spin) and wakes per report.
-        SetTimer(hwnd, 1, duration_ms, None);
+        // If the timer can't be created we MUST bail — otherwise, with no mouse movement, GetMessageW
+        // would block forever (no WM_TIMER ever arrives).
+        if SetTimer(hwnd, 1, duration_ms, None) == 0 {
+            rid.dwFlags = RIDEV_REMOVE;
+            rid.hwndTarget = std::ptr::null_mut();
+            let _ = RegisterRawInputDevices(&rid, 1, size_of::<RAWINPUTDEVICE>() as u32);
+            DestroyWindow(hwnd);
+            UnregisterClassW(class_name.as_ptr(), hinstance);
+            return None;
+        }
+        // Wall-clock backstop: even if the timer message were somehow missed, never run past this.
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_millis(duration_ms as u64 + 500);
         let mut msg: MSG = zeroed();
         loop {
             let ret = GetMessageW(&mut msg, hwnd, 0, 0);
@@ -890,6 +902,9 @@ pub(crate) fn measure_mouse_polling(duration_ms: u32) -> Option<PollingRate> {
             }
             TranslateMessage(&msg);
             DispatchMessageW(&msg); // routes WM_INPUT to DefWindowProc, which frees the raw data
+            if std::time::Instant::now() >= deadline {
+                break; // defense-in-depth vs a stuck timer while reports keep arriving
+            }
         }
 
         // Cleanup: stop the timer, deregister raw input, destroy the window + class.
