@@ -12,6 +12,8 @@
 #![allow(dead_code)] // parked/dark: items are wired by HQ when the Benchmark tab lands.
 
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 /// What the user cares about — weights the standing toward their goals (spec §4).
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -251,6 +253,140 @@ pub(crate) fn compute_standing(inputs: &StandingInputs) -> Standing {
     }
 }
 
+// ── Benchmark runners (increment 2a): native CPU + RAM raw measurement ──────────────
+//
+// Honest RAW throughput only. Normalization to 0..=100 uses PLACEHOLDER reference
+// constants (see `refs`) that are NOT tuned baselines — rough seeds to be replaced per
+// spec §6 (the owner's weighting/baseline open call). Disk runner + GPU are later
+// increments. All workloads are parameterized (tests use tiny params), cancellable, and
+// have **no side effects** (no files, no system changes).
+
+pub(crate) struct RunConfig {
+    pub cpu_ms: u64,
+    pub ram_mb: usize,
+    pub ram_passes: usize,
+}
+impl Default for RunConfig {
+    fn default() -> Self {
+        Self { cpu_ms: 600, ram_mb: 64, ram_passes: 4 }
+    }
+}
+impl RunConfig {
+    /// Tiny params for tests — fast, won't hammer the machine.
+    fn tiny() -> Self {
+        Self { cpu_ms: 15, ram_mb: 2, ram_passes: 1 }
+    }
+}
+
+/// Raw CPU throughput in thousands-of-iterations/sec. No normalization here.
+pub(crate) struct CpuRaw {
+    pub single_kops: f64,
+    pub multi_kops: f64,
+    pub threads: usize,
+}
+
+/// A mixed integer kernel; counts iterations completed before `deadline`. Checks `cancel`
+/// between chunks (time/flag checks amortized over a chunk of work).
+fn cpu_kernel(deadline: Instant, cancel: &AtomicBool) -> u64 {
+    let mut acc: u64 = 0;
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut iters: u64 = 0;
+    while Instant::now() < deadline {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        for _ in 0..4096 {
+            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            acc = acc.wrapping_add(x ^ (x >> 33));
+        }
+        iters += 4096;
+    }
+    std::hint::black_box(acc);
+    iters
+}
+
+pub(crate) fn bench_cpu(cfg: &RunConfig, cancel: &AtomicBool) -> CpuRaw {
+    let budget = Duration::from_millis(cfg.cpu_ms);
+
+    let start = Instant::now();
+    let single_iters = cpu_kernel(start + budget, cancel);
+    let single_secs = start.elapsed().as_secs_f64().max(1e-6);
+    let single_kops = single_iters as f64 / 1000.0 / single_secs;
+
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let start = Instant::now();
+    let deadline = start + budget;
+    let total: u64 = std::thread::scope(|s| {
+        let handles: Vec<_> =
+            (0..threads).map(|_| s.spawn(|| cpu_kernel(deadline, cancel))).collect();
+        handles.into_iter().map(|h| h.join().unwrap_or(0)).sum()
+    });
+    let multi_secs = start.elapsed().as_secs_f64().max(1e-6);
+    let multi_kops = total as f64 / 1000.0 / multi_secs;
+
+    CpuRaw { single_kops, multi_kops, threads }
+}
+
+/// Raw memory bandwidth in MB/s (write + read sweeps over a working set).
+pub(crate) struct RamRaw {
+    pub bandwidth_mb_s: f64,
+}
+
+pub(crate) fn bench_ram(cfg: &RunConfig, cancel: &AtomicBool) -> RamRaw {
+    let elems = (cfg.ram_mb * 1024 * 1024 / std::mem::size_of::<u64>()).max(1);
+    let mut buf = vec![0u64; elems];
+    let bytes_per_pass = (buf.len() * std::mem::size_of::<u64>()) as f64 * 2.0; // write + read
+    let start = Instant::now();
+    let mut total_bytes = 0.0;
+    for p in 0..cfg.ram_passes.max(1) {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        for (i, slot) in buf.iter_mut().enumerate() {
+            *slot = (i as u64) ^ (p as u64);
+        }
+        let mut acc = 0u64;
+        for &v in &buf {
+            acc = acc.wrapping_add(v);
+        }
+        std::hint::black_box(acc);
+        total_bytes += bytes_per_pass;
+    }
+    let secs = start.elapsed().as_secs_f64().max(1e-6);
+    RamRaw { bandwidth_mb_s: total_bytes / (1024.0 * 1024.0) / secs }
+}
+
+/// PLACEHOLDER reference constants — the raw value that maps to score 100. **Not** tuned
+/// baselines; rough seeds to be replaced per spec §6 (owner weighting/baseline call). The
+/// RAW metrics above are the honest signal; these only shape the cosmetic 0..=100.
+mod refs {
+    pub const CPU_SINGLE_KOPS_100: f64 = 200_000.0;
+    pub const CPU_MULTI_KOPS_100: f64 = 2_000_000.0;
+    pub const RAM_MB_S_100: f64 = 30_000.0;
+}
+
+fn normalize(raw: f64, ref_100: f64) -> u32 {
+    ((raw / ref_100) * 100.0).round().clamp(0.0, 100.0) as u32
+}
+
+/// Run the available native components (CPU, RAM) → normalized `ComponentScore`s. Disk +
+/// GPU are later increments, so coverage is honestly partial. Cancellable; no side effects.
+pub(crate) fn run_components(cfg: &RunConfig, cancel: &AtomicBool) -> Vec<ComponentScore> {
+    let cpu = bench_cpu(cfg, cancel);
+    let cpu_score = (normalize(cpu.single_kops, refs::CPU_SINGLE_KOPS_100)
+        + normalize(cpu.multi_kops, refs::CPU_MULTI_KOPS_100))
+        / 2;
+    let ram = bench_ram(cfg, cancel);
+    vec![
+        ComponentScore { component: Component::Cpu, score: cpu_score, measured: true },
+        ComponentScore {
+            component: Component::Ram,
+            score: normalize(ram.bandwidth_mb_s, refs::RAM_MB_S_100),
+            measured: true,
+        },
+    ]
+}
+
 #[cfg(test)]
 mod benchmark_tests {
     use super::*;
@@ -407,5 +543,51 @@ mod benchmark_tests {
         assert_eq!(s.tier, 4);
         assert_eq!(s.tier_name, "Locked-In");
         assert!(s.next_tier_delta.is_none());
+    }
+
+    // ── runner tests (assert shape/invariants, never exact timing) ──
+
+    #[test]
+    fn cpu_runner_produces_positive_throughput() {
+        let cancel = AtomicBool::new(false);
+        let raw = bench_cpu(&RunConfig::tiny(), &cancel);
+        assert!(raw.single_kops > 0.0);
+        assert!(raw.multi_kops > 0.0);
+        assert!(raw.threads >= 1);
+    }
+
+    #[test]
+    fn ram_runner_produces_positive_bandwidth() {
+        let cancel = AtomicBool::new(false);
+        let raw = bench_ram(&RunConfig::tiny(), &cancel);
+        assert!(raw.bandwidth_mb_s > 0.0);
+    }
+
+    #[test]
+    fn precancelled_cpu_returns_fast_and_does_not_hang() {
+        let cancel = AtomicBool::new(true); // pre-cancelled
+        let t = Instant::now();
+        let _ = bench_cpu(&RunConfig::default(), &cancel); // 600ms budget, but cancelled
+        assert!(t.elapsed() < Duration::from_millis(400)); // bails well under budget
+    }
+
+    #[test]
+    fn run_components_covers_cpu_and_ram_and_feeds_scorer() {
+        let cancel = AtomicBool::new(false);
+        let comps = run_components(&RunConfig::tiny(), &cancel);
+        assert_eq!(comps.len(), 2);
+        assert!(comps.iter().all(|c| c.measured));
+        assert!(comps.iter().all(|c| c.score <= 100));
+        // end-to-end: measured components feed the pure scorer
+        let s = compute_standing(&StandingInputs { components: comps, ..Default::default() });
+        assert_eq!(s.measured_components, 2);
+        assert!(s.tier >= 1);
+    }
+
+    #[test]
+    fn normalize_clamps_to_0_100() {
+        assert_eq!(normalize(0.0, 100.0), 0);
+        assert_eq!(normalize(50.0, 100.0), 50);
+        assert_eq!(normalize(1000.0, 100.0), 100); // clamped
     }
 }
