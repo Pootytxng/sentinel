@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
 import { componentLabel, verdictLabel, verdictTone, fmtDelta } from "./benchmark-view";
-import type { BenchmarkState, RunReport, Efficacy } from "../types";
+import type { BenchmarkState, RunReport, Efficacy, AppliedChange } from "../types";
 import "./Benchmark.css";
 
 const POLL_MS = 700;
@@ -12,12 +12,18 @@ const POLL_MS = 700;
 // real signal is the comparison vs your saved baseline, which is reference-independent.
 export function BenchmarkTab() {
   const [state, setState] = useState<BenchmarkState | null>(null);
+  const [changes, setChanges] = useState<AppliedChange[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      setState(await invoke<BenchmarkState>("get_benchmark_state"));
+      const [s, ch] = await Promise.all([
+        invoke<BenchmarkState>("get_benchmark_state"),
+        invoke<AppliedChange[]>("get_applied_changes").catch(() => [] as AppliedChange[]),
+      ]);
+      setState(s);
+      setChanges(ch);
     } catch {
       /* leave prior state */
     }
@@ -40,6 +46,15 @@ export function BenchmarkTab() {
       await invoke("start_benchmark");
     } catch (e) {
       setErr(String(e));
+    }
+    refresh();
+  };
+
+  const cancel = async () => {
+    try {
+      await invoke("cancel_benchmark");
+    } catch {
+      /* ignore */
     }
     refresh();
   };
@@ -75,6 +90,20 @@ export function BenchmarkTab() {
   const showEfficacy =
     !!state?.efficacy && hasBaseline && !!state?.latest && state.latest_at !== state.baseline_at;
 
+  // Sentinel changes (Trust Ledger) applied between the baseline and the latest run — the "Change"
+  // the verdict is attributing the measured delta to.
+  const changesSince =
+    state?.baseline_at && state?.latest_at
+      ? changes.filter((c) => {
+          const t = Date.parse(c.applied_at);
+          return (
+            !Number.isNaN(t) &&
+            t > Date.parse(state.baseline_at!) &&
+            t <= Date.parse(state.latest_at!)
+          );
+        })
+      : [];
+
   return (
     <div className="bench-wrap">
       <header className="bench-head">
@@ -90,10 +119,18 @@ export function BenchmarkTab() {
         <button className="bench-btn bench-btn-primary" onClick={run} disabled={running}>
           {running ? "Measuring… (~10s — leave it alone)" : hasBaseline ? "Re-measure" : "Run benchmark"}
         </button>
+        {running && (
+          <button className="bench-btn bench-btn-ghost" onClick={cancel}>
+            Cancel
+          </button>
+        )}
         {err && <span className="bench-err">{err}</span>}
+        {!err && state?.error && <span className="bench-err">{state.error}</span>}
       </div>
 
-      {showEfficacy && state?.efficacy && <EfficacyCard efficacy={state.efficacy} />}
+      {showEfficacy && state?.efficacy && (
+        <EfficacyCard efficacy={state.efficacy} changes={changesSince} />
+      )}
 
       {state?.latest && (
         <RunCard
@@ -184,13 +221,23 @@ function RunCard({ report, at, title }: { report: RunReport; at: string | null; 
   );
 }
 
-function EfficacyCard({ efficacy }: { efficacy: Efficacy }) {
+function EfficacyCard({ efficacy, changes }: { efficacy: Efficacy; changes: AppliedChange[] }) {
   return (
     <Card>
       <SectionHeader
         title="Since your baseline"
         right={<StatusPill status={verdictTone(efficacy.overall)} label={verdictLabel(efficacy.overall)} />}
       />
+      <p className="bench-change">
+        {changes.length > 0 ? (
+          <>
+            Measuring the effect of:{" "}
+            <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
+          </>
+        ) : (
+          <>No Sentinel changes recorded since the baseline — this reflects manual or ambient changes.</>
+        )}
+      </p>
       <div className="bench-eff">
         {efficacy.per_component.map((c) => (
           <div className="bench-eff-row" key={c.component}>

@@ -130,7 +130,18 @@
   border-radius: 8px;
 }
 
-/* Efficacy rows */
+/* Efficacy: what changed + per-component deltas */
+.bench-change {
+  color: var(--fg);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+
+.bench-change strong {
+  color: var(--accent-bright, var(--accent));
+}
+
 .bench-eff {
   display: flex;
   flex-direction: column;

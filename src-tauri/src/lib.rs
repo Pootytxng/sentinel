@@ -305,6 +305,11 @@ fn start_benchmark() {
 }
 
 #[tauri::command]
+fn cancel_benchmark() {
+    benchmark::cancel_benchmark();
+}
+
+#[tauri::command]
 fn get_benchmark_state() -> benchmark::BenchmarkState {
     benchmark::benchmark_state()
 }
@@ -414,6 +419,7 @@ pub fn run() {
             latency_measure_wake,
             latency_measure_mouse,
             start_benchmark,
+            cancel_benchmark,
             get_benchmark_state,
             set_benchmark_baseline,
             clear_benchmark_baseline,

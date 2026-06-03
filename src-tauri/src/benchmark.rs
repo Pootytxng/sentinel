@@ -894,6 +894,12 @@ pub(crate) fn benchmark_state() -> BenchmarkState {
     state_cache().lock().map(|s| s.clone()).unwrap_or_default()
 }
 
+/// Shared cancel flag for the in-flight run — `cancel_benchmark` sets it, the runner checks it.
+fn cancel_flag() -> &'static AtomicBool {
+    static C: OnceLock<AtomicBool> = OnceLock::new();
+    C.get_or_init(|| AtomicBool::new(false))
+}
+
 /// Kick off a benchmark run on a background thread (no-op if one is already running).
 /// The lock is NOT held during the multi-second run, so `benchmark_state` stays responsive.
 pub(crate) fn start_benchmark() {
@@ -905,18 +911,29 @@ pub(crate) fn start_benchmark() {
         s.running = true;
         s.error = None;
     }
+    cancel_flag().store(false, Ordering::Relaxed);
     let _ = std::thread::Builder::new()
         .name("benchmark-run".into())
         .spawn(|| {
-            let cancel = AtomicBool::new(false);
-            let report = run_benchmark(&RunConfig::default(), &cancel);
+            let report = run_benchmark(&RunConfig::default(), cancel_flag());
+            let cancelled = cancel_flag().load(Ordering::Relaxed);
             if let Ok(mut s) = state_cache().lock() {
-                s.latest = Some(report);
-                s.latest_at = Some(chrono::Utc::now().to_rfc3339());
                 s.running = false;
-                recompute_efficacy(&mut s);
+                if cancelled {
+                    // Don't store a partial/aborted run as a real result.
+                    s.error = Some("Run cancelled.".into());
+                } else {
+                    s.latest = Some(report);
+                    s.latest_at = Some(chrono::Utc::now().to_rfc3339());
+                    recompute_efficacy(&mut s);
+                }
             }
         });
+}
+
+/// Request cancellation of the in-flight run (the runner bails between samples/components).
+pub(crate) fn cancel_benchmark() {
+    cancel_flag().store(true, Ordering::Relaxed);
 }
 
 /// Save the latest run as the baseline (persisted). Errors if there's no run yet.
