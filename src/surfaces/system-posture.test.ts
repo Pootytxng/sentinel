@@ -10,6 +10,7 @@ const readiness = (checks: ReadinessCheck[]): GameReadiness => ({
   ready_count: checks.filter((c) => c.status === "ready").length,
   attention_count: checks.filter((c) => c.status === "attention").length,
   unknown_count: checks.filter((c) => c.status === "unknown").length,
+  advisory_count: checks.filter((c) => c.status === "advisory").length,
   advisory: "",
 });
 
@@ -33,6 +34,13 @@ describe("deriveSystemPosture", () => {
     expect(p.state).toBe("dialed-in");
     expect(p.attentionCount).toBe(0);
     expect(p.reasons).toEqual([]);
+  });
+
+  it("treats 'advisory' as not-attention, so posture stays dialed-in", () => {
+    const r = readiness([check("ready", "SSD"), check("advisory", "Variable refresh rate")]);
+    const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
+    expect(p.state).toBe("dialed-in");
+    expect(p.attentionCount).toBe(0);
   });
 
   it("is 'unknown' when readiness has no usable checks", () => {

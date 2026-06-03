@@ -29,6 +29,11 @@ pub(crate) enum ReadinessStatus {
     Ready,
     Attention,
     Unknown,
+    /// Sentinel deliberately doesn't (or can't) judge this — it's the user's to
+    /// verify (e.g. VRR has no Windows API exposing its on/off state). Distinct
+    /// from `Unknown` (which means a detection genuinely failed). An advisory is
+    /// never a problem and never blocks a clean readiness state.
+    Advisory,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -39,6 +44,12 @@ pub(crate) struct ReadinessCheck {
     detail: String,
     /// Optional short current value to show alongside the row (e.g. "144 Hz").
     value: Option<String>,
+    /// Optional allowlisted deep-link the UI offers as an action button (e.g. the
+    /// Windows VRR setting). Only fixed `ms-settings:` targets, never user data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    action_uri: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    action_label: Option<&'static str>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -48,6 +59,7 @@ pub(crate) struct GameReadiness {
     ready_count: usize,
     attention_count: usize,
     unknown_count: usize,
+    advisory_count: usize,
     advisory: &'static str,
 }
 
@@ -64,6 +76,8 @@ fn check(
         status,
         detail: detail.into(),
         value,
+        action_uri: None,
+        action_label: None,
     }
 }
 
@@ -279,16 +293,34 @@ pub(crate) fn evaluate_readiness(
         checks.push(c);
     }
 
-    // 4. Variable refresh rate — Sentinel has no VRR detection (no kernel access);
-    //    advisory only, never a failure.
-    checks.push(check(
-        "vrr",
-        "Variable refresh rate (G-SYNC / FreeSync)",
-        ReadinessStatus::Unknown,
-        "Sentinel can't read VRR state. If your monitor and GPU support G-SYNC/FreeSync, enabling \
-         it in your GPU control panel smooths frame pacing. Advisory only.",
-        None,
-    ));
+    // 4. Variable refresh rate — no public Windows API exposes VRR on/off, so this
+    //    is an explicit ADVISORY the user verifies, NOT a failed detection. Where
+    //    the display is clearly high-refresh, say it's almost certainly VRR-capable
+    //    (an honest inference from the detected max refresh), and offer a deep-link
+    //    to the Windows VRR setting so the row is actionable, not a dead end.
+    {
+        let vrr_detail = match hw.display.as_ref() {
+            Some(d) if d.max_refresh_rate_hz >= 100 => format!(
+                "Your {} Hz display almost certainly supports VRR (G-SYNC/FreeSync). Windows \
+                 doesn't expose whether it's currently on — verify it's enabled in your GPU \
+                 control panel. It smooths frame pacing and removes tearing.",
+                d.max_refresh_rate_hz
+            ),
+            _ => "If your monitor + GPU support VRR (G-SYNC/FreeSync), enabling it smooths frame \
+                  pacing and removes tearing. Windows doesn't expose its on/off state, so verify \
+                  it in your GPU control panel."
+                .to_string(),
+        };
+        checks.push(ReadinessCheck {
+            id: "vrr",
+            label: "Variable refresh rate (G-SYNC / FreeSync)",
+            status: ReadinessStatus::Advisory,
+            detail: vrr_detail,
+            value: Some("Verify in GPU panel".into()),
+            action_uri: Some("ms-settings:display-advancedgraphics"),
+            action_label: Some("Open VRR settings"),
+        });
+    }
 
     // 5. HDR / Auto HDR — gated on an HDR-capable display; advisory.
     checks.push(match hw.display.as_ref() {
@@ -421,12 +453,17 @@ pub(crate) fn evaluate_readiness(
         .iter()
         .filter(|c| c.status == ReadinessStatus::Unknown)
         .count();
+    let advisory_count = checks
+        .iter()
+        .filter(|c| c.status == ReadinessStatus::Advisory)
+        .count();
 
     GameReadiness {
         checks,
         ready_count,
         attention_count,
         unknown_count,
+        advisory_count,
         advisory: ADVISORY,
     }
 }
@@ -625,7 +662,20 @@ mod readiness_tests {
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Unknown);
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Unknown);
         assert_eq!(find(&r, "install-drive").status, ReadinessStatus::Unknown);
-        assert_eq!(find(&r, "vrr").status, ReadinessStatus::Unknown);
+        // VRR is always Advisory (no API exposes its state) — never a grey Unknown.
+        assert_eq!(find(&r, "vrr").status, ReadinessStatus::Advisory);
+    }
+
+    #[test]
+    fn vrr_is_advisory_with_action_not_unknown() {
+        let hw = hw_with(None, vec![], vec![]);
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
+        let c = find(&r, "vrr");
+        assert_eq!(c.status, ReadinessStatus::Advisory);
+        assert!(c.action_uri.is_some(), "VRR advisory should offer an action link");
+        // Advisory must not be counted as a problem.
+        assert_eq!(r.attention_count, 0);
+        assert!(r.advisory_count >= 1);
     }
 
     #[test]
@@ -646,7 +696,7 @@ mod readiness_tests {
         let hw = hw_with(None, vec![], vec![]);
         let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default());
         assert_eq!(
-            r.ready_count + r.attention_count + r.unknown_count,
+            r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
         );
         assert_eq!(r.checks.len(), 8);

@@ -256,7 +256,7 @@ type DiagnosticSection = {
 
 // Game Readiness (F2): a read-only advisory surface. Mirrors the Rust
 // GameReadiness shape from readiness.rs (status strings are kebab-case).
-type ReadinessStatus = "ready" | "attention" | "unknown";
+type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 
 type ReadinessCheck = {
   id: string;
@@ -264,6 +264,8 @@ type ReadinessCheck = {
   status: ReadinessStatus;
   detail: string;
   value: string | null;
+  action_uri?: string | null;
+  action_label?: string | null;
 };
 
 type GameReadiness = {
@@ -271,6 +273,7 @@ type GameReadiness = {
   ready_count: number;
   attention_count: number;
   unknown_count: number;
+  advisory_count: number;
   advisory: string;
 };
 
@@ -286,6 +289,7 @@ function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
     ready: "Ready",
     attention: "Attention",
     unknown: "Unknown",
+    advisory: "Advisory",
   };
   return (
     <section className="tab-pane readiness-pane">
@@ -301,9 +305,14 @@ function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
           <span className="readiness-pill readiness-unknown">
             {readiness.unknown_count} Unknown
           </span>
+          {readiness.advisory_count > 0 && (
+            <span className="readiness-pill readiness-advisory">
+              {readiness.advisory_count} Advisory
+            </span>
+          )}
         </div>
       </div>
-      <p className="readiness-advisory">{readiness.advisory}</p>
+      <p className="readiness-blurb">{readiness.advisory}</p>
       <ul className="readiness-list">
         {readiness.checks.map((c) => (
           <li key={c.id} className={`readiness-row readiness-row-${c.status}`}>
@@ -315,6 +324,16 @@ function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
               {c.value && <span className="readiness-value">{c.value}</span>}
             </div>
             <p className="readiness-detail">{c.detail}</p>
+            {c.action_uri && (
+              <button
+                className="readiness-action"
+                onClick={() => openGuidedUri(c.action_uri!)}
+                title={`Opens ${c.action_label ?? "settings"}`}
+              >
+                <Icon name="external" />
+                {c.action_label ?? "Open"}
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -372,7 +391,7 @@ function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
       <div className="readiness-head">
         <h2>Session Summaries</h2>
       </div>
-      <p className="readiness-advisory">
+      <p className="readiness-blurb">
         Live estimates sampled about once per second while monitoring was active
         — not benchmark-grade proof.
       </p>
@@ -496,7 +515,7 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
       <div className="readiness-head">
         <h2>Priorities — what matters most</h2>
       </div>
-      <p className="readiness-advisory">
+      <p className="readiness-blurb">
         Advisory, ranked by transparent rules — not a score. Based on your hardware,
         readiness, recommendations, and most recent session.
       </p>
@@ -991,7 +1010,10 @@ function CommandHero({
   // Ring shows the fraction of readiness checks cleared — a real, explainable
   // count, NOT a synthesized score.
   const total = readiness ? readiness.checks.length : 0;
-  const clear = readiness?.ready_count ?? 0;
+  // Advisory items (e.g. VRR — no API exposes its state) are "resolved" from
+  // Sentinel's view: nothing for it to fix, the user's been pointed to verify.
+  // Count them as clear so an inherently-advisory check never holds the ring down.
+  const clear = readiness ? readiness.ready_count + readiness.advisory_count : 0;
   const R = 52;
   const C = 2 * Math.PI * R;
   const dash = C * (total > 0 ? clear / total : 0);
