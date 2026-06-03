@@ -12,7 +12,9 @@
 #![allow(dead_code)] // parked/dark: items are wired by HQ when the Benchmark tab lands.
 
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::{Read, Write};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// What the user cares about — weights the standing toward their goals (spec §4).
@@ -265,16 +267,17 @@ pub(crate) struct RunConfig {
     pub cpu_ms: u64,
     pub ram_mb: usize,
     pub ram_passes: usize,
+    pub disk_mb: usize,
 }
 impl Default for RunConfig {
     fn default() -> Self {
-        Self { cpu_ms: 600, ram_mb: 64, ram_passes: 4 }
+        Self { cpu_ms: 600, ram_mb: 64, ram_passes: 4, disk_mb: 256 }
     }
 }
 impl RunConfig {
     /// Tiny params for tests — fast, won't hammer the machine.
     fn tiny() -> Self {
-        Self { cpu_ms: 15, ram_mb: 2, ram_passes: 1 }
+        Self { cpu_ms: 15, ram_mb: 2, ram_passes: 1, disk_mb: 4 }
     }
 }
 
@@ -361,6 +364,80 @@ pub(crate) fn bench_ram(cfg: &RunConfig, cancel: &AtomicBool) -> RamRaw {
     RamRaw { bandwidth_mb_s: total_bytes / (1024.0 * 1024.0) / secs }
 }
 
+/// Raw sequential disk throughput in MB/s. (Read can be cache-influenced right after a
+/// write without admin-only unbuffered I/O — an approximate signal, like other consumer
+/// benchmarks; documented as such.)
+pub(crate) struct DiskRaw {
+    pub seq_write_mb_s: f64,
+    pub seq_read_mb_s: f64,
+}
+
+/// Deletes the temp file on drop — covers early return, cancellation, and panic.
+struct TempFileGuard(std::path::PathBuf);
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+static DISK_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Sequential write+read benchmark over a temp file in `dir`. Modest size, fsync'd for an
+/// honest write number, file **always** cleaned up (guard). Cancellable; any I/O error or
+/// cancellation → None (honest "not measured"), never a panic. No user files touched.
+pub(crate) fn bench_disk(cfg: &RunConfig, cancel: &AtomicBool, dir: &Path) -> Option<DiskRaw> {
+    let uniq = DISK_SEQ.fetch_add(1, Ordering::Relaxed);
+    let path = dir.join(format!("sentinel_bench_{}_{}.tmp", std::process::id(), uniq));
+    let _guard = TempFileGuard(path.clone());
+
+    let size = cfg.disk_mb.max(1) * 1024 * 1024;
+    let chunk = vec![0xA5u8; 1024 * 1024];
+
+    // sequential write (fsync'd so the number reflects the device, not just the cache)
+    let write_secs = {
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&path)
+            .ok()?;
+        let start = Instant::now();
+        let mut written = 0usize;
+        while written < size {
+            if cancel.load(Ordering::Relaxed) {
+                return None;
+            }
+            f.write_all(&chunk).ok()?;
+            written += chunk.len();
+        }
+        f.flush().ok()?;
+        f.sync_all().ok()?;
+        start.elapsed().as_secs_f64().max(1e-6)
+    };
+
+    // sequential read
+    let read_secs = {
+        let mut f = std::fs::File::open(&path).ok()?;
+        let mut buf = vec![0u8; 1024 * 1024];
+        let start = Instant::now();
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return None;
+            }
+            let n = f.read(&mut buf).ok()?;
+            if n == 0 {
+                break;
+            }
+            std::hint::black_box(buf[0]);
+        }
+        start.elapsed().as_secs_f64().max(1e-6)
+    };
+
+    let mb = size as f64 / (1024.0 * 1024.0);
+    Some(DiskRaw { seq_write_mb_s: mb / write_secs, seq_read_mb_s: mb / read_secs })
+    // _guard drops here → temp file removed
+}
+
 /// PLACEHOLDER reference constants — the raw value that maps to score 100. **Not** tuned
 /// baselines; rough seeds to be replaced per spec §6 (owner weighting/baseline call). The
 /// RAW metrics above are the honest signal; these only shape the cosmetic 0..=100.
@@ -369,6 +446,7 @@ mod refs {
     pub const CPU_MULTI_KOPS_100: f64 = 2_000_000.0;
     pub const RAM_MB_S_100: f64 = 30_000.0;
     pub const GPU_GFLOPS_100: f64 = 12_000.0;
+    pub const DISK_MB_S_100: f64 = 5_000.0;
 }
 
 fn normalize(raw: f64, ref_100: f64) -> u32 {
@@ -545,6 +623,16 @@ pub(crate) fn run_components(cfg: &RunConfig, cancel: &AtomicBool) -> Vec<Compon
         },
         None => ComponentScore { component: Component::Gpu, score: 0, measured: false },
     };
+    let disk = match bench_disk(cfg, cancel, &std::env::temp_dir()) {
+        Some(d) => ComponentScore {
+            component: Component::Disk,
+            score: (normalize(d.seq_write_mb_s, refs::DISK_MB_S_100)
+                + normalize(d.seq_read_mb_s, refs::DISK_MB_S_100))
+                / 2,
+            measured: true,
+        },
+        None => ComponentScore { component: Component::Disk, score: 0, measured: false },
+    };
     vec![
         ComponentScore { component: Component::Cpu, score: cpu_score, measured: true },
         ComponentScore {
@@ -553,6 +641,7 @@ pub(crate) fn run_components(cfg: &RunConfig, cancel: &AtomicBool) -> Vec<Compon
             measured: true,
         },
         gpu,
+        disk,
     ]
 }
 
@@ -744,15 +833,15 @@ mod benchmark_tests {
     fn run_components_covers_native_set_and_feeds_scorer() {
         let cancel = AtomicBool::new(false);
         let comps = run_components(&RunConfig::tiny(), &cancel);
-        assert_eq!(comps.len(), 3); // cpu, ram, gpu
-        // cpu + ram always measured; gpu measured only if a device was available
+        assert_eq!(comps.len(), 4); // cpu, ram, gpu, disk
+        // cpu + ram always measured; gpu/disk measured when available
         assert!(comps.iter().filter(|c| c.measured).count() >= 2);
         assert!(comps.iter().all(|c| c.score <= 100));
         let measured = comps.iter().filter(|c| c.measured).count();
         // end-to-end: measured components feed the pure scorer with honest coverage
         let s = compute_standing(&StandingInputs { components: comps, ..Default::default() });
         assert_eq!(s.measured_components, measured);
-        assert_eq!(s.total_components, 3);
+        assert_eq!(s.total_components, 4);
         assert!(s.tier >= 1);
     }
 
@@ -763,6 +852,20 @@ mod benchmark_tests {
         if let Some(raw) = gpu::bench_gpu(&RunConfig::tiny(), &cancel) {
             assert!(raw.gflops > 0.0);
         }
+    }
+
+    #[test]
+    fn disk_runner_measures_and_cleans_up() {
+        let cancel = AtomicBool::new(false);
+        // isolated dir so the cleanup assertion is immune to parallel tests
+        let dir = std::env::temp_dir().join(format!("sentinel_disktest_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        if let Some(d) = bench_disk(&RunConfig::tiny(), &cancel, &dir) {
+            assert!(d.seq_write_mb_s > 0.0 && d.seq_read_mb_s > 0.0);
+        }
+        let leftover = std::fs::read_dir(&dir).map(|it| it.count()).unwrap_or(0);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(leftover, 0, "disk runner left a temp file behind");
     }
 
     #[test]
