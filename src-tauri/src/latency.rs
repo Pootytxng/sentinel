@@ -1024,6 +1024,90 @@ pub(crate) fn stutter_verdict(c: &StutterCause) -> String {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnostics report assembly — the read-only snapshot the Diagnostics/Latency
+// tab consumes. All reads here are passive: no elevation, no network, no mutation.
+// Time-windowed measurements (wake granularity, mouse polling) are separate
+// on-demand commands so the snapshot load stays instant.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Composite read-only latency snapshot (MSI verified state, timer resolution,
+/// CPU/CCD topology, USB controller sharing) with each section's honest advisory
+/// baked in as a ready-to-show string.
+#[derive(Serialize, Clone, Debug, Default)]
+pub(crate) struct LatencyReport {
+    pub msi_devices: Vec<MsiDevice>,
+    pub msi: MsiSummary,
+    pub msi_active: MsiActiveSummary,
+    pub msi_advisory: Option<String>,
+    pub timer: Option<TimerResolution>,
+    /// `timer.current_ms()` precomputed for the UI (the method isn't serialized).
+    pub timer_current_ms: Option<f64>,
+    pub cpu: Option<CpuTopology>,
+    pub cpu_affinity_advisory: Option<String>,
+    pub usb: Vec<UsbControllerLoad>,
+    pub usb_advisory: Option<String>,
+}
+
+/// Gather the fast read-only latency diagnostics. Each underlying reader degrades
+/// gracefully (empty/None) rather than inventing data, so a partial environment
+/// still yields an honest partial report.
+pub(crate) fn gather_latency_report() -> LatencyReport {
+    let msi_devices = read_verified_msi_devices();
+    let msi = summarize_msi(&msi_devices);
+    let msi_active = summarize_msi_active(&msi_devices);
+    let msi_advisory = msi_active_advisory(&msi_devices);
+    let timer = read_timer_resolution();
+    let timer_current_ms = timer.as_ref().map(|t| t.current_ms());
+    let cpu = read_cpu_topology();
+    let cpu_affinity_advisory = cpu.as_ref().map(affinity_advisory);
+    let usb = read_usb_topology();
+    let usb_advisory = shared_controller_advisory(&usb);
+    LatencyReport {
+        msi_devices,
+        msi,
+        msi_active,
+        msi_advisory,
+        timer,
+        timer_current_ms,
+        cpu,
+        cpu_affinity_advisory,
+        usb,
+        usb_advisory,
+    }
+}
+
+/// On-demand wake-granularity measurement (samples real `Sleep(1)` deltas) + its honest note.
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct WakeMeasurement {
+    pub granularity: SleepGranularity,
+    pub note: String,
+}
+
+/// Measure scheduler wake granularity (~200 samples) paired with the timer-resolution note.
+/// `None` if no samples could be taken.
+pub(crate) fn measure_wake() -> Option<WakeMeasurement> {
+    let timer = read_timer_resolution();
+    let granularity = measure_sleep_granularity(200)?;
+    let note = sleep_granularity_note(&granularity, timer.as_ref());
+    Some(WakeMeasurement { granularity, note })
+}
+
+/// On-demand HID polling-rate measurement (passive Raw Input over a capture window) + its note.
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct MouseMeasurement {
+    pub polling: PollingRate,
+    pub note: String,
+}
+
+/// Measure mouse report rate over `duration_ms` of passive Raw Input (no injection). `None` if too
+/// few reports were captured (e.g. the mouse wasn't moved during the window).
+pub(crate) fn measure_mouse(duration_ms: u32) -> Option<MouseMeasurement> {
+    let polling = measure_mouse_polling(duration_ms)?;
+    let note = polling_note(&polling, None);
+    Some(MouseMeasurement { polling, note })
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;

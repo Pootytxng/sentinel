@@ -275,6 +275,25 @@ fn get_startup_entries() -> Vec<StartupEntry> {
     startup_entries()
 }
 
+// ── Latency / Diagnostics (read-only; no elevation, network, or mutation) ──
+// Surfaces latency.rs's passive diagnostics. `get_latency_diagnostics` is the
+// instant snapshot (MSI/timer/CPU-topology/USB); the two `measure_*` commands run
+// short on-demand timing windows (the UI shows a "measuring…" state while they run).
+#[tauri::command]
+fn get_latency_diagnostics() -> latency::LatencyReport {
+    latency::gather_latency_report()
+}
+
+#[tauri::command]
+fn latency_measure_wake() -> Option<latency::WakeMeasurement> {
+    latency::measure_wake()
+}
+
+#[tauri::command]
+fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasurement> {
+    latency::measure_mouse(duration_ms)
+}
+
 // Plain helper (no #[tauri::command]) so other modules (priorities) can read
 // startup entries without referencing the command fn.
 pub(crate) fn startup_entries() -> Vec<StartupEntry> {
@@ -366,6 +385,9 @@ pub fn run() {
             export_report,
             open_export_folder,
             get_priorities,
+            get_latency_diagnostics,
+            latency_measure_wake,
+            latency_measure_mouse,
             gaming_mode_enabled,
             start_gaming_session,
             stop_gaming_session,
