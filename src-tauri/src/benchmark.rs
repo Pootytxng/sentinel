@@ -268,16 +268,18 @@ pub(crate) struct RunConfig {
     pub ram_mb: usize,
     pub ram_passes: usize,
     pub disk_mb: usize,
+    /// Best-of-N: how many times each component runs (best sample kept, variance flagged).
+    pub repeats: usize,
 }
 impl Default for RunConfig {
     fn default() -> Self {
-        Self { cpu_ms: 600, ram_mb: 64, ram_passes: 4, disk_mb: 256 }
+        Self { cpu_ms: 600, ram_mb: 64, ram_passes: 4, disk_mb: 256, repeats: 3 }
     }
 }
 impl RunConfig {
     /// Tiny params for tests — fast, won't hammer the machine.
     fn tiny() -> Self {
-        Self { cpu_ms: 15, ram_mb: 2, ram_passes: 1, disk_mb: 4 }
+        Self { cpu_ms: 15, ram_mb: 2, ram_passes: 1, disk_mb: 4, repeats: 1 }
     }
 }
 
@@ -609,40 +611,109 @@ mod gpu {
 
 /// Run the available native components (CPU, RAM) → normalized `ComponentScore`s. Disk +
 /// GPU are later increments, so coverage is honestly partial. Cancellable; no side effects.
-pub(crate) fn run_components(cfg: &RunConfig, cancel: &AtomicBool) -> Vec<ComponentScore> {
-    let cpu = bench_cpu(cfg, cancel);
-    let cpu_score = (normalize(cpu.single_kops, refs::CPU_SINGLE_KOPS_100)
-        + normalize(cpu.multi_kops, refs::CPU_MULTI_KOPS_100))
-        / 2;
-    let ram = bench_ram(cfg, cancel);
-    let gpu = match gpu::bench_gpu(cfg, cancel) {
-        Some(g) => ComponentScore {
-            component: Component::Gpu,
-            score: normalize(g.gflops, refs::GPU_GFLOPS_100),
-            measured: true,
-        },
-        None => ComponentScore { component: Component::Gpu, score: 0, measured: false },
+/// Honest run-confidence: a `Clean` run is presentable; `Low` means components varied
+/// enough between repeats that the number shouldn't be trusted as-is.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum RunConfidence {
+    Clean,
+    Low,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct RunReport {
+    pub components: Vec<ComponentScore>,
+    pub confidence: RunConfidence,
+    pub notes: Vec<String>,
+}
+
+/// Best-of-N with a variance flag: runs `once` up to `repeats` times, returns the BEST
+/// (cleanest) normalized score plus whether the samples spread enough to call the run
+/// low-confidence. `None` if every attempt failed (component unavailable) or it was
+/// cancelled before any sample landed.
+fn measure(repeats: usize, cancel: &AtomicBool, mut once: impl FnMut() -> Option<u32>) -> Option<(u32, bool)> {
+    let mut samples: Vec<u32> = Vec::new();
+    for _ in 0..repeats.max(1) {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        if let Some(s) = once() {
+            samples.push(s);
+        }
+    }
+    let best = *samples.iter().max()?;
+    Some((best, high_variance(&samples)))
+}
+
+/// True when ≥2 samples spread more than ~20% (coefficient of variation) — a sign of a
+/// noisy / throttled / contended run that shouldn't be presented as a clean number.
+fn high_variance(samples: &[u32]) -> bool {
+    if samples.len() < 2 {
+        return false;
+    }
+    let mean = samples.iter().map(|&s| s as f64).sum::<f64>() / samples.len() as f64;
+    if mean <= 0.0 {
+        return false;
+    }
+    let var = samples.iter().map(|&s| (s as f64 - mean).powi(2)).sum::<f64>() / samples.len() as f64;
+    (var.sqrt() / mean) > 0.20
+}
+
+fn to_comp(component: Component, m: Option<(u32, bool)>) -> (ComponentScore, bool) {
+    match m {
+        Some((score, low)) => (ComponentScore { component, score, measured: true }, low),
+        None => (ComponentScore { component, score: 0, measured: false }, false),
+    }
+}
+
+/// Run the full local benchmark — best-of-N per component (CPU/RAM/GPU/disk) — and report
+/// the scores plus an honest run-confidence signal. Dark/parked, not registered.
+pub(crate) fn run_benchmark(cfg: &RunConfig, cancel: &AtomicBool) -> RunReport {
+    let (cpu, c1) = to_comp(
+        Component::Cpu,
+        measure(cfg.repeats, cancel, || {
+            let c = bench_cpu(cfg, cancel);
+            Some(
+                (normalize(c.single_kops, refs::CPU_SINGLE_KOPS_100)
+                    + normalize(c.multi_kops, refs::CPU_MULTI_KOPS_100))
+                    / 2,
+            )
+        }),
+    );
+    let (ram, c2) = to_comp(
+        Component::Ram,
+        measure(cfg.repeats, cancel, || {
+            Some(normalize(bench_ram(cfg, cancel).bandwidth_mb_s, refs::RAM_MB_S_100))
+        }),
+    );
+    let (gpu, c3) = to_comp(
+        Component::Gpu,
+        measure(cfg.repeats, cancel, || {
+            gpu::bench_gpu(cfg, cancel).map(|g| normalize(g.gflops, refs::GPU_GFLOPS_100))
+        }),
+    );
+    let (disk, c4) = to_comp(
+        Component::Disk,
+        measure(cfg.repeats, cancel, || {
+            bench_disk(cfg, cancel, &std::env::temp_dir()).map(|d| {
+                (normalize(d.seq_write_mb_s, refs::DISK_MB_S_100)
+                    + normalize(d.seq_read_mb_s, refs::DISK_MB_S_100))
+                    / 2
+            })
+        }),
+    );
+
+    let low_conf = c1 || c2 || c3 || c4;
+    let notes = if low_conf {
+        vec!["Some components varied between runs — close background apps for a cleaner score.".to_string()]
+    } else {
+        Vec::new()
     };
-    let disk = match bench_disk(cfg, cancel, &std::env::temp_dir()) {
-        Some(d) => ComponentScore {
-            component: Component::Disk,
-            score: (normalize(d.seq_write_mb_s, refs::DISK_MB_S_100)
-                + normalize(d.seq_read_mb_s, refs::DISK_MB_S_100))
-                / 2,
-            measured: true,
-        },
-        None => ComponentScore { component: Component::Disk, score: 0, measured: false },
-    };
-    vec![
-        ComponentScore { component: Component::Cpu, score: cpu_score, measured: true },
-        ComponentScore {
-            component: Component::Ram,
-            score: normalize(ram.bandwidth_mb_s, refs::RAM_MB_S_100),
-            measured: true,
-        },
-        gpu,
-        disk,
-    ]
+    RunReport {
+        components: vec![cpu, ram, gpu, disk],
+        confidence: if low_conf { RunConfidence::Low } else { RunConfidence::Clean },
+        notes,
+    }
 }
 
 #[cfg(test)]
@@ -830,19 +901,39 @@ mod benchmark_tests {
     }
 
     #[test]
-    fn run_components_covers_native_set_and_feeds_scorer() {
+    fn run_benchmark_covers_native_set_and_feeds_scorer() {
         let cancel = AtomicBool::new(false);
-        let comps = run_components(&RunConfig::tiny(), &cancel);
+        let report = run_benchmark(&RunConfig::tiny(), &cancel);
+        let comps = report.components;
         assert_eq!(comps.len(), 4); // cpu, ram, gpu, disk
         // cpu + ram always measured; gpu/disk measured when available
         assert!(comps.iter().filter(|c| c.measured).count() >= 2);
         assert!(comps.iter().all(|c| c.score <= 100));
+        // tiny config runs each component once → no variance to flag
+        assert_eq!(report.confidence, RunConfidence::Clean);
         let measured = comps.iter().filter(|c| c.measured).count();
         // end-to-end: measured components feed the pure scorer with honest coverage
         let s = compute_standing(&StandingInputs { components: comps, ..Default::default() });
         assert_eq!(s.measured_components, measured);
         assert_eq!(s.total_components, 4);
         assert!(s.tier >= 1);
+    }
+
+    #[test]
+    fn variance_flag_distinguishes_clean_from_noisy() {
+        assert!(!high_variance(&[100])); // single sample → clean
+        assert!(!high_variance(&[100, 102, 99])); // tight spread → clean
+        assert!(high_variance(&[100, 50, 150])); // wide spread → low confidence
+    }
+
+    #[test]
+    fn measure_keeps_best_and_handles_all_failures() {
+        let cancel = AtomicBool::new(false);
+        let mut seq = [40u32, 70, 55].into_iter();
+        let got = measure(3, &cancel, || seq.next());
+        assert_eq!(got.map(|(best, _)| best), Some(70)); // best of the three
+        let none = measure(3, &cancel, || None);
+        assert!(none.is_none()); // every attempt failed → not measured
     }
 
     #[test]
