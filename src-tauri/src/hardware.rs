@@ -918,7 +918,30 @@ pub(crate) fn detect_gpus() -> Vec<GpuInfo> {
     gpus
 }
 
+/// Run WMI-touching work on a dedicated, freshly-spawned thread.
+///
+/// `wmi::COMLibrary::new()` requests an MTA apartment (`CoInitializeEx` with
+/// `COINIT_MULTITHREADED`). Tauri's synchronous command handlers run on the
+/// app's main UI thread, which WebView2 has already initialized as a
+/// single-threaded apartment (STA); requesting MTA there fails with
+/// `RPC_E_CHANGED_MODE`, so `COMLibrary::new()` returns `Err` and every WMI
+/// query silently yields nothing in the running app — even though it works in
+/// unit tests, which run on a clean thread. A fresh thread always gets a clean
+/// MTA apartment, so WMI succeeds regardless of the caller's COM state. The
+/// closure returns owned, `Send` data back to the calling thread.
+pub(crate) fn on_wmi_thread<T, F>(f: F) -> T
+where
+    T: Default + Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    std::thread::spawn(f).join().unwrap_or_default()
+}
+
 pub(crate) fn collect_hardware() -> HardwareInfo {
+    on_wmi_thread(collect_hardware_inner)
+}
+
+fn collect_hardware_inner() -> HardwareInfo {
     let mut sys = System::new_all();
     sys.refresh_all();
 
@@ -976,22 +999,24 @@ pub(crate) struct Win32NetworkAdapter {
 }
 
 pub(crate) fn detect_has_active_wired_ethernet() -> bool {
-    let com = match COMLibrary::new() {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    let conn = match WMIConnection::new(com) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    let results: Vec<Win32NetworkAdapter> = conn.query().unwrap_or_default();
-    results.iter().any(|a| {
-        a.physical_adapter == Some(true)
-            && a.net_connection_status == Some(2) // 2 = Connected
-            && a.adapter_type
-                .as_deref()
-                .map(|t| t.to_lowercase().contains("ethernet"))
-                .unwrap_or(false)
+    on_wmi_thread(|| {
+        let com = match COMLibrary::new() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+        let conn = match WMIConnection::new(com) {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+        let results: Vec<Win32NetworkAdapter> = conn.query().unwrap_or_default();
+        results.iter().any(|a| {
+            a.physical_adapter == Some(true)
+                && a.net_connection_status == Some(2) // 2 = Connected
+                && a.adapter_type
+                    .as_deref()
+                    .map(|t| t.to_lowercase().contains("ethernet"))
+                    .unwrap_or(false)
+        })
     })
 }
 

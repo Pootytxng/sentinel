@@ -275,15 +275,20 @@ pub(crate) struct Win32Service {
 }
 
 pub(crate) fn service_info(name: &str) -> Option<(String, String)> {
-    let com = COMLibrary::new().ok()?;
-    let wmi_conn = WMIConnection::new(com).ok()?;
-    let query = format!("SELECT * FROM Win32_Service WHERE Name='{}'", name);
-    let results: Vec<Win32Service> = wmi_conn.raw_query(&query).ok()?;
-    let svc = results.into_iter().next()?;
-    Some((
-        svc.state.unwrap_or_else(|| "Unknown".into()),
-        svc.start_mode.unwrap_or_else(|| "Unknown".into()),
-    ))
+    // WMI must run on a clean MTA thread; the Tauri command/UI thread is STA
+    // (see hardware::on_wmi_thread). Own the name so the closure is 'static.
+    let name = name.to_string();
+    crate::hardware::on_wmi_thread(move || {
+        let com = COMLibrary::new().ok()?;
+        let wmi_conn = WMIConnection::new(com).ok()?;
+        let query = format!("SELECT * FROM Win32_Service WHERE Name='{}'", name);
+        let results: Vec<Win32Service> = wmi_conn.raw_query(&query).ok()?;
+        let svc = results.into_iter().next()?;
+        Some((
+            svc.state.unwrap_or_else(|| "Unknown".into()),
+            svc.start_mode.unwrap_or_else(|| "Unknown".into()),
+        ))
+    })
 }
 
 pub(crate) fn ps_service_startup_for_mode(mode: &str) -> &'static str {
