@@ -445,12 +445,16 @@ pub(crate) fn affinity_advisory(topo: &CpuTopology) -> String {
     }
 }
 
-/// Query one relationship class of `GetLogicalProcessorInformationEx` into a properly-aligned
-/// buffer. Returns the raw bytes + the populated length. Empty on any failure — never panics.
+/// Query one relationship class of `GetLogicalProcessorInformationEx` into a correctly-aligned,
+/// zero-initialized buffer. Returns `(backing, byte_len)` where the first `byte_len` bytes hold the
+/// API's records. The `u64` backing is 8-byte aligned (satisfying the record type's alignment) and
+/// carries one full record of slack past `byte_len`, so a `&Rec` formed at the last record — whose
+/// own `Size` may be smaller than `size_of::<Rec>()` — never reads past the allocation. Empty on any
+/// failure — never panics.
 #[cfg(target_os = "windows")]
 fn query_logical_processor_info(
     rel: windows::Win32::System::SystemInformation::LOGICAL_PROCESSOR_RELATIONSHIP,
-) -> Vec<u8> {
+) -> (Vec<u64>, usize) {
     use std::mem::size_of;
     use windows::Win32::System::SystemInformation::{
         GetLogicalProcessorInformationEx, SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,
@@ -464,29 +468,30 @@ fn query_logical_processor_info(
         let _ = GetLogicalProcessorInformationEx(rel, None, &mut len);
     }
     if len == 0 {
-        return Vec::new();
+        return (Vec::new(), 0);
     }
-    // Allocate as Rec to guarantee the struct's alignment, then view the bytes.
-    let cap = (len as usize).div_ceil(size_of::<Rec>()).max(1);
-    let mut backing: Vec<Rec> = Vec::with_capacity(cap);
-    // SAFETY: buffer has room for `len` bytes (cap * size_of::<Rec>() >= len) and the API writes
-    // exactly `len` bytes of valid record data on success.
-    let ok = unsafe { GetLogicalProcessorInformationEx(rel, Some(backing.as_mut_ptr()), &mut len) };
+    // u64 backing → 8-byte alignment (== Rec's alignment on x64), trivially zero-initialized, with a
+    // full Rec of slack past `len` for safe end-of-buffer reference formation.
+    let words = ((len as usize) + size_of::<Rec>()).div_ceil(size_of::<u64>()) + 1;
+    let mut backing: Vec<u64> = vec![0u64; words];
+    // SAFETY: backing holds words*8 >= len bytes, aligned for Rec; the API writes `len` bytes of
+    // valid record data on success.
+    let ok = unsafe {
+        GetLogicalProcessorInformationEx(rel, Some(backing.as_mut_ptr() as *mut Rec), &mut len)
+    };
     if ok.is_err() {
-        return Vec::new();
+        return (Vec::new(), 0);
     }
-    let byte_len = len as usize;
-    // SAFETY: the API populated `byte_len` initialized bytes starting at the buffer base.
-    let bytes = unsafe { std::slice::from_raw_parts(backing.as_ptr() as *const u8, byte_len) };
-    bytes.to_vec()
+    (backing, len as usize)
 }
 
 /// Walk the variable-length records in a `GetLogicalProcessorInformationEx` buffer, invoking `f`
 /// with each record. Each record carries its own `Size`, so we advance by that.
 ///
 /// # Safety
-/// `buf` must contain valid `SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX` records as produced by the
-/// API, and be aligned for that type (it is — it came from a `Vec<Rec>` backing).
+/// `buf` must be a byte view of a buffer produced by `query_logical_processor_info` for the same
+/// relationship class — i.e. aligned for `SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX` and carrying one
+/// record of slack past its end (so forming `&Rec` at the final record stays in-bounds).
 #[cfg(target_os = "windows")]
 unsafe fn walk_lpi_records(
     buf: &[u8],
@@ -506,6 +511,21 @@ unsafe fn walk_lpi_records(
     }
 }
 
+/// Build an aligned byte view of `(backing, byte_len)` and walk its records.
+///
+/// # Safety
+/// `backing`/`byte_len` must be a pair returned by `query_logical_processor_info`.
+#[cfg(target_os = "windows")]
+unsafe fn for_each_lpi_record(
+    buf: &(Vec<u64>, usize),
+    f: impl FnMut(&windows::Win32::System::SystemInformation::SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX),
+) {
+    let (backing, byte_len) = buf;
+    // The backing is Rec-aligned with a full record of slack; view exactly the populated bytes.
+    let bytes = std::slice::from_raw_parts(backing.as_ptr() as *const u8, *byte_len);
+    walk_lpi_records(bytes, f);
+}
+
 /// Live: read CPU core/cache topology via `GetLogicalProcessorInformationEx` (read-only, no
 /// elevation, no network). `None` if the API yields nothing (e.g. a non-Windows sandbox).
 #[cfg(target_os = "windows")]
@@ -517,9 +537,9 @@ pub(crate) fn read_cpu_topology() -> Option<CpuTopology> {
     let core_buf = query_logical_processor_info(RelationProcessorCore);
     let mut physical_cores = 0usize;
     let mut logical_processors = 0usize;
-    // SAFETY: buffer came from query_logical_processor_info, which fills it from the API.
+    // SAFETY: core_buf came from query_logical_processor_info (aligned, slacked).
     unsafe {
-        walk_lpi_records(&core_buf, |rec| {
+        for_each_lpi_record(&core_buf, |rec| {
             physical_cores += 1;
             let p = &rec.Anonymous.Processor;
             let masks = std::slice::from_raw_parts(p.GroupMask.as_ptr(), p.GroupCount as usize);
@@ -534,7 +554,7 @@ pub(crate) fn read_cpu_topology() -> Option<CpuTopology> {
     let mut l3_complexes = 0usize;
     // SAFETY: as above.
     unsafe {
-        walk_lpi_records(&cache_buf, |rec| {
+        for_each_lpi_record(&cache_buf, |rec| {
             if rec.Anonymous.Cache.Level == 3 {
                 l3_complexes += 1;
             }
