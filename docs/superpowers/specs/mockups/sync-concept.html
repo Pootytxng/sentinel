@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sentinel · Sync — concept mockup</title>
+<title>Sentinel · Benchmark — concept mockup</title>
 <!--
   CONCEPT MOCKUP v7 — SMOOTH motion. v6 was janky from real perf sins: getComputedStyle
   every frame, a new radial gradient per-mote-per-frame, backdrop-filter blur over the
@@ -22,6 +22,10 @@
   at z-index:1 (one masked), creating a sandwiched compositing level above the animated
   canvas/aurora → jank. Folded into ONE un-promoted static z:0 .bg-fx layer, same treatment
   as the proven-smooth grid/grain (no mask, no intermediate level). Motion restored.
+  v12 REALIGN — soul changed (2026-06-03) from vanity "score /100 + tiers + level-up reward"
+  to the measured-instrument loop: Measure → Change → Re-measure → honest verdict. Dial now
+  shows a real measured delta; "Recent gains" → "Measured changes" with Improved / no-measurable-
+  change / regressed-&-reverted; level-up modal → an efficacy verdict (keep/revert). Shell + motion kept.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,7 +189,7 @@
 
   <div class="wrap">
     <div class="top">
-      <div class="brand"><span class="mark"></span><b>Sentinel</b><span class="tag">/ Sync</span></div>
+      <div class="brand"><span class="mark"></span><b>Sentinel</b><span class="tag">/ Benchmark</span></div>
       <div class="themes">
         <span class="lbl">Template</span>
         <button class="sw on" data-set="aurora"   style="--c:#33e0da" title="Aurora"></button>
@@ -205,51 +209,51 @@
               <circle class="prog"  cx="112" cy="112" r="85" fill="none" stroke-width="13"/>
             </svg>
             <div class="center">
-              <div class="kick">Tier 3</div>
-              <div class="score">740</div>
-              <div class="scorelabel">Sync score</div>
+              <div class="kick">Last change</div>
+              <div class="score">+4.1<span class="pct">%</span></div>
+              <div class="scorelabel">measured · CPU</div>
             </div>
           </div>
-          <div class="nexttier">▲ <b>+60 to Tier 04 · Locked-In</b> — all optional</div>
+          <div class="nexttier"><b>Measured before &amp; after.</b> Keep what helps, revert what doesn't.</div>
         </div>
 
         <div class="posture">
           <div class="namerow">
-            <span class="pstate"><span class="pdot"></span>Dialed-in</span>
-            <span class="nameplate"><span class="bar"></span><span class="t">Tier 03</span> · <span class="nm">Dialed</span></span>
+            <span class="pstate"><span class="pdot"></span>Measured, not guessed</span>
+            <span class="nameplate"><span class="bar"></span><span class="t">Instrument</span> · <span class="nm">+ undo</span></span>
           </div>
-          <div class="headline">You're ready to play —<br>and it shows.</div>
-          <div class="sub">All readiness checks pass · <span class="ok">5 safe changes active &amp; reversible</span>.</div>
+          <div class="headline">We check your pulse —<br>before and after.</div>
+          <div class="sub">Every change is measured, then it's <span class="ok">yours to keep or revert</span>. If a tweak does nothing, we say so.</div>
           <div class="heroactions">
-            <button class="btn primary" id="celebrate">✦ Preview a level-up</button>
-            <button class="btn" id="calmtoggle">Peace-of-mind view</button>
+            <button class="btn primary" id="celebrate">✦ Re-measure a change</button>
+            <button class="btn" id="calmtoggle">What we measured</button>
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <div class="phead"><h3>Recent gains</h3><div class="note">what's lifting your score</div></div>
+        <div class="phead"><h3>Measured changes</h3><div class="note">before → after, on your machine</div></div>
         <div class="feed">
-          <div class="gain"><div class="pts">+18</div><div class="gtext">USB Selective Suspend off <span>· idle-wake micro-stutter gone</span></div></div>
-          <div class="gain"><div class="pts">+12</div><div class="gtext">Display running at 144 Hz <span>· at its max</span></div></div>
-          <div class="gain"><div class="pts">+10</div><div class="gtext">Fast Startup disabled <span>· clean shutdowns, fresh drivers</span></div></div>
+          <div class="gain"><div class="pts">+4.1%</div><div class="gtext">USB Selective Suspend off <span>· measured · idle-wake stutter gone · kept</span></div></div>
+          <div class="gain"><div class="pts" style="color:var(--ink-faint)">±0%</div><div class="gtext">Hardware GPU Scheduling on <span>· no measurable change — within noise, your call</span></div></div>
+          <div class="gain"><div class="pts" style="color:var(--amber)">−6%</div><div class="gtext">A 'RAM cleaner' you'd installed <span>· measured worse · flagged &amp; reverted for you</span></div></div>
         </div>
       </div>
 
       <div class="panel" style="padding-top:4px">
-        <div class="phead"><h3>What would lift it</h3><div class="note">all optional · your call</div></div>
+        <div class="phead"><h3>Suggested next</h3><div class="note">we'll measure it · you decide</div></div>
         <div class="feed">
-          <div class="gain"><div class="pts" style="color:var(--accent)">+40</div><div class="gtext">Enable Hardware GPU Scheduling <span>· lower GPU latency · reversible</span></div></div>
-          <div class="gain"><div class="pts" style="color:var(--accent)">+20</div><div class="gtext">Trim Windows visual effects <span>· a touch more headroom · reversible</span></div></div>
+          <div class="gain"><div class="pts" style="color:var(--accent)">run</div><div class="gtext">Trim Windows visual effects <span>· relevant to your rig · reversible</span></div></div>
+          <div class="gain"><div class="pts" style="color:var(--accent)">run</div><div class="gtext">Power plan → High performance <span>· relevant to your rig · reversible</span></div></div>
         </div>
         <details class="more">
-          <summary>How the score works</summary>
-          <p>It only climbs. Skipped advisories and security trade-offs never cost you points — those stay your call. <b>Dialed-in</b> is the ceiling; the extras above are just if you want them.</p>
+          <summary>How we measure</summary>
+          <p>Baseline, apply <b>one</b> change, re-run the same benchmark, show the delta. If it's inside the run-to-run noise we call it <b>no measurable change</b> — never a fake win. Every change is one-click reversible.</p>
         </details>
       </div>
 
       <div class="intents">
-        <div class="lbl">What you care about — weights your score</div>
+        <div class="lbl">What you care about — tunes what we suggest &amp; measure</div>
         <div class="chips">
           <span class="chip on"><span class="d"></span>Latency</span>
           <span class="chip on"><span class="d"></span>Smoothness</span>
@@ -261,13 +265,13 @@
         <div class="calmnote">
           <div class="ci">🛡</div>
           <div>
-            <h5>Peace-of-mind mode</h5>
-            <p>Just want reassurance, not tweaks? Your score climbs by <b>confirming</b> your PC is healthy — rollback intact, drivers current, thermals nominal — so you sit high <b>without changing a thing</b>.</p>
+            <h5>Just want reassurance?</h5>
+            <p>No tweaks required. We <b>measure</b> your rig against how its exact parts normally perform and confirm it's healthy — rollback intact, drivers current, thermals nominal. <b>A clean bill of health, not a high score.</b></p>
           </div>
         </div>
       </div>
 
-      <div class="foot"><span class="lock">⬡</span> Sentinel never shows a number it can't explain — tap any gain to see exactly what it counted.</div>
+      <div class="foot"><span class="lock">⬡</span> Sentinel never shows a number it can't explain — tap any change to see the before &amp; after.</div>
     </div>
 
     <div class="caption">Concept only · living wallpaper + swappable templates. Final visuals, naming &amp; wiring are the design lane's.</div>
@@ -275,10 +279,10 @@
 
   <div class="levelup" id="levelup">
     <div class="lucard" id="lucard">
-      <div class="lukicker">✦ Sync · Tier up ✦</div>
-      <div class="lutitle">Locked-In</div>
-      <div class="lusub">You kept your wins active and crossed into Tier 04. Earned, not given.</div>
-      <div class="unlock"><span class="uswatch"></span><div class="utxt"><b>New template unlocked</b><span>a fresh look, because you earned it</span></div></div>
+      <div class="lukicker">✦ Re-measured ✦</div>
+      <div class="lutitle">+4.1%</div>
+      <div class="lusub">CPU multi-core, measured on your machine — before vs after. It cleared the noise floor, so it's real, not a guess.</div>
+      <div class="unlock"><span class="uswatch"></span><div class="utxt"><b>Keep this change?</b><span>or one-click revert — nothing's locked in</span></div></div>
       <div class="ludismiss">click anywhere to dismiss</div>
     </div>
   </div>
