@@ -904,6 +904,111 @@ pub(crate) fn measure_mouse_polling(duration_ms: u32) -> Option<PollingRate> {
     summarize_polling(&timestamps)
 }
 
+// ── Stage 3: Correlate ─────────────────────────────────────────────────────────────────────────
+// Align the latency-event timeline (DPC/ISR, from the Stage 1-2 capture) against the frame-time
+// stream (real game frames) → "your stutter at T was caused by driver X." Pure timeline logic here;
+// it consumes whatever the capture + frame streams produce, so it's testable and built ahead of them.
+
+/// A latency event from the capture: a DPC/ISR with the driver (module) that ran it (Stage-2
+/// attribution) and how long it held the CPU.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct LatencyEvent {
+    /// When it fired, on the same monotonic clock as the frame stream.
+    pub timestamp_ms: f64,
+    pub duration_us: f64,
+    pub driver: String,
+}
+
+/// A problem frame from the frame-time stream — a stutter (e.g. a 1%/0.1%-low frame).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FrameSpike {
+    /// When the frame was presented, same clock as `LatencyEvent`.
+    pub timestamp_ms: f64,
+    /// The (long) frame time that made it a stutter.
+    pub frame_ms: f64,
+}
+
+/// The verdict for one stutter: the latency event that best explains it, if any.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct StutterCause {
+    pub frame_timestamp_ms: f64,
+    pub frame_ms: f64,
+    pub culprit_driver: Option<String>,
+    pub culprit_duration_us: Option<f64>,
+    /// How long before the frame's present the culprit fired (ms).
+    pub lag_ms: Option<f64>,
+}
+
+impl StutterCause {
+    pub fn is_attributed(&self) -> bool {
+        self.culprit_driver.is_some()
+    }
+}
+
+/// Pure: for each stutter, the "culprit" is the longest-duration latency event that fired during the
+/// bad frame or within `window_ms` before its present — a long DPC right before a frame is the
+/// classic cause. A stutter with no event in that window is left **unattributed** (honest: we don't
+/// invent a cause). `window_ms` is the lead-in tolerance beyond the frame's own duration.
+pub(crate) fn correlate_stutters(
+    spikes: &[FrameSpike],
+    events: &[LatencyEvent],
+    window_ms: f64,
+) -> Vec<StutterCause> {
+    spikes
+        .iter()
+        .map(|s| {
+            let lo = s.timestamp_ms - s.frame_ms - window_ms;
+            let hi = s.timestamp_ms;
+            let culprit = events
+                .iter()
+                .filter(|e| e.timestamp_ms >= lo && e.timestamp_ms <= hi)
+                .max_by(|a, b| a.duration_us.total_cmp(&b.duration_us));
+            match culprit {
+                Some(e) => StutterCause {
+                    frame_timestamp_ms: s.timestamp_ms,
+                    frame_ms: s.frame_ms,
+                    culprit_driver: Some(e.driver.clone()),
+                    culprit_duration_us: Some(e.duration_us),
+                    lag_ms: Some(s.timestamp_ms - e.timestamp_ms),
+                },
+                None => StutterCause {
+                    frame_timestamp_ms: s.timestamp_ms,
+                    frame_ms: s.frame_ms,
+                    culprit_driver: None,
+                    culprit_duration_us: None,
+                    lag_ms: None,
+                },
+            }
+        })
+        .collect()
+}
+
+/// Pure: the headline — which driver is implicated in the most stutters, and how many. `None` if
+/// nothing was attributed. This is the "name the guilty driver" payoff in one line.
+pub(crate) fn top_stutter_culprit(causes: &[StutterCause]) -> Option<(String, usize)> {
+    let mut tally: HashMap<&str, usize> = HashMap::new();
+    for c in causes {
+        if let Some(d) = &c.culprit_driver {
+            *tally.entry(d.as_str()).or_insert(0) += 1;
+        }
+    }
+    tally.into_iter().max_by_key(|(_, n)| *n).map(|(d, n)| (d.to_string(), n))
+}
+
+/// Pure: a plain-English verdict for one correlated stutter.
+pub(crate) fn stutter_verdict(c: &StutterCause) -> String {
+    match (&c.culprit_driver, c.culprit_duration_us, c.lag_ms) {
+        (Some(driver), Some(us), Some(lag)) => format!(
+            "Your {:.1}ms frame at {:.0}ms lines up with a {:.0}µs event in {} ({:.1}ms earlier).",
+            c.frame_ms, c.frame_timestamp_ms, us, driver, lag
+        ),
+        _ => format!(
+            "Your {:.1}ms frame at {:.0}ms has no latency event nearby — not attributed (likely GPU/CPU-bound, not a driver hitch).",
+            c.frame_ms, c.frame_timestamp_ms
+        ),
+    }
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -1283,6 +1388,76 @@ mod latency_tests {
             Some(p) => eprintln!(">>> LIVE polling = {:?}\n>>> {}", p, polling_note(&p, None)),
             None => eprintln!(">>> LIVE polling = no reports (did the mouse move?)"),
         }
+    }
+
+    fn ev(t: f64, us: f64, drv: &str) -> LatencyEvent {
+        LatencyEvent { timestamp_ms: t, duration_us: us, driver: drv.into() }
+    }
+
+    #[test]
+    fn correlate_attributes_stutter_to_nearby_long_event() {
+        // A 20ms frame presented at t=100; a 900µs NIC DPC fired at t=95 (within the frame+window).
+        let spikes = [FrameSpike { timestamp_ms: 100.0, frame_ms: 20.0 }];
+        let events = [ev(95.0, 900.0, "rtwlane.sys"), ev(40.0, 1200.0, "nvlddmkm.sys")];
+        let causes = correlate_stutters(&spikes, &events, 5.0);
+        assert_eq!(causes.len(), 1);
+        assert!(causes[0].is_attributed());
+        assert_eq!(causes[0].culprit_driver.as_deref(), Some("rtwlane.sys")); // the far event is out of window
+        assert_eq!(causes[0].lag_ms, Some(5.0));
+    }
+
+    #[test]
+    fn correlate_picks_longest_event_in_window() {
+        let spikes = [FrameSpike { timestamp_ms: 200.0, frame_ms: 10.0 }];
+        let events = [ev(195.0, 300.0, "short.sys"), ev(193.0, 1500.0, "long.sys")];
+        let causes = correlate_stutters(&spikes, &events, 8.0);
+        assert_eq!(causes[0].culprit_driver.as_deref(), Some("long.sys"));
+        assert_eq!(causes[0].culprit_duration_us, Some(1500.0));
+    }
+
+    #[test]
+    fn correlate_leaves_unexplained_stutter_unattributed() {
+        // No event anywhere near the frame → honestly not attributed.
+        let spikes = [FrameSpike { timestamp_ms: 500.0, frame_ms: 12.0 }];
+        let events = [ev(50.0, 800.0, "far.sys")];
+        let causes = correlate_stutters(&spikes, &events, 5.0);
+        assert!(!causes[0].is_attributed());
+        assert!(stutter_verdict(&causes[0]).contains("not attributed"));
+    }
+
+    #[test]
+    fn top_culprit_finds_the_worst_offender() {
+        let spikes = [
+            FrameSpike { timestamp_ms: 100.0, frame_ms: 18.0 },
+            FrameSpike { timestamp_ms: 200.0, frame_ms: 18.0 },
+            FrameSpike { timestamp_ms: 300.0, frame_ms: 18.0 },
+        ];
+        let events = [
+            ev(96.0, 900.0, "rtwlane.sys"),
+            ev(196.0, 950.0, "rtwlane.sys"),
+            ev(296.0, 400.0, "audio.sys"),
+        ];
+        let causes = correlate_stutters(&spikes, &events, 6.0);
+        let (driver, count) = top_stutter_culprit(&causes).expect("a culprit");
+        assert_eq!(driver, "rtwlane.sys");
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn top_culprit_none_when_nothing_attributed() {
+        let spikes = [FrameSpike { timestamp_ms: 100.0, frame_ms: 18.0 }];
+        let causes = correlate_stutters(&spikes, &[], 6.0);
+        assert!(top_stutter_culprit(&causes).is_none());
+    }
+
+    #[test]
+    fn stutter_verdict_names_driver_and_timing() {
+        let spikes = [FrameSpike { timestamp_ms: 100.0, frame_ms: 22.0 }];
+        let events = [ev(96.0, 880.0, "rtwlane.sys")];
+        let v = stutter_verdict(&correlate_stutters(&spikes, &events, 6.0)[0]);
+        assert!(v.contains("rtwlane.sys"));
+        assert!(v.contains("880µs"));
+        assert!(v.contains("22.0ms"));
     }
 
     #[test]
