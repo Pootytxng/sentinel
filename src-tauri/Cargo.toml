@@ -48,6 +48,11 @@ windows = { version = "0.59", features = [
   # QueryPerformanceFrequency, for converting ETW present-event QPC
   # timestamps into milliseconds in the FPS/frametime capture engine.
   "Win32_System_Performance",
+  # GetLogicalProcessorInformationEx, for CPU core/cache topology. The latency
+  # module counts L3 cache complexes (≈ CCDs on AMD Zen) so it only offers
+  # interrupt-affinity tweaks where they're meaningful (multi-CCD), and refuses
+  # them on single-CCD parts (e.g. an 8-core X3D) — read-only, no elevation.
+  "Win32_System_SystemInformation",
   # OpenProcess + QueryFullProcessImageNameW, so the elevated FPS helper can
   # resolve the presenting process's name (it has the rights; the UI doesn't).
   "Win32_System_Threading",

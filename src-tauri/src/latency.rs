@@ -404,6 +404,149 @@ pub(crate) fn sleep_granularity_note(g: &SleepGranularity, timer: Option<&TimerR
     note
 }
 
+/// CPU core/cache topology — enough to decide whether interrupt-affinity tweaks are meaningful.
+/// On AMD Zen each CCD has its own L3, so the count of distinct L3 caches ≈ the CCD count: a single
+/// L3 = single-CCD (no cross-CCD latency to manage), 2+ = multi-CCD (affinity can matter).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct CpuTopology {
+    pub logical_processors: usize,
+    pub physical_cores: usize,
+    /// Distinct L3 cache complexes — the CCD-count proxy on AMD; 1 on monolithic Intel dies.
+    pub l3_complexes: usize,
+}
+
+impl CpuTopology {
+    /// Multi-CCD/multi-L3 → cross-complex interrupt placement can matter.
+    pub fn is_multi_complex(&self) -> bool {
+        self.l3_complexes >= 2
+    }
+}
+
+/// Pure: interrupt-affinity pinning only buys anything when there are 2+ cache complexes to steer
+/// interrupts between. Refusing it on a single-CCD part is itself a credibility feature.
+pub(crate) fn affinity_is_meaningful(topo: &CpuTopology) -> bool {
+    topo.is_multi_complex()
+}
+
+/// Pure: an honest line about whether interrupt-affinity tuning is worth offering on this CPU.
+pub(crate) fn affinity_advisory(topo: &CpuTopology) -> String {
+    if affinity_is_meaningful(topo) {
+        format!(
+            "{} cache complexes (≈CCDs) across {} cores — pinning latency-sensitive interrupts to \
+             one complex can cut cross-CCD hops. Advisory, reversible, measured before/after.",
+            topo.l3_complexes, topo.physical_cores
+        )
+    } else {
+        format!(
+            "Single cache complex ({} cores) — interrupt-affinity pinning has nothing to steer \
+             between here, so it's not offered. (No cross-CCD latency to avoid on this CPU.)",
+            topo.physical_cores
+        )
+    }
+}
+
+/// Query one relationship class of `GetLogicalProcessorInformationEx` into a properly-aligned
+/// buffer. Returns the raw bytes + the populated length. Empty on any failure — never panics.
+#[cfg(target_os = "windows")]
+fn query_logical_processor_info(
+    rel: windows::Win32::System::SystemInformation::LOGICAL_PROCESSOR_RELATIONSHIP,
+) -> Vec<u8> {
+    use std::mem::size_of;
+    use windows::Win32::System::SystemInformation::{
+        GetLogicalProcessorInformationEx, SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,
+    };
+    type Rec = SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
+
+    let mut len: u32 = 0;
+    // First call: probe the required size (returns ERROR_INSUFFICIENT_BUFFER, sets len).
+    // SAFETY: a None buffer with len=0 only writes the required length to `len`.
+    unsafe {
+        let _ = GetLogicalProcessorInformationEx(rel, None, &mut len);
+    }
+    if len == 0 {
+        return Vec::new();
+    }
+    // Allocate as Rec to guarantee the struct's alignment, then view the bytes.
+    let cap = (len as usize).div_ceil(size_of::<Rec>()).max(1);
+    let mut backing: Vec<Rec> = Vec::with_capacity(cap);
+    // SAFETY: buffer has room for `len` bytes (cap * size_of::<Rec>() >= len) and the API writes
+    // exactly `len` bytes of valid record data on success.
+    let ok = unsafe { GetLogicalProcessorInformationEx(rel, Some(backing.as_mut_ptr()), &mut len) };
+    if ok.is_err() {
+        return Vec::new();
+    }
+    let byte_len = len as usize;
+    // SAFETY: the API populated `byte_len` initialized bytes starting at the buffer base.
+    let bytes = unsafe { std::slice::from_raw_parts(backing.as_ptr() as *const u8, byte_len) };
+    bytes.to_vec()
+}
+
+/// Walk the variable-length records in a `GetLogicalProcessorInformationEx` buffer, invoking `f`
+/// with each record. Each record carries its own `Size`, so we advance by that.
+///
+/// # Safety
+/// `buf` must contain valid `SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX` records as produced by the
+/// API, and be aligned for that type (it is — it came from a `Vec<Rec>` backing).
+#[cfg(target_os = "windows")]
+unsafe fn walk_lpi_records(
+    buf: &[u8],
+    mut f: impl FnMut(&windows::Win32::System::SystemInformation::SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX),
+) {
+    use windows::Win32::System::SystemInformation::SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX as Rec;
+    let mut off = 0usize;
+    // Header = Relationship (u32) + Size (u32) = 8 bytes minimum.
+    while off + 8 <= buf.len() {
+        let rec = &*(buf.as_ptr().add(off) as *const Rec);
+        let size = rec.Size as usize;
+        if size == 0 || off + size > buf.len() {
+            break;
+        }
+        f(rec);
+        off += size;
+    }
+}
+
+/// Live: read CPU core/cache topology via `GetLogicalProcessorInformationEx` (read-only, no
+/// elevation, no network). `None` if the API yields nothing (e.g. a non-Windows sandbox).
+#[cfg(target_os = "windows")]
+pub(crate) fn read_cpu_topology() -> Option<CpuTopology> {
+    use windows::Win32::System::SystemInformation::{RelationCache, RelationProcessorCore};
+
+    // Physical cores + logical processors: one record per physical core; popcount the affinity
+    // masks for logical-processor (SMT thread) count across all processor groups.
+    let core_buf = query_logical_processor_info(RelationProcessorCore);
+    let mut physical_cores = 0usize;
+    let mut logical_processors = 0usize;
+    // SAFETY: buffer came from query_logical_processor_info, which fills it from the API.
+    unsafe {
+        walk_lpi_records(&core_buf, |rec| {
+            physical_cores += 1;
+            let p = &rec.Anonymous.Processor;
+            let masks = std::slice::from_raw_parts(p.GroupMask.as_ptr(), p.GroupCount as usize);
+            for m in masks {
+                logical_processors += m.Mask.count_ones() as usize;
+            }
+        });
+    }
+
+    // L3 complexes: count cache records whose Level == 3.
+    let cache_buf = query_logical_processor_info(RelationCache);
+    let mut l3_complexes = 0usize;
+    // SAFETY: as above.
+    unsafe {
+        walk_lpi_records(&cache_buf, |rec| {
+            if rec.Anonymous.Cache.Level == 3 {
+                l3_complexes += 1;
+            }
+        });
+    }
+
+    if physical_cores == 0 {
+        return None;
+    }
+    Some(CpuTopology { logical_processors, physical_cores, l3_complexes })
+}
+
 #[cfg(test)]
 mod latency_tests {
     use super::*;
@@ -615,6 +758,40 @@ mod latency_tests {
         let s = summarize_msi_active(&devs);
         assert_eq!(s.active_on + s.active_off + s.unknown, devs.len());
         assert!(s.advertised_but_inactive <= s.active_off);
+    }
+
+    fn topo(cores: usize, lps: usize, l3: usize) -> CpuTopology {
+        CpuTopology { physical_cores: cores, logical_processors: lps, l3_complexes: l3 }
+    }
+
+    #[test]
+    fn affinity_meaningful_only_on_multi_complex() {
+        assert!(!affinity_is_meaningful(&topo(8, 16, 1))); // single-CCD 8-core X3D
+        assert!(affinity_is_meaningful(&topo(16, 32, 2))); // dual-CCD
+        assert!(!topo(8, 16, 1).is_multi_complex());
+        assert!(topo(16, 32, 2).is_multi_complex());
+    }
+
+    #[test]
+    fn affinity_advisory_refuses_on_single_complex() {
+        let single = affinity_advisory(&topo(8, 16, 1));
+        assert!(single.contains("not offered"));
+        assert!(single.contains("Single cache complex"));
+        let multi = affinity_advisory(&topo(16, 32, 2));
+        assert!(multi.contains("2 cache complexes"));
+        assert!(multi.contains("reversible"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn cpu_topology_reads_or_degrades() {
+        // Real machine → Some with sane invariants; sandbox → None. Never panics.
+        if let Some(t) = read_cpu_topology() {
+            eprintln!("LIVE topology = {:?} multi_complex={}", t, t.is_multi_complex());
+            assert!(t.physical_cores >= 1);
+            assert!(t.logical_processors >= t.physical_cores); // SMT ≥ cores
+            assert!(t.l3_complexes >= 1);
+        }
     }
 
     #[test]
