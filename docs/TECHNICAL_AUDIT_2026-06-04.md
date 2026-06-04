@@ -97,9 +97,10 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
   ETW helper — before/after a tweak → Keep/Revert/Inconclusive with 95% CI + 3% noise floor); and the
   owner confirms it's validated end-to-end. Intel's PresentMon binary is not required (home-grown
   DXGI-ETW capture satisfies §1.7). Closed.
-- 🟡 **Latency tab GUI validation** — the tab + "Measure wake"/"Measure mouse" buttons need a live
-  look; known wart: those two on-demand buttons briefly freeze the UI (sync commands on the STA
-  thread). Easy `spawn_blocking`/async follow-up.
+- ✅ **Latency tab — owner-validated; UI-freeze wart FIXED (`e701565`).** The tab was already
+  validated by the owner (my "pending" note was stale). The two Measure buttons no longer freeze the
+  UI — `latency_measure_wake` / `latency_measure_mouse` are now async and offload the 1–2s blocking
+  probe via `spawn_blocking`.
 - 🟡 **Latency real capture (Stage 1–2)** — the Correlate engine + capture-processing core are landed
   but dark; the elevated ETW kernel-session wiring (the actual DPC/latency capture) is **not wired**.
   Substantial unfinished feature.
