@@ -1128,7 +1128,18 @@ where
 }
 
 pub(crate) fn collect_hardware() -> HardwareInfo {
-    on_wmi_thread(collect_hardware_inner)
+    // Hardware is static for a session, but several commands need it — on startup
+    // get_recommendations / get_diagnostics / get_game_readiness / get_priorities fire in
+    // parallel, and each used to trigger its own full System::new_all() + WMI sweep on a fresh
+    // thread (4–5 simultaneous scans contending for CPU + WMI). Cache the snapshot so they
+    // collapse to ONE scan: get_or_init is synchronized, so concurrent first-calls block on the
+    // single scan and then all clone the result. (A hot-plugged drive/monitor won't appear until
+    // the app restarts — an acceptable trade for the startup-time win; live RAM/temps come from
+    // the monitoring poller, not this snapshot.)
+    static CACHE: std::sync::OnceLock<HardwareInfo> = std::sync::OnceLock::new();
+    CACHE
+        .get_or_init(|| on_wmi_thread(collect_hardware_inner))
+        .clone()
 }
 
 fn collect_hardware_inner() -> HardwareInfo {
