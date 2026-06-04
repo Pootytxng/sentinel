@@ -31,15 +31,15 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
 
 ## B. Security watch-items (not exploitable today, but the sharp edges)
 
-- 🔴 **Elevated PowerShell built by string interpolation.** `run_elevated_powershell` takes a
-  `format!`-built command, e.g. `Set-Service -Name {} -StartupType {}` with `service.name()`
-  interpolated (`actions.rs:333`, `:310`, `:366`, `:379`, `:398`, `:462`). Today every interpolated
-  value comes from a **hardcoded curated catalog**, so it is not exploitable. But it is the
-  highest-leverage *future* vulnerability: the moment any interpolated token comes from remote rules
-  or user input, it becomes **elevated command injection**. Hardening before remote rules go live:
-  whitelist/validate interpolated tokens (service names `^[A-Za-z0-9_]+$`, GUIDs as GUIDs) and/or
-  pass arguments as an array rather than interpolating into a shell string. The Ed25519 signed-
-  manifest infra is the right complementary defense (built; fetch disabled).
+- ✅ **Elevated PowerShell built by string interpolation — ADDRESSED (`0315181`).**
+  `run_elevated_powershell` takes a `format!`-built command, e.g. `Set-Service -Name {} -StartupType
+  {}` with `service.name()` interpolated. Today every interpolated value comes from a hardcoded
+  curated catalog, so it was not exploitable — but it was the highest-leverage *future* vulnerability
+  (elevated command injection if any token ever came from remote rules / user input). Now hardened:
+  `actions::ps_safe()` validates every interpolated token against a `[A-Za-z0-9_.-]` whitelist
+  (rejecting every shell metacharacter) at all six interpolation sites, with tests. The Ed25519
+  signed-manifest infra remains the complementary defense for the remote-rules case (built; fetch
+  disabled).
 - 🟡 **37 `unsafe` FFI blocks** across 6 files — `amd_freesync.rs` (12), `latency.rs` (11),
   `cpu_temp.rs` (5), `hardware.rs` (4), `benchmark.rs` (3), `fps.rs` (2). All are vendor COM /
   memory-mapped / Win32 calls following a canary + `read_unaligned` + fail-soft-to-`None` pattern.
@@ -54,12 +54,10 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
 
 ## C. Loose ends (chaos residue / code hygiene)
 
-- 🟡 **Stale module comments in `lib.rs`.** Lines 6–9 and 18 still describe `benchmark`,
-  `benchmark_verdict`, `benchmark_scoreboard`, and `latency` as "PARKED + DARK / not registered /
-  DARK" — but this work is now wired: `start_benchmark`, `get_benchmark_state`,
-  `get_latency_diagnostics`, `start_calibration`, `start_tweak_trial`, `get_scoreboard`,
-  `get_trial_state` are all in the command handler (`lib.rs:454–486`). The comments now misstate
-  reality. Quick fix.
+- ✅ **Stale module comments in `lib.rs` — FIXED (`0315181`).** Lines 6–9 and 18 described
+  `benchmark` / `benchmark_verdict` / `benchmark_scoreboard` / `benchmark_trial` / `latency` as
+  "PARKED + DARK / not registered" — but they're all wired (Benchmark + Latency tabs, Score card,
+  trials). Comments now state what's live vs. still dark.
 - 🟡 **Blanket `#![allow(dead_code)]`** at the top of `benchmark.rs`, `latency.rs`,
   `benchmark_verdict.rs`, `benchmark_scoreboard.rs`, `benchmark_trial.rs`. These made sense while the
   modules were dark, but now that they're partly wired the module-wide allow **masks the genuinely
@@ -118,10 +116,10 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
 
 ## Recommended order
 
-1. 🔴 Harden elevated-PowerShell construction (validate/whitelist interpolated tokens) — cheap now,
-   essential before remote rules.
-2. 🟡 Hygiene sweep: fix stale `lib.rs` comments + replace blanket `#![allow(dead_code)]` with
-   targeted allows; add `cargo audit` to the workflow. (Pure-upside, ~30 min.)
+1. ✅ Harden elevated-PowerShell construction — **done (`0315181`)**.
+2. 🟡 Remaining hygiene: replace blanket `#![allow(dead_code)]` with targeted allows (deferred —
+   churn-prone; better done when the dark items are wired or cut); add `cargo audit` to CI (deferred
+   — installing it is a heavy build, avoided mid-gaming-session). Stale `lib.rs` comments ✅ fixed.
 3. 🟡 Reconcile the §1.7 PresentMon status; answer the open Readiness-RAM question.
 4. 🔴 Owner: Gaming Mode §7 QA → gate flip. (Gates real value already built.)
 5. 🔴 Pre-public: signing cert + legal pass.
