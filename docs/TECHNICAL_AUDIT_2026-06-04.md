@@ -98,8 +98,9 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
   *first* network egress, a deliberate opt-in/anonymous owner decision.
 - 🟡 **VRR Phase 2b** (AMD `SetEnabled` write — toggle FreeSync, not just read) and **NVIDIA NVAPI**
   VRR — future.
-- 🟡 **Live validations pending**: the tweak A-B trial leaving the rig clean (owner); the proposed
-  Readiness "RAM headroom" check (owner question, still unanswered).
+- 🟡 **Live validations pending**: the tweak A-B trial leaving the rig clean (owner). The proposed
+  Readiness "RAM headroom" check is **decided: SKIP** (owner, 2026-06-04) — the live RAM warning is
+  sufficient; a free-RAM-when-idle Readiness row would be misleading.
 - 🔴 **Public-release blockers**: code-signing cert (~$10/mo) + a legal/privacy pass. Until signed,
   users hit SmartScreen warnings.
 - 🟢 **`SENTINEL_OVERVIEW.md`** is untracked — decide commit vs. keep-local.
