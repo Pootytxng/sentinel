@@ -58,9 +58,13 @@ pub(crate) fn ensure_cpu_poller_started() {
         std::thread::Builder::new()
             .name("cpu-sensor-poller".into())
             .spawn(|| {
-                let mut sys = System::new_all();
+                // `new()`, not `new_all()`: this poller only needs CPU + memory, so we never load
+                // (or retain for the app's lifetime) the full process / disk / network / component
+                // tables `new_all()` builds. Keeps Sentinel's own footprint minimal — a PC
+                // optimizer shouldn't be a memory hog. `refresh_cpu_all` keeps the clock reading.
+                let mut sys = System::new();
                 loop {
-                    sys.refresh_cpu_usage();
+                    sys.refresh_cpu_all();
                     sys.refresh_memory();
                     let usage_per_core_pct: Vec<f32> =
                         sys.cpus().iter().map(|c| c.cpu_usage()).collect();
@@ -146,11 +150,6 @@ pub(crate) fn get_memory_pressure() -> MemoryPressure {
         };
     };
     sys.refresh_memory();
-    sys.refresh_processes_specifics(
-        sysinfo::ProcessesToUpdate::All,
-        true,
-        sysinfo::ProcessRefreshKind::nothing().with_memory(),
-    );
 
     let total = sys.total_memory();
     let used = sys.used_memory();
@@ -159,19 +158,6 @@ pub(crate) fn get_memory_pressure() -> MemoryPressure {
     } else {
         0
     };
-
-    // Group working sets by process name (e.g. all Chrome helpers into one row).
-    let mut by_name: HashMap<String, u64> = HashMap::new();
-    for p in sys.processes().values() {
-        let name = p.name().to_string_lossy().into_owned();
-        *by_name.entry(name).or_insert(0) += p.memory();
-    }
-    let mut top_consumers: Vec<MemConsumer> = by_name
-        .into_iter()
-        .map(|(name, bytes)| MemConsumer { name, bytes })
-        .collect();
-    top_consumers.sort_by_key(|c| std::cmp::Reverse(c.bytes));
-    top_consumers.truncate(6);
 
     let (level, advisory) = if used_pct >= 90 {
         (
@@ -192,6 +178,31 @@ pub(crate) fn get_memory_pressure() -> MemoryPressure {
         )
     } else {
         ("ok", None)
+    };
+
+    // Only pay for the full process scan when there's actually a warning to show. When RAM is fine
+    // (the common case) this stays cheap — just the memory totals, no per-process enumeration.
+    let top_consumers = if used_pct >= 80 {
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::All,
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_memory(),
+        );
+        // Group working sets by process name (e.g. all Chrome helpers into one row).
+        let mut by_name: HashMap<String, u64> = HashMap::new();
+        for p in sys.processes().values() {
+            let name = p.name().to_string_lossy().into_owned();
+            *by_name.entry(name).or_insert(0) += p.memory();
+        }
+        let mut v: Vec<MemConsumer> = by_name
+            .into_iter()
+            .map(|(name, bytes)| MemConsumer { name, bytes })
+            .collect();
+        v.sort_by_key(|c| std::cmp::Reverse(c.bytes));
+        v.truncate(6);
+        v
+    } else {
+        Vec::new()
     };
 
     MemoryPressure {
