@@ -6,7 +6,9 @@
 //! NVIDIA implemented-unverified, Intel future.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
@@ -52,7 +54,46 @@ pub(crate) fn cpu_sensor_cache() -> &'static Mutex<CpuSensorSnapshot> {
     CACHE.get_or_init(|| Mutex::new(CpuSensorSnapshot::default()))
 }
 
+// ─── Demand-gated pollers ────────────────────────────────────────────────
+//
+// The sensor pollers do their (relatively costly) refresh only while a consumer
+// is actively reading them. Every get_* command marks a "demand" timestamp via
+// the ensure_*_started chokepoint; if nothing has asked within
+// POLLER_IDLE_AFTER_MS, the poller thread stays alive but idles — no sysinfo
+// refresh, no ADLX reads — so Sentinel does ~nothing sitting in the tray with
+// the Monitoring tab closed and the overlay hidden. A consumer resumes it just
+// by calling the command again (the next loop tick, ≤1 s later, refreshes).
+// Two independent signals so the CPU poller and the AMD/GPU poller idle on
+// their own schedules — and so the FreeSync read (which Readiness drives via the
+// GPU signal) is never starved.
+const POLLER_IDLE_AFTER_MS: u64 = 3000;
+
+fn poller_epoch() -> Instant {
+    static T: OnceLock<Instant> = OnceLock::new();
+    *T.get_or_init(Instant::now)
+}
+fn poller_now_ms() -> u64 {
+    poller_epoch().elapsed().as_millis() as u64
+}
+fn cpu_demand() -> &'static AtomicU64 {
+    static D: OnceLock<AtomicU64> = OnceLock::new();
+    D.get_or_init(|| AtomicU64::new(0))
+}
+fn gpu_demand() -> &'static AtomicU64 {
+    static D: OnceLock<AtomicU64> = OnceLock::new();
+    D.get_or_init(|| AtomicU64::new(0))
+}
+/// A consumer is reading this sensor right now — keep its poller awake.
+fn mark_demand(d: &AtomicU64) {
+    d.store(poller_now_ms(), Ordering::Relaxed);
+}
+/// True when no consumer has asked within the idle window → the poller skips its refresh.
+fn poller_idle(d: &AtomicU64) -> bool {
+    poller_now_ms().saturating_sub(d.load(Ordering::Relaxed)) > POLLER_IDLE_AFTER_MS
+}
+
 pub(crate) fn ensure_cpu_poller_started() {
+    mark_demand(cpu_demand());
     static STARTED: OnceLock<()> = OnceLock::new();
     STARTED.get_or_init(|| {
         std::thread::Builder::new()
@@ -64,6 +105,11 @@ pub(crate) fn ensure_cpu_poller_started() {
                 // optimizer shouldn't be a memory hog. `refresh_cpu_all` keeps the clock reading.
                 let mut sys = System::new();
                 loop {
+                    // Idle when nothing's reading CPU/RAM — skip the refresh entirely.
+                    if poller_idle(cpu_demand()) {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        continue;
+                    }
                     sys.refresh_cpu_all();
                     sys.refresh_memory();
                     let usage_per_core_pct: Vec<f32> =
@@ -301,6 +347,7 @@ pub(crate) fn amd_freesync_cache() -> &'static Mutex<Option<bool>> {
 }
 
 pub(crate) fn ensure_amd_poller_started() {
+    mark_demand(gpu_demand());
     static STARTED: OnceLock<()> = OnceLock::new();
     STARTED.get_or_init(|| {
         std::thread::Builder::new()
@@ -340,6 +387,13 @@ pub(crate) fn amd_poller_loop() {
     let count = gpu_list.size();
 
     loop {
+        // Idle when neither Monitoring/overlay nor Readiness is reading the GPU — skip the ADLX
+        // sensor reads and the FreeSync poll entirely (Readiness marks the GPU demand when active,
+        // so its FreeSync read is never starved).
+        if poller_idle(gpu_demand()) {
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+            continue;
+        }
         let mut out = Vec::new();
         for i in 0..count {
             let Ok(gpu) = gpu_list.at(i) else { continue };
