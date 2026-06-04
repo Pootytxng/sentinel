@@ -77,10 +77,14 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
 
 ## D. Unfinished tasks / pending owner actions (the "forgot about it" list)
 
-- 🔴 **Gaming Mode** — fully built, merged, behind `gaming_mode_gate()=false`. Needs: owner runs the
-  spec §7 mutation QA on a UAC-on machine (8 scenarios: normal · app-crash · reboot · game-exit ·
-  UAC-cancel-on-start · UAC-cancel-on-restore · missing-plan · external-plan-change) + sign-off →
-  **then** flip the gate. (Claude must not self-flip a mutation gate.) Biggest built-but-unshipped item.
+- 🔴 **Gaming Mode** — fully built, merged, behind `gaming_mode_gate()=false`. **Pre-QA review
+  (2026-06-04): restore/recovery logic verified sound** (contract-before-mutation, atomic writes,
+  best-effort restore-all, never-false-success, idempotent re-run, full orphan coverage); **one gap
+  found + closed** — recovery now greets the user **globally on launch** (`df0013c`), not just when
+  the Gaming tab is opened. Remaining: owner runs the spec §7 mutation QA on a UAC-on machine (8
+  scenarios: normal · app-crash · reboot · game-exit · UAC-cancel-on-start · UAC-cancel-on-restore ·
+  missing-plan · external-plan-change) + sign-off → **then** flip the gate. (Claude must not
+  self-flip a mutation gate.) Biggest built-but-unshipped item; now QA-ready.
 - ✅ **§1.7 PresentMon — COMPLETE (owner-confirmed validated 2026-06-04).** The "ambiguous status" was
   a stale note. Decision done + owner-confirmed (`3076f02`); seam built + live
   (`benchmark_trial::start_tweak_trial` measures real game frametimes — 1%/0.1% lows via the `fps.rs`
