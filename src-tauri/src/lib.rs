@@ -446,6 +446,7 @@ pub fn run() {
             show_overlay,
             hide_overlay,
             overlay_visible,
+            set_overlay_corner,
             apply_recommendation,
             rollback_change,
             get_applied_changes,

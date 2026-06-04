@@ -730,6 +730,37 @@ pub(crate) fn overlay_visible(app: tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// Reposition the overlay to a screen corner: "top-left" | "top-right" | "bottom-left" |
+/// "bottom-right". Computed in physical pixels off the overlay's current monitor (DPI-safe), with
+/// a margin. The frontend persists the choice and re-applies it on show.
+#[tauri::command]
+pub(crate) fn set_overlay_corner(app: tauri::AppHandle, corner: String) -> Result<(), String> {
+    use tauri::Manager;
+    let w = app
+        .get_webview_window("overlay")
+        .ok_or_else(|| "overlay window not found".to_string())?;
+    let monitor = w
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no monitor for the overlay".to_string())?;
+    let msize = monitor.size();
+    let mpos = monitor.position();
+    let wsize = w.outer_size().map_err(|e| e.to_string())?;
+    let margin = (24.0 * monitor.scale_factor()).round() as i32;
+    let left = mpos.x + margin;
+    let top = mpos.y + margin;
+    let right = mpos.x + (msize.width as i32 - wsize.width as i32 - margin).max(margin);
+    let bottom = mpos.y + (msize.height as i32 - wsize.height as i32 - margin).max(margin);
+    let (x, y) = match corner.as_str() {
+        "top-left" => (left, top),
+        "top-right" => (right, top),
+        "bottom-left" => (left, bottom),
+        "bottom-right" => (right, bottom),
+        other => return Err(format!("unknown corner: {other}")),
+    };
+    w.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod runtime_dir_tests {
     use super::*;

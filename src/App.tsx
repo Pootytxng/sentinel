@@ -1528,6 +1528,9 @@ function MonitoringTab({ active }: { active: boolean }) {
   const [fpsBusy, setFpsBusy] = useState(false);
   const [overlayOn, setOverlayOn] = useState(false);
   const [cpuTemp, setCpuTemp] = useState<CpuTemp | null>(null);
+  const [overlayCorner, setOverlayCorner] = useState<string>(
+    () => localStorage.getItem("sentinel_overlay_corner") ?? "top-left",
+  );
 
   // Sync the overlay toggle with the actual window state on mount (e.g. the
   // overlay may already be open from earlier in this app session).
@@ -1543,9 +1546,21 @@ function MonitoringTab({ active }: { active: boolean }) {
       } else {
         await invoke("show_overlay");
         setOverlayOn(true);
+        // Re-apply the saved corner once the window is shown.
+        invoke("set_overlay_corner", { corner: overlayCorner }).catch(() => {});
       }
     } catch {
       /* ignore — leave toggle as-is */
+    }
+  };
+
+  const chooseCorner = async (corner: string) => {
+    setOverlayCorner(corner);
+    localStorage.setItem("sentinel_overlay_corner", corner);
+    try {
+      await invoke("set_overlay_corner", { corner });
+    } catch {
+      /* overlay may be hidden — the choice applies next time it's shown */
     }
   };
 
@@ -1627,6 +1642,27 @@ function MonitoringTab({ active }: { active: boolean }) {
           >
             {overlayOn ? "Hide overlay" : "Show overlay"}
           </button>
+          {overlayOn && (
+            <div style={{ display: "flex", gap: 4 }} title="Move the overlay to a screen corner">
+              {(
+                [
+                  ["top-left", "↖"],
+                  ["top-right", "↗"],
+                  ["bottom-left", "↙"],
+                  ["bottom-right", "↘"],
+                ] as const
+              ).map(([corner, glyph]) => (
+                <button
+                  key={corner}
+                  className={`btn-small ${overlayCorner === corner ? "btn-small-on" : ""}`}
+                  onClick={() => chooseCorner(corner)}
+                  title={corner.replace("-", " ")}
+                >
+                  {glyph}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="read-only-pill">
             {!haveAnything
               ? "Starting…"
