@@ -133,11 +133,19 @@ A checklist to build against:
   bolt-on, never a v1 gate.
 
 **Still open / HQ-gated:**
-1. **PresentMon / `ARCHITECTURE_LOCKS §1.7` — ✅ ACTIONED (HQ, 2026-06-03, owner-confirmed).** §1.7's
-   "out of v1" deferral on PresentMon/ETW frame-capture is lifted; frame-time before/after deltas are now
-   the **core efficacy Measure**, reusing the already-shipping read-only anti-cheat-safe `fps.rs
-   --fps-capture` helper. §1.7's honesty invariant (no fake FPS claims; noise-floor "no measurable change")
-   is preserved and reinforced. **Building** the PresentMon→`compute_efficacy` seam remains dark/gated work.
+1. **PresentMon / `ARCHITECTURE_LOCKS §1.7` — ✅ ACTIONED + BUILT** (decision HQ 2026-06-03,
+   owner-confirmed `3076f02`; seam shipped 2026-06-04). §1.7's "out of v1" deferral on PresentMon/ETW
+   frame-capture is lifted; frame-time before/after deltas are now the **core efficacy Measure**, reusing
+   the already-shipping read-only anti-cheat-safe `fps.rs --fps-capture` helper. §1.7's honesty invariant
+   (no fake FPS claims; noise-floor "no measurable change") is preserved and reinforced. The
+   PresentMon→verdict seam is **built + live**: `benchmark_trial::start_tweak_trial` measures real game
+   frametimes (1%/0.1% lows, via `monitoring::latest_frametimes()` ← the ETW helper) before/after applying
+   a tweak → Keep/Revert/Inconclusive with 95% CI + a 3% noise floor; the synthetic `compute_efficacy`
+   runners stay separate health-signals (per §1.7). Shipped **ungated** alongside the live Benchmark tab —
+   the planned `benchmark_enabled()` gate was not used (owner directed un-darking). **Remaining: live
+   end-to-end validation on a real game** (run a tweak trial with FPS capture on; confirm a real delta +
+   honest verdict + clean rollback). Intel's PresentMon *binary* is **not** required — the home-grown
+   DXGI-ETW capture satisfies §1.7; bundling the redistributable is an optional future "more signals" call.
 2. **If efficacy-sharing ships:** who hosts it, and how are submissions kept honest (signed via the
    existing `ed25519-compact` pattern / server-side bounds)?
 3. **Identity model for sharing:** anonymous token only *(recommended — preserves the no-account ethos)*,

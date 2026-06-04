@@ -81,9 +81,13 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
   spec §7 mutation QA on a UAC-on machine (8 scenarios: normal · app-crash · reboot · game-exit ·
   UAC-cancel-on-start · UAC-cancel-on-restore · missing-plan · external-plan-change) + sign-off →
   **then** flip the gate. (Claude must not self-flip a mutation gate.) Biggest built-but-unshipped item.
-- 🟡 **§1.7 PresentMon lock reversal — ambiguous status.** Memory carries *conflicting* notes (one
-  says "promoted/actioned", another says "HQ holding for owner's direct confirm"). Needs a definitive
-  reconcile: is it done or pending? Classic chaos-residue ambiguity.
+- ✅ **§1.7 PresentMon — RECONCILED (2026-06-04).** The ambiguity was a stale note. Reality: the
+  decision is **done + owner-confirmed** (`3076f02`, 2026-06-03 — lifted the "out of v1" deferral,
+  honesty invariant preserved), and the **seam is built + live** — `benchmark_trial::start_tweak_trial`
+  measures real game frametimes (1%/0.1% lows via the `fps.rs` ETW helper) before/after a tweak →
+  Keep/Revert/Inconclusive with 95% CI + 3% noise floor. Only **live end-to-end validation on a real
+  game** remains (same pending owner validation as the tweak A-B trial). Intel's PresentMon binary is
+  not required (home-grown DXGI-ETW capture satisfies §1.7). Plan doc updated to match.
 - 🟡 **Latency tab GUI validation** — the tab + "Measure wake"/"Measure mouse" buttons need a live
   look; known wart: those two on-demand buttons briefly freeze the UI (sync commands on the STA
   thread). Easy `spawn_blocking`/async follow-up.
