@@ -290,13 +290,23 @@ fn get_latency_diagnostics() -> latency::LatencyReport {
 }
 
 #[tauri::command]
-fn latency_measure_wake() -> Option<latency::WakeMeasurement> {
-    latency::measure_wake()
+async fn latency_measure_wake() -> Option<latency::WakeMeasurement> {
+    // ~1s blocking sample — run on the blocking pool so the webview doesn't freeze while it shows
+    // "Measuring…". (The measurement is self-contained and thread-agnostic.)
+    tauri::async_runtime::spawn_blocking(latency::measure_wake)
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasurement> {
-    latency::measure_mouse(duration_ms)
+async fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasurement> {
+    // ~duration_ms blocking Raw Input probe — self-contained (its own hidden window + message loop,
+    // unique class per call), so it's safe to run off the UI thread on the blocking pool.
+    tauri::async_runtime::spawn_blocking(move || latency::measure_mouse(duration_ms))
+        .await
+        .ok()
+        .flatten()
 }
 
 // ── Benchmark / measured-efficacy (read-only; measures, never mutates) ──
