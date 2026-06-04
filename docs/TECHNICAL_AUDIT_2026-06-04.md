@@ -53,9 +53,10 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
   *warnings*, all transitive and irrelevant to the shipped Windows binary: 11 are the Linux GTK/glib
   GUI stack (`gtk`/`gdk`/`atk`/`gdkx11`/`gdkwayland-sys`/… + `glib` `VariantStrIter` unsoundness) that
   Tauri pulls for the Linux target but doesn't compile/ship on Windows; 6 are unmaintained build/
-  transitive helpers (`unic-*`, `proc-macro-error`). Nothing exploitable on the user's PC. Remaining
-  🟡: to make `cargo audit` a clean CI gate, add an `audit.toml` ignoring these known-noise advisory
-  IDs so a real future CVE stands out.
+  transitive helpers (`unic-*`, `proc-macro-error`). Nothing exploitable on the user's PC.
+  **✅ Clean gate added (`9d9c19c`)**: `src-tauri/.cargo/audit.toml` ignores the 17 triaged advisory
+  IDs (each commented with crate + why), so `cargo audit` now runs clean (0 vulns, 0 unsuppressed
+  warnings) and a real future CVE — a new ID not in the list — stands out.
 
 ## C. Loose ends (chaos residue / code hygiene)
 
