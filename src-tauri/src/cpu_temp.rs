@@ -162,15 +162,25 @@ fn read_hwinfo() -> Option<CpuTemp> {
 
 /// Parse the mapped HWiNFO block for the best CPU temperature reading. Validated + fail-soft.
 unsafe fn parse_hwinfo(base: *const u8) -> Option<CpuTemp> {
-    if std::slice::from_raw_parts(base, 4) != b"SiWH" {
+    // Signature is the DWORD 'SiWH' (0x53695748); in memory its little-endian bytes read as
+    // "HWiS". Accept either byte order AND the raw DWORD so an endianness quirk can't make us
+    // silently miss it.
+    let sig4 = std::slice::from_raw_parts(base, 4);
+    let sig_u32 = u32::from_le_bytes([sig4[0], sig4[1], sig4[2], sig4[3]]);
+    if sig4 != b"SiWH" && sig4 != b"HWiS" && sig_u32 != 0x5369_5748 {
         return None;
     }
     let h: HwiHeader = std::ptr::read_unaligned(base as *const HwiHeader);
     let off = h.offset_reading as usize;
     let size_elem = h.size_reading_elem as usize;
     let num = h.num_reading as usize;
-    // Layout sanity: element size must match our struct; count must be plausible.
-    if size_elem != std::mem::size_of::<HwiReading>() || num == 0 || num > 100_000 {
+    // Layout sanity: the element must be at least our known layout (a newer HWiNFO may append
+    // trailing fields, which don't move the ones we read); offset + count must be plausible.
+    if size_elem < std::mem::size_of::<HwiReading>()
+        || off < std::mem::size_of::<HwiHeader>()
+        || num == 0
+        || num > 100_000
+    {
         return None;
     }
     let mut best: Option<(f64, String)> = None;
@@ -184,7 +194,9 @@ unsafe fn parse_hwinfo(base: *const u8) -> Option<CpuTemp> {
         let label_bytes = e.label_orig; // copy out of the packed struct before borrowing
         let label = cstr(&label_bytes);
         let l = label.to_lowercase();
-        if !l.contains("cpu") {
+        // CPU temps: AMD's headline is "CPU (Tctl/Tdie)", Intel's "CPU Package"; also accept
+        // Tctl/Tdie/CCD labels — but never a GPU sensor.
+        if l.contains("gpu") || !(l.contains("cpu") || l.contains("tctl") || l.contains("tdie")) {
             continue;
         }
         let v = e.value;
@@ -207,4 +219,79 @@ unsafe fn parse_hwinfo(base: *const u8) -> Option<CpuTemp> {
 fn cstr(buf: &[u8]) -> String {
     let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
     String::from_utf8_lossy(&buf[..end]).into_owned()
+}
+
+#[cfg(test)]
+mod hwinfo_tests {
+    use super::*;
+
+    fn u32b(buf: &mut Vec<u8>, v: u32) {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+    fn f64b(buf: &mut Vec<u8>, v: f64) {
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+    fn strb(buf: &mut Vec<u8>, s: &str, len: usize) {
+        let mut b = s.as_bytes().to_vec();
+        b.resize(len, 0);
+        buf.extend_from_slice(&b);
+    }
+    fn reading(buf: &mut Vec<u8>, rtype: u32, label: &str, value: f64) {
+        u32b(buf, rtype); // reading_type
+        u32b(buf, 0); // sensor_index
+        u32b(buf, 0); // reading_id
+        strb(buf, label, 128); // label_orig
+        strb(buf, "", 128); // label_user
+        strb(buf, "C", 16); // unit
+        f64b(buf, value); // value
+        f64b(buf, value); // min
+        f64b(buf, value); // max
+        f64b(buf, value); // avg
+    }
+    /// Build a minimal HWiNFO shared block: header + the given temperature readings.
+    fn block(readings: &[(u32, &str, f64)]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"HWiS"); // signature (LE of 0x53695748)
+        u32b(&mut buf, 1); // version
+        u32b(&mut buf, 0); // revision
+        buf.extend_from_slice(&0u64.to_le_bytes()); // poll_time
+        u32b(&mut buf, 0); // offset_sensor
+        u32b(&mut buf, 0); // size_sensor_elem
+        u32b(&mut buf, 0); // num_sensor
+        u32b(&mut buf, std::mem::size_of::<HwiHeader>() as u32); // offset_reading
+        u32b(&mut buf, std::mem::size_of::<HwiReading>() as u32); // size_reading_elem
+        u32b(&mut buf, readings.len() as u32); // num_reading
+        assert_eq!(buf.len(), std::mem::size_of::<HwiHeader>());
+        for &(rt, label, v) in readings {
+            reading(&mut buf, rt, label, v);
+        }
+        buf
+    }
+
+    #[test]
+    fn parses_cpu_temp_prefers_tctl_excludes_gpu() {
+        let buf = block(&[
+            (1, "GPU Temperature", 70.0),    // excluded (gpu)
+            (1, "CPU Core 0", 48.0),         // a CPU temp, but not the headline
+            (1, "CPU (Tctl/Tdie)", 55.0),    // preferred (tctl)
+            (3, "CPU Fan", 1200.0),          // not a temp (type 3)
+        ]);
+        let t = unsafe { parse_hwinfo(buf.as_ptr()) }.expect("CPU temp parsed");
+        assert_eq!(t.temp_c, 55.0);
+        assert_eq!(t.source, "HWiNFO");
+        assert!(t.label.contains("Tctl"));
+    }
+
+    #[test]
+    fn rejects_wrong_signature() {
+        let mut buf = block(&[(1, "CPU (Tctl/Tdie)", 55.0)]);
+        buf[0] = b'X'; // corrupt the signature
+        assert!(unsafe { parse_hwinfo(buf.as_ptr()) }.is_none());
+    }
+
+    #[test]
+    fn none_when_no_cpu_temp_present() {
+        let buf = block(&[(1, "GPU Temperature", 70.0), (1, "Motherboard", 35.0)]);
+        assert!(unsafe { parse_hwinfo(buf.as_ptr()) }.is_none());
+    }
 }
