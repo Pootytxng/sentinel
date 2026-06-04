@@ -7,6 +7,7 @@ import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
 import { BenchmarkTab } from "./surfaces/Benchmark";
+import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./Onboarding.css";
 
@@ -691,6 +692,32 @@ function App() {
   useEffect(() => {
     invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
   }, []);
+  // Global crash-recovery: once Gaming Mode is enabled, check on launch — regardless of which tab
+  // is open — whether a previous session ended uncleanly, and surface a prompt to restore. Inert
+  // while the feature is gated off (gamingEnabled stays false → never checks; no orphans can exist
+  // anyway since sessions can't start). This is what makes recovery greet the user on startup
+  // instead of only when they happen to open the Gaming tab.
+  const [gamingRecovery, setGamingRecovery] = useState<GamingSessionFile | null>(null);
+  useEffect(() => {
+    if (!gamingEnabled) return;
+    invoke<GamingSessionFile | null>("get_gaming_session_state")
+      .then((s) => {
+        if (s && isRecoverable(s.status)) setGamingRecovery(s);
+      })
+      .catch(() => {});
+  }, [gamingEnabled]);
+  const recoverGaming = async (confirm: boolean) => {
+    if (!confirm) {
+      setGamingRecovery(null);
+      return;
+    }
+    try {
+      await invoke("recover_gaming_session", { confirm: true });
+      setGamingRecovery(null); // cleared only once restore confirms
+    } catch (e) {
+      setError(String(e)); // leave the banner up so the user can retry / Review
+    }
+  };
 
   const changeTheme = (id: string) => {
     setTheme(id);
@@ -921,6 +948,29 @@ function App() {
       </header>
 
       {error && <div className="error">Error: {error}</div>}
+
+      {gamingRecovery && (
+        <div className="gaming-recovery-banner" role="alert">
+          <span>
+            A Gaming Mode session didn't end cleanly — {statusLabel(gamingRecovery.status)}. Restore
+            your settings?
+          </span>
+          <span className="gaming-recovery-actions">
+            <button className="btn-small btn-small-on" onClick={() => recoverGaming(true)}>
+              Restore now
+            </button>
+            <button
+              className="btn-small"
+              onClick={() => {
+                setActiveTab("Gaming");
+                setGamingRecovery(null);
+              }}
+            >
+              Review
+            </button>
+          </span>
+        </div>
+      )}
 
       {hw && (
         <>

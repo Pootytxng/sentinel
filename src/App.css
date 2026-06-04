@@ -2389,3 +2389,25 @@ body::before {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ── Global Gaming-Mode crash-recovery banner (fires on launch, any tab) ──── */
+.gaming-recovery-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border: 1px solid var(--attention, #f5c451);
+  border-left-width: 3px;
+  background: rgba(245, 196, 81, 0.1);
+  color: var(--fg);
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+.gaming-recovery-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
