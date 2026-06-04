@@ -204,7 +204,7 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
             }
             // 2. Apply. If it fails, nothing was mutated — bail cleanly (no guard armed).
             set(|s| s.status = "Applying the change…".into());
-            let view = match crate::history::apply_recommendation(rec_id.clone(), rec_title) {
+            let view = match crate::history::apply_recommendation(rec_id.clone(), rec_title.clone()) {
                 Ok(v) => v,
                 Err(e) => {
                     set(|s| {
@@ -237,6 +237,8 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
 
             // 5. Verdict, then roll back (the guard, on drop).
             let verdict = Trial { baseline, treatment }.verdict();
+            // Record a verified win to the scoreboard — only a Keep earns one (the firewall).
+            let _ = crate::benchmark_scoreboard::record_result(&rec_id, &rec_title, &verdict);
             set(|s| {
                 s.running = false;
                 s.verdict = Some(verdict);

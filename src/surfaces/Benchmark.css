@@ -186,6 +186,37 @@
   color: var(--faint);
 }
 
+.bench-score-total {
+  color: var(--accent-bright, var(--accent));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-awards {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bench-award {
+  font-size: 0.85rem;
+  color: var(--fg);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.45;
+}
+
+.bench-award:last-child {
+  border-bottom: none;
+}
+
+.bench-award-pts {
+  color: var(--ready, #46d98a);
+}
+
 .bench-tweak-pick {
   display: flex;
   align-items: center;

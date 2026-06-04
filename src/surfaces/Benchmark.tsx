@@ -10,7 +10,14 @@ import {
   trialVerdictTone,
   trialReasonText,
 } from "./benchmark-view";
-import type { BenchmarkState, RunReport, Efficacy, AppliedChange, TrialState } from "../types";
+import type {
+  BenchmarkState,
+  RunReport,
+  Efficacy,
+  AppliedChange,
+  TrialState,
+  ScoreboardView,
+} from "../types";
 import "./Benchmark.css";
 
 const POLL_MS = 700;
@@ -24,6 +31,10 @@ export function BenchmarkTab() {
   const [trial, setTrial] = useState<TrialState | null>(null);
   const [tweaks, setTweaks] = useState<{ id: string; title: string }[]>([]);
   const [selectedTweak, setSelectedTweak] = useState<string>("");
+  const [score, setScore] = useState<ScoreboardView | null>(null);
+  const [arcade, setArcade] = useState<boolean>(
+    () => localStorage.getItem("sentinel_score_face") === "arcade",
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,14 +60,16 @@ export function BenchmarkTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const [s, ch, t] = await Promise.all([
+      const [s, ch, t, sb] = await Promise.all([
         invoke<BenchmarkState>("get_benchmark_state"),
         invoke<AppliedChange[]>("get_applied_changes").catch(() => [] as AppliedChange[]),
         invoke<TrialState>("get_trial_state").catch(() => null),
+        invoke<ScoreboardView>("get_scoreboard").catch(() => null),
       ]);
       setState(s);
       setChanges(ch);
       if (t) setTrial(t);
+      if (sb) setScore(sb);
     } catch {
       /* leave prior state */
     }
@@ -107,6 +120,23 @@ export function BenchmarkTab() {
       /* surfaced via trial state */
     }
     refresh();
+  };
+
+  const toggleFace = () => {
+    setArcade((a) => {
+      const next = !a;
+      localStorage.setItem("sentinel_score_face", next ? "arcade" : "lab");
+      return next;
+    });
+  };
+
+  const clearScore = async () => {
+    try {
+      await invoke("clear_scoreboard");
+      await refresh();
+    } catch {
+      /* ignore */
+    }
   };
 
   const run = async () => {
@@ -322,6 +352,57 @@ export function BenchmarkTab() {
         )}
 
         {!trial?.running && trial?.error && <p className="bench-err">{trial.error}</p>}
+      </Card>
+
+      <Card>
+        <SectionHeader
+          title="Score"
+          right={
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {score && score.total_points > 0 && (
+                <span className="bench-score-total">{score.total_points} pts</span>
+              )}
+              <button className="bench-btn bench-btn-ghost" onClick={toggleFace}>
+                {arcade ? "Lab view" : "Arcade view"}
+              </button>
+            </div>
+          }
+        />
+        {!score || score.awards.length === 0 ? (
+          <p className="bench-muted">
+            No verified wins yet. Measure a tweak above — any change that beats your noise floor lands
+            here. Points are only ever earned by a measured, certified improvement; a tweak that
+            doesn't help earns nothing.
+          </p>
+        ) : (
+          <>
+            <ul className="bench-awards">
+              {score.awards.map((a, i) => (
+                <li key={`${a.rec_id}-${a.at}-${i}`} className="bench-award">
+                  {arcade ? (
+                    <span>
+                      <strong className="bench-award-pts">+{a.points}</strong> · {a.rec_title} boosted{" "}
+                      {a.metric} by {fmtDelta(a.effect_pct)}
+                    </span>
+                  ) : (
+                    <span>
+                      <strong>{a.rec_title}</strong> — {a.metric} {fmtDelta(a.effect_pct)} (95% CI{" "}
+                      {fmtDelta(a.ci_lo_pct)}…{fmtDelta(a.ci_hi_pct)}) · {a.points} pts ·{" "}
+                      {fmtWhen(a.at)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <button className="bench-btn bench-btn-ghost" onClick={clearScore}>
+              Clear scoreboard
+            </button>
+          </>
+        )}
+        <p className="bench-fine">
+          Every point traces to a certified result — the tweak, the metric, and its 95% confidence
+          interval. Nothing is awarded for a change that didn't measurably help.
+        </p>
       </Card>
 
       <ol className="bench-steps">

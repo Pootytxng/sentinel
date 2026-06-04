@@ -109,3 +109,19 @@ export type TrialState = {
   rolled_back: boolean;
   error: string | null;
 };
+
+// Scoreboard — the verified-result ledger (only Keep verdicts earn entries).
+export type AwardEntry = {
+  points: number;
+  rec_id: string;
+  rec_title: string;
+  metric: string;
+  effect_pct: number;
+  ci_lo_pct: number;
+  ci_hi_pct: number;
+  at: string;
+};
+export type ScoreboardView = {
+  total_points: number;
+  awards: AwardEntry[];
+};

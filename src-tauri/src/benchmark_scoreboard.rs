@@ -16,7 +16,7 @@
 #![allow(dead_code)] // [B] core: wired to commands + an Arcade/Lab UI in a later phase.
 
 use crate::benchmark_verdict::Verdict;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Points scale with the certified improvement; capped so one tweak can't run away with the board.
 const POINTS_PER_PCT: f64 = 10.0;
@@ -77,6 +77,85 @@ pub(crate) fn completeness_pct(current: f64, ceiling: f64) -> f64 {
         return 0.0;
     }
     (current / ceiling * 100.0).clamp(0.0, 100.0)
+}
+
+// ── Verified-result ledger (persisted, local-only) ──────────────────────────
+// Only `Keep` verdicts land here (the firewall in practice). Each entry keeps its full
+// provenance — the tweak + the verdict's effect & CI — so the UI can always drill a score down to
+// its receipt. The cross-user flywheel (network) is a separate opt-in, stubbed for now.
+
+/// One certified win, persisted. Mirrors `Award` + a title for display and a timestamp.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub(crate) struct AwardEntry {
+    pub points: u32,
+    pub rec_id: String,
+    pub rec_title: String,
+    pub metric: String,
+    pub effect_pct: f64,
+    pub ci_lo_pct: f64,
+    pub ci_hi_pct: f64,
+    pub at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+struct ScoreStore {
+    awards: Vec<AwardEntry>,
+}
+
+/// What the UI reads: total points + entries, newest first.
+#[derive(Serialize, Clone, Debug, Default)]
+pub(crate) struct ScoreboardView {
+    pub total_points: u32,
+    pub awards: Vec<AwardEntry>,
+}
+
+fn store_path() -> std::path::PathBuf {
+    crate::sentinel_data_dir().join("scoreboard.json")
+}
+
+fn load_store() -> ScoreStore {
+    std::fs::read_to_string(store_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_store(store: &ScoreStore) -> Result<(), String> {
+    std::fs::create_dir_all(crate::sentinel_data_dir()).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    std::fs::write(store_path(), json).map_err(|e| e.to_string())
+}
+
+/// Record a trial's result. Only a certified `Keep` earns a ledger entry (the firewall); anything
+/// else is a no-op returning `None`. Returns the entry on success.
+pub(crate) fn record_result(rec_id: &str, rec_title: &str, verdict: &Verdict) -> Option<AwardEntry> {
+    let a = award(rec_id, verdict)?;
+    let entry = AwardEntry {
+        points: a.points,
+        rec_id: a.rec_id,
+        rec_title: rec_title.to_string(),
+        metric: a.metric,
+        effect_pct: a.effect_pct,
+        ci_lo_pct: a.ci_lo_pct,
+        ci_hi_pct: a.ci_hi_pct,
+        at: chrono::Utc::now().to_rfc3339(),
+    };
+    let mut store = load_store();
+    store.awards.push(entry.clone());
+    let _ = save_store(&store);
+    Some(entry)
+}
+
+pub(crate) fn scoreboard() -> ScoreboardView {
+    let store = load_store();
+    let total_points = store.awards.iter().map(|a| a.points).sum();
+    let mut awards = store.awards;
+    awards.reverse(); // newest first
+    ScoreboardView { total_points, awards }
+}
+
+pub(crate) fn clear_scoreboard() -> Result<(), String> {
+    save_store(&ScoreStore::default())
 }
 
 #[cfg(test)]

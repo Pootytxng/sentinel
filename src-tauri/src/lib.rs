@@ -346,6 +346,17 @@ fn get_appliable_rec_ids() -> Vec<String> {
     history::APPLIABLE_REC_IDS.iter().map(|s| s.to_string()).collect()
 }
 
+// Scoreboard: the verified-result ledger (only Keep verdicts earn entries — the firewall).
+#[tauri::command]
+fn get_scoreboard() -> benchmark_scoreboard::ScoreboardView {
+    benchmark_scoreboard::scoreboard()
+}
+
+#[tauri::command]
+fn clear_scoreboard() -> Result<(), String> {
+    benchmark_scoreboard::clear_scoreboard()
+}
+
 #[tauri::command]
 fn get_trial_state() -> benchmark_trial::TrialState {
     benchmark_trial::trial_state()
@@ -468,6 +479,8 @@ pub fn run() {
             cancel_trial,
             start_tweak_trial,
             get_appliable_rec_ids,
+            get_scoreboard,
+            clear_scoreboard,
             get_trial_state,
             get_benchmark_state,
             set_benchmark_baseline,
