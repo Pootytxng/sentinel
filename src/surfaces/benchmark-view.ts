@@ -1,7 +1,7 @@
 // Pure presentation helpers for the Benchmark tab — labels, verdict tone, delta
 // formatting. Kept separate from the component so they're unit-tested without a DOM.
 import type { Status } from "../design";
-import type { BenchComponent, Verdict } from "../types";
+import type { BenchComponent, Verdict, TrialVerdict } from "../types";
 
 const COMPONENT_LABELS: Record<BenchComponent, string> = {
   cpu: "CPU",
@@ -37,4 +37,30 @@ export function fmtDelta(pct: number): string {
   const r = Math.round(pct * 10) / 10;
   if (r === 0) return "0%";
   return r > 0 ? `+${r}%` : `${r}%`;
+}
+
+// ── Live trial (game-frametime) verdict — Keep / Revert / Inconclusive ──
+export function trialVerdictLabel(v: TrialVerdict): string {
+  if (v.verdict === "keep") return "Helped";
+  if (v.verdict === "revert") return "Hurt — reverted";
+  return "No measurable change";
+}
+
+export function trialVerdictTone(v: TrialVerdict): Status {
+  if (v.verdict === "keep") return "ready";
+  if (v.verdict === "revert") return "danger";
+  return "unknown";
+}
+
+export function trialReasonText(reason: string): string {
+  switch (reason) {
+    case "within-noise":
+      return "the change stayed within your rig's run-to-run noise";
+    case "conditions-unstable":
+      return "conditions were too noisy to measure reliably — try again";
+    case "invalid-trial":
+      return "the run was invalid (throttling or background load) and was discarded";
+    default:
+      return reason;
+  }
 }

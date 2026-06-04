@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
-import { componentLabel, verdictLabel, verdictTone, fmtDelta } from "./benchmark-view";
+import {
+  componentLabel,
+  verdictLabel,
+  verdictTone,
+  fmtDelta,
+  trialVerdictLabel,
+  trialVerdictTone,
+  trialReasonText,
+} from "./benchmark-view";
 import type { BenchmarkState, RunReport, Efficacy, AppliedChange, TrialState } from "../types";
 import "./Benchmark.css";
 
@@ -14,8 +22,30 @@ export function BenchmarkTab() {
   const [state, setState] = useState<BenchmarkState | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
   const [trial, setTrial] = useState<TrialState | null>(null);
+  const [tweaks, setTweaks] = useState<{ id: string; title: string }[]>([]);
+  const [selectedTweak, setSelectedTweak] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Measurable tweaks = appliable recs not currently applied (so a trial can apply→measure→undo).
+  useEffect(() => {
+    (async () => {
+      try {
+        const [recs, appliable] = await Promise.all([
+          invoke<{ id: string; title: string; currently_applied: boolean }[]>("get_recommendations"),
+          invoke<string[]>("get_appliable_rec_ids"),
+        ]);
+        const ok = new Set(appliable);
+        const measurable = recs
+          .filter((r) => ok.has(r.id) && !r.currently_applied)
+          .map((r) => ({ id: r.id, title: r.title }));
+        setTweaks(measurable);
+        setSelectedTweak((cur) => cur || measurable[0]?.id || "");
+      } catch {
+        /* ignore — no picker */
+      }
+    })();
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -64,6 +94,17 @@ export function BenchmarkTab() {
       await invoke("cancel_trial");
     } catch {
       /* ignore */
+    }
+    refresh();
+  };
+
+  const measureTweak = async () => {
+    const t = tweaks.find((x) => x.id === selectedTweak);
+    if (!t) return;
+    try {
+      await invoke("start_tweak_trial", { recId: t.id, recTitle: t.title });
+    } catch {
+      /* surfaced via trial state */
     }
     refresh();
   };
@@ -219,11 +260,37 @@ export function BenchmarkTab() {
             </button>
           </>
         ) : (
-          <button className="bench-btn" onClick={calibrate}>
-            Calibrate (measure my run-to-run noise)
-          </button>
+          <>
+            <button className="bench-btn" onClick={calibrate}>
+              Calibrate (measure my run-to-run noise)
+            </button>
+            {tweaks.length > 0 && (
+              <div className="bench-tweak-pick">
+                <select
+                  className="bench-select"
+                  value={selectedTweak}
+                  onChange={(e) => setSelectedTweak(e.target.value)}
+                >
+                  {tweaks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+                <button className="bench-btn" onClick={measureTweak} disabled={!selectedTweak}>
+                  Measure this tweak
+                </button>
+              </div>
+            )}
+            <p className="bench-fine">
+              “Measure this tweak” applies the change, measures with it on, then rolls it back — your
+              settings end up exactly as they started. An elevated tweak asks for UAC twice (apply +
+              undo).
+            </p>
+          </>
         )}
-        {!trial?.running && trial?.noise_floor_pct != null && (
+
+        {!trial?.running && trial?.kind === "calibration" && trial?.noise_floor_pct != null && (
           <p className="bench-stat">
             Run-to-run noise: <strong>±{trial.noise_floor_pct.toFixed(1)}%</strong>
             {trial.verdict &&
@@ -233,6 +300,27 @@ export function BenchmarkTab() {
               : ""}
           </p>
         )}
+
+        {!trial?.running && trial?.kind === "tweak" && trial?.verdict && (
+          <p className="bench-stat">
+            <StatusPill
+              status={trialVerdictTone(trial.verdict)}
+              label={trialVerdictLabel(trial.verdict)}
+            />{" "}
+            {trial.verdict.verdict === "inconclusive" ? (
+              <>— {trialReasonText(trial.verdict.reason)}.</>
+            ) : (
+              <>
+                — {trial.verdict.metric} {fmtDelta(trial.verdict.effect_pct)} (95% CI{" "}
+                {fmtDelta(trial.verdict.ci_lo_pct)}…{fmtDelta(trial.verdict.ci_hi_pct)}).
+              </>
+            )}
+            {trial.rolled_back && (
+              <span className="bench-fine"> Change rolled back — settings unchanged.</span>
+            )}
+          </p>
+        )}
+
         {!trial?.running && trial?.error && <p className="bench-err">{trial.error}</p>}
       </Card>
 

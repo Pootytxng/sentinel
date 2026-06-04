@@ -106,5 +106,6 @@ export type TrialState = {
   target: number;
   verdict: TrialVerdict | null;
   noise_floor_pct: number | null;
+  rolled_back: boolean;
   error: string | null;
 };

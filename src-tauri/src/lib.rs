@@ -332,6 +332,20 @@ fn cancel_trial() {
     benchmark_trial::cancel_trial();
 }
 
+// Tweak A-B trial: measure the game, apply a real change, re-measure, then ALWAYS roll it back
+// (Drop-guarded). Mutating — gated on explicit user choice of an appliable rec. See benchmark_trial.
+#[tauri::command]
+fn start_tweak_trial(rec_id: String, rec_title: String) {
+    benchmark_trial::start_tweak_trial(rec_id, rec_title);
+}
+
+// The rec_ids the trial can apply/measure/roll-back (the verified appliable catalog) — the
+// Benchmark tab's tweak picker filters its rec list to these.
+#[tauri::command]
+fn get_appliable_rec_ids() -> Vec<String> {
+    history::APPLIABLE_REC_IDS.iter().map(|s| s.to_string()).collect()
+}
+
 #[tauri::command]
 fn get_trial_state() -> benchmark_trial::TrialState {
     benchmark_trial::trial_state()
@@ -451,6 +465,8 @@ pub fn run() {
             get_cpu_temp,
             start_calibration,
             cancel_trial,
+            start_tweak_trial,
+            get_appliable_rec_ids,
             get_trial_state,
             get_benchmark_state,
             set_benchmark_baseline,

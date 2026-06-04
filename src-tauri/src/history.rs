@@ -95,6 +95,14 @@ pub(crate) struct AppliedChangeView {
     elevation_used: Option<bool>,
 }
 
+impl AppliedChangeView {
+    /// The change id — what `rollback_change` takes. The benchmark trial runner needs it to undo
+    /// the tweak it applied for measurement.
+    pub(crate) fn id(&self) -> &str {
+        &self.id
+    }
+}
+
 fn check_change_active(c: &AppliedChange) -> bool {
     match c.rec_id.as_str() {
         "game-mode" => game_mode_enabled(),
