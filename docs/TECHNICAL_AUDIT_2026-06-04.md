@@ -49,8 +49,13 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
 - 🟡 **`adlx = "=0.0.0-alpha.1"`** — a pinned pre-1.0 alpha crate (Traverse Research) doing COM FFI
   into the AMD driver. Riskiest dependency (alpha API, small maintainer surface). Exact-pinned (good),
   and we already hand-write the FreeSync vtables because the crate stubs them — so we partly bypass it.
-- 🟡 **No `cargo audit` in the workflow.** Nothing scans dependencies for known CVEs. `cargo-audit`
-  isn't installed. Easy gap to close (add to `/check` / CI).
+- ✅ **Dependency CVE scan run (`cargo audit`, 2026-06-04): 0 vulnerabilities.** 17 advisory
+  *warnings*, all transitive and irrelevant to the shipped Windows binary: 11 are the Linux GTK/glib
+  GUI stack (`gtk`/`gdk`/`atk`/`gdkx11`/`gdkwayland-sys`/… + `glib` `VariantStrIter` unsoundness) that
+  Tauri pulls for the Linux target but doesn't compile/ship on Windows; 6 are unmaintained build/
+  transitive helpers (`unic-*`, `proc-macro-error`). Nothing exploitable on the user's PC. Remaining
+  🟡: to make `cargo audit` a clean CI gate, add an `audit.toml` ignoring these known-noise advisory
+  IDs so a real future CVE stands out.
 
 ## C. Loose ends (chaos residue / code hygiene)
 
