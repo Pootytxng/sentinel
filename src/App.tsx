@@ -1683,19 +1683,6 @@ function MonitoringTab({ active }: { active: boolean }) {
         </span>
       </p>
 
-      {cpuTemp ? (
-        <p className="section-help">
-          <strong>CPU temp: {Math.round(cpuTemp.temp_c)}°C</strong> · {cpuTemp.label} · via{" "}
-          {cpuTemp.source}
-        </p>
-      ) : (
-        <p className="section-help coverage-note">
-          CPU temperature needs ring-0 (a kernel driver) to read — which Sentinel won't install, to
-          stay anti-cheat-safe. If you already run <strong>LibreHardwareMonitor</strong> or
-          OpenHardwareMonitor, Sentinel will read and show its CPU temp here (no driver of our own).
-        </p>
-      )}
-
       {/* FPS / frametime — headline metric, opt-in (needs admin) */}
       <FpsPanel
         fps={fps}
@@ -1709,6 +1696,7 @@ function MonitoringTab({ active }: { active: boolean }) {
         <CpuMonitorPanel
           cpu={latestCpu}
           history={cpuSamples}
+          cpuTemp={cpuTemp}
         />
       )}
 
@@ -1905,9 +1893,11 @@ function FrametimeGraph({ data }: { data: number[] }) {
 function CpuMonitorPanel({
   cpu,
   history,
+  cpuTemp,
 }: {
   cpu: CpuSensorSnapshot;
   history: CpuSensorSnapshot[];
+  cpuTemp: CpuTemp | null;
 }) {
   const coreCount = cpu.usage_per_core_pct.length;
   // First call after process start returns 0% across the board because
@@ -1936,6 +1926,20 @@ function CpuMonitorPanel({
           max={100}
           color="#6aa9ff"
           sublabel={warmingUp ? "Warming up — first delta in 1 s" : undefined}
+        />
+        <MetricRow
+          label="CPU temperature"
+          value={cpuTemp ? Math.round(cpuTemp.temp_c) : null}
+          unit="°C"
+          history={[cpuTemp ? Math.round(cpuTemp.temp_c) : 0]}
+          min={20}
+          max={100}
+          color="#f5a35c"
+          sublabel={
+            cpuTemp
+              ? `${cpuTemp.label} · via ${cpuTemp.source}`
+              : "Run HWiNFO (Shared Memory Support on) or LibreHardwareMonitor to show CPU temp"
+          }
         />
         {cpu.ram_total_bytes > 0 && (
           <MetricRow
