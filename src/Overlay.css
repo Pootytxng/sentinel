@@ -1,13 +1,15 @@
-/* Overlay window. NOTE: currently using a SOLID dark background rather than a
-   transparent window. WebView2 transparent windows on Windows can render white
-   and are finicky; a solid HUD is reliable and still useful. Transparency is a
-   later refinement once the window reliably renders. The whole small window is
-   the HUD. Colors mirror the main app's command-center palette — this window
-   does not load App.css's :root tokens, so the values are inlined here. */
+/* RTSS-style overlay: a TRANSPARENT window (tauri.conf.json `transparent: true`) showing text
+   only — no box, no panel — so it blends onto the game like an in-game performance overlay. The
+   text carries its own readability via a black outline + soft glow (the RTSS trick), so it stays
+   legible over both bright and dark scenes without a background plate.
+
+   Note: WebView2 transparency can occasionally render opaque if compositing is off; if the window
+   ever shows a solid fill, that's the platform, not the CSS — fall back by removing `transparent`.
+*/
 html.overlay-mode,
 html.overlay-mode body,
 html.overlay-mode #root {
-  background: #07080b !important;
+  background: transparent !important;
   overflow: hidden;
   margin: 0;
   height: 100%;
@@ -15,39 +17,48 @@ html.overlay-mode #root {
 
 .ovl {
   font-family: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
-  background: linear-gradient(180deg, #0d1018, #0a0c11);
-  border: 1px solid rgba(106, 169, 255, 0.30);
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #eef1f7;
+  color: #ffffff;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
+  padding: 6px 8px;
   height: 100%;
   box-sizing: border-box;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  /* Click-through is enforced at the window level, but disable selection too. */
   user-select: none;
   -webkit-user-select: none;
+  /* Black outline + soft halo → readable on any background, no plate needed. */
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 0 4px rgba(0, 0, 0, 0.95);
 }
 
+/* Left-aligned "LABEL  value" like RTSS, not edge-to-edge. */
 .ovl-row {
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
-  gap: 16px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.3;
 }
+
 .ovl-k {
-  color: #8b95a8;
+  color: #cdd6e3;
+  min-width: 64px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
+
 .ovl-v {
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 700;
 }
+
+/* FPS is the headline number. */
 .ovl-fps .ovl-v {
-  color: #93c1ff;
-  font-size: 19px;
-  line-height: 1;
-  text-shadow: 0 0 14px rgba(106, 169, 255, 0.5);
+  color: #7dd3fc;
+  font-size: 22px;
+  line-height: 1.05;
 }
