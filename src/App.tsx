@@ -214,6 +214,18 @@ type CpuSensorSnapshot = {
   ram_total_bytes: number;
 };
 
+type MemConsumer = { name: string; bytes: number };
+type MemoryPressure = {
+  used_bytes: number;
+  total_bytes: number;
+  used_pct: number;
+  swap_used_bytes: number;
+  swap_total_bytes: number;
+  level: "ok" | "tight" | "critical";
+  advisory: string | null;
+  top_consumers: MemConsumer[];
+};
+
 type GpuSensorSnapshot = {
   vendor: string; // "NVIDIA" | "AMD"
   index: number;
@@ -1528,6 +1540,7 @@ function MonitoringTab({ active }: { active: boolean }) {
   const [fpsBusy, setFpsBusy] = useState(false);
   const [overlayOn, setOverlayOn] = useState(false);
   const [cpuTemp, setCpuTemp] = useState<CpuTemp | null>(null);
+  const [mem, setMem] = useState<MemoryPressure | null>(null);
   const [overlayCorner, setOverlayCorner] = useState<string>(
     () => localStorage.getItem("sentinel_overlay_corner") ?? "top-left",
   );
@@ -1572,16 +1585,18 @@ function MonitoringTab({ active }: { active: boolean }) {
     let cancelled = false;
     const tick = async () => {
       try {
-        const [gpuSnap, cpuSnap, fpsStatus, temp] = await Promise.all([
+        const [gpuSnap, cpuSnap, fpsStatus, temp, memp] = await Promise.all([
           invoke<GpuSensorSnapshot[]>("get_gpu_sensors"),
           invoke<CpuSensorSnapshot>("get_cpu_sensors"),
           invoke<FpsStatus>("get_fps_status"),
           invoke<CpuTemp | null>("get_cpu_temp").catch(() => null),
+          invoke<MemoryPressure>("get_memory_pressure").catch(() => null),
         ]);
         if (cancelled) return;
         setHasGpu(gpuSnap.length > 0);
         setFps(fpsStatus);
         setCpuTemp(temp);
+        if (memp) setMem(memp);
         setGpuSamples((prev) => {
           const next = [...prev, gpuSnap];
           return next.length > MONITORING_WINDOW
@@ -1682,6 +1697,9 @@ function MonitoringTab({ active }: { active: boolean }) {
           implemented, not yet hardware-verified · Intel — planned.
         </span>
       </p>
+
+      {/* RAM-pressure warning — the invisible stutter cause; shows only when tight/critical */}
+      {mem && <MemoryPressureBanner mem={mem} />}
 
       {/* FPS / frametime — headline metric, opt-in (needs admin) */}
       <FpsPanel
@@ -1887,6 +1905,36 @@ function FrametimeGraph({ data }: { data: number[] }) {
       ))}
       <path d={d} className="frametime-line" fill="none" />
     </svg>
+  );
+}
+
+// RAM-pressure warning. Renders nothing when memory is fine — it only speaks up
+// when RAM is tight/critical, which is the invisible cause of a lot of in-game
+// stutter. Shows what's eating RAM so the user knows what to close.
+function MemoryPressureBanner({ mem }: { mem: MemoryPressure }) {
+  if (mem.level === "ok") return null;
+  return (
+    <div className={`mem-banner mem-${mem.level}`}>
+      <div className="mem-banner-head">
+        <strong>
+          {mem.level === "critical" ? "RAM almost full" : "RAM getting tight"}
+        </strong>
+        <span className="mem-banner-pct">
+          {mem.used_pct}% · {fmtGB(mem.used_bytes)} / {fmtGB(mem.total_bytes)}
+        </span>
+      </div>
+      {mem.advisory && <p className="mem-banner-msg">{mem.advisory}</p>}
+      {mem.top_consumers.length > 0 && (
+        <ul className="mem-consumers">
+          {mem.top_consumers.map((c) => (
+            <li key={c.name}>
+              <span className="mem-consumer-name">{c.name}</span>
+              <span className="mem-consumer-bytes">{fmtGB(c.bytes)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

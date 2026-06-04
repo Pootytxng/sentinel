@@ -95,6 +95,117 @@ pub(crate) fn get_cpu_sensors() -> CpuSensorSnapshot {
     cpu_sensor_cache().lock().map(|c| c.clone()).unwrap_or_default()
 }
 
+// ─── Memory pressure (RAM-maxed → stutter warning) ───────────────────────
+//
+// Physical-RAM exhaustion is a classic, invisible cause of in-game stutter:
+// once the working set exceeds physical RAM, Windows pages to disk and frames
+// hitch. Sentinel surfaces it honestly — the level AND what's eating it, so the
+// user knows what to close. Read-only (sysinfo/PDH), no mutation, no driver.
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct MemConsumer {
+    pub name: String,
+    pub bytes: u64,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct MemoryPressure {
+    pub used_bytes: u64,
+    pub total_bytes: u64,
+    pub used_pct: u32,
+    /// Pagefile currently in use (bytes) — non-zero means some spillover already.
+    pub swap_used_bytes: u64,
+    pub swap_total_bytes: u64,
+    /// "ok" | "tight" | "critical".
+    pub level: String,
+    pub advisory: Option<String>,
+    /// Biggest RAM users, grouped by process name, largest first.
+    pub top_consumers: Vec<MemConsumer>,
+}
+
+// Reused across polls (sysinfo recommends one System); memory-only process
+// refresh keeps it cheap.
+fn mem_pressure_system() -> &'static Mutex<System> {
+    static SYS: OnceLock<Mutex<System>> = OnceLock::new();
+    SYS.get_or_init(|| Mutex::new(System::new()))
+}
+
+#[tauri::command]
+pub(crate) fn get_memory_pressure() -> MemoryPressure {
+    use std::collections::HashMap;
+    let Ok(mut sys) = mem_pressure_system().lock() else {
+        return MemoryPressure {
+            used_bytes: 0,
+            total_bytes: 0,
+            used_pct: 0,
+            swap_used_bytes: 0,
+            swap_total_bytes: 0,
+            level: "ok".into(),
+            advisory: None,
+            top_consumers: Vec::new(),
+        };
+    };
+    sys.refresh_memory();
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_memory(),
+    );
+
+    let total = sys.total_memory();
+    let used = sys.used_memory();
+    let used_pct = if total > 0 {
+        ((used as f64 / total as f64) * 100.0).round() as u32
+    } else {
+        0
+    };
+
+    // Group working sets by process name (e.g. all Chrome helpers into one row).
+    let mut by_name: HashMap<String, u64> = HashMap::new();
+    for p in sys.processes().values() {
+        let name = p.name().to_string_lossy().into_owned();
+        *by_name.entry(name).or_insert(0) += p.memory();
+    }
+    let mut top_consumers: Vec<MemConsumer> = by_name
+        .into_iter()
+        .map(|(name, bytes)| MemConsumer { name, bytes })
+        .collect();
+    top_consumers.sort_by_key(|c| std::cmp::Reverse(c.bytes));
+    top_consumers.truncate(6);
+
+    let (level, advisory) = if used_pct >= 90 {
+        (
+            "critical",
+            Some(
+                "RAM is nearly full — a common, invisible cause of in-game stutter (once it fills, \
+                 Windows pages to disk). Closing some of the apps below frees it up."
+                    .to_string(),
+            ),
+        )
+    } else if used_pct >= 80 {
+        (
+            "tight",
+            Some(
+                "RAM is getting tight. If stutter shows up, closing some of the apps below will help."
+                    .to_string(),
+            ),
+        )
+    } else {
+        ("ok", None)
+    };
+
+    MemoryPressure {
+        used_bytes: used,
+        total_bytes: total,
+        used_pct,
+        swap_used_bytes: sys.used_swap(),
+        swap_total_bytes: sys.total_swap(),
+        level: level.into(),
+        advisory,
+        top_consumers,
+    }
+}
+
 // ─── GPU sensors: NVIDIA path (NVML) ─────────────────────────────────────
 //
 // Sentinel-safe monitoring: NVML is NVIDIA's vendor-blessed signed library

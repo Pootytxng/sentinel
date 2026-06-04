@@ -103,7 +103,17 @@ export default function Overlay() {
       </div>
       <div className="ovl-row">
         <span className="ovl-k">RAM</span>
-        <span className="ovl-v">{ram ?? "—"}%</span>
+        <span
+          className={`ovl-v${
+            ram != null && ram >= 90
+              ? " ovl-crit"
+              : ram != null && ram >= 80
+                ? " ovl-warn"
+                : ""
+          }`}
+        >
+          {ram ?? "—"}%
+        </span>
       </div>
     </div>
   );

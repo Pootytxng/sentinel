@@ -64,3 +64,12 @@ html.overlay-mode #root {
   font-size: 28px;
   line-height: 1.05;
 }
+
+/* RAM pressure: amber → red as it approaches full (the invisible stutter cause),
+   so it's visible mid-game without opening the app. Higher specificity than .ovl-v. */
+.ovl-v.ovl-warn {
+  color: #ff8a3d;
+}
+.ovl-v.ovl-crit {
+  color: #ff5246;
+}

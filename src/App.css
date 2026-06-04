@@ -2325,3 +2325,67 @@ body::before {
   .ledger-row { grid-template-columns: 1fr; gap: 2px; }
   .fps-readout { flex-wrap: wrap; gap: 16px; }
 }
+
+/* ── RAM-pressure warning banner (Monitoring tab) ───────────────────────── */
+.mem-banner {
+  border: 1px solid var(--attention, #f5c451);
+  border-left-width: 3px;
+  background: rgba(245, 196, 81, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.mem-banner.mem-critical {
+  border-color: var(--danger, #f3716f);
+  background: rgba(243, 113, 111, 0.09);
+}
+.mem-banner-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mem-banner-head strong {
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+.mem-banner.mem-critical .mem-banner-head strong {
+  color: var(--danger, #f3716f);
+}
+.mem-banner-pct {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mem-banner-msg {
+  color: var(--fg-2, var(--fg));
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+.mem-consumers {
+  list-style: none;
+  margin: 9px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mem-consumers li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.mem-consumer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-consumer-bytes {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

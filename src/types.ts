@@ -125,3 +125,16 @@ export type ScoreboardView = {
   total_points: number;
   awards: AwardEntry[];
 };
+
+// Memory pressure — RAM-maxed → stutter warning (mirrors monitoring.rs serde).
+export type MemConsumer = { name: string; bytes: number };
+export type MemoryPressure = {
+  used_bytes: number;
+  total_bytes: number;
+  used_pct: number;
+  swap_used_bytes: number;
+  swap_total_bytes: number;
+  level: "ok" | "tight" | "critical";
+  advisory: string | null;
+  top_consumers: MemConsumer[];
+};

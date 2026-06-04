@@ -451,6 +451,7 @@ pub fn run() {
             get_diagnostics,
             get_gpu_sensors,
             get_cpu_sensors,
+            monitoring::get_memory_pressure,
             start_fps_capture,
             stop_fps_capture,
             get_fps_status,
