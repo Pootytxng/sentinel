@@ -3,10 +3,10 @@ use std::process::Command;
 
 mod actions;
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
-mod benchmark; // F6 PARKED + DARK: compiled, not registered. See benchmark.rs + the spec.
-mod benchmark_verdict; // [A] verdict engine (P1/P2) — science core + trial orchestration. DARK.
-mod benchmark_scoreboard; // [B] scoreboard (P3) — verified-result-only awards, firewalled. DARK.
-mod benchmark_trial; // live trial runner — calibration over the real frametime stream.
+mod benchmark; // Measured-efficacy engine — WIRED (Benchmark tab: run/baseline/efficacy). Absolute-score normalization still PLACEHOLDER (delta is the honest signal).
+mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclusive) — WIRED: powers the trial verdict + scoreboard awards.
+mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
+mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;
@@ -15,7 +15,7 @@ mod gaming_orchestrator;
 mod gaming_session;
 mod hardware;
 mod history;
-mod latency; // PARKED + DARK: compiled, not registered. See latency.rs + the latency spec.
+mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
 mod monitoring;
 mod priorities;
 mod readiness;

@@ -264,6 +264,68 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Defense-in-depth against elevated-command injection. Any value interpolated into a
+/// `run_elevated_powershell` command string must pass this first. Today every such token comes from
+/// the curated catalog (Windows service names, power-plan/subgroup/setting GUIDs, fixed state words)
+/// and is inherently safe; this guarantees it stays safe even if a future caller routes external or
+/// dynamic input (e.g. signed remote rules) through the same path. The whitelist
+/// (`[A-Za-z0-9_.-]`) admits every legitimate token and rejects every shell metacharacter
+/// (`; | & $ \` ( ) { } < > " '` space, newline, …) that could break out of the intended command.
+pub(crate) fn ps_safe(token: &str) -> Result<(), String> {
+    if !token.is_empty()
+        && token
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+    {
+        Ok(())
+    } else {
+        Err(format!(
+            "refusing to build an elevated command with an unsafe token: {token:?}"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod ps_injection_tests {
+    use super::ps_safe;
+
+    #[test]
+    fn accepts_every_real_catalog_token() {
+        // Service names, the fixed state/startup words, and power-plan GUIDs — every token we
+        // actually interpolate into an elevated command.
+        for t in [
+            "SysMain",
+            "DiagTrack",
+            "Automatic",
+            "Manual",
+            "Disabled",
+            "Enabled",
+            "2a737441-1930-4402-8d77-b2bebba308a3",
+            "48e6b7a6-50f5-4782-a5d4-53bb8f07e226",
+        ] {
+            assert!(ps_safe(t).is_ok(), "should accept legitimate token {t:?}");
+        }
+    }
+
+    #[test]
+    fn rejects_injection_attempts() {
+        for t in [
+            "",
+            "Svc; Stop-Computer",
+            "a && shutdown /s /t 0",
+            "$(Remove-Item C:\\)",
+            "a`whoami`",
+            "a | Out-File x",
+            "a\nStart-Process calc",
+            "Name -Force; calc",
+            "\"quoted\"",
+            "has space",
+        ] {
+            assert!(ps_safe(t).is_err(), "should reject unsafe token {t:?}");
+        }
+    }
+}
+
 // ─── Service state snapshot via WMI ──────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -304,6 +366,7 @@ pub(crate) fn ps_service_startup_for_mode(mode: &str) -> &'static str {
 // and any future service-shaped rec. Snapshots prior state + start mode so
 // rollback returns the service to exactly where it was.
 pub(crate) fn apply_service_disable(service: KnownService) -> Result<ApplyResult, String> {
+    ps_safe(service.name())?;
     let (prior_state, prior_start_mode) =
         service_info(service.name()).unwrap_or_else(|| ("Running".into(), "Auto".into()));
     let cmd = format!(
@@ -329,7 +392,9 @@ pub(crate) fn rollback_service_disable_typed(
     prior_state: &str,
     prior_start_mode: &str,
 ) -> Result<(), String> {
+    ps_safe(service.name())?;
     let startup = ps_service_startup_for_mode(prior_start_mode);
+    ps_safe(startup)?;
     let mut cmd = format!("Set-Service -Name {} -StartupType {}", service.name(), startup);
     if prior_state == "Running" {
         cmd.push_str(&format!("; Start-Service -Name {}", service.name()));
@@ -376,6 +441,7 @@ pub(crate) fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), Stri
     if prior_guid.len() != 36 {
         return Err("no valid prior plan GUID in snapshot".into());
     }
+    ps_safe(prior_guid)?; // GUID is hex+hyphens — reject anything that isn't
     run_elevated_powershell(&format!("powercfg /setactive {}", prior_guid))?;
     Ok(())
 }
@@ -395,6 +461,7 @@ pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
 
 pub(crate) fn rollback_reserved_storage_off_typed(prior_enabled: bool) -> Result<(), String> {
     let state = if prior_enabled { "Enabled" } else { "Disabled" };
+    ps_safe(state)?;
     run_elevated_powershell(&format!("Set-WindowsReservedStorageState -State {}", state))?;
     Ok(())
 }
@@ -455,6 +522,8 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
     })?;
 
     // Apply AC = 0 only. DC stays untouched (laptop battery behavior preserved).
+    ps_safe(subgroup)?;
+    ps_safe(setting)?;
     let cmd = format!(
         "powercfg /setacvalueindex SCHEME_CURRENT {} {} 0; powercfg /setactive SCHEME_CURRENT",
         subgroup, setting
