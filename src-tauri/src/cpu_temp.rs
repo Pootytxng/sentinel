@@ -39,6 +39,10 @@ pub(crate) fn read_cpu_temp() -> Option<CpuTemp> {
 }
 
 fn read_cpu_temp_inner() -> Option<CpuTemp> {
+    // HWiNFO (shared memory) first — most common with gamers; then the OHM/LHM WMI namespaces.
+    if let Some(t) = read_hwinfo() {
+        return Some(t);
+    }
     for ns in ["LibreHardwareMonitor", "OpenHardwareMonitor"] {
         if let Some(t) = read_ohm(ns) {
             return Some(t);
@@ -86,4 +90,121 @@ fn read_ohm(ns: &str) -> Option<CpuTemp> {
         source: ns.to_string(),
         label: pick.name.clone(),
     })
+}
+
+// ── HWiNFO shared-memory reader ──────────────────────────────────────────────
+// HWiNFO publishes its sensors in a memory-mapped file when "Shared Memory Support" is enabled
+// (Settings → Shared Memory Support; off by default, 12-h limit in the free build). We read it
+// READ-ONLY — no driver of our own; HWiNFO's driver is the user's choice. Layout is the public,
+// stable HWiNFO SDK format; the "SiWH" signature + element size are validated and any mismatch
+// fails soft to None, so a format change can never surface garbage.
+
+#[repr(C, packed)]
+struct HwiHeader {
+    signature: u32,
+    version: u32,
+    revision: u32,
+    poll_time: i64,
+    offset_sensor: u32,
+    size_sensor_elem: u32,
+    num_sensor: u32,
+    offset_reading: u32,
+    size_reading_elem: u32,
+    num_reading: u32,
+}
+
+#[repr(C, packed)]
+struct HwiReading {
+    reading_type: u32,
+    sensor_index: u32,
+    reading_id: u32,
+    label_orig: [u8; 128],
+    label_user: [u8; 128],
+    unit: [u8; 16],
+    value: f64,
+    value_min: f64,
+    value_max: f64,
+    value_avg: f64,
+}
+
+const HWI_SENSOR_TYPE_TEMP: u32 = 1;
+
+fn read_hwinfo() -> Option<CpuTemp> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Memory::{
+        MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_READ,
+    };
+
+    // "Global\..." when HWiNFO runs elevated, the bare name otherwise.
+    for name in ["Global\\HWiNFO_SENS_SM2", "HWiNFO_SENS_SM2"] {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            let Ok(handle) = OpenFileMappingW(FILE_MAP_READ.0, false, PCWSTR(wide.as_ptr())) else {
+                continue;
+            };
+            let view = MapViewOfFile(handle, FILE_MAP_READ, 0, 0, 0);
+            let result = if view.Value.is_null() {
+                None
+            } else {
+                let r = parse_hwinfo(view.Value as *const u8);
+                let _ = UnmapViewOfFile(view);
+                r
+            };
+            let _ = CloseHandle(handle);
+            if result.is_some() {
+                return result;
+            }
+        }
+    }
+    None
+}
+
+/// Parse the mapped HWiNFO block for the best CPU temperature reading. Validated + fail-soft.
+unsafe fn parse_hwinfo(base: *const u8) -> Option<CpuTemp> {
+    if std::slice::from_raw_parts(base, 4) != b"SiWH" {
+        return None;
+    }
+    let h: HwiHeader = std::ptr::read_unaligned(base as *const HwiHeader);
+    let off = h.offset_reading as usize;
+    let size_elem = h.size_reading_elem as usize;
+    let num = h.num_reading as usize;
+    // Layout sanity: element size must match our struct; count must be plausible.
+    if size_elem != std::mem::size_of::<HwiReading>() || num == 0 || num > 100_000 {
+        return None;
+    }
+    let mut best: Option<(f64, String)> = None;
+    let mut best_is_pkg = false;
+    for i in 0..num {
+        let e: HwiReading =
+            std::ptr::read_unaligned(base.add(off + i * size_elem) as *const HwiReading);
+        if e.reading_type != HWI_SENSOR_TYPE_TEMP {
+            continue;
+        }
+        let label_bytes = e.label_orig; // copy out of the packed struct before borrowing
+        let label = cstr(&label_bytes);
+        let l = label.to_lowercase();
+        if !l.contains("cpu") {
+            continue;
+        }
+        let v = e.value;
+        if !v.is_finite() || v <= 0.0 || v >= 150.0 {
+            continue;
+        }
+        let is_pkg = l.contains("package") || l.contains("tctl") || l.contains("tdie");
+        let take = match &best {
+            None => true,
+            Some((bv, _)) => (is_pkg && !best_is_pkg) || (is_pkg == best_is_pkg && v > *bv),
+        };
+        if take {
+            best = Some((v, label));
+            best_is_pkg = is_pkg;
+        }
+    }
+    best.map(|(temp_c, label)| CpuTemp { temp_c, source: "HWiNFO".into(), label })
+}
+
+fn cstr(buf: &[u8]) -> String {
+    let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).into_owned()
 }
