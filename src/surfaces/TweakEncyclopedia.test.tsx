@@ -59,7 +59,7 @@ describe("Library surface", () => {
     expect(screen.getByText("1 real")).toBeInTheDocument();
     expect(screen.getByText("1 risky")).toBeInTheDocument();
     expect(screen.getByText("1 placebo")).toBeInTheDocument();
-    expect(screen.getByText("1 we don't recognize")).toBeInTheDocument();
+    expect(screen.getByText("1 thing we don't recognize")).toBeInTheDocument();
     expect(screen.getByText(/known scam pattern/i)).toBeInTheDocument(); // deep scan flagged
 
     fireEvent.click(screen.getByRole("button", { name: /Windows Game Mode/i })); // a hit row

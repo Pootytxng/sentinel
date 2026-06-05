@@ -158,7 +158,9 @@ function AutopsyResultView({
         This guide: <span className="kl-g-real">{`${grade.real} real`}</span> ·{" "}
         <span className="kl-g-placebo">{`${grade.placebo} placebo`}</span> ·{" "}
         <span className="kl-g-risky">{`${grade.risky} risky`}</span> ·{" "}
-        <span className="kl-g-unknown">{`${grade.unknown} we don't recognize`}</span>
+        <span className="kl-g-unknown">
+          {`${grade.unknown} thing${grade.unknown === 1 ? "" : "s"} we don't recognize`}
+        </span>
       </div>
       {scamFlags > 0 && (
         <div className="kl-scamflag">
