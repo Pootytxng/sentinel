@@ -1,111 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-// First-run introduction. Shown once (gated on a localStorage flag set when
-// the user finishes or skips). Purpose: set expectations about what Compy
-// is and — just as importantly — what it deliberately will NOT do, before the
-// user lands on a list of changes they don't yet have context for.
+// First-run experience — Moment 1 of the first-experience arc.
+// Spec: docs/superpowers/specs/2026-06-04-first-experience-arc-design.md (owner-approved VERBATIM —
+// copy changes need owner sign-off). Three steps, ~70 words: (1) Compy already read THIS machine,
+// (2) demonstrate the apply/undo seatbelt — VISUAL ONLY, mutates nothing, (3) what Compy refuses to
+// do. Shown once, gated on ONBOARDED_KEY (set on finish or Skip).
 
 export const ONBOARDED_KEY = "compy_onboarded_v1";
 
-type Step = {
-  tag: string;
-  title: string;
-  body: React.ReactNode;
-};
+/** One detected-hardware line for Step 1, built by App from the cached startup snapshot. */
+export type RigLine = { label: string; value: string };
 
-const STEPS: Step[] = [
-  {
-    tag: "What this is",
-    title: "A safety layer that happens to optimize",
-    body: (
-      <>
-        <p>
-          Compy isn't an optimizer that bolts on an undo button. It's a
-          <strong> rollback-first Windows configuration tool</strong> that
-          happens to optimize. Every change it suggests is one it can put back
-          exactly the way it found it.
-        </p>
-        <p>
-          It reads your actual hardware and only surfaces changes that make
-          sense for <em>your</em> PC — not a generic checklist.
-        </p>
-      </>
-    ),
-  },
-  {
-    tag: "How it works",
-    title: "Nothing changes without your say-so",
-    body: (
-      <>
-        <p>Each recommendation shows you three separate facts:</p>
-        <ul>
-          <li>
-            <strong>Recommended</strong> — what Compy thinks is best
-          </li>
-          <li>
-            <strong>Current</strong> — what Windows is actually set to right now
-          </li>
-          <li>
-            <strong>Applied by Compy</strong> — whether Compy made the
-            change, or you/Windows already had it that way
-          </li>
-        </ul>
-        <p>
-          You apply changes one at a time, with a confirmation each time, and
-          you can roll any of them back from the same switch.
-        </p>
-      </>
-    ),
-  },
-  {
-    tag: "Our promises",
-    title: "What Compy will never do",
-    body: (
-      <>
-        <ul>
-          <li>
-            <strong>No kernel driver.</strong> Compy stays in user space.
-            (That's why it shows GPU temperature but not CPU temperature —
-            reading CPU temps needs a driver, and we won't ship one.)
-          </li>
-          <li>
-            <strong>No injecting into your games.</strong> FPS and the overlay
-            observe from the outside — anti-cheat safe.
-          </li>
-          <li>
-            <strong>Local-only.</strong> Nothing about your system leaves your
-            PC. No accounts, no telemetry.
-          </li>
-        </ul>
-      </>
-    ),
-  },
-  {
-    tag: "Trust",
-    title: "Every change is logged",
-    body: (
-      <>
-        <p>
-          The <strong>Trust Ledger</strong> records every change Compy makes
-          — what it was before, what it became, and when — so you can review
-          and undo anything later, even across restarts.
-        </p>
-        <p>
-          Recommendations are also labelled by evidence:{" "}
-          <em>Verified</em> (Compy measured it),{" "}
-          <em>Measured signal</em> (established benchmarks), or{" "}
-          <em>Expected impact</em> (sound in theory, not yet measured). No
-          overpromising.
-        </p>
-      </>
-    ),
-  },
-];
-
-export default function Onboarding({ onDone }: { onDone: () => void }) {
-  const [i, setI] = useState(0);
-  const step = STEPS[i];
-  const last = i === STEPS.length - 1;
+export default function Onboarding({
+  onDone,
+  rig,
+}: {
+  onDone: () => void;
+  rig: RigLine[];
+}) {
+  const [step, setStep] = useState(0);
 
   const finish = () => {
     try {
@@ -126,38 +39,146 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           </button>
         </div>
 
-        <div className="onb-tag">{step.tag}</div>
-        <h2 className="onb-title">{step.title}</h2>
-        <div className="onb-body">{step.body}</div>
+        <div className="onb-step">
+          {step === 0 && <StepRig rig={rig} />}
+          {step === 1 && <StepSeatbelt />}
+          {step === 2 && <StepHouseRules />}
+        </div>
 
         <div className="onb-dots">
-          {STEPS.map((_, idx) => (
-            <span
-              key={idx}
-              className={`onb-dot ${idx === i ? "onb-dot-on" : ""}`}
-            />
+          {[0, 1, 2].map((idx) => (
+            <span key={idx} className={`onb-dot ${idx === step ? "onb-dot-on" : ""}`} />
           ))}
         </div>
 
         <div className="onb-actions">
           <button
             className="btn-small"
-            onClick={() => setI((n) => Math.max(0, n - 1))}
-            disabled={i === 0}
+            onClick={() => setStep((n) => Math.max(0, n - 1))}
+            disabled={step === 0}
           >
             Back
           </button>
-          {last ? (
-            <button className="btn" onClick={finish}>
-              Get started
+          {step < 2 ? (
+            <button className="btn" onClick={() => setStep((n) => n + 1)}>
+              Next
             </button>
           ) : (
-            <button className="btn" onClick={() => setI((n) => n + 1)}>
-              Next
+            // Routes to Moment 2 (first-check landing) once that's built; for now finishes onboarding
+            // → the main app (which shows the readiness check).
+            <button className="btn" onClick={finish}>
+              Run my first check
             </button>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+// Step 1 — YOUR RIG. Hardware was already read at startup; the per-line stagger is display polish
+// only (no fake scan time). Shimmer until real values exist — never show hardware that wasn't probed.
+function StepRig({ rig }: { rig: RigLine[] }) {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (rig.length === 0) return;
+    setShown(0);
+    const timers = rig.map((_, idx) =>
+      window.setTimeout(() => setShown((n) => Math.max(n, idx + 1)), idx * 420 + 120),
+    );
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [rig]);
+
+  return (
+    <>
+      <div className="onb-tag">YOUR RIG</div>
+      <h2 className="onb-title">Compy just read your machine</h2>
+      <div className="onb-detect">
+        {rig.length === 0
+          ? [0, 1, 2, 3].map((i) => <div key={i} className="onb-detect-row onb-shimmer" />)
+          : rig.map((line, idx) => (
+              <div
+                key={line.label}
+                className={`onb-detect-row ${idx < shown ? "onb-detect-in" : "onb-detect-pending"}`}
+              >
+                <span className="onb-detect-check">✓</span>
+                <span className="onb-detect-label">{line.label}</span>
+                <span className="onb-detect-dash">—</span>
+                <span className="onb-detect-value">{line.value}</span>
+              </div>
+            ))}
+      </div>
+      <p className="onb-body">
+        Every suggestion you'll see was picked for <strong>this exact hardware</strong>. Nothing
+        generic. Nothing it can't undo.
+      </p>
+    </>
+  );
+}
+
+// Step 2 — THE SEATBELT. The demo card is VISUAL ONLY: Apply/Undo flips local state and shows a
+// mock ledger line — it never calls a command or mutates anything.
+function StepSeatbelt() {
+  const [applied, setApplied] = useState(false);
+  return (
+    <>
+      <div className="onb-tag">THE SEATBELT</div>
+      <h2 className="onb-title">One click to apply. One click to take it back.</h2>
+      <div className="onb-demo">
+        <div className="onb-demo-row">
+          <div className="onb-demo-info">
+            <div className="onb-demo-name">Power plan</div>
+            <div className="onb-demo-sub">Recommended: High performance · Current: Balanced</div>
+          </div>
+          {applied ? (
+            <button className="btn-small onb-demo-btn" onClick={() => setApplied(false)}>
+              Undo
+            </button>
+          ) : (
+            <button
+              className="btn-small btn-small-on onb-demo-btn"
+              onClick={() => setApplied(true)}
+            >
+              Apply
+            </button>
+          )}
+        </div>
+        {applied && (
+          <div className="onb-demo-ledger">
+            Trust Ledger — power plan · Balanced → High performance · just now
+          </div>
+        )}
+      </div>
+      <p className="onb-body">
+        Try it — the button above is live. Every change lands in the <strong>Trust Ledger</strong>{" "}
+        with its before-state. Undoable today, undoable in six months.
+      </p>
+    </>
+  );
+}
+
+// Step 3 — HOUSE RULES.
+function StepHouseRules() {
+  const rules = [
+    { icon: "🛡", text: "No kernel driver — stays in user space" },
+    { icon: "🎮", text: "No game injection — anti-cheat safe by design" },
+    { icon: "🔒", text: "Nothing leaves your PC — no account, no telemetry" },
+  ];
+  return (
+    <>
+      <div className="onb-tag">HOUSE RULES</div>
+      <h2 className="onb-title">What Compy refuses to do</h2>
+      <div className="onb-rules">
+        {rules.map((r) => (
+          <div key={r.text} className="onb-rule">
+            <span className="onb-rule-icon">{r.icon}</span>
+            <span className="onb-rule-text">{r.text}</span>
+          </div>
+        ))}
+      </div>
+      <p className="onb-body onb-kicker">
+        The sketchy tweaks aren't missing. <strong>They're refused.</strong>
+      </p>
+    </>
   );
 }

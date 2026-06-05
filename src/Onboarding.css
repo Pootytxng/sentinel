@@ -121,3 +121,97 @@
 .onb-tag { font-family: var(--font-mono); letter-spacing: 0.06em; }
 .onb-dot-on { box-shadow: 0 0 10px var(--accent-glow); }
 .onb-body strong { color: #fff; }
+
+/* ── Moment 1 onboarding (first-experience arc, 2026-06-04) ───────────────── */
+/* Content sits above the body line now, so card height is held by .onb-step. */
+.onb-step { min-height: 250px; }
+.onb-body { min-height: 0; }
+
+/* Step 1 — detected hardware (mono lines that stagger in; shimmer until probed). */
+.onb-detect {
+  font-family: var(--font-mono);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 2px 0 14px;
+}
+.onb-detect-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.onb-detect-pending { opacity: 0; transform: translateY(4px); }
+.onb-detect-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.onb-detect-check { color: var(--ready, #46d98a); font-weight: 700; }
+.onb-detect-label { color: var(--muted); min-width: 32px; }
+.onb-detect-dash { color: var(--faint); }
+.onb-detect-value { color: var(--fg); font-weight: 600; }
+.onb-shimmer {
+  height: 14px;
+  width: 68%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--panel-2) 25%, var(--border) 50%, var(--panel-2) 75%);
+  background-size: 200% 100%;
+  animation: onb-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes onb-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Step 2 — demo apply/undo card (VISUAL ONLY). */
+.onb-demo {
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--r-md, 10px);
+  background: var(--panel-2);
+  padding: 12px 14px;
+  margin: 2px 0 14px;
+}
+.onb-demo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.onb-demo-name { font-weight: 600; color: var(--fg); font-size: 14px; }
+.onb-demo-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.onb-demo-btn { min-width: 66px; }
+.onb-demo-ledger {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ready, #46d98a);
+  animation: onb-fade 0.25s ease;
+}
+@keyframes onb-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Step 3 — house rules. */
+.onb-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 14px;
+}
+.onb-rule {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 13.5px;
+  color: var(--fg);
+  padding: 9px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 10px);
+}
+.onb-rule-icon { font-size: 16px; line-height: 1; }
+.onb-kicker strong { color: var(--accent-bright, var(--accent)); }

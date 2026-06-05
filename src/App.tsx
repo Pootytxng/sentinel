@@ -914,7 +914,23 @@ function App() {
   return (
     <main className="app">
       {showOnboarding && (
-        <Onboarding onDone={() => setShowOnboarding(false)} />
+        <Onboarding
+          onDone={() => setShowOnboarding(false)}
+          rig={
+            hw
+              ? [
+                  { label: "GPU", value: hw.gpus[0]?.name ?? "No GPU detected" },
+                  { label: "CPU", value: hw.cpu_arch?.family_label || hw.cpu_brand },
+                  { label: "RAM", value: fmtGB(hw.ram_total_bytes) },
+                  {
+                    label: "OS",
+                    value:
+                      hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`,
+                  },
+                ]
+              : []
+          }
+        />
       )}
       {report && (
         <ReportModal
