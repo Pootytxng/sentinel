@@ -123,3 +123,147 @@
   line-height: 1.55;
   padding: 16px 4px;
 }
+
+/* ---- Knowledge library (unified surface across tweaks / terms / tricks / guides) ---- */
+.kl-modal {
+  max-width: 680px;
+}
+.kl-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.kl-filter {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--dur-tap, 90ms) ease, border-color var(--dur-tap, 90ms) ease;
+}
+.kl-filter:hover {
+  color: var(--fg);
+}
+.kl-filter-on {
+  background: var(--accent-soft, rgba(120, 170, 255, 0.12));
+  border-color: var(--accent-line, var(--accent));
+  color: var(--fg);
+}
+
+/* Per-type left-edge tint (tweaks keep their verdict color from .tweak-real/-placebo/-risky). */
+.kl-term {
+  border-left-color: var(--accent);
+}
+.kl-trick {
+  border-left-color: var(--danger, #f3716f);
+}
+.kl-guide {
+  border-left-color: var(--ready, #46d98a);
+}
+
+.kl-typepill {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.kl-typepill-trick {
+  color: var(--danger, #f3716f);
+  border-color: var(--status-danger-line, rgba(243, 113, 111, 0.32));
+}
+.kl-typepill-guide {
+  color: var(--ready, #46d98a);
+  border-color: var(--status-ready-line, rgba(70, 217, 138, 0.32));
+}
+
+.kl-row {
+  margin-bottom: 2px;
+}
+.kl-line {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+.kl-line b {
+  color: var(--fg-2, var(--fg));
+  font-weight: 600;
+}
+.kl-honest b {
+  color: var(--ready, #46d98a);
+}
+.kl-golden {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px dashed var(--border-strong, var(--border));
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin: 2px 0 8px;
+}
+.kl-steps {
+  margin: 8px 0 4px;
+  padding-left: 20px;
+  color: var(--fg-2, var(--fg));
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kl-related {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.kl-related-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint, var(--muted));
+  margin-right: 2px;
+}
+.kl-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--panel);
+  color: var(--fg-2, var(--fg));
+  cursor: pointer;
+  transition: color var(--dur-tap, 90ms) ease, border-color var(--dur-tap, 90ms) ease;
+}
+.kl-chip:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.kl-flash {
+  animation: kl-flash 1.2s ease;
+}
+@keyframes kl-flash {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-line, rgba(120, 170, 255, 0.5));
+  }
+  30% {
+    box-shadow: 0 0 0 3px var(--accent-line, rgba(120, 170, 255, 0.45));
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+}

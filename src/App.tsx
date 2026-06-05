@@ -2149,7 +2149,7 @@ function OptimizeTab({
       </div>
 
       <button className="tweak-launch" onClick={onOpenEncyclopedia}>
-        Check a tweak before you try it →
+        Look it up — tweaks, jargon &amp; scams →
       </button>
 
       <div className="segmented" role="tablist" aria-label="Filter optimizations">
