@@ -392,6 +392,26 @@
   color: #11151f;
   background: #9ca3af;
 }
+.kl-howtos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0 10px;
+}
+.kl-howto {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--status-ready-line, rgba(70, 217, 138, 0.32));
+  background: var(--status-ready-soft, rgba(70, 217, 138, 0.12));
+  color: var(--ready, #46d98a);
+  cursor: pointer;
+}
+.kl-howto:hover {
+  border-color: var(--ready, #46d98a);
+}
 
 .kl-flash {
   animation: kl-flash 1.2s ease;

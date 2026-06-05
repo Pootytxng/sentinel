@@ -52,13 +52,15 @@ and the shipped datasets.
   (`(?<![a-z0-9])…(?![a-z0-9])`) so `ram` doesn't match inside `program`, tie-break
   `tweak < trick < guide < term` so a shared word credits the verdict-bearing entry. `unknown` =
   content lines containing no recognized term (never a guessed verdict). Input capped at 100 KB.
-- **KNOWN, DELIBERATE behavior** — when a guide/term has a *longer* alias than a tweak for the same
-  concept (e.g. guide alias `enable xmp` (10 chars) vs tweak alias `xmp` (3)), longest-first means
-  the **guide** claims the span. So "enable XMP" in a pasted guide surfaces the *guide row* (which
-  links to the safe how-to) and does **not** add to the `real` count. This is on purpose — the guide
-  implies legitimacy and gives the steps. Don't "fix" it by deleting longest-first (the directive
-  mandates it). If a future call wants verdict-bearing entries to always win overlaps, that's a
-  conscious rule change, not a bug.
+- **DELIBERATE overlap behavior (owner decision, 2026-06-05 — supersedes the earlier longest-first
+  rule).** VERDICT-BEARING entries (tweaks + tricks) win an overlapping span's COUNT. A guide whose
+  alias overlaps a verdict-bearing match (e.g. guide `enable xmp` over tweak `xmp`) does **not**
+  consume the match: the tweak's verdict is counted, and the guide attaches to that row as a
+  **"safe how-to available"** chip (`AutopsyHit.howTos`), not a duplicate standalone row. Within each
+  tier, longest-alias-first still avoids substring double-counts. A guide overlapping no
+  verdict-bearing match still stands as its own informational row. Implementation: candidates are
+  sorted verdict-bearing-first, then longest, then type; the first pass claims spans, and a later
+  guide that lands on a verdict-owned span is recorded as that owner's how-to instead of claiming.
 
 ## The gated tier (Black Book Part 8) — slots in later, no migration
 - `GuideEntry.tier` is already typed `"safe" | "gated"`; only `"safe"` ships and the lint asserts it.

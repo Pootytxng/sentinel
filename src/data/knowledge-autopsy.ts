@@ -1,11 +1,15 @@
-// Guide Autopsy — paste a tweak guide, get an honest grade. Pure, local-only matching: every entry
-// name/alias is matched against the pasted text longest-first so a short alias inside a longer match
-// isn't double-counted, each entry is credited once per non-overlapping occurrence, and any content
-// line with no recognized term is counted as "we don't recognize this" — never given a guessed verdict.
+// Guide Autopsy — paste a tweak guide, get an honest grade. Pure, local-only matching.
+//
+// Overlap policy (owner decision, 2026-06-05): VERDICT-BEARING entries (tweaks + tricks) win an
+// overlapping span's COUNT. A guide whose alias overlaps a verdict-bearing match does NOT consume the
+// match — it attaches to that row as a "safe how-to available" link. So "enable XMP" credits the XMP
+// tweak's verdict AND offers the XMP guide as a how-to, rather than the longer guide alias eating it.
+// Within each tier, longest-alias-first still avoids substring double-counts; each entry is credited
+// once per non-overlapping occurrence; a content line with no recognized term is "we don't recognize"
+// (never a guessed verdict). Input is capped so a giant dump degrades gracefully.
 
 import { KNOWLEDGE, foldText, type KnowledgeEntry, type KnowledgeType, type TweakVerdict } from "./knowledge";
 
-/** Pasted input is capped before matching so a giant dump degrades gracefully instead of hanging. */
 export const AUTOPSY_MAX_CHARS = 100_000;
 
 export type AutopsyHit = {
@@ -14,14 +18,14 @@ export type AutopsyHit = {
   type: KnowledgeType;
   verdict?: TweakVerdict;
   occurrences: number;
+  // Guide ids offering a safe how-to for this hit (attached, not counted as their own row).
+  howTos: string[];
 };
 
 export type AutopsyResult = {
   truncated: boolean;
   hits: AutopsyHit[];
-  // Headline grade: distinct tweaks counted by verdict, plus content lines we recognized nothing in.
   grade: { real: number; placebo: number; risky: number; unknown: number };
-  // Known scam patterns (tricks) spotted in the text — surfaced separately, not folded into a verdict.
   scamFlags: number;
 };
 
@@ -29,14 +33,16 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Tie-break so the verdict-bearing entry claims a shared word (e.g. "xmp" credits the tweak, not the term).
+const isVerdictBearing = (t: KnowledgeType) => t === "tweak" || t === "trick";
+// Within a tier, prefer the verdict-bearing/specific type when alias lengths tie.
 const TYPE_PRIORITY: Record<KnowledgeType, number> = { tweak: 0, trick: 1, guide: 2, term: 3 };
+
+type Claim = { start: number; end: number; ownerId: string; ownerVerdict: boolean };
 
 export function autopsyScan(text: string, entries: KnowledgeEntry[] = KNOWLEDGE): AutopsyResult {
   const truncated = text.length > AUTOPSY_MAX_CHARS;
   const folded = foldText(truncated ? text.slice(0, AUTOPSY_MAX_CHARS) : text);
 
-  // Every match candidate (entry × each of its name/aliases), longest first; verdict-bearing types win ties.
   const candidates: { entry: KnowledgeEntry; needle: string }[] = [];
   for (const entry of entries) {
     for (const s of [entry.name, ...entry.aliases]) {
@@ -44,17 +50,19 @@ export function autopsyScan(text: string, entries: KnowledgeEntry[] = KNOWLEDGE)
       if (needle.length >= 2) candidates.push({ entry, needle });
     }
   }
+  // Verdict-bearing first (they win the overlap count), then longest alias, then type order.
   candidates.sort(
     (a, b) =>
-      b.needle.length - a.needle.length || TYPE_PRIORITY[a.entry.type] - TYPE_PRIORITY[b.entry.type],
+      (isVerdictBearing(a.entry.type) ? 0 : 1) - (isVerdictBearing(b.entry.type) ? 0 : 1) ||
+      b.needle.length - a.needle.length ||
+      TYPE_PRIORITY[a.entry.type] - TYPE_PRIORITY[b.entry.type],
   );
 
-  const claimed: [number, number][] = []; // character ranges already attributed to an entry
-  const overlaps = (s: number, e: number) => claimed.some(([cs, ce]) => s < ce && cs < e);
+  const claimed: Claim[] = [];
   const occ = new Map<string, number>();
+  const howTos = new Map<string, Set<string>>(); // verdict ownerId -> guide ids
 
   for (const { entry, needle } of candidates) {
-    // Boundaries so "ram" doesn't match inside "program"; alnum on either side blocks the match.
     const re = new RegExp(`(?<![a-z0-9])${escapeRegex(needle)}(?![a-z0-9])`, "g");
     let m: RegExpExecArray | null;
     while ((m = re.exec(folded)) !== null) {
@@ -64,24 +72,38 @@ export function autopsyScan(text: string, entries: KnowledgeEntry[] = KNOWLEDGE)
       }
       const start = m.index;
       const end = start + m[0].length;
-      if (overlaps(start, end)) continue;
-      claimed.push([start, end]);
+      const owner = claimed.find((c) => start < c.end && c.start < end);
+      if (owner) {
+        // Span already owned. A guide over a verdict owner becomes a "safe how-to" link, not a count.
+        if (entry.type === "guide" && owner.ownerVerdict) {
+          if (!howTos.has(owner.ownerId)) howTos.set(owner.ownerId, new Set());
+          howTos.get(owner.ownerId)!.add(entry.id);
+        }
+        continue;
+      }
+      claimed.push({ start, end, ownerId: entry.id, ownerVerdict: isVerdictBearing(entry.type) });
       occ.set(entry.id, (occ.get(entry.id) ?? 0) + 1);
     }
   }
 
+  const attachedGuides = new Set<string>();
+  for (const set of howTos.values()) for (const g of set) attachedGuides.add(g);
+
   const byId = new Map(entries.map((e) => [e.id, e]));
-  const hits: AutopsyHit[] = [...occ.entries()].map(([id, occurrences]) => {
-    const e = byId.get(id)!;
-    return {
-      id,
-      name: e.name,
-      type: e.type,
-      verdict: e.type === "tweak" ? e.verdict : undefined,
-      occurrences,
-    };
-  });
-  // Strongest signal first: most-mentioned, then verdict-bearing types, then name.
+  const hits: AutopsyHit[] = [...occ.entries()]
+    // A guide that attached as a how-to is shown as a chip, not a duplicate standalone row.
+    .filter(([id]) => !(byId.get(id)!.type === "guide" && attachedGuides.has(id)))
+    .map(([id, occurrences]) => {
+      const e = byId.get(id)!;
+      return {
+        id,
+        name: e.name,
+        type: e.type,
+        verdict: e.type === "tweak" ? e.verdict : undefined,
+        occurrences,
+        howTos: [...(howTos.get(id) ?? [])],
+      };
+    });
   hits.sort(
     (a, b) =>
       b.occurrences - a.occurrences ||
@@ -104,7 +126,7 @@ export function autopsyScan(text: string, entries: KnowledgeEntry[] = KNOWLEDGE)
     offset = end + 1; // account for the stripped "\n"
     const trimmed = line.trim();
     if (trimmed.length < 3 || !/[a-z]/.test(trimmed)) continue;
-    const recognized = claimed.some(([cs, ce]) => cs < end && start < ce);
+    const recognized = claimed.some((c) => c.start < end && start < c.end);
     if (!recognized) grade.unknown += 1;
   }
 

@@ -65,4 +65,16 @@ describe("Library surface", () => {
     fireEvent.click(screen.getByRole("button", { name: /Windows Game Mode/i })); // a hit row
     expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument(); // back in browse mode
   });
+
+  it("autopsy attaches a 'safe how-to' chip to a verdict row and links to the guide", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
+      target: { value: "enable xmp in your bios" }, // xmp tweak (real) + xmp guide overlap
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Grade this guide" }));
+    const howto = screen.getByRole("button", { name: /Safe how-to available/i });
+    fireEvent.click(howto);
+    expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument(); // navigated to the guide
+  });
 });

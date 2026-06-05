@@ -182,6 +182,15 @@ function AutopsyResultView({
                   <span className={`tweak-pill ${pill.cls}`}>{pill.label}</span>
                   {h.occurrences > 1 && <span className="kl-hitcount">×{h.occurrences}</span>}
                 </button>
+                {h.howTos.length > 0 && (
+                  <div className="kl-howtos">
+                    {h.howTos.map((gid) => (
+                      <button key={gid} className="kl-howto" onClick={() => onNavigate(gid)}>
+                        Safe how-to available →
+                      </button>
+                    ))}
+                  </div>
+                )}
               </li>
             );
           })}

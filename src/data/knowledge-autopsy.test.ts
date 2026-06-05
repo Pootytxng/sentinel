@@ -31,6 +31,17 @@ const trick = (id: string, name: string, aliases: string[]): KnowledgeEntry => (
   tell: "",
   honest_version: "",
 });
+const guide = (id: string, name: string, aliases: string[]): KnowledgeEntry => ({
+  type: "guide",
+  id,
+  name,
+  aliases,
+  related: [],
+  tier: "safe",
+  goal: "",
+  steps: [],
+  undo: "",
+});
 
 const fx: KnowledgeEntry[] = [
   tweak("game-mode", "Game Mode", ["game mode"], "real"),
@@ -94,5 +105,25 @@ describe("autopsyScan", () => {
     const r = autopsyScan(big, fx);
     expect(r.truncated).toBe(true);
     expect(r.hits.map((h) => h.id)).toContain("hpet");
+  });
+
+  it("a guide overlapping a verdict tweak attaches as a how-to, not a separate count", () => {
+    const fx2: KnowledgeEntry[] = [
+      tweak("xmp-expo", "XMP", ["xmp"], "real"),
+      guide("xmp-guide", "Turn on XMP", ["enable xmp"]),
+    ];
+    const r = autopsyScan("please enable xmp now", fx2);
+    expect(r.grade.real).toBe(1); // the verdict-bearing tweak wins the count
+    const hit = r.hits.find((h) => h.id === "xmp-expo");
+    expect(hit?.howTos).toContain("xmp-guide"); // guide attaches as a safe how-to
+    expect(r.hits.map((h) => h.id)).not.toContain("xmp-guide"); // not a duplicate standalone row
+  });
+
+  it("a guide with no overlapping verdict still stands on its own", () => {
+    const fx2: KnowledgeEntry[] = [
+      guide("startup-cleanup-guide", "Clean up startup apps", ["startup cleanup"]),
+    ];
+    const r = autopsyScan("do a startup cleanup tonight", fx2);
+    expect(r.hits.map((h) => h.id)).toContain("startup-cleanup-guide");
   });
 });
