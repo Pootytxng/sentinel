@@ -7,6 +7,7 @@ mod benchmark; // Measured-efficacy engine — WIRED (Benchmark tab: run/baselin
 mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclusive) — WIRED: powers the trial verdict + scoreboard awards.
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
 mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
+mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;
@@ -447,6 +448,29 @@ fn clear_scoreboard() -> Result<(), String> {
     benchmark_scoreboard::clear_scoreboard()
 }
 
+// M4 — cross-session comparison: arm a fix from a debrief, then the next same-game session's
+// finalize computes the honest delta.
+#[tauri::command]
+fn arm_comparison(
+    rec_id: String,
+    rec_title: String,
+    game: String,
+    baseline_avg_fps: f64,
+    baseline_low1_fps: f64,
+) -> Result<(), String> {
+    comparison::arm(rec_id, rec_title, game, baseline_avg_fps, baseline_low1_fps)
+}
+
+#[tauri::command]
+fn get_latest_comparison() -> Option<comparison::ComparisonResult> {
+    comparison::latest_result()
+}
+
+#[tauri::command]
+fn dismiss_comparison() {
+    comparison::clear_result();
+}
+
 #[tauri::command]
 fn get_trial_state() -> benchmark_trial::TrialState {
     benchmark_trial::trial_state()
@@ -572,6 +596,9 @@ pub fn run() {
             get_appliable_rec_ids,
             get_scoreboard,
             clear_scoreboard,
+            arm_comparison,
+            get_latest_comparison,
+            dismiss_comparison,
             get_trial_state,
             get_benchmark_state,
             set_benchmark_baseline,

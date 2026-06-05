@@ -164,6 +164,8 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
 
 pub(crate) fn save_session(summary: SessionSummary) -> Result<(), String> {
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
+    // M4: if a comparison was armed for this game, compute the cross-session delta now.
+    crate::comparison::on_session_finalized(&summary);
     save_session_to(&sessions_path(), summary)
 }
 
