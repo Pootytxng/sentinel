@@ -2695,3 +2695,20 @@ body::before {
 .readiness-dismissed-head:hover {
   color: var(--fg);
 }
+
+/* Optimize tab — collapsed "already applied" group (lead with the outstanding few). */
+.rec-satisfied {
+  margin-top: 16px;
+}
+.rec-satisfied-head {
+  font: inherit;
+  font-size: 12.5px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 0;
+}
+.rec-satisfied-head:hover {
+  color: var(--fg);
+}

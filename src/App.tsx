@@ -2049,6 +2049,7 @@ function OptimizeTab({
 }) {
   type Filter = "All" | RecCategory | "Guided" | "Startup";
   const [filter, setFilter] = useState<Filter>("All");
+  const [showSatisfied, setShowSatisfied] = useState(false);
 
   // Split appliable (Compy-owned toggles) from advisory/guided (Compy
   // detects but directs you elsewhere to change). The "All" view shows
@@ -2078,6 +2079,10 @@ function OptimizeTab({
       : filter === "Startup" || filter === "Guided"
       ? []
       : appliableRecs.filter((r) => r.category === filter);
+  // Lead with what's still worth doing; fold the already-applied into a collapsed group so the
+  // list reads as "a few things to do", not a 29-switch buffet.
+  const outstandingRecs = shownRecs.filter((r) => !r.currently_applied);
+  const satisfiedRecs = shownRecs.filter((r) => r.currently_applied);
 
   return (
     <section className="tab-pane">
@@ -2136,21 +2141,50 @@ function OptimizeTab({
           </div>
         </>
       ) : (
-        <div className="rec-list">
-          {shownRecs.map((r) => (
-            <RecCard
-              key={r.id}
-              rec={r}
-              appliable={APPLIABLE_REC_IDS.has(r.id)}
-              busy={busyId === r.id}
-              canToggleOff={hasActiveChange(r.id)}
-              onToggle={() => onToggleRec(r)}
-            />
-          ))}
-          {shownRecs.length === 0 && (
-            <div className="empty">No recommendations in this group right now.</div>
+        <>
+          <div className="rec-list">
+            {outstandingRecs.map((r) => (
+              <RecCard
+                key={r.id}
+                rec={r}
+                appliable={APPLIABLE_REC_IDS.has(r.id)}
+                busy={busyId === r.id}
+                canToggleOff={hasActiveChange(r.id)}
+                onToggle={() => onToggleRec(r)}
+              />
+            ))}
+            {shownRecs.length === 0 && (
+              <div className="empty">No recommendations in this group right now.</div>
+            )}
+            {shownRecs.length > 0 && outstandingRecs.length === 0 && (
+              <div className="empty">All set here — everything in this group is already applied.</div>
+            )}
+          </div>
+          {satisfiedRecs.length > 0 && (
+            <div className="rec-satisfied">
+              <button
+                className="rec-satisfied-head"
+                onClick={() => setShowSatisfied((s) => !s)}
+              >
+                {showSatisfied ? "▾" : "▸"} Already applied ({satisfiedRecs.length})
+              </button>
+              {showSatisfied && (
+                <div className="rec-list">
+                  {satisfiedRecs.map((r) => (
+                    <RecCard
+                      key={r.id}
+                      rec={r}
+                      appliable={APPLIABLE_REC_IDS.has(r.id)}
+                      busy={busyId === r.id}
+                      canToggleOff={hasActiveChange(r.id)}
+                      onToggle={() => onToggleRec(r)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </section>
   );
