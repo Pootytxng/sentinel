@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
+import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -686,6 +687,10 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
+  // Moment 2 — first-check landing, shown once after onboarding (or via "Re-run check").
+  const [showFirstCheck, setShowFirstCheck] = useState(
+    () => localStorage.getItem(FIRST_CHECK_KEY) !== "1",
+  );
   // Gaming Mode (F1) is gated — the backend returns false until its mutation QA
   // + owner sign-off, so the tab never appears by default (the surface is dark).
   const [gamingEnabled, setGamingEnabled] = useState(false);
@@ -932,6 +937,9 @@ function App() {
           }
         />
       )}
+      {!showOnboarding && showFirstCheck && (
+        <FirstCheck onDone={() => setShowFirstCheck(false)} />
+      )}
       {report && (
         <ReportModal
           report={report}
@@ -1051,6 +1059,9 @@ function App() {
         <span>Compy never changes anything without your explicit approval.</span>
         <button className="footer-link" onClick={() => setShowOnboarding(true)}>
           Replay intro
+        </button>
+        <button className="footer-link" onClick={() => setShowFirstCheck(true)}>
+          Re-run check
         </button>
       </footer>
     </main>
