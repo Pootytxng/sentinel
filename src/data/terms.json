@@ -1,0 +1,434 @@
+[
+  {
+    "id": "xmp",
+    "name": "XMP / EXPO / DOCP",
+    "aliases": ["xmp", "expo", "docp", "extreme memory profile", "memory profile", "ram speed profile", "ram overclock"],
+    "what": "Your RAM ships running slower than the speed printed on the box. XMP is the BIOS switch that turns on the speed you already paid for.",
+    "more": "Intel boards call it XMP; AMD calls it EXPO; some ASUS boards say DOCP — same idea, one toggle. It gives real gains in CPU-heavy games and steadier 1% lows. If the PC won't boot after enabling it, clearing CMOS puts everything back to default.",
+    "related": ["xmp-expo", "xmp-guide", "vram", "one-percent-lows", "uefi-bios"]
+  },
+  {
+    "id": "vrr",
+    "name": "VRR (variable refresh rate)",
+    "aliases": ["vrr", "variable refresh rate", "adaptive sync"],
+    "what": "Normally your monitor refreshes on a fixed metronome and your frames arrive whenever they're ready — when those don't line up you get tearing or stutter. VRR lets the monitor wait for each frame, so it draws them the instant they land.",
+    "more": "G-Sync (NVIDIA) and FreeSync (AMD) are the two brand names for it. It's the single biggest jump in how smooth a game feels, and it costs you nothing once your panel supports it. It works inside a range of frame rates, which is why capping your FPS to stay in that range matters.",
+    "related": ["gsync-freesync", "vsync", "vrr-sync-stack", "vrr-sync-stack-guide", "fps-cap"]
+  },
+  {
+    "id": "gsync-freesync",
+    "name": "G-Sync / FreeSync",
+    "aliases": ["gsync", "g-sync", "freesync", "g sync", "free sync", "adaptive sync"],
+    "what": "The two brand names for VRR (variable refresh rate — the monitor waiting for each frame instead of refreshing on a fixed clock). G-Sync is NVIDIA's; FreeSync is AMD's.",
+    "more": "Most modern monitors support at least one, and many support both regardless of your graphics card. You turn it on in two places — the monitor's own menu and your graphics driver — and both need to agree. Outside its supported frame-rate range it switches off, which is why an FPS cap keeps it engaged.",
+    "related": ["vrr", "vrr-sync-stack", "fps-cap", "vrr-sync-stack-guide"]
+  },
+  {
+    "id": "vsync",
+    "name": "V-Sync (vertical sync)",
+    "aliases": ["vsync", "v-sync", "vertical sync"],
+    "what": "The old fix for screen tearing: it holds each finished frame until the monitor is ready for it. It removes tearing but adds input lag, because frames sit in a queue waiting their turn.",
+    "more": "On its own it's a trade you usually don't want for fast games. The modern move is to pair it with VRR (the monitor waiting for frames) plus an FPS cap a few frames below your refresh rate — then V-Sync only acts as a safety net and almost never adds the lag. See the sync stack.",
+    "related": ["vrr", "gsync-freesync", "vrr-sync-stack", "input-latency", "fps-cap"]
+  },
+  {
+    "id": "frametime",
+    "name": "Frametime",
+    "aliases": ["frametime", "frame time", "frame pacing"],
+    "what": "How long each individual frame took to draw, measured in milliseconds. FPS is the yearly average; frametime is the heartbeat monitor.",
+    "more": "Smoothness is about consistency, not just the average — a steady line of 7 ms frames feels great, while a line that keeps spiking to 30 ms feels like stutter even at the same average FPS. A single tall spike is one visible hitch. This is the graph serious testers actually watch.",
+    "related": ["one-percent-lows", "hz-vs-fps", "benchmark", "traversal-stutter"]
+  },
+  {
+    "id": "one-percent-lows",
+    "name": "1% lows / 0.1% lows",
+    "aliases": ["1% low", "1% lows", "0.1% low", "0.1% lows", "one percent low", "lows"],
+    "what": "The average of your worst frames — the number that actually measures stutter. Average FPS is your highlight reel; 1% lows are your bad days.",
+    "more": "The 1% low is the average of your slowest 1% of frames; the 0.1% low zooms in on the worst 0.1%. Two PCs can both say \"144 FPS average\" while one feels silky and one feels like a slideshow with good PR — the lows are the difference. When a tweak is worth anything, this is usually the number that moves.",
+    "related": ["frametime", "hz-vs-fps", "benchmark", "noise-floor"]
+  },
+  {
+    "id": "input-latency",
+    "name": "Input latency (click-to-pixel)",
+    "aliases": ["input latency", "input lag", "click to pixel", "click-to-pixel", "system latency", "end to end latency"],
+    "what": "The total delay from moving your mouse to seeing it on screen. It's the lag you feel in your hands, and it's separate from how high your FPS number is.",
+    "more": "High FPS usually lowers it, but settings matter too: V-Sync and frame generation add latency, while NVIDIA Reflex and a sane FPS cap cut it. A game can show a huge frame rate and still feel sluggish if the click-to-pixel path is stacked with delay. This is the thing competitive players actually chase.",
+    "related": ["nvidia-reflex", "vsync", "frame-gen", "vrr-sync-stack", "polling-rate"]
+  },
+  {
+    "id": "hz-vs-fps",
+    "name": "Hz vs FPS",
+    "aliases": ["hz", "hertz", "fps", "frames per second", "refresh rate", "hz vs fps"],
+    "what": "Hz is how many times per second your monitor can redraw; FPS is how many frames your PC is feeding it. They're two different taps on the same pipe.",
+    "more": "A 144 Hz monitor can show up to 144 frames a second — push 300 FPS into it and the extra frames don't appear, though they can still lower input lag. Push 40 FPS into it and you only see 40. Matching the two well (via VRR and a sensible cap) is where smoothness comes from, not chasing the biggest possible FPS number.",
+    "related": ["frametime", "one-percent-lows", "vrr", "fps-cap"]
+  },
+  {
+    "id": "frame-gen",
+    "name": "Frame generation",
+    "aliases": ["frame generation", "frame gen", "framegen", "dlss frame generation", "afmf", "fluid motion frames", "mfg"],
+    "what": "The graphics card invents extra in-between frames to make the FPS number bigger. It looks smoother but it doesn't make the game respond faster.",
+    "more": "DLSS Frame Generation (NVIDIA) and AFMF / Fluid Motion Frames (AMD) are the common versions. Because the invented frames don't carry your input, it actually adds a little input latency — great for a relaxing single-player game on a big screen, a bad idea in a competitive shooter. Displayed FPS is not the same as how fast the game answers your hands.",
+    "related": ["frame-generation", "upscaling", "input-latency", "nvidia-reflex"]
+  },
+  {
+    "id": "upscaling",
+    "name": "Upscaling (DLSS / FSR / XeSS)",
+    "aliases": ["upscaling", "dlss", "fsr", "xess", "super resolution", "rsr"],
+    "what": "The game renders at a lower resolution and an AI step rebuilds it up to your screen's resolution. Done well, it's close to the real thing for far less GPU work.",
+    "more": "DLSS (NVIDIA), FSR (AMD), and XeSS (Intel) are the three families. In their quality modes this is the rare free lunch — usually more real frames and lower input lag than running at native resolution, with image quality most people can't tell apart in motion. Don't confuse it with frame generation, which is the part that adds latency.",
+    "related": ["upscaling-quality", "frame-gen", "native-resolution", "input-latency"]
+  },
+  {
+    "id": "native-resolution",
+    "name": "Native resolution",
+    "aliases": ["native resolution", "native res", "render resolution"],
+    "what": "The exact pixel grid your monitor is built from — 2560×1440 on a 1440p panel, for example. Running a game at native means every screen pixel is doing real work.",
+    "more": "Native is the sharpest a game can look, but it's also the most expensive for your GPU. Upscaling exists precisely so you can render below native and rebuild up to it, getting most of the look for less cost. A blurry image at native usually means a sharpening or scaling setting is fighting you, not the resolution itself.",
+    "related": ["upscaling", "vram"]
+  },
+  {
+    "id": "gpu-scheduling",
+    "name": "HAGS (Hardware-Accelerated GPU Scheduling)",
+    "aliases": ["hags", "gpu scheduling", "hardware accelerated gpu scheduling", "hardware-accelerated gpu scheduling"],
+    "what": "A Windows setting that hands some scheduling work from the operating system to the graphics card itself. It can shave a little input latency and is required for some frame-generation features.",
+    "more": "It's a real setting with a real effect, but the effect goes both ways — it helps on many modern GPUs and occasionally makes a specific game worse. It needs a reboot to switch. Worth testing on, with a measured before-and-after rather than a vibe.",
+    "related": ["hags", "input-latency", "frame-gen", "benchmark"]
+  },
+  {
+    "id": "mpo",
+    "name": "MPO (Multi-Plane Overlay)",
+    "aliases": ["mpo", "multi plane overlay", "multi-plane overlay", "overlaytestmode"],
+    "what": "A Windows feature that lets the screen composite layers (like a video and a desktop) more efficiently. On some setups it has a bug that causes flicker or stutter.",
+    "more": "When it misbehaves — most often on multi-monitor or VRR setups — turning it off is a legitimate fix. The catch: if you don't have the flicker symptom, turning it off does nothing for you, so it's a fix, not a free upgrade. It's a reversible registry change.",
+    "related": ["mpo-disable", "vrr", "registry"]
+  },
+  {
+    "id": "hpet",
+    "name": "HPET (High Precision Event Timer)",
+    "aliases": ["hpet", "high precision event timer", "useplatformclock", "timer"],
+    "what": "One of several hardware clocks your PC can use to keep time. Old forum guides swear that forcing or disabling it gives big FPS gains.",
+    "more": "On a healthy modern system there's usually no benefit either way — a minority of boards measure slightly better, a minority measure worse, most see nothing. Windows already picks a good timer on its own. If you ever test it, change one thing, measure with a real benchmark, and put it back unless it's clearly better.",
+    "related": ["useplatformclock", "noise-floor", "benchmark"]
+  },
+  {
+    "id": "c-states",
+    "name": "C-states",
+    "aliases": ["c-states", "c states", "cstates", "cpu idle states"],
+    "what": "The low-power sleep levels your CPU drops idle cores into between bursts of work. A popular tweak says to turn them off \"for consistency.\"",
+    "more": "Leave them on. Modern boost works by borrowing the power budget freed up by sleeping cores to push the busy cores faster — switch C-states off and you raise heat and actually lower your peak boost. This is one of the tweaks that backfires on the people who apply it.",
+    "related": ["cstates-disable", "core-parking", "pbo", "thermal-throttling"]
+  },
+  {
+    "id": "pbo",
+    "name": "PBO / Curve Optimizer",
+    "aliases": ["pbo", "precision boost overdrive", "curve optimizer", "co"],
+    "what": "AMD's built-in way to let a Ryzen CPU boost harder and run a per-core undervolt. Tuned well, it gives real sustained clocks and cooler operation.",
+    "more": "PBO (Precision Boost Overdrive) raises the limits the chip is allowed to push to; the Curve Optimizer trims voltage so it boosts higher at the same heat. The honest catch: push the numbers too far and you get crashes that look \"random\" for weeks until you connect them back to this. It's advanced-user territory — small steps, hours of stability testing, expect a few setbacks while dialing.",
+    "related": ["pbo-curve-optimizer", "undervolting", "c-states", "thermal-throttling"]
+  },
+  {
+    "id": "undervolting",
+    "name": "Undervolting",
+    "aliases": ["undervolt", "undervolting", "voltage offset"],
+    "what": "Feeding a chip slightly less voltage to do the same work. Less voltage means less heat, and less heat often means higher sustained clocks.",
+    "more": "On a part that throttles when it gets hot, a good undervolt can be a quiet win — cooler, sometimes faster, often quieter fans. The risk is stability: too little voltage causes crashes that can take ages to trace back, so it's a measure-and-stress-test job, not a set-and-forget one. On AMD CPUs the Curve Optimizer is the usual tool for it.",
+    "related": ["pbo", "thermal-throttling", "fan-curves"]
+  },
+  {
+    "id": "thermal-throttling",
+    "name": "Thermal throttling",
+    "aliases": ["thermal throttling", "throttling", "overheating", "temp throttle"],
+    "what": "When a chip gets too hot it deliberately slows itself down to cool off. That self-protection is why a PC can feel fast for two minutes and then sag.",
+    "more": "It's the most common hidden cause of \"my FPS drops after a while.\" The fix is heat, not registry edits — better airflow, a sane fan curve, repasting an old cooler, or an undervolt. Modern parts also boost higher when they're cooler, so fixing throttling can raise your peak, not just your floor.",
+    "related": ["fan-curves", "fan-curve-guide", "undervolting", "pbo"]
+  },
+  {
+    "id": "vram",
+    "name": "VRAM (video memory)",
+    "aliases": ["vram", "video memory", "video ram", "gpu memory"],
+    "what": "The dedicated memory on your graphics card that holds textures, shadows, and frame buffers. It's separate from your system RAM.",
+    "more": "Run out of it and the game spills over into slower system memory, which shows up as nasty stutter and texture pop-in rather than a clean FPS drop. Higher resolutions and texture settings eat more of it. It's why a card can have plenty of raw speed and still struggle at 4K if it's short on VRAM.",
+    "related": ["native-resolution", "nvme-ssd-hdd", "traversal-stutter"]
+  },
+  {
+    "id": "resizable-bar",
+    "name": "Resizable BAR / SAM",
+    "aliases": ["resizable bar", "rebar", "sam", "smart access memory", "above 4g decoding", "base address register"],
+    "what": "A BIOS-and-driver feature that lets your CPU reach the graphics card's whole video memory at once, instead of through a small window. AMD's version is branded Smart Access Memory (SAM).",
+    "more": "It gives a few percent in many games, a real bump in a handful, and occasionally a small loss in a rare one. The move is to enable it, measure, and only turn it off for a specific game that regresses. You usually have to enable \"Above 4G Decoding\" in the BIOS first.",
+    "related": ["rebar-sam", "vram", "uefi-bios", "benchmark"]
+  },
+  {
+    "id": "nvme-ssd-hdd",
+    "name": "NVMe vs SSD vs HDD",
+    "aliases": ["nvme", "ssd", "hdd", "hard drive", "solid state", "m.2", "storage type"],
+    "what": "Three storage speeds, slow to fast: a spinning hard drive (HDD), a regular solid-state drive (SSD), and an NVMe drive that plugs straight into the fast lane. NVMe is several times quicker than a SATA SSD, which is many times quicker than a hard drive.",
+    "more": "For gaming this mostly affects load times and texture streaming, not your FPS — a game on NVMe loads faster and hitches less when it's pulling new areas off disk. Modern engines that use DirectStorage lean on fast drives even more. A hard drive is fine for storage but a rough place to run a 2024-era game from.",
+    "related": ["vram", "traversal-stutter", "ue5", "raid"]
+  },
+  {
+    "id": "raid",
+    "name": "RAID",
+    "aliases": ["raid", "raid 0", "raid array", "disk array"],
+    "what": "A way of joining several drives so they act as one — some setups for speed, some for a safety backup copy, some for both. The name stands for Redundant Array of Independent Disks.",
+    "more": "For a gaming PC it's rarely worth the trouble: a single modern NVMe drive is already so fast that striping drives for speed barely moves load times. The backup-style setups protect against a drive dying, which is real value, but that's data safety, not performance. Most gamers are better served by one good NVMe than a RAID array.",
+    "related": ["nvme-ssd-hdd"]
+  },
+  {
+    "id": "pagefile",
+    "name": "Pagefile (virtual memory)",
+    "aliases": ["pagefile", "page file", "virtual memory", "swap file"],
+    "what": "A reserved chunk of your drive that Windows uses as overflow when it needs more memory than your RAM holds. It's a safety valve, not a speed setting.",
+    "more": "A popular tweak says to disable it or hard-cap it to a tiny size — don't. Games that commit more memory than you have RAM will hard-crash without it, and \"I have 32 GB, that's plenty\" isn't how memory reservation works. Leave it system-managed and forget it exists.",
+    "related": ["pagefile-disable", "vram"]
+  },
+  {
+    "id": "secure-boot",
+    "name": "Secure Boot",
+    "aliases": ["secure boot", "secureboot"],
+    "what": "A firmware feature that only lets trusted, signed code load at startup. It's a security gate, and some anti-cheats now require it to be on.",
+    "more": "It isn't a performance setting at all, but games like Valorant won't run without it, so it ends up on gamers' radar. Toggling it carelessly — especially alongside the old CSM compatibility mode — can leave a PC that won't boot. Match what your anti-cheat asks for, and know the recovery path before you change it.",
+    "related": ["secure-boot-csm", "tpm", "csm", "anti-cheat", "uefi-bios"]
+  },
+  {
+    "id": "tpm",
+    "name": "TPM / fTPM",
+    "aliases": ["tpm", "ftpm", "trusted platform module", "tpm 2.0"],
+    "what": "A small security chip (or a firmware version of one) that stores keys and proves your PC is what it says it is. Windows 11 and several anti-cheats require it on.",
+    "more": "TPM is the Trusted Platform Module; fTPM is the firmware flavor built into many AMD boards. Keep it on — it's a requirement, not an optional tweak. Heads-up: some older AMD boards had an fTPM firmware bug that caused random stutter, which a BIOS update fixed, so update your BIOS if you hit that.",
+    "related": ["secure-boot", "uefi-bios", "anti-cheat"]
+  },
+  {
+    "id": "uefi-bios",
+    "name": "UEFI vs BIOS",
+    "aliases": ["uefi", "bios", "firmware", "motherboard firmware"],
+    "what": "The low-level menu that runs before Windows loads, where you set memory speed, fan curves, and boot options. \"BIOS\" is the old name; \"UEFI\" is the modern version, but people use the words interchangeably.",
+    "more": "This is where XMP/EXPO, Resizable BAR, and fan settings live. Every board's menu looks different, which is why guides can only teach the concept, not the exact clicks. The universal safety net is that you can reset it to defaults — usually a menu option or by clearing CMOS — if a change goes wrong.",
+    "related": ["xmp", "resizable-bar", "secure-boot", "csm", "fan-curves"]
+  },
+  {
+    "id": "csm",
+    "name": "CSM (Compatibility Support Module)",
+    "aliases": ["csm", "compatibility support module", "legacy boot"],
+    "what": "A BIOS option that lets modern firmware boot in an old-fashioned legacy mode for older operating systems and hardware. On a current gaming PC you generally want it off.",
+    "more": "It matters because Secure Boot and some anti-cheats need CSM disabled to work, and flipping it on a Windows install set up the other way can stop the PC booting. If you change it, know that you may need to adjust how the drive boots too. For most modern builds the correct state is off — but change it deliberately, not on a whim.",
+    "related": ["secure-boot", "uefi-bios", "anti-cheat"]
+  },
+  {
+    "id": "kernel-user-space",
+    "name": "Kernel vs user space",
+    "aliases": ["kernel", "user space", "userspace", "ring 0", "kernel mode", "user mode"],
+    "what": "Two privilege levels in your PC. The kernel is the trusted core that talks directly to hardware; user space is where normal apps and games run, fenced off from that core.",
+    "more": "The fence is what stops a misbehaving app from taking down the whole system. Anything that runs in the kernel has deep power and deeper risk — a crash there is a blue screen, and a bad actor there owns the machine. It's the reason \"this tool installs a kernel driver\" is a sentence worth slowing down for.",
+    "related": ["kernel-driver", "dll-injection", "anti-cheat"]
+  },
+  {
+    "id": "kernel-driver",
+    "name": "Kernel driver",
+    "aliases": ["kernel driver", "kernel-mode driver", "ring 0 driver", "kernel level"],
+    "what": "Software that runs in the trusted core of Windows (the kernel) rather than out in normal app space. Hardware needs them; some anti-cheats and some \"tweak tools\" install them too.",
+    "more": "A driver at this level can read and change almost anything, so a buggy or shady one is a big deal — it can blue-screen your PC or hand deep access to malware. This is why a random \"FPS booster\" that ships a kernel driver is a real risk, not a convenience. Compy ships no kernel driver, which is also why it can't read certain things like CPU temperature on its own.",
+    "related": ["kernel-user-space", "dll-injection", "dll-injectors", "anti-cheat"]
+  },
+  {
+    "id": "dll-injection",
+    "name": "DLL injection",
+    "aliases": ["dll injection", "dll inject", "injector", "code injection"],
+    "what": "Forcing extra code into a program that's already running, by slipping a library (a DLL file) into its process. Overlays use a gentle form of it; cheats and some \"optimizers\" use an aggressive form.",
+    "more": "A DLL is a Dynamic-Link Library — a bundle of code programs share. The problem is that injecting into a game looks exactly like what a cheat does, so anti-cheats treat it as hostile and can ban the account. Any tool that injects into game memory is playing with your account's safety, whatever it promises.",
+    "related": ["dll-injectors", "kernel-driver", "anti-cheat", "overlay"]
+  },
+  {
+    "id": "anti-cheat",
+    "name": "Anti-cheat (Vanguard / EAC / BattlEye)",
+    "aliases": ["anti-cheat", "anticheat", "vanguard", "eac", "easy anti-cheat", "battleye"],
+    "what": "The watchdog software a multiplayer game uses to catch cheaters. Vanguard (Valorant), Easy Anti-Cheat, and BattlEye are the common ones.",
+    "more": "To spot cheats they watch for anything tampering with the game or the system, which is why injectors, kernel tweak tools, and some driver hacks get accounts banned. Several require Secure Boot or TPM to be on. The safe rule: if a \"tweak\" touches game memory, timers, or drivers in a non-standard way, assume anti-cheat risk until proven otherwise.",
+    "related": ["dll-injection", "kernel-driver", "secure-boot", "tpm", "anti-lag-plus"]
+  },
+  {
+    "id": "etw",
+    "name": "ETW (Event Tracing for Windows)",
+    "aliases": ["etw", "event tracing", "event tracing for windows"],
+    "what": "A built-in Windows system that lets tools listen to a live stream of low-level events — frames being presented, drivers firing, and so on. It's the legitimate, no-injection way to measure what a PC is doing.",
+    "more": "Because it reads events Windows already broadcasts, it doesn't touch game memory, so it's anti-cheat-safe. Compy uses it to measure your real frame rate and frametimes without injecting into anything. Proper benchmark tools are built on the same plumbing.",
+    "related": ["benchmark", "frametime", "dll-injection"]
+  },
+  {
+    "id": "overlay",
+    "name": "Overlay",
+    "aliases": ["overlay", "on screen display", "osd", "in-game overlay"],
+    "what": "The little stats or panel drawn on top of your game — an FPS counter, a Discord pop-up, a performance graph. It floats over the picture without being part of the game.",
+    "more": "Some overlays draw the safe way, alongside the game; older ones hook into it more invasively, which can clash with anti-cheats or cost a few frames. Compy's overlay draws over borderless and windowed games but not exclusive-fullscreen ones, because it never injects. If a game stutters only with an overlay on, that overlay is the suspect.",
+    "related": ["fullscreen-modes", "dll-injection", "etw"]
+  },
+  {
+    "id": "fullscreen-modes",
+    "name": "Exclusive fullscreen vs borderless",
+    "aliases": ["exclusive fullscreen", "borderless", "borderless windowed", "fullscreen optimizations", "windowed fullscreen"],
+    "what": "Two ways a game can own your screen. Exclusive fullscreen hands the whole display to the game; borderless runs it in a maximized window that Windows still composites.",
+    "more": "Exclusive can give slightly lower latency and lets some VRR and color features kick in cleanly; borderless makes alt-tabbing and overlays seamless. Modern Windows narrows the gap with a feature it applies automatically, which you can turn off per game to test. Which feels better is genuinely per-setup — measure it rather than trusting a blanket rule.",
+    "related": ["fullscreen-optimizations", "vrr", "input-latency", "overlay"]
+  },
+  {
+    "id": "dpc-latency",
+    "name": "DPC latency",
+    "aliases": ["dpc latency", "dpc", "deferred procedure call", "latencymon"],
+    "what": "A measure of how long a driver makes the system wait while it handles a hardware event. When one driver hogs that time, you get audio crackles and stutter that no FPS number explains.",
+    "more": "DPC stands for Deferred Procedure Call — work a driver queues up to do shortly after a hardware interrupt. A single badly-behaved driver (often network, audio, or USB) can spike it and ruin smoothness on an otherwise strong PC. It's a real diagnostic signal, which is exactly what Compy's Latency tab is for — not something to \"fix\" with blind registry edits.",
+    "related": ["interrupts", "drivers", "polling-rate"]
+  },
+  {
+    "id": "interrupts",
+    "name": "Interrupts / MSI mode",
+    "aliases": ["interrupts", "irq", "msi mode", "message signaled interrupts", "message-signaled interrupts", "interrupt"],
+    "what": "How hardware taps the CPU on the shoulder to say \"I need attention.\" MSI mode is a more modern, efficient way to do that tap than the old shared-line method.",
+    "more": "MSI stands for Message-Signaled Interrupts — instead of devices sharing one alert wire, each sends its own message. Switching a GPU or network card to it can genuinely lower interrupt latency, but it's driver-dependent and reversible, so it's a measure-it tweak, not a guaranteed win. Forcing it blindly across every device is how people break things.",
+    "related": ["msi-mode", "dpc-latency", "interrupt-affinity"]
+  },
+  {
+    "id": "polling-rate",
+    "name": "Polling rate",
+    "aliases": ["polling rate", "poll rate", "1000hz mouse", "8000hz", "mouse polling"],
+    "what": "How many times per second your mouse or keyboard reports its position to the PC, measured in Hz. A 1000 Hz mouse checks in 1000 times a second.",
+    "more": "Higher polling makes motion feel a touch crisper because updates arrive more often, and 1000 Hz is the long-standing sweet spot. Very high rates (4000–8000 Hz) exist but can raise CPU use for a difference most people can't feel. It's one ingredient in input latency, not the whole recipe.",
+    "related": ["input-latency", "dpi-ppi", "dpc-latency"]
+  },
+  {
+    "id": "dpi-ppi",
+    "name": "DPI / PPI",
+    "aliases": ["dpi", "ppi", "dots per inch", "pixels per inch", "mouse sensitivity", "mouse dpi"],
+    "what": "Two related \"how dense\" numbers. Mouse DPI is how far the cursor moves per inch you slide the mouse; screen PPI is how tightly packed your monitor's pixels are.",
+    "more": "DPI is dots per inch; PPI is pixels per inch. A higher mouse DPI moves the cursor further per motion — it's about your aim feel, not performance, and most players pair a moderate DPI with in-game sensitivity. Higher screen PPI only means a sharper-looking panel at a given size. Cranking mouse DPI sky-high doesn't make you faster, it makes you twitchier.",
+    "related": ["polling-rate", "input-latency", "native-resolution"]
+  },
+  {
+    "id": "shader-compilation",
+    "name": "Shader compilation",
+    "aliases": ["shader compilation", "shader comp", "shader stutter", "compiling shaders", "shaders"],
+    "what": "Before the GPU can draw an effect, the little programs that describe it (shaders) have to be compiled for your exact hardware. Doing that mid-game is a leading cause of stutter.",
+    "more": "When a game shows a \"compiling shaders\" screen, let it finish — it's doing the work up front so it doesn't hitch later. Skipping it only moves the stutter into your gameplay. Letting the driver keep a big shader cache on disk helps too, so the work isn't repeated every launch. This is a top suspect in UE5 games.",
+    "related": ["shader-cache-size", "shader-cache-guide", "ue5", "traversal-stutter"]
+  },
+  {
+    "id": "traversal-stutter",
+    "name": "Traversal stutter",
+    "aliases": ["traversal stutter", "traversal hitching", "streaming stutter"],
+    "what": "The hitch you feel when you move into a new area and the game has to load the next chunk of world on the fly. It's a brief freeze tied to motion, not to a fight or effect.",
+    "more": "It's mostly an engine-side problem the game's developers have to solve, not something a driver flag fixes. What helps from your side: a fast NVMe drive, turning on DirectStorage if the game offers it, and capping your FPS to ease the load. It's especially common in big open-world UE5 titles.",
+    "related": ["ue5", "shader-compilation", "nvme-ssd-hdd", "frametime"]
+  },
+  {
+    "id": "ue5",
+    "name": "Unreal Engine 5 (UE5)",
+    "aliases": ["ue5", "unreal engine 5", "unreal engine", "unreal"],
+    "what": "A very common game engine behind many 2024-and-later titles. It looks stunning and has a reputation for two specific kinds of stutter.",
+    "more": "The two culprits are shader compilation (compiling effects on the fly) and traversal streaming (loading world as you move). Most of the fix has to come from the developers; from your side, let shaders pre-compile, use an NVMe drive with DirectStorage, cap your FPS, and ease back heavy lighting and shadow settings. No driver toggle fully solves an engine-side stutter.",
+    "related": ["shader-compilation", "traversal-stutter", "nvme-ssd-hdd", "fps-cap"]
+  },
+  {
+    "id": "drivers",
+    "name": "Drivers / driver age",
+    "aliases": ["driver", "drivers", "gpu driver", "driver age", "graphics driver", "game ready driver"],
+    "what": "The software that lets Windows and your hardware talk. Graphics drivers especially get regular updates that can add real performance for new games.",
+    "more": "New titles often gain measurable FPS from the launch-day driver, so a stale graphics driver can quietly leave performance on the table. Get them straight from AMD or NVIDIA, not from a third-party \"updater\" tool. Compy tracks your driver age and tells you when it's getting old — newer isn't always magic, but very old is a real flag.",
+    "related": ["driver-updates", "ddu", "drivers"]
+  },
+  {
+    "id": "ddu",
+    "name": "DDU (Display Driver Uninstaller)",
+    "aliases": ["ddu", "display driver uninstaller", "clean driver install"],
+    "what": "A trusted free tool that scrubs every trace of a graphics driver so you can install a fresh one cleanly. It's the \"factory reset\" for your GPU driver.",
+    "more": "DDU stands for Display Driver Uninstaller. You don't need it for routine updates — those install fine on their own. Reach for it when something's actually wrong: weird artifacts, a botched install, or switching graphics card brands. Run it, then install the vendor's current driver.",
+    "related": ["drivers", "driver-updates", "driver-update-guide"]
+  },
+  {
+    "id": "telemetry",
+    "name": "Telemetry",
+    "aliases": ["telemetry", "diagtrack", "data collection", "usage data"],
+    "what": "The usage and diagnostic data Windows and apps send back to their makers. Turning the heaviest of it off is the cleanest debloat win.",
+    "more": "Disabling Windows' main telemetry service has no effect on updates, stability, or your games — its honest payoff is privacy and a little less background chatter, not more FPS. It's a safe, reversible toggle. Don't expect frames from it; do expect a quieter machine.",
+    "related": ["diagtrack", "debloating", "telemetry"]
+  },
+  {
+    "id": "debloating",
+    "name": "Debloating",
+    "aliases": ["debloat", "debloating", "bloatware", "remove bloat"],
+    "what": "Trimming the background services, startup apps, and pre-installed extras that ship with Windows or your PC vendor. The realistic payoff is a leaner, calmer machine — not a giant FPS jump.",
+    "more": "Done sanely it reclaims maybe half a gigabyte to a gigabyte and a half of idle memory and cuts a few background stutter sources. Done with an all-in-one \"strip everything\" script, it's the number-one cause of mystery breakage — broken audio, dead anti-cheat, failed updates — because ten changes at once can't be diagnosed. If you debloat, change one thing at a time with an undo path.",
+    "related": ["telemetry", "diagtrack", "startup-cleanup", "debloat-scripts"]
+  },
+  {
+    "id": "registry",
+    "name": "Registry",
+    "aliases": ["registry", "regedit", "registry editor", "registry key"],
+    "what": "Windows' giant central settings database. A huge share of \"FPS boost\" guides are registry edits, and most of them do nothing.",
+    "more": "Real settings live here, but so does a graveyard of recycled tweaks with magic values that modern Windows ignores. A bad edit can break things quietly, and there's no undo button — which is why a restore point before editing is the rule. When a registry tweak sounds too clever to be true, it usually is.",
+    "related": ["restore-point", "mmcss-systemresponsiveness", "win32priorityseparation", "registry-fps-hacks"]
+  },
+  {
+    "id": "restore-point",
+    "name": "Restore point",
+    "aliases": ["restore point", "system restore", "create a restore point"],
+    "what": "A saved snapshot of your Windows settings you can roll back to if a change goes wrong. It's the undo button you set up before you need it.",
+    "more": "Making one takes a minute and costs nothing, and it's the single best habit before any BIOS, registry, or driver-level session. It won't recover deleted personal files, but it will rescue you from a tweak that broke boot or stability. The golden rule \"restore point first\" exists because of how often it saves the day.",
+    "related": ["registry", "benchmark"]
+  },
+  {
+    "id": "power-plans",
+    "name": "Power plans",
+    "aliases": ["power plan", "power plans", "ultimate performance", "high performance", "balanced"],
+    "what": "Windows' presets for how aggressively the CPU saves power versus stays awake. The performance plans stop it from downclocking and parking cores during light moments.",
+    "more": "On many rigs that means a snappier feel mid-game, at the cost of a little more idle power draw. Switching between plans that already exist is a safe, reversible change — Compy can do it for you and records the exact previous plan to switch back. It's a genuine help on some systems and barely noticeable on others.",
+    "related": ["power-plan", "core-parking", "c-states"]
+  },
+  {
+    "id": "core-parking",
+    "name": "Core parking",
+    "aliases": ["core parking", "parked cores", "unpark", "core unparking"],
+    "what": "Windows putting idle CPU cores into a low-power resting state, then waking them when work shows up. A popular tweak forces them all permanently awake.",
+    "more": "Forcing it off is the same myth family as disabling C-states — modern Windows and modern CPUs already manage this well, and overriding it mostly adds heat and can slightly hurt boost. The wake-up is fast enough that you don't feel it. Leave the cores free to park.",
+    "related": ["core-unparking", "c-states", "power-plans"]
+  },
+  {
+    "id": "noise-floor",
+    "name": "Noise floor",
+    "aliases": ["noise floor", "margin of error", "measurement noise"],
+    "what": "The amount a benchmark naturally wiggles from run to run even when nothing changed. A result has to clear that wiggle before it counts as a real difference.",
+    "more": "If your scores bounce around by 3% on their own, then a tweak that \"gained 2%\" gained nothing you can trust — it's inside the noise. This is the honest filter that makes most \"huge boost\" claims evaporate. Compy treats changes under its noise floor as \"no measurable change,\" because pretending otherwise would be lying to you.",
+    "related": ["run-to-run-variance", "benchmark", "one-percent-lows", "placebo-effect"]
+  },
+  {
+    "id": "benchmark",
+    "name": "Benchmark",
+    "aliases": ["benchmark", "benchmarking", "presentmon", "capframex", "frameview", "measure"],
+    "what": "A repeatable test that measures real performance so you can compare before and after a change. It's the difference between knowing and guessing.",
+    "more": "Good benchmarking watches average FPS plus 1% and 0.1% lows and the frametime graph — not just the big number — and runs the same scene the same way each time. Tools like PresentMon, CapFrameX, and FrameView do this honestly. The whole point: change one thing, measure it, keep it only if the numbers actually moved past the noise.",
+    "related": ["noise-floor", "run-to-run-variance", "frametime", "one-percent-lows"]
+  },
+  {
+    "id": "run-to-run-variance",
+    "name": "Run-to-run variance",
+    "aliases": ["run to run variance", "run-to-run variance", "variance", "variability"],
+    "what": "The normal differences you get when you run the exact same benchmark twice. Nothing's broken — temperatures, background tasks, and luck all shift a little each time.",
+    "more": "It's why a single before-and-after run proves almost nothing; the second run might be higher purely by chance. Serious testing runs a few passes and looks at the spread, not one number. Variance is what sets the noise floor that a real improvement has to beat.",
+    "related": ["noise-floor", "benchmark", "placebo-effect"]
+  },
+  {
+    "id": "placebo-effect",
+    "name": "Placebo effect",
+    "aliases": ["placebo", "placebo effect", "feels faster"],
+    "what": "When a change feels like it helped because you expected it to, not because anything measurably improved. After you spend effort on a tweak, your brain really wants it to have worked.",
+    "more": "It's the most important idea in this whole library, because most \"FPS boost\" tweaks live and die on it. The cure is measurement — a benchmark doesn't care what you were hoping for. \"Feels smoother\" is a starting hypothesis, not a result; the frametime graph settles the argument.",
+    "related": ["noise-floor", "run-to-run-variance", "benchmark", "registry-fps-hacks"]
+  },
+  {
+    "id": "clear-cmos",
+    "name": "Clear CMOS",
+    "aliases": ["clear cmos", "cmos", "reset bios", "cmos battery", "cmos jumper"],
+    "what": "The hardware reset for your motherboard's BIOS settings — it wipes them back to factory defaults. It's the escape hatch when a BIOS change stops the PC from booting.",
+    "more": "CMOS is the tiny memory that holds your BIOS settings, kept alive by a coin battery on the board. You clear it with a dedicated button, a jumper, or by briefly pulling that battery with the PC unplugged. It only resets things like memory speed and fan curves — it never touches your files or your Windows install.",
+    "related": ["uefi-bios", "xmp", "xmp-guide"]
+  }
+]

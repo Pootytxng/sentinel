@@ -1,0 +1,119 @@
+[
+  {
+    "id": "fake-deep-scan",
+    "name": "The fake deep scan",
+    "aliases": ["fake scan", "deep scan", "fake deep scan", "scanning animation"],
+    "pattern": "The optimizer runs a dramatic 45-second \"deep scan\" with a throbbing progress bar and scrolling file names. The work it's pretending to do takes under a second — the delay is theater to make the result feel earned.",
+    "tell": "The scan always takes about the same showy length no matter how fast your PC is, and nothing it \"found\" maps to a change you can verify.",
+    "honest_version": "An honest tool shows the real elapsed time on its checks — usually a few seconds — because the truth doesn't need a costume.",
+    "related": ["invented-issue-counter", "fake-optimization-score", "benchmark"]
+  },
+  {
+    "id": "invented-issue-counter",
+    "name": "The invented issue counter",
+    "aliases": ["847 problems", "issues found", "problems found", "issue counter", "errors found"],
+    "pattern": "The scan ends with a big red \"847 issues found!\" Most of those \"issues\" are harmless leftover files, cookies, and registry entries that affect nothing, counted up to look alarming.",
+    "tell": "The number is huge, precise, and scary, but the app won't tell you what a single \"issue\" actually does or what fixing it changes.",
+    "honest_version": "An honest tool names what it found and why it matters, and is comfortable saying \"nothing here needs fixing\" — a clean result is a real result, not a failure to sell.",
+    "related": ["fake-deep-scan", "fake-optimization-score", "scareware-fear-tone"]
+  },
+  {
+    "id": "fake-optimization-score",
+    "name": "The fake optimization score",
+    "aliases": ["pc score", "health score", "optimization score", "pc out of 100", "performance score"],
+    "pattern": "Your PC gets a score like \"61/100\" with no explanation of how it's calculated. After you click the button, it jumps to \"94/100\" — a number designed to go up, not to mean anything.",
+    "tell": "The score moves the instant you \"optimize,\" before anything could possibly have been measured, and the formula behind it is never shown.",
+    "honest_version": "An honest tool shows a real before-and-after measurement with its margin of error, and will tell you when a change made no measurable difference.",
+    "related": ["fps-claim-no-methodology", "noise-floor", "benchmark"]
+  },
+  {
+    "id": "scareware-fear-tone",
+    "name": "Scareware fear-tone",
+    "aliases": ["scareware", "fear tone", "urgent warning", "your pc is at risk", "red alerts"],
+    "pattern": "The whole interface leans on alarm — red banners, warning triangles, countdowns, \"Your PC is at risk!\" The fear is the product; a worried person clicks and pays faster than a calm one.",
+    "tell": "Everything is framed as urgent and dangerous, and the only cure on offer is their button or their subscription.",
+    "honest_version": "An honest tool uses calm, specific language and saves real warnings for real risks — a tool that's always screaming has nothing left to say when something actually matters.",
+    "related": ["invented-issue-counter", "secret-windows-settings", "subscription-trap-local"]
+  },
+  {
+    "id": "ram-cleaner-booster",
+    "name": "The RAM cleaner sold as a booster",
+    "aliases": ["ram cleaner", "memory cleaner", "ram booster", "free up ram", "memory optimizer"],
+    "pattern": "A widget shows your RAM \"filling up\" and a button to \"free\" it for more FPS. It force-empties memory Windows was using as a smart cache — so the system has to reload it moments later, often making things slightly worse.",
+    "tell": "It treats used RAM as a problem, but free RAM isn't doing you any good — memory exists to be used, and Windows already manages it.",
+    "honest_version": "An honest tool leaves memory management to Windows and only flags RAM when you're genuinely running out, which shows up as real stutter, not a scary-looking bar.",
+    "related": ["fake-optimization-score", "fps-claim-no-methodology", "vram"]
+  },
+  {
+    "id": "paid-driver-updater",
+    "name": "The paid driver-updater subscription",
+    "aliases": ["driver updater", "driver booster", "update all drivers", "outdated drivers", "driver subscription"],
+    "pattern": "An app warns that dozens of your drivers are \"outdated\" and offers to fix them all for a yearly fee. It bundles generic, sometimes wrong driver versions, and the scary \"outdated\" count is mostly drivers that are working fine.",
+    "tell": "It wants a subscription to do something the vendors do for free, and it flags drivers as urgent that have no reason to change.",
+    "honest_version": "An honest tool points you to the one driver that actually matters — your graphics driver, straight from the vendor — and leaves working drivers alone.",
+    "related": ["drivers", "driver-updates", "ddu", "subscription-trap-local"]
+  },
+  {
+    "id": "tweak-megapack-no-undo",
+    "name": "The tweak mega-pack with no undo",
+    "aliases": ["mega pack", "all in one tweak", "ultimate tweak pack", "one click optimize", "tweak script"],
+    "pattern": "One button applies dozens of registry, service, and system changes at once, promised as the \"ultimate\" setup. When something breaks afterward — audio, anti-cheat, updates — there's no way to tell which of the dozens of changes did it, and often no clean way back.",
+    "tell": "It changes many things in one click and offers no per-change undo, just a vague promise that it's all safe.",
+    "honest_version": "An honest tool changes one thing at a time, records exactly what it did, and gives you a one-click rollback for each change.",
+    "related": ["debloat-scripts", "debloating", "restore-point", "secret-windows-settings"]
+  },
+  {
+    "id": "fps-claim-no-methodology",
+    "name": "The \"+40% FPS\" claim with no method",
+    "aliases": ["40% fps", "boost fps", "increase fps", "fps boost claim", "double your fps"],
+    "pattern": "A bold percentage promises huge free frames. There's no mention of what hardware, what game, how many runs, or whether the gain even clears normal run-to-run wobble — because under real measurement it usually vanishes.",
+    "tell": "A big percentage with no test conditions and no margin of error attached is a marketing number, not a measurement.",
+    "honest_version": "An honest claim shows the rig, the game, repeated runs, and the noise floor — and is willing to report \"no measurable change,\" which is the most common honest answer.",
+    "related": ["noise-floor", "run-to-run-variance", "placebo-effect", "benchmark"]
+  },
+  {
+    "id": "fake-before-after",
+    "name": "The mismatched before/after",
+    "aliases": ["before after", "before and after", "fake comparison", "fps comparison screenshot"],
+    "pattern": "A side-by-side shows low FPS \"before\" and high FPS \"after.\" Look closer and the two shots are different scenes, different settings, or different spots in the game — the gap is from changing the test, not the tweak.",
+    "tell": "The two images don't match: a different area, a quality preset, or a menu versus gameplay does the heavy lifting, not the change being sold.",
+    "honest_version": "An honest comparison holds everything identical except the one change, in the same scene, measured the same way.",
+    "related": ["fps-claim-no-methodology", "benchmark", "run-to-run-variance"]
+  },
+  {
+    "id": "subscription-trap-local",
+    "name": "The subscription trap on local-only work",
+    "aliases": ["subscription trap", "monthly fee", "renew subscription", "pay to optimize", "premium unlock"],
+    "pattern": "A tool charges a recurring fee for things that happen entirely on your own PC and need no ongoing service — toggling settings, clearing temp files, \"optimizing.\" The repeated billing is the business model; the work is one-time and free elsewhere.",
+    "tell": "You're billed monthly or yearly for changes that live entirely on your machine, with no real service being delivered over time.",
+    "honest_version": "An honest tool charges once or stays free for local-only work, and never holds an undo button or a basic setting behind a renewal.",
+    "related": ["paid-driver-updater", "scareware-fear-tone", "testimonial-wall"]
+  },
+  {
+    "id": "secret-windows-settings",
+    "name": "\"Secret settings Microsoft hides from you\"",
+    "aliases": ["secret settings", "hidden settings", "microsoft hides", "secret windows tweaks", "hidden fps settings"],
+    "pattern": "A video or app frames ordinary, well-documented options as forbidden secrets \"they don't want you to know.\" The conspiracy framing turns boring or useless toggles into must-click revelations.",
+    "tell": "The pitch leans on secrecy and insider language instead of showing a measured result — if it were a real win, it wouldn't need a conspiracy.",
+    "honest_version": "An honest tool explains what a setting does in plain language and shows whether it actually helps, secret or not.",
+    "related": ["registry", "tweak-megapack-no-undo", "fps-claim-no-methodology", "placebo-effect"]
+  },
+  {
+    "id": "bundled-bloat-installer",
+    "name": "The bundled-bloat installer",
+    "aliases": ["bundled software", "bundled bloat", "extra software", "opt out checkbox", "toolbar bundle"],
+    "pattern": "The installer for one tool quietly tucks in two or three others — a browser toolbar, a different \"optimizer,\" an antivirus trial — with the consent boxes pre-checked. Click through fast and you've installed a small crowd you never wanted.",
+    "tell": "The setup has extra pre-ticked checkboxes and \"recommended\" partner offers you have to actively decline on each screen.",
+    "honest_version": "An honest installer installs the one thing you asked for and bundles nothing you didn't choose.",
+    "related": ["subscription-trap-local", "paid-driver-updater", "debloating"]
+  },
+  {
+    "id": "testimonial-wall",
+    "name": "The testimonial wall",
+    "aliases": ["testimonials", "reviews wall", "5 stars", "user reviews", "trusted by millions"],
+    "pattern": "Instead of a measurement, the page is a wall of glowing quotes, five-star ratings, and \"trusted by millions.\" Social proof stands in for evidence the thing actually works, and \"feels faster\" quotes are exactly what the placebo effect produces.",
+    "tell": "Lots of feelings, faces, and star ratings — and not a single repeatable before-and-after number anywhere.",
+    "honest_version": "An honest tool leads with what it measured and how, and treats \"feels faster\" as a question to test, not proof.",
+    "related": ["placebo-effect", "fps-claim-no-methodology", "fake-before-after", "benchmark"]
+  }
+]

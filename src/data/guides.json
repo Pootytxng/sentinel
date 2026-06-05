@@ -1,0 +1,109 @@
+[
+  {
+    "id": "vrr-sync-stack-guide",
+    "name": "Set up the VRR sync stack",
+    "aliases": ["sync stack", "vrr setup", "gsync setup", "freesync setup", "tear free low latency"],
+    "tier": "safe",
+    "goal": "Get tear-free and low-latency at the same time on a VRR monitor — the single most-felt smoothness upgrade there is.",
+    "steps": [
+      "Turn on VRR in two places that must agree: your monitor's own menu (look for G-Sync, FreeSync, or Adaptive Sync) and your graphics driver's display settings.",
+      "In the graphics driver, set V-Sync to On. This sounds wrong, but here it only acts as a safety net for the rare frame that overshoots.",
+      "Cap your frame rate about 3 below your refresh rate — 141 on a 144 Hz panel, 237 on a 240 Hz panel. This keeps you inside the VRR range so V-Sync never adds its lag.",
+      "Turn on NVIDIA Reflex (or in-game Anti-Lag 2 on AMD) in any game that offers it, for the lowest input latency.",
+      "Play, and watch for tearing or stutter — done right, you should see neither."
+    ],
+    "undo": "Set V-Sync back to your old value, remove the FPS cap, and turn VRR off in the driver if you want the original behavior. Nothing here is permanent.",
+    "related": ["vrr", "gsync-freesync", "vsync", "fps-cap", "nvidia-reflex", "vrr-sync-stack"]
+  },
+  {
+    "id": "fps-caps-guide",
+    "name": "Cap your frame rate the right way",
+    "aliases": ["fps cap setup", "frame cap", "limit fps", "frame rate cap"],
+    "tier": "safe",
+    "goal": "Stabilize frametimes, keep VRR engaged, and cut heat and coil whine by capping frames instead of letting them run wild.",
+    "steps": [
+      "Pick your cap based on your goal: about 3 below refresh if you use VRR, or a steady number your PC can always hold in tough scenes.",
+      "Set it in one place to avoid conflicts — your graphics driver's frame-rate limit, or the in-game limiter if it has a good one.",
+      "Avoid stacking two caps at once; pick the driver cap or the in-game cap, not both.",
+      "Test in a demanding spot and confirm the frame rate sits at your cap without dipping or sawtoothing."
+    ],
+    "undo": "Set the frame-rate limit back to Off or its previous number in the same place you changed it.",
+    "related": ["fps-cap", "vrr", "hz-vs-fps", "frametime", "vrr-sync-stack-guide"]
+  },
+  {
+    "id": "startup-cleanup-guide",
+    "name": "Clean up startup apps",
+    "aliases": ["startup cleanup", "disable startup apps", "boot time", "msconfig startup"],
+    "tier": "safe",
+    "goal": "Speed up boot and cut background stutter sources by stopping vendor extras from launching with Windows.",
+    "steps": [
+      "Open Task Manager and go to the Startup apps tab, which lists everything that launches at boot and rates its startup impact.",
+      "Disable the obvious extras — RGB lighting suites, updater helpers, launcher background processes you don't need running all the time.",
+      "Leave anything you don't recognize alone, plus your security software and audio drivers.",
+      "Restart and confirm boot feels quicker and the things you actually use still open normally."
+    ],
+    "undo": "Disabling a startup item doesn't uninstall it — flip it back to Enabled in the same Task Manager tab and it launches at boot again.",
+    "related": ["startup-cleanup", "debloating", "telemetry"]
+  },
+  {
+    "id": "shader-cache-guide",
+    "name": "Set a generous shader cache",
+    "aliases": ["shader cache size", "shader cache setup", "dxcache", "fix shader stutter"],
+    "tier": "safe",
+    "goal": "Reduce shader-compilation stutter — especially in UE5 titles — by letting the driver keep more compiled shaders on disk.",
+    "steps": [
+      "Open your graphics driver's control panel and find the Shader Cache Size setting in the global 3D options.",
+      "Set it to Unlimited, or to 10 GB if your driver offers fixed sizes. It only costs disk space.",
+      "Separately, when a game shows a \"compiling shaders\" screen, let it finish instead of skipping it — that work prevents in-game hitching.",
+      "Play a shader-heavy game; the first run still compiles, but repeat sessions should hitch less."
+    ],
+    "undo": "Set Shader Cache Size back to Driver Default, and clear the cache from the same panel if you want the disk space back.",
+    "related": ["shader-cache-size", "shader-compilation", "ue5", "traversal-stutter"]
+  },
+  {
+    "id": "driver-update-guide",
+    "name": "Update graphics drivers the right way",
+    "aliases": ["driver update", "update gpu driver", "clean install driver", "ddu guide"],
+    "tier": "safe",
+    "goal": "Keep your graphics driver current for new-game performance without third-party updater tools.",
+    "steps": [
+      "Get the driver straight from the vendor — AMD's or NVIDIA's own site or app — not from a third-party \"driver updater.\"",
+      "For a routine update, the standard installer is fine; you don't need to wipe anything first.",
+      "Only reach for DDU (Display Driver Uninstaller, a trusted free scrubbing tool) when something's actually wrong — artifacts, a botched install, or switching card brands.",
+      "If you do use DDU, run it, then install the vendor's current driver right after."
+    ],
+    "undo": "If a new driver misbehaves, use the vendor app's rollback option or DDU, then reinstall the previous version from the vendor's older-driver archive.",
+    "related": ["drivers", "driver-updates", "ddu"]
+  },
+  {
+    "id": "fan-curve-guide",
+    "name": "Set a sane fan curve",
+    "aliases": ["fan curve", "fan curve setup", "cooling", "stop thermal throttling", "custom fan curve"],
+    "tier": "safe",
+    "goal": "Keep parts cool enough to hold their boost clocks — the safest performance change there is, since modern chips run faster when cooler.",
+    "steps": [
+      "Use your vendor's software for fan control — your motherboard's tuning app for case and CPU fans, your graphics card's app for the GPU fan.",
+      "Aim for a gentle ramp: quiet at idle, climbing steadily as temperature rises, full speed only when genuinely hot.",
+      "Avoid fans that slam between off and full — that on-off cycling is noisy and does nothing good.",
+      "Run a game for a while and check that temperatures settle rather than climbing into throttle territory."
+    ],
+    "undo": "Set the fan control back to Default or Auto in the same vendor app, and the stock curve returns.",
+    "related": ["fan-curves", "thermal-throttling", "undervolting"]
+  },
+  {
+    "id": "xmp-guide",
+    "name": "Turn on your RAM's rated speed (XMP / EXPO)",
+    "aliases": ["xmp setup", "expo setup", "enable xmp", "enable expo", "ram speed", "docp setup"],
+    "tier": "safe",
+    "goal": "Unlock the memory speed you already paid for — the number-one low-risk gain for CPU-heavy games and 1% lows.",
+    "steps": [
+      "This one lives in the BIOS, and every board's BIOS looks different, so this is the concept, not exact clicks. If reading that already makes you uneasy, that's a perfectly fine reason to skip it.",
+      "Restart and enter the BIOS (usually by tapping Delete or F2 right after powering on).",
+      "Find the memory profile setting — labeled XMP, EXPO, or DOCP depending on your board — and switch it from Off or Auto to Profile 1.",
+      "Save and exit. If Windows loads normally, run a memory stability test for a while to confirm it's solid.",
+      "The recovery path to know before you start: if the PC won't start up after enabling it, clearing CMOS resets the BIOS to defaults and everything is back to normal."
+    ],
+    "undo": "Re-enter the BIOS and set the memory profile back to Off or Auto. If you can't get into the BIOS, clearing CMOS — via the board's jumper, button, or by briefly removing the coin battery — resets it.",
+    "related": ["xmp", "xmp-expo", "vram", "uefi-bios", "one-percent-lows"]
+  }
+]
