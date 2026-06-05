@@ -921,7 +921,7 @@ function SessionsTab({
 }
 
 // Export Snapshot (F5): read-only local report. Mirrors the Rust ExportResult.
-type ExportResult = { path: string; json_path: string; markdown: string };
+type ExportResult = { path: string; json_path: string; markdown: string; discord: string };
 
 function ReportModal({
   report,
@@ -932,6 +932,16 @@ function ReportModal({
   onClose: () => void;
   onOpenFolder: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const copyDiscord = async () => {
+    try {
+      await navigator.clipboard.writeText(report.discord);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — the block is still visible to select manually */
+    }
+  };
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -946,6 +956,9 @@ function ReportModal({
         <div className="modal-actions">
           <button className="btn" onClick={onOpenFolder}>
             Open folder
+          </button>
+          <button className="btn" onClick={copyDiscord}>
+            {copied ? "Copied!" : "Copy for Discord"}
           </button>
           <button className="btn btn-small" onClick={onClose}>
             Close
@@ -1151,6 +1164,10 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
+  const [sessionsSeenAt, setSessionsSeenAt] = useState<string>(
+    () => localStorage.getItem("compy_sessions_seen_v1") ?? "",
+  );
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -1175,6 +1192,17 @@ function App() {
     applyTheme(theme);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // While the Sessions tab is open, mark the latest debrief as seen — clears the "new" badge.
+  useEffect(() => {
+    if (activeTab === "Sessions" && sessions[0]) {
+      setSessionsSeenAt(sessions[0].started_at);
+      try {
+        localStorage.setItem("compy_sessions_seen_v1", sessions[0].started_at);
+      } catch {
+        /* non-fatal */
+      }
+    }
+  }, [activeTab, sessions]);
   // Global crash-recovery: once Gaming Mode is enabled, check on launch — regardless of which tab
   // is open — whether a previous session ended uncleanly, and surface a prompt to restore. Inert
   // while the feature is gated off (gamingEnabled stays false → never checks; no orphans can exist
@@ -1389,7 +1417,12 @@ function App() {
     // Outstanding (not-yet-applied) recs only — an applied rec isn't an open action, so the badge
     // reflects "things still worth doing" and clears as you apply them.
     if (tab === "Optimize") return recs?.filter((r) => !r.currently_applied).length ?? null;
-    if (tab === "Sessions") return sessions.length;
+    // Sessions: a "new debrief" indicator (the latest session is one the user hasn't viewed yet),
+    // not a running count of all recorded sessions.
+    if (tab === "Sessions") {
+      const latest = sessions[0]?.started_at;
+      return latest && latest !== sessionsSeenAt ? 1 : null;
+    }
     if (tab === "History") return changes.length;
     return null;
   };
@@ -1487,7 +1520,12 @@ function App() {
 
       {hw && (
         <>
-          <CommandHero hw={hw} readiness={readiness} changes={changes} />
+          <CommandHero
+            hw={hw}
+            readiness={readiness}
+            changes={changes}
+            onRunCheck={() => setShowFirstCheck(true)}
+          />
           <div className="shell">
             <nav className="rail" role="tablist" aria-label="Sections">
               {visibleTabs.map((tab) => {
@@ -1598,10 +1636,12 @@ function CommandHero({
   hw,
   readiness,
   changes,
+  onRunCheck,
 }: {
   hw: HardwareInfo;
   readiness: GameReadiness | null;
   changes: AppliedChange[];
+  onRunCheck: () => void;
 }) {
   // Honest, transparent posture — derived from real readiness facts + active
   // changes. No opaque "tune score", no tier ladder, no level-up flourish.
@@ -1661,6 +1701,10 @@ function CommandHero({
           <div className="hero-eyebrow">System status</div>
           <div className="hero-headline">{posture.headline}</div>
           <div className="hero-subline">{posture.sub}</div>
+          {/* Always-visible way back to the guided check — a skipper never loses it. */}
+          <button className="hero-action" onClick={onRunCheck}>
+            Run a check
+          </button>
         </div>
       </div>
       <div className="hero-vitals">

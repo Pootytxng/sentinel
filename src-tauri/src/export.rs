@@ -22,6 +22,8 @@ pub(crate) struct ExportResult {
     path: String,
     json_path: String,
     markdown: String,
+    /// Compact, code-fenced text block for pasting into Discord/forums (copy, not a file).
+    discord: String,
 }
 
 // ── Value helpers (graceful: missing/null → "—") ────────────────────────────
@@ -324,6 +326,72 @@ fn markdown_with_bom(markdown: &str) -> String {
     format!("\u{FEFF}{markdown}")
 }
 
+/// A compact, Discord-pasteable summary — wrapped in a code fence so it renders monospace. ~8 lines:
+/// rig, readiness verdict, top fix, active changes, last session. Read-only.
+fn build_discord_block(
+    hardware: &Value,
+    readiness: &Value,
+    sessions: &Value,
+    trust_ledger: &Value,
+    exported_at: &str,
+) -> String {
+    let gpu = obj_arr(hardware, "gpus").first().map(|g| vstr(g, "name")).unwrap_or_else(|| "—".into());
+    let cpu = hardware
+        .get("cpu_arch")
+        .and_then(|a| a.get("family_label"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| vstr(hardware, "cpu_brand"));
+    let ram_gb = vu64(hardware, "ram_total_bytes")
+        .map(|b| (b as f64 / 1024f64.powi(3)).round() as u64)
+        .unwrap_or(0);
+    let display = hardware
+        .get("display")
+        .map(|d| {
+            let w = vu64(d, "width").unwrap_or(0);
+            let h = vu64(d, "height").unwrap_or(0);
+            let hz = vu64(d, "current_refresh_rate_hz").unwrap_or(0);
+            if w > 0 { format!("{w}x{h}@{hz}") } else { String::new() }
+        })
+        .unwrap_or_default();
+    let ready = vu64(readiness, "ready_count").unwrap_or(0);
+    let total = obj_arr(readiness, "checks").len();
+    let attention = vu64(readiness, "attention_count").unwrap_or(0);
+    let top_fix = obj_arr(readiness, "checks")
+        .iter()
+        .find(|c| vstr(c, "status") == "attention")
+        .map(|c| vstr(c, "label"))
+        .unwrap_or_else(|| "nothing — all clear".into());
+    let active_changes = as_arr(trust_ledger)
+        .iter()
+        .filter(|c| vstr(c, "status") == "applied" && vbool(c, "is_still_active") != Some(false))
+        .count();
+
+    let mut o = String::new();
+    o.push_str("```\n");
+    let _ = writeln!(o, "COMPY · {exported_at}");
+    let mut rig = format!("rig     · {gpu} · {cpu} · {ram_gb}GB");
+    if !display.is_empty() {
+        let _ = write!(rig, " · {display}");
+    }
+    let _ = writeln!(o, "{rig}");
+    let _ = writeln!(o, "ready   · {ready}/{total} checks · {attention} need attention");
+    let _ = writeln!(o, "top fix · {top_fix}");
+    let _ = writeln!(o, "changes · {active_changes} active & reversible");
+    if let Some(s) = as_arr(sessions).first() {
+        let _ = writeln!(
+            o,
+            "session · {} · {:.0} avg / {:.0} 1% low",
+            vstr(s, "process_name"),
+            vf64(s, "avg_fps").unwrap_or(0.0),
+            vf64(s, "low1_fps_est").unwrap_or(0.0),
+        );
+    }
+    o.push_str("compy.gg\n```");
+    o
+}
+
 #[tauri::command]
 pub(crate) fn export_report() -> Result<ExportResult, String> {
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -347,6 +415,8 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         &rules_source,
         &exported_at,
     );
+    // Built before the JSON bundle below moves the source Values.
+    let discord = build_discord_block(&hardware, &readiness, &sessions, &trust_ledger, &exported_at);
 
     let dir = compy_data_dir().join("exports");
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create export folder: {e}"))?;
@@ -377,6 +447,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         path: md_path.to_string_lossy().to_string(),
         json_path: json_path.to_string_lossy().to_string(),
         markdown,
+        discord,
     })
 }
 
