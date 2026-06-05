@@ -44,6 +44,25 @@ use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 use winreg::RegKey;
 
 
+/// The app handle, captured at setup — lets background threads (the session recorder) reach Tauri
+/// APIs like notifications without an injected handle.
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+/// Fire the session-end "debrief ready" toast. A read-only nudge — it never opens or focuses a
+/// window; the user opens Compy's Sessions tab themselves. No-op until the app handle is set.
+pub(crate) fn notify_debrief_ready(game: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let Some(app) = APP_HANDLE.get() else {
+        return;
+    };
+    let body = if game.is_empty() {
+        "Your session debrief is ready in Compy.".to_string()
+    } else {
+        format!("Your {game} debrief is ready in Compy.")
+    };
+    let _ = app.notification().builder().title("Session ended").body(body).show();
+}
+
 pub(crate) fn current_power_plan_name() -> Option<String> {
     let output = crate::actions::quiet_command("powercfg")
         .args(["/getactivescheme"])
@@ -566,6 +585,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             get_hardware_info,
             get_recommendations,
@@ -619,6 +639,11 @@ pub fn run() {
             get_gaming_session_state,
             recover_gaming_session,
         ])
+        .setup(|app| {
+            // Capture the handle so the session recorder thread can fire the debrief toast.
+            let _ = APP_HANDLE.set(app.handle().clone());
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

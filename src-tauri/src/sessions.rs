@@ -176,16 +176,19 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     std::fs::write(path, json).map_err(|e| e.to_string())
 }
 
-pub(crate) fn save_session(summary: SessionSummary) -> Result<(), String> {
+/// Returns `Ok(true)` if a real session was saved, `Ok(false)` if it was dropped as too short — the
+/// caller uses this to decide whether to fire the debrief toast.
+pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
     // Drop trivially short sessions entirely — no debrief, and crucially no armed-comparison
     // resolution (a blip must not confound or settle a pending comparison; the arm waits).
     if !meets_min_duration(summary.duration_secs) {
-        return Ok(());
+        return Ok(false);
     }
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
     crate::comparison::on_session_finalized(&summary);
-    save_session_to(&sessions_path(), summary)
+    save_session_to(&sessions_path(), summary)?;
+    Ok(true)
 }
 
 #[tauri::command]

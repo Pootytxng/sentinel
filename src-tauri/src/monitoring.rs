@@ -838,7 +838,11 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             if acc.has_data() {
                 let mut summary = acc.finalize(start.elapsed().as_secs());
                 summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
-                let _ = crate::sessions::save_session(summary);
+                let game = summary.process_name.clone();
+                // Only a real (saved) session fires the "debrief ready" toast — never a short blip.
+                if matches!(crate::sessions::save_session(summary), Ok(true)) {
+                    crate::notify_debrief_ready(&game);
+                }
             }
         });
     }
