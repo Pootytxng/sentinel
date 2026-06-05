@@ -44,7 +44,13 @@ export type MsiActiveSummary = { active_on: number; active_off: number; unknown:
 export type TimerResolution = { coarsest_100ns: number; finest_100ns: number; current_100ns: number };
 export type SleepGranularity = { samples: number; min_ms: number; median_ms: number; max_ms: number; jitter_ms: number };
 export type CpuTopology = { logical_processors: number; physical_cores: number; l3_complexes: number };
-export type UsbControllerLoad = { controller_name: string; controller_id: string; input_devices: string[] };
+export type UsbControllerLoad = {
+  controller_name: string;
+  controller_id: string;
+  input_devices: string[];
+  streaming_neighbors: string[];
+  has_high_rate_input: boolean;
+};
 export type PollingRate = { reports: number; median_hz: number; min_interval_ms: number; max_interval_ms: number; jitter_ms: number };
 
 export type LatencyReport = {

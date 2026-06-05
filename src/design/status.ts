@@ -1,4 +1,4 @@
-export type Status = "ready" | "attention" | "danger" | "protected" | "scanning" | "unknown";
+export type Status = "ready" | "attention" | "danger" | "protected" | "scanning" | "info" | "unknown";
 
 export type StatusMeta = {
   label: string;
@@ -13,6 +13,7 @@ const MAP: Record<Status, StatusMeta> = {
   danger:    { label: "Critical",    colorVar: "var(--status-danger)",     softVar: "var(--status-danger-soft)",     lineVar: "var(--status-danger-line)" },
   protected: { label: "Protected",   colorVar: "var(--status-protected)",  softVar: "var(--status-protected-soft)",  lineVar: "var(--status-protected-line)" },
   scanning:  { label: "Scanning",    colorVar: "var(--muted)",             softVar: "transparent",                   lineVar: "var(--border-strong)" },
+  info:      { label: "Info",        colorVar: "var(--muted)",             softVar: "transparent",                   lineVar: "var(--border-strong)" },
   unknown:   { label: "Unavailable", colorVar: "var(--status-unknown)",    softVar: "transparent",                   lineVar: "var(--border-strong)" },
 };
 

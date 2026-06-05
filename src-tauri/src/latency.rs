@@ -574,26 +574,67 @@ pub(crate) fn read_cpu_topology() -> Option<CpuTopology> {
 pub(crate) struct UsbControllerLoad {
     pub controller_name: String,
     pub controller_id: String,
-    /// Distinct input devices (deduped by VID&PID) on this controller, by friendly name.
+    /// Distinct input devices (HID/keyboard/mouse, deduped by VID&PID) on this controller, by name.
     pub input_devices: Vec<String>,
+    /// Distinct STREAMING neighbors on this controller — USB audio / wireless headset dongles /
+    /// webcams / capture devices (isochronous endpoints). These can genuinely add polling jitter.
+    pub streaming_neighbors: Vec<String>,
+    /// Whether a high-rate (1000Hz-class) input device — a mouse — is present on this controller.
+    pub has_high_rate_input: bool,
 }
 
 impl UsbControllerLoad {
-    /// Two or more input devices on one controller — the "shared controller" condition.
+    /// Two or more input devices on one controller — the legacy "shared input" condition.
     pub fn is_shared(&self) -> bool {
         self.input_devices.len() >= 2
     }
+
+    /// Two-tier severity. Amber **Attention** ONLY when a high-rate input shares the controller with
+    /// a streaming neighbor (a real, actionable jitter risk). Quiet sharing (a mouse + keyboards/HID,
+    /// or any sharing with no streaming neighbor) is **Info** — education, not alarm. `none` = solo.
+    pub fn severity(&self) -> &'static str {
+        let shared = self.input_devices.len() >= 2
+            || (!self.input_devices.is_empty() && !self.streaming_neighbors.is_empty());
+        if !shared {
+            "none"
+        } else if self.has_high_rate_input && !self.streaming_neighbors.is_empty() {
+            "attention"
+        } else {
+            "info"
+        }
+    }
 }
 
-/// Internal: a resolved input device awaiting controller attribution.
+/// Jitter-relevant device kinds (ordered by how much a neighbor matters to a 1000Hz input).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+enum DeviceKind {
+    Quiet,     // low-rate HID: keyboards, consumer/system-control, RGB, hubs
+    HighRate,  // a mouse — the 1000Hz-class peripheral that actually cares about jitter
+    Streaming, // USB audio / headset dongle / webcam / capture — isochronous, can flood the bus
+}
+
+/// Internal: a resolved device (input or streaming neighbor) awaiting controller attribution.
 struct InputDevice {
     device_id: String,
     name: String,
     vid_pid: Option<String>,
+    kind: DeviceKind,
 }
 
-fn is_input_pnp_class(class: &str) -> bool {
-    matches!(class, "HIDClass" | "Keyboard" | "Mouse")
+/// Classify a device by PnP class (+ name hints) into the jitter-relevant kinds. `None` = irrelevant
+/// to USB-input topology (skip it).
+fn classify_device_kind(pnp_class: &str, name: &str) -> Option<DeviceKind> {
+    let n = name.to_lowercase();
+    let streaming_name =
+        ["headset", "webcam", "capture", "microphone", " audio"].iter().any(|k| n.contains(k));
+    match pnp_class {
+        "MEDIA" | "AudioEndpoint" | "Camera" | "Image" => Some(DeviceKind::Streaming),
+        _ if streaming_name => Some(DeviceKind::Streaming),
+        "Mouse" => Some(DeviceKind::HighRate),
+        "Keyboard" | "HIDClass" if n.contains("mouse") => Some(DeviceKind::HighRate),
+        "Keyboard" | "HIDClass" => Some(DeviceKind::Quiet),
+        _ => None,
+    }
 }
 
 /// A physical peripheral exposes several HID collections (mouse, consumer-control, vendor-defined…)
@@ -627,52 +668,107 @@ fn group_input_devices_by_controller(
     edges: &HashMap<String, String>,
     inputs: &[InputDevice],
 ) -> Vec<UsbControllerLoad> {
-    // controller id -> (vid_pid -> chosen friendly name)
-    let mut by_ctrl: HashMap<String, HashMap<String, String>> = HashMap::new();
+    // controller id -> (vid_pid -> (chosen name, most-concerning kind))
+    let mut by_ctrl: HashMap<String, HashMap<String, (String, DeviceKind)>> = HashMap::new();
     for dev in inputs {
         let Some(vid_pid) = &dev.vid_pid else { continue };
         let Some(ctrl) = edges.get(&dev.device_id) else { continue }; // not attributable → skip
         let slot = by_ctrl.entry(ctrl.clone()).or_default();
         slot.entry(vid_pid.clone())
-            .and_modify(|existing| {
-                if is_generic_input_name(existing) && !is_generic_input_name(&dev.name) {
-                    *existing = dev.name.clone();
+            .and_modify(|(name, kind)| {
+                // A composite device (e.g. a headset dongle = audio + HID) shares one VID&PID across
+                // its collections; keep the most-concerning kind and the most descriptive name.
+                if dev.kind > *kind {
+                    *kind = dev.kind;
+                }
+                if is_generic_input_name(name) && !is_generic_input_name(&dev.name) {
+                    *name = dev.name.clone();
                 }
             })
-            .or_insert_with(|| dev.name.clone());
+            .or_insert_with(|| (dev.name.clone(), dev.kind));
     }
     let mut loads: Vec<UsbControllerLoad> = by_ctrl
         .into_iter()
         .map(|(ctrl, devs)| {
-            let mut names: Vec<String> = devs.into_values().collect();
-            names.sort();
+            let mut input_devices: Vec<String> = Vec::new();
+            let mut streaming_neighbors: Vec<String> = Vec::new();
+            let mut has_high_rate_input = false;
+            for (name, kind) in devs.into_values() {
+                match kind {
+                    DeviceKind::Streaming => streaming_neighbors.push(name),
+                    DeviceKind::HighRate => {
+                        has_high_rate_input = true;
+                        input_devices.push(name);
+                    }
+                    DeviceKind::Quiet => input_devices.push(name),
+                }
+            }
+            input_devices.sort();
+            streaming_neighbors.sort();
             UsbControllerLoad {
                 controller_name: controllers.get(&ctrl).cloned().unwrap_or_else(|| ctrl.clone()),
                 controller_id: ctrl,
-                input_devices: names,
+                input_devices,
+                streaming_neighbors,
+                has_high_rate_input,
             }
         })
+        // Only controllers actually hosting an input device are part of "USB input topology".
+        .filter(|l| !l.input_devices.is_empty())
         .collect();
-    // Most-loaded first, then by name for stable ordering.
+    // Attention controllers first, then by total device count, then name (stable).
     loads.sort_by(|a, b| {
-        b.input_devices.len().cmp(&a.input_devices.len()).then_with(|| a.controller_name.cmp(&b.controller_name))
+        let sev = |l: &UsbControllerLoad| match l.severity() {
+            "attention" => 0,
+            "info" => 1,
+            _ => 2,
+        };
+        sev(a)
+            .cmp(&sev(b))
+            .then_with(|| {
+                (b.input_devices.len() + b.streaming_neighbors.len())
+                    .cmp(&(a.input_devices.len() + a.streaming_neighbors.len()))
+            })
+            .then_with(|| a.controller_name.cmp(&b.controller_name))
     });
     loads
 }
 
-/// Pure: an honest advisory when input devices share a host controller. `None` if none are shared.
-/// Deliberately low-drama — this is "worth knowing", not a problem to scare anyone about.
+/// Pure: a severity-appropriate advisory. Prefers the actionable (attention) case — a high-rate
+/// input sharing a controller with a streaming neighbor — otherwise gives the benign (info)
+/// education. `None` when nothing is shared. INFO copy follows (a) what's observed / (b) why it's
+/// harmless here / (c) the condition under which it WOULD matter.
 pub(crate) fn shared_controller_advisory(loads: &[UsbControllerLoad]) -> Option<String> {
-    let busiest = loads.iter().filter(|l| l.is_shared()).max_by_key(|l| l.input_devices.len())?;
-    let names = busiest.input_devices.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
-    Some(format!(
-        "{} input devices share one USB host controller ({}): {}. Usually fine — but if one floods \
-         the bus it can add jitter to another's polling, which matters if you run 1000Hz+ \
-         peripherals. Worth knowing, not a problem to fix.",
-        busiest.input_devices.len(),
-        busiest.controller_name,
-        names
-    ))
+    if let Some(c) = loads.iter().find(|l| l.severity() == "attention") {
+        let mouse = c
+            .input_devices
+            .iter()
+            .find(|n| n.to_lowercase().contains("mouse"))
+            .cloned()
+            .unwrap_or_else(|| "Your high-rate input".into());
+        let neighbor =
+            c.streaming_neighbors.first().cloned().unwrap_or_else(|| "a streaming device".into());
+        return Some(format!(
+            "{mouse} shares a USB controller ({}) with {neighbor} — a constant-streaming device \
+             (audio/video) that can add polling jitter at 1000Hz+. Move either to a port on a \
+             different controller to remove the risk.",
+            c.controller_name
+        ));
+    }
+    if let Some(c) = loads.iter().find(|l| l.severity() == "info") {
+        let neighbors = if c.has_high_rate_input {
+            "low-traffic devices (keyboard-class)"
+        } else {
+            "other low-traffic input devices"
+        };
+        return Some(format!(
+            "Your mouse shares this controller ({}) with {neighbors}. Harmless — they send a few \
+             bytes per keypress, not a constant stream. Full isolation only matters if you're \
+             chasing the last microsecond of 1000Hz+ consistency.",
+            c.controller_name
+        ));
+    }
+    None
 }
 
 /// Live: build the USB-controller → input-device map (read-only WMI: `Win32_USBController`,
@@ -726,16 +822,20 @@ pub(crate) fn read_usb_topology() -> Vec<UsbControllerLoad> {
     }
 
     let q = "SELECT DeviceID, Name, PNPClass FROM Win32_PnPEntity \
-             WHERE PNPClass = 'HIDClass' OR PNPClass = 'Keyboard' OR PNPClass = 'Mouse'";
+             WHERE PNPClass = 'HIDClass' OR PNPClass = 'Keyboard' OR PNPClass = 'Mouse' \
+             OR PNPClass = 'MEDIA' OR PNPClass = 'AudioEndpoint' OR PNPClass = 'Camera' \
+             OR PNPClass = 'Image'";
     let inputs: Vec<InputDevice> = conn
         .raw_query::<Pnp>(q)
         .unwrap_or_default()
         .into_iter()
-        .filter(|p| p.pnp_class.as_deref().map(is_input_pnp_class).unwrap_or(false))
         .filter_map(|p| {
+            let name = p.name.unwrap_or_default();
+            let kind = classify_device_kind(p.pnp_class.as_deref()?, &name)?;
             let device_id = p.device_id?.to_uppercase();
             let vid_pid = parse_vid_pid(&device_id);
-            Some(InputDevice { name: p.name.unwrap_or_else(|| device_id.clone()), vid_pid, device_id })
+            let name = if name.is_empty() { device_id.clone() } else { name };
+            Some(InputDevice { name, vid_pid, device_id, kind })
         })
         .collect();
 
@@ -1479,9 +1579,9 @@ mod latency_tests {
         }
     }
 
-    fn input(id: &str, name: &str) -> InputDevice {
+    fn idev(id: &str, name: &str, kind: DeviceKind) -> InputDevice {
         let id = id.to_uppercase();
-        InputDevice { vid_pid: parse_vid_pid(&id), name: name.into(), device_id: id }
+        InputDevice { vid_pid: parse_vid_pid(&id), name: name.into(), device_id: id, kind }
     }
 
     #[test]
@@ -1492,12 +1592,15 @@ mod latency_tests {
     }
 
     #[test]
-    fn input_pnp_classes() {
-        assert!(is_input_pnp_class("HIDClass"));
-        assert!(is_input_pnp_class("Keyboard"));
-        assert!(is_input_pnp_class("Mouse"));
-        assert!(!is_input_pnp_class("Net"));
-        assert!(!is_input_pnp_class("USB"));
+    fn classify_separates_streaming_from_quiet() {
+        assert_eq!(classify_device_kind("Mouse", "HID-compliant mouse"), Some(DeviceKind::HighRate));
+        assert_eq!(classify_device_kind("Keyboard", "HID Keyboard Device"), Some(DeviceKind::Quiet));
+        assert_eq!(classify_device_kind("HIDClass", "System Control"), Some(DeviceKind::Quiet));
+        assert_eq!(classify_device_kind("MEDIA", "USB Audio"), Some(DeviceKind::Streaming));
+        // A wireless-headset dongle's HID collection still classifies as streaming via name.
+        assert_eq!(classify_device_kind("HIDClass", "Arctis 7 Headset"), Some(DeviceKind::Streaming));
+        assert_eq!(classify_device_kind("Image", "Logitech Webcam"), Some(DeviceKind::Streaming));
+        assert_eq!(classify_device_kind("Net", "Ethernet"), None);
     }
 
     #[test]
@@ -1513,10 +1616,10 @@ mod latency_tests {
             (r"HID\VID_AAAA&PID_BBBB\W".to_uppercase(), "PCIB".to_string()),
         ]);
         let inputs = [
-            input(r"USB\VID_1532&PID_00B8&MI_00\X", "USB Input Device"), // generic
-            input(r"HID\VID_1532&PID_00B8&MI_00\Y", "HID-compliant mouse"), // specific, same device
-            input(r"HID\VID_046D&PID_C33A\Z", "HID Keyboard Device"),
-            input(r"HID\VID_AAAA&PID_BBBB\W", "Lonely Pad"),
+            idev(r"USB\VID_1532&PID_00B8&MI_00\X", "USB Input Device", DeviceKind::Quiet), // generic node
+            idev(r"HID\VID_1532&PID_00B8&MI_00\Y", "HID-compliant mouse", DeviceKind::HighRate), // same device
+            idev(r"HID\VID_046D&PID_C33A\Z", "HID Keyboard Device", DeviceKind::Quiet),
+            idev(r"HID\VID_AAAA&PID_BBBB\W", "Lonely Pad", DeviceKind::Quiet),
         ];
         let loads = group_input_devices_by_controller(&controllers, &edges, &inputs);
         assert_eq!(loads.len(), 2);
@@ -1524,31 +1627,54 @@ mod latency_tests {
         assert_eq!(loads[0].controller_id, "PCIA");
         assert_eq!(loads[0].input_devices.len(), 2); // mouse + keyboard, mouse deduped to one
         assert!(loads[0].is_shared());
+        assert!(loads[0].has_high_rate_input); // the mouse collection wins the per-VID&PID max-kind
+        assert!(loads[0].streaming_neighbors.is_empty());
+        assert_eq!(loads[0].severity(), "info"); // high-rate + only quiet neighbors → Info, not amber
         assert!(loads[0].input_devices.contains(&"HID-compliant mouse".to_string())); // specific wins
         assert!(!loads[0].input_devices.contains(&"USB Input Device".to_string()));
         // The single-device controller is not shared.
         assert_eq!(loads[1].controller_id, "PCIB");
         assert!(!loads[1].is_shared());
+        assert_eq!(loads[1].severity(), "none");
     }
 
     #[test]
-    fn shared_advisory_fires_only_when_shared() {
-        let shared = vec![UsbControllerLoad {
+    fn advisory_is_info_for_quiet_sharing_and_attention_for_streaming() {
+        // Mouse + keyboard (quiet) → benign INFO copy, no alarm language.
+        let quiet = vec![UsbControllerLoad {
             controller_name: "AMD USB 3.10".into(),
             controller_id: "PCIA".into(),
             input_devices: vec!["HID-compliant mouse".into(), "HID Keyboard Device".into()],
+            streaming_neighbors: vec![],
+            has_high_rate_input: true,
         }];
-        let a = shared_controller_advisory(&shared).expect("advisory present");
-        assert!(a.contains("2 input devices share"));
+        assert_eq!(quiet[0].severity(), "info");
+        let a = shared_controller_advisory(&quiet).expect("advisory present");
+        assert!(a.contains("Harmless"));
         assert!(a.contains("AMD USB 3.10"));
-        assert!(a.contains("Worth knowing")); // low-drama framing
 
-        let not_shared = vec![UsbControllerLoad {
+        // Mouse + streaming audio dongle → actionable ATTENTION copy that names both + the fix.
+        let streaming = vec![UsbControllerLoad {
+            controller_name: "AMD USB 3.10".into(),
+            controller_id: "PCIA".into(),
+            input_devices: vec!["HID-compliant mouse".into()],
+            streaming_neighbors: vec!["Arctis 7 Headset".into()],
+            has_high_rate_input: true,
+        }];
+        assert_eq!(streaming[0].severity(), "attention");
+        let b = shared_controller_advisory(&streaming).expect("advisory present");
+        assert!(b.contains("Move either"));
+        assert!(b.contains("Arctis 7 Headset"));
+
+        // Solo controller → nothing to say.
+        let solo = vec![UsbControllerLoad {
             controller_name: "Solo".into(),
             controller_id: "PCIB".into(),
             input_devices: vec!["Lonely Pad".into()],
+            streaming_neighbors: vec![],
+            has_high_rate_input: false,
         }];
-        assert!(shared_controller_advisory(&not_shared).is_none());
+        assert!(shared_controller_advisory(&solo).is_none());
     }
 
     #[test]

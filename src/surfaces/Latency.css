@@ -83,6 +83,12 @@
   border-radius: 999px;
   flex: 0 0 auto;
 }
+/* Actionable jitter risk keeps the amber base; benign quiet sharing is neutral Info. */
+.lat-shared-info {
+  color: var(--muted);
+  border-color: var(--border-strong, var(--border));
+  background: transparent;
+}
 
 .lat-btn {
   margin-top: 12px;

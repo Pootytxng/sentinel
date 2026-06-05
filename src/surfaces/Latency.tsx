@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
-import { msiStatus, usbStatus, fmtMs } from "./latency-view";
+import { msiStatus, usbStatus, controllerSeverity, fmtMs } from "./latency-view";
 import type { LatencyReport, WakeMeasurement, MouseMeasurement } from "../types";
 import "./Latency.css";
 
@@ -147,13 +147,20 @@ export function LatencyTab() {
           <p className="lat-muted">No USB input controllers detected.</p>
         ) : (
           <ul className="lat-list">
-            {usb.map((c) => (
-              <li key={c.controller_id}>
-                <span className="lat-ctrl">{c.controller_name}</span>
-                <span className="lat-devs">{c.input_devices.join(", ")}</span>
-                {c.input_devices.length >= 2 && <span className="lat-shared">shared</span>}
-              </li>
-            ))}
+            {usb.map((c) => {
+              const sev = controllerSeverity(c);
+              const devs = [...c.input_devices, ...c.streaming_neighbors].join(", ");
+              return (
+                <li key={c.controller_id}>
+                  <span className="lat-ctrl">{c.controller_name}</span>
+                  <span className="lat-devs">{devs}</span>
+                  {sev === "attention" && (
+                    <span className="lat-shared lat-shared-warn">jitter risk</span>
+                  )}
+                  {sev === "info" && <span className="lat-shared lat-shared-info">shared</span>}
+                </li>
+              );
+            })}
           </ul>
         )}
         {report.usb_advisory && <p className="lat-advisory">{report.usb_advisory}</p>}

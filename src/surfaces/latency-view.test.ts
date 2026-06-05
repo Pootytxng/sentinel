@@ -21,18 +21,43 @@ describe("msiStatus", () => {
 });
 
 describe("usb", () => {
-  const shared: UsbControllerLoad[] = [
-    { controller_name: "c", controller_id: "x", input_devices: ["mouse", "kbd"] },
+  // Mouse + a streaming audio dongle → the real, actionable jitter risk.
+  const streaming: UsbControllerLoad[] = [
+    {
+      controller_name: "c",
+      controller_id: "x",
+      input_devices: ["HID-compliant mouse"],
+      streaming_neighbors: ["USB Audio"],
+      has_high_rate_input: true,
+    },
+  ];
+  // Mouse + keyboard → benign quiet sharing (Info, never an alarm).
+  const quiet: UsbControllerLoad[] = [
+    {
+      controller_name: "c",
+      controller_id: "x",
+      input_devices: ["HID-compliant mouse", "kbd"],
+      streaming_neighbors: [],
+      has_high_rate_input: true,
+    },
   ];
   const solo: UsbControllerLoad[] = [
-    { controller_name: "c", controller_id: "x", input_devices: ["mouse"] },
+    {
+      controller_name: "c",
+      controller_id: "x",
+      input_devices: ["HID-compliant mouse"],
+      streaming_neighbors: [],
+      has_high_rate_input: true,
+    },
   ];
-  it("detects the shared-controller condition", () => {
-    expect(usbShared(shared)).toBe(true);
+  it("flags only the actionable (streaming) case as shared — quiet sharing is not an alarm", () => {
+    expect(usbShared(streaming)).toBe(true);
+    expect(usbShared(quiet)).toBe(false);
     expect(usbShared(solo)).toBe(false);
   });
-  it("maps shared->attention, solo->ready, empty->unknown", () => {
-    expect(usbStatus(shared)).toBe("attention");
+  it("maps streaming->attention, quiet->info, solo->ready, empty->unknown", () => {
+    expect(usbStatus(streaming)).toBe("attention");
+    expect(usbStatus(quiet)).toBe("info");
     expect(usbStatus(solo)).toBe("ready");
     expect(usbStatus([])).toBe("unknown");
   });
