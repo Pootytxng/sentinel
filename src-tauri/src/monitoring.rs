@@ -812,21 +812,46 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             use std::sync::atomic::Ordering;
             let mut acc = crate::sessions::SessionAccumulator::new(started_at, active_changes);
             let start = std::time::Instant::now();
+            // Stutter Forensics: a read-only per-second timeline (elapsed, 1% low) + a capped log of
+            // signals (process starts / RAM 90% / GPU clock drop), analyzed once at finalize. Only
+            // runs while monitoring (the user opted in); bounded so it never grows unbounded.
+            let mut timeline: Vec<(u32, f64)> = Vec::new();
+            let mut events: Vec<crate::stutter::StutterEvent> = Vec::new();
+            let mut proc_sys = System::new();
+            let mut prev_procs: Option<std::collections::HashSet<String>> = None;
+            let mut prev_clock: Option<u32> = None;
+            let mut ram_logged = false;
+            // OS chatter that constantly starts/stops — never the culprit, would drown the signal.
+            let proc_ignore: [&str; 8] = [
+                "svchost",
+                "conhost",
+                "dllhost",
+                "runtimebroker",
+                "backgroundtaskhost",
+                "wmiprvse",
+                "taskhostw",
+                "searchprotocolhost",
+            ];
             while fps_active().load(Ordering::Acquire) {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if !fps_active().load(Ordering::Acquire) {
                     break;
                 }
+                let elapsed = start.elapsed().as_secs() as u32;
                 if let Ok(txt) = std::fs::read_to_string(fps_out_path()) {
                     if let Ok(s) = serde_json::from_str::<FpsSample>(&txt) {
                         if s.fps > 0.0 {
                             acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps);
+                            if s.low1_fps > 0.0 && timeline.len() < 7200 {
+                                timeline.push((elapsed, s.low1_fps));
+                            }
                         }
                     }
                 }
                 let gpus = get_gpu_sensors();
                 let gpu_temp = gpus.iter().filter_map(|g| g.temperature_c).max();
                 let gpu_usage = gpus.iter().filter_map(|g| g.utilization_gpu_pct).max();
+                let gpu_clock = gpus.iter().filter_map(|g| g.graphics_clock_mhz).max();
                 let cpu = get_cpu_sensors();
                 acc.record_sensors(
                     gpu_temp,
@@ -834,10 +859,73 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     Some(cpu.ram_used_bytes),
                     Some(cpu.ram_total_bytes),
                 );
+
+                // ── Stutter signals (capped at 50, read-only) ──
+                if events.len() < 50 {
+                    if !ram_logged
+                        && cpu.ram_total_bytes > 0
+                        && cpu.ram_used_bytes as f64 / cpu.ram_total_bytes as f64 >= 0.90
+                    {
+                        events.push(crate::stutter::StutterEvent {
+                            at_secs: elapsed,
+                            kind: "ram".into(),
+                            label: "RAM filling up (90%+)".into(),
+                        });
+                        ram_logged = true;
+                    }
+                    // GPU clock drop ONLY while busy — a sharp drop under load is throttling; a drop
+                    // at low utilization is just normal idle downclock, not a stutter cause.
+                    if let (Some(prev), Some(now)) = (prev_clock, gpu_clock) {
+                        let dropped = prev > 0 && (now as f64) < (prev as f64) * 0.8;
+                        let busy = gpu_usage.is_some_and(|u| u >= 80);
+                        if dropped && busy {
+                            events.push(crate::stutter::StutterEvent {
+                                at_secs: elapsed,
+                                kind: "gpu-clock".into(),
+                                label: "a GPU clock drop under load".into(),
+                            });
+                        }
+                    }
+                    prev_clock = gpu_clock.or(prev_clock);
+                    // Process starts: a names-only diff every tick (1 Hz, only while capturing),
+                    // skipping OS chatter so the insight never degrades to "svchost did it".
+                    proc_sys.refresh_processes_specifics(
+                        sysinfo::ProcessesToUpdate::All,
+                        true,
+                        sysinfo::ProcessRefreshKind::nothing(),
+                    );
+                    let names: std::collections::HashSet<String> = proc_sys
+                        .processes()
+                        .values()
+                        .map(|p| p.name().to_string_lossy().into_owned())
+                        .collect();
+                    if let Some(prev) = &prev_procs {
+                        let new: Vec<&String> = names.difference(prev).collect();
+                        // One launch is a signal; a big burst (login/boot) isn't a single culprit.
+                        if new.len() <= 4 {
+                            for n in new {
+                                let lower = n.to_lowercase();
+                                let base = lower.strip_suffix(".exe").unwrap_or(&lower);
+                                if base == "compy" || proc_ignore.contains(&base) {
+                                    continue;
+                                }
+                                events.push(crate::stutter::StutterEvent {
+                                    at_secs: elapsed,
+                                    kind: "process-start".into(),
+                                    label: format!("{n} starting"),
+                                });
+                            }
+                        }
+                    }
+                    prev_procs = Some(names);
+                }
             }
             if acc.has_data() {
                 let mut summary = acc.finalize(start.elapsed().as_secs());
                 summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
+                summary.stutter_insight = crate::stutter::analyze(&timeline, &events);
+                summary.stutter_timeline = timeline;
+                summary.stutter_events = events;
                 let game = summary.process_name.clone();
                 // Only a real (saved) session fires the "debrief ready" toast — never a short blip.
                 if matches!(crate::sessions::save_session(summary), Ok(true)) {

@@ -486,6 +486,7 @@ type SessionSummary = {
     ram_gb: number;
     display: string;
   } | null;
+  stutter_insight?: string | null;
 };
 
 function SessionMetric({ label, value }: { label: string; value: string }) {
@@ -727,12 +728,14 @@ function SessionDebrief({
   } else if (topLimiter && ratio < 0.75) {
     insight = `Prime suspect: ${topLimiter.title.toLowerCase()}. ${topLimiter.reason}`;
   }
+  // A concrete stutter correlation outranks the generic insight for the single "one thing" slot.
+  const shownInsight = s.stutter_insight || insight;
 
   const topRec = topLimiter
     ? recs.find((r) => r.id === (topLimiter.linked ?? topLimiter.id))
     : undefined;
   const canArm = !!topRec && !topRec.currently_applied;
-  const cleanSession = ratio >= 0.75 && !insight && !canArm;
+  const cleanSession = ratio >= 0.75 && !shownInsight && !canArm;
 
   const nextSuspect = priorities?.limiters?.[1]?.title ?? null;
   const dismissCmp = async () => {
@@ -785,10 +788,10 @@ function SessionDebrief({
           reverting={reverting}
         />
       ) : (
-        insight && (
+        shownInsight && (
           <div className="debrief-insight">
             <div className="debrief-insight-tag">THE ONE THING WORTH KNOWING</div>
-            <p>{insight}</p>
+            <p>{shownInsight}</p>
           </div>
         )
       )}

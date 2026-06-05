@@ -8,6 +8,7 @@ mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted le
 mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
 mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
 mod drift; // Drift Watch — notices readiness checks that were good and regressed (outside Compy).
+mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;

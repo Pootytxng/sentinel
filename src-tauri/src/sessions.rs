@@ -49,6 +49,16 @@ pub(crate) struct SessionSummary {
     /// sessions parse with this as None.
     #[serde(default)]
     pub(crate) hw_fingerprint: Option<crate::hardware::HwFingerprint>,
+    /// Stutter Forensics: at most one hedged insight correlating the worst dips with a signal, or
+    /// None when there's no clear pattern. Computed at finalize from the read-only session timeline.
+    #[serde(default)]
+    pub(crate) stutter_insight: Option<String>,
+    /// Read-only per-second `(elapsed_secs, 1% low)` timeline + the signal log behind the insight.
+    /// Kept only for the most-recent sessions (stripped on save) so sessions.json stays small.
+    #[serde(default)]
+    pub(crate) stutter_timeline: Vec<(u32, f64)>,
+    #[serde(default)]
+    pub(crate) stutter_events: Vec<crate::stutter::StutterEvent>,
 }
 
 fn round1(x: f64) -> f64 {
@@ -147,6 +157,9 @@ impl SessionAccumulator {
             compy_changes_active: self.compy_changes_active,
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
+            stutter_insight: None,
+            stutter_timeline: Vec::new(),
+            stutter_events: Vec::new(),
         }
     }
 }
@@ -171,6 +184,12 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     let len = all.len();
     if len > MAX_SESSIONS {
         all.drain(0..len - MAX_SESSIONS); // keep the most recent MAX_SESSIONS
+    }
+    // Keep the (large) frametime timeline only for the 5 most-recent sessions; older sessions retain
+    // the insight + events but shed the per-second series so sessions.json + exports stay small.
+    let strip_before = all.len().saturating_sub(5);
+    for s in all.iter_mut().take(strip_before) {
+        s.stutter_timeline = Vec::new();
     }
     let json = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| e.to_string())

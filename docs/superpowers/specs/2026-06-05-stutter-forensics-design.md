@@ -1,6 +1,10 @@
 # Stutter Forensics — design note (for owner review)
 
-**Status:** proposal. No code until approved (Wave-2 #4 gate).
+**Status:** APPROVED + BUILT 2026-06-05 with owner riders — 1 Hz worst-frametime + process diff;
+OS-chatter ignore-list (svchost/conhost/dllhost/RuntimeBroker/backgroundTaskHost/WmiPrvSE/taskhostw/
+SearchProtocolHost); thresholds ±2s / >2× median **plus a 12 ms absolute dip floor**; all three
+signals (GPU-clock-drop gated on ≥80% GPU busy = throttle, not idle downclock); timeline + ≤50 events
+persisted, timeline kept only for the 5 most-recent sessions. Honest language as written.
 **Goal (owner's words):** in the session debrief, surface the session's worst frametime dips and
 correlate them — read-only — against signals already plausibly observable (process starts, GPU clock
 drops, RAM pressure). Output stays **max-one-insight**, hedged: *"your 3 worst stutters lined up with
