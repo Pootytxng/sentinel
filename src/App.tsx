@@ -385,7 +385,172 @@ function SessionMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
+// Moment 3 verdict bands from the 1%-low/avg ratio. The ~0.60 band copy is verbatim from the spec;
+// the others are conservative extrapolations (tunable) — see the spec's "conservative, tunable" note.
+function verdictBand(ratio: number): { h: string; sub: string } {
+  const pct = Math.round(ratio * 100);
+  if (ratio >= 0.85)
+    return {
+      h: "Smooth all the way through",
+      sub: `Even your worst moments held at ${pct}% of your average — a steady session.`,
+    };
+  if (ratio >= 0.7)
+    return {
+      h: "Mostly smooth — with the occasional dip",
+      sub: `High average, and your worst moments stayed near ${pct}% of it.`,
+    };
+  if (ratio >= 0.55)
+    return {
+      h: "Mostly smooth — with dips under pressure",
+      sub: `High average, but your worst moments ran at ${pct}% of it. That gap is what stutter feels like.`,
+    };
+  return {
+    h: "Choppy under load",
+    sub: `Your worst moments dropped to ${pct}% of your average — that gap is felt as stutter.`,
+  };
+}
+
+// Moment 3 — session debrief card (first-experience arc). The most-recent session, read honestly:
+// verdict sentence, four tiles (1% low always labeled an estimate), at most ONE insight, a
+// context strip, and the #1-fix CTA. Copy verbatim from the spec where the spec specifies it.
+function SessionDebrief({
+  s,
+  priorities,
+  recs,
+  apply,
+  busyId,
+  onExport,
+}: {
+  s: SessionSummary;
+  priorities: Priorities | null;
+  recs: Recommendation[];
+  apply: (rec: Recommendation) => Promise<void>;
+  busyId: string | null;
+  onExport: () => void;
+}) {
+  const [ctxOpen, setCtxOpen] = useState(false);
+  const ratio = s.avg_fps > 0 ? Math.min(1, s.low1_fps_est / s.avg_fps) : 1;
+  const v = verdictBand(ratio);
+
+  const fmtDur = (sec: number) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
+  };
+  const when = new Date(s.started_at);
+  const end = new Date(when.getTime() + s.duration_secs * 1000);
+  const range = `${when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}–${end.toLocaleTimeString(
+    [],
+    { hour: "numeric", minute: "2-digit" },
+  )}`;
+
+  // At most ONE insight: (a) GPU-vs-system hint, (b) prime-suspect open limiter, else none.
+  const topLimiter = priorities?.limiters?.[0] ?? null;
+  const gpuLoafed = s.peak_gpu_usage_pct != null && s.peak_gpu_usage_pct < 70 && ratio < 0.7;
+  let insight: string | null = null;
+  if (gpuLoafed) {
+    insight = `Your GPU only reached ${s.peak_gpu_usage_pct}% at its peak while frames dipped — so the GPU probably isn't the bottleneck here. Prime suspect: a CPU or system limiter.`;
+  } else if (topLimiter && ratio < 0.85) {
+    insight = `Prime suspect: ${topLimiter.title.toLowerCase()}. ${topLimiter.reason}`;
+  }
+
+  const topRec = topLimiter
+    ? recs.find((r) => r.id === (topLimiter.linked ?? topLimiter.id))
+    : undefined;
+  const canArm = !!topRec && !topRec.currently_applied;
+  const cleanSession = ratio >= 0.85 && !insight && !canArm;
+
+  return (
+    <div className="debrief">
+      <div className="debrief-head">
+        <span className="debrief-title">
+          {s.process_name || "Last session"} · {fmtDur(s.duration_secs)} · {range}
+        </span>
+        <button className="btn-small" onClick={onExport}>
+          Share
+        </button>
+      </div>
+
+      <h2 className="debrief-verdict">{v.h}</h2>
+      <p className="debrief-sub">{v.sub}</p>
+
+      <div className="debrief-tiles">
+        <DebriefTile label="Avg FPS" value={s.avg_fps.toFixed(0)} />
+        <DebriefTile label="1% low" value={s.low1_fps_est.toFixed(0)} note="estimate" />
+        <DebriefTile
+          label="Peak GPU"
+          value={s.peak_gpu_usage_pct == null ? "—" : `${s.peak_gpu_usage_pct}%`}
+        />
+        <DebriefTile
+          label="Peak temp"
+          value={s.peak_gpu_temp_c == null ? "—" : `${s.peak_gpu_temp_c}°C`}
+        />
+      </div>
+
+      {insight && (
+        <div className="debrief-insight">
+          <div className="debrief-insight-tag">THE ONE THING WORTH KNOWING</div>
+          <p>{insight}</p>
+        </div>
+      )}
+
+      <div className="debrief-ctx">
+        <button className="debrief-ctx-head" onClick={() => setCtxOpen((o) => !o)}>
+          <span>During this session: {s.compy_changes_active} Compy changes active</span>
+          <span>{ctxOpen ? "▾" : "▸"}</span>
+        </button>
+        {ctxOpen && (
+          <div className="debrief-ctx-body">
+            <div>capture · ETW, external — no injection</div>
+            {s.compy_changes_active === 0 && (
+              <div>0 changes active — you played on stock settings (an honest baseline).</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {canArm && topRec ? (
+        <button
+          className="debrief-cta"
+          disabled={busyId !== null}
+          onClick={() => apply(topRec)}
+        >
+          {busyId === topRec.id ? "Applying…" : "Apply the #1 fix — compare next session"}
+        </button>
+      ) : cleanSession ? (
+        <p className="debrief-clean">Good session, good rig. Nothing worth changing.</p>
+      ) : null}
+    </div>
+  );
+}
+
+function DebriefTile({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="debrief-tile">
+      <div className="debrief-tile-value">{value}</div>
+      <div className="debrief-tile-label">
+        {label}
+        {note && <span className="debrief-tile-note"> · {note}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SessionsTab({
+  sessions,
+  priorities,
+  recs,
+  apply,
+  busyId,
+  onExport,
+}: {
+  sessions: SessionSummary[];
+  priorities: Priorities | null;
+  recs: Recommendation[];
+  apply: (rec: Recommendation) => Promise<void>;
+  busyId: string | null;
+  onExport: () => void;
+}) {
   if (sessions.length === 0) {
     return (
       <section className="tab-pane">
@@ -413,8 +578,17 @@ function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
         Live estimates sampled about once per second while monitoring was active
         — not benchmark-grade proof.
       </p>
+      <SessionDebrief
+        s={sessions[0]}
+        priorities={priorities}
+        recs={recs}
+        apply={apply}
+        busyId={busyId}
+        onExport={onExport}
+      />
+      {sessions.length > 1 && <h3 className="priorities-group">Earlier sessions</h3>}
       <ul className="sessions-list">
-        {sessions.map((s, i) => (
+        {sessions.slice(1).map((s, i) => (
           <li key={`${s.started_at}-${i}`} className="session-card">
             <div className="session-card-head">
               <span className="session-game">
@@ -1040,7 +1214,16 @@ function App() {
               {activeTab === "Monitoring" && (
                 <MonitoringTab active={activeTab === "Monitoring"} />
               )}
-              {activeTab === "Sessions" && <SessionsTab sessions={sessions} />}
+              {activeTab === "Sessions" && (
+                <SessionsTab
+                  sessions={sessions}
+                  priorities={priorities}
+                  recs={recs ?? []}
+                  apply={apply}
+                  busyId={busyId}
+                  onExport={onExport}
+                />
+              )}
               {activeTab === "Latency" && <LatencyTab />}
               {activeTab === "Benchmark" && <BenchmarkTab />}
               {activeTab === "Diagnostics" && (
