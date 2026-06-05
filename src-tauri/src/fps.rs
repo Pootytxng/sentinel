@@ -1,6 +1,6 @@
 //! FPS / frametime capture engine (ETW present-event consumer).
 //!
-//! This runs in a dedicated elevated helper process (`sentinel.exe
+//! This runs in a dedicated elevated helper process (`compy.exe
 //! --fps-capture`). It subscribes to the Microsoft-Windows-DXGI provider's
 //! present events via ETW and derives per-process frame timing from OUTSIDE
 //! the game — no DLL injection, the same anti-cheat-safe mechanism Intel
@@ -54,7 +54,7 @@ const SESSION_NAME: &str = "Compy-FPS";
 const PRESENTER_DENYLIST: &[&str] = &[
     "dwm.exe",
     "explorer.exe",
-    "sentinel.exe",
+    "compy.exe",
     "applicationframehost.exe",
     "searchhost.exe",
     "startmenuexperiencehost.exe",
@@ -255,16 +255,16 @@ pub fn run_capture() {
     let _trace = match trace {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("[sentinel-fps] failed to start ETW session: {e:?}");
+            eprintln!("[compy-fps] failed to start ETW session: {e:?}");
             eprintln!(
-                "[sentinel-fps] this requires Administrator — run from an elevated console."
+                "[compy-fps] this requires Administrator — run from an elevated console."
             );
             std::process::exit(1);
         }
     };
 
     eprintln!(
-        "[sentinel-fps] capturing DXGI present events. Launch a DX11/DX12 game to see frames."
+        "[compy-fps] capturing DXGI present events. Launch a DX11/DX12 game to see frames."
     );
 
     let stdout = std::io::stdout();
@@ -277,7 +277,7 @@ pub fn run_capture() {
         // so this is how we shut the elevated helper down cleanly.
         if let Some(alive) = &opts.alive_path {
             if heartbeat_stale(alive) {
-                eprintln!("[sentinel-fps] heartbeat stale — exiting.");
+                eprintln!("[compy-fps] heartbeat stale — exiting.");
                 break;
             }
         }
@@ -367,7 +367,7 @@ pub fn run_capture() {
                 let _ = handle.flush();
             }
             eprintln!(
-                "[sentinel-fps] {} (pid {}) | {:.1} FPS | {:.2} ms avg | 1% low {:.1} FPS | {} frames/s",
+                "[compy-fps] {} (pid {}) | {:.1} FPS | {:.2} ms avg | 1% low {:.1} FPS | {} frames/s",
                 report.process_name, report.pid, report.fps, report.avg_frametime_ms, report.low1_fps, frames
             );
         }

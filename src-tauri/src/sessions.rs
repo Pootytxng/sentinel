@@ -33,7 +33,10 @@ pub(crate) struct SessionSummary {
     pub(crate) peak_gpu_usage_pct: Option<u32>,
     pub(crate) peak_ram_used_bytes: Option<u64>,
     pub(crate) ram_total_bytes: Option<u64>,
-    pub(crate) sentinel_changes_active: usize, // active Compy changes during the session
+    // Renamed from `sentinel_changes_active` in the Compy rename; alias keeps pre-rename
+    // sessions.json (migrated from %APPDATA%\Sentinel) parseable.
+    #[serde(alias = "sentinel_changes_active")]
+    pub(crate) compy_changes_active: usize, // active Compy changes during the session
 }
 
 fn round1(x: f64) -> f64 {
@@ -45,7 +48,7 @@ fn round1(x: f64) -> f64 {
 /// measured duration so it stays deterministic and testable.
 pub(crate) struct SessionAccumulator {
     started_at: String,
-    sentinel_changes_active: usize,
+    compy_changes_active: usize,
     proc_counts: HashMap<String, u32>,
     fps_sum: f64,
     frametime_sum: f64,
@@ -58,10 +61,10 @@ pub(crate) struct SessionAccumulator {
 }
 
 impl SessionAccumulator {
-    pub(crate) fn new(started_at: String, sentinel_changes_active: usize) -> Self {
+    pub(crate) fn new(started_at: String, compy_changes_active: usize) -> Self {
         Self {
             started_at,
-            sentinel_changes_active,
+            compy_changes_active,
             proc_counts: HashMap::new(),
             fps_sum: 0.0,
             frametime_sum: 0.0,
@@ -129,7 +132,7 @@ impl SessionAccumulator {
             peak_gpu_usage_pct: self.peak_gpu_usage_pct,
             peak_ram_used_bytes: self.peak_ram_used_bytes,
             ram_total_bytes: self.ram_total_bytes,
-            sentinel_changes_active: self.sentinel_changes_active,
+            compy_changes_active: self.compy_changes_active,
         }
     }
 }
@@ -193,7 +196,7 @@ mod session_tests {
         assert_eq!(s.peak_gpu_usage_pct, Some(99));
         assert_eq!(s.peak_ram_used_bytes, Some(9_000_000_000));
         assert_eq!(s.ram_total_bytes, Some(32_000_000_000));
-        assert_eq!(s.sentinel_changes_active, 2);
+        assert_eq!(s.compy_changes_active, 2);
         assert_eq!(s.process_name, "game.exe");
     }
 
@@ -221,7 +224,7 @@ mod session_tests {
 
     #[test]
     fn save_load_roundtrips_and_caps_at_max() {
-        let path = std::env::temp_dir().join(format!("sentinel-sessions-{}.json", std::process::id()));
+        let path = std::env::temp_dir().join(format!("compy-sessions-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         for i in 0..(MAX_SESSIONS + 5) {
             let mut acc = SessionAccumulator::new(format!("t{i}"), 0);
@@ -238,11 +241,11 @@ mod session_tests {
 
     #[test]
     fn missing_or_corrupt_sessions_file_loads_empty() {
-        let missing = std::env::temp_dir().join("sentinel-sessions-absent-zzz.json");
+        let missing = std::env::temp_dir().join("compy-sessions-absent-zzz.json");
         let _ = std::fs::remove_file(&missing);
         assert!(load_sessions_from(&missing).is_empty());
 
-        let corrupt = std::env::temp_dir().join(format!("sentinel-sessions-bad-{}.json", std::process::id()));
+        let corrupt = std::env::temp_dir().join(format!("compy-sessions-bad-{}.json", std::process::id()));
         std::fs::write(&corrupt, b"}}not json[[").unwrap();
         assert!(load_sessions_from(&corrupt).is_empty(), "corrupt file fails safe to empty");
         std::fs::remove_file(&corrupt).ok();

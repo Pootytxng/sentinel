@@ -389,7 +389,7 @@ static DISK_SEQ: AtomicU64 = AtomicU64::new(0);
 /// cancellation → None (honest "not measured"), never a panic. No user files touched.
 pub(crate) fn bench_disk(cfg: &RunConfig, cancel: &AtomicBool, dir: &Path) -> Option<DiskRaw> {
     let uniq = DISK_SEQ.fetch_add(1, Ordering::Relaxed);
-    let path = dir.join(format!("sentinel_bench_{}_{}.tmp", std::process::id(), uniq));
+    let path = dir.join(format!("compy_bench_{}_{}.tmp", std::process::id(), uniq));
     let _guard = TempFileGuard(path.clone());
 
     let size = cfg.disk_mb.max(1) * 1024 * 1024;
@@ -1191,7 +1191,7 @@ mod benchmark_tests {
     fn disk_runner_measures_and_cleans_up() {
         let cancel = AtomicBool::new(false);
         // isolated dir so the cleanup assertion is immune to parallel tests
-        let dir = std::env::temp_dir().join(format!("sentinel_disktest_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("compy_disktest_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         if let Some(d) = bench_disk(&RunConfig::tiny(), &cancel, &dir) {
             assert!(d.seq_write_mb_s > 0.0 && d.seq_read_mb_s > 0.0);

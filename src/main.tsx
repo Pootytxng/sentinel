@@ -22,7 +22,7 @@ if (isOverlay) {
 // default palette). Theme is a data-attribute that swaps CSS color tokens;
 // purely cosmetic, local-only (localStorage), no network.
 try {
-  const savedTheme = localStorage.getItem("sentinel-theme");
+  const savedTheme = localStorage.getItem("compy-theme");
   if (savedTheme) document.documentElement.dataset.theme = savedTheme;
 } catch {
   /* ignore — fall back to the default theme */

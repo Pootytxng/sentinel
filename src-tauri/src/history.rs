@@ -378,7 +378,7 @@ mod history_tests {
     #[test]
     fn save_then_load_roundtrips_through_disk() {
         let dir =
-            std::env::temp_dir().join(format!("sentinel-hist-roundtrip-{}", std::process::id()));
+            std::env::temp_dir().join(format!("compy-hist-roundtrip-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("history.json");
         let records = vec![
@@ -395,7 +395,7 @@ mod history_tests {
 
     #[test]
     fn missing_history_file_loads_empty() {
-        let path = std::env::temp_dir().join("sentinel-hist-definitely-absent-9z.json");
+        let path = std::env::temp_dir().join("compy-hist-definitely-absent-9z.json");
         let _ = std::fs::remove_file(&path);
         assert!(load_history_from(&path).is_empty());
     }
@@ -406,7 +406,7 @@ mod history_tests {
         // there were no history, so the app stays usable and nothing is "undone"
         // against a phantom record.
         let path =
-            std::env::temp_dir().join(format!("sentinel-hist-corrupt-{}.json", std::process::id()));
+            std::env::temp_dir().join(format!("compy-hist-corrupt-{}.json", std::process::id()));
         std::fs::write(&path, b"{ this is not valid json ]]]").unwrap();
         assert!(
             load_history_from(&path).is_empty(),
@@ -429,7 +429,7 @@ mod history_tests {
             "status": "applied"
         }]);
         let path =
-            std::env::temp_dir().join(format!("sentinel-hist-legacy-{}.json", std::process::id()));
+            std::env::temp_dir().join(format!("compy-hist-legacy-{}.json", std::process::id()));
         std::fs::write(&path, serde_json::to_string(&legacy).unwrap()).unwrap();
         let loaded = load_history_from(&path);
         assert_eq!(loaded.len(), 1);

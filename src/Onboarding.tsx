@@ -5,7 +5,7 @@ import { useState } from "react";
 // is and — just as importantly — what it deliberately will NOT do, before the
 // user lands on a list of changes they don't yet have context for.
 
-export const ONBOARDED_KEY = "sentinel_onboarded_v1";
+export const ONBOARDED_KEY = "compy_onboarded_v1";
 
 type Step = {
   tag: string;

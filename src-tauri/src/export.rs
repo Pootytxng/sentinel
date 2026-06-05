@@ -351,15 +351,15 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
     let dir = compy_data_dir().join("exports");
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create export folder: {e}"))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let md_path = dir.join(format!("sentinel-report-{stamp}.md"));
+    let md_path = dir.join(format!("compy-report-{stamp}.md"));
     std::fs::write(&md_path, markdown_with_bom(&markdown))
         .map_err(|e| format!("could not write report: {e}"))?;
 
     // JSON export comes for free — the assembled source Values + metadata.
-    let json_path = dir.join(format!("sentinel-report-{stamp}.json"));
+    let json_path = dir.join(format!("compy-report-{stamp}.json"));
     let bundle = json!({
         "exported_at": exported_at,
-        "sentinel_version": env!("CARGO_PKG_VERSION"),
+        "compy_version": env!("CARGO_PKG_VERSION"),
         "rules_source": rules_source,
         "hardware": hardware,
         "recommendations": recommendations,
@@ -446,7 +446,7 @@ mod export_tests {
             "avg_frametime_ms": 8.3, "low1_fps_est": 90.0, "peak_gpu_temp_c": 64,
             "peak_gpu_usage_pct": 99, "peak_ram_used_bytes": 9_000_000_000u64,
             "ram_total_bytes": 32_000_000_000u64, "samples": 100, "started_at": "x",
-            "sentinel_changes_active": 2
+            "compy_changes_active": 2
         }]);
         let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, "embedded", "t");
         assert!(md.contains("game.exe"));

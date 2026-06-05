@@ -34,7 +34,7 @@ use recommendations::*;
 use sessions::*;
 
 /// Entry point for the elevated FPS-capture helper process
-/// (`sentinel.exe --fps-capture`). See fps.rs for the full rationale.
+/// (`compy.exe --fps-capture`). See fps.rs for the full rationale.
 pub fn run_fps_capture() {
     fps::run_capture();
 }
@@ -195,7 +195,19 @@ fn migrate_legacy_data_once(app_data: &std::path::Path, new_dir: &std::path::Pat
         if new_dir.exists() || !legacy.exists() {
             return;
         }
-        let _ = copy_dir_recursive(&legacy, new_dir);
+        // Atomic: copy into a staging dir, then rename into place. A mid-copy failure leaves NO
+        // partial `Compy` dir, so the next launch cleanly retries instead of silently keeping a
+        // half-migrated (partial Trust Ledger) directory. Rename is atomic on the same volume.
+        let staging = app_data.join("Compy.migrating");
+        let _ = std::fs::remove_dir_all(&staging); // clear any leftover from a prior aborted run
+        match copy_dir_recursive(&legacy, &staging) {
+            Ok(()) => {
+                let _ = std::fs::rename(&staging, new_dir);
+            }
+            Err(_) => {
+                let _ = std::fs::remove_dir_all(&staging);
+            }
+        }
     });
 }
 
@@ -212,6 +224,37 @@ fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use super::*;
+
+    // The data-dir migration's core: copy_dir_recursive must copy a nested tree (incl. exports/)
+    // AND leave the source intact (copy-not-move), so a Compy rename never orphans the rollback
+    // ledger. (migrate_legacy_data_once itself is OnceLock-guarded → process-global, so we exercise
+    // its copy primitive directly.)
+    #[test]
+    fn copy_dir_recursive_copies_nested_tree_and_preserves_source() {
+        let base = std::env::temp_dir().join(format!("compy_migtest_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let src = base.join("Sentinel");
+        let dst = base.join("Compy");
+        std::fs::create_dir_all(src.join("exports")).unwrap();
+        std::fs::write(src.join("history.json"), b"{\"ledger\":true}").unwrap();
+        std::fs::write(src.join("exports").join("r.md"), b"# report").unwrap();
+
+        copy_dir_recursive(&src, &dst).unwrap();
+
+        // Destination has the full tree…
+        assert_eq!(std::fs::read(dst.join("history.json")).unwrap(), b"{\"ledger\":true}");
+        assert_eq!(std::fs::read(dst.join("exports").join("r.md")).unwrap(), b"# report");
+        // …and the source is untouched (copy, never move).
+        assert!(src.join("history.json").exists());
+        assert!(src.join("exports").join("r.md").exists());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
 
 // ─── Gaming Mode (F1) — GATED ────────────────────────────────────────────

@@ -372,7 +372,7 @@ type SessionSummary = {
   peak_gpu_usage_pct: number | null;
   peak_ram_used_bytes: number | null;
   ram_total_bytes: number | null;
-  sentinel_changes_active: number;
+  compy_changes_active: number;
 };
 
 function SessionMetric({ label, value }: { label: string; value: string }) {
@@ -444,7 +444,7 @@ function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
               <SessionMetric label="Peak RAM" value={fmtGiB(s.peak_ram_used_bytes)} />
               <SessionMetric
                 label="Compy changes active"
-                value={String(s.sentinel_changes_active)}
+                value={String(s.compy_changes_active)}
               />
             </div>
           </li>
@@ -584,7 +584,7 @@ function applyTheme(id: string) {
   if (id === "graphite") root.removeAttribute("data-theme");
   else root.dataset.theme = id;
   try {
-    localStorage.setItem("sentinel-theme", id);
+    localStorage.setItem("compy-theme", id);
   } catch {
     /* ignore persistence failure — theme still applies for this session */
   }
@@ -592,7 +592,7 @@ function applyTheme(id: string) {
 
 function readSavedTheme(): string {
   try {
-    const saved = localStorage.getItem("sentinel-theme") || "graphite";
+    const saved = localStorage.getItem("compy-theme") || "graphite";
     return THEMES.some((t) => t.id === saved) ? saved : "graphite";
   } catch {
     return "graphite";
@@ -1592,7 +1592,7 @@ function MonitoringTab({ active }: { active: boolean }) {
   const [cpuTemp, setCpuTemp] = useState<CpuTemp | null>(null);
   const [mem, setMem] = useState<MemoryPressure | null>(null);
   const [overlayCorner, setOverlayCorner] = useState<string>(
-    () => localStorage.getItem("sentinel_overlay_corner") ?? "top-left",
+    () => localStorage.getItem("compy_overlay_corner") ?? "top-left",
   );
 
   // Sync the overlay toggle with the actual window state on mount (e.g. the
@@ -1619,7 +1619,7 @@ function MonitoringTab({ active }: { active: boolean }) {
 
   const chooseCorner = async (corner: string) => {
     setOverlayCorner(corner);
-    localStorage.setItem("sentinel_overlay_corner", corner);
+    localStorage.setItem("compy_overlay_corner", corner);
     try {
       await invoke("set_overlay_corner", { corner });
     } catch {
@@ -2474,33 +2474,33 @@ function RecCard({
   // we surface that distinction explicitly rather than offering a rollback
   // we don't actually have a contract for.
   const currentlyOn = rec.currently_applied;
-  const sentinelOwns = canToggleOff; // we have a still-active applied change
+  const compyOwns = canToggleOff; // we have a still-active applied change
   const isInfo = !appliable; // advisory / informational only
 
   const toggleDisabled =
-    busy || isInfo || (currentlyOn && !sentinelOwns);
+    busy || isInfo || (currentlyOn && !compyOwns);
 
   const toggleTitle = isInfo
     ? "Advisory recommendation — Compy can't auto-apply this; follow the description"
     : busy
     ? "Working…"
-    : currentlyOn && !sentinelOwns
+    : currentlyOn && !compyOwns
     ? "Already on, but Compy didn't apply it. Toggle off in the original Windows location."
     : currentlyOn
     ? "Click to roll back. Compy will restore the prior state recorded at apply time."
     : "Click to apply. Compy will snapshot the prior state so you can roll back at any time.";
 
   // "Applied by Compy" status — three-way: Yes / No (advisory) / No (external)
-  const sentinelAppliedLabel = isInfo
+  const compyAppliedLabel = isInfo
     ? "N/A — advisory recommendation"
-    : sentinelOwns
+    : compyOwns
     ? "Yes"
     : currentlyOn
     ? "No (set outside Compy)"
     : "No (not applied)";
-  const sentinelAppliedClass = sentinelOwns
+  const compyAppliedClass = compyOwns
     ? "state-on"
-    : currentlyOn && !sentinelOwns
+    : currentlyOn && !compyOwns
     ? "state-warn"
     : "state-muted";
 
@@ -2546,7 +2546,7 @@ function RecCard({
             // Blocked = ON but Compy didn't apply it, so there's no rollback
             // contract to flip it off safely. Surface a clear hover tooltip
             // explaining why (instead of just a bare "no" cursor).
-            const blockedExternal = currentlyOn && !sentinelOwns;
+            const blockedExternal = currentlyOn && !compyOwns;
             return (
               <span
                 className={`toggle-wrap ${blockedExternal ? "toggle-wrap-blocked" : ""}`}
@@ -2621,8 +2621,8 @@ function RecCard({
             </div>
             <div className="rec-status-row">
               <span className="rec-status-label">Applied by Compy</span>
-              <span className={`rec-status-value ${sentinelAppliedClass}`}>
-                {sentinelAppliedLabel}
+              <span className={`rec-status-value ${compyAppliedClass}`}>
+                {compyAppliedLabel}
               </span>
             </div>
           </div>

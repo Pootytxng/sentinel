@@ -33,7 +33,7 @@ export function BenchmarkTab() {
   const [selectedTweak, setSelectedTweak] = useState<string>("");
   const [score, setScore] = useState<ScoreboardView | null>(null);
   const [arcade, setArcade] = useState<boolean>(
-    () => localStorage.getItem("sentinel_score_face") === "arcade",
+    () => localStorage.getItem("compy_score_face") === "arcade",
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -125,7 +125,7 @@ export function BenchmarkTab() {
   const toggleFace = () => {
     setArcade((a) => {
       const next = !a;
-      localStorage.setItem("sentinel_score_face", next ? "arcade" : "lab");
+      localStorage.setItem("compy_score_face", next ? "arcade" : "lab");
       return next;
     });
   };

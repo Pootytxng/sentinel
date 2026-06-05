@@ -9,7 +9,7 @@ import {
 } from "./gaming-mode";
 import "./GamingMode.css";
 
-const CONSENT_KEY = "sentinel_gaming_consent_v1";
+const CONSENT_KEY = "compy_gaming_consent_v1";
 
 // Static description of what the CORE (UAC-free) bundle changes — shown idle
 // and in the first-use consent modal. The live post-apply list comes from the
