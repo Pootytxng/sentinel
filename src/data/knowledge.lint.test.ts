@@ -90,6 +90,11 @@ describe("knowledge dataset lint", () => {
     expect(broken, `dangling related links: ${broken.join(", ")}`).toEqual([]);
   });
 
+  it("no entry lists its own id in related (no self-references)", () => {
+    const offenders = KNOWLEDGE.filter((e) => e.related.includes(e.id)).map((e) => e.id);
+    expect(offenders, `self-referencing related: ${offenders.join(", ")}`).toEqual([]);
+  });
+
   it("has no empty strings in any field (prose, aliases, related, steps)", () => {
     const empties: string[] = [];
     for (const [type, list] of groups) {

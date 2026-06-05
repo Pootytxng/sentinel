@@ -333,7 +333,7 @@
     "aliases": ["driver", "drivers", "gpu driver", "driver age", "graphics driver", "game ready driver"],
     "what": "The software that lets Windows and your hardware talk. Graphics drivers especially get regular updates that can add real performance for new games.",
     "more": "New titles often gain measurable FPS from the launch-day driver, so a stale graphics driver can quietly leave performance on the table. Get them straight from AMD or NVIDIA, not from a third-party \"updater\" tool. Compy tracks your driver age and tells you when it's getting old — newer isn't always magic, but very old is a real flag.",
-    "related": ["driver-updates", "ddu", "drivers"]
+    "related": ["driver-updates", "ddu"]
   },
   {
     "id": "ddu",
@@ -349,7 +349,7 @@
     "aliases": ["telemetry", "diagtrack", "data collection", "usage data"],
     "what": "The usage and diagnostic data Windows and apps send back to their makers. Turning the heaviest of it off is the cleanest debloat win.",
     "more": "Disabling Windows' main telemetry service has no effect on updates, stability, or your games — its honest payoff is privacy and a little less background chatter, not more FPS. It's a safe, reversible toggle. Don't expect frames from it; do expect a quieter machine.",
-    "related": ["diagtrack", "debloating", "telemetry"]
+    "related": ["diagtrack", "debloating"]
   },
   {
     "id": "debloating",

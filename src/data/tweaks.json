@@ -21,7 +21,7 @@
     "aliases": ["message signaled interrupts", "msi"],
     "verdict": "real",
     "what": "Switches a device from a shared legacy line IRQ to dedicated message-signaled interrupts.",
-    "why": "Real, measurable interrupt-latency win for GPU / NIC / NVMe — but driver-dependent and reversible. Compy surfaces it as advisory, never forces it."
+    "why": "A real interrupt-latency win on a device that actually benefits (GPU / NIC / NVMe), though blanket-forcing it everywhere is negligible on modern setups — driver-dependent and reversible. Compy surfaces it as advisory, never forces it."
   },
   {
     "id": "useplatformclock",
@@ -322,7 +322,7 @@
   {
     "id": "dll-injectors",
     "name": "Kernel tweak tools / DLL injectors / 'FPS unlocker' apps",
-    "aliases": ["dll injector", "fps unlocker", "kernel tweaker", "process lasso gaming mode"],
+    "aliases": ["dll injector", "fps unlocker", "kernel tweaker"],
     "verdict": "risky",
     "what": "Third-party tools that inject into game processes or load kernel components to 'optimize'.",
     "why": "Anti-cheat ban territory and a classic malware vector. If a tool touches game memory or ships a driver, assume it can cost you your account. Compy never injects — that's a design law, not a setting."

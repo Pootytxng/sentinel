@@ -35,7 +35,14 @@ and the shipped datasets.
 ## Cross-links
 - `related` is authored on the new entries only. The UI renders `relatedIds` = the entry's own
   `related` **plus** any entry that lists it (reverse links), so `term xmp ↔ tweak xmp-expo` chips
-  appear both ways **without editing `tweaks.json`**. Lint fails on any dangling `related` id.
+  appear both ways **without editing `tweaks.json`**. Lint fails on any dangling `related` id, or on
+  any entry that lists **its own id** (self-reference).
+
+## Alias policy (Cowork audit, 2026-06-05)
+- **Generic descriptive phrases are valid aliases; distinctive coined product names are never valid —
+  even as search keys.** A coined product name ties a whole category to one vendor and can misclassify
+  a legitimate tool. (Fix this audit: removed `process lasso gaming mode` from `dll-injectors` —
+  Process Lasso is a real, non-injecting product; the alias was a dataset error.)
 
 ## Search & Autopsy behavior
 - **Search**: diacritic-fold + lowercase, multi-word AND (every word must match name/alias/body),
