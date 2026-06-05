@@ -8,13 +8,17 @@ import {
   type TweakVerdict,
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
+import { autopsyScan, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
+import { Icon } from "../design";
 import "./TweakEncyclopedia.css";
 
 // The knowledge library: one offline, bundled, searchable surface across tweaks, terms, scam-pattern
-// "tricks", and safe step-by-step guides. Read-only — no network, no mutation, no new capabilities.
-// (File keeps its original name so App's import is undisturbed; the surface is now the full library.)
+// "tricks", and safe step-by-step guides, plus the Guide Autopsy (paste a guide, get an honest grade).
+// Read-only — no network, no mutation, no new capabilities. (File keeps its name so App's import is
+// undisturbed; the surface is now the full library.)
 
 type Filter = "all" | KnowledgeType;
+type Mode = "browse" | "autopsy";
 
 const TYPE_LABEL: Record<KnowledgeType, string> = {
   tweak: "Tweak",
@@ -121,6 +125,115 @@ function EntryCard({
   );
 }
 
+function hitPill(h: AutopsyHit): { label: string; cls: string } {
+  if (h.type === "tweak" && h.verdict) return { label: VERDICT_LABEL[h.verdict], cls: `tweak-pill-${h.verdict}` };
+  if (h.type === "trick") return { label: "Scam pattern", cls: "kl-pill-trick" };
+  return { label: TYPE_LABEL[h.type], cls: "kl-pill-info" };
+}
+
+function AutopsyResultView({
+  result,
+  onNavigate,
+}: {
+  result: AutopsyResult;
+  onNavigate: (id: string) => void;
+}) {
+  const { grade, hits, scamFlags, truncated } = result;
+  const recognizedNothing = hits.length === 0 && grade.unknown === 0;
+
+  if (recognizedNothing) {
+    return (
+      <div className="kl-result">
+        <p className="kl-result-empty">
+          We didn't spot anything we recognize in that. Paste a guide that actually names tweaks or
+          settings and we'll grade each one.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="kl-result">
+      <div className="kl-grade">
+        This guide: <span className="kl-g-real">{`${grade.real} real`}</span> ·{" "}
+        <span className="kl-g-placebo">{`${grade.placebo} placebo`}</span> ·{" "}
+        <span className="kl-g-risky">{`${grade.risky} risky`}</span> ·{" "}
+        <span className="kl-g-unknown">{`${grade.unknown} we don't recognize`}</span>
+      </div>
+      {scamFlags > 0 && (
+        <div className="kl-scamflag">
+          <Icon name="alert" size={15} />
+          {scamFlags} known scam pattern{scamFlags > 1 ? "s" : ""} in here — open the flagged rows below.
+        </div>
+      )}
+      <p className="kl-result-note">
+        Anything we don't recognize gets no verdict — we won't guess. Tap a row to read the full entry.
+      </p>
+      {hits.length > 0 && (
+        <ul className="kl-hitlist">
+          {hits.map((h) => {
+            const pill = hitPill(h);
+            return (
+              <li key={h.id}>
+                <button className="kl-hitrow" onClick={() => onNavigate(h.id)}>
+                  <span className="kl-hitname">{h.name}</span>
+                  <span className={`tweak-pill ${pill.cls}`}>{pill.label}</span>
+                  {h.occurrences > 1 && <span className="kl-hitcount">×{h.occurrences}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {truncated && (
+        <p className="kl-result-note">We graded the first {(100000).toLocaleString()} characters of a longer paste.</p>
+      )}
+    </div>
+  );
+}
+
+function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<AutopsyResult | null>(null);
+
+  return (
+    <div className="kl-autopsy">
+      <p className="tweak-sub">
+        Paste a tweak guide — a forum post, a video description, a "do these 10 things" list — and get
+        the autopsy. Nothing leaves your PC; it's matched against this library, offline.
+      </p>
+      <textarea
+        className="kl-paste"
+        rows={7}
+        aria-label="Paste a tweak guide to autopsy"
+        placeholder="Paste the guide here…"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setResult(null);
+        }}
+      />
+      <div className="kl-autopsy-actions">
+        <button className="btn" disabled={!text.trim()} onClick={() => setResult(autopsyScan(text))}>
+          Grade this guide
+        </button>
+        {text && (
+          <button
+            className="btn btn-small"
+            onClick={() => {
+              setText("");
+              setResult(null);
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {result && <AutopsyResultView result={result} onNavigate={onNavigate} />}
+    </div>
+  );
+}
+
 export default function Library({
   onClose,
   focusId = null,
@@ -128,15 +241,17 @@ export default function Library({
   onClose: () => void;
   focusId?: string | null;
 }) {
+  const [mode, setMode] = useState<Mode>("browse");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [focused, setFocused] = useState<string | null>(focusId);
   const deferredQ = useDeferredValue(q); // keeps the input snappy; dataset is tiny so results are instant
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Opened with a deep-link target (e.g. from a glossary tooltip) — clear filters and reveal it.
+  // Opened with a deep-link target (e.g. from a glossary tooltip) — go to browse and reveal it.
   useEffect(() => {
     if (focusId) {
+      setMode("browse");
       setFocused(focusId);
       setQ("");
       setFilter("all");
@@ -150,17 +265,18 @@ export default function Library({
 
   // Scroll the focused entry into view and flash it once it's in the rendered list.
   useEffect(() => {
-    if (!focused) return;
+    if (mode !== "browse" || !focused) return;
     const el = cardRefs.current.get(focused);
     if (!el) return;
     el.scrollIntoView({ block: "center", behavior: "smooth" });
     el.classList.add("kl-flash");
     const t = setTimeout(() => el.classList.remove("kl-flash"), 1200);
     return () => clearTimeout(t);
-  }, [focused, results]);
+  }, [focused, results, mode]);
 
   const navigateTo = (id: string) => {
     if (!KNOWLEDGE_BY_ID.has(id)) return;
+    setMode("browse");
     setQ("");
     setFilter("all");
     setFocused(id);
@@ -175,52 +291,78 @@ export default function Library({
             Close
           </button>
         </div>
-        <p className="tweak-sub">
-          Type any word you heard online — a tweak, a bit of jargon, or a sketchy "optimizer" trick —
-          and get the honest answer. Everything here is verified and offline.
-        </p>
-        <input
-          className="tweak-search"
-          autoFocus
-          aria-label="Search the knowledge library"
-          placeholder="Search (e.g. XMP, 1% lows, deep scan, frame gen)…"
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setFocused(null);
-          }}
-        />
-        <div className="kl-filters" role="group" aria-label="Filter by type">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              className={`kl-filter ${filter === f.key ? "kl-filter-on" : ""}`}
-              aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
+
+        <div className="kl-modes" role="tablist" aria-label="Library mode">
+          <button
+            role="tab"
+            aria-selected={mode === "browse"}
+            className={`kl-mode ${mode === "browse" ? "kl-mode-on" : ""}`}
+            onClick={() => setMode("browse")}
+          >
+            Look it up
+          </button>
+          <button
+            role="tab"
+            aria-selected={mode === "autopsy"}
+            className={`kl-mode ${mode === "autopsy" ? "kl-mode-on" : ""}`}
+            onClick={() => setMode("autopsy")}
+          >
+            Autopsy a guide
+          </button>
         </div>
-        <div className="tweak-list">
-          {results.map((e) => (
-            <EntryCard
-              key={e.id}
-              entry={e}
-              onNavigate={navigateTo}
-              registerRef={(el) => {
-                if (el) cardRefs.current.set(e.id, el);
-                else cardRefs.current.delete(e.id);
+
+        {mode === "autopsy" ? (
+          <AutopsyPanel onNavigate={navigateTo} />
+        ) : (
+          <>
+            <p className="tweak-sub">
+              Type any word you heard online — a tweak, a bit of jargon, or a sketchy "optimizer"
+              trick — and get the honest answer. Everything here is verified and offline.
+            </p>
+            <input
+              className="tweak-search"
+              autoFocus
+              aria-label="Search the knowledge library"
+              placeholder="Search (e.g. XMP, 1% lows, deep scan, frame gen)…"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setFocused(null);
               }}
             />
-          ))}
-          {results.length === 0 && (
-            <div className="tweak-empty">
-              No entry for that yet — we only answer what we've verified. If you're unsure about a
-              tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.
+            <div className="kl-filters" role="group" aria-label="Filter by type">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  className={`kl-filter ${filter === f.key ? "kl-filter-on" : ""}`}
+                  aria-pressed={filter === f.key}
+                  onClick={() => setFilter(f.key)}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
-          )}
-        </div>
+            <div className="tweak-list">
+              {results.map((e) => (
+                <EntryCard
+                  key={e.id}
+                  entry={e}
+                  onNavigate={navigateTo}
+                  registerRef={(el) => {
+                    if (el) cardRefs.current.set(e.id, el);
+                    else cardRefs.current.delete(e.id);
+                  }}
+                />
+              ))}
+              {results.length === 0 && (
+                <div className="tweak-empty">
+                  No entry for that yet — we only answer what we've verified. If you're unsure about a
+                  tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

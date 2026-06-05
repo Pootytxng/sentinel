@@ -46,4 +46,23 @@ describe("Library surface", () => {
     fireEvent.click(chips[0]);
     expect(searchBox().value).toBe(""); // navigation cleared the query
   });
+
+  it("autopsy grades a pasted guide and links rows back into the library", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
+      // game mode = real, hpet = risky, core parking = placebo, deep scan = scam, last line = unknown
+      target: { value: "turn on game mode\nforce hpet\nset core parking off\nrun a deep scan\nfrobnicate the doohickey" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Grade this guide" }));
+
+    expect(screen.getByText("1 real")).toBeInTheDocument();
+    expect(screen.getByText("1 risky")).toBeInTheDocument();
+    expect(screen.getByText("1 placebo")).toBeInTheDocument();
+    expect(screen.getByText("1 we don't recognize")).toBeInTheDocument();
+    expect(screen.getByText(/known scam pattern/i)).toBeInTheDocument(); // deep scan flagged
+
+    fireEvent.click(screen.getByRole("button", { name: /Windows Game Mode/i })); // a hit row
+    expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument(); // back in browse mode
+  });
 });

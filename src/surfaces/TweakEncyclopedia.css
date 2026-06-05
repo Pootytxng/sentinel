@@ -253,6 +253,146 @@
   color: var(--fg);
 }
 
+/* ---- mode tabs (Look it up / Autopsy a guide) ---- */
+.kl-modes {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.kl-mode {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.kl-mode:hover {
+  color: var(--fg);
+}
+.kl-mode-on {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+/* ---- Guide Autopsy ---- */
+.kl-paste {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--panel);
+  color: var(--fg);
+  resize: vertical;
+  min-height: 120px;
+}
+.kl-paste:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.kl-autopsy-actions {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.kl-result {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.kl-grade {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.6;
+}
+.kl-g-real {
+  color: var(--ready, #46d98a);
+}
+.kl-g-placebo {
+  color: var(--muted);
+}
+.kl-g-risky {
+  color: var(--attention, #f5c451);
+}
+.kl-g-unknown {
+  color: var(--faint, var(--muted));
+}
+.kl-scamflag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  color: var(--danger, #f3716f);
+  background: var(--status-danger-soft, rgba(243, 113, 111, 0.12));
+  border: 1px solid var(--status-danger-line, rgba(243, 113, 111, 0.32));
+}
+.kl-result-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+.kl-result-empty {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+.kl-hitlist {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kl-hitrow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+.kl-hitrow:hover {
+  border-color: var(--accent);
+}
+.kl-hitname {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+.kl-hitcount {
+  font-size: 11.5px;
+  color: var(--faint, var(--muted));
+}
+.kl-pill-trick {
+  color: #2a0d0c;
+  background: var(--danger, #f3716f);
+}
+.kl-pill-info {
+  color: #11151f;
+  background: #9ca3af;
+}
+
 .kl-flash {
   animation: kl-flash 1.2s ease;
 }
