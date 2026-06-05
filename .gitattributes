@@ -1,0 +1,36 @@
+# Normalize line endings to LF in the repo AND the working tree, on every platform. This kills the
+# phantom CRLF diffs that appeared across Windows / WSL / CI checkouts of the same files. A one-time
+# `git add --renormalize .` commit accompanies this file.
+* text=auto eol=lf
+
+# Source + config are text (defensive — covered by text=auto above).
+*.rs    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.svg   text eol=lf
+
+# Binary assets — never normalize or diff as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.dll   binary
+*.exe   binary
+*.wasm  binary
+*.bin   binary
