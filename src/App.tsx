@@ -924,10 +924,14 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
     );
   }
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const row = (i: PriorityItem) => (
-    <li key={i.id} className={`readiness-row readiness-row-${i.status}`}>
+  // `badge` lets a bucket override the per-item status chip — the "Not worth touching" group is
+  // INFO by definition, so its rows read "Info" rather than the raw (often "Unknown") status.
+  const row = (i: PriorityItem, badge?: { cls: string; label: string }) => (
+    <li key={i.id} className={`readiness-row readiness-row-${badge?.cls ?? i.status}`}>
       <div className="readiness-row-head">
-        <span className={`readiness-badge readiness-${i.status}`}>{cap(i.status)}</span>
+        <span className={`readiness-badge readiness-${badge?.cls ?? i.status}`}>
+          {badge?.label ?? cap(i.status)}
+        </span>
         <span className="readiness-label">{i.title}</span>
         <span className="priority-confidence">{cap(i.confidence)} confidence</span>
       </div>
@@ -951,21 +955,23 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
       {priorities.limiters.length === 0 ? (
         <p className="muted">Nothing major flagged — nice.</p>
       ) : (
-        <ul className="readiness-list">{priorities.limiters.map(row)}</ul>
+        <ul className="readiness-list">{priorities.limiters.map((i) => row(i))}</ul>
       )}
 
       <h3 className="priorities-group">Already fine</h3>
       {priorities.already_fine.length === 0 ? (
         <p className="muted">—</p>
       ) : (
-        <ul className="readiness-list">{priorities.already_fine.map(row)}</ul>
+        <ul className="readiness-list">{priorities.already_fine.map((i) => row(i))}</ul>
       )}
 
       <h3 className="priorities-group">Not worth touching</h3>
       {priorities.not_worth_touching.length === 0 ? (
         <p className="muted">—</p>
       ) : (
-        <ul className="readiness-list">{priorities.not_worth_touching.map(row)}</ul>
+        <ul className="readiness-list">
+          {priorities.not_worth_touching.map((i) => row(i, { cls: "info", label: "Info" }))}
+        </ul>
       )}
     </section>
   );
@@ -1314,7 +1320,9 @@ function App() {
   const tabBadgeCount = (tab: Tab): number | null => {
     if (tab === "Readiness") return readiness?.attention_count ?? null;
     if (tab === "Priorities") return priorities ? priorities.limiters.length : null;
-    if (tab === "Optimize") return recs?.length ?? null;
+    // Outstanding (not-yet-applied) recs only — an applied rec isn't an open action, so the badge
+    // reflects "things still worth doing" and clears as you apply them.
+    if (tab === "Optimize") return recs?.filter((r) => !r.currently_applied).length ?? null;
     if (tab === "Sessions") return sessions.length;
     if (tab === "History") return changes.length;
     return null;

@@ -1415,7 +1415,8 @@ html, body, #root {
   color: #11151f;
   background: #9ca3af;
 }
-.readiness-badge.readiness-advisory {
+.readiness-badge.readiness-advisory,
+.readiness-badge.readiness-info {
   color: #04121f;
   background: #7cc4ff;
 }
