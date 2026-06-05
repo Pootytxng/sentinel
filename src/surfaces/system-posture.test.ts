@@ -16,6 +16,7 @@ const readiness = (checks: ReadinessCheck[], dismissed: string[] = []): GameRead
     advisory_count: checks.filter((c) => c.status === "advisory").length,
     advisory: "",
     dismissed_ids: dismissed,
+    drifts: [],
   };
 };
 

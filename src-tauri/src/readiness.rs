@@ -65,6 +65,10 @@ pub(crate) struct GameReadiness {
     /// Dismissed checks are excluded from `attention_count` so they never hold the amber/ring/score —
     /// the UI tucks them into a quiet "Dismissed" section the user can revisit + restore.
     dismissed_ids: Vec<String>,
+    /// Drift Watch: checks that WERE good and have since regressed (outside Compy). Surfaced as a
+    /// quiet heads-up; the underlying check still counts normally, this just adds the "it drifted"
+    /// framing.
+    drifts: Vec<crate::drift::Drift>,
 }
 
 impl GameReadiness {
@@ -521,6 +525,17 @@ pub(crate) fn evaluate_readiness(
         advisory_count,
         advisory: ADVISORY,
         dismissed_ids: Vec::new(),
+        drifts: Vec::new(), // filled by the wrapper (drift detection needs persisted state)
+    }
+}
+
+/// Map a readiness status to its kebab string — the form Drift Watch's pure core keys on.
+fn status_str(s: ReadinessStatus) -> &'static str {
+    match s {
+        ReadinessStatus::Ready => "ready",
+        ReadinessStatus::Attention => "attention",
+        ReadinessStatus::Unknown => "unknown",
+        ReadinessStatus::Advisory => "advisory",
     }
 }
 
@@ -581,6 +596,19 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
         freesync,
     );
     r.apply_dismissals(load_dismissals());
+    // Drift Watch: observe the non-dismissed checks; a previously-good check now needing attention
+    // is a regression (outside Compy) worth a quiet heads-up.
+    let dismissed: std::collections::HashSet<&str> =
+        r.dismissed_ids.iter().map(String::as_str).collect();
+    let observations: Vec<(String, String, String, String)> = r
+        .checks
+        .iter()
+        .filter(|c| !dismissed.contains(c.id))
+        .map(|c| {
+            (c.id.to_string(), c.label.to_string(), status_str(c.status).to_string(), c.detail.clone())
+        })
+        .collect();
+    r.drifts = crate::drift::detect_and_persist(&observations);
     r
 }
 

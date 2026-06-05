@@ -7,6 +7,7 @@ mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclu
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
 mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
 mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
+mod drift; // Drift Watch — notices readiness checks that were good and regressed (outside Compy).
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
 mod export;

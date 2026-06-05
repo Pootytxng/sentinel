@@ -152,6 +152,18 @@ const APPLIABLE_REC_IDS = new Set<string>([
 const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");
 
+// Coarse "how long ago" for the Drift Watch "noticed …" line.
+function fmtAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!then) return "recently";
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 60) return mins <= 1 ? "just now" : `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
+
 const fmtDriver = (g: GpuInfo) => {
   const version = g.driver_version || "—";
   if (g.driver_age_days == null) return version;
@@ -294,7 +306,11 @@ type GameReadiness = {
   advisory_count: number;
   advisory: string;
   dismissed_ids: string[];
+  drifts: Drift[];
 };
+
+// Drift Watch — a check that was good and has since regressed (outside Compy).
+type Drift = { id: string; label: string; detail: string; noticed_at: string };
 
 function ReadinessTab({
   readiness,
@@ -400,6 +416,35 @@ function ReadinessTab({
         </div>
       </div>
       <p className="readiness-blurb">{readiness.advisory}</p>
+      {readiness.drifts.length > 0 && (
+        <div className="drift-watch">
+          <div className="drift-watch-head">Changed since you last had it set</div>
+          {readiness.drifts.map((d) => {
+            const check = readiness.checks.find((c) => c.id === d.id);
+            return (
+              <div key={d.id} className="drift-row">
+                <div className="drift-row-top">
+                  <span className="drift-label">{d.label}</span>
+                  <span className="drift-when">changed outside Compy · noticed {fmtAgo(d.noticed_at)}</span>
+                </div>
+                <p className="drift-detail">{d.detail}</p>
+                {check?.action_uri ? (
+                  <button
+                    className="readiness-action"
+                    onClick={() => openGuidedUri(check.action_uri!)}
+                    title={`Opens ${check.action_label ?? "settings"}`}
+                  >
+                    <Icon name="external" />
+                    {check.action_label ?? "Open settings to restore"}
+                  </button>
+                ) : (
+                  <p className="drift-note">Re-apply it in Optimize to restore — Compy logs it to the Trust Ledger.</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <ul className="readiness-list">{active.map((c) => row(c, false))}</ul>
       {dismissed.length > 0 && (
         <div className="readiness-dismissed">
