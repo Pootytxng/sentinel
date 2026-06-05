@@ -83,10 +83,13 @@ and the shipped datasets.
   (left out now to avoid touching unrelated suites).
 - Autopsy grades on an explicit **Grade** click, not live — live grading would run ~600 candidate
   regexes over up to 100 KB on every keystroke. If live is wanted, precompute one combined matcher.
-- Tooltips wired to **8 static sites only** (debrief tiles + capture context, comparison card,
-  monitoring explainer). Readiness rows and most labels are **backend strings**, intentionally not
-  auto-wrapped (that's the carpet-bomb the directive warned against). If specific backend rows want
-  tooltips later, add a small curated `string → term-id` map for just those rows.
+- Tooltips: **8 hand-picked static sites** (debrief tiles + capture context, comparison card,
+  monitoring explainer) **plus** a curated auto-linker (`GlossText`) on the readiness rows scoped to
+  **exactly three** terms — VRR, driver age, power plan (owner decision B, 2026-06-05). The allowlist
+  is the guardrail against carpet-bombing backend strings; **no further reach this pass.** To extend
+  later, add ids to `READINESS_GLOSS` in `App.tsx`.
+- Discoverability is **unchanged for beta** (library opens from Optimize + inline tooltips); the beta
+  tester template now measures whether it's findable (owner decision D, 2026-06-05).
 
 ## Edge cases for future sessions
 - Adding a term whose id collides with a tweak id → **lint fails** (unique ids). Pick a distinct slug.

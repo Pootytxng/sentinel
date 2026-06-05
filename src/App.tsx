@@ -291,15 +291,13 @@ type DiagnosticSection = {
 // GameReadiness shape from readiness.rs (status strings are kebab-case).
 type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 
-// Curated jargon the readiness rows may auto-link to the knowledge library. Bounded allowlist so the
-// auto-glossary stays tasteful — it can only ever link these phrases, first occurrence per string.
+// Exactly the three readiness rows the owner approved for tooltips (VRR, driver age, power plan).
+// Bounded allowlist, first occurrence per string, so the auto-glossary stays tasteful — no further
+// reach this pass (owner decision B, 2026-06-05).
 const READINESS_GLOSS: GlossRule[] = [
   { id: "vrr", match: ["variable refresh rate", "vrr"] },
-  { id: "gsync-freesync", match: ["g-sync", "gsync", "freesync"] },
   { id: "drivers", match: ["driver age", "graphics driver", "gpu driver", "driver"] },
   { id: "power-plans", match: ["power plan", "ultimate performance", "high performance"] },
-  { id: "one-percent-lows", match: ["1% low"] },
-  { id: "resizable-bar", match: ["resizable bar", "smart access memory"] },
 ];
 
 type ReadinessCheck = {
