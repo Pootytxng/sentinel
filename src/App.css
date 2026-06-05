@@ -2533,3 +2533,108 @@ body::before {
 @media (max-width: 560px) {
   .debrief-tiles { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Moments 4/4b — comparison verdict card ──────────────────────────────── */
+.cmp {
+  border: 1px solid var(--border-strong, var(--border));
+  border-left-width: 3px;
+  border-radius: var(--r-md, 10px);
+  background: var(--panel-2);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.cmp-no-change { border-left-color: var(--muted); } /* neutral — never red */
+.cmp-improved { border-left-color: var(--ready, #46d98a); }
+.cmp-regressed { border-left-color: var(--danger, #f3716f); }
+.cmp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.cmp-nf { white-space: nowrap; }
+.cmp-headline {
+  font-size: 18px;
+  margin: 0 0 5px;
+  color: var(--fg);
+}
+.cmp-win { color: var(--ready, #46d98a); }
+.cmp-bad { color: var(--danger, #f3716f); }
+.cmp-sub {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.cmp-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cmp-receipt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.cmp-receipt-label {
+  color: var(--muted);
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.cmp-receipt-bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cmp-bar {
+  height: 16px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  min-width: 24px;
+}
+.cmp-bar-before { background: var(--border-strong, var(--border)); }
+.cmp-bar-after {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+.cmp-delta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.cmp-means {
+  border: 1px solid var(--ready, #46d98a);
+  border-left-width: 3px;
+  background: rgba(70, 217, 138, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+  margin-bottom: 12px;
+}
+.cmp-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.cmp-tally {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}

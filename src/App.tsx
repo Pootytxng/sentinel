@@ -385,6 +385,130 @@ function SessionMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Moments 4/4b — cross-session comparison result (mirrors comparison.rs serde).
+type ComparisonResult = {
+  rec_id: string;
+  rec_title: string;
+  game: string;
+  baseline_avg_fps: number;
+  baseline_low1_fps: number;
+  after_avg_fps: number;
+  after_low1_fps: number;
+  delta_avg_pct: number;
+  delta_low1_pct: number;
+  noise_floor_pct: number;
+  verdict: "improved" | "no-change" | "regressed";
+};
+
+function CmpReceipt({ label, before, after }: { label: string; before: number; after: number }) {
+  const max = Math.max(before, after, 1);
+  return (
+    <div className="cmp-receipt">
+      <span className="cmp-receipt-label">{label}</span>
+      <div className="cmp-receipt-bars">
+        <div className="cmp-bar cmp-bar-before" style={{ width: `${(before / max) * 100}%` }}>
+          <span>{before.toFixed(0)}</span>
+        </div>
+        <div className="cmp-bar cmp-bar-after" style={{ width: `${(after / max) * 100}%` }}>
+          <span>{after.toFixed(0)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The comparison verdict card. Replaces the debrief insight box once an armed comparison resolves.
+// Null result = neutral (never red): the instrument working. Win = same layout + evidence standard,
+// credit split. Regressed = honest, revert-forward.
+function ComparisonCard({
+  r,
+  nextSuspect,
+  onRevert,
+  onDismiss,
+  reverting,
+}: {
+  r: ComparisonResult;
+  nextSuspect: string | null;
+  onRevert: () => void;
+  onDismiss: () => void;
+  reverting: boolean;
+}) {
+  const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
+  const deltaLine = `Δ avg ${sign(r.delta_avg_pct)}% · 1% low ${sign(r.delta_low1_pct)}% — ${
+    r.verdict === "no-change" ? "inside" : "outside"
+  } the ±${r.noise_floor_pct}% noise floor`;
+
+  return (
+    <div className={`cmp cmp-${r.verdict}`}>
+      <div className="cmp-head">
+        <span>COMPARISON · {r.rec_title} · two {r.game} sessions</span>
+        <span className="cmp-nf">noise floor ±{r.noise_floor_pct}%</span>
+      </div>
+
+      {r.verdict === "no-change" && (
+        <>
+          <h2 className="cmp-headline">No measurable change</h2>
+          <p className="cmp-sub">
+            The difference is smaller than this rig's own session-to-session noise. Claiming a win
+            here would be lying.
+          </p>
+        </>
+      )}
+      {r.verdict === "improved" && (
+        <>
+          <h2 className="cmp-headline cmp-win">Measured improvement — {sign(r.delta_low1_pct)}% on your 1% low</h2>
+          <p className="cmp-sub">
+            Above this rig's noise floor, in {r.game}. You applied it; Compy measured it — that split
+            is the whole point.
+          </p>
+        </>
+      )}
+      {r.verdict === "regressed" && (
+        <>
+          <h2 className="cmp-headline cmp-bad">This made it worse here</h2>
+          <p className="cmp-sub">
+            Your 1% low dropped past the noise floor in {r.game}. No spin — take it back.
+          </p>
+        </>
+      )}
+
+      <div className="cmp-receipts">
+        <CmpReceipt label="Avg FPS" before={r.baseline_avg_fps} after={r.after_avg_fps} />
+        <CmpReceipt label="1% low" before={r.baseline_low1_fps} after={r.after_low1_fps} />
+      </div>
+      <p className="cmp-delta">{deltaLine}</p>
+
+      {r.verdict === "no-change" && (
+        <div className="cmp-means">
+          That's a real answer, not a failure — a lesser tool would have called this a win. One
+          suspect cleared: <strong>your dips aren't {r.rec_title.toLowerCase()}.</strong> It didn't
+          help this game; it may still help heavier ones. Keep it or take it back — one click either
+          way.
+        </div>
+      )}
+
+      <div className="cmp-actions">
+        {nextSuspect && (
+          <button className="btn-small" onClick={onDismiss}>
+            Chase suspect #2 — {nextSuspect}
+          </button>
+        )}
+        {r.verdict === "improved" ? (
+          <button className="btn-small btn-small-on" onClick={onDismiss}>
+            Keep it — measured win, logged
+          </button>
+        ) : (
+          <button className="btn-small" disabled={reverting} onClick={onRevert}>
+            {reverting ? "Reverting…" : "Revert it — no shame"}
+          </button>
+        )}
+      </div>
+
+      <div className="cmp-tally">honest answers: 1 · fake wins sold: 0</div>
+    </div>
+  );
+}
+
 // Moment 3 verdict bands from the 1%-low/avg ratio. The ~0.60 band copy is verbatim from the spec;
 // the others are conservative extrapolations (tunable) — see the spec's "conservative, tunable" note.
 // Owner-tunable bands (set 2026-06-04). The middle subtitle is the spec's verbatim line.
@@ -416,6 +540,8 @@ function SessionDebrief({
   apply,
   busyId,
   onExport,
+  changes,
+  rollback,
 }: {
   s: SessionSummary;
   priorities: Priorities | null;
@@ -423,8 +549,18 @@ function SessionDebrief({
   apply: (rec: Recommendation) => Promise<void>;
   busyId: string | null;
   onExport: () => void;
+  changes: AppliedChange[];
+  rollback: (c: AppliedChange) => Promise<void>;
 }) {
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
+  const [reverting, setReverting] = useState(false);
+  // Show a resolved comparison only if it's for THIS session's game (Moment 4).
+  useEffect(() => {
+    invoke<ComparisonResult | null>("get_latest_comparison")
+      .then((c) => setComparison(c && c.game === s.process_name ? c : null))
+      .catch(() => {});
+  }, [s.process_name]);
   const ratio = s.avg_fps > 0 ? Math.min(1, s.low1_fps_est / s.avg_fps) : 1;
   const v = verdictBand(ratio);
 
@@ -456,6 +592,21 @@ function SessionDebrief({
   const canArm = !!topRec && !topRec.currently_applied;
   const cleanSession = ratio >= 0.75 && !insight && !canArm;
 
+  const nextSuspect = priorities?.limiters?.[1]?.title ?? null;
+  const dismissCmp = async () => {
+    await invoke("dismiss_comparison").catch(() => {});
+    setComparison(null);
+  };
+  const revertCmp = async () => {
+    const active = changes.find((c) => c.rec_id === comparison?.rec_id && c.is_still_active);
+    if (active) {
+      setReverting(true);
+      await rollback(active);
+      setReverting(false);
+    }
+    await dismissCmp();
+  };
+
   return (
     <div className="debrief">
       <div className="debrief-head">
@@ -483,11 +634,21 @@ function SessionDebrief({
         />
       </div>
 
-      {insight && (
-        <div className="debrief-insight">
-          <div className="debrief-insight-tag">THE ONE THING WORTH KNOWING</div>
-          <p>{insight}</p>
-        </div>
+      {comparison ? (
+        <ComparisonCard
+          r={comparison}
+          nextSuspect={nextSuspect}
+          onRevert={revertCmp}
+          onDismiss={dismissCmp}
+          reverting={reverting}
+        />
+      ) : (
+        insight && (
+          <div className="debrief-insight">
+            <div className="debrief-insight-tag">THE ONE THING WORTH KNOWING</div>
+            <p>{insight}</p>
+          </div>
+        )
       )}
 
       <div className="debrief-ctx">
@@ -509,7 +670,17 @@ function SessionDebrief({
         <button
           className="debrief-cta"
           disabled={busyId !== null}
-          onClick={() => apply(topRec)}
+          onClick={async () => {
+            await apply(topRec);
+            // Arm the cross-session comparison: this session's metrics are the baseline.
+            await invoke("arm_comparison", {
+              recId: topRec.id,
+              recTitle: topRec.title,
+              game: s.process_name,
+              baselineAvgFps: s.avg_fps,
+              baselineLow1Fps: s.low1_fps_est,
+            }).catch(() => {});
+          }}
         >
           {busyId === topRec.id ? "Applying…" : "Apply the #1 fix — compare next session"}
         </button>
@@ -539,6 +710,8 @@ function SessionsTab({
   apply,
   busyId,
   onExport,
+  changes,
+  rollback,
 }: {
   sessions: SessionSummary[];
   priorities: Priorities | null;
@@ -546,6 +719,8 @@ function SessionsTab({
   apply: (rec: Recommendation) => Promise<void>;
   busyId: string | null;
   onExport: () => void;
+  changes: AppliedChange[];
+  rollback: (c: AppliedChange) => Promise<void>;
 }) {
   if (sessions.length === 0) {
     return (
@@ -581,6 +756,8 @@ function SessionsTab({
         apply={apply}
         busyId={busyId}
         onExport={onExport}
+        changes={changes}
+        rollback={rollback}
       />
       {sessions.length > 1 && <h3 className="priorities-group">Earlier sessions</h3>}
       <ul className="sessions-list">
@@ -1218,6 +1395,8 @@ function App() {
                   apply={apply}
                   busyId={busyId}
                   onExport={onExport}
+                  changes={changes}
+                  rollback={rollback}
                 />
               )}
               {activeTab === "Latency" && <LatencyTab />}
