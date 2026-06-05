@@ -1,176 +1,160 @@
 # Compy — Private Beta Tester Guide
 
-Thanks for helping test Compy. This is a short guide to install it, try it, and report what you find.
+Thanks for helping test Compy. This guide gets you installed, walks you through the one scary
+dialog, and tells you exactly what we want from you (about 20 minutes of honesty).
 
 ---
 
 ## 1. What Compy is
 
-Compy is a **rollback-first Windows configuration safety layer for PC gamers**. It looks at your
-machine and helps you understand and safely tune it:
+**Compy finds what's actually slowing your gaming PC down — and fixes the fixable, with an undo
+button on everything.** It reads your real hardware (not a generic checklist), tells you in plain
+English what's worth changing for *your* rig, what's already fine, and — this is the part we're
+proudest of — **it tells you honestly when a change did nothing.** No fake "+20% FPS," no invented
+score, no drama.
 
-- **Hardware** detection (CPU, GPU, RAM, storage, display, Windows version)
-- **Readiness** — advisory checks on whether your setup is gaming-ready
-- **Monitoring** — live GPU sensors and FPS/frametime capture
-- **Sessions** — summaries after you've played
-- **Export** — a local report you can save or share
-- **Priorities** — what's worth your attention first
-- A small set of **safe, fully reversible recommendations**
-
-**Compy is not a magic FPS booster or a tweak-pack.** It doesn't promise more frames. Every change
-it can make is audited and undoable — the point is *safety and clarity*, not risky tweaks.
+It is **not** an FPS booster and it doesn't promise frames. If your PC is already in good shape,
+Compy's job is to say so and leave it alone.
 
 ---
 
-## 2. Important beta warning
+## 2. The scary dialog (read this BEFORE installing)
 
-- This is a **private beta**. Please **do not share the installer publicly.**
-- The app is **unsigned**, so **Windows SmartScreen may warn you** ("Windows protected your PC —
-  unknown publisher").
-- **That warning is expected** for this beta — it just means the app isn't code-signed yet.
-- A **public release will require code signing and legal finalization later**; that is not done yet.
+When you run the installer, **Windows SmartScreen will probably show a blue warning**:
 
----
+> **"Windows protected your PC"** — Microsoft Defender SmartScreen prevented an unrecognized app
+> from starting. *Unknown publisher.*
 
-## 3. Install steps
+**This is expected, and you deserve to know exactly why:** Windows shows it for any app that isn't
+code-signed, and code-signing certificates cost money — this beta is free, unsigned, and hasn't
+earned its keep yet. Signing happens before any public release.
 
-Installer (NSIS): **`Compy_0.1.0_x64-setup.exe`**
+What the warning does NOT mean: it's not a virus flag, and it doesn't change what the app can do.
+For the record, here's what Compy deliberately never does — no kernel driver, no game injection,
+no network calls, no account, no auto-update. You can verify the no-network claim yourself with
+any firewall monitor; we'd honestly love it if one of you did.
 
-1. Download or copy the installer to your PC.
-2. Run it.
-3. **If SmartScreen appears:**
-   - click **More info**
-   - click **Run anyway**
-4. Launch **Compy** from the Start Menu or the installed shortcut.
-
-It installs per-user (no admin needed to install). It may briefly ask for a UAC prompt **only** later if
-you choose to use FPS monitoring or apply a recommendation — see below.
+**To proceed:** click **More info** → **Run anyway.**
 
 ---
 
-## 4. Privacy / safety promise
+## 3. Install
 
-- **No telemetry** — Compy does not phone home.
-- **No account** — nothing to sign up for or log into.
-- **No remote rules** — recommendations are built into the app; nothing is fetched from a server.
-- **No updater** — the app does not auto-update.
-- **No kernel driver.**
-- **No game injection.**
-- **No CPU temperature reading** — by design.
-- **Export reports are local files only.** You decide whether to share them.
+Installer: **`Compy_0.1.0_x64-setup.exe`** (private beta — please don't share it publicly)
 
----
+1. Run the installer (installs per-user; no admin needed).
+2. SmartScreen → **More info** → **Run anyway** (see section 2).
+3. Launch **Compy** from the Start Menu.
 
-## 5. What to test
-
-Please try these and note anything odd:
-
-- **First-launch onboarding** — does it appear and make sense?
-- **Hardware detection** — are your CPU / GPU / RAM / storage / display shown correctly?
-- **Readiness tab** — do the checks look reasonable for your setup?
-- **Monitoring tab** — do GPU sensors show up?
-- **FPS monitoring** — *only if you're comfortable accepting a UAC prompt.* Turn it on, play or run
-  something that draws frames, then turn it off.
-- **Sessions tab** — after a game or an active window has presented frames, do you get a session summary?
-- **Export report** — does it create files and open the folder?
-- **Priorities tab** — does the ordering make sense?
-- **Apply / rollback** — *only if you're comfortable,* and preferably **just one safe recommendation**,
-  then roll it back.
+You may see a **UAC prompt later** — only if you turn on FPS monitoring or apply certain
+recommendations. That's the elevated helper doing its job; "unknown publisher" there is the same
+unsigned-beta reason.
 
 ---
 
-## 6. What not to test yet
+## 4. Anti-cheat: the answer to the question you're already asking
 
-- **Gaming Mode is not included** in this build.
-- **Remote rules are disabled.**
-- **The updater is disabled.**
-- **Public-release signing is not done.**
-- **Do not expect CPU temperature** — Compy doesn't read it by design.
-
----
-
-## 7. How to report bugs
-
-When something looks wrong, please send:
-
-- A **screenshot** of the issue.
-- **What you clicked.**
-- **What you expected** to happen.
-- **What actually happened.**
-- Whether a **UAC prompt appeared**.
-- Whether a **second window appeared** (especially during FPS monitoring).
-- The **Export report** (Markdown **and** JSON) if you're comfortable sharing it.
-- Your **Windows version** and **GPU/CPU**, if they aren't already in the export.
-
-The feedback template in section 10 covers most of this — copy/paste and fill it in.
+Compy **never injects into games**. FPS is captured from *outside* the game via Windows' own event
+tracing (the same mechanism Microsoft's tools use), and the overlay is a separate window — it
+draws over borderless/windowed games only, never exclusive fullscreen. There is nothing for
+Vanguard, EAC, or BattlEye to object to, because Compy never touches the game process. Play
+ranked with it running; that's the design.
 
 ---
 
-## 8. Known limitations
+## 5. The guided tour (the main thing to test)
 
-- The **unsigned SmartScreen warning is expected** (see section 2).
-- **NVIDIA monitoring is implemented but still needs validation on real NVIDIA hardware** — results on
-  NVIDIA GPUs may be incomplete for now. (AMD is verified.)
-- The **1% low** figure is a **live-session estimate, not benchmark-grade**.
-- The **overlay works for borderless / windowed games, not exclusive fullscreen.**
-- **Public release still needs code signing and legal finalization.**
-- **Export / report data may include hardware names and local app state** — please **review a report
-  before sharing it.**
+Compy now opens with a guided first-experience. **Please go in blind and note where it loses you
+— first impressions are the data we can't get twice:**
+
+1. **Onboarding** (3 quick steps — it should read your actual rig on the first screen).
+2. **First check** — a fast scan with a verdict: what's worth fixing, what's already fine.
+3. **Apply the #1 fix** if you're comfortable (one click — and note the Trust Ledger entry it
+   leaves; everything is undoable from the same place).
+4. **Play something** — your normal game, with FPS monitoring on (accept the UAC prompt).
+5. **Check the Sessions tab afterward** — you should get a plain-English debrief of how it went.
+6. If you applied the fix in step 3 and chose "compare next session": **play the same game again**
+   and the next debrief will show an honest verdict — improved, no measurable change, or
+   regressed. **"No measurable change" is not a bug.** It's the product refusing to lie to you.
+7. **Roll something back** from the Trust Ledger and confirm your setting came back exactly.
+
+Also worth poking: Readiness, Priorities, Latency, Monitoring tabs; the Export report button.
 
 ---
 
-## 9. Uninstall steps
+## 6. Privacy
 
-1. **Windows Settings → Apps → Compy → Uninstall.**
-2. Your **AppData / Trust Ledger may remain by design** — Compy keeps your history and rollback
-   records so they survive an uninstall/reinstall (nothing is silently lost).
-3. **Optional manual cleanup** — if you want to remove that leftover data, delete:
+No telemetry, no account, no remote anything, no updater. **Nothing about your system leaves your
+PC unless you choose to send it to us.** Export reports are local files; review one before sharing
+— it contains hardware names and app state, nothing else.
 
-   ```
-   %APPDATA%\Compy
-   ```
+---
+
+## 7. What we want back from you (the actual ask)
+
+1. **An Export report** after you've played a session or two (Export button → it writes Markdown +
+   JSON locally → send us both if you're comfortable).
+2. **One sentence:** *how would you describe Compy to a friend?* Don't overthink it — your first
+   phrasing is the valuable one.
+3. **Anything that confused you, scared you, or broke.** Screenshot + what you clicked + what you
+   expected. The template below covers it.
+4. **On NVIDIA?** You're extra valuable — our NVIDIA monitoring is implemented but not yet
+   verified on real hardware (AMD is). Tell us everything that looks wrong.
+
+Send everything to: **[KUYA: your Discord / DM channel here]**
+
+---
+
+## 8. Known limitations (honesty section)
+
+- **No CPU temperature** — reading it needs a kernel driver, and we won't ship one. By design,
+  forever. (GPU temperature works.)
+- **1% low is a live estimate**, not benchmark-grade.
+- **Comparison verdicts need two sessions of the same game** — different games don't compare.
+- **Overlay**: borderless/windowed only, not exclusive fullscreen.
+- **NVIDIA**: implemented, not yet hardware-verified (see section 7).
+- **Gaming Mode is not in this build** — it exists but stays off until it passes its own safety QA.
+
+---
+
+## 9. Uninstall
+
+Windows Settings → Apps → **Compy** → Uninstall. Your Trust Ledger and history are kept in
+`%APPDATA%\Compy` **by design** (so rollback records survive a reinstall — nothing silently lost).
+Delete that folder manually if you want everything gone.
 
 ---
 
 ## 10. Feedback template
 
-Copy this, fill it in, and send it back. **Beyond bugs, we especially want the "Experience & feel"
-answers** — whether Compy feels premium, trustworthy, and like a real command center vs. just a
-settings page:
-
 ```
 Compy beta feedback
 
-Tester name:
+Tester: 
 Windows version:
-CPU:
-GPU:
-Monitor:
+CPU / GPU / Monitor:
 Install worked: yes/no
-SmartScreen appeared: yes/no
-Onboarding appeared: yes/no
+SmartScreen appeared: yes/no — was section 2 enough warning: yes/no
+Onboarding: clear / confusing at step ___
+First check verdict made sense: yes/no
 Hardware detected correctly: yes/no
-Readiness tab worked: yes/no
-Monitoring worked: yes/no
-FPS helper worked: yes/no/not tested
-Second window appeared during FPS monitoring: yes/no
-Export report worked: yes/no
-Priorities tab made sense: yes/no
-Applied a recommendation: yes/no
-Rollback worked: yes/no/not tested
-Bug/issue:
-Steps to reproduce:
+Played a session — debrief appeared: yes/no
+Debrief verdict felt accurate to how it played: yes/no
+Tried apply + compare: yes/no — verdict received: improved / no change / regressed / n.a.
+Rollback restored things exactly: yes/no/not tested
+FPS helper + UAC behaved: yes/no
+Export worked: yes/no
+Bug/issue + steps:
 Screenshot/export attached: yes/no
 
---- Experience & feel (we especially want this) ---
-Does Compy feel useful enough: yes/no
+--- The part we care about most ---
+Describe Compy to a friend in ONE sentence:
+Did it feel trustworthy: yes/no — why:
 Premium or plain: premium/plain
-Does it feel trustworthy: yes/no
-Real command center, or just a settings app: command center/settings app
-Anything feel too light, empty, or unfinished:
-Did it make your system feel more under control: yes/no
 Did it reduce the urge to look up random tweak guides: yes/no
-What would make it the ONLY place you need for PC gaming readiness:
+"No measurable change" verdict — honest or annoying: honest/annoying/didn't see it
+Did you find the Library ("Look it up" in Optimize)? yes/no — what did you search for:
+What would make this the only PC-readiness tool you need:
 Other notes:
 ```
 
