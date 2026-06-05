@@ -224,7 +224,7 @@ export default function FirstCheck({ onDone }: { onDone: () => void }) {
 
             <div className="fc-actions">
               <button className="fc-btn fc-btn-go" onClick={finish}>
-                Go to Compy
+                Open the dashboard
               </button>
             </div>
           </div>

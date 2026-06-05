@@ -213,5 +213,5 @@
   border: 1px solid var(--border);
   border-radius: var(--r-md, 10px);
 }
-.onb-rule-icon { font-size: 16px; line-height: 1; }
+.onb-rule-icon { color: var(--accent-bright, var(--accent)); flex-shrink: 0; }
 .onb-kicker strong { color: var(--accent-bright, var(--accent)); }

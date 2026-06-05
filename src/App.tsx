@@ -387,25 +387,21 @@ function SessionMetric({ label, value }: { label: string; value: string }) {
 
 // Moment 3 verdict bands from the 1%-low/avg ratio. The ~0.60 band copy is verbatim from the spec;
 // the others are conservative extrapolations (tunable) — see the spec's "conservative, tunable" note.
+// Owner-tunable bands (set 2026-06-04). The middle subtitle is the spec's verbatim line.
 function verdictBand(ratio: number): { h: string; sub: string } {
   const pct = Math.round(ratio * 100);
-  if (ratio >= 0.85)
+  if (ratio >= 0.75)
     return {
-      h: "Smooth all the way through",
-      sub: `Even your worst moments held at ${pct}% of your average — a steady session.`,
-    };
-  if (ratio >= 0.7)
-    return {
-      h: "Mostly smooth — with the occasional dip",
-      sub: `High average, and your worst moments stayed near ${pct}% of it.`,
+      h: "Smooth session",
+      sub: `Even your worst moments held at ${pct}% of your average — steady.`,
     };
   if (ratio >= 0.55)
     return {
-      h: "Mostly smooth — with dips under pressure",
+      h: "Mostly smooth — dips under pressure",
       sub: `High average, but your worst moments ran at ${pct}% of it. That gap is what stutter feels like.`,
     };
   return {
-    h: "Choppy under load",
+    h: "Rough — frequent stutter",
     sub: `Your worst moments dropped to ${pct}% of your average — that gap is felt as stutter.`,
   };
 }
@@ -450,7 +446,7 @@ function SessionDebrief({
   let insight: string | null = null;
   if (gpuLoafed) {
     insight = `Your GPU only reached ${s.peak_gpu_usage_pct}% at its peak while frames dipped — so the GPU probably isn't the bottleneck here. Prime suspect: a CPU or system limiter.`;
-  } else if (topLimiter && ratio < 0.85) {
+  } else if (topLimiter && ratio < 0.75) {
     insight = `Prime suspect: ${topLimiter.title.toLowerCase()}. ${topLimiter.reason}`;
   }
 
@@ -458,7 +454,7 @@ function SessionDebrief({
     ? recs.find((r) => r.id === (topLimiter.linked ?? topLimiter.id))
     : undefined;
   const canArm = !!topRec && !topRec.currently_applied;
-  const cleanSession = ratio >= 0.85 && !insight && !canArm;
+  const cleanSession = ratio >= 0.75 && !insight && !canArm;
 
   return (
     <div className="debrief">

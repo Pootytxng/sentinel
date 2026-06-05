@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
 
 // First-run experience — Moment 1 of the first-experience arc.
 // Spec: docs/superpowers/specs/2026-06-04-first-experience-arc-design.md (owner-approved VERBATIM —
@@ -160,9 +161,9 @@ function StepSeatbelt() {
 // Step 3 — HOUSE RULES.
 function StepHouseRules() {
   const rules = [
-    { icon: "🛡", text: "No kernel driver — stays in user space" },
-    { icon: "🎮", text: "No game injection — anti-cheat safe by design" },
-    { icon: "🔒", text: "Nothing leaves your PC — no account, no telemetry" },
+    { Icon: IconCpuOff, text: "No kernel driver — stays in user space" },
+    { Icon: IconShieldCheck, text: "No game injection — anti-cheat safe by design" },
+    { Icon: IconWifiOff, text: "Nothing leaves your PC — no account, no telemetry" },
   ];
   return (
     <>
@@ -171,7 +172,7 @@ function StepHouseRules() {
       <div className="onb-rules">
         {rules.map((r) => (
           <div key={r.text} className="onb-rule">
-            <span className="onb-rule-icon">{r.icon}</span>
+            <r.Icon className="onb-rule-icon" size={18} stroke={1.75} />
             <span className="onb-rule-text">{r.text}</span>
           </div>
         ))}
