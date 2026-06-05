@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::process::Command;
 
 mod actions;
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
@@ -46,7 +45,10 @@ use winreg::RegKey;
 
 
 pub(crate) fn current_power_plan_name() -> Option<String> {
-    let output = Command::new("powercfg").args(["/getactivescheme"]).output().ok()?;
+    let output = crate::actions::quiet_command("powercfg")
+        .args(["/getactivescheme"])
+        .output()
+        .ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Format: "Power Scheme GUID: <guid>  (Plan Name)"
     let start = stdout.find('(')? + 1;
@@ -63,7 +65,7 @@ pub(crate) fn game_mode_enabled() -> bool {
 }
 
 pub(crate) fn service_running(name: &str) -> bool {
-    Command::new("sc")
+    crate::actions::quiet_command("sc")
         .args(["query", name])
         .output()
         .ok()

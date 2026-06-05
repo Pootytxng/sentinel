@@ -23,6 +23,17 @@ use crate::history::AppliedChange;
 // apply_* fns read them to snapshot prior state before mutating.
 use crate::{fast_startup_state, hags_state, reserved_storage_enabled};
 
+/// Build a `Command` that never flashes a console window. EVERY non-elevated CLI probe (powercfg,
+/// sc, logman, powershell) MUST use this — without `CREATE_NO_WINDOW`, Windows briefly pops a
+/// console per spawn, which on launch reads as the terminal rapidly flashing open and closed.
+pub(crate) fn quiet_command(program: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut c = Command::new(program);
+    c.creation_flags(CREATE_NO_WINDOW);
+    c
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum KnownService {
     SysMain,
@@ -406,7 +417,7 @@ pub(crate) fn rollback_service_disable_typed(
 // ─── Power plan: Ultimate Performance ────────────────────────────────────
 
 pub(crate) fn current_power_plan_guid() -> Option<String> {
-    let output = Command::new("powercfg").args(["/getactivescheme"]).output().ok()?;
+    let output = quiet_command("powercfg").args(["/getactivescheme"]).output().ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Format: "Power Scheme GUID: <36-char-guid>  (Plan Name)"
     for line in stdout.lines() {
@@ -486,7 +497,7 @@ pub(crate) const PWR_SETTING_PCIE_ASPM: &str = "ee12f906-d277-404b-b6da-e5fa1a57
 // <subgroup> <setting>`. Returns None if the call fails or output can't
 // be parsed.
 pub(crate) fn query_power_setting_ac_dc(subgroup: &str, setting: &str) -> Option<(u32, u32)> {
-    let output = Command::new("powercfg")
+    let output = quiet_command("powercfg")
         .args(["/query", "SCHEME_CURRENT", subgroup, setting])
         .output()
         .ok()?;
@@ -593,7 +604,7 @@ pub(crate) fn select_best_existing_high_perf_plan(list_stdout: &str) -> Option<S
 }
 
 fn list_power_plans_stdout() -> Option<String> {
-    let out = Command::new("powercfg").args(["/list"]).output().ok()?;
+    let out = quiet_command("powercfg").args(["/list"]).output().ok()?;
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
@@ -601,7 +612,7 @@ fn list_power_plans_stdout() -> Option<String> {
 /// if the OS unexpectedly requires elevation) surfaces as Err — we never
 /// silently elevate.
 fn powercfg_setactive_unelevated(guid: &str) -> Result<(), String> {
-    let out = Command::new("powercfg")
+    let out = quiet_command("powercfg")
         .args(["/setactive", guid])
         .output()
         .map_err(|e| e.to_string())?;
@@ -693,7 +704,7 @@ fn power_plan_exists(guid: &str) -> bool {
     if g.is_empty() {
         return false;
     }
-    Command::new("powercfg")
+    quiet_command("powercfg")
         .args(["/list"])
         .output()
         .ok()
@@ -798,7 +809,7 @@ foreach ($a in $adapters) {
     }
 }
 "#;
-    let output = Command::new("powershell.exe")
+    let output = quiet_command("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", ps])
         .output();
     let stdout = match output {

@@ -241,7 +241,7 @@ pub fn run_capture() {
     // clean Drop). Without this, StartTrace fails with AlreadyExist and FPS
     // capture can never start again until reboot. logman is built into
     // Windows; ignore its result (no session => harmless error).
-    let _ = std::process::Command::new("logman")
+    let _ = crate::actions::quiet_command("logman")
         .args(["stop", SESSION_NAME, "-ets"])
         .output();
 
