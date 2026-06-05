@@ -2547,6 +2547,8 @@ body::before {
 .cmp-no-change { border-left-color: var(--muted); } /* neutral — never red */
 .cmp-improved { border-left-color: var(--ready, #46d98a); }
 .cmp-regressed { border-left-color: var(--danger, #f3716f); }
+.cmp-confounded,
+.cmp-expired { border-left-color: var(--muted); } /* honest non-answer — neutral, no credit */
 .cmp-head {
   display: flex;
   align-items: baseline;

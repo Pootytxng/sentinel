@@ -456,7 +456,7 @@ type ComparisonResult = {
   delta_avg_pct: number;
   delta_low1_pct: number;
   noise_floor_pct: number;
-  verdict: "improved" | "no-change" | "regressed";
+  verdict: "improved" | "no-change" | "regressed" | "confounded" | "expired";
 };
 
 function CmpReceipt({ label, before, after }: { label: string; before: number; after: number }) {
@@ -493,6 +493,9 @@ function ComparisonCard({
   reverting: boolean;
 }) {
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
+  // Only these verdicts are a fair measured comparison — confounded/expired show no numbers.
+  const isMeasured =
+    r.verdict === "no-change" || r.verdict === "improved" || r.verdict === "regressed";
   const deltaLine = `Δ avg ${sign(r.delta_avg_pct)}% · 1% low ${sign(r.delta_low1_pct)}% — ${
     r.verdict === "no-change" ? "inside" : "outside"
   } the ±${r.noise_floor_pct}% noise floor`;
@@ -530,12 +533,34 @@ function ComparisonCard({
           </p>
         </>
       )}
+      {r.verdict === "confounded" && (
+        <>
+          <h2 className="cmp-headline">Can't call this one</h2>
+          <p className="cmp-sub">
+            Other changes landed between these two sessions — this delta can't be honestly attributed
+            to {r.rec_title}. No credit either way.
+          </p>
+        </>
+      )}
+      {r.verdict === "expired" && (
+        <>
+          <h2 className="cmp-headline">Baseline too old to compare</h2>
+          <p className="cmp-sub">
+            This was armed too long ago to compare fairly — drivers, games, and Windows move on.
+            Re-arm fresh from a new debrief.
+          </p>
+        </>
+      )}
 
-      <div className="cmp-receipts">
-        <CmpReceipt label="Avg FPS" before={r.baseline_avg_fps} after={r.after_avg_fps} />
-        <CmpReceipt label="1% low" before={r.baseline_low1_fps} after={r.after_low1_fps} />
-      </div>
-      <p className="cmp-delta">{deltaLine}</p>
+      {isMeasured && (
+        <>
+          <div className="cmp-receipts">
+            <CmpReceipt label="Avg FPS" before={r.baseline_avg_fps} after={r.after_avg_fps} />
+            <CmpReceipt label="1% low" before={r.baseline_low1_fps} after={r.after_low1_fps} />
+          </div>
+          <p className="cmp-delta">{deltaLine}</p>
+        </>
+      )}
 
       {r.verdict === "no-change" && (
         <div className="cmp-means">
@@ -730,6 +755,22 @@ function SessionDebrief({
           className="debrief-cta"
           disabled={busyId !== null}
           onClick={async () => {
+            // Don't silently clobber a pending comparison — confirm before replacing its baseline.
+            const existing = await invoke<{
+              rec_id: string;
+              rec_title: string;
+              game: string;
+            } | null>("get_armed_comparison").catch(() => null);
+            if (
+              existing &&
+              (existing.rec_id !== topRec.id || existing.game !== s.process_name) &&
+              !window.confirm(
+                `A comparison is already armed (${existing.rec_title} · ${existing.game}). ` +
+                  `Applying this replaces that baseline with a fresh one. Continue?`,
+              )
+            ) {
+              return; // keep the pending comparison; don't apply a confounding change
+            }
             await apply(topRec);
             // Arm the cross-session comparison: this session's metrics are the baseline.
             await invoke("arm_comparison", {

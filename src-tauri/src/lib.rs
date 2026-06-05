@@ -469,6 +469,11 @@ fn get_latest_comparison() -> Option<comparison::ComparisonResult> {
 }
 
 #[tauri::command]
+fn get_armed_comparison() -> Option<comparison::ArmedComparison> {
+    comparison::armed()
+}
+
+#[tauri::command]
 fn dismiss_comparison() {
     comparison::clear_result();
 }
@@ -602,6 +607,7 @@ pub fn run() {
             clear_scoreboard,
             arm_comparison,
             get_latest_comparison,
+            get_armed_comparison,
             dismiss_comparison,
             get_trial_state,
             get_benchmark_state,

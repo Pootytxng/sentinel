@@ -254,6 +254,13 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     load_history().into_iter().map(into_view).collect()
 }
 
+/// Total Trust-Ledger entry count (append-only, so monotonic). Used as a confound watermark by the
+/// cross-session comparison engine: if the ledger advanced between arming and the next session,
+/// another change landed and the delta can't be honestly attributed.
+pub(crate) fn ledger_len() -> usize {
+    load_history().len()
+}
+
 /// Read-only roll-up of the Trust Ledger for surfaces that need counts rather
 /// than the full view (e.g. Game Readiness). `active` = applied AND still active;
 /// `externally_reverted` = applied but the live system no longer matches (changed

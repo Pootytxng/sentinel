@@ -17,6 +17,10 @@ use crate::sessions::SessionSummary;
 /// tunable later; matches the benchmark engine's conservative 3% floor.
 const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
 
+/// Owner-tunable: an armed baseline older than this (days) at finalize is too stale to compare
+/// fairly — drivers/games/Windows move on, so we discard rather than attribute a misleading delta.
+const ARM_MAX_AGE_DAYS: i64 = 14;
+
 /// A comparison armed from a debrief: the baseline session's metrics + the fix being applied.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(crate) struct ArmedComparison {
@@ -26,6 +30,10 @@ pub(crate) struct ArmedComparison {
     pub baseline_avg_fps: f64,
     pub baseline_low1_fps: f64,
     pub armed_at: String,
+    /// Trust-Ledger entry count at arm time — the confound watermark. If the ledger has advanced by
+    /// finalize, another change landed between sessions and the delta can't be honestly attributed.
+    #[serde(default)]
+    pub ledger_watermark: usize,
 }
 
 /// The computed result, surfaced in the next same-game debrief (replaces the insight box).
@@ -86,7 +94,13 @@ pub(crate) fn arm(
         baseline_avg_fps,
         baseline_low1_fps,
         armed_at: chrono::Utc::now().to_rfc3339(),
+        ledger_watermark: crate::history::ledger_len(),
     })
+}
+
+/// Currently-armed comparison, if any — lets the UI confirm before an arm overwrites another.
+pub(crate) fn armed() -> Option<ArmedComparison> {
+    load_armed()
 }
 
 /// Pure verdict from the 1%-low %-delta vs the noise floor — the honest core (no credit inside noise).
@@ -98,6 +112,27 @@ pub(crate) fn classify(delta_low1_pct: f64, noise_floor_pct: f64) -> &'static st
     } else {
         "regressed"
     }
+}
+
+/// Pure verdict WITH the honesty guards layered over `classify`. Expiry + confound take precedence
+/// over the measured delta — no credit when the comparison isn't fair. `ledger_now` and `now` are
+/// injected (not read from disk/clock) so this is unit-testable.
+pub(crate) fn classify_with_guards(
+    armed: &ArmedComparison,
+    delta_low1_pct: f64,
+    noise_floor_pct: f64,
+    ledger_now: usize,
+    now: chrono::DateTime<chrono::Utc>,
+) -> &'static str {
+    if let Ok(t) = chrono::DateTime::parse_from_rfc3339(&armed.armed_at) {
+        if (now - t.with_timezone(&chrono::Utc)).num_days() > ARM_MAX_AGE_DAYS {
+            return "expired"; // baseline too old to compare fairly
+        }
+    }
+    if ledger_now > armed.ledger_watermark {
+        return "confounded"; // another change landed between sessions
+    }
+    classify(delta_low1_pct, noise_floor_pct)
 }
 
 fn round1(x: f64) -> f64 {
@@ -116,6 +151,15 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) {
     let pct = |after: f64, base: f64| if base > 0.0 { (after - base) / base * 100.0 } else { 0.0 };
     let delta_low1 = pct(s.low1_fps_est, armed.baseline_low1_fps);
     let nf = DEFAULT_NOISE_FLOOR_PCT;
+    // Borrow `armed` for the verdict BEFORE moving its fields into the result struct below.
+    let verdict = classify_with_guards(
+        &armed,
+        delta_low1,
+        nf,
+        crate::history::ledger_len(),
+        chrono::Utc::now(),
+    )
+    .to_string();
     let result = ComparisonResult {
         rec_id: armed.rec_id,
         rec_title: armed.rec_title,
@@ -127,7 +171,7 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) {
         delta_avg_pct: round1(pct(s.avg_fps, armed.baseline_avg_fps)),
         delta_low1_pct: round1(delta_low1),
         noise_floor_pct: nf,
-        verdict: classify(delta_low1, nf).to_string(),
+        verdict,
         at: chrono::Utc::now().to_rfc3339(),
     };
     let _ = save_result(&result);
@@ -156,5 +200,44 @@ mod comparison_tests {
         assert_eq!(classify(3.0, 3.0), "no-change"); // boundary inclusive
         assert_eq!(classify(8.0, 3.0), "improved");
         assert_eq!(classify(-8.0, 3.0), "regressed");
+    }
+
+    fn armed_fixture(armed_at: String, watermark: usize) -> ArmedComparison {
+        ArmedComparison {
+            rec_id: "power-plan".into(),
+            rec_title: "Power plan".into(),
+            game: "game.exe".into(),
+            baseline_avg_fps: 120.0,
+            baseline_low1_fps: 80.0,
+            armed_at,
+            ledger_watermark: watermark,
+        }
+    }
+
+    #[test]
+    fn confound_guard_flags_a_ledger_advance() {
+        let now = chrono::Utc::now();
+        let armed = armed_fixture(now.to_rfc3339(), 5);
+        // Ledger unchanged since arming → the measured verdict stands.
+        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, 5, now), "improved");
+        // Another change landed between sessions (ledger advanced) → confounded, no credit.
+        assert_eq!(classify_with_guards(&armed, 8.0, 3.0, 6, now), "confounded");
+    }
+
+    #[test]
+    fn arm_expiry_discards_a_stale_baseline() {
+        let now = chrono::Utc::now();
+        let stale = armed_fixture((now - chrono::Duration::days(ARM_MAX_AGE_DAYS + 1)).to_rfc3339(), 5);
+        // A clear improvement with an unchanged ledger is STILL discarded when the baseline's too old.
+        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, 5, now), "expired");
+        let fresh = armed_fixture((now - chrono::Duration::days(ARM_MAX_AGE_DAYS - 1)).to_rfc3339(), 5);
+        assert_eq!(classify_with_guards(&fresh, 8.0, 3.0, 5, now), "improved");
+    }
+
+    #[test]
+    fn expiry_takes_precedence_over_confound() {
+        let now = chrono::Utc::now();
+        let stale = armed_fixture((now - chrono::Duration::days(ARM_MAX_AGE_DAYS + 5)).to_rfc3339(), 5);
+        assert_eq!(classify_with_guards(&stale, 8.0, 3.0, 99, now), "expired");
     }
 }
