@@ -26,8 +26,12 @@ passes with owner lanes. HQ owns all git and all Windows verification; Cowork ow
    mutation surface. Rationale: ~20 testers × one first launch each = the entire reason the beta
    exists. Shipping the old 4-step lecture onboarding spends the scarcest resource (first
    impressions) on the weakest screen. Waiving this saves ~1–2 days and costs the best data.
-4. **compy.gg + getcompy.com registered** (identifier `gg.compy.app` and homepage are baked into
-   the installer; register before any distribution).
+4. **No domain, no signing for the invite beta** (owner decision, 2026-06-05 — money-last).
+   `gg.compy.app` is just a reverse-DNS identifier *string*; Windows never verifies domain
+   ownership, and SmartScreen warns regardless of domain (already disarmed in BETA_TESTER_README
+   §2). Trusted friends who already know the owner need neither. **The domain trigger is the first
+   PUBLIC / stranger exposure of the name** (a Reddit recruit, a public post) — *not* the first
+   install. Register `compy.gg` (+ `getcompy.com`) before that moment, not before invites.
 5. **Beta feedback channel = Export receipts + chat (decision).** The decided beta terms are
    fully local / no telemetry / no new code — honor them. The Export report IS the telemetry:
    ask testers to share receipts voluntarily. The opt-in diagnostics rail (P4) moves to Wave 2
@@ -44,8 +48,11 @@ in the working tree) · the frozen `private-beta-001` refs at `16069fa` (untouch
 
 ## Passes
 
-**Pass 0 — today (Kuya, ~15 min).** Register compy.gg + getcompy.com (auto-renew on, WHOIS
-privacy on). 10-minute USPTO TESS look for "Compy" in software classes.
+**Pass 0 — NOT a blocker for the invite beta (owner decision, 2026-06-05; money-last).** Domain +
+trademark are deferred to the first PUBLIC / stranger exposure of the name, not the first install.
+*When that moment comes* (a public post / stranger recruit): register compy.gg + getcompy.com
+(auto-renew on, WHOIS privacy on) and do a 10-minute USPTO TESS look for "Compy" in software
+classes. The trusted-friends invite beta proceeds without any of it.
 
 **Pass 1 — rename lands (HQ, ~half day).** Work straight from
 `docs/RENAME_COMPLETION_AUDIT.md`: Tier 1 strings → Tier 2 decisions (serde alias rename, ETW
