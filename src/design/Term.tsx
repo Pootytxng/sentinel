@@ -58,3 +58,49 @@ export function Term({ id, children }: { id: string; children: ReactNode }) {
     </span>
   );
 }
+
+// Curated auto-glossary for backend-driven copy (e.g. readiness rows) where jargon can't be wrapped
+// by hand. Each rule is an explicit allowlist of phrases → one term id; only the FIRST occurrence in
+// a string is linked, so it stays tasteful (one tooltip per label, never carpet-bombed).
+export type GlossRule = { id: string; match: string[] };
+
+type GlossSeg = string | { id: string; text: string };
+
+export function glossSegments(text: string, rules: GlossRule[]): GlossSeg[] {
+  const lower = text.toLowerCase();
+  if (lower.length !== text.length) return [text]; // case-fold changed length; don't risk mis-slicing
+  let best: { start: number; len: number; id: string } | null = null;
+  for (const rule of rules) {
+    for (const phrase of rule.match) {
+      const needle = phrase.toLowerCase();
+      if (needle.length < 2) continue;
+      const re = new RegExp(`(?<![a-z0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9])`);
+      const m = re.exec(lower);
+      if (m && (!best || m.index < best.start || (m.index === best.start && m[0].length > best.len))) {
+        best = { start: m.index, len: m[0].length, id: rule.id };
+      }
+    }
+  }
+  if (!best) return [text];
+  return [
+    text.slice(0, best.start),
+    { id: best.id, text: text.slice(best.start, best.start + best.len) },
+    text.slice(best.start + best.len),
+  ].filter((s) => s !== "");
+}
+
+export function GlossText({ text, rules }: { text: string; rules: GlossRule[] }) {
+  return (
+    <>
+      {glossSegments(text, rules).map((s, i) =>
+        typeof s === "string" ? (
+          s
+        ) : (
+          <Term key={i} id={s.id}>
+            {s.text}
+          </Term>
+        ),
+      )}
+    </>
+  );
+}

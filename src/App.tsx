@@ -5,7 +5,7 @@ import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
-import { Term } from "./design/Term";
+import { Term, GlossText, type GlossRule } from "./design/Term";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -291,6 +291,17 @@ type DiagnosticSection = {
 // GameReadiness shape from readiness.rs (status strings are kebab-case).
 type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 
+// Curated jargon the readiness rows may auto-link to the knowledge library. Bounded allowlist so the
+// auto-glossary stays tasteful — it can only ever link these phrases, first occurrence per string.
+const READINESS_GLOSS: GlossRule[] = [
+  { id: "vrr", match: ["variable refresh rate", "vrr"] },
+  { id: "gsync-freesync", match: ["g-sync", "gsync", "freesync"] },
+  { id: "drivers", match: ["driver age", "graphics driver", "gpu driver", "driver"] },
+  { id: "power-plans", match: ["power plan", "ultimate performance", "high performance"] },
+  { id: "one-percent-lows", match: ["1% low"] },
+  { id: "resizable-bar", match: ["resizable bar", "smart access memory"] },
+];
+
 type ReadinessCheck = {
   id: string;
   label: string;
@@ -364,10 +375,14 @@ function ReadinessTab({
     >
       <div className="readiness-row-head">
         <span className={`readiness-badge readiness-${c.status}`}>{statusLabel[c.status]}</span>
-        <span className="readiness-label">{c.label}</span>
+        <span className="readiness-label">
+          <GlossText text={c.label} rules={READINESS_GLOSS} />
+        </span>
         {c.value && <span className="readiness-value">{c.value}</span>}
       </div>
-      <p className="readiness-detail">{c.detail}</p>
+      <p className="readiness-detail">
+        <GlossText text={c.detail} rules={READINESS_GLOSS} />
+      </p>
       <div className="readiness-row-actions">
         {c.action_uri && (
           <button
