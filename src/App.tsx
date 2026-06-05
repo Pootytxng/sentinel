@@ -433,6 +433,13 @@ type SessionSummary = {
   peak_ram_used_bytes: number | null;
   ram_total_bytes: number | null;
   compy_changes_active: number;
+  hw_fingerprint?: {
+    hash: string;
+    gpu: string;
+    gpu_driver: string;
+    ram_gb: number;
+    display: string;
+  } | null;
 };
 
 function SessionMetric({ label, value }: { label: string; value: string }) {
@@ -496,7 +503,12 @@ function ComparisonCard({
   // Only these verdicts are a fair measured comparison — confounded/expired show no numbers.
   const isMeasured =
     r.verdict === "no-change" || r.verdict === "improved" || r.verdict === "regressed";
-  const deltaLine = `Δ avg ${sign(r.delta_avg_pct)}% · 1% low ${sign(r.delta_low1_pct)}% — ${
+  // Show the delta in both units — FPS (what you feel) and % (what the noise floor is in).
+  const dAvgFps = Math.round(r.after_avg_fps - r.baseline_avg_fps);
+  const dLowFps = Math.round(r.after_low1_fps - r.baseline_low1_fps);
+  const deltaLine = `Δ avg ${sign(dAvgFps)} FPS (${sign(r.delta_avg_pct)}%) · 1% low ${sign(
+    dLowFps,
+  )} FPS (${sign(r.delta_low1_pct)}%) — ${
     r.verdict === "no-change" ? "inside" : "outside"
   } the ±${r.noise_floor_pct}% noise floor`;
 
@@ -520,8 +532,8 @@ function ComparisonCard({
         <>
           <h2 className="cmp-headline cmp-win">Measured improvement — {sign(r.delta_low1_pct)}% on your 1% low</h2>
           <p className="cmp-sub">
-            Above this rig's noise floor, in {r.game}. You applied it; Compy measured it — that split
-            is the whole point.
+            Measured on this rig, in {r.game}, above its own noise across these two sessions — a real
+            signal, not a guarantee for every game or session. You applied it; Compy measured it.
           </p>
         </>
       )}
@@ -743,6 +755,12 @@ function SessionDebrief({
         {ctxOpen && (
           <div className="debrief-ctx-body">
             <div>capture · ETW, external — no injection</div>
+            {s.hw_fingerprint && (
+              <div>
+                rig · {s.hw_fingerprint.gpu || "GPU —"} · {s.hw_fingerprint.ram_gb}GB
+                {s.hw_fingerprint.display ? ` · ${s.hw_fingerprint.display}` : ""}
+              </div>
+            )}
             {s.compy_changes_active === 0 && (
               <div>0 changes active — you played on stock settings (an honest baseline).</div>
             )}

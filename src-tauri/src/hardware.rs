@@ -1234,6 +1234,70 @@ pub(crate) fn gpu_vendor_match(hw: &HardwareInfo, needle: &str) -> Option<String
         .map(|g| g.name.clone())
 }
 
+/// A compact rig identity stamped on each session — groundwork for later same-rig analysis
+/// (per-rig empirical noise floor, upgrade validation). The readable fields ride alongside the hash
+/// so the data is self-describing. Local-only; never leaves the machine.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub(crate) struct HwFingerprint {
+    /// Short stable digest of the canonical rig string — the grouping key.
+    pub hash: String,
+    pub gpu: String,
+    pub gpu_driver: String,
+    pub ram_gb: u32,
+    /// "<w>x<h>@<refresh>" or "" if no display was read.
+    pub display: String,
+}
+
+/// Pure: build a fingerprint from rig fields (testable — no system access).
+fn fingerprint_of(gpu: &str, gpu_driver: &str, ram_gb: u32, display: &str) -> HwFingerprint {
+    use sha2::{Digest, Sha256};
+    let canonical = format!("{gpu}|{gpu_driver}|{ram_gb}GB|{display}");
+    let digest = Sha256::digest(canonical.as_bytes());
+    let hash: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    HwFingerprint {
+        hash,
+        gpu: gpu.into(),
+        gpu_driver: gpu_driver.into(),
+        ram_gb,
+        display: display.into(),
+    }
+}
+
+/// Fingerprint the current rig from the cached hardware snapshot. Local-only; no egress.
+pub(crate) fn current_fingerprint() -> HwFingerprint {
+    let hw = get_hardware_info();
+    let primary = hw.gpus.iter().max_by_key(|g| g.vram_bytes);
+    let ram_gb = (hw.ram_total_bytes as f64 / 1024f64.powi(3)).round() as u32;
+    let display = hw
+        .display
+        .as_ref()
+        .map(|d| format!("{}x{}@{}", d.width, d.height, d.max_refresh_rate_hz))
+        .unwrap_or_default();
+    fingerprint_of(
+        primary.map(|g| g.name.as_str()).unwrap_or(""),
+        primary.map(|g| g.driver_version.as_str()).unwrap_or(""),
+        ram_gb,
+        &display,
+    )
+}
+
+#[cfg(test)]
+mod fingerprint_tests {
+    use super::fingerprint_of;
+
+    #[test]
+    fn fingerprint_is_stable_and_distinguishes_rigs() {
+        let a = fingerprint_of("Radeon RX 9070 XT", "25.5.1", 32, "2560x1440@250");
+        let a2 = fingerprint_of("Radeon RX 9070 XT", "25.5.1", 32, "2560x1440@250");
+        let b = fingerprint_of("Radeon RX 9070 XT", "25.6.0", 32, "2560x1440@250"); // driver bump
+        assert_eq!(a.hash, a2.hash, "same rig → same hash");
+        assert_ne!(a.hash, b.hash, "a driver change is a different fingerprint");
+        assert_eq!(a.hash.len(), 16); // 8 bytes hex
+        assert_eq!(a.ram_gb, 32);
+        assert_eq!(a.display, "2560x1440@250");
+    }
+}
+
 #[cfg(test)]
 mod game_storage_tests {
     use super::{drive_letter_of, parse_steam_library_paths};

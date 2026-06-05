@@ -19,6 +19,14 @@ use serde::{Deserialize, Serialize};
 use crate::compy_data_dir;
 
 const MAX_SESSIONS: usize = 20;
+/// Sessions shorter than this (seconds) are too brief to debrief or compare fairly — an alt-tab blip
+/// or accidental capture shouldn't produce a verdict or resolve an armed comparison. Owner-tunable.
+const MIN_SESSION_SECS: u64 = 60;
+
+/// Pure: is a session long enough to be worth keeping?
+fn meets_min_duration(secs: u64) -> bool {
+    secs >= MIN_SESSION_SECS
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct SessionSummary {
@@ -37,6 +45,10 @@ pub(crate) struct SessionSummary {
     // sessions.json (migrated from %APPDATA%\Sentinel) parseable.
     #[serde(alias = "sentinel_changes_active")]
     pub(crate) compy_changes_active: usize, // active Compy changes during the session
+    /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
+    /// sessions parse with this as None.
+    #[serde(default)]
+    pub(crate) hw_fingerprint: Option<crate::hardware::HwFingerprint>,
 }
 
 fn round1(x: f64) -> f64 {
@@ -133,6 +145,8 @@ impl SessionAccumulator {
             peak_ram_used_bytes: self.peak_ram_used_bytes,
             ram_total_bytes: self.ram_total_bytes,
             compy_changes_active: self.compy_changes_active,
+            // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
+            hw_fingerprint: None,
         }
     }
 }
@@ -163,6 +177,11 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
 }
 
 pub(crate) fn save_session(summary: SessionSummary) -> Result<(), String> {
+    // Drop trivially short sessions entirely — no debrief, and crucially no armed-comparison
+    // resolution (a blip must not confound or settle a pending comparison; the arm waits).
+    if !meets_min_duration(summary.duration_secs) {
+        return Ok(());
+    }
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
     crate::comparison::on_session_finalized(&summary);
@@ -209,6 +228,14 @@ mod session_tests {
         acc.record_fps("game.exe", 60.0, 16.6, 50.0);
         acc.record_fps("game.exe", 60.0, 16.6, 50.0);
         assert_eq!(acc.finalize(10).process_name, "game.exe");
+    }
+
+    #[test]
+    fn trivially_short_sessions_are_dropped() {
+        assert!(!meets_min_duration(0));
+        assert!(!meets_min_duration(MIN_SESSION_SECS - 1));
+        assert!(meets_min_duration(MIN_SESSION_SECS));
+        assert!(meets_min_duration(3600));
     }
 
     #[test]

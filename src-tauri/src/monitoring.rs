@@ -836,7 +836,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 );
             }
             if acc.has_data() {
-                let _ = crate::sessions::save_session(acc.finalize(start.elapsed().as_secs()));
+                let mut summary = acc.finalize(start.elapsed().as_secs());
+                summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
+                let _ = crate::sessions::save_session(summary);
             }
         });
     }
