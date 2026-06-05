@@ -41,8 +41,8 @@ pub(crate) struct CpuSensorSnapshot {
     usage_overall_pct: f32,
     /// Per-logical-core utilization in the same units.
     usage_per_core_pct: Vec<f32>,
-    /// Current frequency as reported by sysinfo (often the base clock on
-    /// Windows; boost isn't reliably exposed through PDH).
+    /// Live current clock in MHz — boost-aware (base × "% Processor Performance" via PDH). Falls
+    /// back to sysinfo's base clock if the PDH counter is unavailable.
     frequency_mhz: u64,
     /// Physical memory used / total in bytes.
     ram_used_bytes: u64,
@@ -52,6 +52,54 @@ pub(crate) struct CpuSensorSnapshot {
 pub(crate) fn cpu_sensor_cache() -> &'static Mutex<CpuSensorSnapshot> {
     static CACHE: OnceLock<Mutex<CpuSensorSnapshot>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(CpuSensorSnapshot::default()))
+}
+
+// ── Live CPU frequency via PDH (boost-aware) ──────────────────────────────
+// sysinfo's `frequency()` returns the BASE clock on Windows — it never shows boost. The real
+// current clock = base × "% Processor Performance" (a PDH counter that climbs past 100% under
+// boost and drops below it when the CPU parks/idles). Read-only, no driver, no elevation. The
+// handles live on the poller thread (PDH handles aren't Send) and are primed once on open.
+struct CpuPerfCounter {
+    query: windows::Win32::System::Performance::PDH_HQUERY,
+    counter: windows::Win32::System::Performance::PDH_HCOUNTER,
+}
+
+impl CpuPerfCounter {
+    fn open() -> Option<Self> {
+        use windows::Win32::System::Performance::{
+            PdhAddEnglishCounterW, PdhCollectQueryData, PdhOpenQueryW, PDH_HCOUNTER, PDH_HQUERY,
+        };
+        unsafe {
+            let mut query = PDH_HQUERY::default();
+            if PdhOpenQueryW(None, 0, &mut query) != 0 {
+                return None;
+            }
+            let mut counter = PDH_HCOUNTER::default();
+            let path = windows::core::w!("\\Processor Information(_Total)\\% Processor Performance");
+            if PdhAddEnglishCounterW(query, path, 0, &mut counter) != 0 {
+                return None;
+            }
+            let _ = PdhCollectQueryData(query); // prime — the first sample always reads 0
+            Some(Self { query, counter })
+        }
+    }
+
+    /// Current "% Processor Performance" (~100 at base, >100 under boost). None if unavailable.
+    fn read_pct(&self) -> Option<f64> {
+        use windows::Win32::System::Performance::{
+            PdhCollectQueryData, PdhGetFormattedCounterValue, PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE,
+        };
+        unsafe {
+            if PdhCollectQueryData(self.query) != 0 {
+                return None;
+            }
+            let mut value = PDH_FMT_COUNTERVALUE::default();
+            if PdhGetFormattedCounterValue(self.counter, PDH_FMT_DOUBLE, None, &mut value) != 0 {
+                return None;
+            }
+            Some(value.Anonymous.doubleValue)
+        }
+    }
 }
 
 // ─── Demand-gated pollers ────────────────────────────────────────────────
@@ -104,6 +152,8 @@ pub(crate) fn ensure_cpu_poller_started() {
                 // tables `new_all()` builds. Keeps Compy's own footprint minimal — a PC
                 // optimizer shouldn't be a memory hog. `refresh_cpu_all` keeps the clock reading.
                 let mut sys = System::new();
+                // PDH live-frequency reader (boost-aware); falls back to the base clock if absent.
+                let cpu_perf = CpuPerfCounter::open();
                 loop {
                     // Idle when nothing's reading CPU/RAM — skip the refresh entirely.
                     if poller_idle(cpu_demand()) {
@@ -119,7 +169,14 @@ pub(crate) fn ensure_cpu_poller_started() {
                     } else {
                         usage_per_core_pct.iter().sum::<f32>() / usage_per_core_pct.len() as f32
                     };
-                    let frequency_mhz = sys.cpus().first().map(|c| c.frequency()).unwrap_or(0);
+                    let base_mhz = sys.cpus().first().map(|c| c.frequency()).unwrap_or(0);
+                    // Live current clock = base × % Processor Performance (boost-aware); base fallback.
+                    let frequency_mhz = cpu_perf
+                        .as_ref()
+                        .and_then(|p| p.read_pct())
+                        .filter(|pct| *pct > 0.0)
+                        .map(|pct| (base_mhz as f64 * pct / 100.0).round() as u64)
+                        .unwrap_or(base_mhz);
                     let snap = CpuSensorSnapshot {
                         usage_overall_pct,
                         usage_per_core_pct,

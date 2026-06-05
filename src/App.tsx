@@ -1109,6 +1109,13 @@ function App() {
   useEffect(() => {
     invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
   }, []);
+  // Apply the saved theme to the DOM on launch. `theme` state restores from localStorage, but the
+  // [data-theme] attribute must actually be written or the palette silently falls back to default —
+  // that omission is why a chosen theme "didn't persist" across restarts.
+  useEffect(() => {
+    applyTheme(theme);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Global crash-recovery: once Gaming Mode is enabled, check on launch — regardless of which tab
   // is open — whether a previous session ended uncleanly, and surface a prompt to restore. Inert
   // while the feature is gated off (gamingEnabled stays false → never checks; no orphans can exist
@@ -2499,6 +2506,18 @@ function CpuMonitorPanel({
           color="#6aa9ff"
           sublabel={warmingUp ? "Warming up — first delta in 1 s" : undefined}
         />
+        {cpu.frequency_mhz > 0 && (
+          <MetricRow
+            label="Clock speed"
+            value={Math.round(cpu.frequency_mhz)}
+            unit=" MHz"
+            history={history.map((s) => Math.round(s.frequency_mhz))}
+            min={0}
+            max={7000}
+            color="#34d399"
+            sublabel="Live current clock — rises under boost, drops when idle/parked"
+          />
+        )}
         <MetricRow
           label="CPU temperature"
           value={cpuTemp ? Math.round(cpuTemp.temp_c) : null}
