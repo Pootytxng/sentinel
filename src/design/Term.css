@@ -1,0 +1,59 @@
+/* Inline glossary term + its tooltip. Subtle dotted underline; tooltip is a small popover. */
+.kl-term-wrap {
+  position: relative;
+  display: inline;
+}
+.kl-term {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--accent, #6aa6ff);
+}
+.kl-term:hover,
+.kl-term:focus-visible {
+  color: var(--fg);
+  outline: none;
+}
+.kl-tip {
+  position: absolute;
+  z-index: 1200;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  max-width: 280px;
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel-2, #14181f);
+  border: 1px solid var(--border-strong, var(--border, #2a2f3a));
+  box-shadow: var(--shadow-pop, 0 12px 32px rgba(0, 0, 0, 0.45));
+  text-align: left;
+  white-space: normal;
+}
+.kl-tip-what {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg, #e7ebf2));
+  font-weight: 400;
+}
+.kl-tip-more {
+  display: inline-block;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent, #6aa6ff);
+  cursor: pointer;
+}
+.kl-tip-more:hover {
+  text-decoration: underline;
+}

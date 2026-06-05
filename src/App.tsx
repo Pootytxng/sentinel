@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
+import { LibraryContext } from "./surfaces/library-context";
+import { Term } from "./design/Term";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -577,7 +579,10 @@ function ComparisonCard({
       )}
       {r.verdict === "improved" && (
         <>
-          <h2 className="cmp-headline cmp-win">Measured improvement — {sign(r.delta_low1_pct)}% on your 1% low</h2>
+          <h2 className="cmp-headline cmp-win">
+            Measured improvement — {sign(r.delta_low1_pct)}% on your{" "}
+            <Term id="one-percent-lows">1% low</Term>
+          </h2>
           <p className="cmp-sub">
             Measured on this rig, in {r.game}, above its own noise across these two sessions — a real
             signal, not a guarantee for every game or session. You applied it; Compy measured it.
@@ -588,7 +593,8 @@ function ComparisonCard({
         <>
           <h2 className="cmp-headline cmp-bad">This made it worse here</h2>
           <p className="cmp-sub">
-            Your 1% low dropped past the noise floor in {r.game}. No spin — take it back.
+            Your 1% low dropped past the <Term id="noise-floor">noise floor</Term> in {r.game}. No
+            spin — take it back.
           </p>
         </>
       )}
@@ -767,8 +773,12 @@ function SessionDebrief({
       <p className="debrief-sub">{v.sub}</p>
 
       <div className="debrief-tiles">
-        <DebriefTile label="Avg FPS" value={s.avg_fps.toFixed(0)} />
-        <DebriefTile label="1% low" value={s.low1_fps_est.toFixed(0)} note="estimate" />
+        <DebriefTile label={<Term id="hz-vs-fps">Avg FPS</Term>} value={s.avg_fps.toFixed(0)} />
+        <DebriefTile
+          label={<Term id="one-percent-lows">1% low</Term>}
+          value={s.low1_fps_est.toFixed(0)}
+          note="estimate"
+        />
         <DebriefTile
           label="Peak GPU"
           value={s.peak_gpu_usage_pct == null ? "—" : `${s.peak_gpu_usage_pct}%`}
@@ -803,7 +813,9 @@ function SessionDebrief({
         </button>
         {ctxOpen && (
           <div className="debrief-ctx-body">
-            <div>capture · ETW, external — no injection</div>
+            <div>
+              capture · <Term id="etw">ETW</Term>, external — no injection
+            </div>
             {s.hw_fingerprint && (
               <div>
                 rig · {s.hw_fingerprint.gpu || "GPU —"} · {s.hw_fingerprint.ram_gb}GB
@@ -858,7 +870,7 @@ function SessionDebrief({
   );
 }
 
-function DebriefTile({ label, value, note }: { label: string; value: string; note?: string }) {
+function DebriefTile({ label, value, note }: { label: ReactNode; value: string; note?: string }) {
   return (
     <div className="debrief-tile">
       <div className="debrief-tile-value">{value}</div>
@@ -1218,6 +1230,16 @@ function App() {
     () => localStorage.getItem("compy_sessions_seen_v1") ?? "",
   );
   const [showEncyclopedia, setShowEncyclopedia] = useState(false);
+  const [libraryFocusId, setLibraryFocusId] = useState<string | null>(null);
+  const libraryApi = useMemo(
+    () => ({
+      openLibrary: (focusId?: string) => {
+        setLibraryFocusId(focusId ?? null);
+        setShowEncyclopedia(true);
+      },
+    }),
+    [],
+  );
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -1489,6 +1511,7 @@ function App() {
       : "Rules: Built-in";
 
   return (
+    <LibraryContext.Provider value={libraryApi}>
     <main className="app">
       {showOnboarding && (
         <Onboarding
@@ -1512,7 +1535,15 @@ function App() {
       {!showOnboarding && showFirstCheck && (
         <FirstCheck onDone={() => setShowFirstCheck(false)} />
       )}
-      {showEncyclopedia && <TweakEncyclopedia onClose={() => setShowEncyclopedia(false)} />}
+      {showEncyclopedia && (
+        <TweakEncyclopedia
+          focusId={libraryFocusId}
+          onClose={() => {
+            setShowEncyclopedia(false);
+            setLibraryFocusId(null);
+          }}
+        />
+      )}
       {report && (
         <ReportModal
           report={report}
@@ -1666,6 +1697,7 @@ function App() {
         </button>
       </footer>
     </main>
+    </LibraryContext.Provider>
   );
 }
 
@@ -2414,7 +2446,8 @@ function MonitoringTab({ active }: { active: boolean }) {
       <p className="section-help">
         Live system telemetry. CPU usage via Windows PDH (built-in, no
         driver). GPU sensors via vendor libraries (NVML / ADLX). FPS &
-        frametime via ETW. No injection into your games, no kernel driver —
+        <Term id="frametime">frametime</Term> via <Term id="etw">ETW</Term>. No injection into your
+        games, no <Term id="kernel-driver">kernel driver</Term> —
         anti-cheat compatible. The overlay draws over borderless/windowed
         games (not exclusive fullscreen). Charts show the last minute.
         <br />
