@@ -6,6 +6,14 @@
 > fresh session: read this top-to-bottom, then `docs/RELEASE_QA.md` for the live QA pass.
 > Treat file/line claims as point-in-time — verify against current code before asserting.
 
+> **RENAMED Sentinel → Compy (2026-06-04).** The app was renamed for brand/SEO collision reasons
+> (SentinelOne / MS Sentinel / Valorant). Identifier `gg.compy.app`, exe `compy.exe`, crate
+> `compy`/`compy_lib`, data dir `%APPDATA%\Compy`. **First launch COPY-migrates** the old
+> `%APPDATA%\Sentinel` data dir → `%APPDATA%\Compy` (`migrate_legacy_data_once` in `lib.rs`; the
+> legacy literal MUST stay "Sentinel" — it's the source). Pre-rename **git history, the WSL scaffold
+> path, and the old `%APPDATA%\Sentinel` dir** still use "sentinel" — that's expected, not a leftover.
+> Domain: `compy.gg`.
+
 ## What Compy is
 
 An all-in-one PC optimization & **safety** dashboard for the everyday, **non-technical gamer**
