@@ -2638,3 +2638,44 @@ body::before {
   font-size: 10.5px;
   color: var(--faint);
 }
+
+/* ── Readiness dismiss / Dismissed section ───────────────────────────────── */
+.readiness-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.readiness-dismiss {
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.readiness-dismiss:hover {
+  color: var(--fg);
+  border-color: var(--border-strong, var(--border));
+}
+.readiness-row-dismissed {
+  opacity: 0.6;
+}
+.readiness-dismissed {
+  margin-top: 14px;
+}
+.readiness-dismissed-head {
+  font: inherit;
+  font-size: 12.5px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 0;
+}
+.readiness-dismissed-head:hover {
+  color: var(--fg);
+}

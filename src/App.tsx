@@ -293,9 +293,17 @@ type GameReadiness = {
   unknown_count: number;
   advisory_count: number;
   advisory: string;
+  dismissed_ids: string[];
 };
 
-function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
+function ReadinessTab({
+  readiness,
+  onChanged,
+}: {
+  readiness: GameReadiness | null;
+  onChanged: () => void;
+}) {
+  const [showDismissed, setShowDismissed] = useState(false);
   if (!readiness) {
     return (
       <section className="tab-pane">
@@ -309,6 +317,67 @@ function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
     unknown: "Unknown",
     advisory: "Advisory",
   };
+  const dismissedSet = new Set(readiness.dismissed_ids);
+  const active = readiness.checks.filter((c) => !dismissedSet.has(c.id));
+  const dismissed = readiness.checks.filter((c) => dismissedSet.has(c.id));
+  // Only alert/info findings are dismissable — a clean Ready row has nothing to silence.
+  const dismissable = (s: ReadinessStatus) => s === "attention" || s === "advisory";
+  const dismiss = async (id: string) => {
+    try {
+      await invoke("dismiss_readiness_check", { id });
+      onChanged();
+    } catch {
+      /* surfaced on next scan */
+    }
+  };
+  const restore = async (id: string) => {
+    try {
+      await invoke("restore_readiness_check", { id });
+      onChanged();
+    } catch {
+      /* surfaced on next scan */
+    }
+  };
+  const row = (c: ReadinessCheck, isDismissed: boolean) => (
+    <li
+      key={c.id}
+      className={`readiness-row readiness-row-${c.status}${isDismissed ? " readiness-row-dismissed" : ""}`}
+    >
+      <div className="readiness-row-head">
+        <span className={`readiness-badge readiness-${c.status}`}>{statusLabel[c.status]}</span>
+        <span className="readiness-label">{c.label}</span>
+        {c.value && <span className="readiness-value">{c.value}</span>}
+      </div>
+      <p className="readiness-detail">{c.detail}</p>
+      <div className="readiness-row-actions">
+        {c.action_uri && (
+          <button
+            className="readiness-action"
+            onClick={() => openGuidedUri(c.action_uri!)}
+            title={`Opens ${c.action_label ?? "settings"}`}
+          >
+            <Icon name="external" />
+            {c.action_label ?? "Open"}
+          </button>
+        )}
+        {isDismissed ? (
+          <button className="readiness-dismiss" onClick={() => restore(c.id)}>
+            Restore
+          </button>
+        ) : (
+          dismissable(c.status) && (
+            <button
+              className="readiness-dismiss"
+              onClick={() => dismiss(c.id)}
+              title="Silence this — you've judged it; it moves to Dismissed and stops counting"
+            >
+              Dismiss
+            </button>
+          )
+        )}
+      </div>
+    </li>
+  );
   return (
     <section className="tab-pane readiness-pane">
       <div className="readiness-head">
@@ -331,30 +400,20 @@ function ReadinessTab({ readiness }: { readiness: GameReadiness | null }) {
         </div>
       </div>
       <p className="readiness-blurb">{readiness.advisory}</p>
-      <ul className="readiness-list">
-        {readiness.checks.map((c) => (
-          <li key={c.id} className={`readiness-row readiness-row-${c.status}`}>
-            <div className="readiness-row-head">
-              <span className={`readiness-badge readiness-${c.status}`}>
-                {statusLabel[c.status]}
-              </span>
-              <span className="readiness-label">{c.label}</span>
-              {c.value && <span className="readiness-value">{c.value}</span>}
-            </div>
-            <p className="readiness-detail">{c.detail}</p>
-            {c.action_uri && (
-              <button
-                className="readiness-action"
-                onClick={() => openGuidedUri(c.action_uri!)}
-                title={`Opens ${c.action_label ?? "settings"}`}
-              >
-                <Icon name="external" />
-                {c.action_label ?? "Open"}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+      <ul className="readiness-list">{active.map((c) => row(c, false))}</ul>
+      {dismissed.length > 0 && (
+        <div className="readiness-dismissed">
+          <button
+            className="readiness-dismissed-head"
+            onClick={() => setShowDismissed((s) => !s)}
+          >
+            {showDismissed ? "▾" : "▸"} Dismissed ({dismissed.length}) — silenced by you
+          </button>
+          {showDismissed && (
+            <ul className="readiness-list">{dismissed.map((c) => row(c, true))}</ul>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -1128,6 +1187,15 @@ function App() {
     }
   };
 
+  // Re-fetch just readiness (after a dismiss/restore) without a full rescan.
+  const reloadReadiness = async () => {
+    try {
+      setReadiness(await invoke<GameReadiness>("get_game_readiness"));
+    } catch {
+      /* keep the prior readiness on a transient failure */
+    }
+  };
+
   const toggleStartup = async (entry: StartupEntry) => {
     setBusyId(`startup:${entry.name}`);
     setError(null);
@@ -1372,7 +1440,9 @@ function App() {
 
             <div className="content">
               {activeTab === "Overview" && <OverviewTab hw={hw} />}
-              {activeTab === "Readiness" && <ReadinessTab readiness={readiness} />}
+              {activeTab === "Readiness" && (
+                <ReadinessTab readiness={readiness} onChanged={reloadReadiness} />
+              )}
               {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
               {activeTab === "Optimize" && (
                 <OptimizeTab
@@ -1474,10 +1544,12 @@ function CommandHero({
   // Ring shows the fraction of readiness checks cleared — a real, explainable
   // count, NOT a synthesized score.
   const total = readiness ? readiness.checks.length : 0;
-  // Advisory items (e.g. VRR — no API exposes its state) are "resolved" from
-  // Compy's view: nothing for it to fix, the user's been pointed to verify.
-  // Count them as clear so an inherently-advisory check never holds the ring down.
-  const clear = readiness ? readiness.ready_count + readiness.advisory_count : 0;
+  // Only an ACTIVE (non-dismissed) attention check or an Unknown holds the ring down.
+  // Advisory items (e.g. VRR — no API exposes its state) and user-dismissed checks are "resolved"
+  // from Compy's view — attention_count already excludes dismissals server-side.
+  const clear = readiness
+    ? total - readiness.attention_count - readiness.unknown_count
+    : 0;
   const R = 52;
   const C = 2 * Math.PI * R;
   const dash = C * (total > 0 ? clear / total : 0);

@@ -5,14 +5,19 @@ import type { GameReadiness, ReadinessCheck } from "../types";
 const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
   ({ id: label, label, status, detail: "", value: null });
 
-const readiness = (checks: ReadinessCheck[]): GameReadiness => ({
-  checks,
-  ready_count: checks.filter((c) => c.status === "ready").length,
-  attention_count: checks.filter((c) => c.status === "attention").length,
-  unknown_count: checks.filter((c) => c.status === "unknown").length,
-  advisory_count: checks.filter((c) => c.status === "advisory").length,
-  advisory: "",
-});
+const readiness = (checks: ReadinessCheck[], dismissed: string[] = []): GameReadiness => {
+  const d = new Set(dismissed);
+  return {
+    checks,
+    ready_count: checks.filter((c) => c.status === "ready").length,
+    // attention_count excludes dismissed (mirrors the backend).
+    attention_count: checks.filter((c) => c.status === "attention" && !d.has(c.id)).length,
+    unknown_count: checks.filter((c) => c.status === "unknown").length,
+    advisory_count: checks.filter((c) => c.status === "advisory").length,
+    advisory: "",
+    dismissed_ids: dismissed,
+  };
+};
 
 describe("deriveSystemPosture", () => {
   it("is 'scanning' before readiness loads", () => {
@@ -41,6 +46,14 @@ describe("deriveSystemPosture", () => {
     const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
     expect(p.state).toBe("dialed-in");
     expect(p.attentionCount).toBe(0);
+  });
+
+  it("a dismissed attention check no longer drives the posture (stays dialed-in)", () => {
+    const r = readiness([check("ready", "SSD"), check("attention", "HDR")], ["HDR"]);
+    const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
+    expect(p.state).toBe("dialed-in");
+    expect(p.attentionCount).toBe(0);
+    expect(p.reasons).toEqual([]);
   });
 
   it("is 'unknown' when readiness has no usable checks", () => {

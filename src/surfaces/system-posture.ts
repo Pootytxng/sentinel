@@ -25,7 +25,11 @@ export function deriveSystemPosture(input: {
     return { state: "unknown", headline: "Not enough to judge yet", sub: "Run a scan to see your readiness.", attentionCount: 0, reasons: [] };
   }
 
-  const reasons = readiness.checks.filter((c) => c.status === "attention").map((c) => c.label);
+  // Dismissed checks are informed user choices — they never drive the attention posture.
+  const dismissed = new Set(readiness.dismissed_ids ?? []);
+  const reasons = readiness.checks
+    .filter((c) => c.status === "attention" && !dismissed.has(c.id))
+    .map((c) => c.label);
   const n = reasons.length;
 
   if (n > 0) {

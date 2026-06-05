@@ -580,6 +580,8 @@ pub fn run() {
             set_startup_entry_enabled,
             get_rules_source,
             get_game_readiness,
+            dismiss_readiness_check,
+            restore_readiness_check,
             get_session_summaries,
             export_report,
             open_export_folder,

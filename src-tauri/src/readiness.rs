@@ -61,6 +61,24 @@ pub(crate) struct GameReadiness {
     unknown_count: usize,
     advisory_count: usize,
     advisory: &'static str,
+    /// Check ids the user has explicitly dismissed (informed "I've judged this, stop alerting me").
+    /// Dismissed checks are excluded from `attention_count` so they never hold the amber/ring/score —
+    /// the UI tucks them into a quiet "Dismissed" section the user can revisit + restore.
+    dismissed_ids: Vec<String>,
+}
+
+impl GameReadiness {
+    /// Apply user dismissals: drop dismissed checks from the actionable `attention_count` (they keep
+    /// their real status for the Dismissed section, but stop counting as an alert).
+    fn apply_dismissals(&mut self, dismissed: Vec<String>) {
+        let set: std::collections::HashSet<&str> = dismissed.iter().map(|s| s.as_str()).collect();
+        self.attention_count = self
+            .checks
+            .iter()
+            .filter(|c| c.status == ReadinessStatus::Attention && !set.contains(c.id))
+            .count();
+        self.dismissed_ids = dismissed;
+    }
 }
 
 fn check(
@@ -319,9 +337,13 @@ pub(crate) fn evaluate_readiness(
             Some(false) => ReadinessCheck {
                 id: "vrr",
                 label: "Variable refresh rate (G-SYNC / FreeSync)",
-                status: ReadinessStatus::Advisory,
-                detail: "Your display supports FreeSync but it's currently OFF. Turning it on smooths \
-                         frame pacing and removes tearing."
+                // Gains-based: a verified supported-but-OFF VRR is a MODEST, clearly-perceptible win
+                // (smoother pacing + no tearing across the whole refresh range) — above negligible,
+                // so it earns Attention, with the magnitude stated so the user can gauge it.
+                status: ReadinessStatus::Attention,
+                detail: "Your display supports FreeSync but it's currently OFF. Turning it on is a \
+                         modest, clearly-noticeable win — it smooths frame pacing and removes tearing \
+                         across your whole refresh range. One toggle in your GPU control panel."
                     .to_string(),
                 value: Some("FreeSync: off".into()),
                 action_uri: Some("ms-settings:display-advancedgraphics"),
@@ -498,7 +520,45 @@ pub(crate) fn evaluate_readiness(
         unknown_count,
         advisory_count,
         advisory: ADVISORY,
+        dismissed_ids: Vec::new(),
     }
+}
+
+// ── Dismissals: a tiny persisted set of check ids the user has chosen to silence ──────────────
+fn dismissals_path() -> std::path::PathBuf {
+    crate::compy_data_dir().join("readiness_dismissals.json")
+}
+
+fn load_dismissals() -> Vec<String> {
+    std::fs::read_to_string(dismissals_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_dismissals(ids: &[String]) -> Result<(), String> {
+    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(ids).map_err(|e| e.to_string())?;
+    std::fs::write(dismissals_path(), json).map_err(|e| e.to_string())
+}
+
+/// Dismiss a readiness check by id (idempotent) — the user has judged it and wants it silenced.
+#[tauri::command]
+pub(crate) fn dismiss_readiness_check(id: String) -> Result<(), String> {
+    let mut ids = load_dismissals();
+    if !ids.contains(&id) {
+        ids.push(id);
+        save_dismissals(&ids)?;
+    }
+    Ok(())
+}
+
+/// Restore a previously-dismissed check so it alerts again.
+#[tauri::command]
+pub(crate) fn restore_readiness_check(id: String) -> Result<(), String> {
+    let mut ids = load_dismissals();
+    ids.retain(|x| x != &id);
+    save_dismissals(&ids)
 }
 
 #[tauri::command]
@@ -512,14 +572,16 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
     // systems leave this None → the VRR row stays the honest advisory.
     crate::monitoring::ensure_amd_poller_started();
     let freesync = crate::monitoring::amd_freesync_cache().lock().ok().and_then(|c| *c);
-    evaluate_readiness(
+    let mut r = evaluate_readiness(
         &hw,
         power_plan.as_deref(),
         fps_uac_required,
         fps_running,
         &hist,
         freesync,
-    )
+    );
+    r.apply_dismissals(load_dismissals());
+    r
 }
 
 #[cfg(test)]
@@ -742,23 +804,52 @@ mod readiness_tests {
     }
 
     #[test]
+    fn vrr_supported_but_off_is_attention_modest_gain() {
+        // A verified supported-but-OFF VRR is a modest, perceptible win → Attention (gains-based),
+        // distinct from the undetermined case which stays Advisory.
+        let hw = hw_with(
+            Some(DisplayInfo {
+                current_refresh_rate_hz: 144,
+                max_refresh_rate_hz: 144,
+                ..Default::default()
+            }),
+            vec![],
+            vec![],
+        );
+        let r =
+            evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(false));
+        let c = find(&r, "vrr");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        assert!(c.action_uri.is_some());
+    }
+
+    #[test]
+    fn dismissing_a_check_drops_it_from_attention_count() {
+        let hw = hw_with(
+            Some(DisplayInfo {
+                current_refresh_rate_hz: 60,
+                max_refresh_rate_hz: 144,
+                ..Default::default()
+            }),
+            vec![],
+            vec![],
+        );
+        let mut r =
+            evaluate_readiness(&hw, Some("Balanced"), false, false, &AppliedChangesSummary::default(), None);
+        let before = r.attention_count;
+        assert!(before >= 1, "monitor-refresh below max should be Attention");
+        r.apply_dismissals(vec!["monitor-refresh".to_string()]);
+        assert_eq!(r.attention_count, before - 1);
+        assert!(r.dismissed_ids.contains(&"monitor-refresh".to_string()));
+    }
+
+    #[test]
     fn freesync_on_makes_vrr_ready() {
         let hw = hw_with(None, vec![], vec![]);
         let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(true));
         let c = find(&r, "vrr");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert_eq!(c.value.as_deref(), Some("FreeSync: on"));
-    }
-
-    #[test]
-    fn freesync_supported_but_off_is_advisory_not_attention() {
-        let hw = hw_with(None, vec![], vec![]);
-        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), Some(false));
-        let c = find(&r, "vrr");
-        assert_eq!(c.status, ReadinessStatus::Advisory);
-        assert_eq!(c.value.as_deref(), Some("FreeSync: off"));
-        // "Supported but off" is a nudge, never counted as a problem.
-        assert_eq!(r.attention_count, 0);
     }
 
     #[test]
