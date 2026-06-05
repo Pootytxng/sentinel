@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
+import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -1213,6 +1214,7 @@ function App() {
   const [sessionsSeenAt, setSessionsSeenAt] = useState<string>(
     () => localStorage.getItem("compy_sessions_seen_v1") ?? "",
   );
+  const [showEncyclopedia, setShowEncyclopedia] = useState(false);
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -1507,6 +1509,7 @@ function App() {
       {!showOnboarding && showFirstCheck && (
         <FirstCheck onDone={() => setShowFirstCheck(false)} />
       )}
+      {showEncyclopedia && <TweakEncyclopedia onClose={() => setShowEncyclopedia(false)} />}
       {report && (
         <ReportModal
           report={report}
@@ -1609,6 +1612,7 @@ function App() {
                   onToggleRec={toggleRec}
                   onToggleStartup={toggleStartup}
                   hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
+                  onOpenEncyclopedia={() => setShowEncyclopedia(true)}
                 />
               )}
               {activeTab === "Monitoring" && (
@@ -2084,6 +2088,7 @@ function OptimizeTab({
   onToggleRec,
   onToggleStartup,
   hasActiveChange,
+  onOpenEncyclopedia,
 }: {
   recs: Recommendation[];
   startup: StartupEntry[];
@@ -2091,6 +2096,7 @@ function OptimizeTab({
   onToggleRec: (rec: Recommendation) => void;
   onToggleStartup: (entry: StartupEntry) => void;
   hasActiveChange: (recId: string) => boolean;
+  onOpenEncyclopedia: () => void;
 }) {
   type Filter = "All" | RecCategory | "Guided" | "Startup";
   const [filter, setFilter] = useState<Filter>("All");
@@ -2138,6 +2144,10 @@ function OptimizeTab({
         </h2>
         <div className="read-only-pill">Nothing changes without your approval</div>
       </div>
+
+      <button className="tweak-launch" onClick={onOpenEncyclopedia}>
+        Check a tweak before you try it →
+      </button>
 
       <div className="segmented" role="tablist" aria-label="Filter optimizations">
         {filters.map((f) => (

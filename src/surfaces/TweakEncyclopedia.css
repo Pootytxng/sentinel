@@ -1,0 +1,125 @@
+/* Wave-2 #3 — Tweak Encyclopedia search overlay. */
+.tweak-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(3, 4, 7, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 48px 24px;
+}
+.tweak-modal {
+  width: 100%;
+  max-width: 640px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--r-lg, 14px);
+  box-shadow: var(--shadow-pop, 0 20px 60px rgba(0, 0, 0, 0.45));
+  padding: 20px 22px;
+}
+.tweak-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tweak-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.tweak-sub {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 14px;
+}
+.tweak-search {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--panel);
+  color: var(--fg);
+  margin-bottom: 14px;
+}
+.tweak-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.tweak-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tweak-entry {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--r-md, 10px);
+  background: var(--panel-2);
+  padding: 12px 14px;
+}
+.tweak-real {
+  border-left-color: var(--ready, #46d98a);
+}
+.tweak-placebo {
+  border-left-color: var(--muted);
+}
+.tweak-risky {
+  border-left-color: var(--attention, #f5c451);
+}
+.tweak-entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tweak-name {
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 14.5px;
+}
+.tweak-pill {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.tweak-pill-real {
+  color: #04210f;
+  background: #4ade80;
+}
+.tweak-pill-placebo {
+  color: #11151f;
+  background: #9ca3af;
+}
+.tweak-pill-risky {
+  color: #2a1c00;
+  background: #fbbf24;
+}
+.tweak-what {
+  color: var(--fg-2, var(--fg));
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 6px;
+}
+.tweak-why {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+}
+.tweak-empty {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 16px 4px;
+}

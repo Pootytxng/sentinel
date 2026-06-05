@@ -2762,3 +2762,22 @@ body::before {
   font-size: 12px;
   margin: 0;
 }
+
+/* Tweak Encyclopedia entry-point button (Optimize tab). */
+.tweak-launch {
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.tweak-launch:hover {
+  border-color: var(--accent);
+}

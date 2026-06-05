@@ -1,0 +1,50 @@
+[
+  {
+    "id": "fullscreen-optimizations",
+    "name": "Disable Fullscreen Optimizations",
+    "aliases": ["FSO", "fullscreen optimizations"],
+    "verdict": "real",
+    "what": "Turns off Windows' hybrid fullscreen compositor for a specific game's .exe.",
+    "why": "Genuinely changes frame pacing / latency in SOME games and hurts others — it's per-game, so measure it. Not a global win."
+  },
+  {
+    "id": "game-mode",
+    "name": "Windows Game Mode",
+    "aliases": ["game mode"],
+    "verdict": "real",
+    "what": "Prioritizes the foreground game for CPU/GPU scheduling and holds back background interruptions.",
+    "why": "Modest, low-risk benefit on most rigs; larger on busy/background-heavy systems. Compy can toggle it for you."
+  },
+  {
+    "id": "msi-mode",
+    "name": "MSI Mode (Message-Signaled Interrupts)",
+    "aliases": ["message signaled interrupts", "msi"],
+    "verdict": "real",
+    "what": "Switches a device from a shared legacy line IRQ to dedicated message-signaled interrupts.",
+    "why": "Real, measurable interrupt-latency win for GPU / NIC / NVMe — but driver-dependent and reversible. Compy surfaces it as advisory, never forces it."
+  },
+  {
+    "id": "useplatformclock",
+    "name": "Force HPET / useplatformclock",
+    "aliases": ["HPET", "high precision event timer", "bcdedit useplatformclock"],
+    "verdict": "risky",
+    "what": "Forces Windows to use the High Precision Event Timer via a boot flag.",
+    "why": "Refused. On modern Windows this almost always RAISES latency and causes stutter — the OS already picks the best timer. A classic forum tweak that backfires."
+  },
+  {
+    "id": "disable-vbs",
+    "name": "Disable Core Isolation / VBS",
+    "aliases": ["memory integrity", "virtualization based security", "HVCI"],
+    "verdict": "risky",
+    "what": "Turns off virtualization-based security / memory integrity, which can cost a few percent CPU.",
+    "why": "Real performance gain, real security cost — it removes a kernel exploit mitigation. Compy shows it as a trade-off you decide, never auto-applied."
+  },
+  {
+    "id": "registry-fps-hacks",
+    "name": "Random registry \"FPS boost\" hacks",
+    "aliases": ["regedit fps", "gaming registry tweaks", "fps boost"],
+    "verdict": "placebo",
+    "what": "Assorted forum / video registry edits promising free FPS.",
+    "why": "Almost all are placebo or actively harmful — undocumented keys, no measurable effect, easy to break settings. Compy refuses the lot."
+  }
+]
