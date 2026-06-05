@@ -46,5 +46,293 @@
     "verdict": "placebo",
     "what": "Assorted forum / video registry edits promising free FPS.",
     "why": "Almost all are placebo or actively harmful — undocumented keys, no measurable effect, easy to break settings. Compy refuses the lot."
+  },
+  {
+    "id": "xmp-expo",
+    "name": "XMP / EXPO memory profile",
+    "aliases": ["xmp", "expo", "docp", "ram overclock profile", "memory profile"],
+    "verdict": "real",
+    "what": "Enables your RAM's rated speed profile in BIOS (it runs slower out of the box).",
+    "why": "The #1 low-risk BIOS win — real gains in CPU-bound games and 1% lows. If the PC fails to boot, clear CMOS and it's back; run a memory stability test after enabling."
+  },
+  {
+    "id": "rebar-sam",
+    "name": "Resizable BAR / Smart Access Memory",
+    "aliases": ["rebar", "resizable bar", "SAM", "smart access memory", "above 4g decoding"],
+    "verdict": "real",
+    "what": "Lets the CPU access the GPU's whole VRAM in one mapping instead of small chunks (BIOS + driver).",
+    "why": "Real but title-dependent — a few percent in many games, big in a handful, slightly negative in rare ones. Enable it, measure, and disable per-title only if a game regresses."
+  },
+  {
+    "id": "fan-curves",
+    "name": "Custom fan curves / better cooling",
+    "aliases": ["fan curve", "thermal throttling fix", "undervolt cooling"],
+    "verdict": "real",
+    "what": "Tunes case/GPU/CPU fan response so parts stay cooler under load.",
+    "why": "The safest 'performance' tweak that exists: modern parts boost higher when cooler, so a sane curve is free sustained clocks. No registry, no risk, just airflow."
+  },
+  {
+    "id": "nvidia-reflex",
+    "name": "NVIDIA Reflex",
+    "aliases": ["reflex", "reflex low latency", "on+boost"],
+    "verdict": "real",
+    "what": "In-game toggle that syncs rendering to input to genuinely cut click-to-pixel latency.",
+    "why": "The real latency win on NVIDIA — turn it on wherever a game offers it. (With Reflex on, leave the driver's Low Latency Mode off; they conflict.)"
+  },
+  {
+    "id": "low-latency-mode",
+    "name": "Low Latency Mode (driver setting)",
+    "aliases": ["LLM", "ultra low latency", "nvidia low latency", "anti-lag"],
+    "verdict": "real",
+    "what": "Driver-level cap on how many frames the CPU queues ahead of the GPU.",
+    "why": "Real but conditional: 'On' is a good default, 'Ultra' only helps when GPU-bound above refresh — and turn it OFF in games with Reflex / Anti-Lag 2 integration, which supersede it."
+  },
+  {
+    "id": "anti-lag-plus",
+    "name": "AMD Anti-Lag+ (old driver-level version)",
+    "aliases": ["anti-lag plus", "antilag+", "amd anti lag"],
+    "verdict": "risky",
+    "what": "AMD's old driver-injected latency reducer (distinct from in-game Anti-Lag 2).",
+    "why": "The cautionary tale: it injected into game code and got players VAC-banned in CS2. Use in-game Anti-Lag 2 instead — never a driver-injected hack in an anti-cheat game."
+  },
+  {
+    "id": "vrr-sync-stack",
+    "name": "VRR + V-Sync + frame cap (the sync stack)",
+    "aliases": ["gsync", "g-sync", "freesync", "vrr setup", "vsync on with gsync"],
+    "verdict": "real",
+    "what": "VRR on, V-Sync on in the driver, and an FPS cap a few frames below refresh.",
+    "why": "The most felt improvement available on a VRR monitor: tear-free AND low-latency, because the cap keeps you inside the VRR window. This is where 'smooth' actually comes from."
+  },
+  {
+    "id": "fps-cap",
+    "name": "FPS cap below refresh rate",
+    "aliases": ["frame cap", "max frame rate", "limit fps", "141 cap"],
+    "verdict": "real",
+    "what": "Caps frames ~3 below your monitor's refresh (e.g. 141 on a 144 Hz panel).",
+    "why": "Keeps VRR engaged, avoids V-Sync backpressure, stabilizes frametimes, and lowers heat. One of the few tweaks that's real on nearly every setup."
+  },
+  {
+    "id": "frame-generation",
+    "name": "Frame Generation (DLSS FG / FSR / AFMF)",
+    "aliases": ["frame gen", "MFG", "AFMF", "fluid motion frames", "dlss frame generation"],
+    "verdict": "real",
+    "what": "GPU generates extra in-between frames for higher displayed FPS.",
+    "why": "Real smoothness for single-player on a high-Hz display — but it ADDS input latency. Use it in story games, never in competitive shooters. Displayed FPS is not the same as response."
+  },
+  {
+    "id": "upscaling-quality",
+    "name": "Upscaling (DLSS / FSR / XeSS quality modes)",
+    "aliases": ["dlss", "fsr", "xess", "upscaling"],
+    "verdict": "real",
+    "what": "Renders at lower resolution and AI-upscales to native.",
+    "why": "The rare free lunch: quality modes usually give MORE real FPS and LOWER latency than native with near-native image quality. Distinct from frame-gen (which adds latency)."
+  },
+  {
+    "id": "shader-cache-size",
+    "name": "Shader cache size (unlimited / 10 GB)",
+    "aliases": ["shader cache", "dxcache"],
+    "verdict": "real",
+    "what": "Lets the driver keep more compiled shaders on disk.",
+    "why": "Cheap and real against shader-compilation stutter, especially in UE5 titles — costs only disk space. Also: let games finish their shader pre-compile screens instead of skipping them."
+  },
+  {
+    "id": "power-plan",
+    "name": "High / Ultimate Performance power plan",
+    "aliases": ["power plan", "ultimate performance", "balanced vs high performance"],
+    "verdict": "real",
+    "what": "Stops Windows from downclocking/parking CPU cores at light load.",
+    "why": "Real responsiveness win mid-game on many rigs, at the cost of idle watts. Compy can switch plans for you — with the exact previous plan recorded for rollback."
+  },
+  {
+    "id": "game-dvr-off",
+    "name": "Disable Game Bar background recording (Game DVR)",
+    "aliases": ["game dvr", "game bar", "background recording", "capture off"],
+    "verdict": "real",
+    "what": "Turns off Windows' always-on gameplay capture buffer.",
+    "why": "Real on weaker rigs — capture overhead you may never have wanted. Harmless to disable if you don't use instant replay; Compy treats it as a safe, reversible toggle."
+  },
+  {
+    "id": "hags",
+    "name": "Hardware-Accelerated GPU Scheduling (HAGS)",
+    "aliases": ["hags", "gpu scheduling", "hardware accelerated gpu scheduling"],
+    "verdict": "real",
+    "what": "Moves GPU scheduling from the OS to the GPU itself (reboot required).",
+    "why": "Helps latency and is required for some frame-gen — but occasionally regresses specific titles. Worth testing on, with a measured before/after rather than vibes."
+  },
+  {
+    "id": "mpo-disable",
+    "name": "Disable MPO (Multi-Plane Overlay)",
+    "aliases": ["mpo", "overlaytestmode", "multi plane overlay"],
+    "verdict": "real",
+    "what": "Registry value that turns off a display compositing feature.",
+    "why": "A legitimate FIX for a real flicker/stutter bug on some multi-monitor/VRR setups — but ONLY if you have the symptom. Cargo-culting it on a healthy system does nothing. Reversible."
+  },
+  {
+    "id": "diagtrack",
+    "name": "Disable telemetry services (DiagTrack etc.)",
+    "aliases": ["diagtrack", "telemetry", "connected user experiences"],
+    "verdict": "real",
+    "what": "Stops Windows' usage/diagnostics reporting services.",
+    "why": "The cleanest debloat win — no effect on stability or updates. Honesty note: this is about privacy and background hygiene, not FPS. Compy offers it as a safe, reversible toggle."
+  },
+  {
+    "id": "sysmain-superfetch",
+    "name": "Disable SysMain (Superfetch)",
+    "aliases": ["sysmain", "superfetch"],
+    "verdict": "real",
+    "what": "Stops the service that preloads frequently-used apps into RAM.",
+    "why": "Frees 0.5–1.5 GB on SSD/NVMe systems where preloading earns nothing. KEEP it on hard drives. Compy already gates this recommendation on your storage type."
+  },
+  {
+    "id": "startup-cleanup",
+    "name": "Disabling startup apps",
+    "aliases": ["startup apps", "msconfig", "boot time", "autostart"],
+    "verdict": "real",
+    "what": "Stops vendor bloat (RGB suites, updaters) from launching at boot.",
+    "why": "The biggest FELT win in all of debloating — faster boots, fewer background stutter sources. Safe: disabling startup doesn't uninstall anything."
+  },
+  {
+    "id": "windows-search-off",
+    "name": "Disable Windows Search indexing",
+    "aliases": ["windows search", "indexing", "searchindexer"],
+    "verdict": "placebo",
+    "what": "Stops the file indexer service.",
+    "why": "Near-zero on SSD/NVMe (the common case) and it breaks instant Start-menu search. Only old HDD systems see real relief — which is exactly the only case Compy suggests it."
+  },
+  {
+    "id": "visual-effects",
+    "name": "Visual effects → best performance",
+    "aliases": ["visual effects", "animations off", "performance options"],
+    "verdict": "placebo",
+    "what": "Disables Windows UI animations and effects.",
+    "why": "Snappier-feeling DESKTOP, not more FPS in games — your game doesn't use the desktop compositor's animations. Fine to do for taste; don't expect frames."
+  },
+  {
+    "id": "mmcss-systemresponsiveness",
+    "name": "MMCSS SystemResponsiveness=0 / GPU Priority 8",
+    "aliases": ["mmcss", "systemresponsiveness", "gpu priority registry"],
+    "verdict": "placebo",
+    "what": "Registry edits to multimedia scheduler weighting.",
+    "why": "Trivial to apply, no measurable effect on modern Windows. The classic 'looks technical, does nothing' tweak."
+  },
+  {
+    "id": "win32priorityseparation",
+    "name": "Win32PrioritySeparation foreground boost",
+    "aliases": ["win32priorityseparation", "priority separation"],
+    "verdict": "placebo",
+    "what": "Registry value tuning foreground/background CPU quantum weighting.",
+    "why": "Endlessly recycled in tweak guides with magic hex values; modern schedulers already prioritize the foreground. No measured benefit in controlled testing."
+  },
+  {
+    "id": "timer-resolution",
+    "name": "Forcing 0.5 ms global timer resolution",
+    "aliases": ["timer resolution", "0.5ms timer", "timerresolution.exe"],
+    "verdict": "placebo",
+    "what": "Forces Windows' interrupt timer to its finest interval system-wide.",
+    "why": "Inconsistent: a minority of systems measure slightly better lows, some measure worse, most see nothing — at higher idle power. If you must, change it alone, measure, and revert unless clearly better."
+  },
+  {
+    "id": "core-unparking",
+    "name": "Core unparking / force all cores active",
+    "aliases": ["core parking", "unpark cpu", "parkcontrol"],
+    "verdict": "placebo",
+    "what": "Prevents Windows from parking idle CPU cores.",
+    "why": "Modern Windows + modern CPUs already manage this well; forcing it mostly costs heat and can slightly HURT boost clocks. Same myth family as disabling C-States."
+  },
+  {
+    "id": "cstates-disable",
+    "name": "Disable C-States in BIOS",
+    "aliases": ["c-states", "c states", "disable cstates"],
+    "verdict": "risky",
+    "what": "Stops CPU cores from entering low-power idle states.",
+    "why": "The myth that actively backfires: modern boost algorithms USE the freed power budget from idle cores to clock active cores higher. Disabling C-States raises heat and LOWERS peak boost. Leave them on."
+  },
+  {
+    "id": "pagefile-disable",
+    "name": "Disable / fix the pagefile",
+    "aliases": ["pagefile", "virtual memory off", "fixed pagefile"],
+    "verdict": "risky",
+    "what": "Turns off or hard-caps Windows' virtual memory file.",
+    "why": "Refused. Games that commit more memory than your RAM will hard-crash with it off — '32 GB is enough' isn't how commit charge works. Leave it system-managed."
+  },
+  {
+    "id": "disable-defender",
+    "name": "Disable Windows Defender",
+    "aliases": ["defender off", "disable antivirus", "defender fps"],
+    "verdict": "risky",
+    "what": "Turns off Windows' built-in antivirus for a supposed FPS gain.",
+    "why": "Hard no. The measured gain is a rounding error; the cost is your only always-on protection — and some anti-cheats react badly to tampered security. Permanently blocklisted in Compy."
+  },
+  {
+    "id": "disable-windows-update",
+    "name": "Disable Windows Update entirely",
+    "aliases": ["windows update off", "wuauserv disable"],
+    "verdict": "risky",
+    "what": "Kills the update service so Windows never patches.",
+    "why": "Breaks Game Pass, anti-cheat compatibility, and security patching — and modern updates fix game-relevant bugs (fTPM stutter was fixed by an update). Pause or schedule updates instead."
+  },
+  {
+    "id": "cpu-mitigations",
+    "name": "Disable CPU security mitigations (Spectre/Meltdown)",
+    "aliases": ["spectre", "meltdown", "mitigations off", "inspectre"],
+    "verdict": "risky",
+    "what": "Turns off side-channel attack protections for a small CPU uplift.",
+    "why": "For GAMING the gain is ~0–4% (the big numbers are servers); the cost is re-opening known, documented exploit classes. The FPS rounding error isn't worth it."
+  },
+  {
+    "id": "debloat-scripts",
+    "name": "All-in-one debloat scripts / stripped ISOs",
+    "aliases": ["tiny11", "debloater", "ultimate windows tweaker", "atlas os", "revios"],
+    "verdict": "risky",
+    "what": "Scripts or custom Windows images that strip dozens of components at once.",
+    "why": "The single biggest cause of mystery breakage: ten changes at once means no way to diagnose which one broke audio, anti-cheat, or updates. Some stripped images are irreversible. If you must debloat, change ONE thing at a time with an undo path."
+  },
+  {
+    "id": "tcp-mega-packs",
+    "name": "Network 'mega-pack' tweaks (Nagle, RSS/RSC, netsh stacks)",
+    "aliases": ["nagle", "tcpackfrequency", "network tweaks", "netsh tcp", "rss rsc"],
+    "verdict": "placebo",
+    "what": "Bundles of TCP/NIC registry and netsh changes promising lower ping.",
+    "why": "Your ping is your route and your ISP, not a registry key. Single targeted changes (like Nagle, which Compy surfaces as advisory) have tiny effects in a few titles; the bundled packs mostly just break VoIP, VPNs, and smart-home apps."
+  },
+  {
+    "id": "interrupt-affinity",
+    "name": "IRQ priority / interrupt affinity hacks",
+    "aliases": ["irq priority", "interrupt affinity", "dpc latency tweaks"],
+    "verdict": "risky",
+    "what": "Registry-deep manual control of which CPU cores service which device interrupts.",
+    "why": "Negligible on modern, healthy systems and easy to break devices with. Only meaningful when diagnosing a specific DPC-latency problem with proper tools — which is what Compy's Latency tab is for."
+  },
+  {
+    "id": "pbo-curve-optimizer",
+    "name": "PBO / Curve Optimizer (AMD CPU tuning)",
+    "aliases": ["pbo", "precision boost overdrive", "curve optimizer", "undervolt cpu"],
+    "verdict": "risky",
+    "what": "BIOS-level boost extension and per-core undervolting on Ryzen.",
+    "why": "Real sustained-clock gains and cooler operation when dialed — but over-pushed values cause crashes that masquerade as 'random' instability for weeks. Advanced users only: small steps, hours of stress-testing, expect setbacks."
+  },
+  {
+    "id": "secure-boot-csm",
+    "name": "Toggling Secure Boot / CSM",
+    "aliases": ["secure boot", "csm", "vanguard secure boot"],
+    "verdict": "risky",
+    "what": "Firmware settings controlling boot signature enforcement.",
+    "why": "Not a performance setting at all — but anti-cheats (e.g. Vanguard) REQUIRE specific states, and toggling carelessly can leave a PC unbootable. Match your anti-cheat's requirement and know the recovery path before touching it."
+  },
+  {
+    "id": "dll-injectors",
+    "name": "Kernel tweak tools / DLL injectors / 'FPS unlocker' apps",
+    "aliases": ["dll injector", "fps unlocker", "kernel tweaker", "process lasso gaming mode"],
+    "verdict": "risky",
+    "what": "Third-party tools that inject into game processes or load kernel components to 'optimize'.",
+    "why": "Anti-cheat ban territory and a classic malware vector. If a tool touches game memory or ships a driver, assume it can cost you your account. Compy never injects — that's a design law, not a setting."
+  },
+  {
+    "id": "driver-updates",
+    "name": "Keeping GPU drivers current",
+    "aliases": ["driver update", "ddu", "clean driver install"],
+    "verdict": "real",
+    "what": "Installing current GPU drivers from AMD/NVIDIA (not auto-tools).",
+    "why": "New titles regularly gain real performance from launch drivers. Get them from the vendor directly; use DDU for a clean reinstall only when something's actually wrong. Compy tracks your driver age and tells you when it's stale."
   }
 ]
