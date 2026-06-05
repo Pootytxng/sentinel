@@ -1415,8 +1415,17 @@ function App() {
 
       <footer className="footer">
         <span>Compy never changes anything without your explicit approval.</span>
-        <button className="footer-link" onClick={() => setShowOnboarding(true)}>
-          Replay intro
+        <button
+          className="footer-link"
+          onClick={() => {
+            // One-click guided setup: replay the intro, then flow straight into the first check
+            // (the M2 gate is `!showOnboarding && showFirstCheck`, so the check waits for the intro
+            // to finish, then runs automatically).
+            setShowOnboarding(true);
+            setShowFirstCheck(true);
+          }}
+        >
+          Re-run guided setup
         </button>
         <button className="footer-link" onClick={() => setShowFirstCheck(true)}>
           Re-run check
