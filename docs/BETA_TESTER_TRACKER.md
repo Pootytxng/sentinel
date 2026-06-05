@@ -1,5 +1,8 @@
 # Compy Private Beta — Tester Tracker (owner's private local file)
 
+> **Copy this to `BETA_TESTER_TRACKER.local.md` and fill that in** — the `.local` copy is gitignored,
+> so real tester handles/notes never enter git. Compy's privacy ethos applies to Compy's own beta.
+
 **How to use:** one row per tester; fill cells as they progress (a date or ✅). **Not shipped in the
 app, no telemetry** — this is just your local scoreboard so ~20 invites don't fall through the
 cracks. The two things that matter most per tester are the **export receipt** and the

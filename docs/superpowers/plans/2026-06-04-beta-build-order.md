@@ -44,6 +44,11 @@ legal finalization beyond the name swap (gates PUBLIC) · NVIDIA hardware verifi
 Moments 3/4/4b (Wave 2 — need comparison arming + noise-floor wiring) · CSP work (already strict
 in the working tree) · the frozen `private-beta-001` refs at `16069fa` (untouched, historical).
 
+**Tester data stays local (decision, 2026-06-05).** Third-party personal data — tester handles +
+private notes — must never enter git history. `BETA_TESTER_TRACKER.md` ships only as a blank
+template; the owner fills a gitignored `BETA_TESTER_TRACKER.local.md` (`*.local.md` is ignored). A
+local-first product keeps its own operational data local too.
+
 ---
 
 ## Passes

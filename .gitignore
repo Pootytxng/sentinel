@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+# Local-only operational files (e.g. BETA_TESTER_TRACKER.local.md) — real tester data never enters git.
+*.local.md
 
 # Editor directories and files
 .vscode/*
