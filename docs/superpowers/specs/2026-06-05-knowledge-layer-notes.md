@@ -44,6 +44,13 @@ and the shipped datasets.
   a legitimate tool. (Fix this audit: removed `process lasso gaming mode` from `dll-injectors` —
   Process Lasso is a real, non-injecting product; the alias was a dataset error.)
 
+## `honest_version` voice — brand-neutral, final (owner decision, 2026-06-05)
+All 13 tricks' `honest_version` use **"an honest tool"**, never "Compy". The field descriptor ("what
+an honest tool does instead") wins over the lone calibration example that named Compy — Cowork's
+example, Cowork's call. Rationale: the tricks teach a standard the user can hold against **any** tool,
+Compy included; the in-app context already makes that comparison ambient, so self-citation would be
+redundant. **Ship as shipped — do not rewrite to name Compy.**
+
 ## Search & Autopsy behavior
 - **Search**: diacritic-fold + lowercase, multi-word AND (every word must match name/alias/body),
   ranked exact-alias > prefix > substring > body. Pure + tested. UI defers the query for snappiness.
