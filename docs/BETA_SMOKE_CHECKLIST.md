@@ -23,8 +23,16 @@ fails, stop and report it. **"Beta shippable" is your call after this pass** —
 - [ ] Start menu shows **Compy**; launching opens a window titled **Compy** (not Sentinel).
 - [ ] About/footer + window chrome say Compy; no "Sentinel" visible anywhere.
 
-## 2. Migration — THE CRITICAL ONE  *(~3 min; only meaningful if `%APPDATA%\Sentinel` exists from the old app)*
-- [ ] Before first launch, confirm `%APPDATA%\Sentinel` exists (the old ledger). If it doesn't, skip this section and note it.
+## 2. Migration — THE CRITICAL ONE  *(~3 min)*
+> **Heads-up: migration only fires on a profile where `%APPDATA%\Compy` does NOT exist yet AND
+> `%APPDATA%\Sentinel` does.** On the dev box `%APPDATA%\Compy` already exists (prior runs + the
+> earlier data merge), so it has already migrated and **won't re-run here** — that's correct,
+> idempotent behavior, not a failure. To actually *watch* it happen, use one of: (a) a fresh
+> Windows profile / VM that has the old Sentinel data, (b) a real tester who ran old Sentinel, or
+> (c) temporarily move `%APPDATA%\Compy` aside (rename it) with `%APPDATA%\Sentinel` present, launch
+> once, verify, then restore your real `%APPDATA%\Compy`. If you can't stage any of these, rely on
+> the HQ unit test + code review for migration and just confirm your current ledger renders.
+- [ ] On a stageable profile: confirm `%APPDATA%\Sentinel` exists and `%APPDATA%\Compy` does not, before first launch.
 - [ ] First launch of Compy → `%APPDATA%\Compy` is created and **fully populated** (history.json, sessions, exports, scoreboard).
 - [ ] Open the Trust Ledger / history → **all pre-rename entries render** (nothing lost).
 - [ ] **Roll back a pre-rename applied change** → it executes correctly and the setting reverts.
