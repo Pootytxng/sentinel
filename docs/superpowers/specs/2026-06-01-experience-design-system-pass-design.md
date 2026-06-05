@@ -17,7 +17,7 @@ language, the 10 Experience-Pass items, the honesty boundary).
 
 ## 1. Goal
 
-Make opening Sentinel *feel* like a **serious performance command center** — understand, verify,
+Make opening Compy *feel* like a **serious performance command center** — understand, verify,
 maximize — without ever lying. The product risk is **not** "too few features"; it is that an
 average user reads it as "a settings page with a few switches." This pass closes that gap through
 **clarity, proof, monitoring, and confident-but-honest presentation**, not new tweaks.
@@ -99,7 +99,7 @@ Redesign `Overview` into a landing view that answers the 7 questions at a glance
 its surface:
 1. *Am I ready to play?* → posture hero + readiness summary.
 2. *What's holding this PC back?* → top 1–3 priorities.
-3. *What has Sentinel safely improved?* → active-changes + Trust Ledger trust cue.
+3. *What has Compy safely improved?* → active-changes + Trust Ledger trust cue.
 4. *What should I not touch?* → "already fine / not worth touching" callout.
 5. *How did the last session perform?* → last-session debrief card.
 6. *What can I share if I need help?* → Export entry point.
@@ -111,7 +111,7 @@ The rail stays; grouping gets clearer visual separation (status surfaces vs tool
 - **Readiness → a live system check**: sequential check reveal on scan, confident pass/attention
   rows, "re-run check" affordance. Not a static list.
 - **Sessions → a post-game debrief**: headline verdict + key metrics (avg FPS, frametime, 1%-low
-  *labeled estimate*), small frametime sparkline, which Sentinel settings were active.
+  *labeled estimate*), small frametime sparkline, which Compy settings were active.
 - **Priorities → a personal technician's ranking**: "biggest limiter for *this* rig" framed as
   advice, with reason + confidence; "already fine" and "not worth touching" buckets.
 - **Export → a professional diagnostic report**: report-styled preview, clear "local file only"
@@ -278,7 +278,7 @@ theme-ungating (same files). Exact steps:
 const VALID = new Set(THEMES.map((t) => t.id));
 function readSavedTheme(): string {
   try {
-    const saved = localStorage.getItem("sentinel-theme") || "graphite";
+    const saved = localStorage.getItem("compy-theme") || "graphite";
     return VALID.has(saved) ? saved : "graphite";
   } catch { return "graphite"; }
 }

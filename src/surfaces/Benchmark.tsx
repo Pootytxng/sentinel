@@ -189,7 +189,7 @@ export function BenchmarkTab() {
   const showEfficacy =
     !!state?.efficacy && hasBaseline && !!state?.latest && state.latest_at !== state.baseline_at;
 
-  // Sentinel changes (Trust Ledger) applied between the baseline and the latest run — the "Change"
+  // Compy changes (Trust Ledger) applied between the baseline and the latest run — the "Change"
   // the verdict is attributing the measured delta to.
   const changesSince =
     state?.baseline_at && state?.latest_at
@@ -208,7 +208,7 @@ export function BenchmarkTab() {
       <header className="bench-head">
         <h2>Benchmark</h2>
         <p className="bench-muted">
-          Measure your PC, change something, then re-measure — Sentinel tells you honestly whether it
+          Measure your PC, change something, then re-measure — Compy tells you honestly whether it
           actually helped. A change smaller than the run-to-run noise reads as “no measurable change,”
           not a win.
         </p>
@@ -275,7 +275,7 @@ export function BenchmarkTab() {
           right={trial?.running ? <StatusPill status="scanning" label="Measuring" /> : undefined}
         />
         <p className="bench-muted">
-          Turn on FPS monitoring (Monitoring tab) with a game running, then calibrate — Sentinel
+          Turn on FPS monitoring (Monitoring tab) with a game running, then calibrate — Compy
           measures your rig's run-to-run noise from real frametimes (1% lows). That's the floor: a
           change smaller than it can't be told apart from noise, so we won't claim it.
         </p>
@@ -408,7 +408,7 @@ export function BenchmarkTab() {
       <ol className="bench-steps">
         <li>Run a benchmark and set it as your baseline.</li>
         <li>Change one thing (a Windows setting, or apply a tweak in Optimize).</li>
-        <li>Re-measure — Sentinel reports the honest per-part verdict vs your baseline.</li>
+        <li>Re-measure — Compy reports the honest per-part verdict vs your baseline.</li>
       </ol>
     </div>
   );
@@ -470,7 +470,7 @@ function EfficacyCard({ efficacy, changes }: { efficacy: Efficacy; changes: Appl
             <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
           </>
         ) : (
-          <>No Sentinel changes recorded since the baseline — this reflects manual or ambient changes.</>
+          <>No Compy changes recorded since the baseline — this reflects manual or ambient changes.</>
         )}
       </p>
       <div className="bench-eff">

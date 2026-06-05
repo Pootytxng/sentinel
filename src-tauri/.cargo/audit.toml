@@ -1,7 +1,7 @@
 # cargo-audit configuration.
 #
 # Every advisory ignored below is an **unmaintained / unsound WARNING** (not a vulnerability) on a
-# TRANSITIVE dependency that does not affect Sentinel's shipped Windows binary. Reviewed 2026-06-04:
+# TRANSITIVE dependency that does not affect Compy's shipped Windows binary. Reviewed 2026-06-04:
 # `cargo audit` reported 0 actual vulnerabilities. Ignoring this known, triaged noise keeps the scan
 # a clean gate, so a *real* future CVE stands out instead of hiding in 17 lines of GTK warnings.
 # Re-review when Tauri / wry update their bindings (these should drop off on their own).
@@ -10,7 +10,7 @@
 ignore = [
   # ── Linux GTK3 / glib GUI stack ──────────────────────────────────────────
   # Pulled transitively by Tauri/wry for the LINUX target only — not compiled or shipped on
-  # Windows (Sentinel is Windows-only). "gtk-rs GTK3 bindings no longer maintained" + one glib
+  # Windows (Compy is Windows-only). "gtk-rs GTK3 bindings no longer maintained" + one glib
   # VariantStrIter iterator-unsoundness. None of this code runs on the user's PC.
   "RUSTSEC-2024-0411", # gdkwayland-sys
   "RUSTSEC-2024-0412", # gdk

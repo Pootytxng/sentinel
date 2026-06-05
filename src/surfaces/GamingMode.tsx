@@ -226,7 +226,7 @@ export function GamingMode() {
         <div className="gaming-modal-backdrop" role="dialog" aria-modal="true">
           <div className="gaming-modal">
             <h3>Turn on Gaming Mode?</h3>
-            <p>For this session, Sentinel will change:</p>
+            <p>For this session, Compy will change:</p>
             <ul className="gaming-diff">
               {CORE_ITEMS.map((it) => (
                 <li key={it}>{it}</li>

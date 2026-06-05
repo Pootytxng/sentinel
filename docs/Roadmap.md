@@ -1,4 +1,4 @@
-# Roadmap — Sentinel · Road to Public 1.0
+# Roadmap — Compy · Road to Public 1.0
 
 Companion to [PRD.md](PRD.md) + [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md). **Source of truth for live
 state is the repo [`CLAUDE.md`](../CLAUDE.md);** this file is the durable *forward* map — what's shipped vs
@@ -26,7 +26,7 @@ what stands between us and "a stranger can buy it, install it, optimize their PC
 These are what actually stand between "beta" and "a stranger buys it." Most are *not* code.
 - 🔒 **F1 Gaming Mode QA → flip the gate.** Run spec §7 (normal / crash / reboot / UAC-cancel / missing-plan) on your UAC-on rig → sign off → I flip `gaming_mode_gate()`. *(I can't crash/reboot your PC for you.)*
 - 🔒 **Code signing.** Acquire an **EV (or OV) code-signing cert** (your $ + identity) → integrate into the build pipeline. Unsigned = SmartScreen scares every new user. Plan in `PACKAGING_SIGNING_PLAN.md`. *(🤖 I can wire the pipeline; you buy/own the cert + key — and the key NEVER enters the repo.)*
-- 🔒 **Legal.** EULA · Privacy Policy · liability disclaimers (incl. the Black Book one). *(🤖 I can draft all three — Sentinel's local-only / no-telemetry / rollback-first story is a strong one — you/a lawyer own final sign-off + jurisdiction.)*
+- 🔒 **Legal.** EULA · Privacy Policy · liability disclaimers (incl. the Black Book one). *(🤖 I can draft all three — Compy's local-only / no-telemetry / rollback-first story is a strong one — you/a lawyer own final sign-off + jurisdiction.)*
 - 🔒 **Monetization.** Model (one-time / sub / freemium?) → license-key validation + payment processor. *(Your business call; I build once decided.)*
 - 🔒 **Distribution.** Direct download vs Microsoft Store vs Steam (each changes signing/packaging/revenue cut). *(Your call.)*
 - 🔒 **Landing page + buy button.** *(🤖 I can draft copy/structure; you own brand + payment hookup.)*
@@ -50,7 +50,7 @@ These are what actually stand between "beta" and "a stranger buys it." Most are 
 ---
 
 ## Honest summary
-Sentinel **works** and has a frozen, shippable private beta. The gap to **public 1.0** is mostly
+Compy **works** and has a frozen, shippable private beta. The gap to **public 1.0** is mostly
 **business + legal + your QA + a closed beta** — decisions and outward steps, not more core code. The
 engineering that *remains* is polish, hardening (CSP), drafts, and gated features awaiting your direction.
 **Claude can independently drive the 🤖 items now;** the 🔒 items need you.

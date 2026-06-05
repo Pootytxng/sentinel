@@ -17,7 +17,7 @@ use crate::history::{applied_changes_summary, AppliedChangesSummary};
 use crate::monitoring::{fps_active, uac_disabled};
 
 const ADVISORY: &str =
-    "Readiness checks are advisory. Sentinel is checking configuration signals, not guaranteeing FPS.";
+    "Readiness checks are advisory. Compy is checking configuration signals, not guaranteeing FPS.";
 
 // GPU driver currency thresholds (days). Gaming drivers update ~monthly.
 const DRIVER_FRESH_DAYS: i64 = 90;
@@ -29,7 +29,7 @@ pub(crate) enum ReadinessStatus {
     Ready,
     Attention,
     Unknown,
-    /// Sentinel deliberately doesn't (or can't) judge this — it's the user's to
+    /// Compy deliberately doesn't (or can't) judge this — it's the user's to
     /// verify (e.g. VRR has no Windows API exposing its on/off state). Distinct
     /// from `Unknown` (which means a detection genuinely failed). An advisory is
     /// never a problem and never blocks a clean readiness state.
@@ -404,7 +404,7 @@ pub(crate) fn evaluate_readiness(
                     ReadinessStatus::Attention,
                     format!(
                         "Active plan \"{}\". A performance plan (High performance / Ultimate \
-                         Performance) can reduce latency. Sentinel won't switch it for you.",
+                         Performance) can reduce latency. Compy won't switch it for you.",
                         p
                     ),
                     Some(p.to_string()),
@@ -433,16 +433,16 @@ pub(crate) fn evaluate_readiness(
         ));
     }
 
-    // 8. Applied Sentinel changes — count active + flag external reverts.
+    // 8. Applied Compy changes — count active + flag external reverts.
     {
         let c = if hist.externally_reverted > 0 {
             check(
                 "applied-changes",
-                "Applied Sentinel changes",
+                "Applied Compy changes",
                 ReadinessStatus::Attention,
                 format!(
-                    "{} setting(s) you turned on with Sentinel are currently off — changed \
-                     outside Sentinel (by Windows, another app, or you). Not an error: turn them \
+                    "{} setting(s) you turned on with Compy are currently off — changed \
+                     outside Compy (by Windows, another app, or you). Not an error: turn them \
                      back on in Optimize, or roll them back in the Ledger — either one clears this.",
                     hist.externally_reverted
                 ),
@@ -454,15 +454,15 @@ pub(crate) fn evaluate_readiness(
         } else if hist.total == 0 {
             check(
                 "applied-changes",
-                "Applied Sentinel changes",
+                "Applied Compy changes",
                 ReadinessStatus::Ready,
-                "No Sentinel changes applied yet — nothing to track.",
+                "No Compy changes applied yet — nothing to track.",
                 Some("0".into()),
             )
         } else {
             check(
                 "applied-changes",
-                "Applied Sentinel changes",
+                "Applied Compy changes",
                 ReadinessStatus::Ready,
                 format!(
                     "{} setting(s) active and reversible from the Trust Ledger.",

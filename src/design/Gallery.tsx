@@ -31,7 +31,7 @@ export function Gallery() {
       <Card><TrustCue title="You're protected" detail="4 changes active — all reversible from the Ledger." /></Card>
       <Card>
         <EmptyState icon="chart" title="No sessions yet">
-          Play a game with monitoring on and Sentinel will write a debrief here.
+          Play a game with monitoring on and Compy will write a debrief here.
         </EmptyState>
       </Card>
     </div>

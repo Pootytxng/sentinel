@@ -48,7 +48,7 @@ default, a later step) — and even then it would *prompt*, never silently mutat
 
 - **First enable (one time):** a modal stating **exactly what it changes** + the **exact auto-restore
   guarantee**; requires explicit confirmation to enable. Persisted (e.g. `localStorage`
-  `sentinel_gaming_consent_v1`), mirroring the onboarding-gate pattern.
+  `compy_gaming_consent_v1`), mirroring the onboarding-gate pattern.
 - **After that:** single-click **Start / Stop**, no nag. An **always-visible** line — *"what this changes ·
   auto-restores on exit"* — and the **full concrete diff viewable on demand**.
 - **Advanced toggles** (USB-SS / PCIe-ASPM) get their **own one-time consent** (they introduce the UAC
@@ -59,10 +59,10 @@ default, a later step) — and even then it would *prompt*, never silently mutat
 
 - **Fail-safe ordering:** write session snapshot file → apply → (on stop) restore → **only then** delete
   the file. The restore contract is retained on disk until restore is **confirmed** complete.
-- **Session file:** `%APPDATA%\Sentinel\gaming-session.json` (via `sentinel_data_dir`). Fields:
+- **Session file:** `%APPDATA%\Compy\gaming-session.json` (via `compy_data_dir`). Fields:
   `session_id`, `status`, `started_at` (ISO-8601), `app_version`, the **typed restore contract**
   (`Snapshot::PowerPlan { prior_guid }` + any `Snapshot::PowerPlanSetting {…}` for advanced tweaks +
-  registry snapshots for Game Mode / Game Bar), and flags for which extras Sentinel turned on.
+  registry snapshots for Game Mode / Game Bar), and flags for which extras Compy turned on.
 - **Startup recovery check:** on every launch, read the file. If `status ∈ {active, ending,
   restore-pending}` → previous session did not end cleanly → enter `InterruptedRecovery`.
 - **Recovery prompt:** *"Gaming Mode was interrupted. Restore your previous settings?"* On confirm, run

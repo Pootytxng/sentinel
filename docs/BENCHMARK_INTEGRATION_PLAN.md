@@ -3,7 +3,7 @@
 **Status: MERGED DARK (2026-06-03).** The benchmark engine merged into `main` on 2026-06-03 — compiled
 but **unwired** (`mod benchmark;` only, no IPC command, no tab; nothing user-facing changed). This doc is
 the contract HQ and the benchmark lane both build against so that, when the benchmark is wired up, it does
-so **cleanly and without betraying Sentinel's identity.** No code here — this is the seam + the rules.
+so **cleanly and without betraying Compy's identity.** No code here — this is the seam + the rules.
 
 > **PURPOSE REALIGNED 2026-06-03 (owner).** The original *"scoring / cosmetic-reward + UserBenchmark-style
 > leaderboard"* framing is **dead.** The benchmark's soul is now a **scientific instrument with an undo
@@ -29,7 +29,7 @@ like yours, this tweak improved X%" — not a vanity score ranking. **No cosmeti
   efficacy verdict + health summary live *inside* the Benchmark tab, not in the global hero. That's a
   conflict-free additive merge. *(Engine merged dark 2026-06-03; tab not yet wired.)*
 - **Cross-user efficacy sharing is the one real decision.** Pooling anonymized measured-efficacy data
-  across users needs three things Sentinel has **never** had — **network egress, an (anonymous) identity,
+  across users needs three things Compy has **never** had — **network egress, an (anonymous) identity,
   and a server someone runs.** That crosses the **local-only / no-account / no-telemetry** line the EULA,
   `PRIVACY.md`, the monetization story, and the `/security` audit are all built on. Not a blocker — a
   deliberate product decision. Done as a **strictly opt-in, anonymous, Rust-isolated** feature, the
@@ -54,7 +54,7 @@ The benchmark **tab** reuses the established gated-section seam — no `App.tsx`
 - **Do NOT touch** `CommandHero` / `deriveSystemPosture` / `src/surfaces/system-posture.ts` — the honest
   hero stays score-free. This is what keeps Decision A intact while the score lives in its own room.
 - **Separate data store.** Benchmark results/rewards persist to their **own** JSON under
-  `sentinel_data_dir()` (e.g. `benchmark.json`) — **never** the Trust Ledger (`history.json`) or
+  `compy_data_dir()` (e.g. `benchmark.json`) — **never** the Trust Ledger (`history.json`) or
   `sessions.json`. Same isolation discipline Gaming Mode used (`gaming-session.json`).
 - **No cosmetic-reward grind.** The vanity score / tiers / unlock layer is dropped (purpose realignment).
   The tab surfaces a **measured verdict** + an optional local **health summary**; any cosmetic flourish
@@ -67,7 +67,7 @@ Plain-language: pooling **measured-efficacy data across users** ("on rigs like y
 X%") requires the same three firsts a leaderboard would — they're properties of *any* cross-user data,
 vanity or not:
 
-1. **Network.** The app uploads your anonymized efficacy delta and downloads the aggregate. Today Sentinel
+1. **Network.** The app uploads your anonymized efficacy delta and downloads the aggregate. Today Compy
    makes **0** outbound calls (a hard invariant `/security` checks for). This is the first one ever.
 2. **An identity.** Even anonymous aggregation needs at least a **stable anonymous token** (dedupe, abuse
    control). Today: no account, by design — and the design here stays no-handle, no-PII.

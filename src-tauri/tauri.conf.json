@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Sentinel",
+  "productName": "Compy",
   "version": "0.1.0",
-  "identifier": "io.github.pootytxng.sentinel",
+  "identifier": "gg.compy.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Sentinel",
+        "title": "Compy",
         "width": 800,
         "height": 600
       },
@@ -54,9 +54,9 @@
     "publisher": "Pootytxng",
     "copyright": "© 2026 Pootytxng",
     "category": "Utility",
-    "homepage": "https://github.com/Pootytxng/sentinel",
+    "homepage": "https://compy.gg",
     "shortDescription": "Hardware-aware, rollback-first PC optimization for gamers.",
-    "longDescription": "Sentinel reads your PC's hardware and recommends safe, reversible Windows optimizations in plain language. Every change it applies is snapshotted first so it can be rolled back. No kernel driver, no game injection, no telemetry.",
+    "longDescription": "Compy reads your PC's hardware and recommends safe, reversible Windows optimizations in plain language. Every change it applies is snapshotted first so it can be rolled back. No kernel driver, no game injection, no telemetry.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

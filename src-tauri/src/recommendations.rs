@@ -19,14 +19,14 @@ use crate::{
 
 // Provenance is the honesty tier for each rec's *impact* claim. The UI surfaces
 // this as a pill on every rec card so the user can tell at a glance whether
-// the claim is something Sentinel measured itself ("Verified"), something
+// the claim is something Compy measured itself ("Verified"), something
 // industry/community benchmarks have measured ("Measured signal"), or
-// something Sentinel believes follows from Windows internals but has not
+// something Compy believes follows from Windows internals but has not
 // itself measured ("Expected impact"). See PRD §2.5.
 //
-// Right now nothing is "Verified" — Sentinel has not run its own benchmarks.
+// Right now nothing is "Verified" — Compy has not run its own benchmarks.
 // That is the honest answer. "Verified" is reserved for recs whose claim is a
-// direct measurement Sentinel *itself* performed (e.g., reading current vs
+// direct measurement Compy *itself* performed (e.g., reading current vs
 // max display Hz is a direct fact; saying "lower latency" because we changed
 // a registry value would be Expected). When the synthetic benchmark suite
 // ships, recs whose impact is reproduced under that suite can graduate to
@@ -34,12 +34,12 @@ use crate::{
 #[derive(Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Provenance {
-    /// Sentinel directly observes the fact this rec claims (e.g., current
+    /// Compy directly observes the fact this rec claims (e.g., current
     /// vs max refresh rate, free disk space, driver age in days). The claim
     /// is the measurement.
     Verified,
     /// Third-party benchmarks or wide community consensus has measured this
-    /// impact. Sentinel is citing established results, not inventing them.
+    /// impact. Compy is citing established results, not inventing them.
     MeasuredSignal,
     /// Logical from Windows internals but not benchmarked. Honest "we
     /// believe this but have not measured it ourselves."
@@ -63,7 +63,7 @@ pub(crate) struct Recommendation {
 // ─── Step B: Rules JSON schema + loader ──────────────────────────────────
 //
 // The eventual remote rules.json at the CDN follows this exact schema. The
-// embedded baseline ships with the binary so Sentinel always has a known-good
+// embedded baseline ships with the binary so Compy always has a known-good
 // starting rule set, even with no network access. See docs/ARCHITECTURE_LOCKS
 // Tier 2 for the schema-versioning contract.
 
@@ -306,7 +306,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         category: "Power".into(),
         severity: "moderate".into(),
         description:
-            "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming. The honest tradeoff: this permanently switches your daily power profile, so the higher power draw is in effect even when you're not gaming. A future Sentinel release will offer a Gaming Mode that automatically switches to high-performance only while a game is running, so your daily profile stays alone — this rec is the manual interim option.".into(),
+            "Windows ships with a hidden 'Ultimate Performance' power plan that keeps your CPU at peak responsiveness instead of letting it nap between workloads. Better for gaming. The honest tradeoff: this permanently switches your daily power profile, so the higher power draw is in effect even when you're not gaming. A future Compy release will offer a Gaming Mode that automatically switches to high-performance only while a game is running, so your daily profile stays alone — this rec is the manual interim option.".into(),
         impact: "Lower input latency · steadier frame times (when gaming)".into(),
         downside: Some("Permanently mutates your daily power profile until you roll back. Higher idle power draw (~5–10 W on most desktops). A smarter game-aware switch is planned.".into()),
         applies_to: if active_plan.is_empty() {
@@ -604,7 +604,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             category: "Storage".into(),
             severity: "moderate".into(),
             description:
-                "Every physical drive Sentinel detected is a spinning hard drive. Windows on an HDD is the single biggest performance handicap on a modern PC — game load times, app launches, and Windows itself will be dramatically faster on an SSD or NVMe drive. Typical cost: $40–100 for 500 GB.".into(),
+                "Every physical drive Compy detected is a spinning hard drive. Windows on an HDD is the single biggest performance handicap on a modern PC — game load times, app launches, and Windows itself will be dramatically faster on an SSD or NVMe drive. Typical cost: $40–100 for 500 GB.".into(),
             impact: "Multi-second → sub-second boot · 5–10× faster app launches".into(),
             downside: Some("Requires a hardware purchase and either a Windows reinstall or a drive clone.".into()),
             applies_to: "Spinning HDDs only — no SSDs detected".into(),

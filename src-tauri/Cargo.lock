@@ -486,6 +486,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "compy"
+version = "0.1.0"
+dependencies = [
+ "adlx",
+ "chrono",
+ "ed25519-compact",
+ "ferrisetw",
+ "nvml-wrapper",
+ "runas",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "winapi",
+ "windows 0.59.0",
+ "winreg",
+ "wmi",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3228,30 +3252,6 @@ checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 dependencies = [
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "sentinel"
-version = "0.1.0"
-dependencies = [
- "adlx",
- "chrono",
- "ed25519-compact",
- "ferrisetw",
- "nvml-wrapper",
- "runas",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "winapi",
- "windows 0.59.0",
- "winreg",
- "wmi",
 ]
 
 [[package]]

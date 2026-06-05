@@ -1,4 +1,4 @@
-# Sentinel — Gaming Mode (F1) Plan
+# Compy — Gaming Mode (F1) Plan
 
 **PLANNING ONLY. No code.** This is the design + QA contract for Gaming Mode, the only planned
 feature that introduces **mutation**. It must be built deliberately, behind its own QA gate.
@@ -11,13 +11,13 @@ It reuses what already exists (no new mutation primitives): the hardened power-p
 (`actions.rs`, the `070c3c9` exact-stored-plan fix), the typed `Snapshot`/`RollbackAction` contract
 + `dispatch_rollback`/`resolve_rollback`, the Trust Ledger's "restore from local state alone" model
 (`history.rs`), the FPS-helper **heartbeat lifecycle** as the crash-safe template (`monitoring.rs`/
-`fps.rs`), the F3 session aggregator (`sessions.rs`), and `sentinel_data_dir` for state files.
+`fps.rs`), the F3 session aggregator (`sessions.rs`), and `compy_data_dir` for state files.
 
 ---
 
 ## 1. Product goal
 
-Make Sentinel useful **during** gameplay without becoming a registry clown car. Gaming Mode:
+Make Compy useful **during** gameplay without becoming a registry clown car. Gaming Mode:
 - temporarily applies a small set of **already-audited** gaming settings while a game is active,
 - restores the **exact** prior state when the session ends (or is interrupted),
 - preserves the rollback-first safety model: every change is snapshotted *before* it is applied,
@@ -31,13 +31,13 @@ The value is the *session lifecycle* (apply on start → restore on end + summar
 1. Detect the selected/running game (v1: user picks / confirms; auto-detect is a later, opt-in step).
 2. Capture a **pre-session snapshot** (typed) and write the session state file *before* mutating.
 3. Apply the gaming setting(s) — v1 minimal = **power-plan switch only** (see §3).
-4. Optionally start FPS monitoring + overlay (only if the user opted in; record that Sentinel
+4. Optionally start FPS monitoring + overlay (only if the user opted in; record that Compy
    started them, so it knows to stop them on end).
 5. Record the active session (state = `Active`).
 
 **On end (game exit, or user stops it):**
 1. Restore the **exact** prior power plan/settings from the stored snapshot.
-2. Stop monitoring/overlay **only if Sentinel started them** this session.
+2. Stop monitoring/overlay **only if Compy started them** this session.
 3. Save a session summary (reuse the F3 aggregator).
 4. Mark the session cleanly restored and clear the session lock.
 
@@ -67,10 +67,10 @@ A session change is an *apply with a guaranteed restore trigger* (game exit **or
 detecting an orphaned session). The invariant: **modified state is never silently abandoned, and
 recovery never applies new changes — only restores.**
 
-- **Pre-session snapshot file** — `%APPDATA%\Sentinel\gaming-session.json`, written **before** any
+- **Pre-session snapshot file** — `%APPDATA%\Compy\gaming-session.json`, written **before** any
   mutation. Holds: `session_id`, `status`, `started_at`, `app_version`, the **typed restore
   contract** (e.g. `Snapshot::PowerPlan { prior_guid }` + any audited setting snapshots), and flags
-  for whether Sentinel started monitoring/overlay. This is the rollback contract — same shape the
+  for whether Compy started monitoring/overlay. This is the rollback contract — same shape the
   Trust Ledger already persists.
 - **Session lock** — the file's existence with `status == "active"` (or `"restore-pending"`) means
   a session is/was live. (Mirrors the FPS helper's heartbeat-file lifecycle.)
@@ -139,6 +139,6 @@ the owner signs off on it specifically.
    crash/reboot/cancel cases.
 5. **Optional monitoring auto-start** — opt-in; reuse `start_fps_capture` + overlay; record/cleanup.
 6. **Optional per-game auto-detection** — opt-in, OFF by default; reuse the ETW presenter detection
-   (Sentinel-safe, no injection). Auto-detect may *prompt*, but does not silently mutate.
+   (Compy-safe, no injection). Auto-detect may *prompt*, but does not silently mutate.
 
 Only after all of the above + §8 QA + owner sign-off does Gaming Mode leave its gate.

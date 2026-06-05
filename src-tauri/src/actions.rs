@@ -1,4 +1,4 @@
-//! actions: the Windows-mutation boundary. Owns every change Sentinel makes to
+//! actions: the Windows-mutation boundary. Owns every change Compy makes to
 //! the system AND the rollback/restoration mechanics — the typed action
 //! allowlist (KnownService, AppliedAction, RollbackAction, Snapshot), the
 //! apply_* functions, the rollback_*_typed functions, the rollback dispatch,
@@ -239,8 +239,8 @@ pub(crate) fn apply_visual_effects() -> Result<ApplyResult, String> {
 
 // ─── Admin-elevation helper ──────────────────────────────────────────────
 // Triggers a Windows UAC prompt; the elevated child runs `program args...`,
-// the calling Sentinel process stays at standard user. We use this pattern
-// rather than running Sentinel itself elevated, which would force a UAC
+// the calling Compy process stays at standard user. We use this pattern
+// rather than running Compy itself elevated, which would force a UAC
 // prompt on every launch.
 
 pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
@@ -745,7 +745,7 @@ pub(crate) fn rollback_power_plan_setting_typed(
     if !power_plan_exists(plan_guid) {
         return Err(format!(
             "cannot roll this back: the power plan it was applied to ({}) no longer exists. \
-             Sentinel will not restore the value to a different plan — reselect or recreate that \
+             Compy will not restore the value to a different plan — reselect or recreate that \
              plan and try again.",
             if plan_guid.trim().is_empty() {
                 "unknown".to_string()
@@ -825,7 +825,7 @@ pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
     let adapters = enumerate_eee_eligible_adapters();
     if adapters.is_empty() {
         return Err(
-            "No active wired Ethernet adapter with an Energy Efficient Ethernet property was found. Sentinel only modifies adapters where the property already exists."
+            "No active wired Ethernet adapter with an Energy Efficient Ethernet property was found. Compy only modifies adapters where the property already exists."
                 .into(),
         );
     }
@@ -1257,7 +1257,7 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
 }
 
 // Build a typed (RollbackAction, Snapshot) pair from a legacy AppliedChange
-// (one written by a Sentinel version before the typed-action refactor). The
+// (one written by a Compy version before the typed-action refactor). The
 // legacy snapshot was a free-form serde_json::Value whose shape was determined
 // by the rec_id; we reconstruct the typed form using the same per-rec_id
 // knowledge.
@@ -1265,7 +1265,7 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
 /// history — never the live recommendation catalog (ARCHITECTURE_LOCKS §1.5).
 /// Prefers the typed contract captured at apply time; falls back to
 /// synthesizing one from rec_id + legacy snapshot JSON for entries written by
-/// older Sentinel versions. This is the core of "Sentinel can undo what it did
+/// older Compy versions. This is the core of "Compy can undo what it did
 /// from local history alone" — extracted so it's unit-testable without
 /// mutating Windows.
 pub(crate) fn resolve_rollback(change: &AppliedChange) -> Result<(RollbackAction, Snapshot), String> {

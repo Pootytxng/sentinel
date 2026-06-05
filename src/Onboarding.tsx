@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 // First-run introduction. Shown once (gated on a localStorage flag set when
-// the user finishes or skips). Purpose: set expectations about what Sentinel
+// the user finishes or skips). Purpose: set expectations about what Compy
 // is and — just as importantly — what it deliberately will NOT do, before the
 // user lands on a list of changes they don't yet have context for.
 
@@ -20,7 +20,7 @@ const STEPS: Step[] = [
     body: (
       <>
         <p>
-          Sentinel isn't an optimizer that bolts on an undo button. It's a
+          Compy isn't an optimizer that bolts on an undo button. It's a
           <strong> rollback-first Windows configuration tool</strong> that
           happens to optimize. Every change it suggests is one it can put back
           exactly the way it found it.
@@ -40,13 +40,13 @@ const STEPS: Step[] = [
         <p>Each recommendation shows you three separate facts:</p>
         <ul>
           <li>
-            <strong>Recommended</strong> — what Sentinel thinks is best
+            <strong>Recommended</strong> — what Compy thinks is best
           </li>
           <li>
             <strong>Current</strong> — what Windows is actually set to right now
           </li>
           <li>
-            <strong>Applied by Sentinel</strong> — whether Sentinel made the
+            <strong>Applied by Compy</strong> — whether Compy made the
             change, or you/Windows already had it that way
           </li>
         </ul>
@@ -59,12 +59,12 @@ const STEPS: Step[] = [
   },
   {
     tag: "Our promises",
-    title: "What Sentinel will never do",
+    title: "What Compy will never do",
     body: (
       <>
         <ul>
           <li>
-            <strong>No kernel driver.</strong> Sentinel stays in user space.
+            <strong>No kernel driver.</strong> Compy stays in user space.
             (That's why it shows GPU temperature but not CPU temperature —
             reading CPU temps needs a driver, and we won't ship one.)
           </li>
@@ -86,13 +86,13 @@ const STEPS: Step[] = [
     body: (
       <>
         <p>
-          The <strong>Trust Ledger</strong> records every change Sentinel makes
+          The <strong>Trust Ledger</strong> records every change Compy makes
           — what it was before, what it became, and when — so you can review
           and undo anything later, even across restarts.
         </p>
         <p>
           Recommendations are also labelled by evidence:{" "}
-          <em>Verified</em> (Sentinel measured it),{" "}
+          <em>Verified</em> (Compy measured it),{" "}
           <em>Measured signal</em> (established benchmarks), or{" "}
           <em>Expected impact</em> (sound in theory, not yet measured). No
           overpromising.
@@ -120,7 +120,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     <div className="onb-backdrop">
       <div className="onb-card">
         <div className="onb-head">
-          <span className="onb-brand">Sentinel</span>
+          <span className="onb-brand">Compy</span>
           <button className="onb-skip" onClick={finish}>
             Skip
           </button>

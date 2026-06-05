@@ -1,4 +1,4 @@
-# Sentinel — Remote-Fetch Arming Plan (signed remote rules)
+# Compy — Remote-Fetch Arming Plan (signed remote rules)
 
 **PLANNING ONLY.** This document defines the exact gated sequence required before signed
 remote recommendation rules can ship. Writing this changes **no** behavior: remote fetch stays
@@ -163,6 +163,6 @@ rules — never on unverified/partial data, never crashed.
   in `actions.rs`. A rule cannot define a new mutation.
 - **No unsigned rules**, ever, in any channel.
 - **No remote code** — only signed JSON data is fetched, never executable content.
-- **No telemetry requirement** — remote fetch is download-only; Sentinel still sends no usage
+- **No telemetry requirement** — remote fetch is download-only; Compy still sends no usage
   data. Fetching rules must not become a tracking channel.
 - **No remote fetch before the manual-mutation QA gates are closed.**

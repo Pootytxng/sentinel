@@ -526,7 +526,7 @@ html, body, #root {
 
 /* Toggle in rec head: pushed to the right, primary on/off indicator.
    Per cross-LLM trust-UI feedback, the toggle reflects ONLY the current
-   Windows state — not whether Sentinel applied it. The three-row status
+   Windows state — not whether Compy applied it. The three-row status
    strip at the bottom of each card carries the precise truth. */
 .rec-toggle {
   margin-left: auto;
@@ -564,10 +564,10 @@ html, body, #root {
   border-left-color: var(--accent);
 }
 
-/* Three-row status strip: Recommended / Current / Applied by Sentinel.
-   Explicit separation between what Sentinel suggests, what Windows
+/* Three-row status strip: Recommended / Current / Applied by Compy.
+   Explicit separation between what Compy suggests, what Windows
    actually is, and who owns the change. Prevents the toggle from
-   pretending Sentinel owns Windows. */
+   pretending Compy owns Windows. */
 .rec-status {
   display: flex;
   flex-direction: column;
@@ -601,7 +601,7 @@ html, body, #root {
 
 .state-on    { color: #4ade80; }
 .state-off   { color: #f5c451; }    /* amber — not bad, just "Windows doesn't match recommendation yet" */
-.state-warn  { color: #f5c451; }    /* amber — Sentinel doesn't own this; user has to manage it elsewhere */
+.state-warn  { color: #f5c451; }    /* amber — Compy doesn't own this; user has to manage it elsewhere */
 .state-muted { color: var(--muted); }
 
 .rec-actions {
@@ -1942,7 +1942,7 @@ body::before {
 /* ═══════════════════════════════════════════════════════════════════════════
    COMMAND RAIL + SHELL + segmented filter + rec disclosure + responsive.
    Vertical rail never horizontally scrolls; collapses to icons when narrow so
-   Sentinel stays usable shoved to half a screen.
+   Compy stays usable shoved to half a screen.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .shell { display: flex; align-items: flex-start; gap: 18px; }

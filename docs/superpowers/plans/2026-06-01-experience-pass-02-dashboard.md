@@ -189,7 +189,7 @@ Expected: FAIL — `./dashboard-data` cannot be resolved.
 ```ts
 import type { AppliedChange, Priorities, PriorityItem, SessionSummary } from "../types";
 
-/** Changes Sentinel applied that are still live (the honest "what's improved" count). */
+/** Changes Compy applied that are still live (the honest "what's improved" count). */
 export function activeChangeCount(changes: AppliedChange[]): number {
   return changes.filter((c) => c.status === "applied" && c.is_still_active).length;
 }
@@ -327,7 +327,7 @@ export function Dashboard(p: DashboardProps) {
           </div>
         </Card>
 
-        {/* Q3 + Q4: What has Sentinel improved? / What not to touch? */}
+        {/* Q3 + Q4: What has Compy improved? / What not to touch? */}
         <Card className="col4">
           <TrustCue title={active > 0 ? "You're protected" : "Nothing changed yet"}
             detail={active > 0 ? `${active} change${active === 1 ? "" : "s"} active — all reversible from the Ledger.` : "No changes applied. Your system is untouched."} />
@@ -357,7 +357,7 @@ export function Dashboard(p: DashboardProps) {
           <SectionHeader title="Share & honesty" />
           <button className="btn" onClick={p.onExport}>Export a diagnostic report</button>
           <p className="dash-honesty" style={{ marginTop: 12 }}>
-            Sentinel shows measured facts and reversible changes — never fake percentages, boost claims,
+            Compy shows measured facts and reversible changes — never fake percentages, boost claims,
             or an opaque "score." 1% low is a live estimate. No CPU temp by design (no kernel driver).
           </p>
         </Card>

@@ -1,6 +1,6 @@
 import type { AppliedChange, Priorities, PriorityItem, SessionSummary } from "../types";
 
-/** Changes Sentinel applied that are still live (the honest "what's improved" count). */
+/** Changes Compy applied that are still live (the honest "what's improved" count). */
 export function activeChangeCount(changes: AppliedChange[]): number {
   return changes.filter((c) => c.status === "applied" && c.is_still_active).length;
 }

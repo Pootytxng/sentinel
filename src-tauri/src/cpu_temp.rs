@@ -1,12 +1,12 @@
 //! CPU temperature via **interop** with a monitoring tool the user already runs.
 //!
-//! Sentinel installs NO kernel driver — that's the anti-cheat-safe / no-driver fundamental, and
+//! Compy installs NO kernel driver — that's the anti-cheat-safe / no-driver fundamental, and
 //! real CPU die temp is only readable through ring-0 MSR access (every tool that shows it ships
 //! its own driver; the common WinRing0 one is on Microsoft's vulnerable-driver blocklist and is
-//! flagged by anti-cheat). So Sentinel never reads it directly — it only **displays** what a tool
+//! flagged by anti-cheat). So Compy never reads it directly — it only **displays** what a tool
 //! the user already chose to install is publishing.
 //!
-//! Sources (read-only, no driver in Sentinel): the LibreHardwareMonitor / OpenHardwareMonitor WMI
+//! Sources (read-only, no driver in Compy): the LibreHardwareMonitor / OpenHardwareMonitor WMI
 //! namespaces (present only while that app is running). Returns `None` when nothing is publishing —
 //! the honest "bring your own monitor" default; never a fabricated number.
 //!

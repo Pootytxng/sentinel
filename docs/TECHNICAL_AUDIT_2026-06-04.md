@@ -1,4 +1,4 @@
-# Sentinel — Technical Audit (2026-06-04)
+# Compy — Technical Audit (2026-06-04)
 
 *A full sweep for vulnerabilities, loose ends, and unfinished work — the residue of a fast,
 sometimes-chaotic build. Severity tags: 🔴 address before public release · 🟡 watch / hygiene ·
@@ -10,13 +10,13 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
 
 - 🟢 **No network egress, at all.** There is no HTTP client dependency in `Cargo.toml` (no reqwest /
   ureq / hyper). The remote-rules fetch is a stub that returns `None` (`remote_rules.rs:359`), and
-  the CSP locks `connect-src` to `'self' ipc:` (`tauri.conf.json:43`). Sentinel is truly local-first
+  the CSP locks `connect-src` to `'self' ipc:` (`tauri.conf.json:43`). Compy is truly local-first
   today — nothing leaves the machine.
 - 🟢 **No secrets in the repo.** The rules-signing key is the *public* key only, currently the
   all-zeros placeholder (`remote_rules.rs:84`), guarded by a hard-fail: while it's all-zeros, every
   manifest is rejected (`remote_rules.rs:235`). Verification is real (`ed25519-compact`), there is no
   private key anywhere.
-- 🟢 **Elevation model is sound.** Sentinel never runs itself elevated. Each elevated mutation spawns
+- 🟢 **Elevation model is sound.** Compy never runs itself elevated. Each elevated mutation spawns
   a one-shot elevated PowerShell child via UAC (`actions.rs:246 run_elevated_powershell`), so the
   app's own attack surface stays unprivileged and every elevated step is an explicit user consent.
 - 🟢 **No kernel driver, no game injection.** All telemetry is vendor libraries (NVML, ADLX), OS APIs
@@ -105,7 +105,7 @@ sometimes-chaotic build. Severity tags: 🔴 address before public release · �
   but dark; the elevated ETW kernel-session wiring (the actual DPC/latency capture) is **not wired**.
   Substantial unfinished feature.
 - 🟡 **Benchmark absolute-score tuning** — normalization placeholders (see C).
-- 🟡 **Scoreboard P4** — cross-user efficacy sharing (cohort/anti-spoof). Not built; it's Sentinel's
+- 🟡 **Scoreboard P4** — cross-user efficacy sharing (cohort/anti-spoof). Not built; it's Compy's
   *first* network egress, a deliberate opt-in/anonymous owner decision.
 - 🟡 **VRR Phase 2b** (AMD `SetEnabled` write — toggle FreeSync, not just read) and **NVIDIA NVAPI**
   VRR — future.

@@ -50,13 +50,13 @@ pub(crate) enum Component {
     Gpu,
 }
 
-/// Where a credited win came from — the "you + Sentinel, together" split (spec §4).
+/// Where a credited win came from — the "you + Compy, together" split (spec §4).
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum CreditSource {
-    /// Applied a Sentinel recommendation that's still active.
+    /// Applied a Compy recommendation that's still active.
     Guided,
-    /// A good state the user achieved themselves (detected, not Sentinel-applied).
+    /// A good state the user achieved themselves (detected, not Compy-applied).
     SelfDirected,
 }
 
@@ -720,7 +720,7 @@ pub(crate) fn run_benchmark(cfg: &RunConfig, cancel: &AtomicBool) -> RunReport {
 // Efficacy — the soul: Measure → Change → Re-measure → honest verdict.
 // Compares two `RunReport`s (before/after a tweak) and reports the measured delta
 // per component + overall. A delta that doesn't clear the run-to-run noise floor is
-// reported as `NoMeasurableChange` — never spun as a win. This is what makes Sentinel
+// reported as `NoMeasurableChange` — never spun as a win. This is what makes Compy
 // an honest instrument instead of a faith healer with a registry editor.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -852,7 +852,7 @@ struct BenchmarkStore {
 }
 
 fn store_path() -> std::path::PathBuf {
-    crate::sentinel_data_dir().join("benchmark.json")
+    crate::compy_data_dir().join("benchmark.json")
 }
 
 fn load_store() -> BenchmarkStore {
@@ -863,7 +863,7 @@ fn load_store() -> BenchmarkStore {
 }
 
 fn save_store(store: &BenchmarkStore) -> Result<(), String> {
-    std::fs::create_dir_all(crate::sentinel_data_dir()).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
     let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
     std::fs::write(store_path(), json).map_err(|e| e.to_string())
 }

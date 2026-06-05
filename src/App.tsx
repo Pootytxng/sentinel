@@ -85,11 +85,11 @@ type HardwareInfo = {
   cpu_arch: CpuArchInfo | null;
 };
 
-// "Verified"        — Sentinel directly observes the fact this rec claims.
+// "Verified"        — Compy directly observes the fact this rec claims.
 // "Measured signal" — Third-party benchmarks / community consensus measured it.
 // "Expected impact" — Logical from Windows internals, not benchmarked.
 // Reserved for the synthetic benchmark suite: any rec whose impact reproduces
-// under Sentinel's own benchmark graduates to "verified."
+// under Compy's own benchmark graduates to "verified."
 type Provenance = "verified" | "measured-signal" | "expected-impact";
 
 type Recommendation = {
@@ -443,7 +443,7 @@ function SessionsTab({ sessions }: { sessions: SessionSummary[] }) {
               />
               <SessionMetric label="Peak RAM" value={fmtGiB(s.peak_ram_used_bytes)} />
               <SessionMetric
-                label="Sentinel changes active"
+                label="Compy changes active"
                 value={String(s.sentinel_changes_active)}
               />
             </div>
@@ -798,7 +798,7 @@ function App() {
     const downsideLine = rec.downside ? `\n\nTradeoff: ${rec.downside}` : "";
     if (
       !window.confirm(
-        `Apply "${rec.title}"?\n\nThis will change a Windows setting to match Sentinel's recommendation.\n\n${rec.description}${downsideLine}\n\nSentinel will snapshot the prior state so you can roll this back at any time.`
+        `Apply "${rec.title}"?\n\nThis will change a Windows setting to match Compy's recommendation.\n\n${rec.description}${downsideLine}\n\nCompy will snapshot the prior state so you can roll this back at any time.`
       )
     )
       return;
@@ -832,9 +832,9 @@ function App() {
   };
 
   // Find the most recent still-active applied change for a given rec_id.
-  // Returns undefined if the rec is currently applied but Sentinel didn't
-  // record it (e.g. it was set outside Sentinel) -- in which case toggling
-  // OFF inside Sentinel isn't possible without a rollback contract.
+  // Returns undefined if the rec is currently applied but Compy didn't
+  // record it (e.g. it was set outside Compy) -- in which case toggling
+  // OFF inside Compy isn't possible without a rollback contract.
   const findActiveChangeForRec = (recId: string): AppliedChange | undefined => {
     return changes
       .slice()
@@ -849,10 +849,10 @@ function App() {
     if (rec.currently_applied) {
       const active = findActiveChangeForRec(rec.id);
       if (!active) {
-        // Toggle UI says ON but Sentinel has no rollback record for this
-        // setting — it was applied outside Sentinel before we started watching.
+        // Toggle UI says ON but Compy has no rollback record for this
+        // setting — it was applied outside Compy before we started watching.
         setError(
-          `"${rec.title}" is currently on but Sentinel didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.`,
+          `"${rec.title}" is currently on but Compy didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.`,
         );
         return;
       }
@@ -927,14 +927,14 @@ function App() {
       )}
       <header className="header">
         <div>
-          <h1>Sentinel</h1>
+          <h1>Compy</h1>
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
         <div className="header-right">
           <ThemePicker current={theme} onChange={changeTheme} />
           <span
             className={`rules-source-pill rules-source-${rulesSource}`}
-            title="Where Sentinel's recommendation catalog came from on this launch"
+            title="Where Compy's recommendation catalog came from on this launch"
           >
             {rulesSourceLabel}
           </span>
@@ -1032,7 +1032,7 @@ function App() {
       )}
 
       <footer className="footer">
-        <span>Sentinel never changes anything without your explicit approval.</span>
+        <span>Compy never changes anything without your explicit approval.</span>
         <button className="footer-link" onClick={() => setShowOnboarding(true)}>
           Replay intro
         </button>
@@ -1042,7 +1042,7 @@ function App() {
 }
 
 // ─── Command hero ─────────────────────────────────────────────────────────
-// The at-a-glance verdict the user sees the instant Sentinel opens: a glowing
+// The at-a-glance verdict the user sees the instant Compy opens: a glowing
 // readiness gauge + a confident status headline + live system vitals. Read-only
 // — derives entirely from the already-loaded hardware + readiness data; changes
 // nothing. This is the "are I dialed in / do I need to look elsewhere" answer.
@@ -1081,7 +1081,7 @@ function CommandHero({
   // count, NOT a synthesized score.
   const total = readiness ? readiness.checks.length : 0;
   // Advisory items (e.g. VRR — no API exposes its state) are "resolved" from
-  // Sentinel's view: nothing for it to fix, the user's been pointed to verify.
+  // Compy's view: nothing for it to fix, the user's been pointed to verify.
   // Count them as clear so an inherently-advisory check never holds the ring down.
   const clear = readiness ? readiness.ready_count + readiness.advisory_count : 0;
   const R = 52;
@@ -1264,15 +1264,15 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
 // Optimize: the six rec categories + Startup, consolidated into one section
 // with an inline segmented filter. Replaces the old per-category tabs so the
 // rail stays short. Behavior (apply/rollback/toggle) is unchanged.
-// "Lead the horse to water AND hold the bendy straw" — for settings Sentinel
+// "Lead the horse to water AND hold the bendy straw" — for settings Compy
 // detects but deliberately won't mutate (they live in a vendor app / a Windows
 // page with no safe, reversible programmatic toggle), we point the user to the
 // exact place to change it AND, where possible, open that place for them.
 //
-// HONESTY: `state` reflects only what Sentinel genuinely knows.
-//  - "needs-action": the rec ONLY appears because Sentinel detected a sub-par
+// HONESTY: `state` reflects only what Compy genuinely knows.
+//  - "needs-action": the rec ONLY appears because Compy detected a sub-par
 //    state (e.g. refresh rate below max). Its presence = action available.
-//  - "unknown": Sentinel cannot read this setting's state at all (e.g. a vendor
+//  - "unknown": Compy cannot read this setting's state at all (e.g. a vendor
 //    app's telemetry toggle). We say so plainly rather than fake an indicator.
 //
 // `openUri` is a FIXED, allowlisted ms-settings: deep link (never from data) —
@@ -1383,14 +1383,14 @@ function GuidedCard({ rec }: { rec: Recommendation }) {
           className={`guided-status guided-status-${status}`}
           title={
             status === "needs-action"
-              ? "Sentinel detected this is below its recommended state — worth doing."
-              : "Sentinel can't read this setting's current state (it lives in a vendor app / outside what we probe). Check it yourself; skip if it's already set."
+              ? "Compy detected this is below its recommended state — worth doing."
+              : "Compy can't read this setting's current state (it lives in a vendor app / outside what we probe). Check it yourself; skip if it's already set."
           }
         >
           <span className="guided-status-dot" aria-hidden="true" />
           {statusLabel}
         </span>
-        <span className="rec-guided-pill" title="Sentinel guides you to where this lives — it won't change it for you, by design.">
+        <span className="rec-guided-pill" title="Compy guides you to where this lives — it won't change it for you, by design.">
           Guided
         </span>
       </div>
@@ -1432,12 +1432,12 @@ function GuidedCard({ rec }: { rec: Recommendation }) {
               </ol>
               {status === "unknown" && (
                 <p className="guided-note">
-                  Sentinel can't read this one's current state, so check before you
+                  Compy can't read this one's current state, so check before you
                   change it — if it's already set the way you want, you're done.
                 </p>
               )}
               <p className="guided-note">
-                Sentinel won't change this for you — it lives outside what we can
+                Compy won't change this for you — it lives outside what we can
                 safely undo. Doing it yourself keeps you in control.
               </p>
             </div>
@@ -1466,7 +1466,7 @@ function OptimizeTab({
   type Filter = "All" | RecCategory | "Guided" | "Startup";
   const [filter, setFilter] = useState<Filter>("All");
 
-  // Split appliable (Sentinel-owned toggles) from advisory/guided (Sentinel
+  // Split appliable (Compy-owned toggles) from advisory/guided (Compy
   // detects but directs you elsewhere to change). The "All" view shows
   // appliable recs; guided ones live in their own segment so the toggle list
   // stays clean and the guidance is intentional, not a dead switch.
@@ -1523,9 +1523,9 @@ function OptimizeTab({
       {filter === "Guided" ? (
         <>
           <p className="section-help">
-            Settings Sentinel detected but <strong>won't change for you</strong> —
+            Settings Compy detected but <strong>won't change for you</strong> —
             they live in a vendor app or a Windows page with no safe, reversible
-            switch Sentinel can own. Instead of a dead toggle, here's exactly where
+            switch Compy can own. Instead of a dead toggle, here's exactly where
             to find each one so you stay in control.
           </p>
           <div className="rec-list">
@@ -1771,7 +1771,7 @@ function MonitoringTab({ active }: { active: boolean }) {
       {/* GPU panels — one per detected NVIDIA adapter */}
       {hasGpu === false ? (
         <div className="empty">
-          GPU sensors unavailable. Sentinel reads GPU telemetry from NVML,
+          GPU sensors unavailable. Compy reads GPU telemetry from NVML,
           which ships with the NVIDIA driver. AMD (ADLX) and Intel (GPA)
           support is on the roadmap — your GPU will get its own panel here
           once that lands.
@@ -1896,7 +1896,7 @@ function FpsPanel({
       <p className="fps-disclaimer">
         Live estimates from DirectX present events (not injected). FPS and
         average frametime track closely; <strong>1% low is a session signal</strong>,
-        not a benchmark-grade figure — Sentinel isn't a CapFrameX/PresentMon
+        not a benchmark-grade figure — Compy isn't a CapFrameX/PresentMon
         replacement.
       </p>
     </div>
@@ -2066,7 +2066,7 @@ function CpuMonitorPanel({
       </div>
       <div className="monitor-note">
         No CPU temperature by design: reading it requires a kernel-level driver,
-        and Sentinel won't install one. GPU temperature comes from the vendor's
+        and Compy won't install one. GPU temperature comes from the vendor's
         user-mode library, so it's safe to show — CPU temperature has no
         equivalent without going to the kernel.
       </div>
@@ -2322,7 +2322,7 @@ function DiagnosticsTab({ sections }: { sections: DiagnosticSection[] }) {
         <h2 className="section-title">Diagnostics</h2>
       </div>
       <p className="section-help">
-        Sentinel's raw view of your PC. These are the observations the
+        Compy's raw view of your PC. These are the observations the
         recommendation engine reads to decide what to surface. If a rec you
         expect doesn't show up — or one you don't expect does — the answer
         usually lives here.
@@ -2360,7 +2360,7 @@ function HistoryTab({
 }) {
   // Trust Ledger preface: explain to the user what this view is and why
   // they should rely on it. Per the cross-LLM "anti-scam differentiator"
-  // framing -- this is where Sentinel proves it's not a tweak pack.
+  // framing -- this is where Compy proves it's not a tweak pack.
   return (
     <section className="tab-pane">
       <div className="section-header">
@@ -2371,15 +2371,15 @@ function HistoryTab({
         <div className="read-only-pill">Audit trail · click any row to expand</div>
       </div>
       <p className="section-help">
-        Every change Sentinel has applied to your machine, with the data needed to
+        Every change Compy has applied to your machine, with the data needed to
         roll it back independently of the live recommendation catalog. This is
-        the receipt — Sentinel can prove what it changed, when, with which
+        the receipt — Compy can prove what it changed, when, with which
         version, and whether your machine still reflects the change.
       </p>
       <div className="change-list">
         {changes.length === 0 ? (
           <div className="empty">
-            No applied changes yet. Anything Sentinel applies will appear here
+            No applied changes yet. Anything Compy applies will appear here
             with a full rollback record.
           </div>
         ) : (
@@ -2439,11 +2439,11 @@ const PROVENANCE_LABEL: Record<Provenance, string> = {
 // names the honesty level of the rec's IMPACT claim, not the rec itself.
 const PROVENANCE_TITLE: Record<Provenance, string> = {
   verified:
-    "Sentinel directly observes this fact (e.g., reads the current refresh rate, measures free disk space, checks driver date). The claim IS the measurement.",
+    "Compy directly observes this fact (e.g., reads the current refresh rate, measures free disk space, checks driver date). The claim IS the measurement.",
   "measured-signal":
-    "Third-party benchmarks or wide community testing has measured this impact. Sentinel cites established results rather than inventing them.",
+    "Third-party benchmarks or wide community testing has measured this impact. Compy cites established results rather than inventing them.",
   "expected-impact":
-    "Logical from Windows internals; Sentinel has NOT measured this itself. Honest 'we believe this but haven't verified it under our own benchmark suite.'",
+    "Logical from Windows internals; Compy has NOT measured this itself. Honest 'we believe this but haven't verified it under our own benchmark suite.'",
 };
 
 function RecCard({
@@ -2459,18 +2459,18 @@ function RecCard({
   canToggleOff: boolean;
   onToggle: () => void;
 }) {
-  // Distinct truths Sentinel surfaces (per cross-LLM review): the toggle
-  // position must not pretend Sentinel owns Windows state. We show three
+  // Distinct truths Compy surfaces (per cross-LLM review): the toggle
+  // position must not pretend Compy owns Windows state. We show three
   // separate facts and let the user reason about them:
-  //   1. Recommended state  — what Sentinel thinks (always "On" for these recs;
+  //   1. Recommended state  — what Compy thinks (always "On" for these recs;
   //      they're all framed as "do this thing", so the recommendation is to
   //      apply)
   //   2. Current state      — what Windows actually is right now (live)
-  //   3. Applied by Sentinel — did Sentinel make this change, or did the user
+  //   3. Applied by Compy — did Compy make this change, or did the user
   //      already have it that way / change it externally?
   //
   // The toggle reflects the Current state (so flipping it asks Windows to
-  // change). When Current matches Recommended but Sentinel didn't apply it,
+  // change). When Current matches Recommended but Compy didn't apply it,
   // we surface that distinction explicitly rather than offering a rollback
   // we don't actually have a contract for.
   const currentlyOn = rec.currently_applied;
@@ -2481,22 +2481,22 @@ function RecCard({
     busy || isInfo || (currentlyOn && !sentinelOwns);
 
   const toggleTitle = isInfo
-    ? "Advisory recommendation — Sentinel can't auto-apply this; follow the description"
+    ? "Advisory recommendation — Compy can't auto-apply this; follow the description"
     : busy
     ? "Working…"
     : currentlyOn && !sentinelOwns
-    ? "Already on, but Sentinel didn't apply it. Toggle off in the original Windows location."
+    ? "Already on, but Compy didn't apply it. Toggle off in the original Windows location."
     : currentlyOn
-    ? "Click to roll back. Sentinel will restore the prior state recorded at apply time."
-    : "Click to apply. Sentinel will snapshot the prior state so you can roll back at any time.";
+    ? "Click to roll back. Compy will restore the prior state recorded at apply time."
+    : "Click to apply. Compy will snapshot the prior state so you can roll back at any time.";
 
-  // "Applied by Sentinel" status — three-way: Yes / No (advisory) / No (external)
+  // "Applied by Compy" status — three-way: Yes / No (advisory) / No (external)
   const sentinelAppliedLabel = isInfo
     ? "N/A — advisory recommendation"
     : sentinelOwns
     ? "Yes"
     : currentlyOn
-    ? "No (set outside Sentinel)"
+    ? "No (set outside Compy)"
     : "No (not applied)";
   const sentinelAppliedClass = sentinelOwns
     ? "state-on"
@@ -2543,7 +2543,7 @@ function RecCard({
           <span className="rec-advisory-pill">Guided</span>
         ) : (
           (() => {
-            // Blocked = ON but Sentinel didn't apply it, so there's no rollback
+            // Blocked = ON but Compy didn't apply it, so there's no rollback
             // contract to flip it off safely. Surface a clear hover tooltip
             // explaining why (instead of just a bare "no" cursor).
             const blockedExternal = currentlyOn && !sentinelOwns;
@@ -2552,7 +2552,7 @@ function RecCard({
                 className={`toggle-wrap ${blockedExternal ? "toggle-wrap-blocked" : ""}`}
                 data-tip={
                   blockedExternal
-                    ? "Already on, but you (or Windows) enabled this — not Sentinel. Sentinel has no rollback record for changes it didn't make, so it won't flip it off and risk being unable to restore. Turn it off in its original Windows location if you want it off."
+                    ? "Already on, but you (or Windows) enabled this — not Compy. Compy has no rollback record for changes it didn't make, so it won't flip it off and risk being unable to restore. Turn it off in its original Windows location if you want it off."
                     : undefined
                 }
               >
@@ -2572,7 +2572,7 @@ function RecCard({
                 {blockedExternal && (
                   <span className="toggle-tip" role="tooltip">
                     <strong>Locked for your safety</strong>
-                    Already on, but <em>you</em> or Windows set it — not Sentinel. With no rollback record, Sentinel won't flip it off and risk not being able to put it back. Change it in its own Windows location instead.
+                    Already on, but <em>you</em> or Windows set it — not Compy. With no rollback record, Compy won't flip it off and risk not being able to put it back. Change it in its own Windows location instead.
                   </span>
                 )}
               </span>
@@ -2620,7 +2620,7 @@ function RecCard({
               </span>
             </div>
             <div className="rec-status-row">
-              <span className="rec-status-label">Applied by Sentinel</span>
+              <span className="rec-status-label">Applied by Compy</span>
               <span className={`rec-status-value ${sentinelAppliedClass}`}>
                 {sentinelAppliedLabel}
               </span>
@@ -2713,7 +2713,7 @@ function ChangeRow({
           </div>
           <div className="change-when">
             {when}
-            {stale && <span className="change-note"> · reverted outside Sentinel</span>}
+            {stale && <span className="change-note"> · reverted outside Compy</span>}
           </div>
         </div>
         <div className="change-action-area" onClick={(e) => e.stopPropagation()}>
@@ -2748,14 +2748,14 @@ function ChangeRow({
               <span className="ledger-label">Status</span>
               <span className="ledger-value">
                 {change.status === "rolled_back"
-                  ? "Rolled back by Sentinel"
+                  ? "Rolled back by Compy"
                   : stale
                   ? "Applied, but no longer matches current Windows state"
-                  : "Applied — Sentinel-owned"}
+                  : "Applied — Compy-owned"}
               </span>
             </div>
             <div className="ledger-row">
-              <span className="ledger-label">Sentinel app version</span>
+              <span className="ledger-label">Compy app version</span>
               <span className="ledger-value mono">
                 {change.app_version_at_apply ?? "(pre-versioning entry)"}
               </span>
@@ -2798,7 +2798,7 @@ function ChangeRow({
             </div>
           </div>
           <div className="ledger-footer">
-            This row is the rollback contract. Sentinel can restore the prior
+            This row is the rollback contract. Compy can restore the prior
             state from the snapshot above, independently of whether this rule
             still exists in the active recommendation catalog.
           </div>

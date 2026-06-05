@@ -1,4 +1,4 @@
-# Sentinel Benchmark + Efficacy — engine design (measured-instrument soul)
+# Compy Benchmark + Efficacy — engine design (measured-instrument soul)
 
 > **Status: PARKED + DARK.** F6 benchmark lane. Built **in isolation**, stays **parked** (not merged to
 > `main`) and **dark** (default-off gate, no live UI) until the owner un-parks.
@@ -20,7 +20,7 @@
 ## 0. The spine (this is the whole moat)
 
 Every mainstream "optimizer" is snake oil because it's *all scalpel, no x-ray* — it flips switches and never
-checks the pulse before or after. Sentinel's differentiator is the loop no one does honestly:
+checks the pulse before or after. Compy's differentiator is the loop no one does honestly:
 
 **Measure → Change → Re-measure → Keep or Revert.**
 
@@ -46,7 +46,7 @@ the live app); the loop is wired at integration.
    ("you're 20% low for this card → here's the misconfig"). Phase 1 ships **approximate seed baselines**
    (labeled approximate); the opt-in efficacy network (§8) makes it real later.
 
-> **Demoted (was the old soul):** a composite "Sentinel score /100", tiers, cosmetic-reward unlocks, and a
+> **Demoted (was the old soul):** a composite "Compy score /100", tiers, cosmetic-reward unlocks, and a
 > competitive vanity leaderboard. The roadmap's own line — *"real benchmarks, not a made-up score /100"* —
 > is the rejection of exactly that. An honest **aggregate health summary** may still exist as a secondary
 > glance ("your rig is performing to spec"), but it is **not** the centerpiece and is **never** a ranked
@@ -56,7 +56,7 @@ the live app); the loop is wired at integration.
 
 - **Honest nulls are mandatory.** If a tweak's delta doesn't clear the run-to-run noise floor (the
   best-of-N variance we already compute), the verdict is **"no measurable change"** — full stop. This is
-  what makes Sentinel the only non-charlatan in the room.
+  what makes Compy the only non-charlatan in the room.
 - **Significance from real variance.** The noise floor = the spread across best-of-N repeats (already built,
   `high_variance`). A delta inside that band is noise, not a win.
 - **Measured-signal, never a promise.** Synthetic scores are health/efficacy signals, never "improved FPS by
@@ -118,7 +118,7 @@ gamification the roadmap rejects). No "level up, show your friends." If a glance
   module** (`Measurement`, `compute_efficacy`, verdicts) + Phase-2 bounded network commands.
 - **IPC (dark, not registered):** `run_benchmark()`, `measure_efficacy(before,after)`, `benchmark_enabled()`
   gate. Default-off gate — Gaming Mode precedent.
-- **Separate store:** `benchmark.json` under `sentinel_data_dir()` — never `history.json`/`sessions.json`.
+- **Separate store:** `benchmark.json` under `compy_data_dir()` — never `history.json`/`sessions.json`.
 - **Reuses (pure consumers):** `history.rs`, `recommendations.rs`, `readiness.rs`, `diagnostics.rs`/
   `hardware.rs`. **No changes to `actions.rs` / mutation paths.**
 - **Frontend (design lane / HQ):** new files only; existing `Tab`/`SECTION_META`/`visibleTabs` seam; **do
@@ -158,7 +158,7 @@ The realignment touches things outside this lane's authority. **This lane does n
    HQ updates it; mechanics unchanged.
 2. **PresentMon / `ARCHITECTURE_LOCKS §1.7` (the big one).** The roadmap wants **real game frame-time deltas**
    (PresentMon: frame times, 1%/0.1% lows, GPU-busy) as the *ultimate* proof — the most honest possible
-   "Measure". Sentinel **already has the ETW capture machinery** (`ferrisetw`, the elevated `fps.rs`
+   "Measure". Compy **already has the ETW capture machinery** (`ferrisetw`, the elevated `fps.rs`
    `--fps-capture` helper). But §1.7 currently puts frame capture **out of v1**. Promoting it to the
    centerpiece is a **conscious lock reversal = HQ + owner decision.** *Recommendation: pursue it — it's the
    roadmap's strongest measurement and the machinery exists — but consciously, with HQ.* The synthetic

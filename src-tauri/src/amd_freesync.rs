@@ -239,7 +239,7 @@ mod freesync_tests {
     // Hardware probe: requires an AMD GPU + Adrenalin driver (ADLX present). Exercises the real FFI
     // path on the live GPU — the point is a correct, non-crashing read; the value depends on the
     // attached monitor. Run explicitly on the AMD box:
-    //   cargo test -p sentinel --lib amd_freesync -- --ignored --nocapture
+    //   cargo test -p compy --lib amd_freesync -- --ignored --nocapture
     #[test]
     #[ignore = "hardware: AMD GPU + ADLX required"]
     fn freesync_live_probe() {

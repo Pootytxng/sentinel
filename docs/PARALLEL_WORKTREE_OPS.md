@@ -1,16 +1,16 @@
 # Parallel Worktree Operations — HQ / Air-Traffic-Control model
 
-**Set 2026-06-01.** Sentinel is worked by multiple Claude sessions ("lanes") at once. This is the
+**Set 2026-06-01.** Compy is worked by multiple Claude sessions ("lanes") at once. This is the
 rule of the road. **HQ owns this doc.** Any lane: read this before touching the repo.
 
 ## Lanes & folders (each lane = one git worktree = one branch)
 
 | Lane | Folder | Branch | Domain it may edit |
 |---|---|---|---|
-| **HQ (integration)** | `C:\Users\Kuya\code\sentinel` | `main` | merges, QA, this doc, `CLAUDE.md`, beta-ref guard |
+| **HQ (integration)** | `C:\Users\Kuya\code\compy` | `main` | merges, QA, this doc, `CLAUDE.md`, beta-ref guard |
 | **Design** | (idle — `experience-pass` MERGED 2026-06-02; fresh worktree+branch off `main` when next staffed) | — | `src/` (frontend) + frontend build config |
-| **Backend agent (SPIKE)** | `C:\Users\Kuya\code\sentinel-agent` | `spike/backend-agent` | `src-tauri/` exploration — **speculative, may never merge** |
-| **Benchmark** | `C:\Users\Kuya\code\sentinel-benchmark` | `benchmark` | F6 proof/benchmark **design** (docs first) |
+| **Backend agent (SPIKE)** | `C:\Users\Kuya\code\compy-agent` | `spike/backend-agent` | `src-tauri/` exploration — **speculative, may never merge** |
+| **Benchmark** | `C:\Users\Kuya\code\compy-benchmark` | `benchmark` | F6 proof/benchmark **design** (docs first) |
 
 ## Rules of the road (so it's not a 5-car pileup)
 
@@ -48,7 +48,7 @@ direction is in hand. Until then: benchmark lane holds.
 - **F1 Gaming Mode** — ✅ **BUILT + merged to `main` DARK 2026-06-02** behind a default-off
   `gaming_mode_gate()` (the "Gaming" tab is hidden + the 5 IPC commands refuse). `cargo test` 81/81 ·
   `npm test` 39/39 · /check + /security clean. **Gated until the owner's mutation QA (spec §7) + sign-off
-  flip the gate.** Built by HQ in a throwaway `sentinel-gaming` worktree (now removed). Spec +
+  flip the gate.** Built by HQ in a throwaway `compy-gaming` worktree (now removed). Spec +
   plan under `docs/superpowers/`.
 - **`experience-pass`** — ✅ **MERGED to `main` 2026-06-02** (ff `fcba42b..60daf3a`); branch + worktree
   **retired**. The de-gamified honest command-center is now live on `main`: SystemPosture hero,

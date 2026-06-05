@@ -11,7 +11,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::recommendations::{load_baseline_rules_embedded, RulesFile};
-use crate::sentinel_data_dir;
+use crate::compy_data_dir;
 
 // Small inline hex codec to avoid pulling the hex crate (which has a known
 // compat issue with the current core::error::Error trait bound on stable).
@@ -120,7 +120,7 @@ struct RulesManifest {
     max_app_version: String,
     /// Hex-encoded SHA-256 of the rules JSON file.
     rules_sha256: String,
-    /// URL to fetch the rules JSON from. Sentinel will SHA-256 the response
+    /// URL to fetch the rules JSON from. Compy will SHA-256 the response
     /// and verify it matches `rules_sha256`.
     rules_url: String,
     /// Hex-encoded Ed25519 signature over the manifest's canonical bytes
@@ -155,7 +155,7 @@ impl std::fmt::Display for ManifestError {
             ),
             Self::Expired => write!(f, "manifest expires_at is in the past (freeze attack rejected)"),
             Self::AppVersionOutOfRange => {
-                write!(f, "manifest does not cover the current Sentinel app version")
+                write!(f, "manifest does not cover the current Compy app version")
             }
             Self::BadKey => write!(f, "embedded public key is the placeholder all-zeros"),
         }
@@ -310,7 +310,7 @@ pub(crate) enum RulesSource {
     /// Loaded from the binary's embedded baseline (cold start, no network,
     /// remote fetch disabled, or all remote attempts failed).
     Embedded,
-    /// Loaded from %APPDATA%\Sentinel\cached-rules.json (a prior successful
+    /// Loaded from %APPDATA%\Compy\cached-rules.json (a prior successful
     /// remote fetch survived a restart).
     Cached,
     /// Just fetched from the configured remote URL and passed every gate.
@@ -318,13 +318,13 @@ pub(crate) enum RulesSource {
 }
 
 fn cached_manifest_path() -> PathBuf {
-    sentinel_data_dir().join("cached-manifest.json")
+    compy_data_dir().join("cached-manifest.json")
 }
 fn cached_rules_path() -> PathBuf {
-    sentinel_data_dir().join("cached-rules.json")
+    compy_data_dir().join("cached-rules.json")
 }
 fn last_seen_version_path() -> PathBuf {
-    sentinel_data_dir().join("last-seen-ruleset-version.txt")
+    compy_data_dir().join("last-seen-ruleset-version.txt")
 }
 
 fn load_last_seen_ruleset_version() -> u64 {
@@ -335,7 +335,7 @@ fn load_last_seen_ruleset_version() -> u64 {
 }
 
 fn save_last_seen_ruleset_version(v: u64) {
-    let _ = fs::create_dir_all(sentinel_data_dir());
+    let _ = fs::create_dir_all(compy_data_dir());
     let _ = fs::write(last_seen_version_path(), v.to_string());
 }
 
@@ -350,7 +350,7 @@ fn load_cached_rules() -> Option<(RulesManifest, RulesFile)> {
 }
 
 fn save_cached_rules(raw_manifest: &[u8], raw_rules: &[u8]) -> Result<(), String> {
-    fs::create_dir_all(sentinel_data_dir()).map_err(|e| e.to_string())?;
+    fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     fs::write(cached_manifest_path(), raw_manifest).map_err(|e| e.to_string())?;
     fs::write(cached_rules_path(), raw_rules).map_err(|e| e.to_string())?;
     Ok(())

@@ -1,12 +1,12 @@
-# Sentinel — Advanced Performance Black Book
+# Compy — Advanced Performance Black Book
 
 **Status:** RESEARCH + FEATURE DESIGN (2026-06-02). **Advisory / educational only.** Nothing in this
-document is auto-applied by Sentinel and **none of it changes the frozen recommendation catalog.** This is
-the gated "informed-adults" annex: the deeper, riskier tuning the *front of Sentinel deliberately refuses
+document is auto-applied by Compy and **none of it changes the frozen recommendation catalog.** This is
+the gated "informed-adults" annex: the deeper, riskier tuning the *front of Compy deliberately refuses
 to do for you*, written down honestly so the user who insists on going further does it with eyes open —
-**at their own discretion, with Sentinel taking no responsibility for manual changes made at this level.**
+**at their own discretion, with Compy taking no responsibility for manual changes made at this level.**
 
-> **Why this exists.** Sentinel's whole identity is *rollback-first, safe, for-YOUR-hardware*. The front
+> **Why this exists.** Compy's whole identity is *rollback-first, safe, for-YOUR-hardware*. The front
 > end swears against sketchy tweaks because the standard outcome is: watch one YouTube video → apply ten
 > "ultimate FPS" registry edits at once → turn an optimization venture into a **diagnostic-loop / BSOD
 > speedrun.** But some advanced users genuinely want the deeper step. The honest move isn't to pretend the
@@ -49,11 +49,11 @@ restore point covers the rest). 🟡 **Situational gain · ✅ Safe** *if* you r
 | Service | What it does | Disable verdict | Notes |
 |---|---|---|---|
 | **DiagTrack** (Connected User Experiences & Telemetry) | Sends usage/diagnostic data to MS | 🟢✅ disable | No effect on Update/apps/stability. The cleanest win. |
-| **SysMain** (Superfetch) | Preloads apps into RAM | 🟡✅ disable **on SSD/NVMe** | Frees 0.5–1.5 GB; preload benefit is near-zero on fast storage. **Keep on HDD.** (Sentinel already gates this on storage type.) |
+| **SysMain** (Superfetch) | Preloads apps into RAM | 🟡✅ disable **on SSD/NVMe** | Frees 0.5–1.5 GB; preload benefit is near-zero on fast storage. **Keep on HDD.** (Compy already gates this on storage type.) |
 | **Diagnostic Policy Service / dmwappushservice** | Diagnostics plumbing | 🟢✅ disable | Telemetry-adjacent. |
 | **Delivery Optimization** | P2P update sharing | 🟡✅ set Manual | Stops background upload bandwidth; keep Manual so Update still works. |
 | **Print Spooler** | Printing | 🟢✅ disable **if no printer** | Also closes a historically CVE-heavy surface. Re-enable to print. |
-| **Fax / Remote Registry / Windows Search** | Legacy / indexer | 🟡⚠️ situational | Search-off helps low-RAM/HDD but breaks Start-menu search-as-you-type. Sentinel gates Search on HDD only. |
+| **Fax / Remote Registry / Windows Search** | Legacy / indexer | 🟡⚠️ situational | Search-off helps low-RAM/HDD but breaks Start-menu search-as-you-type. Compy gates Search on HDD only. |
 | **Xbox services** (when not used) | Game Bar / Live | ⚠️ **leave alone if you use Game Pass / Game Bar / some launchers** | Breaking these breaks Game Pass installs + some overlays. |
 
 ### Telemetry / startup / scheduled tasks (reversible)
@@ -74,7 +74,7 @@ restore point covers the rest). 🟡 **Situational gain · ✅ Safe** *if* you r
 ### Genuinely worth it (safe-ish)
 | Setting | Gain | Risk | Verdict |
 |---|---|---|---|
-| **Power plan → High/Ultimate Performance** (existing plan) | 🟡 | ✅ | Stops idle downclock/parking mid-game. Switching to an *existing* plan is non-elevated. (Sentinel's Gaming Mode core.) |
+| **Power plan → High/Ultimate Performance** (existing plan) | 🟡 | ✅ | Stops idle downclock/parking mid-game. Switching to an *existing* plan is non-elevated. (Compy's Gaming Mode core.) |
 | **Game Mode ON** | ⚪–🟡 | ✅ | Modern Game Mode helps low-core CPUs/streaming a little; harmless. |
 | **Game Bar / Game DVR / background recording OFF** | 🟡 | ✅ | Removes capture overhead some users never wanted. Real on weaker rigs. |
 | **Hardware-Accelerated GPU Scheduling (HAGS)** | 🟡 | ⚠️ | Can lower latency / help frame-gen on modern GPUs; **needs reboot**, occasionally regresses — test with/without. |
@@ -163,14 +163,14 @@ The biggest per-game wins are usually **engine-aware**, not magic driver flags:
 - **Competitive esports (CS2, Valorant, OW2, Apex, Fortnite):** CPU-bound; the wins are **Reflex/Anti-Lag 2 + frame cap + max-perf power + clean background (debloat) + a real high-Hz panel**, *not* upscaling/frame-gen. Keep anti-cheat happy.
 - **Sim / strategy / 4X (CPU-bound):** power plan + memory speed (XMP/EXPO) + background hygiene matter more than the GPU panel; frame-gen rarely helps a CPU-bound title.
 - **Emulators (RPCS3, modern Switch/▮ emus):** very flag-specific — vendor "Vulkan present", shader-cache size, sometimes specific compatibility toggles; treat per-emulator docs as the source of truth.
-- **The principle Sentinel should encode:** detect the **engine + whether the title is competitive or cinematic + CPU- vs GPU-bound**, then suggest the matching *profile shape* above — never a blind global preset.
+- **The principle Compy should encode:** detect the **engine + whether the title is competitive or cinematic + CPU- vs GPU-bound**, then suggest the matching *profile shape* above — never a blind global preset.
 
 ---
 
 ## Part 7 — 🕳️ THE BLACK BOOK (advanced / risky · advisory only)
 
 > **You are leaving the safe zone.** Everything below is for users who *insist* on the deeper step.
-> Sentinel will **never auto-apply any of this.** Read each verdict. Restore point first. One at a time.
+> Compy will **never auto-apply any of this.** Read each verdict. Restore point first. One at a time.
 > **You own the outcome.**
 
 ### 7a — BIOS / UEFI
@@ -191,7 +191,7 @@ The biggest per-game wins are usually **engine-aware**, not magic driver flags:
 | **Forcing MSI mode / interrupt affinity / IRQ priority** | ⚪ negligible on modern setups | 🛑 registry-deep; can break devices | Skip unless diagnosing a specific DPC-latency problem with tools. |
 | **Core unparking / forcing all cores active** | ⚪ (same family as the C-States myth) | ⚠️ worse boost/heat/efficiency | Modern Windows already manages this. Skip. |
 | **Forcing 0.5 ms timer resolution globally** | ⚪/🟡 inconsistent | ⚠️ higher idle power, can hurt some titles | Test with PresentMon; revert if not clearly better. |
-| **Network tweaks** (disable Nagle / `TcpAckFrequency`, RSS/RSC off) | 🟡 tiny latency in a few titles | ⚠️ can break VoIP/VPN/some apps | Sentinel already exposes Nagle as *advisory*. Per-NIC, reversible, marginal. |
+| **Network tweaks** (disable Nagle / `TcpAckFrequency`, RSS/RSC off) | 🟡 tiny latency in a few titles | ⚠️ can break VoIP/VPN/some apps | Compy already exposes Nagle as *advisory*. Per-NIC, reversible, marginal. |
 | **Disabling Defender / pagefile / Windows Update** | "more FPS/RAM" | 🛑🛑 security + crashes + anti-cheat | **Never.** This is the bottom of the no-no zone. |
 | **Third-party "debloat/ISO" rebuilds, kernel-mode tweak tools, DLL injectors** | varies | 🛑 **anti-cheat bans + irreversible + malware vector** | Educational warning only — these are how people brick installs and lose accounts. |
 
@@ -201,23 +201,23 @@ who chase it hardest are the ones who end up reinstalling Windows.*
 
 ---
 
-## Part 8 — Trust-gated access design (how Sentinel surfaces this safely)
+## Part 8 — Trust-gated access design (how Compy surfaces this safely)
 
-The Black Book must be **hard to stumble into and easy to leave**, consistent with Sentinel's promise. Design:
+The Black Book must be **hard to stumble into and easy to leave**, consistent with Compy's promise. Design:
 
 1. **Hidden by default. Earned, not advertised.** No Black Book entry point on first run. It unlocks only
-   after the user has **built a track record with Sentinel** — a *trust score* derived from real, local,
+   after the user has **built a track record with Compy** — a *trust score* derived from real, local,
    already-tracked signals (no new telemetry), e.g.:
    - N successful **apply → verify → (optionally) rollback** cycles from the safe catalog (they understand reversibility),
-   - account age / sessions with Sentinel (sustained use, not a fresh install),
+   - account age / sessions with Compy (sustained use, not a fresh install),
    - completed onboarding + read the safety explainer,
    - no recent "applied 10 things then rage-rolled-back everything" thrash pattern.
    The point isn't gatekeeping for its own sake — it's a **proxy for "this user has demonstrated they
    tweak carefully and know how to undo things."**
-2. **Explicit, multi-step opt-in.** When eligible, Sentinel surfaces an *option* (never a nag): *"You've
-   used Sentinel safely for a while. Want to unlock the Advanced Black Book — deeper, riskier tuning we
+2. **Explicit, multi-step opt-in.** When eligible, Compy surfaces an *option* (never a nag): *"You've
+   used Compy safely for a while. Want to unlock the Advanced Black Book — deeper, riskier tuning we
    normally refuse to touch?"* → a **knowledge/consent gate**: a short plain-English acknowledgment screen
-   (what "advisory only" means, that these are manual, that Sentinel won't apply or roll them back, that
+   (what "advisory only" means, that these are manual, that Compy won't apply or roll them back, that
    the user owns the outcome) requiring an explicit, typed-or-checkbox confirmation. Re-confirmed on each
    major version.
 3. **Advisory-only forever — no apply button.** The Black Book **never** gets an "Apply" affordance.
@@ -228,7 +228,7 @@ The Black Book must be **hard to stumble into and easy to leave**, consistent wi
    note** *before* any instructions — the verdict leads, the how-to follows.
 5. **Liability framing, visible and persistent.** A standing banner on the Black Book surface (Part 9).
 6. **One-click "take me back to safe."** The exit is always one tap; the Black Book is a side-room, not a
-   new default mode. Nothing about unlocking it changes how the rest of Sentinel behaves.
+   new default mode. Nothing about unlocking it changes how the rest of Compy behaves.
 
 *(Implementation note: this is a future, gated, **read-only/advisory** surface. It needs no new mutation
 primitive and no catalog change. If/when built it gets its own small design pass — it does not block or
@@ -239,11 +239,11 @@ alter F1 Gaming Mode or anything shipped.)*
 ## Part 9 — Liability / disclaimer (draft copy)
 
 > **Advanced Black Book — read before you continue.**
-> These are **advanced, optional, manual** tweaks. Sentinel does **not** apply them, does **not** monitor
+> These are **advanced, optional, manual** tweaks. Compy does **not** apply them, does **not** monitor
 > them, and **cannot roll them back** for you. Some carry real risks: instability, boot failure, data loss,
 > reduced security, or **anti-cheat bans**. Gains beyond the basics are often small or hardware-specific,
 > and many popular "tweaks" do nothing measurable. **You are choosing to make these changes yourself, at
-> your own risk. Sentinel and its authors accept no responsibility for any outcome of changes you make
+> your own risk. Compy and its authors accept no responsibility for any outcome of changes you make
 > based on this material.** Create a restore point, change one thing at a time, measure with PresentMon /
 > CapFrameX, and keep notes so you can undo anything. *If in doubt — don't.*
 

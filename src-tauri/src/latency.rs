@@ -823,7 +823,7 @@ pub(crate) fn measure_mouse_polling(duration_ms: u32) -> Option<PollingRate> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static PROBE_SEQ: AtomicUsize = AtomicUsize::new(0);
     let seq = PROBE_SEQ.fetch_add(1, Ordering::Relaxed);
-    let class_name: Vec<u16> = format!("SentinelHidPollProbe{seq}\0").encode_utf16().collect();
+    let class_name: Vec<u16> = format!("CompyHidPollProbe{seq}\0").encode_utf16().collect();
     let freq = qpc_frequency() as f64;
     let mut timestamps: Vec<f64> = Vec::new();
 

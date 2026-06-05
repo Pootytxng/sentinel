@@ -50,7 +50,7 @@ pub(crate) struct SessionFile {
     pub(crate) started_at: String, // RFC3339
     pub(crate) app_version: String,
     pub(crate) changes: Vec<SessionChange>,
-    /// Whether Sentinel started monitoring/overlay this session (so it knows to
+    /// Whether Compy started monitoring/overlay this session (so it knows to
     /// stop only what it started). Reserved for the deferred monitoring step.
     pub(crate) started_monitoring: bool,
 }
@@ -94,7 +94,7 @@ pub(crate) fn parse_session_json(s: &str) -> Option<SessionFile> {
 }
 
 fn session_path() -> PathBuf {
-    crate::sentinel_data_dir().join(GAMING_SESSION_FILE)
+    crate::compy_data_dir().join(GAMING_SESSION_FILE)
 }
 
 /// Load the on-disk session, if any. None on absent / corrupt / old-schema.

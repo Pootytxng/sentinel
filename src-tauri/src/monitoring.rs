@@ -19,7 +19,7 @@ use crate::hardware::detect_gpus_dxgi;
 
 // ─── CPU + memory sensors (vendor-agnostic, no kernel driver) ────────────
 //
-// Sentinel-safe: sysinfo calls PDH (Performance Data Helper, a built-in
+// Compy-safe: sysinfo calls PDH (Performance Data Helper, a built-in
 // Windows API) for CPU utilization. No MSR reads, no kernel driver.
 //
 // NO CPU TEMPERATURE. We verified empirically on AMD hardware that every
@@ -60,7 +60,7 @@ pub(crate) fn cpu_sensor_cache() -> &'static Mutex<CpuSensorSnapshot> {
 // is actively reading them. Every get_* command marks a "demand" timestamp via
 // the ensure_*_started chokepoint; if nothing has asked within
 // POLLER_IDLE_AFTER_MS, the poller thread stays alive but idles — no sysinfo
-// refresh, no ADLX reads — so Sentinel does ~nothing sitting in the tray with
+// refresh, no ADLX reads — so Compy does ~nothing sitting in the tray with
 // the Monitoring tab closed and the overlay hidden. A consumer resumes it just
 // by calling the command again (the next loop tick, ≤1 s later, refreshes).
 // Two independent signals so the CPU poller and the AMD/GPU poller idle on
@@ -101,7 +101,7 @@ pub(crate) fn ensure_cpu_poller_started() {
             .spawn(|| {
                 // `new()`, not `new_all()`: this poller only needs CPU + memory, so we never load
                 // (or retain for the app's lifetime) the full process / disk / network / component
-                // tables `new_all()` builds. Keeps Sentinel's own footprint minimal — a PC
+                // tables `new_all()` builds. Keeps Compy's own footprint minimal — a PC
                 // optimizer shouldn't be a memory hog. `refresh_cpu_all` keeps the clock reading.
                 let mut sys = System::new();
                 loop {
@@ -149,7 +149,7 @@ pub(crate) fn get_cpu_sensors() -> CpuSensorSnapshot {
 //
 // Physical-RAM exhaustion is a classic, invisible cause of in-game stutter:
 // once the working set exceeds physical RAM, Windows pages to disk and frames
-// hitch. Sentinel surfaces it honestly — the level AND what's eating it, so the
+// hitch. Compy surfaces it honestly — the level AND what's eating it, so the
 // user knows what to close. Read-only (sysinfo/PDH), no mutation, no driver.
 
 #[derive(Serialize, Clone, Debug)]
@@ -265,7 +265,7 @@ pub(crate) fn get_memory_pressure() -> MemoryPressure {
 
 // ─── GPU sensors: NVIDIA path (NVML) ─────────────────────────────────────
 //
-// Sentinel-safe monitoring: NVML is NVIDIA's vendor-blessed signed library
+// Compy-safe monitoring: NVML is NVIDIA's vendor-blessed signed library
 // for driver-side telemetry (nvml.dll ships with the driver). No injection,
 // no kernel driver, anti-cheat-compatible.
 //
@@ -600,15 +600,15 @@ pub(crate) fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
 // We can't kill an elevated process from here, so the lifecycle is managed
 // by a heartbeat file: while monitoring is active a background thread
 // refreshes it every second; the helper self-exits when it goes stale. The
-// helper writes its latest report to a JSON file under LOCALAPPDATA\Sentinel
+// helper writes its latest report to a JSON file under LOCALAPPDATA\Compy
 // which we read here (same per-user path resolves in both processes).
 
 pub(crate) fn fps_dir() -> PathBuf {
     // Runtime IPC files (fps.json / fps.alive) live in a dedicated `runtime/`
-    // subdir under the app data root — NOT %LOCALAPPDATA%\Sentinel, which is the
+    // subdir under the app data root — NOT %LOCALAPPDATA%\Compy, which is the
     // NSIS install dir, so runtime files never land beside the installed binaries.
-    // The Trust Ledger stays directly in the data root (sentinel_data_dir).
-    crate::sentinel_data_dir().join("runtime")
+    // The Trust Ledger stays directly in the data root (compy_data_dir).
+    crate::compy_data_dir().join("runtime")
 }
 pub(crate) fn fps_out_path() -> PathBuf {
     fps_dir().join("fps.json")
@@ -862,7 +862,7 @@ pub(crate) fn get_fps_status() -> FpsStatus {
 // live telemetry (FPS, frametime, GPU temp/usage, CPU usage) compactly in a
 // screen corner. It loads the same frontend bundle at the #overlay route.
 //
-// Sentinel-safe constraint: this is a normal top-level window, so it draws
+// Compy-safe constraint: this is a normal top-level window, so it draws
 // over BORDERLESS / WINDOWED games but NOT exclusive fullscreen (only injected
 // overlays can do that, which we deliberately don't do). The UI states this.
 
@@ -946,15 +946,15 @@ mod runtime_dir_tests {
         let d = fps_dir();
         // Dedicated runtime/ subdir, under the app data root (same root as the
         // Trust Ledger) but distinct from the bare data dir — so it is never the
-        // install dir (%LOCALAPPDATA%\Sentinel) nor beside the installed binaries.
+        // install dir (%LOCALAPPDATA%\Compy) nor beside the installed binaries.
         assert!(d.ends_with("runtime"), "fps_dir should be a dedicated runtime dir: {d:?}");
         assert!(
-            d.starts_with(crate::sentinel_data_dir()),
+            d.starts_with(crate::compy_data_dir()),
             "fps_dir should be under the data root"
         );
         assert_ne!(
             d,
-            crate::sentinel_data_dir(),
+            crate::compy_data_dir(),
             "runtime dir must be distinct from the ledger dir"
         );
         assert!(fps_out_path().starts_with(&d));

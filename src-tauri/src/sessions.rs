@@ -9,14 +9,14 @@
 //!
 //! The aggregation math lives in the pure `SessionAccumulator` so it's
 //! unit-testable; the monitoring loop feeds it primitive readings and persists
-//! the finalized summary to %APPDATA%\Sentinel\sessions.json.
+//! the finalized summary to %APPDATA%\Compy\sessions.json.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::sentinel_data_dir;
+use crate::compy_data_dir;
 
 const MAX_SESSIONS: usize = 20;
 
@@ -33,7 +33,7 @@ pub(crate) struct SessionSummary {
     pub(crate) peak_gpu_usage_pct: Option<u32>,
     pub(crate) peak_ram_used_bytes: Option<u64>,
     pub(crate) ram_total_bytes: Option<u64>,
-    pub(crate) sentinel_changes_active: usize, // active Sentinel changes during the session
+    pub(crate) sentinel_changes_active: usize, // active Compy changes during the session
 }
 
 fn round1(x: f64) -> f64 {
@@ -135,7 +135,7 @@ impl SessionAccumulator {
 }
 
 fn sessions_path() -> PathBuf {
-    sentinel_data_dir().join("sessions.json")
+    compy_data_dir().join("sessions.json")
 }
 
 fn load_sessions_from(path: &Path) -> Vec<SessionSummary> {
@@ -160,7 +160,7 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
 }
 
 pub(crate) fn save_session(summary: SessionSummary) -> Result<(), String> {
-    std::fs::create_dir_all(sentinel_data_dir()).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     save_session_to(&sessions_path(), summary)
 }
 

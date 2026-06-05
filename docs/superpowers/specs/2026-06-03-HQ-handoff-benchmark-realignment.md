@@ -1,6 +1,6 @@
 # HQ hand-off — benchmark lane realigned to measured-efficacy
 
-**From:** benchmark lane (worktree `sentinel-benchmark`, branch `benchmark`).
+**From:** benchmark lane (worktree `compy-benchmark`, branch `benchmark`).
 **Date:** 2026-06-03. **No `main` edits from this lane** — this note is the heads-up; HQ owns the merge
 and the cross-cutting reconciliation below.
 

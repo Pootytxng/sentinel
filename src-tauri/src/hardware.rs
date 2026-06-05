@@ -581,7 +581,7 @@ pub(crate) fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
 
 // Parse the CPU brand string sysinfo gives us and derive vendor + arch +
 // generation. Recognizes mainstream desktop SKUs from the last ~7 years —
-// good enough for the "Sentinel knows my CPU" moment and to drive vendor /
+// good enough for the "Compy knows my CPU" moment and to drive vendor /
 // generation-specific recs (PBO on AMD, E-core handling on Intel 12+).
 pub(crate) fn parse_cpu_arch(brand: &str) -> Option<CpuArchInfo> {
     let trimmed = brand.trim();

@@ -1,4 +1,4 @@
-# Sentinel — Packaging & Signing Plan
+# Compy — Packaging & Signing Plan
 
 **Planning / config-audit only. No public release artifact yet.** This is the path to a
 **private-beta** installer and, later, a properly-signed public release. The product surface
@@ -9,8 +9,8 @@ already beta-worthy; packaging is now the safer critical path. Gaming Mode (F1) 
 
 ## 1. Current packaging state (audited 2026-05-31)
 
-- `productName`: **Sentinel** ✓
-- bundle identifier: **`io.github.pootytxng.sentinel`** ✓
+- `productName`: **Compy** ✓
+- bundle identifier: **`gg.compy.app`** ✓
 - publisher / copyright: **Pootytxng** ✓ · category **Utility**, homepage, short/long description ✓
 - icons: `icon.ico`, `icon.icns`, 32/128/128@2x present ✓ (Windows build won't fail on icons)
 - capabilities: **tight** — `core:default` + `opener:default` only; no fs/shell/http exposed to
@@ -110,8 +110,8 @@ beta (local app, no remote content); tighten + test it before any public release
 
 | Item | Status |
 |---|---|
-| identifier | `io.github.pootytxng.sentinel` ✓ |
-| product name | Sentinel ✓ |
+| identifier | `gg.compy.app` ✓ |
+| product name | Compy ✓ |
 | bundle metadata (publisher/copyright/category/homepage/descriptions) | ✓ |
 | Windows installer target | MSI + NSIS (via `targets: "all"`) — could narrow to `["msi","nsis"]` later |
 | icon assets | ✓ present |
@@ -134,13 +134,13 @@ beta (local app, no remote content); tighten + test it before any public release
 
 - [x] `cargo test` green (68/68) · `cargo build` zero warnings · `npm run build` clean
 - [x] `npm run tauri build` produces MSI + NSIS without error — **VERIFIED 2026-05-31**:
-  `Sentinel_0.1.0_x64_en-US.msi` (3.5 MB) + `Sentinel_0.1.0_x64-setup.exe` (2.3 MB) in
-  `src-tauri/target/release/bundle/`. Identity baked into the binary (ProductName Sentinel, Company
+  `Compy_0.1.0_x64_en-US.msi` (3.5 MB) + `Compy_0.1.0_x64-setup.exe` (2.3 MB) in
+  `src-tauri/target/release/bundle/`. Identity baked into the binary (ProductName Compy, Company
   Pootytxng, v0.1.0, © 2026 Pootytxng); signature **NotSigned** (expected); no updater artifacts.
   WiX + NSIS auto-fetched on first build.
-- [x] **Install / uninstall / reinstall** — PASS (silent NSIS `/S`; per-user `%LOCALAPPDATA%\Sentinel`;
-      registry Sentinel/0.1.0/Pootytxng; uninstall removes exe + registry; reinstall restores).
-- [x] **AppData persistence** — PASS: `%APPDATA%\Sentinel\history.json` (Roaming) **survived uninstall +
+- [x] **Install / uninstall / reinstall** — PASS (silent NSIS `/S`; per-user `%LOCALAPPDATA%\Compy`;
+      registry Compy/0.1.0/Pootytxng; uninstall removes exe + registry; reinstall restores).
+- [x] **AppData persistence** — PASS: `%APPDATA%\Compy\history.json` (Roaming) **survived uninstall +
       reinstall** intact + sessions. (Ledger lives in Roaming, separate from the install dir.)
 - [x] **Trust Ledger survives** — PASS: entries + rollback contracts intact across restart and uninstall/reinstall.
 - [x] **No remote fetch / unsigned rules / telemetry / kernel / injection** — PASS: **zero outbound TCP**
@@ -172,24 +172,24 @@ legal, remote-fetch, updater, recommendation-catalog, or Gaming-Mode changes. `c
    DXGI↔WMI name-matched merge (the DXGI and WMI names are byte-identical, so the date attaches). No code
    change; no registry fallback added.
 4. ✅ **Install dir vs runtime dir** separated — FPS runtime IPC (`fps.json` / `fps.alive`) moved to
-   `%APPDATA%\Sentinel\runtime`, out of the `%LOCALAPPDATA%\Sentinel` install dir (`e87ecdd` + test `512dd11`).
+   `%APPDATA%\Compy\runtime`, out of the `%LOCALAPPDATA%\Compy` install dir (`e87ecdd` + test `512dd11`).
 5. ✅ **Single-instance lock** added (`tauri-plugin-single-instance`) — a 2nd launch focuses the existing
    window, so only one main process ever mutates `history.json` (`75e4681`).
 
 ## 7b. Post-polish re-smoke on the fresh 17:11 installer — ✅ PASS (2026-05-31)
 
-Targeted re-smoke of the 17:11 NSIS build (`Sentinel_0.1.0_x64-setup.exe`) covering the polish fixes +
+Targeted re-smoke of the 17:11 NSIS build (`Compy_0.1.0_x64-setup.exe`) covering the polish fixes +
 no-regression on core flows. Mechanical checks driven directly; the GUI/UAC steps (Export click, FPS
 enable, apply/rollback) were performed by the owner and the resulting on-disk evidence verified.
 
-- [x] **Install / identity** — silent `/S`; installed `Sentinel.exe` is the 17:11 build, Sentinel/0.1.0/Pootytxng, NotSigned.
+- [x] **Install / identity** — silent `/S`; installed `Compy.exe` is the 17:11 build, Compy/0.1.0/Pootytxng, NotSigned.
 - [x] **Single-instance** — 2nd launch opens no 2nd process/window (1 process; confirmed no respawn).
 - [x] **Export UTF-8 BOM (#3)** — fresh `.md` begins `EF BB BF`; `—` / `·` / `⚠` render; no mojibake; `.json` is BOM-free + parses. Clean before/after vs the old pre-fix export (which had no BOM).
-- [x] **Runtime-dir separation + FPS helper (#2)** — `fps.json` / `fps.alive` written under `%APPDATA%\Sentinel\runtime`; **zero** `fps.*` in the install dir; helper headless (no 2nd window), elevated (real ETW frame data), and **exits cleanly on stop** (heartbeat removed).
+- [x] **Runtime-dir separation + FPS helper (#2)** — `fps.json` / `fps.alive` written under `%APPDATA%\Compy\runtime`; **zero** `fps.*` in the install dir; helper headless (no 2nd window), elevated (real ETW frame data), and **exits cleanly on stop** (heartbeat removed).
 - [x] **AMD driver-age (#5)** — live `detect_gpus()` → `2026-05-12`, `Some(20)` (not unknown).
 - [x] **Apply + rollback** — ledger grew 12→13; newest entry `status: rolled_back`; ledger valid; 1 process (no race). (`is_still_active` / `rolled_back_at` are computed, not persisted — `status` is the stored truth.)
 - [x] **Network** — 0 non-loopback outbound TCP; remote fetch off; updater off.
-- [x] **Uninstall / reinstall** — silent both ways; `sentinel.exe` removed; **Trust Ledger persisted (8022 B)** in Roaming; reinstall restores.
+- [x] **Uninstall / reinstall** — silent both ways; `compy.exe` removed; **Trust Ledger persisted (8022 B)** in Roaming; reinstall restores.
 
 ⇒ **Post-polish installed-build smoke = PASS.** The **private beta is READY for invite-only, unsigned,
 direct-download / local-share distribution.** PUBLIC release stays gated on **code signing + legal**

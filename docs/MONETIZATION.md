@@ -1,9 +1,9 @@
-# Sentinel — Monetization (decision doc)
+# Compy — Monetization (decision doc)
 
 **Status: DECISION NEEDED (2026-06-02).** This frames the model + processor choice so the build is a
 fast follow once you pick. **Nothing here is built yet** — picking the model is the checkpoint, because
 you can't build licensing infrastructure for a model that isn't chosen (and "free" means no licensing
-at all). Honest framing per Sentinel's identity: **local-only, no account, no telemetry.** That identity
+at all). Honest framing per Compy's identity: **local-only, no account, no telemetry.** That identity
 should *shape* the monetization, not get sacrificed for it.
 
 ---
@@ -17,7 +17,7 @@ should *shape* the monetization, not get sacrificed for it.
 Everything else (the licensing tech) I can build once these are set — see §5.
 
 ## 2. Models — fit for a local-only indie gamer utility
-| Model | Fits Sentinel's "no-account/local/no-telemetry" identity? | Pros | Cons | Verdict |
+| Model | Fits Compy's "no-account/local/no-telemetry" identity? | Pros | Cons | Verdict |
 |---|---|---|---|---|
 | **Free** | Perfectly | Max adoption, reputation, zero billing surface | $0; monetize later/never | Fine if the goal is portfolio/reach. |
 | **One-time purchase** | **Excellent** — pairs with **offline license keys** (no phone-home) | "Own your tool," no sub fatigue, privacy-preserving, simple | No recurring revenue; major versions may need paid upgrades | **Recommended** if charging. |
@@ -34,7 +34,7 @@ Napkin price: one-time **$15–30**, or free core + Pro **$10–20 one-time**. (
 - **Pro (one-time unlock):** the **Advanced Black Book** (already trust-gated — natural Pro tier),
   multi-rig / saved profiles, future **F6 benchmark proofs**, priority of new advanced content.
 - **Principle:** never paywall *safety* (rollback, the core recs). Charge for *depth/power-user* surface.
-  This keeps Sentinel honest and the free tier genuinely useful.
+  This keeps Compy honest and the free tier genuinely useful.
 
 ## 4. Payment processor — for a solo indie selling a Windows app globally
 | Option | Tax/VAT handled for you? | Notes |
@@ -52,7 +52,7 @@ into the architecture below.
 **Offline, Ed25519-signed license keys — no phone-home, no account.** Reuses the crypto already in the
 repo (`ed25519-compact` + the signed-manifest verify pattern in `remote_rules.rs`).
 - A license key = a signed token: `{ buyer_id/email_hash, tier, issued_at, (optional expiry/version_max) }`
-  + an **Ed25519 signature**. Sentinel verifies it **offline** against an **embedded public key** — same
+  + an **Ed25519 signature**. Compy verifies it **offline** against an **embedded public key** — same
   trust model as the rules manifest. No server call to validate → the no-telemetry/local promise holds.
 - **Issuance:** the processor's webhook (Lemon Squeezy/Paddle license API, or a tiny signing endpoint)
   signs + delivers the key on purchase. **The private signing key NEVER enters the repo / app / `.env` /

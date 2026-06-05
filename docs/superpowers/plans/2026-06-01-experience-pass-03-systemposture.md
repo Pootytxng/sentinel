@@ -173,7 +173,7 @@ git commit -m "feat(posture): pure, transparent SystemPosture derivation"
   - the `TUNE_TIERS` array and the `computeTuneState(...)` function;
   - the `const tune = useMemo(() => computeTuneState(...))` line and the `useEffect` that sets
     `document.documentElement.dataset.tune = tune.tier.key`;
-  - the `peakTier` state + its persistence `useEffect` (`localStorage` `sentinel-peak-tier`).
+  - the `peakTier` state + its persistence `useEffect` (`localStorage` `compy-peak-tier`).
 
 - [ ] **Step 2: Remove the Garage tab** — in `App.tsx`:
   - drop `"Garage"` from the `Tab` union;

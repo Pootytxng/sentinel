@@ -110,7 +110,7 @@ pub(crate) struct ScoreboardView {
 }
 
 fn store_path() -> std::path::PathBuf {
-    crate::sentinel_data_dir().join("scoreboard.json")
+    crate::compy_data_dir().join("scoreboard.json")
 }
 
 fn load_store() -> ScoreStore {
@@ -121,7 +121,7 @@ fn load_store() -> ScoreStore {
 }
 
 fn save_store(store: &ScoreStore) -> Result<(), String> {
-    std::fs::create_dir_all(crate::sentinel_data_dir()).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
     let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
     std::fs::write(store_path(), json).map_err(|e| e.to_string())
 }

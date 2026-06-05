@@ -1,4 +1,4 @@
-# Sentinel — Project Overview
+# Compy — Project Overview
 
 *A shareable snapshot of where the project is and where it's going. Written to get an outside set of eyes on the whole thing — what's good, what's missing, what's a bad idea. Be blunt.*
 
@@ -6,7 +6,7 @@
 
 ## TL;DR (30 seconds)
 
-**Sentinel is a safety-first PC optimization dashboard for everyday gamers who aren't techies.** It reads your *actual* hardware and tells you, in plain English, what's worth changing for *your* rig — then makes only changes it can undo with one click, and keeps a full history of everything it touched.
+**Compy is a safety-first PC optimization dashboard for everyday gamers who aren't techies.** It reads your *actual* hardware and tells you, in plain English, what's worth changing for *your* rig — then makes only changes it can undo with one click, and keeps a full history of everything it touched.
 
 The pitch in one line: **"A rollback-first Windows configuration safety layer that happens to optimize"** — not an "FPS booster," not a registry tweak pack, not snake oil.
 
@@ -14,7 +14,7 @@ It's a real, working Windows app (built on Tauri — a Rust core with a web UI).
 
 ---
 
-## 1. What Sentinel is
+## 1. What Compy is
 
 Most "PC optimizer" tools fall into a few buckets, and they're all kind of bad for a normal gamer:
 
@@ -22,7 +22,7 @@ Most "PC optimizer" tools fall into a few buckets, and they're all kind of bad f
 - **Vendor apps** (NVIDIA App, AMD Adrenalin, MSI Center) — only touch their own settings, won't tell you to turn their own telemetry off.
 - **"Booster" / tweak-pack apps** (and the endless YouTube/Reddit "best tweaks" guides) — one-size-fits-all, often reckless, rarely reversible, no record of what they changed. People break their PCs and don't know how to undo it.
 
-**Sentinel aims at the gap nobody owns:** *hardware-aware, safe-by-default, plain-English, rollback-first, and built for the non-technical gamer.* The wedge is **trust, not "boost."**
+**Compy aims at the gap nobody owns:** *hardware-aware, safe-by-default, plain-English, rollback-first, and built for the non-technical gamer.* The wedge is **trust, not "boost."**
 
 The mental model we keep coming back to: **a scientific instrument with an undo button — not a magic potion.** It measures, it changes one thing, it re-measures, and it's honest enough to tell you when a change did *nothing*.
 
@@ -39,7 +39,7 @@ The mental model we keep coming back to: **a scientific instrument with an undo 
 
 ## 3. The core idea — why it's different
 
-This is the part that actually matters, so here it is plainly. Sentinel holds a few hard lines that the rest of the category doesn't:
+This is the part that actually matters, so here it is plainly. Compy holds a few hard lines that the rest of the category doesn't:
 
 1. **Everything is reversible.** Before any change, it snapshots the prior state. One-click rollback on anything, anytime. The rollback history survives app updates and even if a recommendation is later removed — your undo never depends on the change still being in the catalog. **It will never apply something it can't undo.**
 
@@ -47,7 +47,7 @@ This is the part that actually matters, so here it is plainly. Sentinel holds a 
 
 3. **Hardware-aware, per-rig.** Recommendations only fire when *your* actual hardware benefits. No "universally applicable" tweaks. (Example: it refuses certain CPU tweaks on chips where they'd hurt.)
 
-4. **A deliberately *small* catalog (~29 safe recommendations) — and it's frozen.** The whole category competes on tweak *count* and ships registry mega-packs. Sentinel competes on what it *refuses* to include. There's a hard blocklist of the popular-but-sketchy stuff: HPET/timer hacks, Defender disable, MMCSS edits, forced core parking, TCP "mega-packs," fixed pagefile, etc. **"Sentinel is not a registry clown car."**
+4. **A deliberately *small* catalog (~29 safe recommendations) — and it's frozen.** The whole category competes on tweak *count* and ships registry mega-packs. Compy competes on what it *refuses* to include. There's a hard blocklist of the popular-but-sketchy stuff: HPET/timer hacks, Defender disable, MMCSS edits, forced core parking, TCP "mega-packs," fixed pagefile, etc. **"Compy is not a registry clown car."**
 
 5. **No fake performance claims.** It strictly separates "we actually changed this setting" (Verified) from "we ran a probe and measured this" (Measured) from "here's the theory" (Expected impact). No invented "+20% FPS," no fake "optimized score."
 
@@ -55,7 +55,7 @@ This is the part that actually matters, so here it is plainly. Sentinel holds a 
 
 7. **No risky internals.** No kernel driver, no game injection (so it's anti-cheat-safe). Performance data comes from safe Windows event tracing and official GPU vendor SDKs.
 
-The honesty boundary is the whole brand: the feeling of "my PC is dialed in" has to come from **clarity, proof, monitoring, and safe recs — never from lying to you.** The emotional target is *"If Sentinel says I'm good, I don't need to chase sketchy Reddit/YouTube tweak packs."*
+The honesty boundary is the whole brand: the feeling of "my PC is dialed in" has to come from **clarity, proof, monitoring, and safe recs — never from lying to you.** The emotional target is *"If Compy says I'm good, I don't need to chase sketchy Reddit/YouTube tweak packs."*
 
 ---
 
@@ -70,7 +70,7 @@ This is a real app, not a mockup. Here's what's live right now:
 
 **The "command center" surfaces (all read-only / advisory — they don't change anything)**
 - **Readiness** — a plain-English "are you ready to play?" check: monitor at max refresh? game on a fast drive? VRR on? power profile? driver age? etc.
-- **Sessions** — a post-game performance debrief: avg FPS/frametime, 1%-low estimate, peak temps, what was active. Makes Sentinel useful *every day*, not just at setup.
+- **Sessions** — a post-game performance debrief: avg FPS/frametime, 1%-low estimate, peak temps, what was active. Makes Compy useful *every day*, not just at setup.
 - **Priorities** — a personal-technician ranking: "your biggest likely limiter is X," what's already fine, and what's not worth touching.
 - **Export** — a clean shareable report (Markdown/JSON) of your system, changes, and readiness — for Discord/Reddit/support or before-after comparisons. Stays local; never auto-uploads.
 - **Latency diagnostics** — read-only surfacing of the stuff that actually causes input lag (interrupt/timer/USB-topology/mouse polling signals).
@@ -107,7 +107,7 @@ These are genuinely undecided. Outside opinions are most valuable here:
 - **Distribution.** Direct download (best margin, but SmartScreen friction), Microsoft Store (free discovery + auto-update, takes a cut), or Steam (the audience literally lives there). Where would you actually expect to find/trust a tool like this?
 - **The pitch itself.** Does "rollback-first safety layer that happens to optimize" *land*, or does it undersell? Is "trust, not boost" compelling, or does a gamer just want to be told "this makes your game faster"?
 - **Is the small-catalog discipline a feature or a bug?** We deliberately *won't* add the popular sketchy tweaks. Does "we left those out on purpose" read as trustworthy, or as "this does less than the free YouTube guide"?
-- **Does the honesty hurt the sell?** When a change does nothing, Sentinel *says so*. That's the whole soul of it — but is "this tweak did nothing" a feature people want, or a buzzkill?
+- **Does the honesty hurt the sell?** When a change does nothing, Compy *says so*. That's the whole soul of it — but is "this tweak did nothing" a feature people want, or a buzzkill?
 
 ---
 
@@ -118,7 +118,7 @@ These are genuinely undecided. Outside opinions are most valuable here:
 3. **Missing features** — is there an obvious thing a gamer would expect that isn't here? (Keeping in mind we deliberately avoid risky tweaks.)
 4. **Bad ideas** — anything here that's overthought, won't matter to real users, or is a trap?
 5. **Money** — would you pay for it? One-time vs. free? What's the most you'd pay, and for which part?
-6. **The name + positioning** — does "Sentinel" fit? Does the framing make sense to a normal gamer in 10 seconds?
+6. **The name + positioning** — does "Compy" fit? Does the framing make sense to a normal gamer in 10 seconds?
 
 ---
 

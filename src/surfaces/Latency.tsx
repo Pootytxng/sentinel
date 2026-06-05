@@ -83,7 +83,7 @@ export function LatencyTab() {
       <header className="lat-head">
         <h2>Latency &amp; responsiveness</h2>
         <p className="lat-muted">
-          Read-only diagnostics — Sentinel reports what your machine actually does. Nothing here
+          Read-only diagnostics — Compy reports what your machine actually does. Nothing here
           changes a setting.
         </p>
       </header>

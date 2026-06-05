@@ -3,7 +3,7 @@
 
 fn main() {
     // Elevated helper mode: when launched with --fps-capture, run the ETW
-    // present-event consumer instead of the Tauri app. Sentinel spawns itself
+    // present-event consumer instead of the Tauri app. Compy spawns itself
     // with this flag (elevated) to capture FPS / frametime. See fps.rs.
     let is_helper = std::env::args().any(|a| a == "--fps-capture");
 
@@ -14,10 +14,10 @@ fn main() {
     log_launch(is_helper);
 
     if is_helper {
-        sentinel_lib::run_fps_capture();
+        compy_lib::run_fps_capture();
         return;
     }
-    sentinel_lib::run()
+    compy_lib::run()
 }
 
 #[cfg(debug_assertions)]
@@ -27,7 +27,7 @@ fn log_launch(is_helper: bool) {
         Ok(b) => b,
         Err(_) => return,
     };
-    let dir = format!("{base}\\Sentinel");
+    let dir = format!("{base}\\Compy");
     let _ = std::fs::create_dir_all(&dir);
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

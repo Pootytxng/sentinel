@@ -11,7 +11,7 @@
 > `docs/superpowers/specs/2026-06-01-experience-design-system-pass-design.md`.
 
 **Goal:** Build a small, tested design-system layer (`src/design/`) — token contract, pure UI
-helpers, and presentational primitives — that every Sentinel surface can be restyled onto.
+helpers, and presentational primitives — that every Compy surface can be restyled onto.
 
 **Architecture:** Additive and non-breaking. New `src/design/` module with a CSS token contract
 (extends, does not replace, the existing `:root` in `App.css`), two pure TS helper modules
@@ -897,7 +897,7 @@ export function Gallery() {
       <Card><TrustCue title="You're protected" detail="4 changes active — all reversible from the Ledger." /></Card>
       <Card>
         <EmptyState icon="chart" title="No sessions yet">
-          Play a game with monitoring on and Sentinel will write a debrief here.
+          Play a game with monitoring on and Compy will write a debrief here.
         </EmptyState>
       </Card>
     </div>

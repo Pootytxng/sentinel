@@ -1,4 +1,4 @@
-//! Trust Ledger: the persisted record of every change Sentinel has applied,
+//! Trust Ledger: the persisted record of every change Compy has applied,
 //! and the apply / rollback / list commands that read and write it.
 //!
 //! Rollback is resolved from these persisted records alone — via
@@ -16,7 +16,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::actions::*;
-use crate::sentinel_data_dir;
+use crate::compy_data_dir;
 use crate::{
     current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state,
     game_bar_disabled, game_mode_enabled, hags_state, mouse_accel_disabled,
@@ -77,7 +77,7 @@ pub(crate) struct AppliedChange {
 }
 
 // AppliedChange + a freshly-computed `is_still_active` flag. We never persist
-// this flag (state changes outside Sentinel can revert what we applied), so it
+// this flag (state changes outside Compy can revert what we applied), so it
 // has to be recomputed every time history is read.
 #[derive(Serialize)]
 pub(crate) struct AppliedChangeView {
@@ -150,7 +150,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
 }
 
 fn history_path() -> PathBuf {
-    sentinel_data_dir().join("history.json")
+    compy_data_dir().join("history.json")
 }
 
 // load/save are split into path-parameterized cores so the JSON round-trip and
@@ -171,7 +171,7 @@ fn load_history_from(path: &Path) -> Vec<AppliedChange> {
 }
 
 fn save_history(h: &[AppliedChange]) -> Result<(), String> {
-    std::fs::create_dir_all(sentinel_data_dir()).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     save_history_to(&history_path(), h)
 }
 
@@ -257,7 +257,7 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
 /// Read-only roll-up of the Trust Ledger for surfaces that need counts rather
 /// than the full view (e.g. Game Readiness). `active` = applied AND still active;
 /// `externally_reverted` = applied but the live system no longer matches (changed
-/// outside Sentinel). Computed from local history alone, like everything else here.
+/// outside Compy). Computed from local history alone, like everything else here.
 #[derive(serde::Serialize, Clone, Debug, Default)]
 pub(crate) struct AppliedChangesSummary {
     pub(crate) total: usize,

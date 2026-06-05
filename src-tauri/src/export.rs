@@ -1,4 +1,4 @@
-//! Export Snapshot (F5): READ-ONLY. Composes Sentinel's already-gathered data
+//! Export Snapshot (F5): READ-ONLY. Composes Compy's already-gathered data
 //! (hardware, recommendations, Trust Ledger, readiness, sessions) into a local,
 //! shareable Markdown (+ JSON) report. It mutates nothing, calls no apply/
 //! rollback, performs no detection of its own, and sends nothing off the device
@@ -15,7 +15,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::history::APPLIABLE_REC_IDS;
-use crate::sentinel_data_dir;
+use crate::compy_data_dir;
 
 #[derive(Serialize)]
 pub(crate) struct ExportResult {
@@ -99,16 +99,16 @@ pub(crate) fn build_markdown_report(
     exported_at: &str,
 ) -> String {
     let mut o = String::new();
-    let _ = writeln!(o, "# Sentinel Report\n");
+    let _ = writeln!(o, "# Compy Report\n");
     let _ = writeln!(
         o,
-        "_Exported {} · Sentinel v{}_\n",
+        "_Exported {} · Compy v{}_\n",
         exported_at,
         env!("CARGO_PKG_VERSION")
     );
     let _ = writeln!(
         o,
-        "> Generated locally. Sentinel collects no telemetry, has no account, and sends nothing \
+        "> Generated locally. Compy collects no telemetry, has no account, and sends nothing \
          off your device. You choose where to share this file.\n"
     );
 
@@ -195,7 +195,7 @@ pub(crate) fn build_markdown_report(
         });
     let _ = writeln!(o, "- **OS:** {os}\n");
 
-    // ── Applied-by-Sentinel set (from the ledger, status applied) ──
+    // ── Applied-by-Compy set (from the ledger, status applied) ──
     let applied_ids: HashSet<String> = as_arr(trust_ledger)
         .iter()
         .filter(|c| vstr(c, "status") == "applied")
@@ -213,7 +213,7 @@ pub(crate) fn build_markdown_report(
             "advisory"
         };
         let applied = if applied_ids.contains(&id) {
-            " · applied by Sentinel"
+            " · applied by Compy"
         } else {
             ""
         };
@@ -239,7 +239,7 @@ pub(crate) fn build_markdown_report(
         let status = vstr(c, "status");
         let reverted = status == "applied" && vbool(c, "is_still_active") == Some(false);
         let note = if reverted {
-            " · ⚠ no longer active (changed outside Sentinel)"
+            " · ⚠ no longer active (changed outside Compy)"
         } else {
             ""
         };
@@ -310,7 +310,7 @@ pub(crate) fn build_markdown_report(
 
     // ── Privacy & safety ──
     let _ = writeln!(o, "## Privacy & safety\n");
-    let _ = writeln!(o, "- This report was generated **locally**. Sentinel sends nothing off your device — no telemetry, no account, no tracking.");
+    let _ = writeln!(o, "- This report was generated **locally**. Compy sends nothing off your device — no telemetry, no account, no tracking.");
     let _ = writeln!(o, "- You choose where (and whether) to share this file.");
     let _ = writeln!(o, "- Recommendation rules source: **{}**.", pretty_source(rules_source));
 
@@ -348,7 +348,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         &exported_at,
     );
 
-    let dir = sentinel_data_dir().join("exports");
+    let dir = compy_data_dir().join("exports");
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create export folder: {e}"))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let md_path = dir.join(format!("sentinel-report-{stamp}.md"));
@@ -366,7 +366,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         "trust_ledger": trust_ledger,
         "readiness": readiness,
         "sessions": sessions,
-        "privacy": "Local export only. Sentinel collects no telemetry and has no account.",
+        "privacy": "Local export only. Compy collects no telemetry and has no account.",
     });
     let _ = std::fs::write(
         &json_path,
@@ -382,7 +382,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
 
 #[tauri::command]
 pub(crate) fn open_export_folder() -> Result<(), String> {
-    let dir = sentinel_data_dir().join("exports");
+    let dir = compy_data_dir().join("exports");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     // Reveal the folder in Explorer — read-only, no elevation, no UAC.
     std::process::Command::new("explorer")
@@ -399,10 +399,10 @@ mod export_tests {
 
     #[test]
     fn markdown_file_is_written_with_utf8_bom() {
-        let s = markdown_with_bom("# Sentinel Report\n");
+        let s = markdown_with_bom("# Compy Report\n");
         assert!(s.starts_with('\u{FEFF}'));
         assert_eq!(&s.as_bytes()[0..3], &[0xEF, 0xBB, 0xBF]); // UTF-8 BOM bytes
-        assert!(s.trim_start_matches('\u{FEFF}').starts_with("# Sentinel Report"));
+        assert!(s.trim_start_matches('\u{FEFF}').starts_with("# Compy Report"));
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod export_tests {
             "embedded",
             "2026-05-31 12:00",
         );
-        assert!(md.contains("# Sentinel Report"));
+        assert!(md.contains("# Compy Report"));
         assert!(md.contains("## Privacy & safety"));
         assert!(md.contains("no telemetry"));
         assert!(md.contains("—")); // missing values degrade gracefully
@@ -469,7 +469,7 @@ mod export_tests {
         let md = build_markdown_report(&Value::Null, &recs, &ledger, &json!({}), &json!([]), "embedded", "t");
         assert!(md.contains("Enable Game Mode"));
         assert!(md.contains("Trust Ledger (1 changes)"));
-        assert!(md.contains("applied by Sentinel")); // cross-referenced from ledger
+        assert!(md.contains("applied by Compy")); // cross-referenced from ledger
         assert!(md.contains("_appliable_")); // game-mode is in the appliable set
     }
 

@@ -4,7 +4,7 @@
 
 **Goal:** Build a session-scoped "Gaming Mode" that applies a small bundle of already-audited settings on start and restores the exact prior state on stop (crash-safe), shipped **dark** behind a default-off `GAMING_MODE_ENABLED` flag.
 
-**Architecture:** New pure Rust module `gaming_session.rs` (state machine + restore-contract resolution + session-file serde, all unit-tested with no Windows calls), orchestrating the existing audited `apply_*`/`dispatch_rollback` mutation primitives in `actions.rs`. Session state persists to its **own** `%APPDATA%\Sentinel\gaming-session.json` (separate from the Trust Ledger). Four new IPC commands; a gated React surface for the toggle/consent/recovery UX.
+**Architecture:** New pure Rust module `gaming_session.rs` (state machine + restore-contract resolution + session-file serde, all unit-tested with no Windows calls), orchestrating the existing audited `apply_*`/`dispatch_rollback` mutation primitives in `actions.rs`. Session state persists to its **own** `%APPDATA%\Compy\gaming-session.json` (separate from the Trust Ledger). Four new IPC commands; a gated React surface for the toggle/consent/recovery UX.
 
 **Tech Stack:** Rust (Tauri 2, `serde`, `winreg`, `powercfg`), React 19 + TypeScript, Vitest, `cargo test`.
 
@@ -74,7 +74,7 @@ pub(crate) struct SessionFile {
     pub(crate) started_at: String, // RFC3339
     pub(crate) app_version: String,
     pub(crate) changes: Vec<SessionChange>,
-    pub(crate) started_monitoring: bool, // Sentinel turned monitoring on this session
+    pub(crate) started_monitoring: bool, // Compy turned monitoring on this session
 }
 
 #[cfg(test)]
@@ -89,7 +89,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run it, verify it fails** — Run: `cargo test -p sentinel gaming_session` · Expected: FAIL (`next_on_stop` not found).
+- [ ] **Step 2: Run it, verify it fails** — Run: `cargo test -p compy gaming_session` · Expected: FAIL (`next_on_stop` not found).
 
 - [ ] **Step 3: Add the pure transition fn**
 
@@ -109,7 +109,7 @@ pub(crate) fn needs_recovery(status: SessionStatus) -> bool {
 }
 ```
 
-- [ ] **Step 4: Run, verify pass** — Run: `cargo test -p sentinel gaming_session` · Expected: PASS.
+- [ ] **Step 4: Run, verify pass** — Run: `cargo test -p compy gaming_session` · Expected: PASS.
 
 - [ ] **Step 5: Commit** — `git add src-tauri/src/gaming_session.rs && git commit -m "feat(gaming): pure session types + state transitions (TDD)"`
 
@@ -148,7 +148,7 @@ fn change_stub(label: &str, elevated: bool) -> SessionChange {
 }
 ```
 
-- [ ] **Step 2: Run, verify fail** — Run: `cargo test -p sentinel gaming_session` · Expected: FAIL.
+- [ ] **Step 2: Run, verify fail** — Run: `cargo test -p compy gaming_session` · Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
@@ -219,7 +219,7 @@ pub(crate) fn parse_session_json(s: &str) -> Option<SessionFile> {
 }
 
 fn session_path() -> Option<PathBuf> {
-    Some(crate::sentinel_data_dir()?.join(GAMING_SESSION_FILE))
+    Some(crate::compy_data_dir()?.join(GAMING_SESSION_FILE))
 }
 
 /// Load the on-disk session, if any. None on absent/corrupt/old (fail safe).
@@ -249,7 +249,7 @@ pub(crate) fn clear_session() -> Result<(), String> {
 }
 ```
 
-- [ ] **Step 4: Run, verify pass** — Run: `cargo test -p sentinel gaming_session`.
+- [ ] **Step 4: Run, verify pass** — Run: `cargo test -p compy gaming_session`.
 - [ ] **Step 5: Commit** — `git commit -am "feat(gaming): session-file serde + atomic fail-safe persistence (TDD)"`
 
 ---
@@ -283,7 +283,7 @@ fn returns_none_when_only_balanced() {
 }
 ```
 
-- [ ] **Step 2: Run, verify fail** — Run: `cargo test -p sentinel select_`.
+- [ ] **Step 2: Run, verify fail** — Run: `cargo test -p compy select_`.
 
 - [ ] **Step 3: Implement the pure selector + non-elevated apply/restore**
 
@@ -350,7 +350,7 @@ pub(crate) fn restore_power_plan_unelevated(prior_guid: &str) -> Result<(), Stri
 
 > **Note:** add a `run_powershell_unelevated(cmd)` helper next to `run_elevated_powershell` (a plain `Command::new("powershell").args(["-NonInteractive","-Command", cmd])`, non-zero exit → `Err`). QA item: confirm `/setactive` to an existing plan truly needs no UAC on the test box; if it errors needing elevation, the core surfaces it (does NOT auto-elevate).
 
-- [ ] **Step 4: Run, verify pass** — `cargo test -p sentinel select_`.
+- [ ] **Step 4: Run, verify pass** — `cargo test -p compy select_`.
 - [ ] **Step 5: Commit** — `git commit -am "feat(actions): non-elevated existing-plan switch + restore for Gaming Mode core (TDD)"`
 
 ### Task 5: Orchestrator — start (snapshot → write file → apply core bundle)
@@ -437,7 +437,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
 
 > If any `apply_*?` returns `Err` (e.g., UAC cancel on an advanced item), `start` returns the error with the partial contract already on disk → the caller transitions to `RestorePending` and calls `restore()` (Task 6) to undo what landed. (Task 7 wires this.)
 
-- [ ] **Step 2: Build check** — Run: `cargo build -p sentinel` · Expected: compiles (no test yet — pure logic was tested in Phase 1; this is thin glue).
+- [ ] **Step 2: Build check** — Run: `cargo build -p compy` · Expected: compiles (no test yet — pure logic was tested in Phase 1; this is thin glue).
 - [ ] **Step 3: Commit** — `git commit -am "feat(gaming): start orchestration — write-before-mutate core bundle"`
 
 ### Task 6: Orchestrator — restore (idempotent, exact-GUID, fail-loud)
@@ -478,7 +478,7 @@ pub(crate) fn restore(file: &mut SessionFile) -> Result<(), String> {
 }
 ```
 
-- [ ] **Step 2: Build check** — `cargo build -p sentinel`.
+- [ ] **Step 2: Build check** — `cargo build -p compy`.
 - [ ] **Step 3: Commit** — `git commit -am "feat(gaming): idempotent fail-loud restore from stored contract"`
 
 ---
@@ -516,7 +516,7 @@ pub(crate) fn stop() -> Result<(), String> {
 }
 ```
 
-- [ ] **Step 2: Build check** — `cargo build -p sentinel`.
+- [ ] **Step 2: Build check** — `cargo build -p compy`.
 - [ ] **Step 3: Commit** — `git commit -am "feat(gaming): startup orphan detection + user-confirmed recovery"`
 
 ---
@@ -568,8 +568,8 @@ fn recover_gaming_session(confirm: bool) -> Result<(), String> {
 ```
 
 - [ ] **Step 2: Register in `invoke_handler`** — add `gaming_mode_enabled, start_gaming_session, stop_gaming_session, get_gaming_session_state, recover_gaming_session` to the existing `tauri::generate_handler![...]` list.
-- [ ] **Step 3: Build check** — `cargo build -p sentinel` · Expected: compiles, zero warnings.
-- [ ] **Step 4: Full backend test run** — Run: `cargo test -p sentinel` · Expected: all prior tests + new `gaming_session` tests PASS.
+- [ ] **Step 3: Build check** — `cargo build -p compy` · Expected: compiles, zero warnings.
+- [ ] **Step 4: Full backend test run** — Run: `cargo test -p compy` · Expected: all prior tests + new `gaming_session` tests PASS.
 - [ ] **Step 5: Commit** — `git commit -am "feat(gaming): IPC commands + default-off GAMING_MODE_ENABLED gate"`
 
 ---
@@ -629,7 +629,7 @@ export function summarizeChanges(changes: SessionChange[]) {
 
 - [ ] **Step 1: Implement the surface** — a component that:
   - On mount calls `invoke("get_gaming_session_state")`; if it returns a session with `status ∈ {active, ending, restore-pending, restore-failed}` and the app didn't just start it, render the **interrupted-recovery prompt** ("Gaming Mode was interrupted. Restore your previous settings?" → `invoke("recover_gaming_session",{confirm:true|false})`).
-  - First enable: gate behind `localStorage["sentinel_gaming_consent_v1"]`; show a consent modal (what it changes + exact restore guarantee) before the first `start`. (Mirror `Onboarding.tsx`'s localStorage-gate pattern.)
+  - First enable: gate behind `localStorage["compy_gaming_consent_v1"]`; show a consent modal (what it changes + exact restore guarantee) before the first `start`. (Mirror `Onboarding.tsx`'s localStorage-gate pattern.)
   - Start/Stop button → `invoke("start_gaming_session",{opts})` / `invoke("stop_gaming_session")`; on `start` Err, surface it (RestorePending message) and offer recover.
   - Always-visible honesty line from `summarizeChanges`; "View what changes" expands the diff rows.
   - Two advanced opt-in toggles (USB-SS, PCIe-ASPM) with their own one-time consent note ("adds a UAC prompt").
@@ -653,8 +653,8 @@ export function summarizeChanges(changes: SessionChange[]) {
 
 ### Task 12: Full verification gate
 
-- [ ] **Step 1:** `cargo test -p sentinel` — all green.
-- [ ] **Step 2:** `cargo build -p sentinel` (or `cargo clippy`) — zero warnings.
+- [ ] **Step 1:** `cargo test -p compy` — all green.
+- [ ] **Step 2:** `cargo build -p compy` (or `cargo clippy`) — zero warnings.
 - [ ] **Step 3:** `npm test` — all green.
 - [ ] **Step 4:** `npm run build` — tsc + vite clean.
 - [ ] **Step 5:** Invoke `/check` then `/security` on the diff (Rust/Tauri + React-TS).
@@ -679,5 +679,5 @@ Gaming Mode is merged **dark**. To go live it needs the **spec §7 mutation QA o
 ## Self-review
 
 - **Spec coverage:** §2 scope→Tasks 4–5; §3 consent→Tasks 10; §4 crash-safe→Tasks 3,5,6,7; §5 state machine→Tasks 1,6,7; §6 architecture (pure module + separate store + reuse dispatch + IPC + gate)→Tasks 1–11; §7 QA→owner hand-off; §8 sequence→Phases 1–5. Covered.
-- **Placeholder scan:** none — every code step has real code; integration tasks name the exact existing fns (`apply_game_mode`, `apply_game_bar_disable`, `apply_power_plan_switch_core`, `dispatch_rollback`, `sentinel_data_dir`, `Onboarding.tsx` pattern).
+- **Placeholder scan:** none — every code step has real code; integration tasks name the exact existing fns (`apply_game_mode`, `apply_game_bar_disable`, `apply_power_plan_switch_core`, `dispatch_rollback`, `compy_data_dir`, `Onboarding.tsx` pattern).
 - **Type consistency:** `SessionFile`/`SessionChange`/`SessionStatus`/`StartOptions` names used identically across Rust tasks; `start_gaming_session`/`stop_gaming_session`/`get_gaming_session_state`/`recover_gaming_session`/`gaming_mode_enabled` command names consistent between Phase 4 and Phase 5; TS `SessionFile` mirrors the Rust serde (kebab-case status). Open verification (flagged, not a placeholder): whether `now_rfc3339()` already exists in the crate — if not, Task 5 adds a 2-line helper using the same time crate `sessions.rs` uses.

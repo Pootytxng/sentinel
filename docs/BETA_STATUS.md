@@ -15,7 +15,7 @@ versioned tag (`private-beta-002`, …). The `main` branch continues normal deve
 
 Features may be marked with one of the following statuses:
 
-- **`Sentinel-verified`** — validated for beta use.
+- **`Compy-verified`** — validated for beta use.
 - **`Beta-included`** — included in the current private-beta snapshot.
 - **`Experimental`** — present in development but not validated.
 - **`WIP`** — incomplete or unstable.
@@ -24,7 +24,7 @@ Features may be marked with one of the following statuses:
 
 ## What's in `private-beta-001`
 
-`Sentinel-verified` / `Beta-included` for this snapshot: hardware detection, Readiness, Monitoring,
+`Compy-verified` / `Beta-included` for this snapshot: hardware detection, Readiness, Monitoring,
 Sessions, Export, Priorities, and the safe reversible recommendations (apply/rollback). Post-polish
 installed-build smoke passed 2026-05-31.
 
@@ -55,7 +55,7 @@ is ready for either.
 
 ## Tester Warning
 
-Any feature **not** marked `Sentinel-verified` should be treated as experimental and used at the
+Any feature **not** marked `Compy-verified` should be treated as experimental and used at the
 tester's discretion. The canonical label for such features is:
 
-> **Experimental / not Sentinel-verified. Use at your own discretion.**
+> **Experimental / not Compy-verified. Use at your own discretion.**

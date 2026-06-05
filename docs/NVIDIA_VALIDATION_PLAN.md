@@ -1,4 +1,4 @@
-# Sentinel — NVIDIA GPU Sensor Validation Plan
+# Compy — NVIDIA GPU Sensor Validation Plan
 
 **Goal:** graduate NVIDIA GPU sensor support from *"implemented, not yet hardware-verified"* →
 *"verified."* The NVML code path is written but has **never run on real NVIDIA hardware** — the
@@ -16,7 +16,7 @@ GPU and the exact criteria/locations to flip the honesty label afterward.
   don't appear (no crash). `read_nvml_sensors()` in `src-tauri/src/monitoring.rs`.
 - Enumerates **all** NVML devices (`device_count` / `device_by_index`) and reads, per device:
 
-| Sentinel field | NVML source | Notes |
+| Compy field | NVML source | Notes |
 |---|---|---|
 | `temperature_c` | `temperature(TemperatureSensor::Gpu)` | core temp |
 | `hotspot_temperature_c` | — | always `None` (NVML doesn't expose hotspot) |
@@ -40,8 +40,8 @@ GPU and the exact criteria/locations to flip the honesty label afterward.
 
 ## Procedure
 
-Run Sentinel (`npm run tauri dev`) on the NVIDIA machine, open the Monitoring tab, and compare
-Sentinel's readings against `nvidia-smi` sampled at the same time. Drive load with a game or a
+Run Compy (`npm run tauri dev`) on the NVIDIA machine, open the Monitoring tab, and compare
+Compy's readings against `nvidia-smi` sampled at the same time. Drive load with a game or a
 GPU stress (so values aren't all idle), and check both idle and under-load.
 
 ### Per-metric cross-check (tolerances account for sampling skew)

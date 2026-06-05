@@ -172,9 +172,46 @@ pub(crate) fn nagle_disabled_on_any_nic() -> bool {
 
 
 
-pub(crate) fn sentinel_data_dir() -> PathBuf {
+pub(crate) fn compy_data_dir() -> PathBuf {
     let app_data = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Temp".into());
-    PathBuf::from(app_data).join("Sentinel")
+    let dir = PathBuf::from(&app_data).join("Compy");
+    migrate_legacy_data_once(std::path::Path::new(&app_data), &dir);
+    dir
+}
+
+// One-time, COPY-not-move migration of the pre-rename data dir (`%APPDATA%\Sentinel`) into the new
+// `%APPDATA%\Compy` on first run, so rollback history / sessions / exports / scoreboard survive the
+// Sentinel→Compy rename. We COPY (never move or delete) — the original `Sentinel` dir is left intact
+// as a safety net. Best-effort: any failure just means a fresh start, with the old data still
+// recoverable by hand. Runs once per process via the OnceLock guard; later calls are a no-op.
+//
+// NOTE: the legacy literal MUST stay "Sentinel" (the old brand) — it's the source we copy FROM. Do
+// not let a future brand-rename sweep touch it.
+fn migrate_legacy_data_once(app_data: &std::path::Path, new_dir: &std::path::Path) {
+    static DONE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    DONE.get_or_init(|| {
+        let legacy = app_data.join("Sentinel");
+        // Migrate only when the new dir doesn't exist yet AND the legacy one does.
+        if new_dir.exists() || !legacy.exists() {
+            return;
+        }
+        let _ = copy_dir_recursive(&legacy, new_dir);
+    });
+}
+
+fn copy_dir_recursive(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let src = entry.path();
+        let dst = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&src, &dst)?;
+        } else {
+            std::fs::copy(&src, &dst)?;
+        }
+    }
+    Ok(())
 }
 
 // ─── Gaming Mode (F1) — GATED ────────────────────────────────────────────
@@ -324,7 +361,7 @@ fn cancel_benchmark() {
 }
 
 // CPU temp via interop with a user-installed monitor (LHM/OHM). None when none is running —
-// Sentinel never reads it directly (no kernel driver). See cpu_temp.rs.
+// Compy never reads it directly (no kernel driver). See cpu_temp.rs.
 #[tauri::command]
 fn get_cpu_temp() -> Option<cpu_temp::CpuTemp> {
     cpu_temp::read_cpu_temp()
@@ -510,7 +547,7 @@ pub fn run() {
 // ─── Apply / rollback safety-contract tests ──────────────────────────────
 //
 // These PIN the existing safety model before any module movement (revised
-// plan: tests first). They prove the contract is real — that Sentinel can undo
+// plan: tests first). They prove the contract is real — that Compy can undo
 // what it did from LOCAL HISTORY ALONE — without mutating Windows. The actual
 // mutation (dispatch_apply / dispatch_rollback running powercfg/registry edits)
 // is covered by the manual release-gate QA checklist, not unit tests; here we

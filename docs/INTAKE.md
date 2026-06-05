@@ -1,4 +1,4 @@
-# Content Intake — Sentinel
+# Content Intake — Compy
 
 Filled in 2026-05-27 from initial scoping conversation. Some sections still have open questions — those are called out explicitly rather than left as `____`.
 
@@ -6,11 +6,11 @@ Filled in 2026-05-27 from initial scoping conversation. Some sections still have
 
 ## 1. The basics
 
-- Project name: **Sentinel**
+- Project name: **Compy**
 - One-sentence description: An all-in-one Windows PC optimization & configuration dashboard that reads the user's actual hardware and recommends settings tailored to *that specific rig* — not generic "best settings" advice.
 - Who is this for: **Everyday gamers and average PC users.** Non-technical people who want better game performance and a snappier system but don't know what a registry key is, don't want to learn, and don't trust random YouTube tweak guides.
-- Why does this need to exist: Today, non-technical users have two bad options — leave their PC at stock and miss real performance, or blindly apply universal "tweaks" from forums that cause conflicts and breakage they can't debug. Sentinel sits in the gap: hardware-aware, safe-by-default, plain-English, reversible.
-- How will we know it's working: A non-technical gamer installs Sentinel, sees clear recommendations specific to their PC, approves changes one at a time with confidence, and notices a real improvement (smoother FPS, faster startup, less stutter) — without ever feeling like they broke something or risked breaking something.
+- Why does this need to exist: Today, non-technical users have two bad options — leave their PC at stock and miss real performance, or blindly apply universal "tweaks" from forums that cause conflicts and breakage they can't debug. Compy sits in the gap: hardware-aware, safe-by-default, plain-English, reversible.
+- How will we know it's working: A non-technical gamer installs Compy, sees clear recommendations specific to their PC, approves changes one at a time with confidence, and notices a real improvement (smoother FPS, faster startup, less stutter) — without ever feeling like they broke something or risked breaking something.
 
 ## 2. Scope
 
@@ -64,7 +64,7 @@ Filled in 2026-05-27 from initial scoping conversation. Some sections still have
 ## 6. Anything else
 
 - **Monetization:** planned. Public commercial product. Model (one-time purchase / subscription / freemium with a paid pro tier) is an open decision.
-- **References / things to study:** ChrisTitusTech WinUtil, NTLite, Razer Cortex, MSI Afterburner, NVIDIA GeForce Experience, AMD Adrenalin, Process Lasso — all overlap parts of what Sentinel does, none nail the "tailored + safe + non-technical" combination.
+- **References / things to study:** ChrisTitusTech WinUtil, NTLite, Razer Cortex, MSI Afterburner, NVIDIA GeForce Experience, AMD Adrenalin, Process Lasso — all overlap parts of what Compy does, none nail the "tailored + safe + non-technical" combination.
 - **Worries / things to figure out:** TBD — would be useful to know what specifically worries you about building this.
 - **Open questions:**
   - **Platform/stack** — current scaffold is WSL/FastAPI which is wrong for the target audience. Native Windows shell (Tauri/Electron/.NET) needed. Decision pending.

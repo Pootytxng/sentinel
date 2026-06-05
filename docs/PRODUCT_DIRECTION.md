@@ -1,12 +1,12 @@
-# Sentinel — Product Direction & Feature Plan
+# Compy — Product Direction & Feature Plan
 
-**Thesis:** Sentinel grows **upward** into a *gaming readiness, monitoring, rollback, and
+**Thesis:** Compy grows **upward** into a *gaming readiness, monitoring, rollback, and
 safe-configuration control center* — not **sideways** into more Windows tweak switches. The
 recommendation catalog is one part of the value, not the product. The module refactor and the
 locked safety model make higher-level features *safer* to add, not impossible.
 
 > **Catalog discipline ≠ feature freeze.** "No more tweaks" means no more low-quality
-> tweak-stuffing. It does **not** mean Sentinel stops adding value. What is locked is the
+> tweak-stuffing. It does **not** mean Compy stops adding value. What is locked is the
 > **safety model**, not the **product scope**.
 
 ## Hard anti-goals — the "optimizer rot" blocklist (do NOT add)
@@ -14,7 +14,7 @@ locked safety model make higher-level features *safer* to add, not impossible.
 These increase weight and lower trust. Adding any of them is a regression in product quality:
 timer hacks, HPET toggles, `bcdedit` edits, MMCSS registry edits, global NIC offload packs,
 forced core parking, Defender disable, MPO disable, fixed pagefile, TCP "mega-pack" edits, or
-any unsigned/AI-generated/arbitrary registry-service-PowerShell action. Sentinel is not a
+any unsigned/AI-generated/arbitrary registry-service-PowerShell action. Compy is not a
 registry clown car.
 
 ## Foundation already in place (these features compose it; they don't re-derive it)
@@ -35,14 +35,14 @@ registry clown car.
 Safety classes: **READ-ONLY** (no system change) · **ADVISORY** (reads + advises) ·
 **SESSION-SCOPED MUTATION** (changes, auto-restored) · all gated as noted below.
 
-### F1 — Sentinel Gaming Mode  *(SESSION-SCOPED MUTATION — highest value, highest care)*
-On game start: switch to a Sentinel gaming power profile, apply safe **AC-only** latency
+### F1 — Compy Gaming Mode  *(SESSION-SCOPED MUTATION — highest value, highest care)*
+On game start: switch to a Compy gaming power profile, apply safe **AC-only** latency
 settings, auto-start monitoring/overlay, show a pre-game health status. On game exit: restore
 the previous power plan/settings, optionally stop overlay, log a session summary.
 - **Reuses:** ETW presenter detection (game start/exit, no injection), the hardened power-plan
   apply/rollback (exact-GUID targeting), overlay, FPS capture.
 - **Critical safety design:** a session change is an *apply with a guaranteed restore trigger*
-  (game exit). It MUST be crash-safe: if the game or Sentinel dies mid-session, settings
+  (game exit). It MUST be crash-safe: if the game or Compy dies mid-session, settings
   restore on next launch (treat an orphaned active session like a pending rollback — same
   heartbeat/ledger pattern the FPS helper already uses). No session may ever leave the machine
   in a modified state with no path back.
@@ -50,7 +50,7 @@ the previous power plan/settings, optionally stop overlay, log a session summary
   rigor. Build the *read-only* parts first (pre-game status, monitoring auto-start); add the
   power switch only after mutation QA is green and crash-safe restore is verified.
 - **Open decisions:** game detection (auto via ETW presenter vs. user-listed executables vs.
-  both); gaming profile (create a dedicated "Sentinel Gaming" plan vs. temporarily switch to an
+  both); gaming profile (create a dedicated "Compy Gaming" plan vs. temporarily switch to an
   existing one); which AC-only settings are in-scope (start minimal).
 
 ### F2 — Per-game readiness check  *(READ-ONLY / ADVISORY — lowest risk, build first)*
@@ -63,11 +63,11 @@ monitoring ready, GPU driver age (OK/stale).
 
 ### F3 — Session summary  *(READ-ONLY — local log)*
 After a session: game name, average FPS, average frametime, **1%-low** estimate, peak GPU
-temp/usage, RAM usage, detected stutters/frametime spikes, and which Sentinel settings were
+temp/usage, RAM usage, detected stutters/frametime spikes, and which Compy settings were
 active.
 - **Reuses:** FPS capture already emits fps/frametime/1%-low and recent frametimes (spike =
   frametime-variance analysis); GPU/CPU/RAM sensors; the active-session record (from F1).
-- **Gate:** none — read-only aggregation + local storage. This is what makes Sentinel useful
+- **Gate:** none — read-only aggregation + local storage. This is what makes Compy useful
   *every day*, not only at setup.
 
 ### F4 — Hardware-aware "what matters most" ranking  *(ADVISORY)*
@@ -107,16 +107,16 @@ the path that graduates rec impact claims from "Expected impact" → "Verified" 
 more catalog expansion.** It refines the thesis above: growing "upward" means a **premium experience
 layer**, not just read-only features stacked plainly.
 
-**The concern is not "Sentinel needs more features."** Sentinel is technically strong, verified,
+**The concern is not "Compy needs more features."** Compy is technically strong, verified,
 rollback-safe, and private-beta ready. The risk is how it *feels* — that an average user experiences it
 as *"here are some light switches; flip them, trust us, performance is better."* That is emotionally too
-close to the generic-optimizer category, even though Sentinel is architecturally far safer. A user who
+close to the generic-optimizer category, even though Compy is architecturally far safer. A user who
 flips a few safe switches once and never returns has not received the real value.
 
-**Desired feeling.** Opening Sentinel should feel like stepping into a **serious performance command
+**Desired feeling.** Opening Compy should feel like stepping into a **serious performance command
 center** — a place that actively helps you *understand, verify, and maximize* your system around what
 *you* care about (FPS, latency, smoothness, quality, stability, thermals, readiness, overall gaming
-confidence). Emotional target: **"This is the place. If Sentinel says I'm good, I don't need to chase
+confidence). Emotional target: **"This is the place. If Compy says I'm good, I don't need to chase
 sketchy Reddit/YouTube tweak packs."** Analogy: a **Ferrari lounge** (offered a glass of wine while
 professionals handle the car), not a **Toyota dealership** where the user feels pressured, confused, and
 unsure whether they got scammed.
@@ -124,13 +124,13 @@ unsure whether they got scammed.
 **The honesty boundary (non-negotiable).** The feeling of "maximized / dialed-in" must come from
 **clarity, proof, monitoring, and safe recommendations — never from false claims.** Do NOT promise
 "maximum FPS," fabricate guarantees, invent percentages, or show an "optimized score" unless it is
-**transparent and defensible.** Confidence without lying. What Sentinel legitimately delivers: hardware
+**transparent and defensible.** Confidence without lying. What Compy legitimately delivers: hardware
 checked · obvious misconfigurations surfaced · safe optimizations applied **or intentionally skipped** ·
 system monitored · session results visible · rollback history clear · readiness understandable — so the
 user has **no need to hunt random external tweak guides to feel "fully optimized."**
 
-**Seven questions Sentinel should answer (the home-base test):**
-1. Am I ready to play? 2. What is holding this PC back? 3. What has Sentinel safely improved?
+**Seven questions Compy should answer (the home-base test):**
+1. Am I ready to play? 2. What is holding this PC back? 3. What has Compy safely improved?
 4. What should I not touch? 5. How did the last session perform? 6. What can I share if I need help?
 7. Am I chasing real performance, or snake oil?
 
@@ -154,7 +154,7 @@ for non-technical gamers; **no fake gamer hype, no scammy boost language, no fak
 ranking, explanations, and which safe actions are surfaced** — it does **not** silently flip settings.
 Any actual mutation still rides the rollback contract + Gaming Mode's gate.
 
-**The user-aims a mode is a lens over (added 2026-06-01):** a gamer opens Sentinel with a *goal*, not just
+**The user-aims a mode is a lens over (added 2026-06-01):** a gamer opens Compy with a *goal*, not just
 a toggle list. The aims to recognize and frame around: **maximum competitive performance · smoother
 frametimes · lower latency · better visual quality · safer / more stable configuration · a cleaner system
 state · confidence before launching a game.** A mode is a lens that re-weights readiness, priorities, and
@@ -180,7 +180,7 @@ brand accent kept. **Implementation is HELD** until owner green-light, ideally i
 private-beta feel-feedback. (This refines, not relaxes, the locks below.)
 
 **Core product rule (the correction):** Do **not** solve perceived "lightness" by adding more tweak
-buttons. Solve it by making Sentinel *feel* like a **performance cockpit · readiness advisor · monitoring
+buttons. Solve it by making Compy *feel* like a **performance cockpit · readiness advisor · monitoring
 dashboard · session analyst · rollback-safe control center · premium trust layer over Windows gaming
 configuration.** The product should not become "30 switches" — it should become **"the place a gamer goes
 to know their PC is truly ready."**

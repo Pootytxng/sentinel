@@ -1,12 +1,12 @@
-# Sentinel — Private Beta Tester Guide
+# Compy — Private Beta Tester Guide
 
-Thanks for helping test Sentinel. This is a short guide to install it, try it, and report what you find.
+Thanks for helping test Compy. This is a short guide to install it, try it, and report what you find.
 
 ---
 
-## 1. What Sentinel is
+## 1. What Compy is
 
-Sentinel is a **rollback-first Windows configuration safety layer for PC gamers**. It looks at your
+Compy is a **rollback-first Windows configuration safety layer for PC gamers**. It looks at your
 machine and helps you understand and safely tune it:
 
 - **Hardware** detection (CPU, GPU, RAM, storage, display, Windows version)
@@ -17,7 +17,7 @@ machine and helps you understand and safely tune it:
 - **Priorities** — what's worth your attention first
 - A small set of **safe, fully reversible recommendations**
 
-**Sentinel is not a magic FPS booster or a tweak-pack.** It doesn't promise more frames. Every change
+**Compy is not a magic FPS booster or a tweak-pack.** It doesn't promise more frames. Every change
 it can make is audited and undoable — the point is *safety and clarity*, not risky tweaks.
 
 ---
@@ -34,14 +34,14 @@ it can make is audited and undoable — the point is *safety and clarity*, not r
 
 ## 3. Install steps
 
-Installer (NSIS): **`Sentinel_0.1.0_x64-setup.exe`**
+Installer (NSIS): **`Compy_0.1.0_x64-setup.exe`**
 
 1. Download or copy the installer to your PC.
 2. Run it.
 3. **If SmartScreen appears:**
    - click **More info**
    - click **Run anyway**
-4. Launch **Sentinel** from the Start Menu or the installed shortcut.
+4. Launch **Compy** from the Start Menu or the installed shortcut.
 
 It installs per-user (no admin needed to install). It may briefly ask for a UAC prompt **only** later if
 you choose to use FPS monitoring or apply a recommendation — see below.
@@ -50,7 +50,7 @@ you choose to use FPS monitoring or apply a recommendation — see below.
 
 ## 4. Privacy / safety promise
 
-- **No telemetry** — Sentinel does not phone home.
+- **No telemetry** — Compy does not phone home.
 - **No account** — nothing to sign up for or log into.
 - **No remote rules** — recommendations are built into the app; nothing is fetched from a server.
 - **No updater** — the app does not auto-update.
@@ -85,7 +85,7 @@ Please try these and note anything odd:
 - **Remote rules are disabled.**
 - **The updater is disabled.**
 - **Public-release signing is not done.**
-- **Do not expect CPU temperature** — Sentinel doesn't read it by design.
+- **Do not expect CPU temperature** — Compy doesn't read it by design.
 
 ---
 
@@ -121,13 +121,13 @@ The feedback template in section 10 covers most of this — copy/paste and fill 
 
 ## 9. Uninstall steps
 
-1. **Windows Settings → Apps → Sentinel → Uninstall.**
-2. Your **AppData / Trust Ledger may remain by design** — Sentinel keeps your history and rollback
+1. **Windows Settings → Apps → Compy → Uninstall.**
+2. Your **AppData / Trust Ledger may remain by design** — Compy keeps your history and rollback
    records so they survive an uninstall/reinstall (nothing is silently lost).
 3. **Optional manual cleanup** — if you want to remove that leftover data, delete:
 
    ```
-   %APPDATA%\Sentinel
+   %APPDATA%\Compy
    ```
 
 ---
@@ -135,11 +135,11 @@ The feedback template in section 10 covers most of this — copy/paste and fill 
 ## 10. Feedback template
 
 Copy this, fill it in, and send it back. **Beyond bugs, we especially want the "Experience & feel"
-answers** — whether Sentinel feels premium, trustworthy, and like a real command center vs. just a
+answers** — whether Compy feels premium, trustworthy, and like a real command center vs. just a
 settings page:
 
 ```
-Sentinel beta feedback
+Compy beta feedback
 
 Tester name:
 Windows version:
@@ -163,7 +163,7 @@ Steps to reproduce:
 Screenshot/export attached: yes/no
 
 --- Experience & feel (we especially want this) ---
-Does Sentinel feel useful enough: yes/no
+Does Compy feel useful enough: yes/no
 Premium or plain: premium/plain
 Does it feel trustworthy: yes/no
 Real command center, or just a settings app: command center/settings app

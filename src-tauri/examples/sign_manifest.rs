@@ -1,4 +1,4 @@
-//! Offline Ed25519 signer for Sentinel rules manifests.
+//! Offline Ed25519 signer for Compy rules manifests.
 //!
 //! This is a RELEASE-TIME tool, run on a trusted/air-gapped machine. It never
 //! ships in the app and never touches the private key automatically — you pass

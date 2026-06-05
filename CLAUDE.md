@@ -1,4 +1,4 @@
-# CLAUDE.md — Sentinel project brief & resume point
+# CLAUDE.md — Compy project brief & resume point
 
 > **This file auto-loads into every Claude Code session opened in this repo.** It is the
 > durable, in-git, portable source of truth — independent of Claude's local `~/.claude`
@@ -6,7 +6,7 @@
 > fresh session: read this top-to-bottom, then `docs/RELEASE_QA.md` for the live QA pass.
 > Treat file/line claims as point-in-time — verify against current code before asserting.
 
-## What Sentinel is
+## What Compy is
 
 An all-in-one PC optimization & **safety** dashboard for the everyday, **non-technical gamer**
 (not sysadmins). Positioned as *"a rollback-first Windows configuration safety layer that
@@ -47,18 +47,18 @@ Everything else — refactors, features behind a gate, docs, local builds, rever
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
-- **Single source of truth: `C:\Users\Kuya\code\sentinel\`** (Windows-side). The old
-  `\\wsl.localhost\...\var\www\sentinel` WSL/FastAPI scaffold is **superseded/stale** — do
+- **Single source of truth: `C:\Users\Kuya\code\compy\`** (Windows-side). The old
+  `\\wsl.localhost\...\var\www\compy` WSL/FastAPI scaffold is **superseded/stale** — do
   not use it. WSL is not needed (and breaks anti-cheat via Hyper-V).
-- GitHub remote: `Pootytxng/sentinel`, branch `main`.
+- GitHub remote: `Pootytxng/compy`, branch `main`.
 - Dev loop: `npm run tauri dev` (from repo root). Tests: `cargo test --manifest-path src-tauri/Cargo.toml`.
   Fresh shells may need `export PATH="$HOME/.cargo/bin:$PATH"`. Git CRLF warnings are benign.
-- Runtime data: Trust Ledger at `%APPDATA%\Sentinel\history.json` (Roaming); FPS IPC +
-  `launch-debug.log` (debug only) at `%LOCALAPPDATA%\Sentinel\` (Local).
+- Runtime data: Trust Ledger at `%APPDATA%\Compy\history.json` (Roaming); FPS IPC +
+  `launch-debug.log` (debug only) at `%LOCALAPPDATA%\Compy\` (Local).
 
 ### Rust module map (post-refactor — `lib.rs` carved into safety-boundary modules)
 
-- `lib.rs` (~496 lines) — `run()` wiring + command registration, 13 state probes, `sentinel_data_dir`, startup-apps, `safety_tests`.
+- `lib.rs` (~496 lines) — `run()` wiring + command registration, 13 state probes, `compy_data_dir`, startup-apps, `safety_tests`.
 - `actions.rs` — the ONLY Windows-mutation + rollback boundary: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
 - `history.rs` — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history alone.
 - `recommendations.rs`, `hardware.rs`, `monitoring.rs`, `diagnostics.rs`, `fps.rs`, `remote_rules.rs`.
@@ -103,7 +103,7 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > untouched). The new `Dashboard` surface (`src/surfaces/Dashboard.tsx`) is built + tested but **not yet
 > wired** into a tab — intentionally deferred. **Beta refs remain pinned at `16069fa` (NOT moved).**
 
-> **🛰️ HQ / PARALLEL-OPS UPDATE — 2026-06-01.** Sentinel is now worked by multiple sessions under an
+> **🛰️ HQ / PARALLEL-OPS UPDATE — 2026-06-01.** Compy is now worked by multiple sessions under an
 > **HQ / air-traffic-control model** — see `docs/PARALLEL_WORKTREE_OPS.md` (the rule of the road).
 > **Only HQ (the `main` checkout) merges/pushes `main`;** each lane runs in its own git worktree on its
 > own branch with a disjoint file domain (HQ=`main`; design=`experience-pass`/`src/`;
@@ -137,7 +137,7 @@ Mutates nothing.
 
 **F5 Export Snapshot — SHIPPED** (read-only): `export.rs` (pure `build_markdown_report` from each
 source's serialized JSON → decoupled + graceful-on-missing; `export_report` writes Markdown + JSON
-to `%APPDATA%\Sentinel\exports\`; `open_export_folder`) and an "Export report" header button +
+to `%APPDATA%\Compy\exports\`; `open_export_folder`) and an "Export report" header button +
 preview modal. Composes hardware / recs / Trust Ledger / readiness / sessions + privacy note;
 sessions labeled live-estimate. 5 unit tests. Mutates nothing.
 
@@ -190,7 +190,7 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
 - **§2a power-plan fidelity — PASSED decisively:** rolling back a Balanced-stored `pcie-aspm-off`
   while Ultimate was active restored Balanced AC 0→1, left Ultimate untouched at 0, and didn't
   change the active plan — live proof of `070c3c9` (no SCHEME_CURRENT fallback, no forced switch).
-- Restart-persistence PASS; no orphan helpers; Sentinel correctly withholds already-satisfied
+- Restart-persistence PASS; no orphan helpers; Compy correctly withholds already-satisfied
   (SysMain/DiagTrack) and HDD-gated (Windows Search) recs.
 
 **Optional NON-blocking follow-up QA** (nice-to-have, not gating): (1) live elevated-apply UAC
@@ -200,7 +200,7 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
 - **Packaging/signing:** plan + audit in `docs/PACKAGING_SIGNING_PLAN.md`. Config verified good
   (identity/icons/capabilities/updater-off). **Beta route DECIDED (2026-05-31): unsigned + invite-only
   direct download + fully local-only (no telemetry, no new code).** **Build VERIFIED 2026-05-31:**
-  `npm run tauri build` → `Sentinel_0.1.0_x64_en-US.msi` (3.5 MB) + `Sentinel_0.1.0_x64-setup.exe`
+  `npm run tauri build` → `Compy_0.1.0_x64_en-US.msi` (3.5 MB) + `Compy_0.1.0_x64-setup.exe`
   (2.3 MB) in `src-tauri/target/release/bundle/`; identity baked in, NotSigned (expected), no updater.
   **INSTALLED-BUILD QA COMPLETE & PASSING (2026-05-31):** §6 + §7 all pass — install/uninstall/reinstall,
   AppData + Trust-Ledger persistence, zero outbound network, Export (valid UTF-8), headless elevated FPS
@@ -214,11 +214,11 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   `514ca0e`; (3) AMD GPU driver-age — **VERIFIED NOT A BUG** via a live `detect_gpus()` run: the RX 9070 XT
   reads `driver_date 2026-05-12`, `driver_age_days Some(20)` (value at check; `2026-05-12` is the stable fact) through the existing DXGI↔WMI name-matched
   merge — no code change, no registry fallback; (4) install dir vs runtime dir separated →
-  `%APPDATA%\Sentinel\runtime` `e87ecdd`+`512dd11`; (5) single-instance lock (2nd launch focuses existing
+  `%APPDATA%\Compy\runtime` `e87ecdd`+`512dd11`; (5) single-instance lock (2nd launch focuses existing
   window) `75e4681`. (See `docs/PACKAGING_SIGNING_PLAN.md` §7a.)
   **✅ Installer REBUILT (2026-05-31 17:11) — includes #1–#4.** `npm run tauri build` →
-  `Sentinel_0.1.0_x64_en-US.msi` (≈3.4 MB) + `Sentinel_0.1.0_x64-setup.exe` (≈2.2 MB) in
-  `src-tauri/target/release/bundle/`; identity baked in (Sentinel / 0.1.0 / Pootytxng), NotSigned
+  `Compy_0.1.0_x64_en-US.msi` (≈3.4 MB) + `Compy_0.1.0_x64-setup.exe` (≈2.2 MB) in
+  `src-tauri/target/release/bundle/`; identity baked in (Compy / 0.1.0 / Pootytxng), NotSigned
   (expected), no updater; single-instance smoke passed on the fresh binary. (First attempt OOM'd
   compiling the `windows` crate at `opt-level=3` with ~5 GB free RAM; cleared with
   `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256` — lower peak memory, negligible runtime cost.)
@@ -241,8 +241,8 @@ MUTATION → rides its own apply/rollback + crash-safe-restore QA, not covered b
 without their own gate:** Gaming Mode's mutating parts, remote-fetch enablement, new tweak-catalog
 expansion, declaring beta/release-ready before the packaging/legal/signing gates close.
 
-Packaging metadata DONE (identity, not signing): `productName` "Sentinel", identifier
-`io.github.pootytxng.sentinel`, publisher/copyright "Pootytxng", category Utility, homepage,
+Packaging metadata DONE (identity, not signing): `productName` "Compy", identifier
+`gg.compy.app`, publisher/copyright "Pootytxng", category Utility, homepage,
 short/long description in `tauri.conf.json` (schema-validated). Privacy + EULA drafted with
 identity filled: `docs/PRIVACY.md`, `docs/EULA.md` (still DRAFTS — owner/legal review needed).
 Remaining packaging gaps (NOT done, intentionally): no code-signing config, `csp: null`,
@@ -256,5 +256,5 @@ debug-only (console subsystem); a packaged **release** build still warrants a fi
 1. Read `docs/RELEASE_QA.md` — the checklist with per-subtest expected before/after.
 2. Resume the BLOCKER: §1 subtests 2–4 (real elevated apply/rollback), then §2a.
 3. I (Claude) verify GUI behavior via the backend: live process/IL queries, `history.json`,
-   real Windows service/power state, and `%LOCALAPPDATA%\Sentinel\launch-debug.log`.
+   real Windows service/power state, and `%LOCALAPPDATA%\Compy\launch-debug.log`.
 4. Commit after each verified unit. Branch is `main`; push only when asked.

@@ -31,11 +31,11 @@ just exercise start/stop without a game — the power-plan/registry changes appl
       plan + Game Mode/Bar values are restored.** Session file cleared.
 - [ ] **2. Consent gate (first use).** First enable shows the one-time modal (what changes + restore
       guarantee) and requires confirmation; subsequent starts are one-click.
-- [ ] **3. App crash while Active.** Start Gaming Mode, then **kill `sentinel.exe`** (Task Manager) mid-
+- [ ] **3. App crash while Active.** Start Gaming Mode, then **kill `compy.exe`** (Task Manager) mid-
       session. Relaunch → the toggle should show **Gaming Mode "on"** (live session resumed); click Stop
       → prior state restored. *(Per the /check fix, an active session resumes rather than false-prompting.)*
 - [ ] **4. Full reboot while Active.** Start Gaming Mode → **reboot the PC** without stopping. After
-      reboot, launch Sentinel → it detects the unfinished session (`gaming-session.json`) and **prompts
+      reboot, launch Compy → it detects the unfinished session (`gaming-session.json`) and **prompts
       to restore**; confirm → exact prior state restored.
 - [ ] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
 - [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles

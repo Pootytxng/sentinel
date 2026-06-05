@@ -15,9 +15,9 @@ use crate::{
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────
 //
-// The Diagnostics tab is "Sentinel's view of your PC, as raw observations."
+// The Diagnostics tab is "Compy's view of your PC, as raw observations."
 // It exists for two reasons: (1) trust — the user can spot-check that
-// Sentinel's view of their hardware and system state is correct, and (2)
+// Compy's view of their hardware and system state is correct, and (2)
 // debug aid — if a rec doesn't fire as expected, the user can see which
 // underlying observation drove that decision. No new detection runs here;
 // every value comes from helpers that already exist for the rec engine.

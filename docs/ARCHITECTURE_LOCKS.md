@@ -1,12 +1,12 @@
 # Architecture Locks
 
-> Sentinel is not an optimizer that happens to have rollback. Sentinel is a rollback-first Windows configuration safety layer that happens to optimize.
+> Compy is not an optimizer that happens to have rollback. Compy is a rollback-first Windows configuration safety layer that happens to optimize.
 
 This document captures decisions that are hard to change once users are in the wild, plus the operating policies that govern how new features get added. Future contributors (including future Claude sessions) must respect these. Breaking them silently is a "users-can't-update-or-rollback" class incident — or worse, a "remote control plane shipped without signed verification" class incident.
 
 The doc has three sections:
 
-1. **Operating Policies** — how Sentinel behaves and what it is allowed to do. Apply to all current and future work.
+1. **Operating Policies** — how Compy behaves and what it is allowed to do. Apply to all current and future work.
 2. **Immutability Tiers** — concrete data and identifier decisions, ranked by how locked-in they become.
 3. **Baseline Exclusions** — tweaks deliberately not in baseline v1, with the conditions under which they could appear later as advanced/diagnostic features.
 
@@ -23,7 +23,7 @@ Any rule served from a CDN is treated as **privileged Windows policy metadata**,
 Implications, all of which must be true before any remote fetch ships:
 
 - **No generic mutation dispatchers.** No `apply_kind: "registry-set"`, no `apply_kind: "service-set"`, no `apply_kind: "powershell-run"`. Apply behavior is dispatched through typed Rust enums (see §2.4) with allowlisted variants and parameters.
-- **All apply / rollback variants are auditable in source.** A maintainer can read the Rust source and enumerate every possible privileged operation Sentinel can perform. Remote JSON only *selects* among them.
+- **All apply / rollback variants are auditable in source.** A maintainer can read the Rust source and enumerate every possible privileged operation Compy can perform. Remote JSON only *selects* among them.
 - **Unknown enum variants, unknown fields, unknown services, and unknown parameter values are rejected.** Loud parse failure, no silent skip-and-continue.
 - **The action allowlist is updated only through app releases**, never through remote rules.
 
@@ -48,7 +48,7 @@ The disallowed surface, with no exceptions:
 
 ### 1.3 Cold-start behavior
 
-Sentinel must be useful on first launch with no network access, indefinitely.
+Compy must be useful on first launch with no network access, indefinitely.
 
 - The embedded baseline is the starting catalog. Always.
 - Remote validation runs in the background after the UI is interactive.
@@ -84,7 +84,7 @@ A user must always be able to roll back any applied change, even if:
 - The rule has been removed from the catalog
 - The rule has been renamed or its conditions changed
 - The user has downgraded the app to an older version
-- Sentinel itself has changed how the rule dispatches internally
+- Compy itself has changed how the rule dispatches internally
 
 This is achieved by storing the complete rollback contract inside `AppliedChange` at apply time (see §2.1). Rollback never consults the live `Vec<Recommendation>`; it consults local history.
 
@@ -94,7 +94,7 @@ Rule text rendered in the UI is treated as untrusted. No HTML, no Markdown injec
 
 ### 1.7 No fake performance claims
 
-Sentinel does not promise FPS gains, latency reductions, or other measured improvements unless and until they are produced by actual measurements on the user's machine. The three labels are kept strictly separate in the UI:
+Compy does not promise FPS gains, latency reductions, or other measured improvements unless and until they are produced by actual measurements on the user's machine. The three labels are kept strictly separate in the UI:
 
 - **Verified** — a configuration value was deterministically changed (e.g. Fast Startup now off; checked via registry).
 - **Measured signal** — a probe was run (memory latency, network jitter, storage random-read latency). This is a signal, not proof of gaming improvement.
@@ -116,7 +116,7 @@ Every `Recommendation.id` shipped in a release is a permanent contract. No renam
 
 #### `AppliedChange` schema (the full rollback contract)
 
-Persisted in `%APPDATA%\Sentinel\history.json`. Fields can be added (with `#[serde(default)]`) but never renamed or removed. The minimum fields required for rollback independence (per §1.5):
+Persisted in `%APPDATA%\Compy\history.json`. Fields can be added (with `#[serde(default)]`) but never renamed or removed. The minimum fields required for rollback independence (per §1.5):
 
 ```rust
 struct AppliedChange {
@@ -159,9 +159,9 @@ Adding a new variant is fine. Renaming or removing existing ones permanently bre
 
 #### Bundle identifier
 
-Currently `com.sentinel.app`. Confirmable pre-launch; immutable once shipped to users. See pre-launch checklist.
+Currently `com.compy.app`. Confirmable pre-launch; immutable once shipped to users. See pre-launch checklist.
 
-#### AppData directory `%APPDATA%\Sentinel`
+#### AppData directory `%APPDATA%\Compy`
 
 History persistence lives here. Renaming requires migration code.
 
@@ -257,7 +257,7 @@ These tweaks are **explicitly excluded from baseline safe recommendations** in v
 
 ### Conditions for any future inclusion
 
-If any of the above is later added to Sentinel, it must be:
+If any of the above is later added to Compy, it must be:
 
 - Advanced mode only (separate UI surface, opt-in)
 - Problem-specific (gated on a detected issue, not "more performance")
@@ -272,7 +272,7 @@ If any of the above is later added to Sentinel, it must be:
 
 Tracked here so the right decisions are made at the right time, not skipped:
 
-- [ ] Trademark check on the public name (currently "Sentinel" is a code name; SentinelOne is an established holder in adjacent space)
+- [ ] Trademark check on the public name (currently "Compy" is a code name; CompyOne is an established holder in adjacent space)
 - [ ] Final bundle identifier confirmed
 - [ ] Final public product name confirmed
 - [ ] EV code-signing certificate purchased and integrated into the build pipeline
@@ -287,7 +287,7 @@ Tracked here so the right decisions are made at the right time, not skipped:
 
 ## 5. Rules Signing — Key Management
 
-The rules-manifest signing key is treated like an updater signing key — it is the trust root for every privileged Windows change Sentinel performs in the field. Mishandling it equals mishandling root on every installed machine.
+The rules-manifest signing key is treated like an updater signing key — it is the trust root for every privileged Windows change Compy performs in the field. Mishandling it equals mishandling root on every installed machine.
 
 ### Hard rules
 

@@ -7,7 +7,7 @@
 //! PresentMon uses.
 //!
 //! Why a separate elevated process: creating a real-time ETW session requires
-//! Administrator (or membership in "Performance Log Users"). Sentinel's main
+//! Administrator (or membership in "Performance Log Users"). Compy's main
 //! window runs unelevated, so it spawns this helper elevated (one UAC prompt
 //! when the user starts the FPS graph) and consumes the helper's output.
 //!
@@ -45,11 +45,11 @@ const PRESENT_START_EVENT_ID: u16 = 42;
 
 // Our real-time ETW session name. Must be stable so we can stop a leftover
 // one on startup (see run_capture).
-const SESSION_NAME: &str = "Sentinel-FPS";
+const SESSION_NAME: &str = "Compy-FPS";
 
 // Processes that present frames but are NOT "the game": the desktop compositor
 // (which composites borderless windows, so it presents at the game's rate),
-// the shell, and Sentinel's own webview windows. Excluded from the
+// the shell, and Compy's own webview windows. Excluded from the
 // dominant-presenter pick so we report the actual game, not the compositor.
 const PRESENTER_DENYLIST: &[&str] = &[
     "dwm.exe",

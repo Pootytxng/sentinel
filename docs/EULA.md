@@ -1,4 +1,4 @@
-# Sentinel — End-User License Agreement & Disclaimer
+# Compy — End-User License Agreement & Disclaimer
 
 **Status: DRAFT v0.2 (2026-06-02).** Starting-point draft reflecting how the software works
 today (v0.2 adds §4's advisory / advanced-manual-tweaks clause covering the Advanced Black Book).
@@ -8,14 +8,14 @@ issues); still open before public distribution: final license model and governin
 
 ---
 
-By installing or using **Sentinel** ("the Software"), you ("you") agree to the terms below. If
+By installing or using **Compy** ("the Software"), you ("you") agree to the terms below. If
 you do not agree, do not install or use the Software.
 
-## 1. What Sentinel is
+## 1. What Compy is
 
-Sentinel is a Windows optimization and **configuration-safety** tool for everyday users. It
+Compy is a Windows optimization and **configuration-safety** tool for everyday users. It
 reads your PC's hardware and settings, recommends changes in plain language, and — when you
-choose to apply one — records the prior state first so the change can be rolled back. Sentinel
+choose to apply one — records the prior state first so the change can be rolled back. Compy
 is designed around a **rollback-first** principle: it tries hard to make every change it
 applies reversible from a local history that does not depend on the internet.
 
@@ -39,22 +39,22 @@ significantly between versions. Do not rely on it as your only safeguard for imp
 - Before applying a change, the Software records the prior state and offers a rollback.
 - **Rollback is provided on a best-effort basis and is not guaranteed in every environment.**
   External changes (Windows updates, other tools, hardware/driver changes, deleted power
-  plans, manual edits) can alter or remove the state a rollback depends on. Where Sentinel
+  plans, manual edits) can alter or remove the state a rollback depends on. Where Compy
   cannot safely restore the exact prior state, it is designed to **stop and tell you** rather
   than guess.
 - **You are responsible for your system.** Maintain your own backups / restore points. You
   apply changes at your own risk.
-- **Advisory & educational content (including the "Advanced Black Book").** Sentinel may present
+- **Advisory & educational content (including the "Advanced Black Book").** Compy may present
   *advisory, educational* information about deeper or riskier system, driver, or firmware (BIOS/UEFI)
   tweaks that it **does not perform for you.** Any such tweak you choose to make is carried out
-  **manually, by you, outside the Software** — Sentinel does not apply it, monitor it, or roll it back,
+  **manually, by you, outside the Software** — Compy does not apply it, monitor it, or roll it back,
   and these changes fall **entirely outside** the rollback protections described above. Advanced tweaks
   can carry real risks (instability, boot failure, data loss, reduced security, or third-party /
   anti-cheat consequences), and reported benefits are often small or hardware-specific. **You undertake
   any such change entirely at your own risk; the owner and contributors accept no responsibility for the
   outcome of changes you make manually based on this material.**
 
-## 5. Administrator access; what Sentinel does NOT do
+## 5. Administrator access; what Compy does NOT do
 
 Some operations and the performance-capture helper require Windows Administrator permission and
 will prompt you (UAC). The Software does **not** install a kernel driver and does **not** inject
@@ -71,7 +71,7 @@ responsible for actions taken against your accounts by third parties.
 ## 7. Third-party names
 
 Windows is a trademark of Microsoft. AMD, NVIDIA, Intel, and other product names are
-trademarks of their respective owners. Sentinel is an independent project and is **not
+trademarks of their respective owners. Compy is an independent project and is **not
 affiliated with, endorsed by, or sponsored by** Microsoft, AMD, NVIDIA, Intel, or any game
 publisher.
 
@@ -102,6 +102,6 @@ your use of that build.
 ## 12. Governing law / contact
 
 Governing law / jurisdiction: *to be confirmed by the owner before public distribution.*
-Contact: **Pootytxng** (Sentinel) — via the project's GitHub issues page:
-https://github.com/Pootytxng/sentinel/issues
-Project: https://github.com/Pootytxng/sentinel
+Contact: **Pootytxng** (Compy) — via the project's GitHub issues page:
+https://github.com/Pootytxng/compy/issues
+Project: https://github.com/Pootytxng/compy

@@ -163,7 +163,7 @@ pub(crate) fn build_priorities(
                     id: "pending-safe-recs",
                     title: format!("{} safe one-click tweak(s) not applied", pending.len()),
                     reason: format!(
-                        "Sentinel has safe, reversible tweaks you haven't applied: {}{}.",
+                        "Compy has safe, reversible tweaks you haven't applied: {}{}.",
                         titles.join(", "),
                         if pending.len() > titles.len() { ", …" } else { "" }
                     ),
@@ -224,7 +224,7 @@ pub(crate) fn build_priorities(
             let applied = r.get("currently_applied").and_then(Value::as_bool).unwrap_or(false);
             // Use a neutral, state-agnostic title — the recommendation's own title
             // reads "…is active", which contradicts the row when VBS is actually
-            // off. Sentinel DOES know the state (read from the registry), so this
+            // off. Compy DOES know the state (read from the registry), so this
             // is a real, decided advisory — never "Unknown".
             tagged.push((
                 Bucket::NotWorth,
@@ -234,7 +234,7 @@ pub(crate) fn build_priorities(
                     reason: if applied {
                         "Memory Integrity / VBS is ON. It can cost a few % in some games, but it's a security feature — advisory only, your call.".into()
                     } else {
-                        "Memory Integrity / VBS is off — nothing to do. (Leaving it off can help a few games; turning it on is a security/FPS tradeoff Sentinel never changes for you.)".into()
+                        "Memory Integrity / VBS is off — nothing to do. (Leaving it off can help a few games; turning it on is a security/FPS tradeoff Compy never changes for you.)".into()
                     },
                     linked: r.get("id").and_then(Value::as_str).map(str::to_string),
                     confidence: Confidence::Low,

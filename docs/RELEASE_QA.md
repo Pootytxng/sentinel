@@ -1,4 +1,4 @@
-# Sentinel — Release-Gate QA Checklist
+# Compy — Release-Gate QA Checklist
 
 > ✅ **MANUAL-MUTATION QA — LIFTED 2026-05-31 (owner sign-off APPROVED).**
 > This blocker is closed. Verified live on a UAC-on machine:
@@ -12,7 +12,7 @@
 > - **§3** apply-cancel: structurally guaranteed (apply returns on the elevation error via `?`
 >   before any history write) + runas-cancel verified live in §1; live UX check optional.
 > - Restart-persistence demonstrated (ledger survived reboot + restarts); no orphan helpers;
->   Sentinel correctly withholds already-satisfied / hardware-inappropriate recs.
+>   Compy correctly withholds already-satisfied / hardware-inappropriate recs.
 >
 > **Non-blocking follow-ups (optional):** live elevated-apply UAC cancel-message UX check;
 > external-revert "no longer active" UI observation.
@@ -26,7 +26,7 @@ covers what only a human at the machine can verify: real Windows mutation,
 elevation prompts, restart, external changes, and live-game monitoring.
 
 Run the dev app with `npm run tauri dev` from the repo root. History lives at
-`%APPDATA%\Sentinel\history.json`.
+`%APPDATA%\Compy\history.json`.
 
 Legend: ☐ todo · ✅ pass · ❌ fail (note what happened)
 
@@ -59,7 +59,7 @@ Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies
     UAC prompt, not a freeze** — confirm it clears the moment you answer.
 - ☐ **Cancel the UAC prompt** for FPS monitoring → clean error message, app
   stays responsive, no half-started helper (check Task Manager: no orphan
-  `sentinel.exe --fps-capture`).
+  `compy.exe --fps-capture`).
 - ☐ **Elevated apply** — apply any elevated rec (e.g. `sysmain-disable`) → UAC
   prompt → accept → applies, ledger entry written.
 - ☐ **Cancel an elevated apply** → clean error (e.g. "Did you cancel the UAC
@@ -69,9 +69,9 @@ Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies
 
 ## 2. Apply / rollback smoke — per recommendation
 
-For each rec: **Apply** → *Current* row updates → *Applied by Sentinel* = yes →
+For each rec: **Apply** → *Current* row updates → *Applied by Compy* = yes →
 Trust Ledger entry correct (title, time, status) → **Rollback** → exact prior
-state restored → *Applied by Sentinel* reverts → ledger status = rolled_back.
+state restored → *Applied by Compy* reverts → ledger status = rolled_back.
 
 **No elevation (HKCU) — safest, start here:**
 - ☐ `game-mode`
@@ -122,9 +122,9 @@ state restored → *Applied by Sentinel* reverts → ledger status = rolled_back
 ## 4. External-revert honesty
 
 - ☐ Apply `game-mode`.
-- ☐ Outside Sentinel, toggle Game Mode **off** in Windows Settings.
-- ☐ Refresh / reopen Sentinel → the ledger entry shows **not currently active**
-  (honest: Sentinel doesn't claim a change it no longer controls is live).
+- ☐ Outside Compy, toggle Game Mode **off** in Windows Settings.
+- ☐ Refresh / reopen Compy → the ledger entry shows **not currently active**
+  (honest: Compy doesn't claim a change it no longer controls is live).
 - ☐ Rollback is still offered (we never hide a rollback just because state drifted).
 
 ---
@@ -140,10 +140,10 @@ exclusive fullscreen — by design, no injection).
   in-app FPS + frametime populate.
 - ☐ **Overlay** — *Show overlay* → HUD appears over the borderless game with
   live values → *Hide overlay* removes it.
-- ☐ **Helper exit lifecycle** — disable monitoring → `sentinel.exe --fps-capture`
+- ☐ **Helper exit lifecycle** — disable monitoring → `compy.exe --fps-capture`
   exits (Task Manager shows no orphan).
 - ☐ **App-crash → helper self-exit** — with monitoring on, kill the **main**
-  `sentinel.exe` in Task Manager → the capture helper exits on its own within
+  `compy.exe` in Task Manager → the capture helper exits on its own within
   ~4 s (heartbeat goes stale).
 - ☐ **Stale-ETW recovery** — enable → disable → enable again: no
   "AlreadyExist"/session failure (the `logman stop` on start cleans up).
@@ -152,11 +152,11 @@ exclusive fullscreen — by design, no injection).
 
 ## 6. Failure paths
 
-- ☐ **Corrupt history** — close app, replace `%APPDATA%\Sentinel\history.json`
+- ☐ **Corrupt history** — close app, replace `%APPDATA%\Compy\history.json`
   with garbage, reopen → ledger loads **empty**, no crash. *(also unit-tested)*
 - ☐ **Missing history** — delete `history.json`, reopen → empty ledger, no crash.
 - ☐ **Cancelled apply** — (covered in §1) no success entry on UAC cancel.
-- ☐ **Helper crash** — kill `sentinel.exe --fps-capture` mid-capture → app
+- ☐ **Helper crash** — kill `compy.exe --fps-capture` mid-capture → app
   reflects FPS stopped; re-enabling works (no stale session).
 
 ---
@@ -164,10 +164,10 @@ exclusive fullscreen — by design, no injection).
 ## 7. UI truth surfaces
 
 - ☐ **Onboarding** (first run, or "Replay intro") — 4 steps; explains
-  Recommended vs Applied-by-Sentinel; explains **why there's no CPU temp**
+  Recommended vs Applied-by-Compy; explains **why there's no CPU temp**
   (no kernel driver).
 - ☐ **Three-row strip** on rec cards — *Recommended / Current / Applied by
-  Sentinel* all present and correct.
+  Compy* all present and correct.
 - ☐ **Provenance pills** — *Verified* / *Measured signal* / *Expected impact*
   render with the right visual weight.
 - ☐ **Rules-source pill** — shows the embedded/baseline source (remote fetch is
@@ -184,6 +184,6 @@ exclusive fullscreen — by design, no injection).
 
 Do **not** start packaging/signing until §1 (normal-UAC elevation) and §2a
 (power-plan rollback fidelity) pass. Packaging-prep findings already logged:
-generic bundle identifier (`com.sentinel.app`), lowercase `productName`, no
+generic bundle identifier (`com.compy.app`), lowercase `productName`, no
 publisher/copyright/license, no code-signing config, `csp: null`, and no
 license/privacy/EULA content yet.

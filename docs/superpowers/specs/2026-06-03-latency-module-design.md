@@ -1,6 +1,6 @@
-# Sentinel Latency Module — design (the edge)
+# Compy Latency Module — design (the edge)
 
-> **Status: PARKED + DARK.** Measurement/diagnostics lane (`sentinel-benchmark`), per the owner's
+> **Status: PARKED + DARK.** Measurement/diagnostics lane (`compy-benchmark`), per the owner's
 > "build next" call. **Stage-4 safe read-only diagnostics are now COMPLETE** (MSI active-verify,
 > MeasureSleep, CPU/CCD topology + affinity gate, USB shared-controller map — all live-verified); the ETW
 > capture core (Stages 1–2) is the next big build, awaiting the owner's dual-session spec. **HQ aware**
@@ -16,7 +16,7 @@ afterward and says *"it was the Wi-Fi driver, here's the timestamp, here's the f
 **Capture → Attribute → Correlate → Analyze → Verify → Guard.**
 
 ### ⚙️ Stack grounding (one correction to the owner's build-stack note)
-The thesis suggests **.NET `TraceEvent`** / **krabsetw (C++)**. **We don't use those** — Sentinel is a lean
+The thesis suggests **.NET `TraceEvent`** / **krabsetw (C++)**. **We don't use those** — Compy is a lean
 **Rust/Tauri** app and already ships **`ferrisetw`** (a Rust ETW consumer) which `fps.rs` already uses for
 DXGI present-event capture. So:
 - **ETW in Rust via `ferrisetw`** — no .NET runtime, no C++ side-car bolted onto a lean app.

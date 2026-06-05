@@ -1,4 +1,4 @@
-# Sentinel — Docs Index
+# Compy — Docs Index
 
 Working documents for the project. This is an internal index, not public-facing copy.
 
@@ -16,7 +16,7 @@ Working documents for the project. This is an internal index, not public-facing 
 - [EULA.md](EULA.md) — end-user license agreement (draft; license model + jurisdiction still pending).
 
 ## Product & planning
-- [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) — what Sentinel is and is not; scope and anti-goals.
+- [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md) — what Compy is and is not; scope and anti-goals.
 - [GAMING_MODE_PLAN.md](GAMING_MODE_PLAN.md) — design + QA gate for Gaming Mode (gated; not built).
 - [NVIDIA_VALIDATION_PLAN.md](NVIDIA_VALIDATION_PLAN.md) — plan to validate NVIDIA monitoring on real hardware.
 - [REMOTE_FETCH_ARMING_PLAN.md](REMOTE_FETCH_ARMING_PLAN.md) — plan for the signed remote-rules path (remote fetch stays disabled).

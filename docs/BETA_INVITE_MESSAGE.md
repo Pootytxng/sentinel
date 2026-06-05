@@ -1,11 +1,11 @@
-# Sentinel — Private Beta Invite (short message)
+# Compy — Private Beta Invite (short message)
 
 Copy/paste this when inviting a trusted tester. Keep it to people you trust — **please don't share the
 installer publicly.**
 
 ---
 
-Hey — want to try a **private beta** of **Sentinel**, my Windows app for PC gamers? It's a safety-first
+Hey — want to try a **private beta** of **Compy**, my Windows app for PC gamers? It's a safety-first
 tool that checks your hardware, gaming readiness, live monitoring, and a few **safe, reversible**
 tweaks. (It's **not** an FPS booster and doesn't promise more frames — it's about clarity and safety.)
 
@@ -16,9 +16,9 @@ A few heads-ups:
   That's **expected** — click **More info → Run anyway**.
 
 **Install:**
-1. Run **`Sentinel_0.1.0_x64-setup.exe`**.
+1. Run **`Compy_0.1.0_x64-setup.exe`**.
 2. If SmartScreen appears → **More info → Run anyway**.
-3. Launch **Sentinel** from the Start Menu.
+3. Launch **Compy** from the Start Menu.
 
 **Privacy:** no telemetry, no account, no updater, no remote rules — it all runs locally.
 
