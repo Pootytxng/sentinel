@@ -274,9 +274,11 @@ pub(crate) fn evaluate_readiness(
                 Some(age) if age <= DRIVER_OLD_DAYS => check(
                     "gpu-driver-age",
                     "GPU driver age",
-                    ReadinessStatus::Attention,
+                    ReadinessStatus::Advisory,
                     format!(
-                        "{} driver is {} days old — consider updating for game fixes and performance.",
+                        "{} driver is {} days old — still fine. Worth updating around a new game's \
+                         launch for day-one fixes, but nothing's broken here; updating mid-cycle \
+                         rarely moves measured FPS.",
                         g.name, age
                     ),
                     Some(format!("{} days", age)),
@@ -364,9 +366,10 @@ pub(crate) fn evaluate_readiness(
         Some(d) if d.hdr_capable => check(
             "hdr",
             "HDR / Auto HDR",
-            ReadinessStatus::Attention,
-            "An HDR-capable display was detected. For competitive play, verify HDR/Auto HDR suits \
-             you — HDR can add latency or brightness variance on some setups. Advisory only.",
+            ReadinessStatus::Advisory,
+            "Your display is HDR-capable. Nothing to fix — HDR is a preference, not a performance \
+             setting. It only matters competitively if you notice it adding latency or brightness \
+             variance; otherwise enable it for richer color in games that support it.",
             Some("HDR-capable".into()),
         ),
         Some(_) => check(
@@ -690,10 +693,28 @@ mod readiness_tests {
         );
         let r = evaluate_readiness(&hw, Some("Balanced"), true, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Attention);
-        assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Attention);
+        assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Attention); // 500d > 1yr
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Attention);
-        assert_eq!(find(&r, "hdr").status, ReadinessStatus::Attention);
         assert_eq!(find(&r, "install-drive").status, ReadinessStatus::Attention);
+        // Severity redesign: HDR-capable is a preference, not a fix — INFO/Advisory, never amber.
+        assert_eq!(find(&r, "hdr").status, ReadinessStatus::Advisory);
+    }
+
+    #[test]
+    fn mid_age_driver_is_advisory_not_amber() {
+        // A driver older than "fresh" but well under a year is INFO, not an alarm.
+        let hw = hw_with(
+            None,
+            vec![GpuInfo {
+                name: "Test GPU".into(),
+                vram_bytes: 8u64 << 30,
+                driver_age_days: Some((DRIVER_FRESH_DAYS + DRIVER_OLD_DAYS) / 2),
+                ..Default::default()
+            }],
+            vec![],
+        );
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Advisory);
     }
 
     #[test]

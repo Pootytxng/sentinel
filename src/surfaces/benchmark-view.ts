@@ -25,11 +25,12 @@ export function verdictLabel(v: Verdict): string {
 }
 
 /** Map an efficacy verdict to a status-pill tone. "No measurable change" is neutral
- * (unknown) on purpose — it's the honest non-result, never dressed up as a win. */
+ * INFO on purpose — it's the honest non-result (a determined finding), never dressed up
+ * as a win and never an alarm. */
 export function verdictTone(v: Verdict): Status {
   if (v === "improved") return "ready";
   if (v === "regressed") return "danger";
-  return "unknown";
+  return "info";
 }
 
 /** Signed percent to one decimal (e.g. "+4.2%", "-1.1%", "0%"). */
@@ -49,7 +50,7 @@ export function trialVerdictLabel(v: TrialVerdict): string {
 export function trialVerdictTone(v: TrialVerdict): Status {
   if (v.verdict === "keep") return "ready";
   if (v.verdict === "revert") return "danger";
-  return "unknown";
+  return "info"; // "no measurable change" — a determined null, neutral not amber
 }
 
 export function trialReasonText(reason: string): string {

@@ -421,7 +421,7 @@ function RunCard({ report, at, title }: { report: RunReport; at: string | null; 
         title={title}
         right={
           <StatusPill
-            status={report.confidence === "clean" ? "ready" : "attention"}
+            status={report.confidence === "clean" ? "ready" : "info"}
             label={report.confidence === "clean" ? "Clean run" : "Noisy run"}
           />
         }

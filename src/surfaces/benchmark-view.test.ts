@@ -25,10 +25,10 @@ describe("verdict", () => {
     expect(verdictLabel("no-measurable-change")).toBe("No measurable change");
     expect(verdictLabel("regressed")).toBe("Regressed");
   });
-  it("tones: improved=ready, regressed=danger, no-change=neutral(unknown)", () => {
+  it("tones: improved=ready, regressed=danger, no-change=neutral(info)", () => {
     expect(verdictTone("improved")).toBe("ready");
     expect(verdictTone("regressed")).toBe("danger");
-    expect(verdictTone("no-measurable-change")).toBe("unknown");
+    expect(verdictTone("no-measurable-change")).toBe("info");
   });
 });
 
@@ -51,7 +51,7 @@ describe("trial verdict", () => {
     expect(trialVerdictLabel(revert)).toBe("Hurt — reverted");
     expect(trialVerdictTone(revert)).toBe("danger");
     expect(trialVerdictLabel(noChange)).toBe("No measurable change");
-    expect(trialVerdictTone(noChange)).toBe("unknown");
+    expect(trialVerdictTone(noChange)).toBe("info");
   });
   it("explains inconclusive reasons", () => {
     expect(trialReasonText("within-noise")).toMatch(/noise/);
