@@ -110,6 +110,14 @@ html, body, #root {
   margin: 0 auto;
 }
 
+/* Command Center (new home) takes the full window — it provides its own centered shell + padding,
+   so drop the classic frame to avoid double-padding. Additive: only applied while the flag is on. */
+.app-cc {
+  padding: 0;
+  max-width: none;
+  gap: 0;
+}
+
 .header {
   display: flex;
   align-items: flex-start;
@@ -269,6 +277,18 @@ html, body, #root {
 .footer-link:hover {
   color: var(--accent-hover);
   text-decoration: underline;
+}
+.footer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.footer-toggle input {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .gpu-block {

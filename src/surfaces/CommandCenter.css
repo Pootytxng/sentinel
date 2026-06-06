@@ -1,0 +1,555 @@
+/* Command Center — the first live Instrument surface. Token-only (no hardcoded hex); every color
+   resolves from the --ix-* layer (instrument.css), so theme switches recolor everything for free.
+   The ambient backdrop sits at z-index 0 (fixed); this whole surface sits above it so glass panels
+   occlude the streaks. Reversible: unmount the surface and the classic home is untouched. */
+
+.cc-root {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.cc-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 208px 1fr;
+  gap: 22px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 26px 30px 40px;
+}
+
+/* ── Glass panel base (kernel §2/§5) ──────────────────────────────────────── */
+.cc-panel {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 18px 20px;
+  box-shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(7px);
+}
+
+.cc-panel-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ix-text-3);
+  margin-bottom: 6px;
+}
+
+/* ── Nav rail ─────────────────────────────────────────────────────────────── */
+.cc-rail {
+  position: sticky;
+  top: 26px;
+  align-self: start;
+  height: calc(100vh - 66px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 18px 14px;
+  backdrop-filter: blur(7px);
+}
+
+.cc-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 10px;
+}
+.cc-pulse {
+  filter: drop-shadow(0 0 6px var(--ix-accent));
+}
+.cc-wordmark {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  letter-spacing: 0.01em;
+}
+.cc-wordmark-c {
+  color: var(--ix-accent);
+  text-shadow: 0 0 10px var(--ix-accent);
+}
+
+.cc-rail-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.cc-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+.cc-rail-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ix-text-1);
+}
+.cc-rail-item-on {
+  background: var(--accent-soft, rgba(46, 230, 192, 0.12));
+  color: var(--ix-accent-text);
+}
+.cc-rail-item-on .cc-nav-ico {
+  color: var(--ix-accent);
+  filter: drop-shadow(0 0 5px var(--ix-accent));
+}
+
+.cc-rig {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ix-glass-border);
+}
+.cc-rig-gpu {
+  font-size: 11.5px;
+  color: var(--ix-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-rig-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ix-accent);
+  box-shadow: 0 0 7px var(--ix-accent);
+}
+.cc-rig-attention .cc-rig-dot {
+  background: var(--ix-amber);
+  box-shadow: 0 0 7px var(--ix-amber);
+}
+.cc-rig-scanning .cc-rig-dot {
+  background: var(--ix-text-3);
+  box-shadow: none;
+}
+
+/* ── Main column ──────────────────────────────────────────────────────────── */
+.cc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 2px 4px;
+}
+.cc-greeting {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.cc-rigline {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.cc-recheck {
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ix-text-1);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.cc-recheck:hover {
+  border-color: var(--ix-accent);
+  background: var(--accent-soft, rgba(46, 230, 192, 0.1));
+}
+
+/* ── Posture hero ─────────────────────────────────────────────────────────── */
+.cc-hero {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 24px 26px;
+}
+.cc-hero-text {
+  min-width: 0;
+}
+.cc-hero-headline {
+  margin: 2px 0 6px;
+  font-size: 23px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.cc-hero-sentence {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--ix-text-1);
+}
+.cc-hero-reassure {
+  margin: 7px 0 0;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
+
+/* ── Signal ring ──────────────────────────────────────────────────────────── */
+.cc-ring {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  flex-shrink: 0;
+}
+.cc-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+.cc-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 9;
+}
+.cc-ring-fill {
+  fill: none;
+  stroke: var(--ix-accent);
+  stroke-width: 9;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px var(--ix-accent));
+}
+.cc-ring-ready .cc-ring-fill {
+  stroke: var(--ix-amber);
+  filter: drop-shadow(0 0 6px var(--ix-amber));
+}
+.cc-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.cc-ring-label {
+  font-size: 21px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.cc-ring-sub {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--ix-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.cc-ring-shimmer {
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  border: 9px solid rgba(255, 255, 255, 0.07);
+  animation: cc-pulse 1.6s ease-in-out infinite;
+}
+
+/* ── #1 limiter ───────────────────────────────────────────────────────────── */
+.cc-limiter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-limiter-title {
+  margin: 6px 0 6px;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+}
+.cc-limiter-reason {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ix-text-2);
+  line-height: 1.5;
+}
+.cc-evidence {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid var(--ix-glass-border);
+  color: var(--ix-text-2);
+}
+.cc-evidence-verified {
+  color: var(--ix-accent-text);
+  border-color: var(--accent-line, rgba(46, 230, 192, 0.32));
+  background: var(--accent-soft, rgba(46, 230, 192, 0.1));
+}
+.cc-evidence-measured {
+  color: var(--ix-text-1);
+}
+
+.cc-limiter-clear .cc-limiter-title {
+  color: var(--ix-accent-text);
+}
+
+/* Trust-switch (kernel §6) — the apply AND the undo, role=switch, keyboard-accessible. */
+.cc-trust {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-top: 16px;
+}
+.cc-switch {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--ix-glass-border);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  padding: 0;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.cc-switch:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+.cc-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ix-text-2);
+  transition: transform 220ms cubic-bezier(0.4, 0.12, 0.18, 1), background 200ms ease;
+}
+.cc-switch-on {
+  background: var(--accent-soft, rgba(46, 230, 192, 0.18));
+  border-color: var(--ix-accent);
+}
+.cc-switch-on .cc-switch-thumb {
+  transform: translateX(24px);
+  background: var(--ix-accent);
+  box-shadow: 0 0 9px var(--ix-accent);
+}
+.cc-switch:focus-visible {
+  outline: 2px solid var(--ix-accent);
+  outline-offset: 2px;
+}
+.cc-trust-label {
+  font-size: 13px;
+  color: var(--ix-text-1);
+}
+.cc-snapshot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--ix-text-2);
+  line-height: 1.5;
+}
+.cc-snapshot-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transform: translateY(-1px);
+  background: var(--ix-accent);
+  box-shadow: 0 0 6px var(--ix-accent);
+}
+.cc-seefix {
+  margin-top: 14px;
+  padding: 9px 15px;
+  border-radius: 9px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ix-text-1);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+.cc-seefix:hover {
+  border-color: var(--ix-accent);
+}
+
+/* ── Live strip ───────────────────────────────────────────────────────────── */
+.cc-live-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-live-game {
+  font-size: 12px;
+  color: var(--ix-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.cc-live-metrics {
+  display: flex;
+  gap: 30px;
+  margin-top: 12px;
+}
+.cc-metric-value {
+  font-size: 27px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: -0.01em;
+}
+.cc-metric-label {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ix-text-2);
+}
+.cc-metric-note {
+  color: var(--ix-text-3);
+}
+.cc-live-emptytext {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+
+/* ── Skeleton / shimmer ───────────────────────────────────────────────────── */
+.cc-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  background-size: 200% 100%;
+  animation: cc-shimmer 1.5s linear infinite;
+}
+.cc-skel-title {
+  height: 22px;
+  width: 55%;
+  margin: 8px 0 12px;
+}
+.cc-skel-line {
+  height: 13px;
+  width: 90%;
+  margin-bottom: 8px;
+}
+.cc-skel-short {
+  width: 60%;
+}
+.cc-shimmer-text {
+  color: var(--ix-text-3);
+}
+
+/* ── Surface controls ─────────────────────────────────────────────────────── */
+.cc-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding: 2px;
+}
+.cc-seg {
+  display: inline-flex;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--ix-glass-fill);
+}
+.cc-seg-btn {
+  padding: 7px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+.cc-seg-btn:hover {
+  color: var(--ix-text-1);
+}
+.cc-seg-on {
+  background: var(--accent-soft, rgba(46, 230, 192, 0.14));
+  color: var(--ix-accent-text);
+}
+.cc-classic {
+  margin-left: auto;
+  padding: 7px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.cc-classic:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-text-3);
+}
+
+@keyframes cc-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes cc-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Reduced motion → static end-state, no shimmer/pulse/thumb easing (spec §5). */
+@media (prefers-reduced-motion: reduce) {
+  .cc-skel,
+  .cc-ring-shimmer {
+    animation: none;
+  }
+  .cc-switch-thumb {
+    transition: none;
+  }
+}
+
+/* Narrow windows — collapse the rail to a top strip so the surface never breaks. */
+@media (max-width: 760px) {
+  .cc-shell {
+    grid-template-columns: 1fr;
+  }
+  .cc-rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .cc-rail-items {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .cc-hero {
+    flex-direction: column;
+    text-align: center;
+  }
+}

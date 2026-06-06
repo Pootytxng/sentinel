@@ -11,6 +11,7 @@ import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
 import { BenchmarkTab } from "./surfaces/Benchmark";
+import CommandCenter from "./surfaces/CommandCenter";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
@@ -1159,6 +1160,28 @@ function readSavedTheme(): string {
   }
 }
 
+// New "Command Center" home, behind a local flag. Default ON in dev so the owner sees it first;
+// OFF in a release build until the reskin lands fully. Additive + reversible — flag off restores
+// the classic home untouched.
+const HOME_V2_KEY = "compy_home_v2";
+function readHomeV2(): boolean {
+  try {
+    const v = localStorage.getItem(HOME_V2_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch {
+    /* ignore — fall back to the dev default */
+  }
+  return import.meta.env.DEV;
+}
+function persistHomeV2(on: boolean): void {
+  try {
+    localStorage.setItem(HOME_V2_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore persistence failure — still applies this session */
+  }
+}
+
 // Header theme picker — freely selectable; no tiers, no locks, no randomizer.
 function ThemePicker({
   current,
@@ -1258,6 +1281,8 @@ function App() {
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
   const [theme, setTheme] = useState<string>(readSavedTheme);
+  // Command Center (new home) preview flag — see readHomeV2.
+  const [homeV2, setHomeV2] = useState<boolean>(readHomeV2);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -1524,9 +1549,24 @@ function App() {
       ? "Rules: Cached (last-known-good)"
       : "Rules: Built-in";
 
+  // ── Command Center (new home) wiring ──────────────────────────────────────
+  // Resolve the #1 limiter + its linked recommendation so the trust-switch routes through the SAME
+  // audited apply/rollback flow (toggleRec) the rest of the app uses — no parallel mutation path.
+  const ccTopLimiter = priorities?.limiters[0] ?? null;
+  const ccLimiterRec = ccTopLimiter
+    ? (recs ?? []).find((r) => r.id === (ccTopLimiter.linked ?? ccTopLimiter.id))
+    : undefined;
+  const ccLimiterAppliable = ccLimiterRec ? APPLIABLE_REC_IDS.has(ccLimiterRec.id) : false;
+  const ccLimiterActiveChange = ccLimiterRec
+    ? findActiveChangeForRec(ccLimiterRec.id) ?? null
+    : null;
+  // Only swap in the new home once hardware has resolved (avoids a blank first paint); any other
+  // tab falls back to the classic shell, which is where the not-yet-reskinned surfaces still live.
+  const ccActive = homeV2 && activeTab === "Overview" && hw !== null;
+
   return (
     <LibraryContext.Provider value={libraryApi}>
-    <main className="app">
+    <main className={ccActive ? "app app-cc" : "app"}>
       {showOnboarding && (
         <Onboarding
           onDone={() => setShowOnboarding(false)}
@@ -1567,7 +1607,8 @@ function App() {
           }}
         />
       )}
-      <header className="header">
+      {!ccActive && (
+        <header className="header">
         <div>
           <h1>Compy</h1>
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
@@ -1587,7 +1628,8 @@ function App() {
             {loading ? "Scanning…" : "Refresh"}
           </button>
         </div>
-      </header>
+        </header>
+      )}
 
       {error && <div className="error">Error: {error}</div>}
 
@@ -1614,7 +1656,28 @@ function App() {
         </div>
       )}
 
-      {hw && (
+      {hw && ccActive ? (
+        <CommandCenter
+          hw={hw}
+          readiness={readiness}
+          priorities={priorities}
+          sessions={sessions}
+          changes={changes}
+          limiterRec={ccLimiterRec}
+          limiterAppliable={ccLimiterAppliable}
+          limiterActiveChange={ccLimiterActiveChange}
+          busyLimiter={ccLimiterRec ? busyId === ccLimiterRec.id : false}
+          onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
+          onSeeInFix={() => setActiveTab("Optimize")}
+          onNavigate={(tab) => setActiveTab(tab)}
+          onOpenLibrary={() => libraryApi.openLibrary()}
+          onRunCheck={() => setShowFirstCheck(true)}
+          onDisablePreview={() => {
+            setHomeV2(false);
+            persistHomeV2(false);
+          }}
+        />
+      ) : hw ? (
         <>
           <CommandHero
             hw={hw}
@@ -1690,8 +1753,9 @@ function App() {
             </div>
           </div>
         </>
-      )}
+      ) : null}
 
+      {!ccActive && (
       <footer className="footer">
         <span>Compy never changes anything without your explicit approval.</span>
         <button
@@ -1709,7 +1773,21 @@ function App() {
         <button className="footer-link" onClick={() => setShowFirstCheck(true)}>
           Re-run check
         </button>
+        <label className="footer-toggle" title="Try the new Command Center home (preview)">
+          <input
+            type="checkbox"
+            checked={homeV2}
+            onChange={(e) => {
+              setHomeV2(e.target.checked);
+              persistHomeV2(e.target.checked);
+              // Jump to Overview so the new home is shown immediately on opt-in.
+              if (e.target.checked) setActiveTab("Overview");
+            }}
+          />
+          New home (preview)
+        </label>
       </footer>
+      )}
     </main>
     </LibraryContext.Provider>
   );
