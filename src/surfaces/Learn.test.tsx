@@ -36,7 +36,7 @@ describe("Learn surface (reskin)", () => {
     expect(screen.queryByText("XMP / EXPO memory profile", { selector: title })).not.toBeInTheDocument();
   });
 
-  it("autopsy grades a pasted guide identically and links rows back into the library", () => {
+  it("autopsy grades a guide, expands rows in place, and offers a full-entry link (continuity §3)", () => {
     open();
     fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
     fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
@@ -48,7 +48,14 @@ describe("Learn surface (reskin)", () => {
     expect(screen.getByText("1 placebo")).toBeInTheDocument();
     expect(screen.getByText("1 thing we don't recognize")).toBeInTheDocument();
     expect(screen.getByText(/known scam pattern/i)).toBeInTheDocument();
+    // The sticky context header reports the read-through.
+    expect(screen.getByText(/claims? graded/i)).toBeInTheDocument();
+    // Clicking a graded row expands IN PLACE — the autopsy stays (paste box remains), no redirect.
     fireEvent.click(screen.getByRole("button", { name: /Windows Game Mode/i }));
+    expect(screen.getByText(/Open full entry in Library/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Paste a tweak guide to autopsy")).toBeInTheDocument();
+    // The quiet full-entry link is the only deliberate travel into the library.
+    fireEvent.click(screen.getByText(/Open full entry in Library/i));
     expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument();
   });
 });

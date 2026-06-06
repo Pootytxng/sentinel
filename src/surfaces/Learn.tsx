@@ -142,13 +142,19 @@ function hitPill(h: AutopsyHit): { label: string; cls: string } {
 
 function AutopsyResultView({
   result,
+  text,
   onNavigate,
+  onClear,
 }: {
   result: AutopsyResult;
+  text: string;
   onNavigate: (id: string) => void;
+  onClear: () => void;
 }) {
   const { grade, hits, scamFlags, truncated } = result;
   const recognizedNothing = hits.length === 0 && grade.unknown === 0;
+  // Expand a graded row IN PLACE (continuity §3) instead of redirecting away from the autopsy.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   if (recognizedNothing) {
     return (
@@ -161,8 +167,25 @@ function AutopsyResultView({
     );
   }
 
+  const trimmed = text.trim();
+  const preview = trimmed.replace(/\s+/g, " ").slice(0, 40);
+  const claims = hits.length + grade.unknown;
+
   return (
     <div className="lx-result">
+      {/* Sticky context header — the read-through you're in, always endable on purpose (continuity §3). */}
+      <div className="lx-autopsy-sticky">
+        <span className="lx-autopsy-sticky-label" title={trimmed}>
+          Autopsy: {preview}
+          {trimmed.length > 40 ? "…" : ""}
+        </span>
+        <span className="lx-autopsy-sticky-count">
+          {claims} claim{claims === 1 ? "" : "s"} graded
+        </span>
+        <button className="lx-btn lx-btn-ghost lx-autopsy-sticky-clear" onClick={onClear}>
+          Clear
+        </button>
+      </div>
       <div className="lx-grade">
         This guide: <span className="lx-g-real">{`${grade.real} real`}</span> ·{" "}
         <span className="lx-g-placebo">{`${grade.placebo} placebo`}</span> ·{" "}
@@ -178,19 +201,34 @@ function AutopsyResultView({
         </div>
       )}
       <p className="lx-result-note">
-        Anything we don't recognize gets no verdict — we won't guess. Tap a row to read the full entry.
+        Anything we don't recognize gets no verdict — we won't guess. Tap a row to read it right here.
       </p>
       {hits.length > 0 && (
         <ul className="lx-hitlist">
           {hits.map((h) => {
             const pill = hitPill(h);
+            const open = openId === h.id;
+            const entry = KNOWLEDGE_BY_ID.get(h.id);
             return (
               <li key={h.id}>
-                <button className="lx-hitrow" onClick={() => onNavigate(h.id)}>
+                <button
+                  className="lx-hitrow"
+                  onClick={() => setOpenId(open ? null : h.id)}
+                  aria-expanded={open}
+                >
                   <span className="lx-hitname">{h.name}</span>
                   <span className={`lx-verdict ${pill.cls}`}>{pill.label}</span>
                   {h.occurrences > 1 && <span className="lx-hitcount">×{h.occurrences}</span>}
                 </button>
+                {open && entry && (
+                  <div className="lx-hit-detail">
+                    <EntryBody entry={entry} />
+                    {/* Deliberate travel only — the quiet full-entry link, per the continuity law. */}
+                    <button className="lx-howto" onClick={() => onNavigate(h.id)}>
+                      Open full entry in Library →
+                    </button>
+                  </div>
+                )}
                 {h.howTos.length > 0 && (
                   <div className="lx-howtos">
                     {h.howTos.map((gid) => (
@@ -212,9 +250,47 @@ function AutopsyResultView({
   );
 }
 
+// Autopsy state persists for the SESSION (continuity §3) — the pasted text + graded flag survive tab
+// switches + Library detours, so returning to Learn shows the read-through exactly as left. The result
+// is re-derived from the text (the scan is offline + pure), so nothing heavy is serialized.
+const AUTOPSY_TEXT_KEY = "compy_autopsy_text";
+const AUTOPSY_GRADED_KEY = "compy_autopsy_graded";
+const LEARN_MODE_KEY = "compy_learn_mode";
+function readAutopsyText(): string {
+  try {
+    return sessionStorage.getItem(AUTOPSY_TEXT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+function persistAutopsy(text: string, graded: boolean): void {
+  try {
+    sessionStorage.setItem(AUTOPSY_TEXT_KEY, text);
+    sessionStorage.setItem(AUTOPSY_GRADED_KEY, graded ? "1" : "0");
+  } catch {
+    /* sessionStorage unavailable — degrade to in-memory only */
+  }
+}
+
 function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
-  const [text, setText] = useState("");
-  const [result, setResult] = useState<AutopsyResult | null>(null);
+  const [text, setText] = useState(readAutopsyText);
+  const [result, setResult] = useState<AutopsyResult | null>(() => {
+    try {
+      if (sessionStorage.getItem(AUTOPSY_GRADED_KEY) === "1") {
+        const t = readAutopsyText();
+        return t.trim() ? autopsyScan(t) : null;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  });
+
+  const clear = () => {
+    setText("");
+    setResult(null);
+    persistAutopsy("", false);
+  };
 
   return (
     <div className="lx-autopsy">
@@ -231,25 +307,29 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
         onChange={(e) => {
           setText(e.target.value);
           setResult(null);
+          persistAutopsy(e.target.value, false);
         }}
       />
       <div className="lx-autopsy-actions">
-        <button className="lx-btn" disabled={!text.trim()} onClick={() => setResult(autopsyScan(text))}>
+        <button
+          className="lx-btn"
+          disabled={!text.trim()}
+          onClick={() => {
+            setResult(autopsyScan(text));
+            persistAutopsy(text, true);
+          }}
+        >
           Grade this guide
         </button>
-        {text && (
-          <button
-            className="lx-btn lx-btn-ghost"
-            onClick={() => {
-              setText("");
-              setResult(null);
-            }}
-          >
+        {text && !result && (
+          <button className="lx-btn lx-btn-ghost" onClick={clear}>
             Clear
           </button>
         )}
       </div>
-      {result && <AutopsyResultView result={result} onNavigate={onNavigate} />}
+      {result && (
+        <AutopsyResultView result={result} text={text} onNavigate={onNavigate} onClear={clear} />
+      )}
     </div>
   );
 }
@@ -263,7 +343,19 @@ export default function Learn({
   focusId?: string | null;
   asPanel?: boolean;
 }) {
-  const [mode, setMode] = useState<Mode>("browse");
+  // The room (asPanel) restores its last mode so returning mid-autopsy isn't an empty browse view
+  // (continuity §3). A deep-link (focusId) always lands in browse; the cross-link modal doesn't persist.
+  const [mode, setMode] = useState<Mode>(() => {
+    if (focusId) return "browse";
+    if (asPanel) {
+      try {
+        return sessionStorage.getItem(LEARN_MODE_KEY) === "autopsy" ? "autopsy" : "browse";
+      } catch {
+        /* ignore */
+      }
+    }
+    return "browse";
+  });
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [focused, setFocused] = useState<string | null>(focusId);
@@ -280,6 +372,16 @@ export default function Learn({
       setFilter("all");
     }
   }, [focusId]);
+
+  // Persist the room's mode so the autopsy survives leaving + returning (continuity §3); modal excluded.
+  useEffect(() => {
+    if (!asPanel) return;
+    try {
+      sessionStorage.setItem(LEARN_MODE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  }, [mode, asPanel]);
 
   // Cycle the placeholder examples; frozen (static first) under prefers-reduced-motion.
   useEffect(() => {
