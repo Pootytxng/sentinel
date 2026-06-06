@@ -37,6 +37,18 @@
   color: var(--muted);
 }
 
+/* Radar + rows side-by-side — unscoped so it works for both FirstCheck (arc) and Check (not inside
+   .arc-v2). The .fc-radar* visuals are unscoped in arc-instrument.css. */
+.fc-scanzone {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+.fc-scanzone .fc-scan {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Scan rows */
 .fc-scan {
   font-family: var(--font-mono);

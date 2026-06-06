@@ -51,7 +51,7 @@ type Props = {
   onToggleLimiter: () => void;
   onSeeInFix: () => void;
   // Navigation into the classic (not-yet-reskinned) surfaces + the preview toggle.
-  onNavigate: (tab: "Readiness" | "Monitoring" | "Optimize") => void;
+  onNavigate: (tab: "Readiness" | "Monitoring" | "Optimize" | "Check") => void;
   onOpenLibrary: () => void;
   onRunCheck: () => void;
   onDisablePreview: () => void;
@@ -380,7 +380,7 @@ export default function CommandCenter(props: Props) {
 
   const NAV: { id: string; label: string; icon: string; onClick: () => void; active?: boolean }[] = [
     { id: "home", label: "Home", icon: "gauge", onClick: () => {}, active: true },
-    { id: "check", label: "Check", icon: "check", onClick: () => onNavigate("Readiness") },
+    { id: "check", label: "Check", icon: "check", onClick: () => onNavigate("Check") },
     { id: "play", label: "Play", icon: "play", onClick: () => onNavigate("Monitoring") },
     { id: "fix", label: "Fix", icon: "fix", onClick: () => onNavigate("Optimize") },
     { id: "learn", label: "Learn", icon: "learn", onClick: onOpenLibrary },

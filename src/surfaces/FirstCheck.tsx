@@ -1,79 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { GameReadiness, ReadinessCheck, Priorities, PriorityItem } from "../types";
-import { ArcRadar, type RadarBlip } from "./ArcRadar";
+import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { PulseC } from "../design/PulseC";
+import { useScan, rowVerdict, type ScanRecLite } from "./use-scan";
+import { ScanStream } from "./ScanStream";
 import "./FirstCheck.css";
 
 // Moment 2 of the first-experience arc — the first-run "first check" landing.
 // Spec: docs/superpowers/specs/2026-06-04-first-experience-arc-design.md (copy VERBATIM).
 // Shown once after onboarding (gated on FIRST_CHECK_KEY); later launches go straight to the app
-// with a "Re-run check" affordance. Re-runs the real readiness/priorities (honest elapsed) and
-// streams the rows for legibility — display stagger only, never a fake sleep (design law #2).
+// with a "Re-run check" affordance. The scan (real commands, honest elapsed, streamed rows) now
+// lives in the shared useScan/ScanStream (one source of truth with the Check surface); this file
+// keeps the arc's verdict + spotlight + copy.
 
 export const FIRST_CHECK_KEY = "compy_first_check_v1";
 
-type RecLite = { id: string; title: string; currently_applied: boolean };
-
-const STAGGER_MS = 280; // legibility only (spec: ≤~350ms/row, never sleep for drama)
-
-function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown" {
-  if (s === "attention") return "fix";
-  if (s === "ready" || s === "advisory") return "ok";
-  return "unknown";
-}
-
 export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => void; arcV2?: boolean }) {
-  const [readiness, setReadiness] = useState<GameReadiness | null>(null);
-  const [priorities, setPriorities] = useState<Priorities | null>(null);
-  const [recs, setRecs] = useState<RecLite[]>([]);
-  const [running, setRunning] = useState(true);
-  const [elapsed, setElapsed] = useState<number | null>(null);
-  const [shownRows, setShownRows] = useState(0);
-  const [phase, setPhase] = useState<"scan" | "verdict">("scan");
+  const { readiness, priorities, recs, running, elapsed, shownRows, phase, radarBlips, rerun } =
+    useScan();
   const [greenOpen, setGreenOpen] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setRunning(true);
-    setPhase("scan");
-    setShownRows(0);
-    const t0 = performance.now();
-    try {
-      const [r, p, rc] = await Promise.all([
-        invoke<GameReadiness>("get_game_readiness"),
-        invoke<Priorities>("get_priorities"),
-        invoke<RecLite[]>("get_recommendations"),
-      ]);
-      setReadiness(r);
-      setPriorities(p);
-      setRecs(rc);
-    } catch {
-      /* leave nulls — render guards below */
-    } finally {
-      setElapsed((performance.now() - t0) / 1000);
-      setRunning(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  // Stream the check rows in (legibility), then flip to the verdict.
-  useEffect(() => {
-    if (running || !readiness) return;
-    const n = readiness.checks.length;
-    const timers: number[] = [];
-    for (let i = 0; i < n; i++) {
-      timers.push(
-        window.setTimeout(() => setShownRows((c) => Math.max(c, i + 1)), i * STAGGER_MS),
-      );
-    }
-    timers.push(window.setTimeout(() => setPhase("verdict"), n * STAGGER_MS + 220));
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [running, readiness]);
 
   const finish = () => {
     try {
@@ -84,7 +31,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
     onDone();
   };
 
-  const recFor = (lim: PriorityItem | null): RecLite | null => {
+  const recFor = (lim: PriorityItem | null): ScanRecLite | null => {
     if (!lim) return null;
     const id = lim.linked ?? lim.id;
     const rec = recs.find((r) => r.id === id);
@@ -103,7 +50,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
     setApplyingId(rec.id);
     try {
       await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });
-      await load(); // re-run so the verdict + limiters reflect the change
+      await rerun(); // re-run so the verdict + limiters reflect the change
     } catch {
       /* reload surfaces state */
     } finally {
@@ -117,27 +64,6 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
   const top = limiters[0] ?? null;
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
-
-  const radarBlips: RadarBlip[] = checks.map((c) => ({ id: c.id, verdict: rowVerdict(c.status) }));
-  const scanRows = (
-    <div className="fc-scan">
-      {checks.map((c, i) => {
-        const v = rowVerdict(c.status);
-        return (
-          <div
-            key={c.id}
-            className={`fc-row ${i < shownRows ? "fc-row-in" : "fc-row-pending"} fc-row-${v}`}
-          >
-            <span className="fc-row-mark">{v === "fix" ? "→" : v === "ok" ? "✓" : "·"}</span>
-            <span className="fc-row-label">{c.label}</span>
-            <span className="fc-row-tag">
-              {v === "fix" ? "worth fixing" : v === "unknown" ? "—" : ""}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
 
   return (
     <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
@@ -154,20 +80,15 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
           </span>
         </header>
 
-        {/* Scan rows — stream in as the (real) checks display. Arc adds the radar beside them
-            (augments, never replaces the legible list). */}
-        {arcV2 ? (
-          <div className="fc-scanzone">
-            <ArcRadar
-              blips={radarBlips}
-              shownCount={shownRows}
-              scanning={running || phase === "scan"}
-            />
-            {scanRows}
-          </div>
-        ) : (
-          scanRows
-        )}
+        {/* Scan rows — stream in as the (real) checks display. Arc adds the radar beside them. */}
+        <ScanStream
+          readiness={readiness}
+          shownRows={shownRows}
+          running={running}
+          phase={phase}
+          radar={arcV2}
+          radarBlips={radarBlips}
+        />
 
         {/* Verdict — appears after the rows have streamed. */}
         {phase === "verdict" && (

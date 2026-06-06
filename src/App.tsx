@@ -14,6 +14,7 @@ import { BenchmarkTab } from "./surfaces/Benchmark";
 import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
+import Check from "./surfaces/Check";
 import Settings, { type PreviewFlag } from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
@@ -191,10 +192,11 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
+  Check: { label: "Check", icon: "shield" },
   Readiness: { label: "Readiness", icon: "shield" },
   Priorities: { label: "Priorities", icon: "target" },
   Optimize: { label: "Optimize", icon: "sliders" },
@@ -1153,6 +1155,7 @@ const LEARN_V2_KEY = "compy_learn_v2";
 const ARC_V2_KEY = "compy_arc_v2";
 const SETTINGS_V2_KEY = "compy_settings_v2";
 const OVERLAY_V2_KEY = "compy_overlay_v2";
+const CHECK_V2_KEY = "compy_check_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1209,6 +1212,7 @@ function App() {
   const [arcV2, setArcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
   const [settingsV2, setSettingsV2] = useState<boolean>(() => readDevFlag(SETTINGS_V2_KEY));
   const [overlayV2, setOverlayV2] = useState<boolean>(() => readDevFlag(OVERLAY_V2_KEY));
+  const [checkV2, setCheckV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
@@ -1418,8 +1422,13 @@ function App() {
   // so the rail stays short and never needs a horizontal scroll.
   const visibleTabs: Tab[] = useMemo(() => {
     const list: Tab[] = ["Overview"];
-    if (readiness) list.push("Readiness");
-    if (priorities) list.push("Priorities");
+    // Check (compy_check_v2) consolidates Readiness + Priorities into one section; classics show when off.
+    if (checkV2) {
+      if (readiness || priorities) list.push("Check");
+    } else {
+      if (readiness) list.push("Readiness");
+      if (priorities) list.push("Priorities");
+    }
     if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
@@ -1429,7 +1438,7 @@ function App() {
     if (changes.length > 0) list.push("History");
     if (gamingEnabled) list.push("Gaming");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -1492,6 +1501,7 @@ function App() {
       arc: [ARC_V2_KEY, setArcV2],
       settings: [SETTINGS_V2_KEY, setSettingsV2],
       overlay: [OVERLAY_V2_KEY, setOverlayV2],
+      check: [CHECK_V2_KEY, setCheckV2],
     };
     const [key, setter] = setters[flag];
     setter(on);
@@ -1602,7 +1612,7 @@ function App() {
       {hw && settingsActive ? (
         <Settings
           appVersion="0.1.0"
-          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2 }}
+          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2 }}
           onSetFlag={setPreviewFlag}
           onClose={() => setShowSettings(false)}
         />
@@ -1622,7 +1632,12 @@ function App() {
           }
           onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
           onSeeInFix={() => setActiveTab("Optimize")}
-          onNavigate={(tab) => setActiveTab(tab)}
+          onNavigate={(tab) => {
+            // Check consolidates Readiness+Priorities behind compy_check_v2; route to the classic
+            // Readiness tab when the flag is off.
+            if (tab === "Check") setActiveTab(checkV2 ? "Check" : "Readiness");
+            else setActiveTab(tab);
+          }}
           onOpenLibrary={() => libraryApi.openLibrary()}
           onRunCheck={() => setShowFirstCheck(true)}
           onOpenSettings={settingsV2 ? () => setShowSettings(true) : undefined}
@@ -1665,6 +1680,13 @@ function App() {
 
             <div className="content">
               {activeTab === "Overview" && <OverviewTab hw={hw} />}
+              {activeTab === "Check" && (
+                <Check
+                  isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                  onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                  onChanged={refresh}
+                />
+              )}
               {activeTab === "Readiness" && (
                 <ReadinessTab readiness={readiness} onChanged={reloadReadiness} />
               )}
@@ -1813,6 +1835,17 @@ function App() {
             }}
           />
           New overlay (preview)
+        </label>
+        <label className="footer-toggle" title="Try the new Check surface (preview)">
+          <input
+            type="checkbox"
+            checked={checkV2}
+            onChange={(e) => {
+              setCheckV2(e.target.checked);
+              persistFlag(CHECK_V2_KEY, e.target.checked);
+            }}
+          />
+          New Check (preview)
         </label>
         {settingsV2 && (
           <button className="footer-link" onClick={() => setShowSettings(true)}>
