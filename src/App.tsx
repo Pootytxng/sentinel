@@ -12,6 +12,7 @@ import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
 import { BenchmarkTab } from "./surfaces/Benchmark";
 import CommandCenter from "./surfaces/CommandCenter";
+import Fix from "./surfaces/Fix";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
@@ -1162,13 +1163,14 @@ function readSavedTheme(): string {
   }
 }
 
-// New "Command Center" home, behind a local flag. Default ON in dev so the owner sees it first;
-// OFF in a release build until the reskin lands fully. Additive + reversible — flag off restores
-// the classic home untouched.
+// New Instrument surfaces ride behind per-surface localStorage flags. Default ON in dev so the owner
+// sees them first; OFF in a release build until the reskin lands fully. Additive + reversible — a
+// flag off restores the classic surface untouched.
 const HOME_V2_KEY = "compy_home_v2";
-function readHomeV2(): boolean {
+const FIX_V2_KEY = "compy_fix_v2";
+function readDevFlag(key: string): boolean {
   try {
-    const v = localStorage.getItem(HOME_V2_KEY);
+    const v = localStorage.getItem(key);
     if (v === "1") return true;
     if (v === "0") return false;
   } catch {
@@ -1176,9 +1178,9 @@ function readHomeV2(): boolean {
   }
   return import.meta.env.DEV;
 }
-function persistHomeV2(on: boolean): void {
+function persistFlag(key: string, on: boolean): void {
   try {
-    localStorage.setItem(HOME_V2_KEY, on ? "1" : "0");
+    localStorage.setItem(key, on ? "1" : "0");
   } catch {
     /* ignore persistence failure — still applies this session */
   }
@@ -1283,8 +1285,9 @@ function App() {
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
   const [theme, setTheme] = useState<string>(readSavedTheme);
-  // Command Center (new home) preview flag — see readHomeV2.
-  const [homeV2, setHomeV2] = useState<boolean>(readHomeV2);
+  // Instrument-surface preview flags — see readDevFlag.
+  const [homeV2, setHomeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
+  const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -1679,7 +1682,7 @@ function App() {
           onRunCheck={() => setShowFirstCheck(true)}
           onDisablePreview={() => {
             setHomeV2(false);
-            persistHomeV2(false);
+            persistFlag(HOME_V2_KEY, false);
           }}
         />
       ) : hw ? (
@@ -1720,17 +1723,34 @@ function App() {
                 <ReadinessTab readiness={readiness} onChanged={reloadReadiness} />
               )}
               {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
-              {activeTab === "Optimize" && (
-                <OptimizeTab
-                  recs={recs ?? []}
-                  startup={startup}
-                  busyId={busyId}
-                  onToggleRec={toggleRec}
-                  onToggleStartup={toggleStartup}
-                  hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
-                  onOpenEncyclopedia={() => setShowEncyclopedia(true)}
-                />
-              )}
+              {activeTab === "Optimize" &&
+                (fixV2 ? (
+                  <Fix
+                    recs={recs ?? []}
+                    busyId={busyId}
+                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                    activeChangeFor={findActiveChangeForRec}
+                    onToggleRec={(recId) => {
+                      const r = (recs ?? []).find((x) => x.id === recId);
+                      if (r) toggleRec(r);
+                    }}
+                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                    onDisablePreview={() => {
+                      setFixV2(false);
+                      persistFlag(FIX_V2_KEY, false);
+                    }}
+                  />
+                ) : (
+                  <OptimizeTab
+                    recs={recs ?? []}
+                    startup={startup}
+                    busyId={busyId}
+                    onToggleRec={toggleRec}
+                    onToggleStartup={toggleStartup}
+                    hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
+                    onOpenEncyclopedia={() => setShowEncyclopedia(true)}
+                  />
+                ))}
               {activeTab === "Monitoring" && (
                 <MonitoringTab active={activeTab === "Monitoring"} />
               )}
@@ -1784,12 +1804,24 @@ function App() {
             checked={homeV2}
             onChange={(e) => {
               setHomeV2(e.target.checked);
-              persistHomeV2(e.target.checked);
+              persistFlag(HOME_V2_KEY, e.target.checked);
               // Jump to Overview so the new home is shown immediately on opt-in.
               if (e.target.checked) setActiveTab("Overview");
             }}
           />
           New home (preview)
+        </label>
+        <label className="footer-toggle" title="Try the new Fix surface (preview)">
+          <input
+            type="checkbox"
+            checked={fixV2}
+            onChange={(e) => {
+              setFixV2(e.target.checked);
+              persistFlag(FIX_V2_KEY, e.target.checked);
+              if (e.target.checked) setActiveTab("Optimize");
+            }}
+          />
+          New Fix (preview)
         </label>
       </footer>
       )}
