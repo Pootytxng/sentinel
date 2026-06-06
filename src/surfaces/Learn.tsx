@@ -10,6 +10,8 @@ import {
 import { searchKnowledge } from "../data/knowledge-search";
 import { autopsyScan, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
 import { Icon } from "../design";
+import { Walkthrough } from "../design/Walkthrough";
+import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import "./Learn.css";
 
 // Learn — the Instrument reskin of the knowledge library (Library + Guide Autopsy). RESKIN ONLY:
@@ -105,12 +107,15 @@ function EntryCard({
   entry,
   onNavigate,
   registerRef,
+  vendor,
 }: {
   entry: KnowledgeEntry;
   onNavigate: (id: string) => void;
   registerRef: (el: HTMLDivElement | null) => void;
+  vendor: GpuVendor;
 }) {
   const related = relatedIds(entry, KNOWLEDGE);
+  const walkthrough = walkthroughForKey(entry.id);
   // Tweak cards take the verdict color on their edge; other types take their kind color.
   const accent = entry.type === "tweak" ? `lx-card-${entry.verdict}` : `lx-card-${entry.type}`;
   return (
@@ -120,6 +125,12 @@ function EntryCard({
         <span className={`lx-typepill lx-typepill-${entry.type}`}>{typePill(entry.type)}</span>
       </div>
       <EntryBody entry={entry} />
+      {walkthrough && (
+        <details className="lx-walkthrough">
+          <summary>Show me the way</summary>
+          <Walkthrough walkthrough={walkthrough} vendor={vendor} />
+        </details>
+      )}
       {related.length > 0 && (
         <div className="lx-related">
           <span className="lx-related-label">Related</span>
@@ -338,10 +349,12 @@ export default function Learn({
   onClose,
   focusId = null,
   asPanel = false,
+  vendor = "any",
 }: {
   onClose: () => void;
   focusId?: string | null;
   asPanel?: boolean;
+  vendor?: GpuVendor;
 }) {
   // The room (asPanel) restores its last mode so returning mid-autopsy isn't an empty browse view
   // (continuity §3). A deep-link (focusId) always lands in browse; the cross-link modal doesn't persist.
@@ -489,6 +502,7 @@ export default function Learn({
                     key={e.id}
                     entry={e}
                     onNavigate={navigateTo}
+                    vendor={vendor}
                     registerRef={(el) => {
                       if (el) cardRefs.current.set(e.id, el);
                       else cardRefs.current.delete(e.id);

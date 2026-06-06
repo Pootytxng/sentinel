@@ -17,6 +17,7 @@ import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
 import { prettyGameName } from "./surfaces/game-name";
+import { gpuVendor } from "./surfaces/walkthroughs";
 import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
 import { SessionDebrief } from "./surfaces/SessionDebrief";
@@ -1122,6 +1123,8 @@ function App() {
     Diagnostics: "lab",
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
+  // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
+  const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
 
   // ── Back navigation (wayfinding §1) — an app-level location-history stack ───────────────────────
   // A "location" is the active room/tab (or Settings). In-place expansions are NOT location changes,
@@ -1246,6 +1249,7 @@ function App() {
         (learnV2 ? (
           <Learn
             focusId={libraryFocusId}
+            vendor={detectedVendor}
             onClose={() => {
               setShowEncyclopedia(false);
               setLibraryFocusId(null);
@@ -1409,6 +1413,7 @@ function App() {
                   isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                   onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
                   onChanged={refresh}
+                  vendor={detectedVendor}
                 />
               )}
               {activeTab === "Readiness" && (
@@ -1435,6 +1440,7 @@ function App() {
                       setFixV2(false);
                       persistFlag(FIX_V2_KEY, false);
                     }}
+                    vendor={detectedVendor}
                   />
                 ) : (
                   <OptimizeTab
@@ -1482,6 +1488,7 @@ function App() {
                 <Learn
                   asPanel
                   focusId={libraryFocusId}
+                  vendor={detectedVendor}
                   onClose={() => setActiveTab("Overview")}
                 />
               )}

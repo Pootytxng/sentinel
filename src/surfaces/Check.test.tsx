@@ -28,7 +28,7 @@ afterEach(cleanup);
 
 describe("Check", () => {
   it("renders the Check header + the scanned rows from the shared scan", async () => {
-    render(<Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} />);
+    render(<Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />);
     expect(screen.getByText("Check")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Re-run check|Scanning/ })).toBeInTheDocument();
     // The real readiness check streams into the shared scan rows.

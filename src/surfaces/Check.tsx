@@ -2,6 +2,8 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
+import { Walkthrough } from "../design/Walkthrough";
+import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useScan } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./Check.css";
@@ -27,10 +29,12 @@ export default function Check({
   isAppliable,
   onOpenLibrary,
   onChanged,
+  vendor,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
   onChanged: () => void;
+  vendor: GpuVendor;
 }) {
   const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
@@ -120,6 +124,17 @@ export default function Check({
                       <span className="check-conf">{cap(lim.confidence)} confidence</span>
                     </div>
                     <p className="check-row-reason">{lim.reason}</p>
+                    {/* Advisory checks that need action outside Compy finally show the way
+                        (walkthroughs §3) — the readiness check is no longer a dead "verify it yourself". */}
+                    {!canApply(lim) && walkthroughForKey(lim.linked ?? lim.id) && (
+                      <details className="fix-walkthrough">
+                        <summary>Show me the way</summary>
+                        <Walkthrough
+                          walkthrough={walkthroughForKey(lim.linked ?? lim.id)!}
+                          vendor={vendor}
+                        />
+                      </details>
+                    )}
                   </div>
                   {canApply(lim) ? (
                     <TrustSwitch

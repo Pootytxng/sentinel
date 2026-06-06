@@ -1,0 +1,94 @@
+[
+  {
+    "group": "vrr",
+    "title": "Turn on variable refresh (FreeSync / G-SYNC)",
+    "pairsWith": ["vrr-sync-stack", "vrr", "freesync", "g-sync"],
+    "variants": [
+      {
+        "vendor": "amd",
+        "label": "AMD",
+        "steps": [
+          { "caption": "Right-click the desktop, open AMD Software: Adrenalin Edition.", "x": 50, "y": 15, "label": "AMD Software" },
+          { "caption": "Open the Display tab on the left.", "x": 17, "y": 47, "label": "Display" },
+          { "caption": "Switch AMD FreeSync to On.", "x": 73, "y": 57, "label": "FreeSync · On" }
+        ]
+      },
+      {
+        "vendor": "nvidia",
+        "label": "NVIDIA",
+        "steps": [
+          { "caption": "Right-click the desktop, open NVIDIA Control Panel.", "x": 50, "y": 15, "label": "NVIDIA Control Panel" },
+          { "caption": "Under Display, pick “Set up G-SYNC”.", "x": 17, "y": 47, "label": "Set up G-SYNC" },
+          { "caption": "Tick “Enable G-SYNC”, then Apply.", "x": 73, "y": 57, "label": "Enable G-SYNC ✓" }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "xmp-expo",
+    "title": "Enable XMP / EXPO (full RAM speed)",
+    "pairsWith": ["xmp-expo", "xmp", "expo"],
+    "biosGeneric": true,
+    "variants": [
+      {
+        "vendor": "any",
+        "label": "BIOS",
+        "steps": [
+          { "caption": "Restart and tap Del or F2 at boot to enter the BIOS.", "x": 50, "y": 15, "label": "BIOS" },
+          { "caption": "Find the memory profile — look for XMP, EXPO, or DOCP (names vary by board).", "x": 30, "y": 46, "label": "XMP / EXPO / DOCP" },
+          { "caption": "Enable Profile 1, then Save & Exit (usually F10).", "x": 72, "y": 58, "label": "Profile 1 → Save" }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "game-mode",
+    "title": "Turn on Windows Game Mode",
+    "pairsWith": ["game-mode"],
+    "variants": [
+      {
+        "vendor": "any",
+        "label": "Windows",
+        "steps": [
+          { "caption": "Open Settings → Gaming.", "x": 18, "y": 40, "label": "Gaming" },
+          { "caption": "Pick Game Mode.", "x": 40, "y": 55, "label": "Game Mode" },
+          { "caption": "Switch it On.", "x": 74, "y": 55, "label": "On" }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "storage-sense",
+    "title": "Free up the system drive (Storage Sense)",
+    "pairsWith": ["storage-c-low", "storage-sense", "storagesense"],
+    "deepLink": "ms-settings:storagesense",
+    "deepLinkLabel": "Open Storage settings",
+    "variants": [
+      {
+        "vendor": "any",
+        "label": "Windows",
+        "steps": [
+          { "caption": "Open Settings → System → Storage.", "x": 18, "y": 40, "label": "Storage" },
+          { "caption": "Turn on Storage Sense (or run Cleanup recommendations).", "x": 45, "y": 54, "label": "Storage Sense" },
+          { "caption": "Review and clean — temp files, Recycle Bin, unused apps.", "x": 74, "y": 56, "label": "Clean up" }
+        ]
+      }
+    ]
+  },
+  {
+    "group": "hdr",
+    "title": "Turn on HDR / Auto HDR",
+    "pairsWith": ["hdr", "auto-hdr"],
+    "variants": [
+      {
+        "vendor": "any",
+        "label": "Windows",
+        "steps": [
+          { "caption": "Open Settings → System → Display.", "x": 18, "y": 40, "label": "Display" },
+          { "caption": "Pick HDR.", "x": 42, "y": 54, "label": "HDR" },
+          { "caption": "Turn on Use HDR (and Auto HDR for games).", "x": 74, "y": 55, "label": "Use HDR · On" }
+        ]
+      }
+    ]
+  }
+]

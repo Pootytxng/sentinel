@@ -169,6 +169,32 @@ html, body, #root {
   text-decoration: underline;
 }
 
+/* "Show me the way" disclosure (walkthroughs §3) — quiet expander in Learn + Fix advisory rows. */
+.lx-walkthrough,
+.fix-walkthrough {
+  margin-top: 12px;
+}
+.lx-walkthrough > summary,
+.fix-walkthrough > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  list-style: none;
+  user-select: none;
+}
+.lx-walkthrough > summary::-webkit-details-marker,
+.fix-walkthrough > summary::-webkit-details-marker {
+  display: none;
+}
+.lx-walkthrough > summary::before,
+.fix-walkthrough > summary::before {
+  content: "▸ ";
+}
+.lx-walkthrough[open] > summary::before,
+.fix-walkthrough[open] > summary::before {
+  content: "▾ ";
+}
+
 .header h1 {
   margin: 0;
   font-size: 28px;

@@ -23,6 +23,7 @@ const baseProps = {
   onRollback: vi.fn(),
   onOpenLibrary: vi.fn(),
   onDisablePreview: vi.fn(),
+  vendor: "any" as const,
 };
 
 describe("Fix", () => {

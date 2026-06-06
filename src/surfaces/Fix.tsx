@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
+import { Walkthrough } from "../design/Walkthrough";
+import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import "./Fix.css";
 
@@ -33,6 +35,7 @@ type Props = {
   onRollback: (c: AppliedChange) => void;
   onOpenLibrary: (focusId: string) => void;
   onDisablePreview: () => void;
+  vendor: GpuVendor;
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
@@ -177,9 +180,10 @@ function CollapsibleSection({
 // A guided/advisory rec — Compy detected it but won't change it (vendor app / a Windows page with no
 // safe reversible switch). Carries the full where + steps + the allowlisted "Open it" deep link, so
 // classic Optimize is no longer needed for the detail (parity for the release default-flip).
-function GuidedRow({ rec }: { rec: Rec }) {
+function GuidedRow({ rec, vendor }: { rec: Rec; vendor: GpuVendor }) {
   const [open, setOpen] = useState(false);
   const guide = GUIDED_STEPS[rec.id];
+  const walkthrough = walkthroughForKey(rec.id);
   return (
     <li className="fix-row fix-row-advisory">
       <div className="fix-row-main">
@@ -224,6 +228,12 @@ function GuidedRow({ rec }: { rec: Rec }) {
                 Compy can't read this one's current state — check before you change it; if it's already
                 set the way you want, you're done.
               </p>
+            )}
+            {walkthrough && (
+              <details className="fix-walkthrough">
+                <summary>Show me the way</summary>
+                <Walkthrough walkthrough={walkthrough} vendor={vendor} />
+              </details>
             )}
           </div>
         )}
@@ -343,6 +353,7 @@ export default function Fix({
   onRollback,
   onOpenLibrary,
   onDisablePreview,
+  vendor,
 }: Props) {
   const appliable = recs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
@@ -476,7 +487,7 @@ export default function Fix({
           </p>
           <ul className="fix-list">
             {advisory.map((rec) => (
-              <GuidedRow key={rec.id} rec={rec} />
+              <GuidedRow key={rec.id} rec={rec} vendor={vendor} />
             ))}
           </ul>
         </CollapsibleSection>

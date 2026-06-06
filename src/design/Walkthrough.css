@@ -1,0 +1,253 @@
+/* Show-me walkthrough (spec 2026-06-06) — token-only schematic; never real OS chrome, never a logo. */
+.wt-root {
+  margin: 8px 0 2px;
+}
+.wt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.wt-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ix-text-1, var(--text-1));
+}
+.wt-variants {
+  display: inline-flex;
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  border-radius: 999px;
+  overflow: hidden;
+}
+.wt-variant {
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-2, var(--text-2));
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.wt-variant-on {
+  background: var(--ix-accent, var(--accent));
+  color: var(--ix-accent-ink, #06231c);
+}
+
+/* The abstracted window. Aspect-boxed, glassy, clearly diagrammatic. */
+.wt-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  background: var(--ix-base-2, rgba(255, 255, 255, 0.03));
+  overflow: hidden;
+}
+.wt-titlebar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ix-glass-border, var(--hairline));
+}
+.wt-titlebar span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ix-text-3, var(--faint));
+  opacity: 0.5;
+}
+.wt-body {
+  display: flex;
+  height: calc(100% - 27px);
+}
+.wt-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 28%;
+  padding: 14px 12px;
+  border-right: 1px solid var(--ix-glass-border, var(--hairline));
+}
+.wt-side-row {
+  height: 9px;
+  border-radius: 4px;
+  background: var(--ix-text-3, var(--faint));
+  opacity: 0.22;
+}
+.wt-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  padding: 16px 16px;
+}
+.wt-content-row {
+  height: 11px;
+  border-radius: 4px;
+  background: var(--ix-text-3, var(--faint));
+  opacity: 0.16;
+}
+
+/* Numbered hotspots — dim until active; the active one glows accent. */
+.wt-hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 3px;
+  border-radius: 999px;
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  opacity: 0.4;
+  transition: opacity 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+}
+.wt-hotspot-on {
+  opacity: 1;
+  border-color: var(--ix-accent, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ix-accent, #2ee6c0) 22%, transparent);
+}
+.wt-hotspot-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ix-accent, var(--accent));
+  color: var(--ix-accent-ink, #06231c);
+  font-size: 11px;
+  font-weight: 700;
+}
+.wt-hotspot-label {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ix-text-1, var(--text-1));
+}
+
+/* The gliding cursor + a looping click-pulse ring. */
+.wt-cursor {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-3px, -2px);
+  transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1), top 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 3;
+}
+.wt-cursor::before {
+  /* arrow pointer (token color) */
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 7px solid var(--ix-text-1, #fff);
+  border-bottom: 5px solid transparent;
+  border-top: 5px solid transparent;
+  transform: rotate(45deg);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+.wt-cursor::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--ix-accent, var(--accent));
+  animation: wt-click 2.2s ease-out infinite;
+}
+@keyframes wt-click {
+  0%, 70% { transform: scale(0.3); opacity: 0; }
+  80% { opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 0; }
+}
+
+/* Step list. */
+.wt-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wt-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--ix-text-2, var(--text-2));
+  opacity: 0.7;
+  transition: opacity 200ms ease;
+}
+.wt-step-on {
+  opacity: 1;
+  color: var(--ix-text-1, var(--text-1));
+}
+.wt-step-num {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.wt-step-on .wt-step-num {
+  background: var(--ix-accent, var(--accent));
+  color: var(--ix-accent-ink, #06231c);
+  border-color: var(--ix-accent, var(--accent));
+}
+
+.wt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+.wt-honest {
+  font-size: 11px;
+  color: var(--ix-text-3, var(--faint));
+  font-style: italic;
+}
+.wt-open {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-accent, var(--accent));
+  background: transparent;
+  color: var(--ix-accent-text, var(--accent));
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.wt-open:hover {
+  background: var(--ix-accent, var(--accent));
+  color: var(--ix-accent-ink, #06231c);
+}
+
+/* Reduced-motion: static side-by-side storyboard, no cursor, no loop. */
+.wt-storyboard {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.wt-stage-frame {
+  aspect-ratio: 4 / 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-cursor {
+    transition: none;
+  }
+  .wt-cursor::after {
+    animation: none;
+  }
+}
