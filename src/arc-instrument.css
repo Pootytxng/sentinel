@@ -54,8 +54,10 @@
   color: var(--ix-text-3);
 }
 .arc-v2 .onb-shimmer {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
-  background-size: 200% 100%;
+  /* Static placeholder — the arc deliberately carries NO loading shimmer; the only celebratory
+     shimmer in the arc is the win card's improved bar (kernel law). */
+  background: rgba(255, 255, 255, 0.05);
+  animation: none;
 }
 
 /* Step-2 demo + ledger — glass. */
@@ -290,18 +292,170 @@
   color: var(--ix-base, #07090e);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .fc-radar-sweep-on {
-    animation: none;
-  }
-  .arc-v2 .onb-shimmer {
-    animation: none;
-  }
-}
-
 @media (max-width: 640px) {
   .arc-v2 .fc-scanzone {
     flex-direction: column;
     align-items: center;
+  }
+}
+
+/* ══ M3 · Session debrief ══════════════════════════════════════════════════ */
+.debrief.arc-v2 {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  backdrop-filter: blur(7px);
+}
+.arc-v2 .debrief-title {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--ix-text-2);
+}
+.arc-v2 .debrief-verdict {
+  color: var(--ix-text-1);
+}
+.arc-v2 .debrief-sub {
+  color: var(--ix-text-2);
+}
+.arc-v2 .debrief-tile {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 11px;
+}
+.arc-v2 .debrief-tile-value {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--ix-text-1);
+}
+.arc-v2 .debrief-tile-label {
+  color: var(--ix-text-2);
+}
+.arc-v2 .debrief-tile-note {
+  color: var(--ix-text-3);
+}
+.arc-v2 .debrief-insight {
+  background: rgba(251, 191, 60, 0.07);
+  border: 1px solid rgba(251, 191, 60, 0.28);
+  border-radius: 11px;
+}
+.arc-v2 .debrief-insight-tag {
+  color: var(--ix-amber);
+}
+.arc-v2 .debrief-ctx-head {
+  color: var(--ix-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .debrief-ctx-body {
+  color: var(--ix-text-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .debrief-cta {
+  background: var(--ix-accent);
+  border: 0;
+  color: var(--ix-base, #07090e);
+}
+.arc-v2 .debrief-clean {
+  color: var(--ix-text-2);
+}
+
+/* ══ M4/4b · Comparison verdict cards ══════════════════════════════════════ */
+.cmp.arc-v2 {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  backdrop-filter: blur(7px);
+}
+.arc-v2 .cmp-head {
+  color: var(--ix-text-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .cmp-nf {
+  color: var(--ix-text-3);
+}
+.arc-v2 .cmp-headline {
+  color: var(--ix-text-1);
+}
+.arc-v2 .cmp-sub {
+  color: var(--ix-text-2);
+}
+/* Null verdict = frost/neutral (never red — the instrument working). */
+.cmp-no-change.arc-v2 {
+  border-left: 3px solid var(--ix-text-3);
+}
+.arc-v2 .cmp-win {
+  color: var(--ix-accent-text);
+}
+.cmp-improved.arc-v2 {
+  border-left: 3px solid var(--ix-accent);
+}
+.arc-v2 .cmp-bad {
+  color: var(--ix-danger);
+}
+.cmp-regressed.arc-v2 {
+  border-left: 3px solid var(--ix-danger);
+}
+.arc-v2 .cmp-receipt-label {
+  color: var(--ix-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .cmp-bar {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .cmp-bar-before {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ix-text-1);
+}
+.arc-v2 .cmp-bar-after {
+  background: var(--accent-soft, rgba(46, 230, 192, 0.2));
+  color: var(--ix-text-1);
+}
+.arc-v2 .cmp-delta {
+  color: var(--ix-text-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .cmp-means {
+  color: var(--ix-text-2);
+}
+.arc-v2 .cmp-tally {
+  color: var(--ix-text-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* THE single earned shimmer (kernel law) — only on the WIN card's improved after-bar, nowhere else
+   in the app. One sweep per slow cycle; none under reduced motion. */
+.cmp-improved.arc-v2 .cmp-bar-after {
+  position: relative;
+  overflow: hidden;
+}
+.cmp-improved.arc-v2 .cmp-bar-after::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 75%
+  );
+  transform: translateX(-130%);
+  animation: cmp-winshimmer 3.4s ease-in-out 0.35s infinite;
+}
+@keyframes cmp-winshimmer {
+  0% {
+    transform: translateX(-130%);
+  }
+  30%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-radar-sweep-on {
+    animation: none;
+  }
+  .cmp-improved.arc-v2 .cmp-bar-after::after {
+    animation: none;
+    display: none;
   }
 }

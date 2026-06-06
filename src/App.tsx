@@ -561,12 +561,14 @@ function ComparisonCard({
   onRevert,
   onDismiss,
   reverting,
+  arcV2 = false,
 }: {
   r: ComparisonResult;
   nextSuspect: string | null;
   onRevert: () => void;
   onDismiss: () => void;
   reverting: boolean;
+  arcV2?: boolean;
 }) {
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
   // Only these verdicts are a fair measured comparison — confounded/expired show no numbers.
@@ -582,7 +584,7 @@ function ComparisonCard({
   } the ±${r.noise_floor_pct}% noise floor`;
 
   return (
-    <div className={`cmp cmp-${r.verdict}`}>
+    <div className={`cmp cmp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="cmp-head">
         <span>COMPARISON · {r.rec_title} · two {r.game} sessions</span>
         <span className="cmp-nf">noise floor ±{r.noise_floor_pct}%</span>
@@ -711,6 +713,7 @@ function SessionDebrief({
   onExport,
   changes,
   rollback,
+  arcV2 = false,
 }: {
   s: SessionSummary;
   priorities: Priorities | null;
@@ -720,6 +723,7 @@ function SessionDebrief({
   onExport: () => void;
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
+  arcV2?: boolean;
 }) {
   const [ctxOpen, setCtxOpen] = useState(false);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
@@ -779,7 +783,7 @@ function SessionDebrief({
   };
 
   return (
-    <div className="debrief">
+    <div className={`debrief${arcV2 ? " arc-v2" : ""}`}>
       <div className="debrief-head">
         <span className="debrief-title">
           {s.process_name || "Last session"} · {fmtDur(s.duration_secs)} · {range}
@@ -816,6 +820,7 @@ function SessionDebrief({
           onRevert={revertCmp}
           onDismiss={dismissCmp}
           reverting={reverting}
+          arcV2={arcV2}
         />
       ) : (
         shownInsight && (
@@ -911,6 +916,7 @@ function SessionsTab({
   onExport,
   changes,
   rollback,
+  arcV2,
 }: {
   sessions: SessionSummary[];
   priorities: Priorities | null;
@@ -920,6 +926,7 @@ function SessionsTab({
   onExport: () => void;
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
+  arcV2: boolean;
 }) {
   if (sessions.length === 0) {
     return (
@@ -957,6 +964,7 @@ function SessionsTab({
         onExport={onExport}
         changes={changes}
         rollback={rollback}
+        arcV2={arcV2}
       />
       {sessions.length > 1 && <h3 className="priorities-group">Earlier sessions</h3>}
       <ul className="sessions-list">
@@ -1780,6 +1788,7 @@ function App() {
                   onExport={onExport}
                   changes={changes}
                   rollback={rollback}
+                  arcV2={arcV2}
                 />
               )}
               {activeTab === "Latency" && <LatencyTab />}
