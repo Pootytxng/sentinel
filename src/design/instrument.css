@@ -1,0 +1,81 @@
+/* Instrument design-token layer — the reversibility backbone of the reskin (spec §4/§5).
+   ADDITIVE over App.css: it only adds `--ix-*` tokens and re-points the existing `--accent*` at the
+   active Instrument theme. Activated by `[data-itheme]` on <html> (set by src/design/theme.ts).
+   Fully reversible: drop the import + the data-itheme attribute and the app falls back to its
+   previous palette untouched. Imported AFTER App.css so the accent re-point wins ties. */
+
+:root {
+  /* Theme-independent Instrument tokens — available for surfaces to adopt later; NOT forced on the
+     existing surfaces in this pass (no restructuring yet). */
+  --ix-glass-fill: rgba(11, 16, 21, 0.72);
+  --ix-glass-border: rgba(255, 255, 255, 0.1);
+  --ix-glass-top: rgba(255, 255, 255, 0.18);
+  --ix-radius: 14px;
+  --ix-text-1: #eaf2f1;
+  --ix-text-2: #8fa0a0;
+  --ix-text-3: #5a6a6a;
+  --ix-amber: #fbbf3c; /* semantic, constant across themes */
+  --ix-danger: #f0726f;
+
+  /* Velocity defaults so `--ix-*` resolve even before the provider sets data-itheme. */
+  --ix-accent: #2ee6c0;
+  --ix-accent-text: #9bf6e4;
+  --ix-streak-1: #22d3ee;
+  --ix-streak-2: #2ee6c0;
+  --ix-streak-3: #5eead4;
+  --ix-base: #07090e;
+}
+
+/* VELOCITY (default) — competitive, cool. */
+:root[data-itheme="velocity"] {
+  --ix-accent: #2ee6c0;
+  --ix-accent-text: #9bf6e4;
+  --ix-streak-1: #22d3ee;
+  --ix-streak-2: #2ee6c0;
+  --ix-streak-3: #5eead4;
+  --ix-base: #07090e;
+  --ix-text-1: #eaf2f1;
+
+  --accent: #2ee6c0;
+  --accent-bright: #9bf6e4;
+  --accent-hover: #9bf6e4;
+  --accent-soft: rgba(46, 230, 192, 0.12);
+  --accent-line: rgba(46, 230, 192, 0.32);
+  --accent-glow: rgba(46, 230, 192, 0.42);
+}
+
+/* NOVA (stub) — electric, vivid. */
+:root[data-itheme="nova"] {
+  --ix-accent: #c084fc;
+  --ix-accent-text: #ecd5ff;
+  --ix-streak-1: #a855f7;
+  --ix-streak-2: #ec4899;
+  --ix-streak-3: #818cf8;
+  --ix-base: #0a0710;
+  --ix-text-1: #eaf2f1;
+
+  --accent: #c084fc;
+  --accent-bright: #ecd5ff;
+  --accent-hover: #ecd5ff;
+  --accent-soft: rgba(192, 132, 252, 0.13);
+  --accent-line: rgba(192, 132, 252, 0.32);
+  --accent-glow: rgba(192, 132, 252, 0.45);
+}
+
+/* EMBER (stub) — warm, cinematic (two warm hues on a plum base). */
+:root[data-itheme="ember"] {
+  --ix-accent: #fb9d4b;
+  --ix-accent-text: #ffdcb0;
+  --ix-streak-1: #fb923c;
+  --ix-streak-2: #f43f5e;
+  --ix-streak-3: #fbbf24;
+  --ix-base: #0d0810;
+  --ix-text-1: #f6ece6; /* warm primary text on Ember */
+
+  --accent: #fb9d4b;
+  --accent-bright: #ffdcb0;
+  --accent-hover: #ffdcb0;
+  --accent-soft: rgba(251, 157, 75, 0.13);
+  --accent-line: rgba(251, 157, 75, 0.32);
+  --accent-glow: rgba(251, 157, 75, 0.45);
+}

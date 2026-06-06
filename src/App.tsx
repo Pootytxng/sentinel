@@ -13,6 +13,7 @@ import { LatencyTab } from "./surfaces/Latency";
 import { BenchmarkTab } from "./surfaces/Benchmark";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
+import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 
 type DiskInfo = {

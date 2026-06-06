@@ -28,6 +28,15 @@ try {
   /* ignore — fall back to the default theme */
 }
 
+// Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Velocity.
+// Local-only, cosmetic; reversible (drop instrument.css + this block to fall back to the old accent).
+try {
+  const it = localStorage.getItem("compy_theme");
+  document.documentElement.dataset.itheme = it === "nova" || it === "ember" ? it : "velocity";
+} catch {
+  document.documentElement.dataset.itheme = "velocity";
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>{isOverlay ? <Overlay /> : <App />}</React.StrictMode>,
 );
