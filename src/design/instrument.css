@@ -5,85 +5,88 @@
    previous palette untouched. Imported AFTER App.css so the accent re-point wins ties. */
 
 :root {
-  /* Theme-independent Instrument tokens — available for surfaces to adopt later; NOT forced on the
-     existing surfaces in this pass (no restructuring yet). */
-  --ix-glass-fill: rgba(11, 16, 21, 0.72);
-  --ix-glass-border: rgba(255, 255, 255, 0.1);
-  --ix-glass-top: rgba(255, 255, 255, 0.18);
+  /* Halfway Home palette (halfway-home §2): walls neutral, color on the controls, motion as
+     punctuation. ZERO green tint in surfaces/glass — teal lives only on the controls. Defaults here
+     resolve before the provider sets data-itheme. */
+  --ix-glass-fill: rgba(20, 22, 28, 0.72); /* neutral charcoal glass, no tint */
+  --ix-glass-border: rgba(255, 255, 255, 0.08);
+  --ix-glass-top: rgba(255, 255, 255, 0.12);
   --ix-radius: 14px;
-  --ix-text-1: #eaf2f1;
-  --ix-text-2: #8fa0a0;
-  --ix-text-3: #5a6a6a;
+  --ix-text-1: #f2f3f7;
+  --ix-text-2: #b8bcc8;
+  --ix-text-3: #828896;
   --ix-amber: #fbbf3c; /* semantic, constant across themes */
   --ix-danger: #f0726f;
 
-  /* Velocity defaults so `--ix-*` resolve even before the provider sets data-itheme. */
-  --ix-accent: #2ee6c0;
-  --ix-accent-text: #9bf6e4;
+  --ix-accent: #2ee6c0; /* brand teal — controls, active states, key numbers ONLY */
+  --ix-accent-text: #7defcf; /* teal label text on neutral surfaces */
   --ix-accent-ink: #06231c; /* dark ink for labels ON bright accent fills (never white) — guarded */
-  --ix-streak-1: #22d3ee;
-  --ix-streak-2: #2ee6c0;
+  --ix-accent-2: #7c9cff; /* soft cool blue — gradient partner so teal never reads monochrome */
+  --ix-streak-1: #2ee6c0;
+  --ix-streak-2: #7c9cff;
   --ix-streak-3: #5eead4;
-  --ix-base: #07090e;
+  --ix-base: #0b0c10; /* neutral charcoal canvas */
 }
 
-/* VELOCITY (default) — competitive, cool. */
-:root[data-itheme="velocity"] {
+/* HALFWAY (default) — neutral charcoal, teal-on-controls. */
+:root[data-itheme="halfway"] {
   --ix-accent: #2ee6c0;
-  --ix-accent-text: #9bf6e4;
-  --ix-streak-1: #22d3ee;
-  --ix-streak-2: #2ee6c0;
+  --ix-accent-text: #7defcf;
+  --ix-accent-2: #7c9cff;
+  --ix-streak-1: #2ee6c0;
+  --ix-streak-2: #7c9cff;
   --ix-streak-3: #5eead4;
-  --ix-base: #07090e;
-  --ix-text-1: #eaf2f1;
+  --ix-base: #0b0c10;
+  --ix-text-1: #f2f3f7;
 
   --accent: #2ee6c0;
-  --accent-bright: #9bf6e4;
-  --accent-hover: #9bf6e4;
+  --accent-bright: #7defcf;
+  --accent-hover: #7defcf;
   --accent-soft: rgba(46, 230, 192, 0.12);
-  --accent-line: rgba(46, 230, 192, 0.32);
-  --accent-glow: rgba(46, 230, 192, 0.42);
+  --accent-line: rgba(46, 230, 192, 0.3);
+  --accent-glow: rgba(46, 230, 192, 0.36);
 }
 
-/* NOVA (stub) — electric, vivid. */
-:root[data-itheme="nova"] {
-  --ix-accent: #c084fc;
-  --ix-accent-text: #ecd5ff;
-  --ix-streak-1: #a855f7;
-  --ix-streak-2: #ec4899;
-  --ix-streak-3: #818cf8;
-  --ix-base: #0a0710;
-  --ix-text-1: #eaf2f1;
+/* MIDNIGHT — same neutral discipline, blue-leaning (cooler base, the blue partner more present). */
+:root[data-itheme="midnight"] {
+  --ix-accent: #2ee6c0;
+  --ix-accent-text: #7defcf;
+  --ix-accent-2: #7c9cff;
+  --ix-streak-1: #7c9cff;
+  --ix-streak-2: #2ee6c0;
+  --ix-streak-3: #a5b4ff;
+  --ix-base: #090b12;
+  --ix-text-1: #eef1f8;
+  --ix-glass-fill: rgba(18, 21, 30, 0.73);
 
-  --accent: #c084fc;
-  --accent-bright: #ecd5ff;
-  --accent-hover: #ecd5ff;
-  --accent-soft: rgba(192, 132, 252, 0.13);
-  --accent-line: rgba(192, 132, 252, 0.32);
-  --accent-glow: rgba(192, 132, 252, 0.45);
+  --accent: #2ee6c0;
+  --accent-bright: #7defcf;
+  --accent-hover: #7defcf;
+  --accent-soft: rgba(46, 230, 192, 0.12);
+  --accent-line: rgba(124, 156, 255, 0.3);
+  --accent-glow: rgba(124, 156, 255, 0.36);
 }
 
-/* EMBER v2 — warm candlelight (less neon-orange, more cozy). CANDIDATE values; owner tunes live via
-   the Settings preview, then the finals get recorded in the kernel §4 table after sign-off. The
-   per-theme text/glass overrides (--ix-text-2/-3, --ix-glass-fill) warm-tint Ember only; the other
-   themes keep the neutral :root defaults. (--ix-base is a single solid for the canvas backdrop; the
-   owner's radial #241712→#140e0b is approximated by the surfaces' warm accent-soft radial tints.) */
-:root[data-itheme="ember"] {
+/* HEARTH — the warm-cozy variant (owner asked to keep). Same neutral discipline, warm base + amber
+   accent. Basic values this pass; owner live-tunes the warmth later (spec §2: "port later"). */
+:root[data-itheme="hearth"] {
   --ix-accent: #e8b07a;
-  --ix-accent-text: #ffe3c2;
-  --ix-streak-1: #e8a96a; /* gold */
-  --ix-streak-2: #d4847c; /* dusty rose */
-  --ix-streak-3: #f0c585; /* cream */
-  --ix-base: #140e0b;
+  --ix-accent-text: #ffd9a8;
+  --ix-accent-ink: #2a1606;
+  --ix-accent-2: #d4847c;
+  --ix-streak-1: #e8a96a;
+  --ix-streak-2: #d4847c;
+  --ix-streak-3: #f0c585;
+  --ix-base: #14100c;
   --ix-text-1: #f5ece4;
-  --ix-text-2: #b3a195;
-  --ix-text-3: #79695e;
-  --ix-glass-fill: rgba(24, 16, 12, 0.74);
+  --ix-text-2: #c2b3a5;
+  --ix-text-3: #8a7866;
+  --ix-glass-fill: rgba(26, 20, 15, 0.74);
 
   --accent: #e8b07a;
-  --accent-bright: #ffe3c2;
-  --accent-hover: #ffe3c2;
+  --accent-bright: #ffd9a8;
+  --accent-hover: #ffd9a8;
   --accent-soft: rgba(232, 176, 122, 0.13);
-  --accent-line: rgba(232, 176, 122, 0.32);
-  --accent-glow: rgba(232, 176, 122, 0.42);
+  --accent-line: rgba(232, 176, 122, 0.3);
+  --accent-glow: rgba(232, 176, 122, 0.36);
 }

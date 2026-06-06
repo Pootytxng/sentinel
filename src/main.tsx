@@ -18,14 +18,14 @@ if (isOverlay) {
   document.documentElement.classList.add("overlay-mode");
 }
 
-// Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Velocity.
+// Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Halfway.
 // (The classic [data-theme] appearance system was retired 2026-06-06; data-itheme is the one theme.)
 // Local-only, cosmetic; reversible (drop instrument.css + this block to fall back to the old accent).
 try {
   const it = localStorage.getItem("compy_theme");
-  document.documentElement.dataset.itheme = it === "nova" || it === "ember" ? it : "velocity";
+  document.documentElement.dataset.itheme = it === "midnight" || it === "hearth" ? it : "halfway";
 } catch {
-  document.documentElement.dataset.itheme = "velocity";
+  document.documentElement.dataset.itheme = "halfway";
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

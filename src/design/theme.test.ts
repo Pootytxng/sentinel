@@ -12,20 +12,20 @@ afterEach(() => {
 });
 
 describe("instrument theme", () => {
-  it("defaults to velocity when unset", () => {
-    expect(readInstrumentTheme()).toBe("velocity");
+  it("defaults to halfway when unset", () => {
+    expect(readInstrumentTheme()).toBe("halfway");
   });
 
   it("applies + persists a theme and sets data-itheme on <html>", () => {
-    applyInstrumentTheme("nova");
-    expect(localStorage.getItem("compy_theme")).toBe("nova");
-    expect(document.documentElement.dataset.itheme).toBe("nova");
-    expect(readInstrumentTheme()).toBe("nova");
+    applyInstrumentTheme("midnight");
+    expect(localStorage.getItem("compy_theme")).toBe("midnight");
+    expect(document.documentElement.dataset.itheme).toBe("midnight");
+    expect(readInstrumentTheme()).toBe("midnight");
   });
 
-  it("falls back to velocity on a junk stored value", () => {
+  it("falls back to halfway on a junk stored value", () => {
     localStorage.setItem("compy_theme", "synthwave");
-    expect(readInstrumentTheme()).toBe("velocity");
+    expect(readInstrumentTheme()).toBe("halfway");
   });
 });
 

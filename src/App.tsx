@@ -760,7 +760,7 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
 }
 
 // (The classic appearance ThemePicker was retired 2026-06-06 — superseded by the Instrument theme
-// system: Velocity/Nova/Ember via data-itheme, set app-wide at startup and managed in Settings. A
+// system: Halfway/Midnight/Hearth via data-itheme, set app-wide at startup and managed in Settings. A
 // recorded decision, not a silent loss — see the surface-default governance section in
 // docs/superpowers/plans/2026-06-04-beta-build-order.md.)
 

@@ -2,13 +2,13 @@
 // cosmetic. The theme drives the app accent + the backdrop streak colors via `[data-itheme]` on
 // <html> (see instrument.css). Reversible: nothing here touches logic or the backend.
 
-export type InstrumentTheme = "velocity" | "nova" | "ember";
+export type InstrumentTheme = "halfway" | "midnight" | "hearth";
 export type Ambiance = "off" | "calm" | "full";
 
 export const INSTRUMENT_THEMES: { id: InstrumentTheme; label: string }[] = [
-  { id: "velocity", label: "Velocity" },
-  { id: "nova", label: "Nova" },
-  { id: "ember", label: "Ember" },
+  { id: "halfway", label: "Halfway" },
+  { id: "midnight", label: "Midnight" },
+  { id: "hearth", label: "Hearth" },
 ];
 
 export const AMBIANCE_OPTIONS: { id: Ambiance; label: string }[] = [
@@ -21,7 +21,7 @@ const THEME_KEY = "compy_theme";
 const AMBIANCE_KEY = "compy_ambiance";
 
 const isTheme = (v: unknown): v is InstrumentTheme =>
-  v === "velocity" || v === "nova" || v === "ember";
+  v === "halfway" || v === "midnight" || v === "hearth";
 const isAmbiance = (v: unknown): v is Ambiance => v === "off" || v === "calm" || v === "full";
 
 export function readInstrumentTheme(): InstrumentTheme {
@@ -31,7 +31,7 @@ export function readInstrumentTheme(): InstrumentTheme {
   } catch {
     /* ignore — fall back to default */
   }
-  return "velocity";
+  return "halfway";
 }
 
 export function applyInstrumentTheme(t: InstrumentTheme): void {

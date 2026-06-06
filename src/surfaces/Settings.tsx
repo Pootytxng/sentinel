@@ -25,9 +25,9 @@ export type PreviewFlag = "home" | "fix" | "learn" | "arc" | "settings" | "overl
 // Theme identity swatches — a theme PICKER must show each theme's real colors, so these literal
 // kernel values are the justified exception to "tokens-only" (same pattern as the classic picker).
 const THEME_CARDS: { id: InstrumentTheme; label: string; swatch: [string, string, string] }[] = [
-  { id: "velocity", label: "Velocity", swatch: ["#07090e", "#2ee6c0", "#22d3ee"] },
-  { id: "nova", label: "Nova", swatch: ["#0a0710", "#c084fc", "#ec4899"] },
-  { id: "ember", label: "Ember", swatch: ["#140e0b", "#e8b07a", "#d4847c"] },
+  { id: "halfway", label: "Halfway", swatch: ["#0b0c10", "#2ee6c0", "#7c9cff"] },
+  { id: "midnight", label: "Midnight", swatch: ["#090b12", "#2ee6c0", "#7c9cff"] },
+  { id: "hearth", label: "Hearth", swatch: ["#14100c", "#e8b07a", "#d4847c"] },
 ];
 
 const DENSITIES: { id: OverlayDensity; label: string }[] = [
