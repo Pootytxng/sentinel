@@ -6,12 +6,9 @@ import { NavGlyph } from "../design/NavGlyph";
 import { HOME_RAIL, type HomeRailId } from "../design/homeRail";
 import {
   type InstrumentTheme,
-  INSTRUMENT_THEMES,
   readInstrumentTheme,
   applyInstrumentTheme,
   readAmbiance,
-  persistAmbiance,
-  AMBIANCE_OPTIONS,
   type Ambiance,
 } from "../design/theme";
 import { activeChangeCount } from "./dashboard-data";
@@ -318,17 +315,13 @@ export default function CommandCenter(props: Props) {
   // Instrument theme + ambiance. The theme is now app-wide (set at startup in main.tsx + here on
   // change) and persists across every surface — no unmount-removal (the classic ThemePicker is
   // retired; Instrument's Velocity/Nova/Ember is the one theme system).
-  const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
-  const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
+  // Read once on mount — appearance is changed in Settings now (smalls §4); Home only reflects the
+  // current theme/ambiance (applied app-wide via data-itheme at startup + re-asserted here on mount).
+  const [itheme] = useState<InstrumentTheme>(readInstrumentTheme);
+  const [ambiance] = useState<Ambiance>(readAmbiance);
   useEffect(() => {
     applyInstrumentTheme(itheme);
   }, [itheme]);
-
-  const changeTheme = (t: InstrumentTheme) => setITheme(t);
-  const changeAmbiance = (a: Ambiance) => {
-    setAmbiance(a);
-    persistAmbiance(a);
-  };
 
   const posture = postureLine(readiness, priorities, activeChangeCount(changes));
   const limiter = priorities?.limiters[0] ?? null;
@@ -428,36 +421,8 @@ export default function CommandCenter(props: Props) {
           />
 
           <LiveStrip sessions={sessions} progress={progress} />
-
-          {/* Surface controls — theme + ambiance. The "Classic home" escape hatch is retired
-              (one-rail §1b): classics are reached via Settings → New look only. */}
-          <div className="cc-controls">
-            <div className="cc-seg" role="group" aria-label="Theme">
-              {INSTRUMENT_THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  className={`cc-seg-btn ${itheme === t.id ? "cc-seg-on" : ""}`}
-                  aria-pressed={itheme === t.id}
-                  onClick={() => changeTheme(t.id)}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="cc-seg" role="group" aria-label="Ambient backdrop">
-              {AMBIANCE_OPTIONS.map((a) => (
-                <button
-                  key={a.id}
-                  className={`cc-seg-btn ${ambiance === a.id ? "cc-seg-on" : ""}`}
-                  aria-pressed={ambiance === a.id}
-                  onClick={() => changeAmbiance(a.id)}
-                  title={`Ambient backdrop: ${a.label}`}
-                >
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Appearance controls (theme + ambiance) live in Settings → Appearance now (smalls §4) —
+              the canvas stays clean; the rail's Settings gear is the way there. */}
         </div>
       </div>
     </div>

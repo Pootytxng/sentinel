@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "../types";
 import { type OverlayDensity, readOverlayDensity, persistOverlayDensity } from "../design/theme";
 import { SessionDebrief } from "./SessionDebrief";
+import { prettyGameName } from "./game-name";
 import "./Play.css";
 
 // PLAY — live + debrief (halfway-home §1: navigation never teleports). The live-monitor card +
@@ -273,7 +274,7 @@ export default function Play({
                   >
                     <span className="play-session-main">
                       {unviewed && <span className="play-dot" aria-label="new" />}
-                      <span className="play-session-game">{s.process_name || "Unknown game"}</span>
+                      <span className="play-session-game">{prettyGameName(s.process_name) || "Unknown game"}</span>
                       <span className="play-session-meta">
                         {fmtDur(s.duration_secs)} · {shortVerdict(s)}
                         {isArmed && <span className="play-armed">comparison armed</span>}

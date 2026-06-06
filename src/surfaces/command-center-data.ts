@@ -6,6 +6,7 @@
 import type { GameReadiness, Priorities, SessionSummary } from "../types";
 import { deriveSystemPosture } from "./system-posture";
 import { latestSession } from "./dashboard-data";
+import { prettyGameName } from "./game-name";
 
 // The signal ring encodes a REAL readiness ratio: of the checks evaluated, how many are already
 // ideal. Never a 0–100 "score". `ideal` mirrors the CommandHero accounting exactly — advisory and
@@ -116,7 +117,7 @@ export function liveStrip(sessions: SessionSummary[]): LiveStrip {
   if (!s) return { kind: "empty" };
   return {
     kind: "data",
-    game: s.process_name || "Last session",
+    game: prettyGameName(s.process_name) || "Last session",
     avgFps: s.avg_fps,
     low1Est: s.low1_fps_est,
     peakTempC: s.peak_gpu_temp_c,

@@ -261,7 +261,10 @@
 }
 .cc-ring-sub {
   margin-top: 2px;
-  font-size: 10.5px;
+  /* Fit inside the ring's inner diameter — wrap instead of clipping/overrunning the stroke (smalls §4). */
+  max-width: 88px;
+  font-size: 10px;
+  line-height: 1.18;
   color: var(--ix-text-2);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
@@ -400,54 +403,8 @@
 }
 
 /* ── Surface controls ─────────────────────────────────────────────────────── */
-.cc-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-  padding: 2px;
-}
-.cc-seg {
-  display: inline-flex;
-  border: 1px solid var(--ix-glass-border);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--ix-glass-fill);
-}
-.cc-seg-btn {
-  padding: 7px 14px;
-  border: 0;
-  background: transparent;
-  color: var(--ix-text-2);
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease;
-}
-.cc-seg-btn:hover {
-  color: var(--ix-text-1);
-}
-.cc-seg-on {
-  background: var(--accent-soft, rgba(46, 230, 192, 0.14));
-  color: var(--ix-accent-text);
-}
-.cc-classic {
-  margin-left: auto;
-  padding: 7px 15px;
-  border-radius: 999px;
-  border: 1px solid var(--ix-glass-border);
-  background: transparent;
-  color: var(--ix-text-2);
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: color 160ms ease, border-color 160ms ease;
-}
-.cc-classic:hover {
-  color: var(--ix-text-1);
-  border-color: var(--ix-text-3);
-}
+/* (Appearance segments + the Classic-home pill CSS were removed — those controls left Home in
+   smalls §4 / one-rail §1b; appearance lives in Settings.) */
 
 @keyframes cc-pulse {
   0%, 100% { opacity: 0.5; }

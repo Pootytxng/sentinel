@@ -41,7 +41,8 @@ describe("Play", () => {
     render(<Play {...base} sessions={[session("game.exe", 120)]} />);
     expect(screen.getByText("Live monitor")).toBeInTheDocument();
     expect(screen.getByText("In-game overlay")).toBeInTheDocument();
-    expect(screen.getByText("game.exe")).toBeInTheDocument();
+    // Game name is prettified for display — the ".exe" is stripped (smalls §4).
+    expect(screen.getByText("game")).toBeInTheDocument();
   });
 
   it("honest empty state when no sessions", () => {
@@ -51,7 +52,7 @@ describe("Play", () => {
 
   it("a session row expands the full debrief IN PLACE (no route) — navigation never teleports", () => {
     render(<Play {...base} sessions={[session("doom.exe", 144)]} />);
-    const row = screen.getByRole("button", { name: /doom\.exe/ });
+    const row = screen.getByRole("button", { name: /doom/ });
     expect(row.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("true");

@@ -15,6 +15,7 @@ import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
+import { prettyGameName } from "./surfaces/game-name";
 import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
 import { SessionDebrief } from "./surfaces/SessionDebrief";
@@ -577,7 +578,7 @@ function SessionsTab({
           <li key={`${s.started_at}-${i}`} className="session-card">
             <div className="session-card-head">
               <span className="session-game">
-                {s.process_name || "Unknown game"}
+                {prettyGameName(s.process_name) || "Unknown game"}
               </span>
               <span className="session-meta">
                 {fmtDuration(s.duration_secs)} ·{" "}
@@ -2143,7 +2144,7 @@ function FpsPanel({
       <div className="monitor-panel-head">
         <div className="monitor-panel-name">
           FPS &amp; frametime
-          <span className="fps-proc">{sample.process_name || `pid ${sample.pid}`}</span>
+          <span className="fps-proc">{prettyGameName(sample.process_name) || `pid ${sample.pid}`}</span>
         </div>
         <button className="btn btn-small" onClick={onStop} disabled={busy}>
           Stop
