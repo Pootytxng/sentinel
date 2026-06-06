@@ -1599,7 +1599,7 @@ function App() {
         />
       )}
       {!showOnboarding && showFirstCheck && (
-        <FirstCheck onDone={() => setShowFirstCheck(false)} />
+        <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2={arcV2} />
       )}
       {showEncyclopedia &&
         (learnV2 ? (

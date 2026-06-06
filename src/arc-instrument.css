@@ -106,3 +106,202 @@
 .arc-v2 .onb-skip:hover {
   color: var(--ix-text-1);
 }
+/* Onboarding nav buttons — instrument accent. */
+.arc-v2 .onb-actions .btn {
+  background: var(--ix-accent);
+  border: 0;
+  color: var(--ix-base, #07090e);
+}
+.arc-v2 .onb-actions .btn-small {
+  background: transparent;
+  border: 1px solid var(--ix-glass-border);
+  color: var(--ix-text-2);
+}
+
+/* ══ M2 · First-check landing ══════════════════════════════════════════════ */
+.fc-backdrop.arc-v2 {
+  background: radial-gradient(120% 90% at 50% 0%, rgba(46, 230, 192, 0.06), transparent 60%),
+    var(--ix-base, #07090e);
+}
+.arc-v2 .fc-screen {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  backdrop-filter: blur(7px);
+}
+.arc-v2 .fc-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ix-text-1);
+}
+.arc-v2 .fc-status {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--ix-accent-text);
+}
+
+/* Scan rows — mono telemetry. */
+.arc-v2 .fc-row {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  border-bottom: 1px solid var(--ix-glass-border);
+}
+.arc-v2 .fc-row-label {
+  color: var(--ix-text-1);
+}
+.arc-v2 .fc-row-tag {
+  color: var(--ix-amber);
+}
+.arc-v2 .fc-row-ok .fc-row-mark {
+  color: var(--ix-accent);
+}
+.arc-v2 .fc-row-fix .fc-row-mark {
+  color: var(--ix-amber);
+}
+.arc-v2 .fc-row-unknown .fc-row-mark {
+  color: var(--ix-text-3);
+}
+
+/* Radar + rows side by side (radar augments the legible list). */
+.arc-v2 .fc-scanzone {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+.arc-v2 .fc-scanzone .fc-scan {
+  flex: 1;
+  min-width: 0;
+}
+.fc-radar {
+  flex-shrink: 0;
+  width: 210px;
+  height: 210px;
+}
+.fc-radar-svg {
+  width: 100%;
+  height: 100%;
+}
+.fc-radar-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 1;
+}
+.fc-radar-cross {
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 1;
+}
+.fc-radar-wedge {
+  fill: var(--ix-accent);
+  opacity: 0.16;
+}
+.fc-radar-sweep {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+}
+.fc-radar-sweep-on {
+  animation: fc-sweep 2.4s linear infinite;
+}
+.fc-radar-blip {
+  fill: var(--ix-text-3);
+}
+.fc-radar-blip-ok {
+  fill: var(--ix-accent);
+  filter: drop-shadow(0 0 4px var(--ix-accent));
+}
+.fc-radar-blip-fix {
+  fill: var(--ix-amber);
+  filter: drop-shadow(0 0 4px var(--ix-amber));
+}
+@keyframes fc-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Verdict block. */
+.arc-v2 .fc-tag {
+  color: var(--ix-accent-text);
+  letter-spacing: 0.08em;
+}
+.arc-v2 .fc-headline {
+  color: var(--ix-text-1);
+}
+.arc-v2 .fc-subtitle {
+  color: var(--ix-text-2);
+}
+.arc-v2 .fc-spotlight {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--ix-glass-border);
+  border-left: 3px solid var(--ix-amber);
+  border-radius: var(--ix-radius);
+}
+.arc-v2 .fc-spotlight-tag {
+  color: var(--ix-amber);
+}
+.arc-v2 .fc-spotlight-title {
+  color: var(--ix-text-1);
+}
+.arc-v2 .fc-spotlight-reason {
+  color: var(--ix-text-2);
+}
+.arc-v2 .fc-chip {
+  border: 1px solid var(--ix-glass-border);
+  color: var(--ix-text-2);
+  background: transparent;
+}
+.arc-v2 .fc-rest {
+  border-top: 1px solid var(--ix-glass-border);
+}
+.arc-v2 .fc-rest-title {
+  color: var(--ix-text-1);
+}
+.arc-v2 .fc-rest-conf {
+  color: var(--ix-text-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.arc-v2 .fc-green {
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 11px;
+  background: var(--accent-soft, rgba(46, 230, 192, 0.05));
+}
+.arc-v2 .fc-green-head {
+  color: var(--ix-accent-text);
+}
+.arc-v2 .fc-green-row {
+  color: var(--ix-text-2);
+}
+.arc-v2 .fc-green-row .fc-row-ok {
+  color: var(--ix-accent);
+}
+.arc-v2 .fc-footer {
+  color: var(--ix-text-2);
+}
+.arc-v2 .fc-footer strong {
+  color: var(--ix-text-1);
+}
+.arc-v2 .fc-btn-primary {
+  background: var(--ix-accent);
+  border: 0;
+  color: var(--ix-base, #07090e);
+}
+.arc-v2 .fc-btn-go {
+  background: var(--ix-accent);
+  border: 0;
+  color: var(--ix-base, #07090e);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-radar-sweep-on {
+    animation: none;
+  }
+  .arc-v2 .onb-shimmer {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .arc-v2 .fc-scanzone {
+    flex-direction: column;
+    align-items: center;
+  }
+}

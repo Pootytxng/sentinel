@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { GameReadiness, ReadinessCheck, Priorities, PriorityItem } from "../types";
+import { ArcRadar, type RadarBlip } from "./ArcRadar";
+import { TrustSwitch } from "../design/TrustSwitch";
+import { PulseC } from "../design/PulseC";
 import "./FirstCheck.css";
 
 // Moment 2 of the first-experience arc — the first-run "first check" landing.
@@ -21,7 +24,7 @@ function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown" {
   return "unknown";
 }
 
-export default function FirstCheck({ onDone }: { onDone: () => void }) {
+export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => void; arcV2?: boolean }) {
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [recs, setRecs] = useState<RecLite[]>([]);
@@ -115,11 +118,35 @@ export default function FirstCheck({ onDone }: { onDone: () => void }) {
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
 
+  const radarBlips: RadarBlip[] = checks.map((c) => ({ id: c.id, verdict: rowVerdict(c.status) }));
+  const scanRows = (
+    <div className="fc-scan">
+      {checks.map((c, i) => {
+        const v = rowVerdict(c.status);
+        return (
+          <div
+            key={c.id}
+            className={`fc-row ${i < shownRows ? "fc-row-in" : "fc-row-pending"} fc-row-${v}`}
+          >
+            <span className="fc-row-mark">{v === "fix" ? "→" : v === "ok" ? "✓" : "·"}</span>
+            <span className="fc-row-label">{c.label}</span>
+            <span className="fc-row-tag">
+              {v === "fix" ? "worth fixing" : v === "unknown" ? "—" : ""}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
-    <div className="fc-backdrop">
+    <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
       <div className="fc-screen">
         <header className="fc-head">
-          <span className="fc-brand">Compy</span>
+          <span className="fc-brand">
+            {arcV2 && <PulseC size={20} />}
+            Compy
+          </span>
           <span className="fc-status">
             {running
               ? "first check · running"
@@ -127,24 +154,20 @@ export default function FirstCheck({ onDone }: { onDone: () => void }) {
           </span>
         </header>
 
-        {/* Scan rows — stream in as the (real) checks display. */}
-        <div className="fc-scan">
-          {checks.map((c, i) => {
-            const v = rowVerdict(c.status);
-            return (
-              <div
-                key={c.id}
-                className={`fc-row ${i < shownRows ? "fc-row-in" : "fc-row-pending"} fc-row-${v}`}
-              >
-                <span className="fc-row-mark">{v === "fix" ? "→" : v === "ok" ? "✓" : "·"}</span>
-                <span className="fc-row-label">{c.label}</span>
-                <span className="fc-row-tag">
-                  {v === "fix" ? "worth fixing" : v === "unknown" ? "—" : ""}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {/* Scan rows — stream in as the (real) checks display. Arc adds the radar beside them
+            (augments, never replaces the legible list). */}
+        {arcV2 ? (
+          <div className="fc-scanzone">
+            <ArcRadar
+              blips={radarBlips}
+              shownCount={shownRows}
+              scanning={running || phase === "scan"}
+            />
+            {scanRows}
+          </div>
+        ) : (
+          scanRows
+        )}
 
         {/* Verdict — appears after the rows have streamed. */}
         {phase === "verdict" && (
@@ -170,13 +193,24 @@ export default function FirstCheck({ onDone }: { onDone: () => void }) {
                 <div className="fc-spotlight-foot">
                   <span className="fc-chip">Expected impact · not yet measured on this rig</span>
                   {recFor(top) ? (
-                    <button
-                      className="fc-btn fc-btn-primary"
-                      disabled={applyingId !== null}
-                      onClick={() => applyLimiter(top)}
-                    >
-                      {applyingId === recFor(top)?.id ? "Applying…" : "Apply"}
-                    </button>
+                    arcV2 ? (
+                      // The shared trust-switch, label-less to introduce no copy into the locked arc;
+                      // it triggers the SAME applyLimiter flow as the classic button.
+                      <TrustSwitch
+                        applied={false}
+                        busy={applyingId === recFor(top)?.id}
+                        onToggle={() => applyLimiter(top)}
+                        ariaLabel={`Apply ${top.title}`}
+                      />
+                    ) : (
+                      <button
+                        className="fc-btn fc-btn-primary"
+                        disabled={applyingId !== null}
+                        onClick={() => applyLimiter(top)}
+                      >
+                        {applyingId === recFor(top)?.id ? "Applying…" : "Apply"}
+                      </button>
+                    )
                   ) : (
                     <span className="fc-chip fc-chip-muted">advisory — no one-click change</span>
                   )}
