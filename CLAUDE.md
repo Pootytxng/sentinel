@@ -89,35 +89,47 @@ Fully **AMD**: **Radeon RX 9070 XT (RDNA4)** GPU, Ryzen X3D-class CPU, 16 logica
 2026-05-30** so the `runas` elevation path can be tested. `uac_disabled()` now returns false →
 the real `runas` branch is live (not the direct-spawn fallback). To revert: set `EnableLUA=0` + reboot.
 
-## CURRENT STATE — Instrument reskin + Halfway Home (as of 2026-06-06)
+## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL (as of 2026-06-06)
 
-> **🎨 WHOLE-APP RESKIN + "HALFWAY HOME" COURSE-CORRECTION LANDED — 2026-06-06 (`main` @ `d942b80`).**
-> The app now wears the **Instrument** design system end to end, then dialed back per the owner's live
-> sweep ("dial down the extremities, bring us halfway home"). **A cold session MUST start from here —
-> the banners below this one are pre-reskin history (two designs behind).**
-> - **Theme system:** `data-itheme` on `<html>` (applied at startup in `main.tsx`; managed in Settings →
->   Appearance) is THE theme system — the classic `data-theme` ThemePicker is RETIRED. Slots:
->   **Halfway (default) · Midnight (blue-leaning) · Hearth (warm — basic, owner tuning pending)**. Palette =
->   neutral charcoal walls (ZERO green tint), teal `--ix-accent` on CONTROLS ONLY + `--ix-accent-2` blue
->   partner + `--ix-accent-ink` (dark label-on-accent, guard-checked). Tokens: `src/design/instrument.css`.
-> - **Navigation law — "navigation never teleports":** the rail is the only thing that changes location;
->   in-page detail expands in place (no route-to-tab). Six-home IA: **Home · Check · Play · Fix · Learn ·
->   Lab** (+ Export = header action, Settings = gear). Check absorbs Readiness+Priorities; Play absorbs
->   Sessions+Monitoring+overlay (session rows expand to the full `SessionDebrief` inline); Lab absorbs
->   Benchmark+Latency (inline collapsibles). Each surface is behind a `compy_*_v2` flag (default ON dev,
->   OFF release) — classics stay reachable when off (parity governance in the build-order doc).
-> - **Motion:** ONE whisper aurora on Home (`AmbientBackdrop`); hyperspeed streaks RESERVED for
->   scan/win; the scan is a light-sweep beam (the radar is retired); win-card `cmp-winshimmer` is the only
->   celebratory shimmer. Both laws are grep/contrast-guarded by tests.
-> - **Identity:** shared `src/design/Wordmark.tsx` (pulse-C IS the C, one word) swept app-wide; app icon =
->   heartbeat INSIDE the C (16/24px single-beat small cut, 32px+ full master; `scripts/build-icon-ico.mjs`).
-> - **Guards:** `src/theme-contrast.test.ts` (WCAG floor incl. ink-on-accent) + `src/sweep-guard.test.ts`
->   (one shimmer). **Verify:** `tsc` + `vite build` clean · **npm 162/162** · cargo untouched by the reskin
->   (frontend-only). /check + /security clean on every train.
-> - **OPEN (owner-only):** the live `npm run tauri dev` sweep; **Hearth + warm final hexes → kernel §4**;
->   the **beta flag-default decision** — which `compy_*_v2` becomes the shipped (release) default, gated by
->   the **Fix parity chain** (classic Optimize can't retire until Startup-mgmt + the full guided-advisory
->   cards reach parity inside Fix or are re-homed with owner sign-off).
+> **🎨 WHOLE-APP RESKIN → "HALFWAY HOME" → "ONE RAIL" LANDED, AND THE REDESIGN NOW SHIPS BY DEFAULT —
+> 2026-06-06 (`main` @ `1c6b6af`).** The app wears the **Instrument** design system end to end, dialed
+> back to "halfway home," and the **one-rail pass** unified the navigation so there's a single map
+> app-wide. **The redesign is the shipped app now (release-default ON).** A cold session MUST start from
+> here — the banners below are pre-reskin history (designs behind).
+> - **Theme system:** `data-itheme` on `<html>` (startup in `main.tsx`; managed in Settings → Appearance)
+>   is THE theme system — the classic `data-theme` ThemePicker is RETIRED. Slots: **Halfway (default) ·
+>   Midnight · Hearth (warm — basic, owner tuning pending)**. Palette = neutral charcoal (ZERO green
+>   tint), teal `--ix-accent` on CONTROLS ONLY + `--ix-accent-2` + `--ix-accent-ink` (guard-checked).
+> - **ONE RAIL (the shell adopts the six-home IA app-wide):** **Home · Check · Play · Fix · Learn · Lab**
+>   + Settings gear (rail bottom) + Export (header action). BOTH the app-shell rail and the CommandCenter
+>   rail render from the shared `src/design/homeRail.ts` (+ `NavGlyph`) — identical by construction,
+>   **parity-guarded** by `src/design/homeRail.test.ts`. The legacy `SECTION_META` rail is retired;
+>   `CommandHero` removed (posture hero is Home-only). **Matched-rails** approach (owner decision); the
+>   full structural merge — one rail component, CommandCenter as rail-less Home content, AmbientBackdrop
+>   app-wide — is a **recorded POST-BETA follow-up**, not done.
+> - **Navigation law — "never teleports":** the rail is the only location change; detail expands in place.
+>   Check absorbs Readiness+Priorities; **Play** absorbs Sessions+Monitoring+overlay (rows expand to the
+>   full `SessionDebrief` inline; deep charts embed via `MonitoringTab embedded`); **Lab** absorbs
+>   Benchmark+Latency+**Diagnostics** (inline collapsibles); **Fix** holds the recs + Startup + guided +
+>   the **Trust Ledger** (see below); **Learn** is a rail ROOM (renders the Learn surface via `asPanel`;
+>   the Library overlay survives only as the cross-link quick-look).
+> - **Trust Ledger (redesigned, lives in Fix):** "Active on this PC" = one deduped card per currently-
+>   active change (latest per rec id) + humanized "active since" + a quiet GHOST rollback; "Full history"
+>   collapsed below. Rollback BEHAVIOR byte-identical (same audited path).
+> - **Guide Autopsy (Learn):** graded rows expand IN PLACE; the autopsy persists for the session
+>   (sessionStorage: text + graded flag + mode) so it survives tab switches; sticky context header + Clear.
+> - **Flags:** `compy_*_v2` now **DEFAULT ON in dev AND release** (`readDevFlag`/`readOverlayV2` → `true`);
+>   each classic stays reachable via Settings → New look (`"0"`). Fix+Play parity gates were closed first.
+> - **Identity:** shared `Wordmark` swept app-wide; app icon = heartbeat INSIDE the C (`scripts/build-icon-ico.mjs`).
+> - **Smalls:** posture-ring subline wraps within the ring; game names display via `prettyGameName` (strips
+>   `.exe`; raw kept for exports); appearance controls live only in Settings (off Home).
+> - **Guards:** `theme-contrast.test.ts` (WCAG incl. ink-on-accent) · `sweep-guard.test.ts` (one shimmer) ·
+>   `homeRail.test.ts` (rail parity). **Verify:** `tsc` + `vite build` clean · **npm 168/168** · cargo
+>   untouched (frontend-only). /check + /security clean on every train.
+> - **Installer:** unsigned `Compy_0.1.0` (NSIS `…/bundle/nsis/Compy_0.1.0_x64-setup.exe` + MSI) — rebuild
+>   after UI changes (`npm run tauri build`; close Diablo if free RAM < ~8 GB — cold release builds OOM).
+> - **OPEN (owner-only):** live smoke of the rebuilt installer; **Hearth + warm final hexes → kernel §4**;
+>   the post-beta full rail-merge.
 > - Canonical specs: `docs/superpowers/specs/2026-06-0{5,6}-*.md`; governance:
 >   `docs/superpowers/plans/2026-06-04-beta-build-order.md`. **Beta refs still pinned @ `16069fa` (untouched).**
 
