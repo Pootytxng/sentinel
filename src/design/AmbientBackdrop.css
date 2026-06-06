@@ -1,0 +1,26 @@
+/* Ambient hyperspeed backdrop + readability vignette. Both fixed, behind content (z-index 0),
+   pointer-events:none. The surface shell sits at z-index 1 so panels occlude the streaks. */
+.ix-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
+/* Soft dark wash strongest behind the centered content, fading to transparent at the edges so the
+   streaks shine in the negative space (spec §3). Keeps panels/text readable over the motion. */
+.ix-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    115% 85% at 50% 40%,
+    rgba(5, 7, 11, 0.5) 0%,
+    rgba(5, 7, 11, 0.22) 48%,
+    rgba(5, 7, 11, 0) 82%
+  );
+}
