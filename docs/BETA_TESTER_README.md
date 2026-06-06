@@ -70,15 +70,22 @@ Compy now opens with a guided first-experience. **Please go in blind and note wh
 1. **Onboarding** (3 quick steps — it should read your actual rig on the first screen).
 2. **First check** — a fast scan with a verdict: what's worth fixing, what's already fine.
 3. **Apply the #1 fix** if you're comfortable (one click — and note the Trust Ledger entry it
-   leaves; everything is undoable from the same place).
-4. **Play something** — your normal game, with FPS monitoring on (accept the UAC prompt).
-5. **Check the Sessions tab afterward** — you should get a plain-English debrief of how it went.
+   leaves in **Fix**; everything is undoable from there).
+4. **Play something** — your normal game, with FPS monitoring on from **Play** (accept the UAC
+   prompt).
+5. **Open Play afterward** — your session is in the list, and clicking it unfolds a plain-English
+   debrief right there.
 6. If you applied the fix in step 3 and chose "compare next session": **play the same game again**
    and the next debrief will show an honest verdict — improved, no measurable change, or
    regressed. **"No measurable change" is not a bug.** It's the product refusing to lie to you.
-7. **Roll something back** from the Trust Ledger and confirm your setting came back exactly.
+7. **Roll something back** from the Trust Ledger (in **Fix**) and confirm your setting came back
+   exactly.
 
-Also worth poking: Readiness, Priorities, Latency, Monitoring tabs; the Export report button.
+The map, if you ever feel lost — six rooms on the left rail: **Home** (the overview) · **Check**
+(scan your rig, see what's worth fixing) · **Play** (live monitoring, overlay, your session
+debriefs) · **Fix** (changes + the Trust Ledger) · **Learn** (the Library — every tweak and scam,
+graded) · **Lab** (Benchmark + Latency instruments). Export lives in the header; Settings is the
+gear — **Appearance has three themes; tell us which one you ended up keeping.**
 
 ---
 
@@ -153,7 +160,8 @@ Did it feel trustworthy: yes/no — why:
 Premium or plain: premium/plain
 Did it reduce the urge to look up random tweak guides: yes/no
 "No measurable change" verdict — honest or annoying: honest/annoying/didn't see it
-Did you find the Library ("Look it up" in Optimize)? yes/no — what did you search for:
+Did you find the Library (the Learn tab)? yes/no — what did you search for:
+Which theme did you keep (Settings → Appearance): Halfway / Midnight / Hearth:
 What would make this the only PC-readiness tool you need:
 Other notes:
 ```
