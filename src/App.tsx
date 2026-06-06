@@ -1666,7 +1666,10 @@ function App() {
           limiterRec={ccLimiterRec}
           limiterAppliable={ccLimiterAppliable}
           limiterActiveChange={ccLimiterActiveChange}
-          busyLimiter={ccLimiterRec ? busyId === ccLimiterRec.id : false}
+          busyLimiter={
+            busyId !== null &&
+            (busyId === ccLimiterRec?.id || busyId === ccLimiterActiveChange?.id)
+          }
           onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
           onSeeInFix={() => setActiveTab("Optimize")}
           onNavigate={(tab) => setActiveTab(tab)}
