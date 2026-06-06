@@ -89,8 +89,24 @@ Fully **AMD**: **Radeon RX 9070 XT (RDNA4)** GPU, Ryzen X3D-class CPU, 16 logica
 2026-05-30** so the `runas` elevation path can be tested. `uac_disabled()` now returns false →
 the real `runas` branch is live (not the direct-spawn fallback). To revert: set `EnableLUA=0` + reboot.
 
-## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL (as of 2026-06-06)
+## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🧭 WAYFINDING + SHOW-ME WALKTHROUGHS LANDED (first-live-beta QoL) — 2026-06-06 (`main` @ `ee92773`).**
+> From the FIRST live beta feedback, two QoL trains shipped on top of the one-rail app:
+> - **Back button** (`4b14b6e`) — a 24/7 location-history back control in every surface header (Alt+Left;
+>   mouse XButton1 if the webview surfaces it — needs a dev verify); in-place expansions don't push.
+> - **Inline dependencies** (`9aae36b`) — "bring the switch to the need": the Benchmark "Measure on a
+>   live game" card starts FPS monitoring inline (no trip to another page). Sweep reported in the commit.
+> - **Named-place links + "What's this?"** (`6b9ac67`) — `WhatsThis` opens the exact Learn entry by id via
+>   the quick-look overlay (Fix rows; resolves only where an entry exists); bare room-names reworded.
+> - **Show-me walkthroughs** (`ee92773`) — data-driven animated SCHEMATIC guides (`walkthroughs.json` +
+>   `Walkthrough` component, lint-tested) for out-of-Compy steps. v1 set: VRR (AMD/NVIDIA), XMP/EXPO, Game
+>   Mode, Storage Sense (deep-link paired), HDR. Live on Check advisory limiters (the VRR readiness check
+>   shows the way), Fix guided rows, + matching Learn entries. Vendor-variant auto-selected from the GPU;
+>   deep links open ONLY via the existing allowlist (no new entries). npm **181/181**.
+> - **OPEN (owner):** rebuild the installer for wave 2 (these ship before wave-2 invites); live-verify
+>   XButton1 + eyeball the VRR loop. Wayfinding §1-forward-button is a recorded trivial follow-up.
+>
 > **🎨 WHOLE-APP RESKIN → "HALFWAY HOME" → "ONE RAIL" LANDED, AND THE REDESIGN NOW SHIPS BY DEFAULT —
 > 2026-06-06 (`main` @ `1c6b6af`).** The app wears the **Instrument** design system end to end, dialed
 > back to "halfway home," and the **one-rail pass** unified the navigation so there's a single map
