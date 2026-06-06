@@ -1856,15 +1856,8 @@ body::before {
   overflow: hidden;
   animation: hero-rise 620ms var(--ease) both;
 }
-.hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, 0.055) 50%, transparent 68%);
-  transform: translateX(-100%);
-  animation: hero-sheen 6s var(--ease) 0.7s infinite;
-  pointer-events: none;
-}
+/* (legacy hero-sheen sweep removed — the win card's cmp-winshimmer is the only celebratory sweep
+   left in the codebase; enforced by src/sweep-guard.test.ts) */
 .hero-ready    { --hero-glow: rgba(70, 217, 138, 0.20);  --hero-accent: var(--ready); }
 .hero-attention { --hero-glow: rgba(245, 183, 64, 0.18);  --hero-accent: var(--attention); }
 .hero-scanning { --hero-glow: rgba(106, 169, 255, 0.18); --hero-accent: var(--accent); }
@@ -1953,7 +1946,6 @@ body::before {
 }
 
 @keyframes hero-rise { from { opacity: 0; transform: translateY(16px) scale(0.99); } to { opacity: 1; transform: none; } }
-@keyframes hero-sheen { 0% { transform: translateX(-100%); } 16%, 100% { transform: translateX(100%); } }
 
 /* Hero eyebrow row (status label above the headline). */
 .hero-eyebrow { display: flex; align-items: center; gap: 9px; }
