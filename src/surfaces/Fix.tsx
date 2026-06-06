@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
+import { WhatsThis } from "../design/WhatsThis";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import "./Fix.css";
 
@@ -114,12 +115,14 @@ function FixRow({
   activeChange,
   busy,
   onToggle,
+  onWhatsThis,
 }: {
   rec: Rec;
   applied: boolean;
   activeChange: AppliedChange | undefined;
   busy: boolean;
   onToggle: () => void;
+  onWhatsThis: (id: string) => void;
 }) {
   return (
     <li className="fix-row">
@@ -127,6 +130,7 @@ function FixRow({
         <div className="fix-row-head">
           <span className="fix-row-title">{rec.title}</span>
           <EvidenceChip p={rec.provenance} />
+          <WhatsThis id={rec.id} onOpen={onWhatsThis} />
         </div>
         <p className="fix-row-reason">{rec.impact || rec.description}</p>
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
@@ -270,16 +274,19 @@ function ActiveChangeCard({
   change,
   busy,
   onRollback,
+  onWhatsThis,
 }: {
   change: AppliedChange;
   busy: boolean;
   onRollback: () => void;
+  onWhatsThis: (id: string) => void;
 }) {
   return (
     <li className="fix-active-card">
       <div className="fix-row-main">
         <div className="fix-row-head">
           <span className="fix-row-title">{change.rec_title}</span>
+          <WhatsThis id={change.rec_id} onOpen={onWhatsThis} />
         </div>
         <p className="fix-row-reason">
           Active since {humanizeWhen(change.applied_at)}
@@ -393,6 +400,7 @@ export default function Fix({
               activeChange={undefined}
               busy={rowBusy(rec)}
               onToggle={() => onToggleRec(rec.id)}
+              onWhatsThis={onOpenLibrary}
             />
           ))}
         </ul>
@@ -410,6 +418,7 @@ export default function Fix({
                 change={c}
                 busy={busyId !== null && busyId === c.id}
                 onRollback={() => onRollback(c)}
+                onWhatsThis={onOpenLibrary}
               />
             ))}
           </ul>

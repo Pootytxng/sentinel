@@ -277,8 +277,8 @@ export function BenchmarkTab() {
           <>
             <p className="bench-muted">
               Baseline saved{state?.baseline_at ? ` · ${fmtWhen(state.baseline_at)}` : ""}. Change a
-              setting (or apply a tweak in Optimize), then hit <strong>Re-measure</strong> to see the
-              effect.
+              setting (or use <strong>Measure this tweak</strong> below), then hit{" "}
+              <strong>Re-measure</strong> to see the effect.
             </p>
             <button className="bench-btn bench-btn-ghost" onClick={clearBaseline} disabled={busy || running}>
               Clear baseline
@@ -453,7 +453,7 @@ export function BenchmarkTab() {
 
       <ol className="bench-steps">
         <li>Run a benchmark and set it as your baseline.</li>
-        <li>Change one thing (a Windows setting, or apply a tweak in Optimize).</li>
+        <li>Change one thing (a Windows setting, or apply one of Compy's tweaks).</li>
         <li>Re-measure — Compy reports the honest per-part verdict vs your baseline.</li>
       </ol>
     </div>
