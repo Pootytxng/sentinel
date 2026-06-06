@@ -107,9 +107,19 @@ everything else stands.
   header (where approval happens) + it already lives in every apply confirm dialog.
 - **`--ix-accent-ink` (§0):** labels on bright accent fills use dark ink (never white); the contrast
   guard now also asserts ink-on-accent ≥ 4.5:1 per theme (its old blind spot).
-- **§1 navigation law — "navigation never teleports":** Play/Lab expand detail in place; the
-  route-to-tab behavior + the `railTabs`/`visibleTabs` hidden-but-navigable hack retire once the
-  embeds land (absorbed classics cease to be destinations when flags are on).
+- **§1 navigation law — "navigation never teleports" — BUILT.** Play session rows expand IN PLACE
+  into the full debrief (`SessionDebrief` cluster extracted verbatim → `src/surfaces/SessionDebrief.tsx`,
+  locked copy unchanged; types `Recommendation`/`SessionSummary`/`ComparisonResult` added to
+  `types.ts`). Lab embeds Benchmark + Latency as inline collapsible sections (those are already
+  separate components). The route-to-tab links + the `railTabs` hack are gone; `visibleTabs` now drops
+  the absorbed classics when a flag is on (they cease to be destinations). Rail labels always visible
+  (gear is the conventional icon-only exception).
+- **Play deep-Monitoring deferral (parity decision, halfway-home §1):** Play's live-monitor card +
+  overlay card ARE the Monitoring consolidation (FPS/1%/temp/CPU + capture + overlay — the essentials,
+  "stays as built" per spec). The deep classic MonitoringTab extras (memory-pressure card, per-core,
+  time charts) are NOT embedded in Play v1 — embedding the whole tab would duplicate Play's capture +
+  overlay controls. They remain in classic Monitoring (flag off). Deferred to a chart-only panel in a
+  follow-up if tester signal wants it — recorded, not a silent drop.
 
 ---
 

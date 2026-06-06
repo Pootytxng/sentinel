@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { BenchmarkState, LatencyReport, Verdict } from "../types";
+import { BenchmarkTab } from "./Benchmark";
+import { LatencyTab } from "./Latency";
 import "./Lab.css";
 
-// LAB — the measured instruments, visible to everyone (spec 2026-06-06-check-play-lab). v1 is the
-// launcher + recent-results room: two cards (Benchmark / Latency) with a plain-English one-liner +
-// real recent results, whose primary action routes into the EXISTING full benchmark/latency UIs
-// (not rebuilt this pass). Existing commands only; calm dot-grid ambiance.
+// LAB — the measured instruments, visible to everyone (halfway-home §1: navigation never teleports).
+// Each instrument is an INLINE collapsible section ON Lab — summary header + expand reveals the full
+// existing Benchmark/Latency UI right here (no route to another tab). Existing commands only.
 
 const VERDICT_LABEL: Record<Verdict, string> = {
   improved: "Improved",
@@ -20,38 +21,29 @@ function fmtDate(iso: string | null): string {
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
 }
 
-export default function Lab({
-  onOpenBenchmark,
-  onOpenLatency,
-}: {
-  onOpenBenchmark: () => void;
-  onOpenLatency: () => void;
-}) {
+export default function Lab() {
   const [bench, setBench] = useState<BenchmarkState | null>(null);
   const [latency, setLatency] = useState<LatencyReport | null>(null);
 
-  // Recent results — existing commands, read once on mount (no polling).
+  // Recent-results summary — existing commands, read once on mount (no polling).
   useEffect(() => {
     invoke<BenchmarkState>("get_benchmark_state").then(setBench).catch(() => {});
     invoke<LatencyReport>("get_latency_diagnostics").then(setLatency).catch(() => {});
   }, []);
 
-  const benchLines: string[] = bench
+  const benchSummary = bench
     ? bench.efficacy
-      ? [`Last verdict: ${VERDICT_LABEL[bench.efficacy.overall]}`]
+      ? `Last verdict: ${VERDICT_LABEL[bench.efficacy.overall]}`
       : bench.baseline
-        ? [`Baseline set${bench.baseline_at ? ` · ${fmtDate(bench.baseline_at)}` : ""}`]
-        : ["No baseline yet — run one to measure a change"]
-    : ["—"];
+        ? `Baseline set${bench.baseline_at ? ` · ${fmtDate(bench.baseline_at)}` : ""}`
+        : "No baseline yet"
+    : "—";
 
-  const latencyLines: string[] = latency
-    ? [
-        `MSI mode: ${latency.msi.msi_on} on · ${latency.msi.msi_off} off`,
-        latency.timer_current_ms != null
-          ? `Timer resolution: ${latency.timer_current_ms.toFixed(2)} ms`
-          : "Timer resolution: —",
-      ]
-    : ["—"];
+  const latencySummary = latency
+    ? `MSI ${latency.msi.msi_on} on · ${latency.msi.msi_off} off${
+        latency.timer_current_ms != null ? ` · timer ${latency.timer_current_ms.toFixed(2)}ms` : ""
+      }`
+    : "—";
 
   return (
     <section className="lab-root">
@@ -62,30 +54,29 @@ export default function Lab({
           <p className="lab-sub">The measured instruments — prove it, don't vibe it.</p>
         </header>
 
-        <div className="lab-cards">
-          <LabCard
-            icon="chart"
-            name="Benchmark"
-            oneLiner="Run it, change one thing, re-run — Compy tells you if it actually moved, honestly."
-            lines={benchLines}
-            action="Run a baseline"
-            onAction={onOpenBenchmark}
-          />
-          <LabCard
-            icon="pulse"
-            name="Latency"
-            oneLiner="The path from your mouse to the screen — Compy names what's adding delay."
-            lines={latencyLines}
-            action="Measure input path"
-            onAction={onOpenLatency}
-          />
-        </div>
+        <LabSection
+          icon="chart"
+          name="Benchmark"
+          oneLiner="Run it, change one thing, re-run — Compy tells you if it actually moved, honestly."
+          summary={benchSummary}
+        >
+          <BenchmarkTab />
+        </LabSection>
+
+        <LabSection
+          icon="pulse"
+          name="Latency"
+          oneLiner="The path from your mouse to the screen — Compy names what's adding delay."
+          summary={latencySummary}
+        >
+          <LatencyTab />
+        </LabSection>
       </div>
     </section>
   );
 }
 
-const ICONS: Record<string, React.ReactNode> = {
+const ICONS: Record<string, ReactNode> = {
   chart: (
     <>
       <line x1="4" y1="20" x2="20" y2="20" />
@@ -97,24 +88,23 @@ const ICONS: Record<string, React.ReactNode> = {
   pulse: <path d="M3 12h4l2-6 4 12 2-6h6" />,
 };
 
-function LabCard({
+function LabSection({
   icon,
   name,
   oneLiner,
-  lines,
-  action,
-  onAction,
+  summary,
+  children,
 }: {
   icon: string;
   name: string;
   oneLiner: string;
-  lines: string[];
-  action: string;
-  onAction: () => void;
+  summary: string;
+  children: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="lab-card">
-      <div className="lab-card-head">
+    <div className={`lab-card ${open ? "lab-card-open" : ""}`}>
+      <button className="lab-card-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <svg
           className="lab-card-icon"
           viewBox="0 0 24 24"
@@ -129,17 +119,16 @@ function LabCard({
         >
           {ICONS[icon]}
         </svg>
-        <span className="lab-card-name">{name}</span>
-      </div>
-      <p className="lab-card-oneliner">{oneLiner}</p>
-      <ul className="lab-recent">
-        {lines.map((l, i) => (
-          <li key={i}>{l}</li>
-        ))}
-      </ul>
-      <button className="lab-action" onClick={onAction}>
-        {action} →
+        <span className="lab-card-text">
+          <span className="lab-card-name">{name}</span>
+          <span className="lab-card-oneliner">{oneLiner}</span>
+        </span>
+        <span className="lab-card-summary">{summary}</span>
+        <span className={`lab-card-caret ${open ? "lab-card-caret-open" : ""}`} aria-hidden="true">
+          ▸
+        </span>
       </button>
+      {open && <div className="lab-card-body">{children}</div>}
     </div>
   );
 }

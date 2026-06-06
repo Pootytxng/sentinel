@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { SessionSummary } from "../types";
+import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "../types";
 import { type OverlayDensity, readOverlayDensity, persistOverlayDensity } from "../design/theme";
+import { SessionDebrief } from "./SessionDebrief";
 import "./Play.css";
 
-// PLAY — live + debrief, the consolidation surface absorbing Monitoring + Sessions + overlay control
-// (spec 2026-06-06-check-play-lab). A CONVENIENCE surface, not a fork: the controls operate the SAME
-// backend state via the SAME existing commands (zero new IPC), and "open the full debrief / full
-// monitoring" routes to the existing tabs (untouched). Calm ambiance.
+// PLAY — live + debrief (halfway-home §1: navigation never teleports). The live-monitor card +
+// overlay controls operate the SAME backend state via the SAME existing commands; session rows
+// expand IN PLACE into the full existing debrief (no route to another tab). Zero new IPC.
 
 type GpuLite = { temperature_c: number | null; utilization_gpu_pct: number | null };
 type CpuLite = { usage_overall_pct: number };
@@ -43,14 +43,24 @@ export default function Play({
   active,
   sessions,
   sessionsSeenAt,
-  onOpenSessions,
-  onOpenMonitoring,
+  priorities,
+  recs,
+  apply,
+  busyId,
+  onExport,
+  changes,
+  rollback,
 }: {
   active: boolean;
   sessions: SessionSummary[];
   sessionsSeenAt: string;
-  onOpenSessions: () => void;
-  onOpenMonitoring: () => void;
+  priorities: Priorities | null;
+  recs: Recommendation[];
+  apply: (rec: Recommendation) => Promise<void>;
+  busyId: string | null;
+  onExport: () => void;
+  changes: AppliedChange[];
+  rollback: (c: AppliedChange) => Promise<void>;
 }) {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
@@ -62,9 +72,9 @@ export default function Play({
     () => localStorage.getItem("compy_overlay_corner") ?? "top-left",
   );
   const [armed, setArmed] = useState<ArmedLite>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
-  // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is the active
-  // surface (no new background polling).
+  // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -176,9 +186,6 @@ export default function Play({
             </div>
           </div>
           <p className="play-honest">ETW · external · anti-cheat safe — no injection, no kernel driver.</p>
-          <button className="play-link" onClick={onOpenMonitoring}>
-            Full monitoring + charts →
-          </button>
         </div>
 
         {/* Overlay card */}
@@ -218,7 +225,7 @@ export default function Play({
         </div>
       </div>
 
-      {/* Sessions list */}
+      {/* Sessions — rows expand IN PLACE into the full debrief (no route; navigation never teleports). */}
       <div className="play-sessions">
         <div className="play-section-label">Recent sessions</div>
         {sessions.length === 0 ? (
@@ -228,11 +235,17 @@ export default function Play({
         ) : (
           <ul className="play-list">
             {sessions.map((s, i) => {
+              const key = `${s.started_at}-${i}`;
+              const open = openKey === key;
               const unviewed = i === 0 && latest != null && latest.started_at !== sessionsSeenAt;
               const isArmed = armed != null && armed.game === s.process_name;
               return (
-                <li key={`${s.started_at}-${i}`}>
-                  <button className="play-session" onClick={onOpenSessions}>
+                <li key={key} className={`play-session-item ${open ? "play-session-open" : ""}`}>
+                  <button
+                    className="play-session"
+                    aria-expanded={open}
+                    onClick={() => setOpenKey(open ? null : key)}
+                  >
                     <span className="play-session-main">
                       {unviewed && <span className="play-dot" aria-label="new" />}
                       <span className="play-session-game">{s.process_name || "Unknown game"}</span>
@@ -241,19 +254,36 @@ export default function Play({
                         {isArmed && <span className="play-armed">comparison armed</span>}
                       </span>
                     </span>
-                    <span className="play-session-nums">
-                      {s.avg_fps.toFixed(0)} avg · {s.low1_fps_est.toFixed(0)} 1% low
+                    <span className="play-session-right">
+                      <span className="play-session-nums">
+                        {s.avg_fps.toFixed(0)} avg · {s.low1_fps_est.toFixed(0)} 1% low
+                      </span>
+                      <span
+                        className={`play-session-caret ${open ? "play-session-caret-open" : ""}`}
+                        aria-hidden="true"
+                      >
+                        ▸
+                      </span>
                     </span>
                   </button>
+                  {open && (
+                    <div className="play-debrief-wrap">
+                      <SessionDebrief
+                        s={s}
+                        priorities={priorities}
+                        recs={recs}
+                        apply={apply}
+                        busyId={busyId}
+                        onExport={onExport}
+                        changes={changes}
+                        rollback={rollback}
+                      />
+                    </div>
+                  )}
                 </li>
               );
             })}
           </ul>
-        )}
-        {sessions.length > 0 && (
-          <button className="play-link" onClick={onOpenSessions}>
-            Open the full debrief →
-          </button>
         )}
       </div>
     </section>

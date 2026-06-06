@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import type { SessionSummary } from "../types";
 
-// Play polls sensors + reads overlay state on mount; mock invoke so it doesn't throw outside Tauri.
+// Play (+ the embedded debrief) polls/reads on mount; mock invoke so it doesn't throw outside Tauri.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
 import Play from "./Play";
@@ -21,9 +21,20 @@ const session = (game: string, avg: number): SessionSummary => ({
   peak_gpu_usage_pct: 98,
   peak_ram_used_bytes: null,
   ram_total_bytes: null,
+  compy_changes_active: 0,
 });
 
-const base = { active: true, sessionsSeenAt: "", onOpenSessions: vi.fn(), onOpenMonitoring: vi.fn() };
+const base = {
+  active: true,
+  sessionsSeenAt: "",
+  priorities: null,
+  recs: [],
+  apply: vi.fn(),
+  busyId: null,
+  onExport: vi.fn(),
+  changes: [],
+  rollback: vi.fn(),
+};
 
 describe("Play", () => {
   it("renders the live monitor + overlay cards and condensed session rows", () => {
@@ -38,10 +49,13 @@ describe("Play", () => {
     expect(screen.getByText(/Play a session to see this/)).toBeInTheDocument();
   });
 
-  it("a session row opens the full existing debrief (navigates)", () => {
-    const onOpenSessions = vi.fn();
-    render(<Play {...base} sessions={[session("doom.exe", 144)]} onOpenSessions={onOpenSessions} />);
-    fireEvent.click(screen.getByText("doom.exe"));
-    expect(onOpenSessions).toHaveBeenCalled();
+  it("a session row expands the full debrief IN PLACE (no route) — navigation never teleports", () => {
+    render(<Play {...base} sessions={[session("doom.exe", 144)]} />);
+    const row = screen.getByRole("button", { name: /doom\.exe/ });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    // The full debrief verdict heading now renders inline.
+    expect(screen.getByText(/Smooth session|smooth|Rough/i)).toBeInTheDocument();
   });
 });

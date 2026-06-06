@@ -49,7 +49,7 @@ describe("latestSession", () => {
   const s = (started_at: string, name: string): SessionSummary => ({
     started_at, duration_secs: 1, process_name: name, samples: 1, avg_fps: 1,
     avg_frametime_ms: 1, low1_fps_est: 1, peak_gpu_temp_c: null, peak_gpu_usage_pct: null,
-    peak_ram_used_bytes: null, ram_total_bytes: null,
+    peak_ram_used_bytes: null, ram_total_bytes: null, compy_changes_active: 0,
   });
   it("returns the most recent by started_at", () => {
     const out = latestSession([s("2026-05-01T10:00:00Z", "old"), s("2026-06-01T10:00:00Z", "new")]);

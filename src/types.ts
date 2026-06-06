@@ -39,6 +39,47 @@ export type SessionSummary = {
   peak_gpu_usage_pct: number | null;
   peak_ram_used_bytes: number | null;
   ram_total_bytes: number | null;
+  compy_changes_active: number;
+  hw_fingerprint?: {
+    hash: string;
+    gpu: string;
+    gpu_driver: string;
+    ram_gb: number;
+    display: string;
+  } | null;
+  stutter_insight?: string | null;
+};
+
+// Recommendation provenance — the honesty level of a rec's IMPACT claim.
+// "verified" (Compy observes it) · "measured-signal" (third-party/community) · "expected-impact"
+// (logical from Windows internals, not benchmarked).
+export type Provenance = "verified" | "measured-signal" | "expected-impact";
+export type Recommendation = {
+  id: string;
+  title: string;
+  category: string;
+  severity: "safe" | "moderate" | "advanced";
+  description: string;
+  impact: string;
+  downside: string | null;
+  applies_to: string;
+  currently_applied: boolean;
+  provenance: Provenance;
+};
+
+// Cross-session comparison result (mirrors comparison.rs serde).
+export type ComparisonResult = {
+  rec_id: string;
+  rec_title: string;
+  game: string;
+  baseline_avg_fps: number;
+  baseline_low1_fps: number;
+  after_avg_fps: number;
+  after_low1_fps: number;
+  delta_avg_pct: number;
+  delta_low1_pct: number;
+  noise_floor_pct: number;
+  verdict: "improved" | "no-change" | "regressed" | "confounded" | "expired";
 };
 
 // ── Latency / Diagnostics (mirrors src-tauri/src/latency.rs serde, snake_case) ──

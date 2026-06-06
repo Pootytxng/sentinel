@@ -250,6 +250,25 @@
   font-size: 12px;
   color: var(--ix-text-2);
 }
+.play-session-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.play-session-caret {
+  color: var(--ix-text-3);
+  transition: transform 160ms ease;
+}
+.play-session-caret-open {
+  transform: rotate(90deg);
+}
+.play-session-open .play-session {
+  border-color: var(--ix-accent);
+}
+.play-debrief-wrap {
+  padding: 10px 2px 4px;
+}
 
 @media (max-width: 620px) {
   .play-session {

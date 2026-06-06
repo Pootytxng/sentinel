@@ -101,6 +101,7 @@ describe("liveStrip (real last session or honest empty)", () => {
     peak_gpu_usage_pct: 98,
     peak_ram_used_bytes: null,
     ram_total_bytes: null,
+    compy_changes_active: 0,
   });
 
   it("is empty when no sessions exist (no fake numbers)", () => {
