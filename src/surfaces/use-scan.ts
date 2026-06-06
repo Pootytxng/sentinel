@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
-import type { RadarBlip } from "./ArcRadar";
 
 // The readiness/priorities scan — the shared core behind FirstCheck (the first-run arc) and Check
 // (the permanent consolidation surface). One source of truth for the scan choreography: real
@@ -25,7 +24,6 @@ export type ScanState = {
   elapsed: number | null;
   shownRows: number;
   phase: "scan" | "verdict";
-  radarBlips: RadarBlip[];
   rerun: () => Promise<void>;
 };
 
@@ -78,8 +76,5 @@ export function useScan(): ScanState {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [running, readiness]);
 
-  const checks = readiness?.checks ?? [];
-  const radarBlips: RadarBlip[] = checks.map((c) => ({ id: c.id, verdict: rowVerdict(c.status) }));
-
-  return { readiness, priorities, recs, running, elapsed, shownRows, phase, radarBlips, rerun };
+  return { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun };
 }

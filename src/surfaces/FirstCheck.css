@@ -37,16 +37,83 @@
   color: var(--muted);
 }
 
-/* Radar + rows side-by-side — unscoped so it works for both FirstCheck (arc) and Check (not inside
-   .arc-v2). The .fc-radar* visuals are unscoped in arc-instrument.css. */
-.fc-scanzone {
-  display: flex;
-  gap: 22px;
-  align-items: flex-start;
+/* Scan visual (halfway-home §2: radar retired → light sweep). A soft beam passes down across the
+   streaming rows while scanning; one streak bursts as the verdict lands. Unscoped so FirstCheck (arc)
+   and Check both get it. Reduced-motion → beam + streak don't render (rows still stream). */
+.fc-sweepzone {
+  position: relative;
 }
-.fc-scanzone .fc-scan {
-  flex: 1;
-  min-width: 0;
+.fc-sweep-beam {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  height: 34px;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--ix-accent, #2ee6c0) 22%, transparent),
+    transparent
+  );
+  filter: blur(2px);
+  animation: fc-beam 1.5s ease-in-out infinite;
+}
+@keyframes fc-beam {
+  0% {
+    top: -10%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+.fc-verdict-streak {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 2px;
+  pointer-events: none;
+  transform-origin: left center;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ix-accent, #2ee6c0),
+    var(--ix-accent-2, #7c9cff),
+    transparent
+  );
+  animation: fc-streak 0.7s ease-out forwards;
+}
+@keyframes fc-streak {
+  0% {
+    transform: scaleX(0.1);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-sweep-beam,
+  .fc-verdict-streak {
+    display: none;
+  }
+}
+.fc-sweepzone .fc-scan {
+  position: relative;
+  z-index: 1;
 }
 
 /* Scan rows */

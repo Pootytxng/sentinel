@@ -32,8 +32,7 @@ export default function Check({
   onOpenLibrary: (focusId?: string) => void;
   onChanged: () => void;
 }) {
-  const { readiness, priorities, recs, running, elapsed, shownRows, phase, radarBlips, rerun } =
-    useScan();
+  const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [fineOpen, setFineOpen] = useState(false);
 
@@ -90,14 +89,7 @@ export default function Check({
         </button>
       </header>
 
-      <ScanStream
-        readiness={readiness}
-        shownRows={shownRows}
-        running={running}
-        phase={phase}
-        radar
-        radarBlips={radarBlips}
-      />
+      <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
 
       {/* The ranked result — appears after the rows have streamed. */}
       {phase === "verdict" && (

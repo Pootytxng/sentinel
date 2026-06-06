@@ -17,8 +17,7 @@ import "./FirstCheck.css";
 export const FIRST_CHECK_KEY = "compy_first_check_v1";
 
 export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => void; arcV2?: boolean }) {
-  const { readiness, priorities, recs, running, elapsed, shownRows, phase, radarBlips, rerun } =
-    useScan();
+  const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [greenOpen, setGreenOpen] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
 
@@ -80,15 +79,8 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
           </span>
         </header>
 
-        {/* Scan rows — stream in as the (real) checks display. Arc adds the radar beside them. */}
-        <ScanStream
-          readiness={readiness}
-          shownRows={shownRows}
-          running={running}
-          phase={phase}
-          radar={arcV2}
-          radarBlips={radarBlips}
-        />
+        {/* Scan rows — stream in as the (real) checks display, with a light sweep passing across. */}
+        <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
 
         {/* Verdict — appears after the rows have streamed. */}
         {phase === "verdict" && (
