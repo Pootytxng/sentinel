@@ -1,17 +1,59 @@
-/* Ambient hyperspeed backdrop + readability vignette. Both fixed, behind content (z-index 0),
-   pointer-events:none. The surface shell sits at z-index 1 so panels occlude the streaks. */
-.ix-backdrop {
+/* Whisper aurora (halfway-home §2) — at most one soft teal+blue radial pair, ≤8% alpha, heavy blur,
+   slow drift. Fixed, behind content (z-index 0), pointer-events:none. The surface shell sits at
+   z-index 1 so panels occlude it. Streaks are retired here — reserved for scan/win moments. */
+.ix-aurora {
   position: fixed;
-  inset: 0;
+  inset: -12%;
   z-index: 0;
-  display: block;
-  width: 100vw;
-  height: 100vh;
   pointer-events: none;
+  filter: blur(70px);
+  will-change: transform;
+}
+.ix-aurora-a {
+  background: radial-gradient(
+    40% 40% at 34% 30%,
+    color-mix(in srgb, var(--ix-streak-1, #2ee6c0) 8%, transparent),
+    transparent 70%
+  );
+}
+.ix-aurora-b {
+  background: radial-gradient(
+    42% 42% at 70% 66%,
+    color-mix(in srgb, var(--ix-streak-2, #7c9cff) 8%, transparent),
+    transparent 70%
+  );
+}
+.ix-aurora-drift-a {
+  animation: ix-drift-a 38s ease-in-out infinite alternate;
+}
+.ix-aurora-drift-b {
+  animation: ix-drift-b 47s ease-in-out infinite alternate;
+}
+@keyframes ix-drift-a {
+  from {
+    transform: translate(-4%, -3%) scale(1);
+  }
+  to {
+    transform: translate(5%, 4%) scale(1.12);
+  }
+}
+@keyframes ix-drift-b {
+  from {
+    transform: translate(3%, 4%) scale(1.08);
+  }
+  to {
+    transform: translate(-5%, -3%) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ix-aurora-drift-a,
+  .ix-aurora-drift-b {
+    animation: none;
+  }
 }
 
-/* Soft dark wash strongest behind the centered content, fading to transparent at the edges so the
-   streaks shine in the negative space (spec §3). Keeps panels/text readable over the motion. */
+/* Soft dark wash strongest behind the centered content, fading to transparent at the edges. Keeps
+   panels/text readable over the aurora. */
 .ix-vignette {
   position: fixed;
   inset: 0;
@@ -19,8 +61,8 @@
   pointer-events: none;
   background: radial-gradient(
     115% 85% at 50% 40%,
-    rgba(5, 7, 11, 0.5) 0%,
-    rgba(5, 7, 11, 0.22) 48%,
-    rgba(5, 7, 11, 0) 82%
+    rgba(8, 9, 12, 0.45) 0%,
+    rgba(8, 9, 12, 0.2) 48%,
+    rgba(8, 9, 12, 0) 82%
   );
 }
