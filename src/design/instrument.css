@@ -62,20 +62,27 @@
   --accent-glow: rgba(192, 132, 252, 0.45);
 }
 
-/* EMBER (stub) — warm, cinematic (two warm hues on a plum base). */
+/* EMBER v2 — warm candlelight (less neon-orange, more cozy). CANDIDATE values; owner tunes live via
+   the Settings preview, then the finals get recorded in the kernel §4 table after sign-off. The
+   per-theme text/glass overrides (--ix-text-2/-3, --ix-glass-fill) warm-tint Ember only; the other
+   themes keep the neutral :root defaults. (--ix-base is a single solid for the canvas backdrop; the
+   owner's radial #241712→#140e0b is approximated by the surfaces' warm accent-soft radial tints.) */
 :root[data-itheme="ember"] {
-  --ix-accent: #fb9d4b;
-  --ix-accent-text: #ffdcb0;
-  --ix-streak-1: #fb923c;
-  --ix-streak-2: #f43f5e;
-  --ix-streak-3: #fbbf24;
-  --ix-base: #0d0810;
-  --ix-text-1: #f6ece6; /* warm primary text on Ember */
+  --ix-accent: #e8b07a;
+  --ix-accent-text: #ffe3c2;
+  --ix-streak-1: #e8a96a; /* gold */
+  --ix-streak-2: #d4847c; /* dusty rose */
+  --ix-streak-3: #f0c585; /* cream */
+  --ix-base: #140e0b;
+  --ix-text-1: #f5ece4;
+  --ix-text-2: #b3a195;
+  --ix-text-3: #79695e;
+  --ix-glass-fill: rgba(24, 16, 12, 0.74);
 
-  --accent: #fb9d4b;
-  --accent-bright: #ffdcb0;
-  --accent-hover: #ffdcb0;
-  --accent-soft: rgba(251, 157, 75, 0.13);
-  --accent-line: rgba(251, 157, 75, 0.32);
-  --accent-glow: rgba(251, 157, 75, 0.45);
+  --accent: #e8b07a;
+  --accent-bright: #ffe3c2;
+  --accent-hover: #ffe3c2;
+  --accent-soft: rgba(232, 176, 122, 0.13);
+  --accent-line: rgba(232, 176, 122, 0.32);
+  --accent-glow: rgba(232, 176, 122, 0.42);
 }
