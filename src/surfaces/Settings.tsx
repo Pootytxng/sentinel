@@ -20,7 +20,7 @@ import "./Settings.css";
 // every control changes pixels or a UI preference — NONE of it touches what Compy measures. Calm,
 // static surface (no canvas). Behind compy_settings_v2.
 
-export type PreviewFlag = "home" | "fix" | "learn" | "arc" | "settings" | "overlay" | "check";
+export type PreviewFlag = "home" | "fix" | "learn" | "arc" | "settings" | "overlay" | "check" | "play";
 
 // Theme identity swatches — a theme PICKER must show each theme's real colors, so these literal
 // kernel values are the justified exception to "tokens-only" (same pattern as the classic picker).
@@ -39,6 +39,7 @@ const DENSITIES: { id: OverlayDensity; label: string }[] = [
 const FLAG_ROWS: { id: PreviewFlag; label: string }[] = [
   { id: "home", label: "Home — Command Center" },
   { id: "check", label: "Check (Readiness + Priorities)" },
+  { id: "play", label: "Play (Monitoring + Sessions)" },
   { id: "fix", label: "Fix surface" },
   { id: "learn", label: "Learn (Library + Autopsy)" },
   { id: "arc", label: "First-run arc" },

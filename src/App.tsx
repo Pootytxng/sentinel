@@ -15,6 +15,7 @@ import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
+import Play from "./surfaces/Play";
 import Settings, { type PreviewFlag } from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
@@ -192,7 +193,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Monitoring" | "Sessions" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -200,6 +201,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Readiness: { label: "Readiness", icon: "shield" },
   Priorities: { label: "Priorities", icon: "target" },
   Optimize: { label: "Optimize", icon: "sliders" },
+  Play: { label: "Play", icon: "pulse" },
   Monitoring: { label: "Monitor", icon: "pulse" },
   Sessions: { label: "Sessions", icon: "chart" },
   Latency: { label: "Latency", icon: "pulse" },
@@ -1156,6 +1158,7 @@ const ARC_V2_KEY = "compy_arc_v2";
 const SETTINGS_V2_KEY = "compy_settings_v2";
 const OVERLAY_V2_KEY = "compy_overlay_v2";
 const CHECK_V2_KEY = "compy_check_v2";
+const PLAY_V2_KEY = "compy_play_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1213,6 +1216,7 @@ function App() {
   const [settingsV2, setSettingsV2] = useState<boolean>(() => readDevFlag(SETTINGS_V2_KEY));
   const [overlayV2, setOverlayV2] = useState<boolean>(() => readDevFlag(OVERLAY_V2_KEY));
   const [checkV2, setCheckV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
+  const [playV2, setPlayV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
@@ -1430,6 +1434,9 @@ function App() {
       if (priorities) list.push("Priorities");
     }
     if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
+    // Play (compy_play_v2) consolidates Monitoring + Sessions; both stay NAVIGABLE (so Play can open
+    // the full debrief/monitoring + the reset doesn't bounce), but the rail hides them (see railTabs).
+    if (playV2 && (hw || sessions.length > 0)) list.push("Play");
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
     if (hw) list.push("Latency");
@@ -1438,7 +1445,14 @@ function App() {
     if (changes.length > 0) list.push("History");
     if (gamingEnabled) list.push("Gaming");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2, playV2]);
+
+  // What the rail actually renders: Play absorbs Monitoring + Sessions, so hide those from the rail
+  // when the flag is on (they remain navigable via Play's links + reset, per visibleTabs above).
+  const railTabs = useMemo(
+    () => visibleTabs.filter((t) => !(playV2 && (t === "Monitoring" || t === "Sessions"))),
+    [visibleTabs, playV2],
+  );
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -1502,6 +1516,7 @@ function App() {
       settings: [SETTINGS_V2_KEY, setSettingsV2],
       overlay: [OVERLAY_V2_KEY, setOverlayV2],
       check: [CHECK_V2_KEY, setCheckV2],
+      play: [PLAY_V2_KEY, setPlayV2],
     };
     const [key, setter] = setters[flag];
     setter(on);
@@ -1612,7 +1627,7 @@ function App() {
       {hw && settingsActive ? (
         <Settings
           appVersion="0.1.0"
-          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2 }}
+          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2 }}
           onSetFlag={setPreviewFlag}
           onClose={() => setShowSettings(false)}
         />
@@ -1636,6 +1651,7 @@ function App() {
             // Check consolidates Readiness+Priorities behind compy_check_v2; route to the classic
             // Readiness tab when the flag is off.
             if (tab === "Check") setActiveTab(checkV2 ? "Check" : "Readiness");
+            else if (tab === "Play") setActiveTab(playV2 ? "Play" : "Monitoring");
             else setActiveTab(tab);
           }}
           onOpenLibrary={() => libraryApi.openLibrary()}
@@ -1656,7 +1672,7 @@ function App() {
           />
           <div className="shell">
             <nav className="rail" role="tablist" aria-label="Sections">
-              {visibleTabs.map((tab) => {
+              {railTabs.map((tab) => {
                 const badge = tabBadgeCount(tab);
                 const meta = SECTION_META[tab];
                 return (
@@ -1719,6 +1735,15 @@ function App() {
                     onOpenEncyclopedia={() => setShowEncyclopedia(true)}
                   />
                 ))}
+              {activeTab === "Play" && (
+                <Play
+                  active={activeTab === "Play"}
+                  sessions={sessions}
+                  sessionsSeenAt={sessionsSeenAt}
+                  onOpenSessions={() => setActiveTab("Sessions")}
+                  onOpenMonitoring={() => setActiveTab("Monitoring")}
+                />
+              )}
               {activeTab === "Monitoring" && (
                 <MonitoringTab active={activeTab === "Monitoring"} />
               )}
@@ -1846,6 +1871,17 @@ function App() {
             }}
           />
           New Check (preview)
+        </label>
+        <label className="footer-toggle" title="Try the new Play surface (preview)">
+          <input
+            type="checkbox"
+            checked={playV2}
+            onChange={(e) => {
+              setPlayV2(e.target.checked);
+              persistFlag(PLAY_V2_KEY, e.target.checked);
+            }}
+          />
+          New Play (preview)
         </label>
         {settingsV2 && (
           <button className="footer-link" onClick={() => setShowSettings(true)}>
