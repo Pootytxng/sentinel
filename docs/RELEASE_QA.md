@@ -185,5 +185,6 @@ exclusive fullscreen — by design, no injection).
 Do **not** start packaging/signing until §1 (normal-UAC elevation) and §2a
 (power-plan rollback fidelity) pass. Packaging-prep findings already logged:
 generic bundle identifier (`com.compy.app`), lowercase `productName`, no
-publisher/copyright/license, no code-signing config, `csp: null`, and no
-license/privacy/EULA content yet.
+publisher/copyright/license, no code-signing config, and no
+license/privacy/EULA content yet. (CSP is strict in config; pre-public gate =
+verify the policy under the packaged build, not write it.)

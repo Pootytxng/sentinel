@@ -98,8 +98,8 @@ then the beta ships unsigned (decided — SmartScreen "unknown publisher" is exp
   Export report is the manual share mechanism. (No new code; zero-telemetry promise intact.)
 
 ⇒ The private beta is **unblocked**: no cert, no hosting setup, no new code. Remaining packaging
-work is the §6 build/pre-package checks + §7 beta QA. CSP stays `null` for the trusted invite-only
-beta (local app, no remote content); tighten + test it before any public release.
+work is the §6 build/pre-package checks + §7 beta QA. CSP is strict in config; pre-public gate =
+verify the policy under the packaged build, not write it.
 
 **Still pending — LEGAL track, gates PUBLIC release only (not the private beta):**
 - **License model** (fills `EULA.md` §2).
@@ -117,7 +117,7 @@ beta (local app, no remote content); tighten + test it before any public release
 | icon assets | ✓ present |
 | updater | disabled ✓ (keep off — see §8) |
 | code-signing fields (`bundle.windows.certificateThumbprint` / `digestAlgorithm` / `timestampUrl`, or Trusted Signing) | **absent — add when a cert exists** |
-| CSP (`app.security.csp`) | **`null` — tighten + test** (candidate below) |
+| CSP (`app.security.csp`) | **strict in config ✓ — verify under the packaged build** (policy below) |
 | capabilities / permissions | tight (`core:default`, `opener:default`) ✓ |
 | installer output path | `src-tauri/target/release/bundle/{msi,nsis}/` |
 | versioning | `0.1.0` (SemVer); bump `0.1.x` per beta build |

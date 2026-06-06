@@ -214,7 +214,7 @@ The manual apply/rollback release blocker is **LIFTED.** Verified live on a UAC-
   AppData + Trust-Ledger persistence, zero outbound network, Export (valid UTF-8), headless elevated FPS
   helper, and apply+rollback incl. the `070c3c9` stored-plan fidelity — all verified on the packaged
   build. **No private-beta functional blockers remain**; the private beta is functionally shippable on
-  the invite terms. CSP stays `null` for the trusted beta; tighten+test before public. **PUBLIC release
+  the invite terms. CSP is strict in config; pre-public gate = verify the policy under the packaged build, not write it. **PUBLIC release
   still gated on signing route + legal (license model + jurisdiction). Gaming Mode (F1) remains gated —
   NOT covered by the lifted mutation-QA sign-off.**
   **Pre-public polish backlog — ✅ CLEARED (2026-05-31, tests 72/72):** (1) Export `.md` UTF-8 BOM
@@ -253,8 +253,9 @@ Packaging metadata DONE (identity, not signing): `productName` "Compy", identifi
 `gg.compy.app`, publisher/copyright "Pootytxng", category Utility, homepage,
 short/long description in `tauri.conf.json` (schema-validated). Privacy + EULA drafted with
 identity filled: `docs/PRIVACY.md`, `docs/EULA.md` (still DRAFTS — owner/legal review needed).
-Remaining packaging gaps (NOT done, intentionally): no code-signing config, `csp: null`,
-EULA license-model + governing-law TBD before public distribution.
+Remaining packaging gaps (NOT done, intentionally): no code-signing config,
+EULA license-model + governing-law TBD before public distribution. (CSP is strict in config;
+pre-public gate = verify the policy under the packaged build, not write it.)
 
 **Caveat:** all QA so far is in the **dev (debug)** build. The helper-window issue was
 debug-only (console subsystem); a packaged **release** build still warrants a final pass.
