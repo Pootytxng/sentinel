@@ -26,6 +26,25 @@
   overflow: hidden;
 }
 
+/* As a rail room (one-rail §1): render inline in the content area, not as a fixed overlay. */
+.lx-aspanel {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  padding: 0;
+  background: none;
+  backdrop-filter: none;
+  overflow-y: visible;
+}
+.lx-aspanel .lx-modal {
+  max-width: none;
+  box-shadow: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
 /* Static dot-grid — ~24px pitch, very low alpha; behind the content, never animated. */
 .lx-dotgrid {
   position: absolute;

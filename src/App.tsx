@@ -196,7 +196,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Learn" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -207,6 +207,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Play: { label: "Play", icon: "pulse" },
   Monitoring: { label: "Monitor", icon: "pulse" },
   Sessions: { label: "Sessions", icon: "chart" },
+  Learn: { label: "Learn", icon: "learn" },
   Lab: { label: "Lab", icon: "chart" },
   Latency: { label: "Latency", icon: "pulse" },
   Benchmark: { label: "Benchmark", icon: "chart" },

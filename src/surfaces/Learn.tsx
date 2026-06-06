@@ -257,9 +257,11 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
 export default function Learn({
   onClose,
   focusId = null,
+  asPanel = false,
 }: {
   onClose: () => void;
   focusId?: string | null;
+  asPanel?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("browse");
   const [q, setQ] = useState("");
@@ -311,7 +313,10 @@ export default function Learn({
   };
 
   return (
-    <div className="lx-backdrop" onClick={onClose}>
+    <div
+      className={`lx-backdrop ${asPanel ? "lx-aspanel" : ""}`}
+      onClick={asPanel ? undefined : onClose}
+    >
       <div className="lx-modal" onClick={(e) => e.stopPropagation()}>
         <div className="lx-dotgrid" aria-hidden="true" />
         <div className="lx-inner">
@@ -322,9 +327,12 @@ export default function Learn({
                 Look up any tweak, term, or scam you heard online — we only answer what we've verified.
               </p>
             </div>
-            <button className="lx-btn lx-btn-ghost" onClick={onClose}>
-              Close
-            </button>
+            {/* As a rail room there's no "Close" (you leave via the rail); only the modal form has it. */}
+            {!asPanel && (
+              <button className="lx-btn lx-btn-ghost" onClick={onClose}>
+                Close
+              </button>
+            )}
           </div>
 
           <div className="lx-modes" role="tablist" aria-label="Library mode">
