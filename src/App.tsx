@@ -1405,7 +1405,9 @@ function App() {
                   arcV2={arcV2}
                 />
               )}
-              {activeTab === "Lab" && <Lab />}
+              {activeTab === "Lab" && (
+                <Lab diagnostics={<DiagnosticsTab sections={diagnostics} />} />
+              )}
               {activeTab === "Latency" && <LatencyTab />}
               {activeTab === "Benchmark" && <BenchmarkTab />}
               {activeTab === "Diagnostics" && (

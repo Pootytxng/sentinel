@@ -21,7 +21,7 @@ function fmtDate(iso: string | null): string {
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
 }
 
-export default function Lab() {
+export default function Lab({ diagnostics }: { diagnostics?: ReactNode }) {
   const [bench, setBench] = useState<BenchmarkState | null>(null);
   const [latency, setLatency] = useState<LatencyReport | null>(null);
 
@@ -71,6 +71,18 @@ export default function Lab() {
         >
           <LatencyTab />
         </LabSection>
+
+        {/* Diagnostics — read-only forensics, re-homed into Lab as a third instrument (one-rail §1). */}
+        {diagnostics && (
+          <LabSection
+            icon="terminal"
+            name="Diagnostics"
+            oneLiner="Read-only system forensics — what Compy detected about this rig, raw."
+            summary="System report"
+          >
+            {diagnostics}
+          </LabSection>
+        )}
       </div>
     </section>
   );
@@ -86,6 +98,13 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   pulse: <path d="M3 12h4l2-6 4 12 2-6h6" />,
+  terminal: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9l3 3-3 3" />
+      <line x1="13" y1="15" x2="17" y2="15" />
+    </>
+  ),
 };
 
 function LabSection({
