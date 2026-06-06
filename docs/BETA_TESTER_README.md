@@ -108,7 +108,8 @@ PC unless you choose to send it to us.** Export reports are local files; review 
 4. **On NVIDIA?** You're extra valuable — our NVIDIA monitoring is implemented but not yet
    verified on real hardware (AMD is). Tell us everything that looks wrong.
 
-Send everything to: **[KUYA: your Discord / DM channel here]**
+Send everything back **in the same chat where you got this kit** — screenshots, exports, and
+complaints all welcome.
 
 ---
 
