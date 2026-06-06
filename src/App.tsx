@@ -1349,6 +1349,7 @@ function App() {
                   <Fix
                     recs={recs ?? []}
                     startup={startup}
+                    changes={changes}
                     busyId={busyId}
                     isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                     activeChangeFor={findActiveChangeForRec}
@@ -1357,6 +1358,7 @@ function App() {
                       if (r) toggleRec(r);
                     }}
                     onToggleStartup={toggleStartup}
+                    onRollback={rollback}
                     onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
                     onDisablePreview={() => {
                       setFixV2(false);

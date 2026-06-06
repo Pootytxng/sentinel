@@ -14,11 +14,13 @@ const rec = (id: string, applied = false, provenance: Prov = "expected-impact") 
 
 const baseProps = {
   startup: [],
+  changes: [],
   busyId: null,
   isAppliable: (id: string) => ["game-mode", "sysmain-disable"].includes(id),
   activeChangeFor: () => undefined,
   onToggleRec: vi.fn(),
   onToggleStartup: vi.fn(),
+  onRollback: vi.fn(),
   onOpenLibrary: vi.fn(),
   onDisablePreview: vi.fn(),
 };
@@ -32,10 +34,36 @@ describe("Fix", () => {
     ];
     render(<Fix recs={recs} {...baseProps} />);
     expect(
-      screen.getByText(/1 worth your attention · 1 already applied · 3 we'd leave alone/),
+      screen.getByText(/1 worth your attention · 0 active on this PC · 3 we'd leave alone/),
     ).toBeTruthy();
     // outstanding appliable rec is visible in Worth fixing
     expect(screen.getByText("Title game-mode")).toBeTruthy();
+  });
+
+  it("ledger §2: Active-on-PC shows a deduped active change with a ghost rollback", () => {
+    const onRollback = vi.fn();
+    const now = new Date().toISOString();
+    const ch = (id: string, at: string) => ({
+      id,
+      rec_id: "game-mode",
+      rec_title: "Game Mode",
+      applied_at: at,
+      snapshot: null,
+      status: "applied" as const,
+      is_still_active: true,
+    });
+    // two active entries for the same rec → ONE card (deduped to latest), not two rows.
+    render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        changes={[ch("c1", "2026-06-01T10:00:00Z"), ch("c2", now)]}
+        onRollback={onRollback}
+      />,
+    );
+    expect(screen.getAllByText("Game Mode")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Roll back/ }));
+    expect(onRollback).toHaveBeenCalled();
   });
 
   it("honest empty state when nothing is worth fixing", () => {

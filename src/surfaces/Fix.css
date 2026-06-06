@@ -351,6 +351,94 @@
   background: var(--ix-accent);
 }
 
+/* ── Trust Ledger §2: Active on this PC (Layer 1) ── */
+.fix-active-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-left: 3px solid var(--ix-accent);
+  border-radius: var(--ix-radius);
+  padding: 13px 16px;
+  backdrop-filter: blur(6px);
+}
+/* Ghost rollback — quiet outline; dark ink-on-accent only on hover (banner-blindness fix). */
+.fix-ghost-rollback {
+  flex-shrink: 0;
+  padding: 7px 15px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.fix-ghost-rollback:hover:not(:disabled) {
+  background: var(--ix-accent);
+  color: var(--ix-accent-ink, #06231c);
+  border-color: var(--ix-accent);
+}
+.fix-ghost-rollback:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ── Full history (Layer 2) ── */
+.fix-hist-row {
+  border-bottom: 1px solid var(--ix-glass-border);
+}
+.fix-hist-row:last-child {
+  border-bottom: 0;
+}
+.fix-hist-rolledback {
+  opacity: 0.6;
+}
+.fix-hist-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-1);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fix-hist-title {
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+}
+.fix-hist-when {
+  font-size: 11.5px;
+  color: var(--ix-text-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.fix-hist-status {
+  font-size: 11px;
+  color: var(--ix-text-3);
+}
+.fix-hist-detail {
+  padding: 6px 4px 12px 30px;
+  font-size: 12px;
+  color: var(--ix-text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fix-hist-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ix-text-3);
+}
+
 @keyframes fix-fade {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }

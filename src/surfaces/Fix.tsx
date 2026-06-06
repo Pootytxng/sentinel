@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
@@ -23,14 +23,28 @@ type Rec = {
 type Props = {
   recs: Rec[];
   startup: StartupEntry[];
+  changes: AppliedChange[];
   busyId: string | null;
   isAppliable: (recId: string) => boolean;
   activeChangeFor: (recId: string) => AppliedChange | undefined;
   onToggleRec: (recId: string) => void;
   onToggleStartup: (entry: StartupEntry) => void;
+  onRollback: (c: AppliedChange) => void;
   onOpenLibrary: (focusId: string) => void;
   onDisablePreview: () => void;
 };
+
+// Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
+function humanizeWhen(iso: string): string {
+  const t = new Date(iso);
+  if (isNaN(t.getTime())) return "recently";
+  const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.floor((Date.now() - t.getTime()) / 86400000);
+  if (days <= 0) return `today · ${time}`;
+  if (days === 1) return `yesterday · ${time}`;
+  if (days < 7) return `${days} days ago · ${time}`;
+  return `${t.toLocaleDateString([], { month: "short", day: "numeric" })} · ${time}`;
+}
 
 const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
   verified: { label: "Verified", cls: "verified" },
@@ -249,21 +263,100 @@ function StartupRow({
   );
 }
 
+// Ledger Layer 1 — one card per CURRENTLY-ACTIVE change ("what is Compy doing to my machine?").
+// Humanized "active since", a quiet GHOST rollback (outline; accent ink only on hover). Rollback
+// BEHAVIOR is untouched — this calls the same audited onRollback.
+function ActiveChangeCard({
+  change,
+  busy,
+  onRollback,
+}: {
+  change: AppliedChange;
+  busy: boolean;
+  onRollback: () => void;
+}) {
+  return (
+    <li className="fix-active-card">
+      <div className="fix-row-main">
+        <div className="fix-row-head">
+          <span className="fix-row-title">{change.rec_title}</span>
+        </div>
+        <p className="fix-row-reason">
+          Active since {humanizeWhen(change.applied_at)}
+          {change.restores_label ? ` · rolls back to ${change.restores_label}` : ""}
+        </p>
+      </div>
+      <button className="fix-ghost-rollback" disabled={busy} onClick={onRollback}>
+        {busy ? "Rolling back…" : "Roll back"}
+      </button>
+    </li>
+  );
+}
+
+// Ledger Layer 2 — the full chronological audit trail (active + rolled-back + superseded), muted,
+// each row expands to its typed receipt. Click to expand.
+function HistoryRow({ change }: { change: AppliedChange }) {
+  const [open, setOpen] = useState(false);
+  const rolledBack = change.status === "rolled_back" || !change.is_still_active;
+  return (
+    <li className={`fix-hist-row ${rolledBack ? "fix-hist-rolledback" : ""}`}>
+      <button className="fix-hist-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Chevron open={open} />
+        <span className="fix-hist-title">{change.rec_title}</span>
+        <span className="fix-hist-when">{humanizeWhen(change.applied_at)}</span>
+        <span className="fix-hist-status">{rolledBack ? "✓ rolled back" : "active"}</span>
+      </button>
+      {open && (
+        <div className="fix-hist-detail">
+          {change.restores_label && (
+            <div>
+              Restores: <strong>{change.restores_label}</strong>
+            </div>
+          )}
+          <div>
+            Applied {humanizeWhen(change.applied_at)}
+            {change.elevation_used ? " · elevated" : ""}
+          </div>
+          <div className="fix-hist-id">{change.rec_id}</div>
+        </div>
+      )}
+    </li>
+  );
+}
+
 export default function Fix({
   recs,
   startup,
+  changes,
   busyId,
   isAppliable,
   activeChangeFor,
   onToggleRec,
   onToggleStartup,
+  onRollback,
   onOpenLibrary,
   onDisablePreview,
 }: Props) {
   const appliable = recs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
-  const alreadyApplied = appliable.filter((r) => r.currently_applied);
   const advisory = recs.filter((r) => !isAppliable(r.id));
+
+  // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
+  // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
+  const active = useMemo(() => {
+    const byRec = new Map<string, AppliedChange>();
+    for (const c of changes) {
+      if (!c.is_still_active) continue;
+      const prev = byRec.get(c.rec_id);
+      if (!prev || new Date(c.applied_at) > new Date(prev.applied_at)) byRec.set(c.rec_id, c);
+    }
+    return [...byRec.values()].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at));
+  }, [changes]);
+  // Layer 2: the full chronological trail (newest first).
+  const history = useMemo(
+    () => [...changes].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at)),
+    [changes],
+  );
 
   const rowBusy = (rec: Rec) =>
     busyId !== null && (busyId === rec.id || busyId === activeChangeFor(rec.id)?.id);
@@ -274,7 +367,7 @@ export default function Fix({
         <div>
           <h2 className="fix-title">Fix</h2>
           <p className="fix-subtitle">
-            {worthFixing.length} worth your attention · {alreadyApplied.length} already applied ·{" "}
+            {worthFixing.length} worth your attention · {active.length} active on this PC ·{" "}
             {REFUSE_PILE.length} we'd leave alone. Every change is one click to undo.
           </p>
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
@@ -305,19 +398,34 @@ export default function Fix({
         </ul>
       )}
 
-      {/* Already applied — collapsed, each with its named prior + Undo (the same switch off). */}
-      {alreadyApplied.length > 0 && (
-        <CollapsibleSection title="Already applied" count={alreadyApplied.length} tint="applied">
+      {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.
+          Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
+      {active.length > 0 && (
+        <>
+          <div className="fix-section-label">Active on this PC</div>
           <ul className="fix-list">
-            {alreadyApplied.map((rec) => (
-              <FixRow
-                key={rec.id}
-                rec={rec}
-                applied
-                activeChange={activeChangeFor(rec.id)}
-                busy={rowBusy(rec)}
-                onToggle={() => onToggleRec(rec.id)}
+            {active.map((c) => (
+              <ActiveChangeCard
+                key={c.id}
+                change={c}
+                busy={busyId !== null && busyId === c.id}
+                onRollback={() => onRollback(c)}
               />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* Full history (ledger Layer 2) — the complete audit trail, collapsed; click a row for its
+          receipt. Rolled-back + superseded entries stay, muted. */}
+      {history.length > 0 && (
+        <CollapsibleSection title="Full history" count={history.length} tint="applied">
+          <p className="fix-refuse-intro">
+            The complete trail — applied, rolled back, superseded. Click any row for its receipt.
+          </p>
+          <ul className="fix-list">
+            {history.map((c) => (
+              <HistoryRow key={c.id} change={c} />
             ))}
           </ul>
         </CollapsibleSection>
