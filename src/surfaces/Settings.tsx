@@ -9,6 +9,9 @@ import {
   persistAmbiance,
   readStepAsideGame,
   persistStepAsideGame,
+  type OverlayDensity,
+  readOverlayDensity,
+  persistOverlayDensity,
 } from "../design/theme";
 import { PulseC } from "../design/PulseC";
 import "./Settings.css";
@@ -17,14 +20,20 @@ import "./Settings.css";
 // every control changes pixels or a UI preference — NONE of it touches what Compy measures. Calm,
 // static surface (no canvas). Behind compy_settings_v2.
 
-export type PreviewFlag = "home" | "fix" | "learn" | "arc" | "settings";
+export type PreviewFlag = "home" | "fix" | "learn" | "arc" | "settings" | "overlay";
 
 // Theme identity swatches — a theme PICKER must show each theme's real colors, so these literal
 // kernel values are the justified exception to "tokens-only" (same pattern as the classic picker).
 const THEME_CARDS: { id: InstrumentTheme; label: string; swatch: [string, string, string] }[] = [
   { id: "velocity", label: "Velocity", swatch: ["#07090e", "#2ee6c0", "#22d3ee"] },
   { id: "nova", label: "Nova", swatch: ["#0a0710", "#c084fc", "#ec4899"] },
-  { id: "ember", label: "Ember", swatch: ["#0d0810", "#fb9d4b", "#f43f5e"] },
+  { id: "ember", label: "Ember", swatch: ["#140e0b", "#e8b07a", "#d4847c"] },
+];
+
+const DENSITIES: { id: OverlayDensity; label: string }[] = [
+  { id: "minimal", label: "Minimal" },
+  { id: "standard", label: "Standard" },
+  { id: "full", label: "Full" },
 ];
 
 const FLAG_ROWS: { id: PreviewFlag; label: string }[] = [
@@ -32,6 +41,7 @@ const FLAG_ROWS: { id: PreviewFlag; label: string }[] = [
   { id: "fix", label: "Fix surface" },
   { id: "learn", label: "Learn (Library + Autopsy)" },
   { id: "arc", label: "First-run arc" },
+  { id: "overlay", label: "In-game overlay" },
   { id: "settings", label: "This Settings surface" },
 ];
 
@@ -98,6 +108,7 @@ export default function Settings({
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
+  const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [reduced, setReduced] = useState<boolean>(() => {
     try {
       return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -133,6 +144,11 @@ export default function Settings({
     persistStepAsideGame(v);
     // Let a mounted backdrop react immediately (it re-reads on this event).
     window.dispatchEvent(new Event("compy:stepaside-changed"));
+  };
+  // Overlay density persists to localStorage; the overlay (separate window) reacts via `storage`.
+  const changeDensity = (d: OverlayDensity) => {
+    setDensity(d);
+    persistOverlayDensity(d);
   };
 
   return (
@@ -215,6 +231,26 @@ export default function Settings({
               </div>
             </div>
             <span className="set-status">{reduced ? "On" : "Off"}</span>
+          </div>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">In-game overlay density</div>
+              <div className="set-row-sub">
+                What the in-game overlay shows: just FPS · + 1%/temp/GPU · + a frametime line.
+              </div>
+            </div>
+            <div className="set-seg" role="group" aria-label="Overlay density">
+              {DENSITIES.map((d) => (
+                <button
+                  key={d.id}
+                  className={`set-seg-btn ${density === d.id ? "set-seg-on" : ""}`}
+                  aria-pressed={density === d.id}
+                  onClick={() => changeDensity(d.id)}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 

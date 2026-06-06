@@ -1152,6 +1152,7 @@ const FIX_V2_KEY = "compy_fix_v2";
 const LEARN_V2_KEY = "compy_learn_v2";
 const ARC_V2_KEY = "compy_arc_v2";
 const SETTINGS_V2_KEY = "compy_settings_v2";
+const OVERLAY_V2_KEY = "compy_overlay_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1207,6 +1208,7 @@ function App() {
   const [learnV2, setLearnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
   const [arcV2, setArcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
   const [settingsV2, setSettingsV2] = useState<boolean>(() => readDevFlag(SETTINGS_V2_KEY));
+  const [overlayV2, setOverlayV2] = useState<boolean>(() => readDevFlag(OVERLAY_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
@@ -1489,6 +1491,7 @@ function App() {
       learn: [LEARN_V2_KEY, setLearnV2],
       arc: [ARC_V2_KEY, setArcV2],
       settings: [SETTINGS_V2_KEY, setSettingsV2],
+      overlay: [OVERLAY_V2_KEY, setOverlayV2],
     };
     const [key, setter] = setters[flag];
     setter(on);
@@ -1599,7 +1602,7 @@ function App() {
       {hw && settingsActive ? (
         <Settings
           appVersion="0.1.0"
-          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2 }}
+          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2 }}
           onSetFlag={setPreviewFlag}
           onClose={() => setShowSettings(false)}
         />
@@ -1799,6 +1802,17 @@ function App() {
             }}
           />
           New settings (preview)
+        </label>
+        <label className="footer-toggle" title="Try the re-dressed in-game overlay (preview)">
+          <input
+            type="checkbox"
+            checked={overlayV2}
+            onChange={(e) => {
+              setOverlayV2(e.target.checked);
+              persistFlag(OVERLAY_V2_KEY, e.target.checked);
+            }}
+          />
+          New overlay (preview)
         </label>
         {settingsV2 && (
           <button className="footer-link" onClick={() => setShowSettings(true)}>

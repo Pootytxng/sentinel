@@ -73,3 +73,53 @@ html.overlay-mode #root {
 .ovl-v.ovl-crit {
   color: #ff5246;
 }
+
+/* ── v2 — THE INVERTED RULE: in-game the game is the hero. Flat near-opaque pill, mono, high
+   contrast; NO glow, NO glass blur, NO ambient, no animation beyond data. Accent appears ONLY on the
+   unit label + the frametime line. The pill backing is a FIXED rgba (deliberate token exception):
+   it must hold contrast over arbitrary game footage, not follow the theme. ── */
+.ovl2 {
+  font-family: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 9px;
+  background: rgba(5, 8, 10, 0.62);
+  border: 0.5px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  color: #eef2f6;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ovl2-fps {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.ovl2-fps-num {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+.ovl2-unit {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ix-accent, #2ee6c0);
+}
+.ovl2-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #ccd5de;
+  font-variant-numeric: tabular-nums;
+}
+.ovl2-dot {
+  color: #58626f;
+}
+.ovl2-ft {
+  display: block;
+  margin-top: 1px;
+}

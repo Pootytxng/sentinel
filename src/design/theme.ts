@@ -84,3 +84,29 @@ export function persistStepAsideGame(on: boolean): void {
     /* ignore */
   }
 }
+
+// In-game overlay density (spec 2026-06-06-overlay-redress §2). minimal = FPS only; standard = +
+// 1%/temp/gpu row; full = + frametime line. Read by the overlay window; set in Settings (the main
+// window) — they're separate windows, so the overlay reacts via the cross-window `storage` event.
+export type OverlayDensity = "minimal" | "standard" | "full";
+const OVERLAY_DENSITY_KEY = "compy_overlay_density";
+const isDensity = (v: unknown): v is OverlayDensity =>
+  v === "minimal" || v === "standard" || v === "full";
+
+export function readOverlayDensity(): OverlayDensity {
+  try {
+    const v = localStorage.getItem(OVERLAY_DENSITY_KEY);
+    if (isDensity(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return "standard";
+}
+
+export function persistOverlayDensity(d: OverlayDensity): void {
+  try {
+    localStorage.setItem(OVERLAY_DENSITY_KEY, d);
+  } catch {
+    /* ignore */
+  }
+}
