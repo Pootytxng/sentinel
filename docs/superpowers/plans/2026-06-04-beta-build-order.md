@@ -68,6 +68,24 @@ Apply the same principle to every future surface flip: before the release defaul
 what the classic surface does that the new one doesn't, and either reach parity or record an explicit
 owner decision to re-home/drop.
 
+**Classic ThemePicker RETIRED (owner, 2026-06-06) — a decision, not a silent loss.** The Instrument
+theme system (Velocity / Nova / Ember via `data-itheme`, applied app-wide at startup + managed in
+Settings → Appearance) is now THE theme system. The legacy appearance ThemePicker (Graphite / Frost /
+Aurora / Carbon-Ember via `data-theme`) is removed from the header. The old classic palettes are
+superseded; classic (flag-off) surfaces now inherit the Instrument accent app-wide. Acceptance owner
+spot-checks: Fix-classic/Optimize, Library-classic, and the classic arc must stay legible under
+Velocity + Nova + Ember.
+
+**Navigation IA BLESSED (owner, 2026-06-06) — the six-home information architecture.** The rail is:
+**Home · Check · Play · Fix · Learn · Lab**, with:
+- **Check** absorbs Readiness + Priorities.
+- **Play** absorbs Sessions + Monitoring + the overlay control.
+- **Lab** absorbs Benchmark + Latency — **Lab is visible to everyone** (not gated).
+- **Fix** and **Learn** as built.
+- **Export** is a global header action, not a tab. **Settings** is the gear (bottom of the rail).
+This unblocks the dashboard-tab consolidation surfaces (Check / Play / Lab). Do NOT build those until
+their specs land (Cowork is writing them); this entry only records the decided IA.
+
 ---
 
 ## Passes
