@@ -15,6 +15,9 @@ export type AppliedChange = {
   app_version_at_apply?: string | null;
   ruleset_version_at_apply?: string | null;
   elevation_used?: boolean | null;
+  // Read-only, computed-at-read: what a rollback restores ("Running"/"On"/"Best performance"/…),
+  // derived from the captured typed snapshot. null when no clean label → UI shows a generic prior.
+  restores_label?: string | null;
 };
 
 export type ReadinessCheck = { id: string; label: string; status: ReadinessStatus; detail: string; value: string | null; action_uri?: string | null; action_label?: string | null };

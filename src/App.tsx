@@ -127,6 +127,8 @@ type AppliedChange = {
   app_version_at_apply?: string | null;
   ruleset_version_at_apply?: string | null;
   elevation_used?: boolean | null;
+  // Human-readable prior the trust-switch reveals (computed read-only by the backend; see types.ts).
+  restores_label?: string | null;
 };
 
 type StartupEntry = {

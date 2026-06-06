@@ -93,6 +93,10 @@ pub(crate) struct AppliedChangeView {
     app_version_at_apply: Option<String>,
     ruleset_version_at_apply: Option<String>,
     elevation_used: Option<bool>,
+    // Read-only, computed-at-read enrichment (never persisted): a human-readable description of the
+    // state a rollback restores, for the Fix surface trust-switch. Derived only from the captured
+    // typed snapshot; None → the UI shows the generic "your previous setting".
+    restores_label: Option<String>,
 }
 
 impl AppliedChangeView {
@@ -133,6 +137,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
     } else {
         false
     };
+    let restores_label = restores_label_from_snapshot(&c.snapshot);
     AppliedChangeView {
         id: c.id,
         rec_id: c.rec_id,
@@ -146,6 +151,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         app_version_at_apply: c.app_version_at_apply,
         ruleset_version_at_apply: c.ruleset_version_at_apply,
         elevation_used: c.elevation_used,
+        restores_label,
     }
 }
 

@@ -174,6 +174,79 @@ pub(crate) struct ApplyResult {
     pub(crate) elevation_used: bool,
 }
 
+/// A short, human-readable description of the state a rollback restores — derived ONLY from the
+/// typed `Snapshot` we actually captured at apply time. Never probes live state, never turns a bare
+/// GUID into a name. Returns `None` when no clean label is derivable (legacy/untyped entries, a
+/// power plan captured as only a GUID, or multi-target snapshots) → the UI then shows the generic
+/// "your previous setting". Read-only enrichment for the Fix surface (spec 2026-06-05-fix-surface §5).
+pub(crate) fn restores_label_from_snapshot(snapshot: &serde_json::Value) -> Option<String> {
+    let snap: Snapshot = serde_json::from_value(snapshot.clone()).ok()?;
+    label_for_snapshot(&snap)
+}
+
+fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
+    // Registry booleans captured as 0/1.
+    let on_off = |v: Option<u32>| match v {
+        Some(0) => Some("Off".to_string()),
+        Some(1) => Some("On".to_string()),
+        _ => None,
+    };
+    match snap {
+        Snapshot::Service {
+            prior_state,
+            prior_start_mode,
+        } => {
+            let mode = prior_start_mode.trim();
+            let state = prior_state.trim();
+            if mode.eq_ignore_ascii_case("Disabled") {
+                Some("Disabled".to_string())
+            } else if state.eq_ignore_ascii_case("Running") {
+                Some("Running".to_string())
+            } else if mode.eq_ignore_ascii_case("Auto") || mode.eq_ignore_ascii_case("Automatic") {
+                Some("Automatic start".to_string())
+            } else if mode.eq_ignore_ascii_case("Manual") {
+                Some("Manual start".to_string())
+            } else {
+                None
+            }
+        }
+        Snapshot::GameMode { prior_enabled } => on_off(*prior_enabled),
+        Snapshot::GameBar { prior_enabled, .. } => on_off(*prior_enabled),
+        Snapshot::MouseAccel { prior_speed, .. } => match prior_speed.trim() {
+            "1" => Some("On".to_string()),
+            "0" => Some("Off".to_string()),
+            _ => None,
+        },
+        // HAGS uses 2 = on, 1 = off (not 0/1).
+        Snapshot::HwSchMode { prior } => match prior {
+            Some(2) => Some("On".to_string()),
+            Some(1) => Some("Off".to_string()),
+            _ => None,
+        },
+        // VisualFXSetting registry semantics: 0 = Windows default, 1 = best appearance,
+        // 2 = best performance, 3 = custom.
+        Snapshot::VisualEffects {
+            vfx_setting_prior, ..
+        } => match vfx_setting_prior {
+            Some(0) => Some("Windows default".to_string()),
+            Some(1) => Some("Best appearance".to_string()),
+            Some(2) => Some("Best performance".to_string()),
+            Some(3) => Some("Custom".to_string()),
+            _ => None,
+        },
+        Snapshot::FastStartup { prior_hiberboot } => on_off(*prior_hiberboot),
+        Snapshot::ReservedStorage { prior_enabled } => {
+            Some(if *prior_enabled { "On" } else { "Off" }.to_string())
+        }
+        // A bare GUID is NOT a name — never dress it up (spec §5). No name captured → generic.
+        Snapshot::PowerPlan { .. } => None,
+        // Power-plan setting indices and per-NIC vendor properties have no single clean label.
+        Snapshot::PowerPlanSetting { .. }
+        | Snapshot::NagleNics { .. }
+        | Snapshot::EeeNicProperty { .. } => None,
+    }
+}
+
 pub(crate) fn apply_game_mode() -> Result<ApplyResult, String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (key, _) = hkcu
@@ -1677,5 +1750,146 @@ mod rollback_tests {
             !power_plan_exists("00000000-0000-0000-0000-000000000000"),
             "all-zeros GUID is not a real plan"
         );
+    }
+}
+
+#[cfg(test)]
+mod restores_label_tests {
+    use super::*;
+    use serde_json::json;
+
+    // Round-trip through serde_json::Value so the test exercises the real read-time path
+    // (deserialize the persisted snapshot → label), exactly as `into_view` does.
+    fn label(snap: &Snapshot) -> Option<String> {
+        let v = serde_json::to_value(snap).expect("snapshot serializes");
+        restores_label_from_snapshot(&v)
+    }
+
+    #[test]
+    fn service_running_disabled_manual_and_unknown() {
+        assert_eq!(
+            label(&Snapshot::Service {
+                prior_state: "Running".into(),
+                prior_start_mode: "Auto".into()
+            }),
+            Some("Running".to_string())
+        );
+        assert_eq!(
+            label(&Snapshot::Service {
+                prior_state: "Stopped".into(),
+                prior_start_mode: "Disabled".into()
+            }),
+            Some("Disabled".to_string())
+        );
+        assert_eq!(
+            label(&Snapshot::Service {
+                prior_state: "Stopped".into(),
+                prior_start_mode: "Manual".into()
+            }),
+            Some("Manual start".to_string())
+        );
+        // Default/unknown capture → no clean label → generic fallback.
+        assert_eq!(
+            label(&Snapshot::Service {
+                prior_state: "Unknown".into(),
+                prior_start_mode: "Unknown".into()
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn boolean_registry_values_on_off() {
+        assert_eq!(label(&Snapshot::GameMode { prior_enabled: Some(1) }), Some("On".into()));
+        assert_eq!(label(&Snapshot::GameMode { prior_enabled: Some(0) }), Some("Off".into()));
+        assert_eq!(label(&Snapshot::GameMode { prior_enabled: None }), None);
+        assert_eq!(
+            label(&Snapshot::FastStartup { prior_hiberboot: Some(1) }),
+            Some("On".into())
+        );
+        assert_eq!(label(&Snapshot::ReservedStorage { prior_enabled: true }), Some("On".into()));
+        assert_eq!(
+            label(&Snapshot::ReservedStorage { prior_enabled: false }),
+            Some("Off".into())
+        );
+        assert_eq!(
+            label(&Snapshot::GameBar { prior_capture: Some(0), prior_enabled: Some(1) }),
+            Some("On".into())
+        );
+        assert_eq!(
+            label(&Snapshot::MouseAccel {
+                prior_speed: "1".into(),
+                prior_threshold1: "6".into(),
+                prior_threshold2: "10".into()
+            }),
+            Some("On".into())
+        );
+    }
+
+    #[test]
+    fn hags_uses_two_for_on() {
+        assert_eq!(label(&Snapshot::HwSchMode { prior: Some(2) }), Some("On".into()));
+        assert_eq!(label(&Snapshot::HwSchMode { prior: Some(1) }), Some("Off".into()));
+        assert_eq!(label(&Snapshot::HwSchMode { prior: None }), None);
+    }
+
+    #[test]
+    fn visual_effects_named_modes() {
+        assert_eq!(
+            label(&Snapshot::VisualEffects {
+                vfx_setting_prior: Some(1),
+                user_prefs_mask_prior: None
+            }),
+            Some("Best appearance".into())
+        );
+        assert_eq!(
+            label(&Snapshot::VisualEffects {
+                vfx_setting_prior: Some(2),
+                user_prefs_mask_prior: None
+            }),
+            Some("Best performance".into())
+        );
+        assert_eq!(
+            label(&Snapshot::VisualEffects {
+                vfx_setting_prior: None,
+                user_prefs_mask_prior: None
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn power_plan_bare_guid_is_never_named() {
+        // The snapshot holds only a GUID — must NOT be dressed up as a plan name (spec §5).
+        assert_eq!(
+            label(&Snapshot::PowerPlan {
+                prior_guid: "381b4222-f694-41f0-9685-ff5bb260df2e".into()
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn multi_target_and_setting_snapshots_are_generic() {
+        assert_eq!(
+            label(&Snapshot::PowerPlanSetting {
+                plan_guid: "g".into(),
+                subgroup_guid: "s".into(),
+                setting_guid: "x".into(),
+                prior_ac_value: 1,
+                prior_dc_value: 1,
+            }),
+            None
+        );
+        assert_eq!(label(&Snapshot::NagleNics { interfaces: vec![] }), None);
+        assert_eq!(label(&Snapshot::EeeNicProperty { adapters: vec![] }), None);
+    }
+
+    #[test]
+    fn legacy_or_untyped_snapshot_falls_back_to_none() {
+        // Old entries / unexpected shapes can't deserialize into Snapshot → None (generic UI).
+        assert_eq!(restores_label_from_snapshot(&json!({"foo": "bar"})), None);
+        assert_eq!(restores_label_from_snapshot(&json!("legacy string")), None);
+        assert_eq!(restores_label_from_snapshot(&json!(null)), None);
     }
 }
