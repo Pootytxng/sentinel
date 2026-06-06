@@ -1,3 +1,9 @@
+export type StartupEntry = {
+  name: string;
+  command: string;
+  enabled: boolean;
+};
+
 export type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 export type PriorityStatus = "ready" | "attention" | "unknown";
 export type Confidence = "high" | "medium" | "low";

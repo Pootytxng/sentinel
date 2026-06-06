@@ -13,10 +13,12 @@ const rec = (id: string, applied = false, provenance: Prov = "expected-impact") 
 });
 
 const baseProps = {
+  startup: [],
   busyId: null,
   isAppliable: (id: string) => ["game-mode", "sysmain-disable"].includes(id),
   activeChangeFor: () => undefined,
   onToggleRec: vi.fn(),
+  onToggleStartup: vi.fn(),
   onOpenLibrary: vi.fn(),
   onDisablePreview: vi.fn(),
 };

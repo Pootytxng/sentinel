@@ -237,6 +237,120 @@
   padding: 3px 11px;
 }
 
+/* Guided detail — where + steps + the allowlisted "Open it" deep link, inline in Fix. */
+.fix-guided-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.fix-guided-toggle,
+.fix-guided-open {
+  padding: 6px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-1);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+.fix-guided-open {
+  background: var(--accent-soft, rgba(46, 230, 192, 0.12));
+  color: var(--ix-accent-text);
+}
+.fix-guided-toggle:hover,
+.fix-guided-open:hover {
+  border-color: var(--ix-accent);
+}
+.fix-guided-detail {
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.fix-guided-where {
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  margin-bottom: 6px;
+}
+.fix-guided-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  line-height: 1.5;
+}
+.fix-guided-note {
+  margin: 9px 0 0;
+  font-size: 12px;
+  color: var(--ix-text-3);
+}
+
+/* Startup apps — same row shape as a fix row, with a small reversible toggle. */
+.fix-startup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--ix-glass-border);
+}
+.fix-startup-row:last-child {
+  border-bottom: 0;
+}
+.fix-startup-off {
+  opacity: 0.62;
+}
+.fix-startup-cmd {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+.fix-startup-toggle {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.fix-startup-toggle:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.fix-startup-track {
+  display: block;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--ix-glass-border);
+  border: 1px solid var(--ix-glass-border);
+  position: relative;
+  transition: background 160ms ease;
+}
+.fix-startup-on .fix-startup-track {
+  background: var(--accent-soft, rgba(46, 230, 192, 0.3));
+}
+.fix-startup-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ix-text-2);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.fix-startup-on .fix-startup-thumb {
+  transform: translateX(18px);
+  background: var(--ix-accent);
+}
+
 @keyframes fix-fade {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }

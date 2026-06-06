@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { AppliedChange } from "../types";
+import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
+import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import "./Fix.css";
 
 // Second live Instrument surface (spec 2026-06-05-fix-surface). Reskins the recommendations list:
@@ -21,10 +22,12 @@ type Rec = {
 
 type Props = {
   recs: Rec[];
+  startup: StartupEntry[];
   busyId: string | null;
   isAppliable: (recId: string) => boolean;
   activeChangeFor: (recId: string) => AppliedChange | undefined;
   onToggleRec: (recId: string) => void;
+  onToggleStartup: (entry: StartupEntry) => void;
   onOpenLibrary: (focusId: string) => void;
   onDisablePreview: () => void;
 };
@@ -153,12 +156,107 @@ function CollapsibleSection({
   );
 }
 
+// A guided/advisory rec — Compy detected it but won't change it (vendor app / a Windows page with no
+// safe reversible switch). Carries the full where + steps + the allowlisted "Open it" deep link, so
+// classic Optimize is no longer needed for the detail (parity for the release default-flip).
+function GuidedRow({ rec }: { rec: Rec }) {
+  const [open, setOpen] = useState(false);
+  const guide = GUIDED_STEPS[rec.id];
+  return (
+    <li className="fix-row fix-row-advisory">
+      <div className="fix-row-main">
+        <div className="fix-row-head">
+          <span className="fix-row-title">{rec.title}</span>
+          <EvidenceChip p={rec.provenance} />
+          <span className="fix-guided-tag">Guided</span>
+        </div>
+        <p className="fix-row-reason">{rec.impact || rec.description}</p>
+        {guide && (
+          <div className="fix-guided-actions">
+            <button
+              className="fix-guided-toggle"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+            >
+              {open ? "Hide steps" : `How to → ${guide.where}`}
+            </button>
+            {guide.openUri && (
+              <button
+                className="fix-guided-open"
+                onClick={() => openGuidedUri(guide.openUri!)}
+                title={`Opens ${guide.where} directly`}
+              >
+                {guide.openLabel ?? "Open it"} →
+              </button>
+            )}
+          </div>
+        )}
+        {open && guide && (
+          <div className="fix-guided-detail">
+            <div className="fix-guided-where">
+              Where: <strong>{guide.where}</strong>
+            </div>
+            <ol className="fix-guided-steps">
+              {guide.steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+            {guide.state === "unknown" && (
+              <p className="fix-guided-note">
+                Compy can't read this one's current state — check before you change it; if it's already
+                set the way you want, you're done.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+// User-scope auto-start entry — toggle off to keep it from launching with Windows. Reversible,
+// nothing deleted. Uses the existing audited set_startup_entry_enabled flow via onToggle.
+function StartupRow({
+  entry,
+  busy,
+  onToggle,
+}: {
+  entry: StartupEntry;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li className={`fix-startup-row ${!entry.enabled ? "fix-startup-off" : ""}`}>
+      <div className="fix-row-main">
+        <div className="fix-row-head">
+          <span className="fix-row-title">{entry.name}</span>
+        </div>
+        <p className="fix-row-reason fix-startup-cmd">{entry.command || "(no command)"}</p>
+      </div>
+      <button
+        className={`fix-startup-toggle ${entry.enabled ? "fix-startup-on" : ""}`}
+        onClick={onToggle}
+        disabled={busy}
+        role="switch"
+        aria-checked={entry.enabled}
+        aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.name} at startup`}
+      >
+        <span className="fix-startup-track">
+          <span className="fix-startup-thumb" />
+        </span>
+      </button>
+    </li>
+  );
+}
+
 export default function Fix({
   recs,
+  startup,
   busyId,
   isAppliable,
   activeChangeFor,
   onToggleRec,
+  onToggleStartup,
   onOpenLibrary,
   onDisablePreview,
 }: Props) {
@@ -251,26 +349,37 @@ export default function Fix({
         </ul>
       </CollapsibleSection>
 
-      {/* Guided / advisory — catalog recs Compy detects but won't auto-apply (no switch). */}
+      {/* Guided / advisory — Compy detects but won't auto-apply; the full where + steps + the
+          allowlisted "Open it" deep link live right here (no need to fall back to classic Optimize). */}
       {advisory.length > 0 && (
         <CollapsibleSection title="Compy points the way" count={advisory.length}>
           <p className="fix-refuse-intro">
             Detected, but Compy won't change these for you — they live in a vendor app or a Windows
-            page with no safe, reversible switch. The classic Optimize view has the full detail on
-            each (toggle "Classic Optimize" above).
+            page with no safe, reversible switch. Here's exactly where each one lives, with the steps.
           </p>
           <ul className="fix-list">
             {advisory.map((rec) => (
-              <li key={rec.id} className="fix-row fix-row-advisory">
-                <div className="fix-row-main">
-                  <div className="fix-row-head">
-                    <span className="fix-row-title">{rec.title}</span>
-                    <EvidenceChip p={rec.provenance} />
-                  </div>
-                  <p className="fix-row-reason">{rec.impact || rec.description}</p>
-                </div>
-                <span className="fix-guided-tag">Guided</span>
-              </li>
+              <GuidedRow key={rec.id} rec={rec} />
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+
+      {/* Startup apps — user-scope auto-start entries; toggle off to stop them launching with Windows. */}
+      {startup.length > 0 && (
+        <CollapsibleSection title="Startup apps" count={startup.length}>
+          <p className="fix-refuse-intro">
+            Apps that launch with Windows. Toggle one off to keep it from auto-starting — reversible,
+            nothing is deleted.
+          </p>
+          <ul className="fix-list">
+            {startup.map((entry) => (
+              <StartupRow
+                key={entry.name}
+                entry={entry}
+                busy={busyId === `startup:${entry.name}`}
+                onToggle={() => onToggleStartup(entry)}
+              />
             ))}
           </ul>
         </CollapsibleSection>
