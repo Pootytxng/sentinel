@@ -12,11 +12,10 @@ describe("home rail parity", () => {
     expect(HOME_RAIL.map((r) => r.label)).toEqual(["Home", "Check", "Play", "Fix", "Learn", "Lab"]);
   });
 
-  it("the CommandCenter rail renders from HOME_RAIL (single source)", () => {
+  it("BOTH the CommandCenter rail and the app-shell rail render from HOME_RAIL (no second map)", () => {
     const cc = readFileSync(join("src", "surfaces", "CommandCenter.tsx"), "utf8");
+    const app = readFileSync(join("src", "App.tsx"), "utf8");
     expect(cc, "CommandCenter must source the shared rail").toMatch(/HOME_RAIL/);
-    // §1b (shell-rail swap): extend this to also assert App.tsx sources HOME_RAIL, so the two rails
-    // are parity-locked once the shell adopts it. Held until the coupled re-homing (Diagnostics→Lab,
-    // ledger→Fix) lands in the same unit, so removing legacy rail items never strands content.
+    expect(app, "the app shell must source the shared rail").toMatch(/HOME_RAIL/);
   });
 });

@@ -53,10 +53,8 @@ type Props = {
   onToggleLimiter: () => void;
   onSeeInFix: () => void;
   // Navigation into the classic (not-yet-reskinned) surfaces + the preview toggle.
-  onNavigate: (tab: "Readiness" | "Monitoring" | "Optimize" | "Check" | "Play" | "Lab") => void;
-  onOpenLibrary: () => void;
+  onNavigate: (tab: "Readiness" | "Monitoring" | "Optimize" | "Check" | "Play" | "Lab" | "Learn") => void;
   onRunCheck: () => void;
-  onDisablePreview: () => void;
   onOpenSettings?: () => void;
 };
 
@@ -310,9 +308,7 @@ export default function CommandCenter(props: Props) {
     onToggleLimiter,
     onSeeInFix,
     onNavigate,
-    onOpenLibrary,
     onRunCheck,
-    onDisablePreview,
     onOpenSettings,
   } = props;
 
@@ -347,7 +343,7 @@ export default function CommandCenter(props: Props) {
     check: () => onNavigate("Check"),
     play: () => onNavigate("Play"),
     fix: () => onNavigate("Optimize"),
-    learn: onOpenLibrary, // §1b converts Learn to a rail destination; modal for now
+    learn: () => onNavigate("Learn"), // Learn is a rail room now (one-rail §1b)
     lab: () => onNavigate("Lab"),
   };
   const NAV = HOME_RAIL.map((it) => ({
@@ -433,7 +429,8 @@ export default function CommandCenter(props: Props) {
 
           <LiveStrip sessions={sessions} progress={progress} />
 
-          {/* Surface controls — theme + ambiance + flip back to the classic home (the preview flag) */}
+          {/* Surface controls — theme + ambiance. The "Classic home" escape hatch is retired
+              (one-rail §1b): classics are reached via Settings → New look only. */}
           <div className="cc-controls">
             <div className="cc-seg" role="group" aria-label="Theme">
               {INSTRUMENT_THEMES.map((t) => (
@@ -460,9 +457,6 @@ export default function CommandCenter(props: Props) {
                 </button>
               ))}
             </div>
-            <button className="cc-classic" onClick={onDisablePreview} title="Switch back to the classic home">
-              Classic home
-            </button>
           </div>
         </div>
       </div>

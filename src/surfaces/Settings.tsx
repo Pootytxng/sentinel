@@ -99,6 +99,7 @@ function LivePreview({ ambiance }: { ambiance: Ambiance }) {
 
 export default function Settings({
   appVersion,
+  rulesSourceLabel,
   flags,
   onSetFlag,
   onRerunSetup,
@@ -106,6 +107,7 @@ export default function Settings({
   onClose,
 }: {
   appVersion: string;
+  rulesSourceLabel: string;
   flags: Record<PreviewFlag, boolean>;
   onSetFlag: (flag: PreviewFlag, on: boolean) => void;
   onRerunSetup: () => void;
@@ -314,6 +316,8 @@ export default function Settings({
             <p className="set-about-privacy">
               Fully local. No account, no telemetry, nothing leaves your PC.
             </p>
+            {/* Rules-source — engineering status, re-homed here from the header (one-rail §1b). */}
+            <p className="set-about-rules">{rulesSourceLabel}</p>
           </div>
         </section>
       </div>

@@ -6,8 +6,8 @@ import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
-import { deriveSystemPosture } from "./surfaces/system-posture";
-import { activeChangeCount } from "./surfaces/dashboard-data";
+import { NavGlyph } from "./design/NavGlyph";
+import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
 import { BenchmarkTab } from "./surfaces/Benchmark";
@@ -197,24 +197,6 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
 type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Learn" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
-
-const SECTION_META: Record<Tab, { label: string; icon: string }> = {
-  Overview: { label: "Dashboard", icon: "grid" },
-  Check: { label: "Check", icon: "shield" },
-  Readiness: { label: "Readiness", icon: "shield" },
-  Priorities: { label: "Priorities", icon: "target" },
-  Optimize: { label: "Optimize", icon: "sliders" },
-  Play: { label: "Play", icon: "pulse" },
-  Monitoring: { label: "Monitor", icon: "pulse" },
-  Sessions: { label: "Sessions", icon: "chart" },
-  Learn: { label: "Learn", icon: "learn" },
-  Lab: { label: "Lab", icon: "chart" },
-  Latency: { label: "Latency", icon: "pulse" },
-  Benchmark: { label: "Benchmark", icon: "chart" },
-  Diagnostics: { label: "Diagnostics", icon: "terminal" },
-  History: { label: "Ledger", icon: "ledger" },
-  Gaming: { label: "Gaming", icon: "engine" },
-};
 
 // Inline stroke icons (no icon font/library → offline, zero-outbound).
 const ICONS: Record<string, React.ReactNode> = {
@@ -809,7 +791,6 @@ function App() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticSection[]>([]);
   const [rulesSource, setRulesSource] = useState<string>("embedded");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
@@ -907,7 +888,6 @@ function App() {
   };
 
   const refresh = async () => {
-    setLoading(true);
     setError(null);
     try {
       const [
@@ -942,8 +922,6 @@ function App() {
       setPriorities(prioritiesData);
     } catch (e) {
       setError(String(e));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1059,6 +1037,9 @@ function App() {
       if (priorities) list.push("Priorities");
     }
     if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
+    // Learn is a rail room now (one-rail §1b) and is ALWAYS available — the knowledge library is
+    // static/offline. Must be in visibleTabs or the reset effect would bounce it back to Overview.
+    list.push("Learn");
     // Play (compy_play_v2) consolidates Monitoring + Sessions IN PLACE; Lab (compy_lab_v2) consolidates
     // Benchmark + Latency IN PLACE. When a flag is on the absorbed classics cease to be destinations
     // (halfway-home §1 — navigation never teleports; the old hidden-but-navigable hack is retired).
@@ -1087,22 +1068,6 @@ function App() {
     }
   }, [visibleTabs, activeTab]);
 
-  const tabBadgeCount = (tab: Tab): number | null => {
-    if (tab === "Readiness") return readiness?.attention_count ?? null;
-    if (tab === "Priorities") return priorities ? priorities.limiters.length : null;
-    // Outstanding (not-yet-applied) recs only — an applied rec isn't an open action, so the badge
-    // reflects "things still worth doing" and clears as you apply them.
-    if (tab === "Optimize") return recs?.filter((r) => !r.currently_applied).length ?? null;
-    // Sessions: a "new debrief" indicator (the latest session is one the user hasn't viewed yet),
-    // not a running count of all recorded sessions.
-    if (tab === "Sessions") {
-      const latest = sessions[0]?.started_at;
-      return latest && latest !== sessionsSeenAt ? 1 : null;
-    }
-    if (tab === "History") return changes.length;
-    return null;
-  };
-
   // Truthful label for the rules source — what's actually driving the
   // catalog the user sees. Per ARCHITECTURE_LOCKS §1.3 cold-start contract,
   // "Embedded" is the always-available baseline; "Cached" / "Remote" only
@@ -1113,6 +1078,48 @@ function App() {
       : rulesSource === "cached"
       ? "Rules: Cached (last-known-good)"
       : "Rules: Built-in";
+
+  // Six-home rail (one-rail §1b) — the shell rail + the CommandCenter rail both render from HOME_RAIL.
+  // navHome maps a home id to its tab (flag-aware: a classic falls back when its v2 flag is off);
+  // HOME_FOR_TAB maps the active tab back to its home so the right rail item highlights.
+  const navHome = (id: HomeRailId) => {
+    setActiveTab(
+      id === "home"
+        ? "Overview"
+        : id === "check"
+          ? checkV2
+            ? "Check"
+            : "Readiness"
+          : id === "play"
+            ? playV2
+              ? "Play"
+              : "Monitoring"
+            : id === "fix"
+              ? "Optimize"
+              : id === "learn"
+                ? "Learn"
+                : labV2
+                  ? "Lab"
+                  : "Benchmark",
+    );
+  };
+  const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
+    Overview: "home",
+    Check: "check",
+    Readiness: "check",
+    Priorities: "check",
+    Play: "play",
+    Monitoring: "play",
+    Sessions: "play",
+    Optimize: "fix",
+    History: "fix",
+    Learn: "learn",
+    Lab: "lab",
+    Latency: "lab",
+    Benchmark: "lab",
+    Diagnostics: "lab",
+  };
+  const activeHomeId = HOME_FOR_TAB[activeTab];
 
   // ── Command Center (new home) wiring ──────────────────────────────────────
   // Resolve the #1 limiter + its linked recommendation so the trust-switch routes through the SAME
@@ -1207,20 +1214,14 @@ function App() {
         <header className="header">
         <div>
           <h1><Wordmark size={24} /></h1>
-          <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
+          <p className="tag">Hardware-aware PC optimization</p>
         </div>
         <div className="header-right">
-          <span
-            className={`rules-source-pill rules-source-${rulesSource}`}
-            title="Where Compy's recommendation catalog came from on this launch"
-          >
-            {rulesSourceLabel}
-          </span>
+          {/* Export is the one header action (one-rail §1b). The rules-source chip moved to
+              Settings → About; the version lives only in the footer; the duplicate Refresh retired
+              (re-run lives in Check + the Home hero). */}
           <button className="btn" onClick={onExport} disabled={exporting}>
             {exporting ? "Exporting…" : "Export report"}
-          </button>
-          <button className="btn" onClick={refresh} disabled={loading}>
-            {loading ? "Scanning…" : "Refresh"}
           </button>
         </div>
         </header>
@@ -1254,6 +1255,7 @@ function App() {
       {hw && settingsActive ? (
         <Settings
           appVersion={APP_VERSION}
+          rulesSourceLabel={rulesSourceLabel}
           flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2, lab: labV2 }}
           onSetFlag={setPreviewFlag}
           onRerunSetup={() => {
@@ -1292,44 +1294,48 @@ function App() {
             else if (tab === "Lab") setActiveTab(labV2 ? "Lab" : "Benchmark");
             else setActiveTab(tab);
           }}
-          onOpenLibrary={() => libraryApi.openLibrary()}
           onRunCheck={() => setShowFirstCheck(true)}
           onOpenSettings={settingsV2 ? () => setShowSettings(true) : undefined}
-          onDisablePreview={() => {
-            setHomeV2(false);
-            persistFlag(HOME_V2_KEY, false);
-          }}
         />
       ) : hw ? (
-        <>
-          <CommandHero
-            hw={hw}
-            readiness={readiness}
-            changes={changes}
-            onRunCheck={() => setShowFirstCheck(true)}
-          />
-          <div className="shell">
+        <div className="shell">
+            {/* ONE rail (one-rail §1b): the six-home set from the shared HOME_RAIL — identical to the
+                Command Center rail (parity-guarded). The legacy SECTION_META rail is retired; the
+                posture hero is Home-only (CommandHero removed). */}
             <nav className="rail" role="tablist" aria-label="Sections">
-              {visibleTabs.map((tab) => {
-                const badge = tabBadgeCount(tab);
-                const meta = SECTION_META[tab];
-                return (
-                  <button
-                    key={tab}
-                    role="tab"
-                    aria-selected={activeTab === tab}
-                    className={`rail-item ${activeTab === tab ? "rail-item-on" : ""}`}
-                    onClick={() => setActiveTab(tab)}
-                    title={meta.label}
-                  >
-                    <Icon name={meta.icon} />
-                    <span className="rail-label">{meta.label}</span>
-                    {badge !== null && badge > 0 && (
-                      <span className="rail-badge">{badge}</span>
-                    )}
-                  </button>
-                );
-              })}
+              {HOME_RAIL.map((item) => (
+                <button
+                  key={item.id}
+                  role="tab"
+                  aria-selected={activeHomeId === item.id}
+                  className={`rail-item ${activeHomeId === item.id ? "rail-item-on" : ""}`}
+                  onClick={() => navHome(item.id)}
+                  title={item.label}
+                >
+                  <NavGlyph name={item.icon} />
+                  <span className="rail-label">{item.label}</span>
+                </button>
+              ))}
+              {gamingEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={activeTab === "Gaming"}
+                  className={`rail-item ${activeTab === "Gaming" ? "rail-item-on" : ""}`}
+                  onClick={() => setActiveTab("Gaming")}
+                  title="Gaming"
+                >
+                  <Icon name="engine" />
+                  <span className="rail-label">Gaming</span>
+                </button>
+              )}
+              <button
+                className="rail-item rail-gear"
+                onClick={() => setShowSettings(true)}
+                title="Settings"
+              >
+                <NavGlyph name="gear" />
+                <span className="rail-label">Settings</span>
+              </button>
             </nav>
 
             <div className="content">
@@ -1408,6 +1414,13 @@ function App() {
                   arcV2={arcV2}
                 />
               )}
+              {activeTab === "Learn" && (
+                <Learn
+                  asPanel
+                  focusId={libraryFocusId}
+                  onClose={() => setActiveTab("Overview")}
+                />
+              )}
               {activeTab === "Lab" && (
                 <Lab diagnostics={<DiagnosticsTab sections={diagnostics} />} />
               )}
@@ -1422,7 +1435,6 @@ function App() {
               {activeTab === "Gaming" && <GamingMode />}
             </div>
           </div>
-        </>
       ) : null}
 
       {!ccActive && !settingsActive && (
@@ -1438,105 +1450,6 @@ function App() {
   );
 }
 
-// ─── Command hero ─────────────────────────────────────────────────────────
-// The at-a-glance verdict the user sees the instant Compy opens: a glowing
-// readiness gauge + a confident status headline + live system vitals. Read-only
-// — derives entirely from the already-loaded hardware + readiness data; changes
-// nothing. This is the "are I dialed in / do I need to look elsewhere" answer.
-
-function Vital({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="vital">
-      <div className="vital-label">{label}</div>
-      <div className="vital-value" title={value}>{value}</div>
-    </div>
-  );
-}
-
-function CommandHero({
-  hw,
-  readiness,
-  changes,
-  onRunCheck,
-}: {
-  hw: HardwareInfo;
-  readiness: GameReadiness | null;
-  changes: AppliedChange[];
-  onRunCheck: () => void;
-}) {
-  // Honest, transparent posture — derived from real readiness facts + active
-  // changes. No opaque "tune score", no tier ladder, no level-up flourish.
-  const posture = deriveSystemPosture({
-    readiness,
-    activeChanges: activeChangeCount(changes),
-    monitoringAvailable: true,
-  });
-  const state =
-    posture.state === "attention" ? "attention"
-    : posture.state === "dialed-in" ? "ready"
-    : "scanning";
-
-  // Ring shows the fraction of readiness checks cleared — a real, explainable
-  // count, NOT a synthesized score.
-  const total = readiness ? readiness.checks.length : 0;
-  // Only an ACTIVE (non-dismissed) attention check or an Unknown holds the ring down.
-  // Advisory items (e.g. VRR — no API exposes its state) and user-dismissed checks are "resolved"
-  // from Compy's view — attention_count already excludes dismissals server-side.
-  const clear = readiness
-    ? total - readiness.attention_count - readiness.unknown_count
-    : 0;
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const dash = C * (total > 0 ? clear / total : 0);
-
-  const cpu = hw.cpu_arch?.family_label || hw.cpu_brand || "—";
-  const gpu = hw.gpus[0]?.name ?? "—";
-  const ram = hw.ram_total_bytes > 0 ? fmtGB(hw.ram_total_bytes) : "—";
-  const disp =
-    hw.display && hw.display.width > 0
-      ? `${hw.display.current_refresh_rate_hz} Hz`
-      : "—";
-
-  return (
-    <section className={`hero hero-${state}`}>
-      <div className="hero-core">
-        <div
-          className="hero-ring-wrap"
-          title={readiness ? `${clear}/${total} readiness checks clear` : "Scanning…"}
-        >
-          <svg className="hero-ring" viewBox="0 0 120 120" aria-hidden="true">
-            <circle className="hero-ring-track" cx="60" cy="60" r={R} />
-            <circle
-              className="hero-ring-fill"
-              cx="60" cy="60" r={R}
-              strokeDasharray={`${dash} ${C}`}
-              transform="rotate(-90 60 60)"
-            />
-          </svg>
-          <div className="hero-ring-center">
-            <div className="hero-ring-num">{readiness ? `${clear}/${total}` : "—"}</div>
-            <div className="hero-ring-den">{readiness ? "ready" : "scan"}</div>
-          </div>
-        </div>
-        <div className="hero-verdict">
-          <div className="hero-eyebrow">System status</div>
-          <div className="hero-headline">{posture.headline}</div>
-          <div className="hero-subline">{posture.sub}</div>
-          {/* Always-visible way back to the guided check — a skipper never loses it. */}
-          <button className="hero-action" onClick={onRunCheck}>
-            Run a check
-          </button>
-        </div>
-      </div>
-      <div className="hero-vitals">
-        <Vital label="CPU" value={cpu} />
-        <Vital label="GPU" value={gpu} />
-        <Vital label="Memory" value={ram} />
-        <Vital label="Display" value={disp} />
-      </div>
-    </section>
-  );
-}
 
 // ─── Tabs ────────────────────────────────────────────────────────────────
 

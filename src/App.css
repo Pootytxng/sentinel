@@ -2026,6 +2026,8 @@ body::before {
 }
 .rail-item-on .ico { transform: scale(1.06); filter: drop-shadow(0 0 6px var(--accent-glow)); }
 .rail-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Settings gear sits at the bottom of the six-home rail (one-rail §1b). */
+.rail-gear { margin-top: auto; }
 .rail-badge {
   font-family: var(--font-mono);
   font-size: 10px;
