@@ -18,17 +18,8 @@ if (isOverlay) {
   document.documentElement.classList.add("overlay-mode");
 }
 
-// Apply the saved appearance theme before first paint (avoids a flash of the
-// default palette). Theme is a data-attribute that swaps CSS color tokens;
-// purely cosmetic, local-only (localStorage), no network.
-try {
-  const savedTheme = localStorage.getItem("compy-theme");
-  if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-} catch {
-  /* ignore — fall back to the default theme */
-}
-
 // Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Velocity.
+// (The classic [data-theme] appearance system was retired 2026-06-06; data-itheme is the one theme.)
 // Local-only, cosmetic; reversible (drop instrument.css + this block to fall back to the old accent).
 try {
   const it = localStorage.getItem("compy_theme");

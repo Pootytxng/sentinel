@@ -357,15 +357,13 @@ export default function CommandCenter(props: Props) {
   const reduced = useReducedMotion();
   const progress = useMountProgress(900, reduced);
 
-  // Instrument theme + ambiance. Applied only while this surface is mounted; removed on unmount so
-  // the classic (not-yet-reskinned) surfaces keep their original palette — maximally reversible.
+  // Instrument theme + ambiance. The theme is now app-wide (set at startup in main.tsx + here on
+  // change) and persists across every surface — no unmount-removal (the classic ThemePicker is
+  // retired; Instrument's Velocity/Nova/Ember is the one theme system).
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
   useEffect(() => {
     applyInstrumentTheme(itheme);
-    return () => {
-      document.documentElement.removeAttribute("data-itheme");
-    };
   }, [itheme]);
 
   const changeTheme = (t: InstrumentTheme) => setITheme(t);

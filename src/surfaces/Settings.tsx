@@ -106,11 +106,10 @@ export default function Settings({
     }
   });
 
-  // Apply the instrument theme while this surface is mounted (live recolor); persists via
-  // applyInstrumentTheme. Removed on unmount — the next Instrument surface re-applies the saved one.
+  // Theme is app-wide + persistent (set at startup in main.tsx); applying here recolors live. No
+  // unmount-removal — the Instrument theme is the one theme system now.
   useEffect(() => {
     applyInstrumentTheme(itheme);
-    return () => document.documentElement.removeAttribute("data-itheme");
   }, [itheme]);
 
   useEffect(() => {

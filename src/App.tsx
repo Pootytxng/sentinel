@@ -1139,40 +1139,10 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
   );
 }
 
-// Appearance themes — cosmetic palettes applied via the [data-theme] attribute
-// on <html>. "graphite" is the default (no attribute). Freely selectable;
-// local-only (localStorage), no network. Curated to a premium dark/metallic set.
-type Theme = {
-  id: string;
-  label: string;
-  swatch: [string, string, string];
-};
-const THEMES: Theme[] = [
-  { id: "graphite", label: "Graphite", swatch: ["#0b0d12", "#6aa9ff", "#46d98a"] },
-  { id: "frost", label: "Frost", swatch: ["#060a0d", "#38d6e6", "#46d98a"] },
-  { id: "aurora", label: "Aurora Noir", swatch: ["#05080c", "#34e0a8", "#6cf0c4"] },
-  { id: "ember", label: "Carbon Ember", swatch: ["#0a0807", "#ff8b3d", "#7cd66b"] },
-];
-
-function applyTheme(id: string) {
-  const root = document.documentElement;
-  if (id === "graphite") root.removeAttribute("data-theme");
-  else root.dataset.theme = id;
-  try {
-    localStorage.setItem("compy-theme", id);
-  } catch {
-    /* ignore persistence failure — theme still applies for this session */
-  }
-}
-
-function readSavedTheme(): string {
-  try {
-    const saved = localStorage.getItem("compy-theme") || "graphite";
-    return THEMES.some((t) => t.id === saved) ? saved : "graphite";
-  } catch {
-    return "graphite";
-  }
-}
+// (The classic appearance ThemePicker was retired 2026-06-06 — superseded by the Instrument theme
+// system: Velocity/Nova/Ember via data-itheme, set app-wide at startup and managed in Settings. A
+// recorded decision, not a silent loss — see the surface-default governance section in
+// docs/superpowers/plans/2026-06-04-beta-build-order.md.)
 
 // New Instrument surfaces ride behind per-surface localStorage flags. Default ON in dev so the owner
 // sees them first; OFF in a release build until the reskin lands fully. Additive + reversible — a
@@ -1198,73 +1168,6 @@ function persistFlag(key: string, on: boolean): void {
   } catch {
     /* ignore persistence failure — still applies this session */
   }
-}
-
-// Header theme picker — freely selectable; no tiers, no locks, no randomizer.
-function ThemePicker({
-  current,
-  onChange,
-}: {
-  current: string;
-  onChange: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  // Esc closes the popover (keyboard parity with the click-out backdrop).
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const currentLabel = THEMES.find((t) => t.id === current)?.label ?? "Graphite";
-
-  return (
-    <div className="theme-picker">
-      <button
-        className="theme-trigger"
-        onClick={() => setOpen((v) => !v)}
-        title="Change appearance theme"
-        aria-haspopup="true"
-        aria-expanded={open}
-      >
-        <span className="theme-trigger-dot" aria-hidden="true" />
-        {currentLabel}
-      </button>
-      {open && (
-        <>
-          <div className="theme-backdrop" onClick={() => setOpen(false)} />
-          <div className="theme-pop" role="menu">
-            <div className="theme-pop-head">
-              <span>Appearance</span>
-            </div>
-            <div className="theme-grid">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  className={`theme-swatch ${current === t.id ? "theme-swatch-on" : ""}`}
-                  onClick={() => { onChange(t.id); setOpen(false); }}
-                  role="menuitemradio"
-                  aria-checked={current === t.id}
-                  title={t.label}
-                >
-                  <span className="theme-swatch-chips">
-                    <span style={{ background: t.swatch[0] }} />
-                    <span style={{ background: t.swatch[1] }} />
-                    <span style={{ background: t.swatch[2] }} />
-                  </span>
-                  <span className="theme-swatch-label">{t.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
 }
 
 function App() {
@@ -1298,7 +1201,6 @@ function App() {
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [theme, setTheme] = useState<string>(readSavedTheme);
   // Instrument-surface preview flags — see readDevFlag.
   const [homeV2, setHomeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
   const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
@@ -1318,13 +1220,6 @@ function App() {
   const [gamingEnabled, setGamingEnabled] = useState(false);
   useEffect(() => {
     invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
-  }, []);
-  // Apply the saved theme to the DOM on launch. `theme` state restores from localStorage, but the
-  // [data-theme] attribute must actually be written or the palette silently falls back to default —
-  // that omission is why a chosen theme "didn't persist" across restarts.
-  useEffect(() => {
-    applyTheme(theme);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // While the Sessions tab is open, mark the latest debrief as seen — clears the "new" badge.
   useEffect(() => {
@@ -1364,10 +1259,6 @@ function App() {
     }
   };
 
-  const changeTheme = (id: string) => {
-    setTheme(id);
-    applyTheme(id);
-  };
   const onExport = async () => {
     setExporting(true);
     setError(null);
@@ -1664,7 +1555,6 @@ function App() {
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
         <div className="header-right">
-          <ThemePicker current={theme} onChange={changeTheme} />
           <span
             className={`rules-source-pill rules-source-${rulesSource}`}
             title="Where Compy's recommendation catalog came from on this launch"
