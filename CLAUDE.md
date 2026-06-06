@@ -52,6 +52,28 @@ Everything else — refactors, features behind a gate, docs, local builds, rever
 "fewer stops" means fewer *check-ins*, not less rigor. See [[working-state-persistent-mode]] +
 [[working-defaults-pure-upside]].
 
+### MINIMAL GATES (owner directive 2026-06-06 — extends SPORT MODE)
+
+**If a task CAN be done by us (you or Cowork), DO IT — never redirect to the owner anything we're
+capable of handling.** Owner-bound items are ONLY: **money · distribution/sends to other humans ·
+aesthetic taste calls** (e.g. theme hexes) **· the LOCKED gates** (frozen beta refs, `gaming_mode`
+flag, remote-fetch/updater, signing keys, force-push, secrets).
+
+**Pause for the owner on ONLY two things:**
+1. **Point-of-no-return** — anything irreversible (deletions without backup, history rewrites,
+   outward-facing/real-world actions).
+2. **Reshaping a core feature/element OUTSIDE the currently-discussed topic** — send a brief
+   **WELFARE CHECK** first (one message: *what / why / blast radius*), and only when genuinely
+   important. Gauge: *"would this leave the owner upset if he saw it without warning?"* If no → proceed,
+   report after.
+
+**Everything reversible: just do it and report after.** The owner is explicitly forgiving of fixable
+mistakes — **bias hard toward momentum. Reversibility is the license:** keep changes revertable (flags,
+small commits, additive) and the license stays valid. This loosens **nothing** about rigor —
+tests/builds/verification never skipped, locked gates unchanged, honesty rules unchanged: fewer
+check-ins, not less rigor. `AskUserQuestion` is reserved for genuine forks in **owner territory**
+(taste/money/people/irreversible); **engineering forks you resolve yourself and record the reasoning.**
+
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
