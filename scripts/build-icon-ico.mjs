@@ -16,10 +16,11 @@ const CHROME =
 const ASSETS = "docs/superpowers/specs/assets";
 const OUT = "src-tauri/icons/icon.ico";
 
-// size → source SVG. C-only for the tiny layers (legibility), full pulse-c for the rest (spec B3).
+// size → source SVG (halfway-home §3): the single-beat small cut for the tiny layers (the plain
+// C-only mark is retired — "the plain C is so plain"), the full three-beat master for 32px+.
 const LAYERS = [
-  { size: 16, svg: "pulse-c-icon-c-only.svg" },
-  { size: 24, svg: "pulse-c-icon-c-only.svg" },
+  { size: 16, svg: "pulse-c-icon-small.svg" },
+  { size: 24, svg: "pulse-c-icon-small.svg" },
   { size: 32, svg: "pulse-c-icon-master.svg" },
   { size: 48, svg: "pulse-c-icon-master.svg" },
   { size: 256, svg: "pulse-c-icon-master.svg" },
