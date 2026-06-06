@@ -51,6 +51,25 @@ local-first product keeps its own operational data local too.
 
 ---
 
+## Instrument reskin — surface-default governance (owner, 2026-06-06)
+
+The Instrument reskin ships each surface behind a `compy_*_v2` localStorage flag (default ON in dev,
+OFF in release), so the classic surface stays the shipped default until the new one is at parity.
+
+**RULE — no capability silently lost on a default-flip or retirement:**
+- **Classic Optimize cannot retire, and `compy_fix_v2` cannot become the shipped (release) default,
+  until Startup management AND the full guided-advisory cards either reach parity inside Fix or are
+  deliberately re-homed elsewhere (owner sign-off on the re-home).** Fix v1 intentionally omits both;
+  they remain fully reachable in classic Optimize via the flag toggle. Nothing is silently dropped.
+- The in-surface general "Look it up" Library launcher is a **deliberate permanent removal** (covered
+  by the refuse-pile autopsy links + the home rail's "Learn") — a decision, not a parity gap.
+
+Apply the same principle to every future surface flip: before the release default changes, enumerate
+what the classic surface does that the new one doesn't, and either reach parity or record an explicit
+owner decision to re-home/drop.
+
+---
+
 ## Passes
 
 **Pass 0 — NOT a blocker for the invite beta (owner decision, 2026-06-05; money-last).** Domain +
