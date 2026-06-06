@@ -1382,6 +1382,7 @@ function App() {
                   onExport={onExport}
                   changes={changes}
                   rollback={rollback}
+                  deepMonitoring={<MonitoringTab active={activeTab === "Play"} embedded />}
                 />
               )}
               {activeTab === "Monitoring" && (
@@ -1928,7 +1929,7 @@ const MONITORING_WINDOW = 60;
 
 type CpuTemp = { temp_c: number; source: string; label: string };
 
-function MonitoringTab({ active }: { active: boolean }) {
+function MonitoringTab({ active, embedded = false }: { active: boolean; embedded?: boolean }) {
   const [gpuSamples, setGpuSamples] = useState<GpuSensorSnapshot[][]>([]);
   const [cpuSamples, setCpuSamples] = useState<CpuSensorSnapshot[]>([]);
   const [hasGpu, setHasGpu] = useState<boolean | null>(null);
@@ -2043,6 +2044,10 @@ function MonitoringTab({ active }: { active: boolean }) {
 
   return (
     <section className="tab-pane">
+      {/* Header overlay controls + telemetry blurb hidden when embedded in Play (Play has its own
+          live + overlay cards) — embedded shows only the deep panels Play lacks. */}
+      {!embedded && (
+      <>
       <div className="section-header">
         <h2 className="section-title">Monitoring</h2>
         <div className="section-header-actions">
@@ -2094,17 +2099,22 @@ function MonitoringTab({ active }: { active: boolean }) {
           implemented, not yet hardware-verified · Intel — planned.
         </span>
       </p>
+      </>
+      )}
 
       {/* RAM-pressure warning — the invisible stutter cause; shows only when tight/critical */}
       {mem && <MemoryPressureBanner mem={mem} />}
 
-      {/* FPS / frametime — headline metric, opt-in (needs admin) */}
-      <FpsPanel
-        fps={fps}
-        busy={fpsBusy}
-        onEnable={enableFps}
-        onStop={stopFps}
-      />
+      {/* FPS / frametime — headline metric, opt-in (needs admin). Hidden when embedded in Play (its
+          live card already owns capture). */}
+      {!embedded && (
+        <FpsPanel
+          fps={fps}
+          busy={fpsBusy}
+          onEnable={enableFps}
+          onStop={stopFps}
+        />
+      )}
 
       {/* CPU panel — vendor-agnostic, always shows */}
       {latestCpu && (

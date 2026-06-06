@@ -178,6 +178,49 @@
   color: var(--ix-accent-text);
   margin: 4px 2px 10px;
 }
+
+/* Full-monitoring collapsible — the deep classic panels embedded in place. */
+.play-monitor {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  overflow: hidden;
+}
+.play-monitor-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.play-monitor-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+}
+.play-monitor-sub {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ix-text-3);
+}
+.play-monitor-caret {
+  color: var(--ix-text-3);
+  transition: transform 160ms ease;
+}
+.play-monitor-caret-open {
+  transform: rotate(90deg);
+}
+.play-monitor-body {
+  padding: 2px 14px 14px;
+  border-top: 1px solid var(--ix-glass-border);
+}
 .play-empty {
   margin: 2px;
   font-size: 13px;

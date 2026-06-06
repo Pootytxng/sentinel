@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "../types";
 import { type OverlayDensity, readOverlayDensity, persistOverlayDensity } from "../design/theme";
@@ -50,6 +50,7 @@ export default function Play({
   onExport,
   changes,
   rollback,
+  deepMonitoring,
 }: {
   active: boolean;
   sessions: SessionSummary[];
@@ -61,6 +62,7 @@ export default function Play({
   onExport: () => void;
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
+  deepMonitoring?: ReactNode;
 }) {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
@@ -73,6 +75,7 @@ export default function Play({
   );
   const [armed, setArmed] = useState<ArmedLite>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [monitorOpen, setMonitorOpen] = useState(false);
 
   // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
   useEffect(() => {
@@ -224,6 +227,28 @@ export default function Play({
           </div>
         </div>
       </div>
+
+      {/* Full monitoring — the deep classic Monitoring panels (memory pressure, per-core, charts)
+          embedded in place (no route). Mounted only when expanded so it polls only then. */}
+      {deepMonitoring && (
+        <div className="play-monitor">
+          <button
+            className="play-monitor-head"
+            onClick={() => setMonitorOpen((o) => !o)}
+            aria-expanded={monitorOpen}
+          >
+            <span className="play-monitor-title">Full monitoring &amp; charts</span>
+            <span className="play-monitor-sub">memory pressure · per-core · live graphs</span>
+            <span
+              className={`play-monitor-caret ${monitorOpen ? "play-monitor-caret-open" : ""}`}
+              aria-hidden="true"
+            >
+              ▸
+            </span>
+          </button>
+          {monitorOpen && <div className="play-monitor-body">{deepMonitoring}</div>}
+        </div>
+      )}
 
       {/* Sessions — rows expand IN PLACE into the full debrief (no route; navigation never teleports). */}
       <div className="play-sessions">
