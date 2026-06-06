@@ -16,6 +16,7 @@ import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
 import Play from "./surfaces/Play";
+import Lab from "./surfaces/Lab";
 import Settings, { type PreviewFlag } from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
@@ -193,7 +194,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
 
 const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Overview: { label: "Dashboard", icon: "grid" },
@@ -204,6 +205,7 @@ const SECTION_META: Record<Tab, { label: string; icon: string }> = {
   Play: { label: "Play", icon: "pulse" },
   Monitoring: { label: "Monitor", icon: "pulse" },
   Sessions: { label: "Sessions", icon: "chart" },
+  Lab: { label: "Lab", icon: "chart" },
   Latency: { label: "Latency", icon: "pulse" },
   Benchmark: { label: "Benchmark", icon: "chart" },
   Diagnostics: { label: "Diagnostics", icon: "terminal" },
@@ -1159,6 +1161,7 @@ const SETTINGS_V2_KEY = "compy_settings_v2";
 const OVERLAY_V2_KEY = "compy_overlay_v2";
 const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
+const LAB_V2_KEY = "compy_lab_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1217,6 +1220,7 @@ function App() {
   const [overlayV2, setOverlayV2] = useState<boolean>(() => readDevFlag(OVERLAY_V2_KEY));
   const [checkV2, setCheckV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
   const [playV2, setPlayV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
+  const [labV2, setLabV2] = useState<boolean>(() => readDevFlag(LAB_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
@@ -1439,19 +1443,28 @@ function App() {
     if (playV2 && (hw || sessions.length > 0)) list.push("Play");
     if (hw) list.push("Monitoring");
     if (sessions.length > 0) list.push("Sessions");
+    // Lab (compy_lab_v2) consolidates Benchmark + Latency; both stay navigable (for Lab's run links
+    // + reset), the rail hides them (see railTabs).
+    if (labV2 && hw) list.push("Lab");
     if (hw) list.push("Latency");
     if (hw) list.push("Benchmark");
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     if (gamingEnabled) list.push("Gaming");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2, playV2]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2, playV2, labV2]);
 
-  // What the rail actually renders: Play absorbs Monitoring + Sessions, so hide those from the rail
-  // when the flag is on (they remain navigable via Play's links + reset, per visibleTabs above).
+  // What the rail actually renders: Play absorbs Monitoring + Sessions and Lab absorbs Benchmark +
+  // Latency, so hide those from the rail when their flag is on (they stay navigable via the surfaces'
+  // links + reset, per visibleTabs above).
   const railTabs = useMemo(
-    () => visibleTabs.filter((t) => !(playV2 && (t === "Monitoring" || t === "Sessions"))),
-    [visibleTabs, playV2],
+    () =>
+      visibleTabs.filter(
+        (t) =>
+          !(playV2 && (t === "Monitoring" || t === "Sessions")) &&
+          !(labV2 && (t === "Latency" || t === "Benchmark")),
+      ),
+    [visibleTabs, playV2, labV2],
   );
 
   // If the active section disappears, fall back to Dashboard (Overview).
@@ -1517,6 +1530,7 @@ function App() {
       overlay: [OVERLAY_V2_KEY, setOverlayV2],
       check: [CHECK_V2_KEY, setCheckV2],
       play: [PLAY_V2_KEY, setPlayV2],
+      lab: [LAB_V2_KEY, setLabV2],
     };
     const [key, setter] = setters[flag];
     setter(on);
@@ -1627,7 +1641,7 @@ function App() {
       {hw && settingsActive ? (
         <Settings
           appVersion="0.1.0"
-          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2 }}
+          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2, lab: labV2 }}
           onSetFlag={setPreviewFlag}
           onClose={() => setShowSettings(false)}
         />
@@ -1652,6 +1666,7 @@ function App() {
             // Readiness tab when the flag is off.
             if (tab === "Check") setActiveTab(checkV2 ? "Check" : "Readiness");
             else if (tab === "Play") setActiveTab(playV2 ? "Play" : "Monitoring");
+            else if (tab === "Lab") setActiveTab(labV2 ? "Lab" : "Benchmark");
             else setActiveTab(tab);
           }}
           onOpenLibrary={() => libraryApi.openLibrary()}
@@ -1758,6 +1773,12 @@ function App() {
                   changes={changes}
                   rollback={rollback}
                   arcV2={arcV2}
+                />
+              )}
+              {activeTab === "Lab" && (
+                <Lab
+                  onOpenBenchmark={() => setActiveTab("Benchmark")}
+                  onOpenLatency={() => setActiveTab("Latency")}
                 />
               )}
               {activeTab === "Latency" && <LatencyTab />}
@@ -1882,6 +1903,17 @@ function App() {
             }}
           />
           New Play (preview)
+        </label>
+        <label className="footer-toggle" title="Try the new Lab surface (preview)">
+          <input
+            type="checkbox"
+            checked={labV2}
+            onChange={(e) => {
+              setLabV2(e.target.checked);
+              persistFlag(LAB_V2_KEY, e.target.checked);
+            }}
+          />
+          New Lab (preview)
         </label>
         {settingsV2 && (
           <button className="footer-link" onClick={() => setShowSettings(true)}>

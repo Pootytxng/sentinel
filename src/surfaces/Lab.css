@@ -1,0 +1,101 @@
+/* LAB surface — the instruments room. Token-only (--ix-*). Calm static dot-grid (instrument-room
+   quiet), glass cards. */
+.lab-root {
+  position: relative;
+  padding: 4px 2px 24px;
+}
+.lab-dotgrid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 0%, transparent 75%);
+}
+.lab-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.lab-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.lab-sub {
+  margin: 5px 0 18px;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+
+.lab-cards {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.lab-card {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 18px 20px;
+  backdrop-filter: blur(7px);
+}
+.lab-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.lab-card-icon {
+  color: var(--ix-accent);
+}
+.lab-card-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+}
+.lab-card-oneliner {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--ix-text-2);
+  line-height: 1.55;
+}
+.lab-recent {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
+.lab-action {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: var(--accent-soft, rgba(46, 230, 192, 0.14));
+  color: var(--ix-accent-text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+.lab-action:hover {
+  border-color: var(--ix-accent);
+}
