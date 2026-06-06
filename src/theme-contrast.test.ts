@@ -72,9 +72,24 @@ const root = decls(":root");
 const THEMES = ["velocity", "nova", "ember"];
 
 describe("theme contrast (legibility guard)", () => {
+  it(":root defaults parsed (guards the inherited tokens)", () => {
+    // velocity/nova inherit text-2/-3 + glass-fill from :root; if the :root parse breaks, those
+    // would be undefined and the per-theme checks would validate nothing meaningful.
+    expect(root).toHaveProperty("--ix-glass-fill");
+    expect(root).toHaveProperty("--ix-text-2");
+    expect(root).toHaveProperty("--ix-base");
+  });
+
   for (const theme of THEMES) {
     it(`${theme}: text tokens clear the contrast floor on base + glass`, () => {
-      const t = { ...root, ...decls(`:root[data-itheme="${theme}"]`) };
+      const themeTokens = decls(`:root[data-itheme="${theme}"]`);
+      // Guard the guard: if a selector reformat stops this matching, we'd silently fall back to the
+      // :root defaults and validate the wrong theme. Every theme block defines its own accent-text.
+      expect(
+        themeTokens,
+        `:root[data-itheme="${theme}"] did not match — selector format changed?`,
+      ).toHaveProperty("--ix-accent-text");
+      const t = { ...root, ...themeTokens };
       const base = parseHex(t["--ix-base"]);
       const glass = compositeRgba(t["--ix-glass-fill"], base);
 
