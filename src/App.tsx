@@ -778,15 +778,19 @@ const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
 const LAB_V2_KEY = "compy_lab_v2";
 const APP_VERSION = "0.1.0";
+// The Instrument/Halfway-Home surfaces now DEFAULT ON in dev AND release (the redesign is the
+// shipped app — owner sign-off 2026-06-06, after the Fix + Play parity gaps were closed). Each
+// classic surface stays reachable by setting its flag to "0" in Settings → New look. An explicit
+// stored "1"/"0" always wins.
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
     if (v === "1") return true;
     if (v === "0") return false;
   } catch {
-    /* ignore — fall back to the dev default */
+    /* ignore — fall back to the default */
   }
-  return import.meta.env.DEV;
+  return true;
 }
 function persistFlag(key: string, on: boolean): void {
   try {

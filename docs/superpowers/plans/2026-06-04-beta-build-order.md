@@ -122,6 +122,19 @@ everything else stands.
   overlay controls. They remain in classic Monitoring (flag off). Deferred to a chart-only panel in a
   follow-up if tester signal wants it — recorded, not a silent drop.
 
+**RELEASE DEFAULT FLIPPED — the redesign ships (owner decision, 2026-06-06).** The `compy_*_v2`
+surfaces now DEFAULT ON in release (not just dev): `readDevFlag`/`readOverlayV2` default `true`; a
+stored `"0"` (Settings → New look) still falls back to each classic surface. **The two parity gates
+are now CLOSED**, which is what unblocked this:
+- **Fix parity met:** Startup management + the full guided-advisory cards (where + steps + the
+  allowlisted ms-settings "Open it" link) now live IN Fix (`57f2e21`) — classic Optimize is no longer
+  the only home for them, so `compy_fix_v2` as the shipped default no longer drops a capability.
+- **Play parity met:** the deep Monitoring panels (memory pressure, per-core, charts) embed in Play
+  in place (`aaa4f79`) — classic Monitoring's depth is preserved, so `compy_play_v2` shipping default
+  drops nothing.
+Owner chose "close the gaps first, then ship all." Gaming Mode stays dark; the frozen
+`private-beta-001` ref @ `16069fa` is untouched; the build is unsigned (beta-by-decision).
+
 ---
 
 ## Passes

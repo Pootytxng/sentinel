@@ -28,18 +28,18 @@ type FpsLite = {
   } | null;
 };
 
-// compy_overlay_v2: render the re-dressed (inverted-rule) overlay. Default ON in dev. Read here (the
-// overlay is a separate window from the main app); it reacts to the cross-window `storage` event when
-// Settings flips it or the density.
+// compy_overlay_v2: render the re-dressed (inverted-rule) overlay. DEFAULT ON (the redesign is the
+// shipped app); "0" in Settings falls back to the classic overlay. Read here (the overlay is a
+// separate window); it reacts to the cross-window `storage` event when Settings flips it or the density.
 function readOverlayV2(): boolean {
   try {
     const v = localStorage.getItem("compy_overlay_v2");
     if (v === "1") return true;
     if (v === "0") return false;
   } catch {
-    /* ignore — dev default */
+    /* ignore — default ON */
   }
-  return import.meta.env.DEV;
+  return true;
 }
 
 // A system can expose more than one GPU — AM5 desktop CPUs (incl. X3D) ship
