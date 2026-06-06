@@ -28,13 +28,23 @@ does it lie?* If it neither testifies nor lies, it's allowed to simply be pretty
 
 ## 1. Brand mark
 
-- **Wordmark: "Compy"** — the leading **C is the pulse-C**: a heartbeat/frametime spike that curls
-  into the letter C, the signal continuing as a faint flatline tick under "ompy." One continuous
-  stroke. The C carries the accent + glow; "ompy" wears a theme-tinted off-white and yields the
-  spotlight. **(provisional — current frontrunner over 8 vetted alternates: velocity-C, gauge-C,
-  power-C, bolt-C, pixel-C, reticle-C, play-C, bold-C. Cross-breed to still try: Pulse × Power.)**
-- **App icon:** the pulse-C alone in a rounded-square obsidian tile; the pulse detail drops out
-  below ~24px, leaving the glowing C (graceful degradation for the taskbar).
+- **WORDMARK LAW (owner, 2026-06-06 — repeat offense, now hard law):** wherever the brand renders
+  as identity (app header, onboarding hero, splash, About, site header/footer, marketing, docs
+  headers), **the pulse-C IS the letter C: bare glyph (NO tile) at cap height, tight-kerned
+  directly into "ompy" — one word, one mark.** Never icon-next-to-"Compy", never a separated
+  logo + full word. The **tiled** pulse-C exists ONLY in icon contexts (desktop/taskbar/favicon/
+  thumbnail). In running prose, type "Compy" normally. Implement once as a shared `Wordmark`
+  component and reuse it everywhere.
+  **Wordmark cut (the kerning that makes it ONE WORD):** crop the glyph viewBox to the stroke
+  bounds — `viewBox="218 218 510 588"` on the master geometry (no dead padding); trim the pulse
+  to end at `648,512` so the "o" can tuck toward the C's mouth; C-to-"o" gap = normal letter
+  spacing (≈ −1px at 19px / ≤0.05em — match the o-to-m rhythm). If it reads as logo-then-word,
+  the kerning is wrong.
+- **Wordmark: "Compy"** — the leading **C is the pulse-C** (heartbeat inside the C's bowl per the
+  2026-06-06 icon revision). The C carries the accent; "ompy" wears theme off-white and yields
+  the spotlight.
+- **App icon:** the pulse-C in a rounded-square neutral tile; 16/24px use the single-beat small
+  cut (`pulse-c-icon-small.svg`) — owner override: the pulse survives ALL sizes, C-only retired.
 - **Launch reveal:** the pulse draws itself on cold start (flatline → spike → curl into C). The app
   introduces itself with its own heartbeat. Honors `prefers-reduced-motion`.
 - **Outstanding task:** replace stock `src-tauri/icons/*` (still the Tauri default) with the real

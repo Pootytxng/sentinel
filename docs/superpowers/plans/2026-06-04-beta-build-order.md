@@ -91,11 +91,12 @@ their specs land (Cowork is writing them); this entry only records the decided I
 rail when its flag is on, while `visibleTabs` keeps them NAVIGABLE (so the surfaces' links + the
 active-tab reset don't bounce). Check shares the scan with FirstCheck (extracted `useScan` +
 `ScanStream`). Parity governance (above) still applies — classics stay reachable when flags are off.
-- **Play's debrief = decision, not drift (owner + Cowork audit, 2026-06-06):** Play's session rows
-  open the **full EXISTING debrief by navigating to the Sessions tab** rather than re-rendering the
-  `SessionDebrief`/comparison cluster inline. This matches the spec verbatim ("click opens the full
-  existing debrief") and deliberately avoids extracting the locked-copy debrief cluster. Inline reuse
-  is **Wave 2 only if tester signal demands it** — not a parity gap.
+- **Play's debrief — SUPERSEDED same day (owner UX verdict, halfway-home §1):** the original
+  2026-06-06 decision (rows navigate to the Sessions tab; no inline extraction) was REVERSED by the
+  owner's live sweep ("boxes in boxes"). Standing law: **navigation never teleports** — Play rows
+  expand the full `SessionDebrief` IN PLACE (extraction greenlit; locked copy moved untouched), Lab
+  embeds Benchmark/Latency inline, and the hidden-but-navigable classic-tab hack is retired. Built
+  in `6a820be`.
 
 **Halfway Home pass (owner live-sweep course-correction, 2026-06-06)** — spec
 `2026-06-06-halfway-home.md`. Supersedes the green-tinted palette + the route-to-classic-tab nav;

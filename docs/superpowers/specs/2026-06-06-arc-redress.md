@@ -1,3 +1,7 @@
+> **PARTIALLY SUPERSEDED (2026-06-06, owner course-correction):** the RADAR visualization
+> prescribed below is **RETIRED** — replaced by the light sweep per `2026-06-06-halfway-home.md`
+> §2. Copy locks and all non-radar content still stand.
+
 # First-Experience Arc — Instrument re-dress spec (fourth live pass)
 
 *2026-06-06, Cowork. Re-dresses the four arc surfaces (onboarding · first-check landing · session

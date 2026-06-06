@@ -89,7 +89,37 @@ Fully **AMD**: **Radeon RX 9070 XT (RDNA4)** GPU, Ryzen X3D-class CPU, 16 logica
 2026-05-30** so the `runas` elevation path can be tested. `uac_disabled()` now returns false →
 the real `runas` branch is live (not the direct-spawn fallback). To revert: set `EnableLUA=0` + reboot.
 
-## CURRENT STATE — Release-gate QA + first upward feature (as of 2026-05-31)
+## CURRENT STATE — Instrument reskin + Halfway Home (as of 2026-06-06)
+
+> **🎨 WHOLE-APP RESKIN + "HALFWAY HOME" COURSE-CORRECTION LANDED — 2026-06-06 (`main` @ `d942b80`).**
+> The app now wears the **Instrument** design system end to end, then dialed back per the owner's live
+> sweep ("dial down the extremities, bring us halfway home"). **A cold session MUST start from here —
+> the banners below this one are pre-reskin history (two designs behind).**
+> - **Theme system:** `data-itheme` on `<html>` (applied at startup in `main.tsx`; managed in Settings →
+>   Appearance) is THE theme system — the classic `data-theme` ThemePicker is RETIRED. Slots:
+>   **Halfway (default) · Midnight (blue-leaning) · Hearth (warm — basic, owner tuning pending)**. Palette =
+>   neutral charcoal walls (ZERO green tint), teal `--ix-accent` on CONTROLS ONLY + `--ix-accent-2` blue
+>   partner + `--ix-accent-ink` (dark label-on-accent, guard-checked). Tokens: `src/design/instrument.css`.
+> - **Navigation law — "navigation never teleports":** the rail is the only thing that changes location;
+>   in-page detail expands in place (no route-to-tab). Six-home IA: **Home · Check · Play · Fix · Learn ·
+>   Lab** (+ Export = header action, Settings = gear). Check absorbs Readiness+Priorities; Play absorbs
+>   Sessions+Monitoring+overlay (session rows expand to the full `SessionDebrief` inline); Lab absorbs
+>   Benchmark+Latency (inline collapsibles). Each surface is behind a `compy_*_v2` flag (default ON dev,
+>   OFF release) — classics stay reachable when off (parity governance in the build-order doc).
+> - **Motion:** ONE whisper aurora on Home (`AmbientBackdrop`); hyperspeed streaks RESERVED for
+>   scan/win; the scan is a light-sweep beam (the radar is retired); win-card `cmp-winshimmer` is the only
+>   celebratory shimmer. Both laws are grep/contrast-guarded by tests.
+> - **Identity:** shared `src/design/Wordmark.tsx` (pulse-C IS the C, one word) swept app-wide; app icon =
+>   heartbeat INSIDE the C (16/24px single-beat small cut, 32px+ full master; `scripts/build-icon-ico.mjs`).
+> - **Guards:** `src/theme-contrast.test.ts` (WCAG floor incl. ink-on-accent) + `src/sweep-guard.test.ts`
+>   (one shimmer). **Verify:** `tsc` + `vite build` clean · **npm 162/162** · cargo untouched by the reskin
+>   (frontend-only). /check + /security clean on every train.
+> - **OPEN (owner-only):** the live `npm run tauri dev` sweep; **Hearth + warm final hexes → kernel §4**;
+>   the **beta flag-default decision** — which `compy_*_v2` becomes the shipped (release) default, gated by
+>   the **Fix parity chain** (classic Optimize can't retire until Startup-mgmt + the full guided-advisory
+>   cards reach parity inside Fix or are re-homed with owner sign-off).
+> - Canonical specs: `docs/superpowers/specs/2026-06-0{5,6}-*.md`; governance:
+>   `docs/superpowers/plans/2026-06-04-beta-build-order.md`. **Beta refs still pinned @ `16069fa` (untouched).**
 
 > **✅ EXPERIENCE PASS LANDED — 2026-06-02 (`main` @ `60daf3a`).** The former post-freeze experimental
 > UI layer (the un-QA'd gamified premium UI, old `main` HEAD `d049d63`) has been **superseded and

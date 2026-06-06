@@ -1,3 +1,8 @@
+> **PARTIALLY SUPERSEDED (2026-06-06, owner course-correction):** the radar references below are
+> **RETIRED** (light sweep per `2026-06-06-halfway-home.md` §2), and Play/Lab's route-to-classic-tab
+> behavior is replaced by in-place expansion per the same spec's §1 navigation law. Everything else
+> stands.
+
 # Check · Play · Lab — the consolidation surfaces (final reskin stretch)
 
 *2026-06-06, Cowork. Builds the three blessed six-home consolidations (governance entry
