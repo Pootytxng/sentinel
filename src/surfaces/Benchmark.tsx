@@ -37,6 +37,10 @@ export function BenchmarkTab() {
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Inline dependency (wayfinding §2): the live-game measurement needs FPS monitoring, which used to
+  // live only on another page. Track it here + offer [Start monitoring] right on the card.
+  const [fpsActive, setFpsActive] = useState<boolean | null>(null);
+  const [fpsBusy, setFpsBusy] = useState(false);
 
   // Measurable tweaks = appliable recs not currently applied (so a trial can apply→measure→undo).
   useEffect(() => {
@@ -78,6 +82,34 @@ export function BenchmarkTab() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Poll FPS-monitoring state so the live-game card can offer to start it inline (wayfinding §2).
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () =>
+      invoke<{ active: boolean }>("get_fps_status")
+        .then((f) => !cancelled && setFpsActive(f.active))
+        .catch(() => {});
+    tick();
+    const id = window.setInterval(tick, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  // Same command + UAC flow as Play's capture toggle — no trip to another page. The next poll
+  // reflects the result (incl. a cancelled UAC, which leaves monitoring off).
+  const startMonitoring = async () => {
+    setFpsBusy(true);
+    try {
+      await invoke("start_fps_capture");
+    } catch {
+      /* surfaced via the next poll */
+    } finally {
+      setFpsBusy(false);
+    }
+  };
 
   // Poll only while a run is in flight.
   useEffect(() => {
@@ -275,10 +307,20 @@ export function BenchmarkTab() {
           right={trial?.running ? <StatusPill status="scanning" label="Measuring" /> : undefined}
         />
         <p className="bench-muted">
-          Turn on FPS monitoring (Monitoring tab) with a game running, then calibrate — Compy
-          measures your rig's run-to-run noise from real frametimes (1% lows). That's the floor: a
-          change smaller than it can't be told apart from noise, so we won't claim it.
+          With a game running and FPS monitoring on, calibrate — Compy measures your rig's run-to-run
+          noise from real frametimes (1% lows). That's the floor: a change smaller than it can't be
+          told apart from noise, so we won't claim it.
         </p>
+        {/* Inline dependency (wayfinding §2) — start monitoring right here; no trip to another page. */}
+        {fpsActive === false && (
+          <div className="bench-dep">
+            <span className="bench-dep-msg">Benchmark needs FPS monitoring — it's off.</span>
+            <button className="bench-btn" onClick={startMonitoring} disabled={fpsBusy}>
+              {fpsBusy ? "Starting…" : "Start monitoring"}
+            </button>
+          </div>
+        )}
+        {fpsActive === true && <p className="bench-fine">FPS monitoring is on — you're set to measure.</p>}
         {trial?.running ? (
           <>
             <p className="bench-stat">
@@ -291,7 +333,7 @@ export function BenchmarkTab() {
           </>
         ) : (
           <>
-            <button className="bench-btn" onClick={calibrate}>
+            <button className="bench-btn" onClick={calibrate} disabled={fpsActive === false}>
               Calibrate (measure my run-to-run noise)
             </button>
             {tweaks.length > 0 && (
@@ -307,7 +349,11 @@ export function BenchmarkTab() {
                     </option>
                   ))}
                 </select>
-                <button className="bench-btn" onClick={measureTweak} disabled={!selectedTweak}>
+                <button
+                  className="bench-btn"
+                  onClick={measureTweak}
+                  disabled={!selectedTweak || fpsActive === false}
+                >
                   Measure this tweak
                 </button>
               </div>

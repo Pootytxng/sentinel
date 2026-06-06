@@ -120,6 +120,27 @@
   margin: 12px 0 0;
 }
 
+/* Inline dependency notice (wayfinding §2) — signposts the unmet need at the moment of need + the
+   action to resolve it right here, never a "go to another tab" instruction. */
+.bench-dep {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 12px 0 4px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  border-left: 3px solid var(--ix-accent, var(--accent));
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.04));
+}
+.bench-dep-msg {
+  flex: 1;
+  min-width: 200px;
+  font-size: 0.88rem;
+  color: var(--ix-text-1, var(--text-1));
+}
+
 .bench-note {
   color: var(--muted);
   font-size: 0.82rem;
