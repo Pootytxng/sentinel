@@ -121,8 +121,35 @@ html, body, #root {
 .header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+/* 24/7 Back control (wayfinding §1) — quiet chevron-ghost, far-left of every surface header;
+   disabled (faded, not hidden) when there's no history to pop. Shared across shell/Home/Settings. */
+.back-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ix-text-2, var(--text-2, #9aa4b2));
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+.back-btn:hover:not(:disabled) {
+  background: var(--ix-glass-fill, rgba(255, 255, 255, 0.05));
+  color: var(--ix-text-1, var(--text-1, #e8edf4));
+  border-color: var(--ix-glass-border, var(--hairline, rgba(255, 255, 255, 0.1)));
+}
+.back-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .header h1 {
@@ -146,6 +173,7 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
 }
 
 .rules-source-pill {

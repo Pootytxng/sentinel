@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
@@ -6,6 +6,7 @@ import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
+import { BackButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -1122,6 +1123,63 @@ function App() {
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
 
+  // ── Back navigation (wayfinding §1) — an app-level location-history stack ───────────────────────
+  // A "location" is the active room/tab (or Settings). In-place expansions are NOT location changes,
+  // so they never push (they don't touch activeTab/showSettings). The effect watches the derived
+  // location and pushes the PREVIOUS one on a forward move; back-moves set isBackNav so they don't
+  // re-push. Frontend-only, zero IPC. Forward is out of scope; stack capped at 50.
+  const currentLocation = showSettings ? "settings" : `tab:${activeTab}`;
+  const [navHistory, setNavHistory] = useState<string[]>([]);
+  const prevLocationRef = useRef(currentLocation);
+  const isBackNavRef = useRef(false);
+  useEffect(() => {
+    if (currentLocation === prevLocationRef.current) return;
+    if (isBackNavRef.current) {
+      isBackNavRef.current = false;
+    } else {
+      const prev = prevLocationRef.current;
+      setNavHistory((h) => [...h, prev].slice(-50));
+    }
+    prevLocationRef.current = currentLocation;
+  }, [currentLocation]);
+  const goBack = useCallback(() => {
+    setNavHistory((h) => {
+      if (h.length === 0) return h;
+      const target = h[h.length - 1];
+      isBackNavRef.current = true;
+      if (target === "settings") {
+        setShowSettings(true);
+      } else {
+        setShowSettings(false);
+        setActiveTab(target.slice(4) as Tab);
+      }
+      return h.slice(0, -1);
+    });
+  }, []);
+  const canGoBack = navHistory.length > 0;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Alt+Left = back (Windows convention). NO Backspace binding (it conflicts with text inputs).
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        goBack();
+      }
+    };
+    // Mouse XButton1 (the side "back" button) — fires as button 3 if the webview surfaces it.
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        goBack();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [goBack]);
+
   // ── Command Center (new home) wiring ──────────────────────────────────────
   // Resolve the #1 limiter + its linked recommendation so the trust-switch routes through the SAME
   // audited apply/rollback flow (toggleRec) the rest of the app uses — no parallel mutation path.
@@ -1213,6 +1271,7 @@ function App() {
       )}
       {!ccActive && !settingsActive && (
         <header className="header">
+        <BackButton onBack={goBack} canGoBack={canGoBack} />
         <div>
           <h1><Wordmark size={24} /></h1>
           <p className="tag">Hardware-aware PC optimization</p>
@@ -1257,6 +1316,8 @@ function App() {
         <Settings
           appVersion={APP_VERSION}
           rulesSourceLabel={rulesSourceLabel}
+          onBack={goBack}
+          canGoBack={canGoBack}
           flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2, lab: labV2 }}
           onSetFlag={setPreviewFlag}
           onRerunSetup={() => {
@@ -1297,6 +1358,8 @@ function App() {
           }}
           onRunCheck={() => setShowFirstCheck(true)}
           onOpenSettings={settingsV2 ? () => setShowSettings(true) : undefined}
+          onBack={goBack}
+          canGoBack={canGoBack}
         />
       ) : hw ? (
         <div className="shell">

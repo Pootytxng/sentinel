@@ -154,8 +154,8 @@
 .cc-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 14px;
   padding: 2px 2px 4px;
 }
 .cc-greeting {
@@ -173,6 +173,7 @@
 }
 .cc-recheck {
   flex-shrink: 0;
+  margin-left: auto;
   padding: 9px 16px;
   border-radius: 9px;
   border: 1px solid var(--ix-glass-border);

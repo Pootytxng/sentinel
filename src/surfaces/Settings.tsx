@@ -14,6 +14,7 @@ import {
   persistOverlayDensity,
 } from "../design/theme";
 import { PulseC } from "../design/PulseC";
+import { BackButton } from "../design/BackButton";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -105,9 +106,13 @@ export default function Settings({
   onRerunSetup,
   onRerunCheck,
   onClose,
+  onBack,
+  canGoBack,
 }: {
   appVersion: string;
   rulesSourceLabel: string;
+  onBack: () => void;
+  canGoBack: boolean;
   flags: Record<PreviewFlag, boolean>;
   onSetFlag: (flag: PreviewFlag, on: boolean) => void;
   onRerunSetup: () => void;
@@ -165,6 +170,7 @@ export default function Settings({
       <div className="set-shell">
         <header className="set-header">
           <span className="set-brand">
+            <BackButton onBack={onBack} canGoBack={canGoBack} />
             <PulseC size={22} />
             <h1 className="set-title">Settings</h1>
           </span>

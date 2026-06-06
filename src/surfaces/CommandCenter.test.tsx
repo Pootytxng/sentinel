@@ -31,9 +31,9 @@ const baseProps = {
   onToggleLimiter: vi.fn(),
   onSeeInFix: vi.fn(),
   onNavigate: vi.fn(),
-  onOpenLibrary: vi.fn(),
   onRunCheck: vi.fn(),
-  onDisablePreview: vi.fn(),
+  onBack: vi.fn(),
+  canGoBack: false,
 };
 
 describe("CommandCenter", () => {
