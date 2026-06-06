@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
 import { TrustSwitch } from "./design/TrustSwitch";
-import { PulseC } from "./design/PulseC";
+import { Wordmark } from "./design/Wordmark";
 
 // First-run experience — Moment 1 of the first-experience arc.
 // Spec: docs/superpowers/specs/2026-06-04-first-experience-arc-design.md (owner-approved VERBATIM —
@@ -39,8 +39,7 @@ export default function Onboarding({
       <div className="onb-card">
         <div className="onb-head">
           <span className="onb-brand">
-            {arcV2 && <PulseC size={22} />}
-            Compy
+            <Wordmark size={22} />
           </span>
           <button className="onb-skip" onClick={finish}>
             Skip

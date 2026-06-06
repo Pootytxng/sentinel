@@ -1,0 +1,18 @@
+/* Wordmark Law v2 — pulse-C IS the C, one word. If it reads logo-then-word, the kerning is wrong. */
+.cmp-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--ix-text-1);
+  user-select: none;
+}
+.cmp-wordmark-glyph {
+  display: block;
+  flex: none;
+}
+.cmp-wordmark-rest {
+  margin-left: -0.053em; /* ≈ -1px @ 19px, scaled by em so it holds at any size */
+}

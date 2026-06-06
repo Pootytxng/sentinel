@@ -2,7 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
-import { PulseC } from "../design/PulseC";
+import { Wordmark } from "../design/Wordmark";
 import { useScan, rowVerdict, type ScanRecLite } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./FirstCheck.css";
@@ -69,8 +69,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
       <div className="fc-screen">
         <header className="fc-head">
           <span className="fc-brand">
-            {arcV2 && <PulseC size={20} />}
-            Compy
+            <Wordmark size={20} />
           </span>
           <span className="fc-status">
             {running

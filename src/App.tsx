@@ -6,6 +6,7 @@ import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term, GlossText, type GlossRule } from "./design/Term";
+import { Wordmark } from "./design/Wordmark";
 import { deriveSystemPosture } from "./surfaces/system-posture";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -1200,7 +1201,7 @@ function App() {
       {!ccActive && !settingsActive && (
         <header className="header">
         <div>
-          <h1>Compy</h1>
+          <h1><Wordmark size={24} /></h1>
           <p className="tag">Hardware-aware PC optimization · v0.1.0</p>
         </div>
         <div className="header-right">

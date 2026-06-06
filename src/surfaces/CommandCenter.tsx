@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppliedChange, GameReadiness, Priorities, PriorityItem, SessionSummary } from "../types";
 import { AmbientBackdrop } from "../design/AmbientBackdrop";
+import { Wordmark } from "../design/Wordmark";
 import {
   type InstrumentTheme,
   INSTRUMENT_THEMES,
@@ -113,28 +114,6 @@ function useMountProgress(durationMs: number, reduced: boolean): number {
 }
 
 // ─── Inline brand + nav glyphs (no icon font — offline, zero-outbound) ───────
-// Pulse-C wordmark glyph: a flatline → spike → curl-into-C (kernel §1). The C carries the glow.
-function PulseC() {
-  return (
-    <svg className="cc-pulse" viewBox="0 0 34 24" width="30" height="22" fill="none" aria-hidden="true">
-      <path
-        d="M1 12h6l2.5-7 3 14 2.2-5.5"
-        stroke="var(--ix-accent)"
-        strokeWidth="2.1"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M30 7.5a8 8 0 1 0 0 9"
-        stroke="var(--ix-accent)"
-        strokeWidth="2.1"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
-  );
-}
-
 const NAV_ICONS: Record<string, ReactNode> = {
   gauge: (<><path d="M4 18a8 8 0 1 1 16 0" /><line x1="12" y1="18" x2="15.5" y2="11" /></>),
   check: (<><circle cx="12" cy="12" r="8.5" /><path d="M8.5 12l2.5 2.5 4.5-5" /></>),
@@ -398,10 +377,7 @@ export default function CommandCenter(props: Props) {
         {/* Glass nav rail */}
         <nav className="cc-rail" aria-label="Sections">
           <div className="cc-brand">
-            <PulseC />
-            <span className="cc-wordmark">
-              <span className="cc-wordmark-c">C</span>ompy
-            </span>
+            <Wordmark size={22} />
           </div>
           <div className="cc-rail-items" role="tablist">
             {NAV.map((n) => (
