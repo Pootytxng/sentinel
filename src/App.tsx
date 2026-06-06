@@ -1162,6 +1162,7 @@ const OVERLAY_V2_KEY = "compy_overlay_v2";
 const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
 const LAB_V2_KEY = "compy_lab_v2";
+const APP_VERSION = "0.1.0";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1640,9 +1641,19 @@ function App() {
 
       {hw && settingsActive ? (
         <Settings
-          appVersion="0.1.0"
+          appVersion={APP_VERSION}
           flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2, lab: labV2 }}
           onSetFlag={setPreviewFlag}
+          onRerunSetup={() => {
+            // Re-homed from the footer: replay the intro, then flow into the first check.
+            setShowSettings(false);
+            setShowOnboarding(true);
+            setShowFirstCheck(true);
+          }}
+          onRerunCheck={() => {
+            setShowSettings(false);
+            setShowFirstCheck(true);
+          }}
           onClose={() => setShowSettings(false)}
         />
       ) : hw && ccActive ? (
@@ -1797,129 +1808,10 @@ function App() {
 
       {!ccActive && !settingsActive && (
       <footer className="footer">
-        <span>Compy never changes anything without your explicit approval.</span>
-        <button
-          className="footer-link"
-          onClick={() => {
-            // One-click guided setup: replay the intro, then flow straight into the first check
-            // (the M2 gate is `!showOnboarding && showFirstCheck`, so the check waits for the intro
-            // to finish, then runs automatically).
-            setShowOnboarding(true);
-            setShowFirstCheck(true);
-          }}
-        >
-          Re-run guided setup
-        </button>
-        <button className="footer-link" onClick={() => setShowFirstCheck(true)}>
-          Re-run check
-        </button>
-        <label className="footer-toggle" title="Try the new Command Center home (preview)">
-          <input
-            type="checkbox"
-            checked={homeV2}
-            onChange={(e) => {
-              setHomeV2(e.target.checked);
-              persistFlag(HOME_V2_KEY, e.target.checked);
-              // Jump to Overview so the new home is shown immediately on opt-in.
-              if (e.target.checked) setActiveTab("Overview");
-            }}
-          />
-          New home (preview)
-        </label>
-        <label className="footer-toggle" title="Try the new Fix surface (preview)">
-          <input
-            type="checkbox"
-            checked={fixV2}
-            onChange={(e) => {
-              setFixV2(e.target.checked);
-              persistFlag(FIX_V2_KEY, e.target.checked);
-              if (e.target.checked) setActiveTab("Optimize");
-            }}
-          />
-          New Fix (preview)
-        </label>
-        <label className="footer-toggle" title="Try the new Learn surface (preview)">
-          <input
-            type="checkbox"
-            checked={learnV2}
-            onChange={(e) => {
-              setLearnV2(e.target.checked);
-              persistFlag(LEARN_V2_KEY, e.target.checked);
-            }}
-          />
-          New Library (preview)
-        </label>
-        <label className="footer-toggle" title="Try the re-dressed first-experience arc (preview)">
-          <input
-            type="checkbox"
-            checked={arcV2}
-            onChange={(e) => {
-              setArcV2(e.target.checked);
-              persistFlag(ARC_V2_KEY, e.target.checked);
-            }}
-          />
-          New first-run (preview)
-        </label>
-        <label className="footer-toggle" title="Try the new Settings surface (preview)">
-          <input
-            type="checkbox"
-            checked={settingsV2}
-            onChange={(e) => {
-              setSettingsV2(e.target.checked);
-              persistFlag(SETTINGS_V2_KEY, e.target.checked);
-            }}
-          />
-          New settings (preview)
-        </label>
-        <label className="footer-toggle" title="Try the re-dressed in-game overlay (preview)">
-          <input
-            type="checkbox"
-            checked={overlayV2}
-            onChange={(e) => {
-              setOverlayV2(e.target.checked);
-              persistFlag(OVERLAY_V2_KEY, e.target.checked);
-            }}
-          />
-          New overlay (preview)
-        </label>
-        <label className="footer-toggle" title="Try the new Check surface (preview)">
-          <input
-            type="checkbox"
-            checked={checkV2}
-            onChange={(e) => {
-              setCheckV2(e.target.checked);
-              persistFlag(CHECK_V2_KEY, e.target.checked);
-            }}
-          />
-          New Check (preview)
-        </label>
-        <label className="footer-toggle" title="Try the new Play surface (preview)">
-          <input
-            type="checkbox"
-            checked={playV2}
-            onChange={(e) => {
-              setPlayV2(e.target.checked);
-              persistFlag(PLAY_V2_KEY, e.target.checked);
-            }}
-          />
-          New Play (preview)
-        </label>
-        <label className="footer-toggle" title="Try the new Lab surface (preview)">
-          <input
-            type="checkbox"
-            checked={labV2}
-            onChange={(e) => {
-              setLabV2(e.target.checked);
-              persistFlag(LAB_V2_KEY, e.target.checked);
-            }}
-          />
-          New Lab (preview)
-        </label>
-        {settingsV2 && (
-          <button className="footer-link" onClick={() => setShowSettings(true)}>
-            Settings
-          </button>
-        )}
+        {/* Footer carries the version only (halfway-home §0). Preview toggles live in Settings →
+            New look; re-run lives in Settings + Check; the approval-reassurance line lives where
+            approval happens (Fix header / the apply confirm), not in global chrome. */}
+        <span className="footer-version">v{APP_VERSION}</span>
       </footer>
       )}
     </main>

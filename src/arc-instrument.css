@@ -112,7 +112,7 @@
 .arc-v2 .onb-actions .btn {
   background: var(--ix-accent);
   border: 0;
-  color: var(--ix-base, #07090e);
+  color: var(--ix-accent-ink, #06231c);
 }
 .arc-v2 .onb-actions .btn-small {
   background: transparent;
@@ -284,12 +284,12 @@
 .arc-v2 .fc-btn-primary {
   background: var(--ix-accent);
   border: 0;
-  color: var(--ix-base, #07090e);
+  color: var(--ix-accent-ink, #06231c);
 }
 .arc-v2 .fc-btn-go {
   background: var(--ix-accent);
   border: 0;
-  color: var(--ix-base, #07090e);
+  color: var(--ix-accent-ink, #06231c);
 }
 
 @media (max-width: 640px) {
@@ -351,7 +351,7 @@
 .arc-v2 .debrief-cta {
   background: var(--ix-accent);
   border: 0;
-  color: var(--ix-base, #07090e);
+  color: var(--ix-accent-ink, #06231c);
 }
 .arc-v2 .debrief-clean {
   color: var(--ix-text-2);

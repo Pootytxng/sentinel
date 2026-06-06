@@ -244,6 +244,22 @@
   border-radius: 999px;
   padding: 3px 12px;
 }
+.set-action {
+  flex-shrink: 0;
+  padding: 7px 15px;
+  border-radius: 9px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ix-text-1);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+.set-action:hover {
+  border-color: var(--ix-accent);
+}
 
 .set-toggle {
   position: relative;

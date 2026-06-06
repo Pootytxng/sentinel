@@ -112,6 +112,14 @@ describe("theme contrast (legibility guard)", () => {
           ).toBeGreaterThanOrEqual(floor);
         }
       }
+
+      // Label-on-accent: dark ink on the bright accent fill must be readable. This was the guard's
+      // blind spot — it only checked text-on-backgrounds, which is what let white-on-mint ship.
+      const inkRatio = contrast(parseHex(t["--ix-accent-ink"]), parseHex(t["--ix-accent"]));
+      expect(
+        inkRatio,
+        `${theme} accent-ink on accent = ${inkRatio.toFixed(2)} (floor 4.5)`,
+      ).toBeGreaterThanOrEqual(4.5);
     });
   }
 });

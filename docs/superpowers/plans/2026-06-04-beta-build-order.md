@@ -97,6 +97,20 @@ active-tab reset don't bounce). Check shares the scan with FirstCheck (extracted
   existing debrief") and deliberately avoids extracting the locked-copy debrief cluster. Inline reuse
   is **Wave 2 only if tester signal demands it** — not a parity gap.
 
+**Halfway Home pass (owner live-sweep course-correction, 2026-06-06)** — spec
+`2026-06-06-halfway-home.md`. Supersedes the green-tinted palette + the route-to-classic-tab nav;
+everything else stands.
+- **Footer re-home (§0) = owner-directed, not a silent loss.** The global footer now carries the
+  version only. Re-homed: the nine `compy_*_v2` preview toggles → Settings → New look (their only
+  home); "Re-run guided setup" / "Re-run check" → Settings → Setup (Check also has re-run); the
+  standing approval line ("Compy never changes anything without your explicit approval.") → the Fix
+  header (where approval happens) + it already lives in every apply confirm dialog.
+- **`--ix-accent-ink` (§0):** labels on bright accent fills use dark ink (never white); the contrast
+  guard now also asserts ink-on-accent ≥ 4.5:1 per theme (its old blind spot).
+- **§1 navigation law — "navigation never teleports":** Play/Lab expand detail in place; the
+  route-to-tab behavior + the `railTabs`/`visibleTabs` hidden-but-navigable hack retire once the
+  embeds land (absorbed classics cease to be destinations when flags are on).
+
 ---
 
 ## Passes
@@ -106,6 +120,10 @@ trademark are deferred to the first PUBLIC / stranger exposure of the name, not 
 *When that moment comes* (a public post / stranger recruit): register compy.gg + getcompy.com
 (auto-renew on, WHOIS privacy on) and do a 10-minute USPTO TESS look for "Compy" in software
 classes. The trusted-friends invite beta proceeds without any of it.
+**Landing page PRE-BUILT and parked at `site/` (Cowork, 2026-06-06)** — single static
+`index.html`, zero dependencies, deploy-ready on GitHub/Cloudflare Pages free tier (see
+`site/README.md` for deploy steps + the `[KUYA: …]` placeholder checklist). Registering the
+domain remains the ONLY cost at trigger time; the storefront opens the same afternoon.
 
 **Pass 1 — rename lands (HQ, ~half day).** Work straight from
 `docs/RENAME_COMPLETION_AUDIT.md`: Tier 1 strings → Tier 2 decisions (serde alias rename, ETW

@@ -101,11 +101,15 @@ export default function Settings({
   appVersion,
   flags,
   onSetFlag,
+  onRerunSetup,
+  onRerunCheck,
   onClose,
 }: {
   appVersion: string;
   flags: Record<PreviewFlag, boolean>;
   onSetFlag: (flag: PreviewFlag, on: boolean) => void;
+  onRerunSetup: () => void;
+  onRerunCheck: () => void;
   onClose: () => void;
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
@@ -275,6 +279,29 @@ export default function Settings({
               />
             </div>
           ))}
+        </section>
+
+        {/* ── Setup (re-homed from the global footer, halfway-home §0) ── */}
+        <section className="set-section">
+          <h2 className="set-section-title">Setup</h2>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">Re-run the guided setup</div>
+              <div className="set-row-sub">Replay the intro, then run a fresh first check.</div>
+            </div>
+            <button className="set-action" onClick={onRerunSetup}>
+              Re-run setup
+            </button>
+          </div>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">Re-run the check</div>
+              <div className="set-row-sub">Re-scan this rig's readiness without the intro.</div>
+            </div>
+            <button className="set-action" onClick={onRerunCheck}>
+              Re-run check
+            </button>
+          </div>
         </section>
 
         {/* ── About ── */}

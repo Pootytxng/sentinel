@@ -9,6 +9,8 @@ const baseProps = {
   appVersion: "0.1.0",
   flags: { home: true, fix: true, learn: false, arc: true, settings: true, overlay: true, check: true, play: true, lab: true },
   onSetFlag: vi.fn(),
+  onRerunSetup: vi.fn(),
+  onRerunCheck: vi.fn(),
   onClose: vi.fn(),
 };
 

@@ -20,6 +20,7 @@
   /* Velocity defaults so `--ix-*` resolve even before the provider sets data-itheme. */
   --ix-accent: #2ee6c0;
   --ix-accent-text: #9bf6e4;
+  --ix-accent-ink: #06231c; /* dark ink for labels ON bright accent fills (never white) — guarded */
   --ix-streak-1: #22d3ee;
   --ix-streak-2: #2ee6c0;
   --ix-streak-3: #5eead4;

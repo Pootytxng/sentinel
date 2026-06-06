@@ -179,6 +179,9 @@ export default function Fix({
             {worthFixing.length} worth your attention · {alreadyApplied.length} already applied ·{" "}
             {REFUSE_PILE.length} we'd leave alone. Every change is one click to undo.
           </p>
+          {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
+              it belongs where approval actually happens. */}
+          <p className="fix-consent">Compy never changes anything without your explicit approval.</p>
         </div>
         <button className="fix-classic" onClick={onDisablePreview} title="Switch back to classic Optimize">
           Classic Optimize

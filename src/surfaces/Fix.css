@@ -42,6 +42,11 @@
   font-size: 13px;
   color: var(--ix-text-2);
 }
+.fix-consent {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--ix-text-3);
+}
 .fix-classic {
   flex-shrink: 0;
   padding: 7px 15px;
