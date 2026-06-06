@@ -377,9 +377,10 @@
 /* ── Skeleton / shimmer ───────────────────────────────────────────────────── */
 .cc-skel {
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
-  background-size: 200% 100%;
-  animation: cc-shimmer 1.5s linear infinite;
+  /* Opacity-pulse, NOT a moving shimmer — the win card's earned shimmer is the only sweep in the
+     app (kernel law). */
+  background: rgba(255, 255, 255, 0.06);
+  animation: cc-pulse 1.5s ease-in-out infinite;
 }
 .cc-skel-title {
   height: 22px;
@@ -448,10 +449,6 @@
   border-color: var(--ix-text-3);
 }
 
-@keyframes cc-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
 @keyframes cc-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
