@@ -253,8 +253,8 @@ export default function Fix({
         <CollapsibleSection title="Compy points the way" count={advisory.length}>
           <p className="fix-refuse-intro">
             Detected, but Compy won't change these for you — they live in a vendor app or a Windows
-            page with no safe, reversible switch. The full step-by-step lives in the classic Optimize
-            view (toggle “Classic Optimize” above).
+            page with no safe, reversible switch. The classic Optimize view has the full detail on
+            each (toggle "Classic Optimize" above).
           </p>
           <ul className="fix-list">
             {advisory.map((rec) => (
