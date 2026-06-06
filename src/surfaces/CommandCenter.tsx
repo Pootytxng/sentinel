@@ -283,8 +283,7 @@ function LimiterCard({
           {applied && activeChange && (
             <p className="cc-snapshot">
               <span className="cc-snapshot-dot" aria-hidden="true" />
-              Snapshot captured before this change — logged to the Trust Ledger. Toggle off to
-              restore.
+              snapshot captured — restores your previous setting · logged to Trust Ledger
             </p>
           )}
         </>
