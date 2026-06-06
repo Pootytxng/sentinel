@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { Ambiance } from "./theme";
+import { type Ambiance, readStepAsideGame } from "./theme";
 import "./AmbientBackdrop.css";
 
 // Dependency-free canvas "hyperspeed" — light streaks warping out from a vanishing point, colors
@@ -40,6 +40,14 @@ export function AmbientBackdrop({
   const [reduced, setReduced] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [gameActive, setGameActive] = useState(false);
+  // "Step aside when I play" preference (default ON). Read on mount + on the Settings change event;
+  // when OFF, the game-freeze is skipped (reduced-motion + hidden stay UNCONDITIONAL below).
+  const [freezeOnGame, setFreezeOnGame] = useState<boolean>(readStepAsideGame);
+  useEffect(() => {
+    const on = () => setFreezeOnGame(readStepAsideGame());
+    window.addEventListener("compy:stepaside-changed", on);
+    return () => window.removeEventListener("compy:stepaside-changed", on);
+  }, []);
 
   // (b) prefers-reduced-motion
   useEffect(() => {
@@ -79,7 +87,9 @@ export function AmbientBackdrop({
     };
   }, [ambiance]);
 
-  const paused = ambiance === "off" || reduced || hidden || gameActive;
+  // reduced-motion + hidden-document are UNCONDITIONAL freezes (a11y/efficiency); the game-freeze is
+  // the user-toggleable courtesy (default ON).
+  const paused = ambiance === "off" || reduced || hidden || (gameActive && freezeOnGame);
 
   useEffect(() => {
     if (ambiance === "off") return;

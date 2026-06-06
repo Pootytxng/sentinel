@@ -60,3 +60,27 @@ export function persistAmbiance(a: Ambiance): void {
     /* ignore */
   }
 }
+
+// "Step aside when I play" — freeze the ambient backdrop while a game is presenting. This is a USER
+// PREFERENCE (default ON), distinct from the UNCONDITIONAL reduced-motion + hidden-document freezes
+// (those are a11y/efficiency and are never user-overridable). Spec 2026-06-06-settings-and-icon §A0.
+const STEPASIDE_GAME_KEY = "compy_stepaside_game";
+
+export function readStepAsideGame(): boolean {
+  try {
+    const v = localStorage.getItem(STEPASIDE_GAME_KEY);
+    if (v === "0") return false;
+    if (v === "1") return true;
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function persistStepAsideGame(on: boolean): void {
+  try {
+    localStorage.setItem(STEPASIDE_GAME_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}

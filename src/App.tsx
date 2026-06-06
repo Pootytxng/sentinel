@@ -14,6 +14,7 @@ import { BenchmarkTab } from "./surfaces/Benchmark";
 import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
+import Settings, { type PreviewFlag } from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
@@ -1180,6 +1181,7 @@ const HOME_V2_KEY = "compy_home_v2";
 const FIX_V2_KEY = "compy_fix_v2";
 const LEARN_V2_KEY = "compy_learn_v2";
 const ARC_V2_KEY = "compy_arc_v2";
+const SETTINGS_V2_KEY = "compy_settings_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1302,6 +1304,8 @@ function App() {
   const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
   const [learnV2, setLearnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
   const [arcV2, setArcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
+  const [settingsV2, setSettingsV2] = useState<boolean>(() => readDevFlag(SETTINGS_V2_KEY));
+  const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -1579,13 +1583,30 @@ function App() {
   const ccLimiterActiveChange = ccLimiterRec
     ? findActiveChangeForRec(ccLimiterRec.id) ?? null
     : null;
+  // Settings is a full-surface route (replaces the home/shell while open) so the surfaces under it
+  // unmount and re-read their persisted prefs on return — no cross-surface live-sync needed.
+  const settingsActive = showSettings && settingsV2 && hw !== null;
   // Only swap in the new home once hardware has resolved (avoids a blank first paint); any other
   // tab falls back to the classic shell, which is where the not-yet-reskinned surfaces still live.
-  const ccActive = homeV2 && activeTab === "Overview" && hw !== null;
+  const ccActive = homeV2 && activeTab === "Overview" && hw !== null && !settingsActive;
+
+  // Flip any surface's preview flag from one place (Settings preview-flags hub + footer toggles).
+  const setPreviewFlag = (flag: PreviewFlag, on: boolean) => {
+    const setters: Record<PreviewFlag, [string, (v: boolean) => void]> = {
+      home: [HOME_V2_KEY, setHomeV2],
+      fix: [FIX_V2_KEY, setFixV2],
+      learn: [LEARN_V2_KEY, setLearnV2],
+      arc: [ARC_V2_KEY, setArcV2],
+      settings: [SETTINGS_V2_KEY, setSettingsV2],
+    };
+    const [key, setter] = setters[flag];
+    setter(on);
+    persistFlag(key, on);
+  };
 
   return (
     <LibraryContext.Provider value={libraryApi}>
-    <main className={ccActive ? "app app-cc" : "app"}>
+    <main className={ccActive || settingsActive ? "app app-cc" : "app"}>
       {showOnboarding && (
         <Onboarding
           onDone={() => setShowOnboarding(false)}
@@ -1636,7 +1657,7 @@ function App() {
           }}
         />
       )}
-      {!ccActive && (
+      {!ccActive && !settingsActive && (
         <header className="header">
         <div>
           <h1>Compy</h1>
@@ -1685,7 +1706,14 @@ function App() {
         </div>
       )}
 
-      {hw && ccActive ? (
+      {hw && settingsActive ? (
+        <Settings
+          appVersion="0.1.0"
+          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2 }}
+          onSetFlag={setPreviewFlag}
+          onClose={() => setShowSettings(false)}
+        />
+      ) : hw && ccActive ? (
         <CommandCenter
           hw={hw}
           readiness={readiness}
@@ -1704,6 +1732,7 @@ function App() {
           onNavigate={(tab) => setActiveTab(tab)}
           onOpenLibrary={() => libraryApi.openLibrary()}
           onRunCheck={() => setShowFirstCheck(true)}
+          onOpenSettings={settingsV2 ? () => setShowSettings(true) : undefined}
           onDisablePreview={() => {
             setHomeV2(false);
             persistFlag(HOME_V2_KEY, false);
@@ -1805,7 +1834,7 @@ function App() {
         </>
       ) : null}
 
-      {!ccActive && (
+      {!ccActive && !settingsActive && (
       <footer className="footer">
         <span>Compy never changes anything without your explicit approval.</span>
         <button
@@ -1870,6 +1899,22 @@ function App() {
           />
           New first-run (preview)
         </label>
+        <label className="footer-toggle" title="Try the new Settings surface (preview)">
+          <input
+            type="checkbox"
+            checked={settingsV2}
+            onChange={(e) => {
+              setSettingsV2(e.target.checked);
+              persistFlag(SETTINGS_V2_KEY, e.target.checked);
+            }}
+          />
+          New settings (preview)
+        </label>
+        {settingsV2 && (
+          <button className="footer-link" onClick={() => setShowSettings(true)}>
+            Settings
+          </button>
+        )}
       </footer>
       )}
     </main>
