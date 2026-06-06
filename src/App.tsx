@@ -13,6 +13,7 @@ import { LatencyTab } from "./surfaces/Latency";
 import { BenchmarkTab } from "./surfaces/Benchmark";
 import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
+import Learn from "./surfaces/Learn";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
@@ -1168,6 +1169,7 @@ function readSavedTheme(): string {
 // flag off restores the classic surface untouched.
 const HOME_V2_KEY = "compy_home_v2";
 const FIX_V2_KEY = "compy_fix_v2";
+const LEARN_V2_KEY = "compy_learn_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1288,6 +1290,7 @@ function App() {
   // Instrument-surface preview flags — see readDevFlag.
   const [homeV2, setHomeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
   const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
+  const [learnV2, setLearnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -1594,15 +1597,24 @@ function App() {
       {!showOnboarding && showFirstCheck && (
         <FirstCheck onDone={() => setShowFirstCheck(false)} />
       )}
-      {showEncyclopedia && (
-        <TweakEncyclopedia
-          focusId={libraryFocusId}
-          onClose={() => {
-            setShowEncyclopedia(false);
-            setLibraryFocusId(null);
-          }}
-        />
-      )}
+      {showEncyclopedia &&
+        (learnV2 ? (
+          <Learn
+            focusId={libraryFocusId}
+            onClose={() => {
+              setShowEncyclopedia(false);
+              setLibraryFocusId(null);
+            }}
+          />
+        ) : (
+          <TweakEncyclopedia
+            focusId={libraryFocusId}
+            onClose={() => {
+              setShowEncyclopedia(false);
+              setLibraryFocusId(null);
+            }}
+          />
+        ))}
       {report && (
         <ReportModal
           report={report}
@@ -1822,6 +1834,17 @@ function App() {
             }}
           />
           New Fix (preview)
+        </label>
+        <label className="footer-toggle" title="Try the new Learn surface (preview)">
+          <input
+            type="checkbox"
+            checked={learnV2}
+            onChange={(e) => {
+              setLearnV2(e.target.checked);
+              persistFlag(LEARN_V2_KEY, e.target.checked);
+            }}
+          />
+          New Library (preview)
         </label>
       </footer>
       )}
