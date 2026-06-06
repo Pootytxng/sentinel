@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#142a26"/>
-      <stop offset="1" stop-color="#0a0e12"/>
+      <stop offset="0" stop-color="#101216"/>
+      <stop offset="1" stop-color="#0a0c10"/>
     </linearGradient>
   </defs>
   <rect x="32" y="32" width="960" height="960" rx="240" fill="url(#tile)" stroke="#ffffff" stroke-opacity="0.10" stroke-width="16"/>
   <path d="M672 320 A240 240 0 1 0 672 704" fill="none" stroke="#2ee6c0" stroke-opacity="0.25" stroke-width="150" stroke-linecap="round"/>
   <path d="M672 320 A240 240 0 1 0 672 704" fill="none" stroke="#2ee6c0" stroke-width="96" stroke-linecap="round"/>
-  <polyline points="208,512 320,512 384,368 448,672 512,448 576,512" fill="none" stroke="#7ff0d0" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="352,512 420,512 458,430 514,598 558,468 604,512 668,512" fill="none" stroke="#7ff0d0" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
