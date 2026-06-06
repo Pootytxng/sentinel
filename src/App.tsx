@@ -18,6 +18,7 @@ import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/g
 import "./App.css";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
+import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
 
 type DiskInfo = {
   mount_point: string;
@@ -1170,6 +1171,7 @@ function readSavedTheme(): string {
 const HOME_V2_KEY = "compy_home_v2";
 const FIX_V2_KEY = "compy_fix_v2";
 const LEARN_V2_KEY = "compy_learn_v2";
+const ARC_V2_KEY = "compy_arc_v2";
 function readDevFlag(key: string): boolean {
   try {
     const v = localStorage.getItem(key);
@@ -1291,6 +1293,7 @@ function App() {
   const [homeV2, setHomeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
   const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
   const [learnV2, setLearnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
+  const [arcV2, setArcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -1578,6 +1581,7 @@ function App() {
       {showOnboarding && (
         <Onboarding
           onDone={() => setShowOnboarding(false)}
+          arcV2={arcV2}
           rig={
             hw
               ? [
@@ -1845,6 +1849,17 @@ function App() {
             }}
           />
           New Library (preview)
+        </label>
+        <label className="footer-toggle" title="Try the re-dressed first-experience arc (preview)">
+          <input
+            type="checkbox"
+            checked={arcV2}
+            onChange={(e) => {
+              setArcV2(e.target.checked);
+              persistFlag(ARC_V2_KEY, e.target.checked);
+            }}
+          />
+          New first-run (preview)
         </label>
       </footer>
       )}

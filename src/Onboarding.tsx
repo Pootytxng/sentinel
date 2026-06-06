@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
+import { TrustSwitch } from "./design/TrustSwitch";
+import { PulseC } from "./design/PulseC";
 
 // First-run experience — Moment 1 of the first-experience arc.
 // Spec: docs/superpowers/specs/2026-06-04-first-experience-arc-design.md (owner-approved VERBATIM —
@@ -15,9 +17,11 @@ export type RigLine = { label: string; value: string };
 export default function Onboarding({
   onDone,
   rig,
+  arcV2 = false,
 }: {
   onDone: () => void;
   rig: RigLine[];
+  arcV2?: boolean;
 }) {
   const [step, setStep] = useState(0);
 
@@ -31,10 +35,13 @@ export default function Onboarding({
   };
 
   return (
-    <div className="onb-backdrop">
+    <div className={`onb-backdrop ${arcV2 ? "arc-v2" : ""}`}>
       <div className="onb-card">
         <div className="onb-head">
-          <span className="onb-brand">Compy</span>
+          <span className="onb-brand">
+            {arcV2 && <PulseC size={22} />}
+            Compy
+          </span>
           <button className="onb-skip" onClick={finish}>
             Skip
           </button>
@@ -42,7 +49,7 @@ export default function Onboarding({
 
         <div className="onb-step">
           {step === 0 && <StepRig rig={rig} />}
-          {step === 1 && <StepSeatbelt />}
+          {step === 1 && <StepSeatbelt arcV2={arcV2} />}
           {step === 2 && <StepHouseRules />}
         </div>
 
@@ -119,7 +126,7 @@ function StepRig({ rig }: { rig: RigLine[] }) {
 
 // Step 2 — THE SEATBELT. The demo card is VISUAL ONLY: Apply/Undo flips local state and shows a
 // mock ledger line — it never calls a command or mutates anything.
-function StepSeatbelt() {
+function StepSeatbelt({ arcV2 }: { arcV2: boolean }) {
   const [applied, setApplied] = useState(false);
   return (
     <>
@@ -131,7 +138,15 @@ function StepSeatbelt() {
             <div className="onb-demo-name">Power plan</div>
             <div className="onb-demo-sub">Recommended: High performance · Current: Balanced</div>
           </div>
-          {applied ? (
+          {arcV2 ? (
+            // Demo mode — the shared trust-switch, but it mutates NOTHING (flips local state only).
+            <TrustSwitch
+              applied={applied}
+              busy={false}
+              onToggle={() => setApplied((a) => !a)}
+              ariaLabel={applied ? "Undo power plan (demo)" : "Apply power plan (demo)"}
+            />
+          ) : applied ? (
             <button className="btn-small onb-demo-btn" onClick={() => setApplied(false)}>
               Undo
             </button>

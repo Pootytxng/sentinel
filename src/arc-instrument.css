@@ -1,0 +1,108 @@
+/* First-experience arc — Instrument re-dress skin. Every rule is scoped under `.arc-v2` and wins by
+   specificity over the classic arc CSS, so it's purely additive: drop the class and the classics
+   render untouched. Token-only (--ix-*). PIXELS ONLY — no copy or choreography lives here.
+   Imported once by App.tsx. */
+
+/* ══ M1 · Onboarding ═══════════════════════════════════════════════════════ */
+.onb-backdrop.arc-v2 {
+  background: radial-gradient(120% 90% at 50% 0%, rgba(46, 230, 192, 0.06), transparent 60%),
+    var(--ix-base, #07090e);
+}
+.arc-v2 .onb-card {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  box-shadow: 0 30px 80px -28px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(7px);
+}
+.arc-v2 .onb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ix-text-1);
+}
+.arc-v2 .onb-tag {
+  color: var(--ix-accent-text);
+  letter-spacing: 0.08em;
+}
+.arc-v2 .onb-title {
+  color: var(--ix-text-1);
+}
+.arc-v2 .onb-body {
+  color: var(--ix-text-2);
+}
+.arc-v2 .onb-body strong {
+  color: var(--ix-text-1);
+}
+
+/* Detect rows — mono accent (the "machine read your rig" telemetry feel). */
+.arc-v2 .onb-detect-row {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  border-bottom: 1px solid var(--ix-glass-border);
+}
+.arc-v2 .onb-detect-check {
+  color: var(--ix-accent);
+}
+.arc-v2 .onb-detect-label {
+  color: var(--ix-text-2);
+}
+.arc-v2 .onb-detect-value {
+  color: var(--ix-text-1);
+}
+.arc-v2 .onb-detect-dash {
+  color: var(--ix-text-3);
+}
+.arc-v2 .onb-shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  background-size: 200% 100%;
+}
+
+/* Step-2 demo + ledger — glass. */
+.arc-v2 .onb-demo {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: var(--ix-radius);
+}
+.arc-v2 .onb-demo-name {
+  color: var(--ix-text-1);
+}
+.arc-v2 .onb-demo-sub {
+  color: var(--ix-text-2);
+}
+.arc-v2 .onb-demo-ledger {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--ix-accent-text);
+  border-top: 1px solid var(--ix-glass-border);
+}
+
+/* House-rules rows — glass + accent icons. */
+.arc-v2 .onb-rule {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 11px;
+}
+.arc-v2 .onb-rule-icon {
+  color: var(--ix-accent);
+}
+.arc-v2 .onb-rule-text {
+  color: var(--ix-text-1);
+}
+.arc-v2 .onb-kicker strong {
+  color: var(--ix-accent-text);
+}
+
+/* Step dots + skip. */
+.arc-v2 .onb-dot {
+  background: var(--ix-text-3);
+}
+.arc-v2 .onb-dot-on {
+  background: var(--ix-accent);
+  box-shadow: 0 0 7px var(--ix-accent);
+}
+.arc-v2 .onb-skip {
+  color: var(--ix-text-2);
+}
+.arc-v2 .onb-skip:hover {
+  color: var(--ix-text-1);
+}
