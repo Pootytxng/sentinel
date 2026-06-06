@@ -135,6 +135,25 @@ are now CLOSED**, which is what unblocked this:
 Owner chose "close the gaps first, then ship all." Gaming Mode stays dark; the frozen
 `private-beta-001` ref @ `16069fa` is untouched; the build is unsigned (beta-by-decision).
 
+**One Rail / Ledger / Autopsy pass (owner installed-build sweep #2, 2026-06-06)** — spec
+`2026-06-06-one-rail-ledger-autopsy.md`. Root finding: the six-home rail existed only inside
+CommandCenter; the app shell still rendered the legacy rail (SECTION_META) — two maps. Owner
+decisions on the §1 approach:
+- **Matched rails, NOT the full merge (owner, Cowork concurs).** The shell rail is rebuilt to the
+  identical six-home set; CommandCenter stays the Home surface. Both rails render from a SHARED
+  definition (parity by construction). **Condition 1: a rail-parity guard test** (both render the
+  identical set/order/labels — Home·Check·Play·Fix·Learn·Lab + Settings gear — fails on drift, same
+  spirit as sweep/contrast guards). **Condition 2 (POST-BETA FOLLOW-UP): the full structural merge**
+  (one rail component, CommandCenter as rail-less Home content, AmbientBackdrop app-wide, CommandHero
+  dissolved) is the right end-state — deferred, "not the night before an installer rebuild."
+- **Learn becomes a full content destination** (a rail tab, not the modal) — needed for §3's
+  autopsy-persistence-across-tab-switches.
+- §1 also: Diagnostics → Lab (third inline instrument; rail entry dies); "Classic home" pill retires
+  (classic via Settings flags only); the header "Rules: Built-in" chip → Settings → About; drop the
+  V0.1.0 from the header tagline (footer is the one version source); dedupe the run affordances.
+- §2 ledger state-first redesign, §3 autopsy continuity, §4 smalls follow. Zero new IPC; rollback
+  behavior byte-identical; copy locks + guards green.
+
 ---
 
 ## Passes
