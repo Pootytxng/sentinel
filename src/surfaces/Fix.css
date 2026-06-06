@@ -1,0 +1,255 @@
+/* Fix surface — Instrument reskin of the recommendations list. Token-only (--ix-*). Calm ambiance
+   (spec §4): a static, low-alpha tint contained to this surface — never the Full motion backdrop,
+   so a dense list stays readable. Glass rows occlude the tint. */
+
+.fix-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 24px;
+}
+/* Static calm field — subtle, contained, no motion (kernel calm-surface guidance). */
+.fix-root::before {
+  content: "";
+  position: absolute;
+  inset: -8px -8px 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 60% at 80% 0%, var(--accent-soft, rgba(46, 230, 192, 0.06)) 0%, transparent 60%);
+}
+.fix-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.fix-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.fix-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.fix-subtitle {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+.fix-classic {
+  flex-shrink: 0;
+  padding: 7px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.fix-classic:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-text-3);
+}
+
+/* ── Section label (accent) ───────────────────────────────────────────────── */
+.fix-section-label {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text);
+  margin: 6px 2px 0;
+}
+.fix-empty {
+  margin: 4px 2px;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+
+/* ── Rows ─────────────────────────────────────────────────────────────────── */
+.fix-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fix-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 15px 18px;
+  backdrop-filter: blur(6px);
+}
+.fix-row-main {
+  min-width: 0;
+}
+.fix-row-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fix-row-title {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+}
+.fix-row-reason {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  line-height: 1.5;
+}
+
+/* Evidence chip — never upgraded; expected is the most muted. */
+.fix-evidence {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid var(--ix-glass-border);
+  color: var(--ix-text-2);
+}
+.fix-evidence-verified {
+  color: var(--ix-accent-text);
+  border-color: var(--accent-line, rgba(46, 230, 192, 0.32));
+  background: var(--accent-soft, rgba(46, 230, 192, 0.1));
+}
+.fix-evidence-measured {
+  color: var(--ix-text-1);
+}
+
+/* ── Collapsible groups ───────────────────────────────────────────────────── */
+.fix-group {
+  border: 1px solid var(--ix-glass-border);
+  border-radius: var(--ix-radius);
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+.fix-group-applied {
+  border-color: var(--accent-line, rgba(46, 230, 192, 0.28));
+  background: var(--accent-soft, rgba(46, 230, 192, 0.05));
+}
+.fix-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-1);
+  font-size: 13.5px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.fix-group-title {
+  flex: 1;
+}
+.fix-group-count {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--ix-text-2);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+.fix-group-icon {
+  display: inline-flex;
+  color: var(--ix-amber);
+}
+.fix-chev {
+  color: var(--ix-text-3);
+  transition: transform 180ms ease;
+}
+.fix-chev-open {
+  transform: rotate(90deg);
+}
+.fix-group-body {
+  padding: 4px 14px 16px;
+  animation: fix-fade 180ms ease;
+}
+
+/* ── Refuse-pile ──────────────────────────────────────────────────────────── */
+.fix-refuse-intro {
+  margin: 4px 2px 12px;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  line-height: 1.5;
+}
+.fix-refuse-row {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 14px 16px;
+}
+.fix-autopsy {
+  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-accent-text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.fix-autopsy:hover {
+  border-color: var(--ix-accent);
+  background: var(--accent-soft, rgba(46, 230, 192, 0.1));
+}
+
+/* ── Advisory (guided, no switch) ─────────────────────────────────────────── */
+.fix-row-advisory {
+  background: rgba(255, 255, 255, 0.02);
+}
+.fix-guided-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--ix-text-2);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 999px;
+  padding: 3px 11px;
+}
+
+@keyframes fix-fade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fix-chev {
+    transition: none;
+  }
+  .fix-group-body {
+    animation: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .fix-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+}
