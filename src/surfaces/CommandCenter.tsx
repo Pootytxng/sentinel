@@ -14,6 +14,7 @@ import {
 } from "../design/theme";
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
+import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import "./CommandCenter.css";
 
 // ─── Structural prop subsets ────────────────────────────────────────────────
@@ -265,26 +266,16 @@ function LimiterCard({
       {canToggle ? (
         <>
           <div className="cc-trust">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={applied}
-              aria-label={`${applied ? "Roll back" : "Apply"} ${limiter.title}`}
-              className={`cc-switch ${applied ? "cc-switch-on" : ""}`}
-              disabled={busy}
-              onClick={onToggle}
-            >
-              <span className="cc-switch-thumb" />
-            </button>
-            <span className="cc-trust-label">
-              {busy ? "Working…" : applied ? "Applied — toggle to roll back" : "Apply this fix"}
-            </span>
+            <TrustSwitch
+              applied={applied}
+              busy={busy}
+              onToggle={onToggle}
+              ariaLabel={`${applied ? "Roll back" : "Apply"} ${limiter.title}`}
+              label={applied ? "Applied — toggle to roll back" : "Apply this fix"}
+            />
           </div>
           {applied && activeChange && (
-            <p className="cc-snapshot">
-              <span className="cc-snapshot-dot" aria-hidden="true" />
-              snapshot captured — restores your previous setting · logged to Trust Ledger
-            </p>
+            <TrustSnapshotLine restoresLabel={activeChange.restores_label} />
           )}
         </>
       ) : (
