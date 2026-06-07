@@ -1,0 +1,88 @@
+# Beta Feedback Train #3 — clean exit · exact links · flatten Play · apply-all · Learn de-overload · wordmark straggler
+
+*2026-06-06, Cowork, from the owner's full first-beta feedback list. Triage: two reported items
+are ALREADY SHIPPED in wave-2 (ineligible-option dismissal = eligibility train; back button =
+wayfinding train) — resolution is distribution, not code. The six below are real. Sequencing:
+this train runs after the reopened elastic fix is owner-re-blessed; ONE rebuild then carries
+elastic + doorknobs + eggs + this train together.*
+
+---
+
+## §1 Clean exit — trust-class, leads the train
+
+**Report: closing the app leaves background processes in Task Manager.** For a product whose
+README invites process/firewall scrutiny, ghosts after close contradict the core pitch.
+
+- Closing the main window = FULL process-tree exit: main process, overlay window, and — prime
+  suspect — the **elevated FPS helper** (`--fps-capture`): stop capture cleanly on app exit;
+  the helper must terminate when its parent session ends (no orphans, including when capture
+  is mid-run at close). WebView2 child processes follow the parent automatically — verify.
+- No hidden-to-tray behavior exists; close means exit, period.
+- Acceptance: with capture running + overlay shown, close the app → within ~2s Task Manager
+  shows ZERO compy-related processes. Repeat from a UAC-elevated-helper session. Add a
+  regression test for helper lifetime where feasible (orphan-detection logic exists from
+  Gaming Mode work — reuse the pattern).
+
+## §2 Exact-article links (named-place law, Check straggler)
+
+**Report: Check → "not worth touching" → "why we refuse these" dumps into ALL of Learn.**
+Route it to the EXACT entry via the existing quick-look-by-id mechanism (WhatsThis pattern,
+already shipped on Fix rows). Sweep for any other remaining generic-Learn links — the law is
+"if it names a place it takes you there," and a specific refusal must link its specific
+article.
+
+## §3 Play — flatten "Full monitoring & charts"
+
+**Report: kill the dropdown; just show everything — no point in the extra click.** The
+doorknob made it perceptible; the tester is right that it shouldn't be a door at all on its
+own home turf. Render the deep monitoring inline on Play, always (charts poll only while Play
+is the active room — existing visibility-gating keeps the cost honest). Remove the collapsible;
+the .cmp-door grammar elsewhere is unaffected.
+
+## §4 Fix — "Apply all" (philosophy-preserving design)
+
+**Report: a toggle/button to apply all suggested items at once.** Accepted with guardrails so
+this never becomes optimizer-rot bulk-flipping:
+
+- Button: **"Apply all safe fixes (N)"** — SAFE-tier appliable recs only (matches the
+  first-run arc's "Fix both" precedent). Moderate stays individual; advisory can't apply by
+  definition; dismissed/not-for-this-rig excluded.
+- ONE consent sheet first: lists every item with its one-line what-it-changes. Approve →
+  sequential application, **one ledger receipt PER item** (rollback granularity unchanged —
+  each individually undoable, exactly as if applied one-by-one).
+- Elevation batched where items share it (one UAC prompt, not N) via the existing elevated
+  path; per-item failure isolation — one failure skips, doesn't abort; honest summary after
+  ("Applied 5 · 1 skipped: <reason>").
+- Copy law: "Apply all" never implies a performance promise — it's convenience, not a boost
+  button.
+
+## §5 Learn — de-overload pass (structure only; voice/content untouched)
+
+**Report: information overload in Learn.** 116 entries need progressive disclosure:
+
+- Categories collapsed by default (tweaks / terms / tricks / guides — count chips on each).
+- A short **"Start here"** strip: 3–5 curated entries (the guides + the biggest myths).
+- Verdict filter chips (real / placebo / risky) alongside the existing search.
+- Entry rows compress to title + one-liner until expanded (everything else behind the
+  expand-in-place the autopsy already uses).
+- Search stays primary and prominent. Zero copy changes — this is shelving, not rewriting.
+
+## §6 Settings wordmark straggler
+
+**Report: the logo in Settings differs from the rest of the app.** Wordmark-law violation —
+swap to the shared `Wordmark` component; grep-sweep for ANY remaining non-component logo
+usages so the law holds everywhere (the guard for this is the component being the only
+sanctioned source).
+
+## Acceptance
+
+- [ ] §1: zero compy processes in Task Manager ~2s after close, including mid-capture +
+      elevated-helper scenarios; regression coverage added.
+- [ ] §2: refusal links open the exact entry (quick-look); no generic-Learn dumps remain.
+- [ ] §3: Play shows full monitoring inline; no dropdown; polling stays visibility-gated.
+- [ ] §4: consent sheet lists all; per-item receipts; one elevation; failure isolation;
+      safe-tier only; copy promise-free.
+- [ ] §5: Learn opens calm (collapsed categories + start-here + filters); content unchanged.
+- [ ] §6: one Wordmark source everywhere, grep-verified.
+- [ ] Tests/guards green per section; copy locks untouched; zero new IPC beyond §4's
+      orchestration of EXISTING apply commands; catalog unchanged.
