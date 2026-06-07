@@ -121,6 +121,8 @@ type Recommendation = {
   applies_to: string;
   currently_applied: boolean;
   provenance: Provenance;
+  eligible?: boolean;
+  ineligible_reason?: string | null;
 };
 
 type AppliedChange = {

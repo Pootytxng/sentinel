@@ -71,6 +71,10 @@ export type Recommendation = {
   applies_to: string;
   currently_applied: boolean;
   provenance: Provenance;
+  /** Applicability gating: false when this rig's hardware can't use the rec (→ "Not for this rig",
+   *  out of the completion denominator). Defaults true for older payloads without the field. */
+  eligible?: boolean;
+  ineligible_reason?: string | null;
 };
 
 // Cross-session comparison result (mirrors comparison.rs serde).

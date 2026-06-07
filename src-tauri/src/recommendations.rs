@@ -58,6 +58,17 @@ pub(crate) struct Recommendation {
     applies_to: String,
     currently_applied: bool,
     provenance: Provenance,
+    /// Applicability gating (eligibility train): false when this rig's HARDWARE can't use the rec
+    /// (e.g. a wired-Ethernet tweak on a Wi-Fi-only rig). Ineligible recs move to "Not for this rig"
+    /// and leave the completion denominator — they are never silently dropped.
+    #[serde(default = "default_eligible")]
+    eligible: bool,
+    #[serde(default)]
+    ineligible_reason: Option<String>,
+}
+
+fn default_eligible() -> bool {
+    true
 }
 
 // ─── Step B: Rules JSON schema + loader ──────────────────────────────────
@@ -123,8 +134,33 @@ pub(crate) enum Condition {
     OldGpuDriverDays { min_days: i64 },
     StorageBelowFreePercent { mount_prefix: String, percent: f64 },
     HasActiveWiredEthernet,
+    HasWiredEthernetPort,
     MemoryIntegrityOrVbsActive,
     DisplayHdrCapable,
+}
+
+// A FAILED condition either means "this rig's hardware can't use the rec" (→ show it in "Not for this
+// rig" with this reason) or "not relevant right now" (→ omit it, as before). Only genuine hardware-
+// capability gates return a reason; relevance gates return None.
+pub(crate) fn hardware_ineligibility_reason(cond: &Condition, _hw: &HardwareInfo) -> Option<String> {
+    match cond {
+        Condition::HasActiveWiredEthernet | Condition::HasWiredEthernetPort => Some(
+            "Needs a wired Ethernet port — this rig has none (Wi-Fi / other only).".into(),
+        ),
+        Condition::DisplayHdrCapable => Some("Your display isn't HDR-capable.".into()),
+        Condition::AllHdd => Some("Only for HDD-only systems — this rig has an SSD/NVMe.".into()),
+        Condition::HasModernDiscreteGpu => Some("Needs a modern discrete GPU.".into()),
+        Condition::GpuVendor { vendor } => {
+            Some(format!("For {} GPUs — this rig's GPU is different.", vendor.to_uppercase()))
+        }
+        // Relevance gates: when unmet the rec simply isn't applicable right now — omit it (not "ineligible").
+        Condition::RamGbAtLeast { .. }
+        | Condition::FastStoragePresent
+        | Condition::DisplayUnderdriven { .. }
+        | Condition::OldGpuDriverDays { .. }
+        | Condition::StorageBelowFreePercent { .. }
+        | Condition::MemoryIntegrityOrVbsActive => None,
+    }
 }
 
 pub(crate) fn load_baseline_rules_embedded() -> RulesFile {
@@ -196,6 +232,7 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
             })
         }
         Condition::HasActiveWiredEthernet => hw.has_active_wired_ethernet,
+        Condition::HasWiredEthernetPort => hw.has_wired_ethernet_port,
         Condition::MemoryIntegrityOrVbsActive => memory_integrity_or_vbs_active(),
         Condition::DisplayHdrCapable => hw
             .display
@@ -247,11 +284,19 @@ pub(crate) fn template_substitute(template: &str, hw: &HardwareInfo) -> String {
 }
 
 pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<Recommendation> {
+    // Applicability gating: a failed RELEVANCE gate omits the rec; a failed HARDWARE-capability gate
+    // keeps it but marks it ineligible (→ "Not for this rig" with the reason, out of the denominator).
+    let mut ineligible_reason: Option<String> = None;
     for cond in &spec.conditions {
-        if !condition_matches(cond, hw) {
-            return None;
+        if condition_matches(cond, hw) {
+            continue;
         }
+        match hardware_ineligibility_reason(cond, hw) {
+            Some(reason) => ineligible_reason.get_or_insert(reason),
+            None => return None,
+        };
     }
+    let eligible = ineligible_reason.is_none();
 
     let applies_to = spec
         .applies_to_template
@@ -276,6 +321,8 @@ pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<R
         applies_to,
         currently_applied,
         provenance: spec.provenance,
+        eligible,
+        ineligible_reason,
     })
 }
 
@@ -316,6 +363,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         },
         currently_applied: on_ultimate,
         provenance: Provenance::MeasuredSignal,
+        eligible: true,
+        ineligible_reason: None,
     });
 
     // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
@@ -358,6 +407,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             ),
             currently_applied: !reserved_storage_enabled(),
             provenance: Provenance::MeasuredSignal,
+            eligible: true,
+            ineligible_reason: None,
         });
     }
 
@@ -377,6 +428,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         },
         currently_applied: fast_startup_state() == Some(0),
         provenance: Provenance::ExpectedImpact,
+        eligible: true,
+        ineligible_reason: None,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -394,6 +447,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: name.clone(),
             currently_applied: !telemetry_running,
             provenance: Provenance::ExpectedImpact,
+            eligible: true,
+            ineligible_reason: None,
         });
 
         recs.push(Recommendation {
@@ -408,6 +463,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: "NVIDIA GPU + latency profile".into(),
             currently_applied: false,
             provenance: Provenance::MeasuredSignal,
+            eligible: true,
+            ineligible_reason: None,
         });
     }
 
@@ -424,6 +481,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: name,
             currently_applied: false,
             provenance: Provenance::ExpectedImpact,
+            eligible: true,
+            ineligible_reason: None,
         });
     }
 
@@ -443,6 +502,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: "Hybrid GPU setup detected".into(),
             currently_applied: false,
             provenance: Provenance::ExpectedImpact,
+            eligible: true,
+            ineligible_reason: None,
         });
     }
 
@@ -465,6 +526,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 applies_to: format!("{} ({:.0}% free)", disk.mount_point, pct_free),
                 currently_applied: false,
                 provenance: Provenance::Verified,
+                eligible: true,
+                ineligible_reason: None,
             });
             break;
         }
@@ -494,6 +557,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
             currently_applied: !service_running("SysMain"),
             provenance: Provenance::ExpectedImpact,
+            eligible: true,
+            ineligible_reason: None,
         });
     }
 
@@ -530,6 +595,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 },
                 currently_applied: state == Some(2),
                 provenance: Provenance::MeasuredSignal,
+                eligible: true,
+                ineligible_reason: None,
             });
         }
     }
@@ -558,6 +625,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 ),
                 currently_applied: false,
                 provenance: Provenance::Verified,
+                eligible: true,
+                ineligible_reason: None,
             });
         }
     }
@@ -592,6 +661,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 applies_to: format!("{} driver is ~{} months old", vendor, months),
                 currently_applied: false,
                 provenance: Provenance::Verified,
+                eligible: true,
+                ineligible_reason: None,
             });
         }
     }
@@ -610,6 +681,8 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             applies_to: "Spinning HDDs only — no SSDs detected".into(),
             currently_applied: false,
             provenance: Provenance::MeasuredSignal,
+            eligible: true,
+            ineligible_reason: None,
         });
     }
 
@@ -831,5 +904,41 @@ mod rec_tests {
         for r in &recs {
             assert!(seen.insert(r.id.clone()), "duplicate rec id: {}", r.id);
         }
+    }
+
+    #[test]
+    fn hardware_ineligible_rec_is_marked_not_dropped() {
+        // Applicability gating: on a rig with no physical Ethernet port, the EEE rec must stay
+        // PRESENT but ineligible (with a reason) — never silently dropped, never falsely offered.
+        let wifi = HardwareInfo {
+            has_wired_ethernet_port: false,
+            ..Default::default()
+        };
+        let eee = build_recommendations(&wifi)
+            .into_iter()
+            .find(|r| r.id == "eee-disable")
+            .expect("ineligible rec is kept, not dropped");
+        assert!(!eee.eligible, "EEE must be ineligible on a portless rig");
+        assert!(eee.ineligible_reason.is_some(), "ineligible recs carry a plain-English reason");
+
+        // With a physical Ethernet port it's eligible again.
+        let wired = HardwareInfo {
+            has_wired_ethernet_port: true,
+            ..Default::default()
+        };
+        let eee2 = build_recommendations(&wired)
+            .into_iter()
+            .find(|r| r.id == "eee-disable")
+            .expect("present");
+        assert!(eee2.eligible);
+        assert!(eee2.ineligible_reason.is_none());
+    }
+
+    #[test]
+    fn relevance_gate_still_omits_the_rec() {
+        // A non-hardware (relevance) gate that fails still OMITS the rec (not "ineligible").
+        // all-hdd is a hardware gate (kept), but memory-integrity is relevance — verify the helper.
+        assert!(hardware_ineligibility_reason(&Condition::MemoryIntegrityOrVbsActive, &HardwareInfo::default()).is_none());
+        assert!(hardware_ineligibility_reason(&Condition::HasWiredEthernetPort, &HardwareInfo::default()).is_some());
     }
 }

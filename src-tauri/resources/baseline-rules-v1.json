@@ -142,8 +142,8 @@
       "impact": "More consistent latency on the wired gaming NIC; reduces ping variance",
       "provenance": "expected-impact",
       "downside": "Slightly higher idle network power draw on the adapter (a fraction of a watt).",
-      "applies_to_template": "Active wired Ethernet adapter with an EEE-shaped property exposed by the driver",
-      "conditions": [{ "kind": "has-active-wired-ethernet" }],
+      "applies_to_template": "Wired Ethernet adapter with an EEE-shaped property exposed by the driver",
+      "conditions": [{ "kind": "has-wired-ethernet-port" }],
       "apply_kind": "eee-disable",
       "state_kind": "eee-disabled-on-eligible-adapters"
     },

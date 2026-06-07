@@ -21,6 +21,8 @@ type Rec = {
   impact: string;
   currently_applied: boolean;
   provenance: "verified" | "measured-signal" | "expected-impact";
+  eligible?: boolean;
+  ineligible_reason?: string | null;
 };
 
 type Props = {
@@ -355,9 +357,14 @@ export default function Fix({
   onDisablePreview,
   vendor,
 }: Props) {
-  const appliable = recs.filter((r) => isAppliable(r.id));
+  // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
+  // the completion denominator entirely — they sit in a quiet "Not for this rig" bucket with the
+  // plain-English reason, never silently dropped, never falsely offered.
+  const notForThisRig = recs.filter((r) => r.eligible === false);
+  const eligibleRecs = recs.filter((r) => r.eligible !== false);
+  const appliable = eligibleRecs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
-  const advisory = recs.filter((r) => !isAppliable(r.id));
+  const advisory = eligibleRecs.filter((r) => !isAppliable(r.id));
 
   // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
   // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
@@ -446,6 +453,29 @@ export default function Fix({
           <ul className="fix-list">
             {history.map((c) => (
               <HistoryRow key={c.id} change={c} />
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+
+      {/* Not for this rig — hardware-ineligible recs (eligibility train): set aside with the reason,
+          and OUT of the completion denominator, so they never block "all handled" or nag. */}
+      {notForThisRig.length > 0 && (
+        <CollapsibleSection title="Not for this rig" count={notForThisRig.length} tint="refuse">
+          <p className="fix-refuse-intro">
+            Compy detected these don't apply to your hardware — set aside, and left out of your
+            "all handled" count.
+          </p>
+          <ul className="fix-list">
+            {notForThisRig.map((r) => (
+              <li key={r.id} className="fix-refuse-row">
+                <div className="fix-row-head">
+                  <span className="fix-row-title">{r.title}</span>
+                </div>
+                <p className="fix-row-reason">
+                  {r.ineligible_reason ?? "Not applicable to this rig's hardware."}
+                </p>
+              </li>
             ))}
           </ul>
         </CollapsibleSection>
