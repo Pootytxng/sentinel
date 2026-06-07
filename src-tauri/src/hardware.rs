@@ -1231,6 +1231,7 @@ struct MsftNetAdapter {
     media_connect_state: Option<i64>,
     #[serde(rename = "PnPDeviceID")]
     pnp_device_id: Option<String>,
+    interface_guid: Option<String>,
 }
 
 // Belt-and-suspenders virtual exclusion (a SECOND signal — never the only one): name patterns of the
@@ -1302,6 +1303,37 @@ pub(crate) fn detect_network_adapters() -> Vec<NetAdapterInfo> {
                     connected: a.media_connect_state == Some(1),
                     name,
                 })
+            })
+            .collect()
+    })
+}
+
+/// Interface GUIDs (UPPER-cased, braced — matching the `Tcpip\Parameters\Interfaces` key names) of
+/// PHYSICAL NICs only. Used to target per-interface network tweaks (Nagle) at real adapters, never at
+/// VPN/virtual ones. Empty when undeterminable — callers MUST fall back (never silently no-op).
+pub(crate) fn physical_nic_guids() -> Vec<String> {
+    on_wmi_thread(|| {
+        let com = match COMLibrary::new() {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+        let conn = match WMIConnection::with_namespace_path("ROOT\\StandardCimv2", com) {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+        let rows: Vec<MsftNetAdapter> = conn.query().unwrap_or_default();
+        rows.into_iter()
+            .filter_map(|a| {
+                let name = a
+                    .interface_description
+                    .clone()
+                    .or_else(|| a.name.clone())
+                    .unwrap_or_default();
+                if is_physical_adapter(a.connector_present, a.pnp_device_id.as_deref(), &name) {
+                    a.interface_guid.map(|g| g.to_uppercase())
+                } else {
+                    None
+                }
             })
             .collect()
     })

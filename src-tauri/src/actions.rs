@@ -410,6 +410,33 @@ mod ps_injection_tests {
     }
 }
 
+#[cfg(test)]
+mod nagle_target_tests {
+    use super::select_nagle_targets;
+
+    #[test]
+    fn targets_physical_excludes_virtual() {
+        // Tester case: a Wi-Fi rig with a VPN TAP adapter. Both have IPs; only the physical Wi-Fi
+        // NIC should get the Nagle write — never the VPN's virtual interface.
+        let with_ip = vec!["{WIFI-GUID}".to_string(), "{TAP-VPN-GUID}".to_string()];
+        let physical = vec!["{WIFI-GUID}".to_string()];
+        assert_eq!(select_nagle_targets(&with_ip, &physical), vec!["{WIFI-GUID}".to_string()]);
+    }
+
+    #[test]
+    fn falls_back_to_all_when_physical_unknown_never_inert() {
+        // If we can't identify the physical set (WMI down / GUID mismatch), apply to all with-IP so
+        // the rec is never silently a no-op.
+        let with_ip = vec!["{A}".to_string(), "{B}".to_string()];
+        assert_eq!(select_nagle_targets(&with_ip, &[]), with_ip);
+        // Registry key casing vs WMI casing: the with-IP side is upper-cased before compare, and the
+        // original registry key name is preserved in the result (we write to that exact key).
+        let with_ip_lower = vec!["{a}".to_string(), "{b}".to_string()];
+        let physical_upper = vec!["{A}".to_string()];
+        assert_eq!(select_nagle_targets(&with_ip_lower, &physical_upper), vec!["{a}".to_string()]);
+    }
+}
+
 // ─── Service state snapshot via WMI ──────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -1129,14 +1156,30 @@ pub(crate) fn rollback_mouse_accel_off_typed(
 
 // ─── Nagle disable across active NICs ────────────────────────────────────
 
+// Pure target selector (testable): of the with-IP Tcpip interfaces, target the PHYSICAL ones only —
+// but if we can't identify any physical among them (WMI unavailable / GUID mismatch), fall back to ALL
+// with-IP so the rec is never silently inert. Detection/eligibility train (addendum): per-interface
+// network tweaks target the active physical interface, never VPN/Hyper-V/virtual adapters.
+pub(crate) fn select_nagle_targets(with_ip_guids: &[String], physical_guids_upper: &[String]) -> Vec<String> {
+    let phys: Vec<String> = with_ip_guids
+        .iter()
+        .filter(|g| physical_guids_upper.contains(&g.to_uppercase()))
+        .cloned()
+        .collect();
+    if phys.is_empty() {
+        with_ip_guids.to_vec()
+    } else {
+        phys
+    }
+}
+
 pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
-    // Snapshot (no admin): walk every Tcpip interface, capture prior values
-    // on adapters that have an actual IP. Skip loopback / virtual / inactive.
+    // Snapshot (no admin): capture prior values on every Tcpip interface that has an IP...
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let interfaces = hklm
         .open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces")
         .map_err(|e| e.to_string())?;
-    let mut nic_snapshots: Vec<NagleInterfaceSnapshot> = Vec::new();
+    let mut with_ip: Vec<NagleInterfaceSnapshot> = Vec::new();
     for adapter_name in interfaces.enum_keys().filter_map(|r| r.ok()) {
         let Ok(adapter) = interfaces.open_subkey(&adapter_name) else {
             continue;
@@ -1146,24 +1189,39 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
         if !has_ip {
             continue;
         }
-        let prior_ack: Option<u32> = adapter.get_value("TcpAckFrequency").ok();
-        let prior_nodelay: Option<u32> = adapter.get_value("TCPNoDelay").ok();
-        nic_snapshots.push(NagleInterfaceSnapshot {
+        with_ip.push(NagleInterfaceSnapshot {
             interface: adapter_name,
-            prior_ack,
-            prior_nodelay,
+            prior_ack: adapter.get_value("TcpAckFrequency").ok(),
+            prior_nodelay: adapter.get_value("TCPNoDelay").ok(),
         });
     }
 
-    let ps = "$ifs = Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'; \
-              foreach ($i in $ifs) { \
-                $hasIp = (Get-ItemProperty -Path $i.PSPath -Name 'DhcpIPAddress' -ErrorAction SilentlyContinue) -or (Get-ItemProperty -Path $i.PSPath -Name 'IPAddress' -ErrorAction SilentlyContinue); \
-                if ($hasIp) { \
-                  Set-ItemProperty -Path $i.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord; \
-                  Set-ItemProperty -Path $i.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord; \
-                } \
-              }";
-    run_elevated_powershell(ps)?;
+    // ...then narrow to the PHYSICAL interfaces (Wi-Fi or wired), excluding VPN/virtual adapters.
+    let with_ip_guids: Vec<String> = with_ip.iter().map(|s| s.interface.clone()).collect();
+    let physical = crate::hardware::physical_nic_guids(); // UPPER, braced; empty → fall back to all
+    let targets: std::collections::HashSet<String> = select_nagle_targets(&with_ip_guids, &physical)
+        .into_iter()
+        .map(|g| g.to_uppercase())
+        .collect();
+    // The snapshot now covers EXACTLY what we write, so rollback is exact.
+    let nic_snapshots: Vec<NagleInterfaceSnapshot> = with_ip
+        .into_iter()
+        .filter(|s| targets.contains(&s.interface.to_uppercase()))
+        .collect();
+
+    // Write to exactly those interfaces, by explicit path (mirrors the rollback script).
+    let mut ps = String::new();
+    for s in &nic_snapshots {
+        let path = format!(
+            "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
+            s.interface
+        );
+        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1 -Type DWord; "));
+        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1 -Type DWord; "));
+    }
+    if !ps.is_empty() {
+        run_elevated_powershell(&ps)?;
+    }
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableNagleOnActiveNics,
         rollback_action: RollbackAction::RestoreNagleNicsFromSnapshot,

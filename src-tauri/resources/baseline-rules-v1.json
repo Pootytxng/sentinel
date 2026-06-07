@@ -100,7 +100,7 @@
       "impact": "Lower latency in games that actually use TCP for gameplay traffic",
       "provenance": "measured-signal",
       "downside": "Marginally more network overhead. For UDP-based games (which is most of them today), this does nothing.",
-      "applies_to_template": "Active network adapter — verify your specific game uses TCP before enabling",
+      "applies_to_template": "Your active PHYSICAL network adapter (Wi-Fi or wired) — virtual/VPN adapters are excluded. Verify your specific game uses TCP before enabling.",
       "conditions": [],
       "apply_kind": "nagle-disable",
       "state_kind": "nagle-disabled-any-nic"
