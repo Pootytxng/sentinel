@@ -373,3 +373,33 @@ pub fn run_capture() {
         }
     }
 }
+
+#[cfg(test)]
+mod heartbeat_tests {
+    use super::*;
+
+    // Train #3 §1 regression — the elevated helper's shutdown channel. A clean app exit drops the
+    // fps.alive heartbeat (monitoring::shutdown_for_exit); the helper must read a MISSING file as
+    // stale and break its loop. That is how the orphan ("ghost") is prevented when the parent dies.
+    #[test]
+    fn missing_heartbeat_is_stale() {
+        let p = std::env::temp_dir().join("compy-test-no-such-heartbeat.alive");
+        let _ = std::fs::remove_file(&p); // ensure absent
+        let path = p.to_string_lossy().to_string();
+        assert!(
+            heartbeat_stale(&path),
+            "a missing heartbeat file must read as stale so the helper self-exits on app close"
+        );
+    }
+
+    // The inverse: a just-written heartbeat is NOT stale — the helper keeps running while the parent
+    // is alive and refreshing it (no premature self-exit during a real session).
+    #[test]
+    fn fresh_heartbeat_is_not_stale() {
+        let p = std::env::temp_dir().join("compy-test-fresh-heartbeat.alive");
+        std::fs::write(&p, b"alive").expect("write temp heartbeat");
+        let path = p.to_string_lossy().to_string();
+        assert!(!heartbeat_stale(&path), "a just-written heartbeat must not be stale");
+        let _ = std::fs::remove_file(&p);
+    }
+}

@@ -687,6 +687,16 @@ pub(crate) fn touch_alive() {
     let _ = std::fs::write(fps_alive_path(), b"alive");
 }
 
+/// Clean teardown for app exit (Train #3 §1 — clean exit). Stops the FPS heartbeat and drops the
+/// `fps.alive` file so the elevated `--fps-capture` helper self-exits on its next poll (~0.5s —
+/// `heartbeat_stale` treats a missing file as stale). A non-elevated parent can't kill the elevated
+/// helper, so this heartbeat-drop is the shutdown channel. Idempotent + safe when nothing is running.
+pub(crate) fn shutdown_for_exit() {
+    use std::sync::atomic::Ordering;
+    fps_active().store(false, Ordering::Release);
+    let _ = std::fs::remove_file(fps_alive_path());
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 pub(crate) struct FpsSample {
     pid: u32,

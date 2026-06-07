@@ -580,10 +580,25 @@ pub fn run() {
         // so it never registers here and is unaffected.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             use tauri::Manager;
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.unminimize();
-                let _ = win.show();
-                let _ = win.set_focus();
+            match app.get_webview_window("main") {
+                Some(win) => {
+                    let _ = win.unminimize();
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+                None => {
+                    // Single-instance hardening (Train #3 §1, part 2 — defense in depth): the lock
+                    // holder is alive but has NO main window (a ghost from a prior unclean exit). The
+                    // old code did nothing here, so the plugin killed the second launch and NOTHING
+                    // appeared — the "Compy won't open" report. Revive the UI instead of a silent
+                    // no-op: recreate the main window (matches tauri.conf's main window).
+                    use tauri::{WebviewUrl, WebviewWindowBuilder};
+                    let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                        .title("Compy")
+                        .inner_size(800.0, 600.0)
+                        .min_inner_size(380.0, 560.0)
+                        .build();
+                }
             }
         }))
         .plugin(tauri_plugin_opener::init())
@@ -641,6 +656,20 @@ pub fn run() {
             get_gaming_session_state,
             recover_gaming_session,
         ])
+        .on_window_event(|window, event| {
+            // Close = quit (Train #3 §1 — clean exit). The overlay is a CONFIG-DECLARED window, so
+            // closing the main window would otherwise leave it (hidden) keeping the process alive as a
+            // windowless ghost — which both holds the single-instance lock (→ "Compy won't open") AND
+            // keeps the FPS heartbeat refreshing so the elevated helper never self-exits. So when MAIN
+            // closes: tear down capture (helper self-exits ~0.5s) + exit the whole app.
+            use tauri::Manager;
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    crate::monitoring::shutdown_for_exit();
+                    window.app_handle().exit(0);
+                }
+            }
+        })
         .setup(|app| {
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
