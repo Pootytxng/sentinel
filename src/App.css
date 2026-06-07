@@ -102,12 +102,16 @@ html, body, #root {
 
 .app {
   min-height: 100vh;
-  padding: 24px 32px;
+  /* Fluid page padding — tightens toward the floor, breathes on wide windows (elastic §6). */
+  padding: clamp(14px, 2.4vw, 26px) clamp(16px, 3vw, 36px);
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 1100px;
-  margin: 0 auto;
+  /* Fill the window up to a generous cap, THEN center — dragging wider GROWS the layout instead of
+     freezing at a narrow cap (elastic §6 "doesn't match the window" fix). margin-inline:auto keeps
+     content centered in its lane so it never hugs one side. */
+  max-width: 1600px;
+  margin-inline: auto;
 }
 
 /* Command Center (new home) takes the full window — it provides its own centered shell + padding,
@@ -268,10 +272,16 @@ html, body, #root {
   color: var(--danger);
 }
 
+/* Count-agnostic hardware glance (elastic §6): flex-grow so each row fills its width and an orphan
+   card spans as a designed wide-card — never a ragged dangler, at any card count or window width. */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 14px;
+}
+.grid > .card {
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .card {
@@ -1703,7 +1713,7 @@ body {
 *::-webkit-scrollbar-thumb:hover { background: #3c465c; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.app { max-width: 1140px; }
+.app { max-width: 1600px; } /* elastic §6: fill-then-center (overrides the base cap; kept in sync) */
 
 /* ── Header → wordmark + live indicator + hairline divider ──────────────── */
 .header {

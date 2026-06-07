@@ -15,9 +15,11 @@
   display: grid;
   grid-template-columns: 208px 1fr;
   gap: 22px;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 26px 30px 40px;
+  /* Fill the window up to a generous cap, then center (elastic §6) — Home grows with the window like
+     every other room instead of freezing at a narrow cap. */
+  max-width: 1500px;
+  margin-inline: auto;
+  padding: clamp(16px, 2vw, 26px) clamp(16px, 2.6vw, 30px) 40px;
 }
 
 /* ── Glass panel base (kernel §2/§5) ──────────────────────────────────────── */
@@ -149,6 +151,11 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  /* Home's content is a single readable column — center it in its (growing) track so wide windows
+     don't stretch the panels to an awkward width or pin them to one side (elastic §6). */
+  width: 100%;
+  max-width: 880px;
+  margin-inline: auto;
 }
 
 .cc-header {
@@ -201,12 +208,14 @@
 /* ── Posture hero ─────────────────────────────────────────────────────────── */
 .cc-hero {
   display: flex;
+  flex-wrap: wrap; /* liquid: text wraps below the ring when narrow — no breakpoint needed (elastic §6) */
   align-items: center;
   gap: 26px;
   padding: 24px 26px;
 }
 .cc-hero-text {
   min-width: 0;
+  flex: 1 1 260px; /* grows beside the ring, wraps below it intrinsically when the column is narrow */
 }
 .cc-hero-headline {
   margin: 2px 0 6px;
@@ -486,8 +495,5 @@
   .cc-recheck {
     align-self: flex-start;
   }
-  .cc-hero {
-    flex-direction: column;
-    text-align: center;
-  }
+  /* (Hero stacking is intrinsic now via flex-wrap — no breakpoint rule needed; elastic §6.) */
 }

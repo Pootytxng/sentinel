@@ -84,6 +84,10 @@ type CpuArchInfo = {
   generation: string;
 };
 
+// Classified network adapter (detection train) — `name` is the InterfaceDescription (the evidence
+// shown to users), `medium` is "wired" | "wifi" | "other". Serialized snake_case by serde.
+type NetAdapterInfo = { name: string; physical: boolean; medium: string; connected: boolean };
+
 type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -103,6 +107,8 @@ type HardwareInfo = {
   memory_modules: MemoryModuleInfo[];
   windows_version: WindowsVersionInfo | null;
   cpu_arch: CpuArchInfo | null;
+  network_adapters: NetAdapterInfo[];
+  has_wired_ethernet_port: boolean;
 };
 
 // "Verified"        — Compy directly observes the fact this rec claims.
@@ -1657,6 +1663,37 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
             </>
           )}
         </Card>
+
+        {/* Network (elastic §6, 6th card → the grid tiles symmetrically): named PHYSICAL adapter +
+            state, from the detection-train inventory (existing get_hardware data; zero new IPC). */}
+        {(() => {
+          const phys = (hw.network_adapters ?? []).filter((a) => a.physical);
+          const active = phys.find((a) => a.connected) ?? null;
+          const mediumLabel = (m: string) =>
+            m === "wired" ? "Ethernet" : m === "wifi" ? "Wi-Fi" : "Other";
+          const value = active
+            ? mediumLabel(active.medium)
+            : hw.has_wired_ethernet_port
+            ? "Ethernet — unplugged"
+            : phys.length > 0
+            ? "Not connected"
+            : "No adapter detected";
+          return (
+            <Card label="Network" value={value}>
+              {phys.length === 0 ? (
+                <Detail k="Status" v="No physical adapter detected" />
+              ) : (
+                phys.map((a, i) => (
+                  <Detail
+                    key={i}
+                    k={a.name}
+                    v={a.connected ? `Connected · ${mediumLabel(a.medium)}` : "Not connected"}
+                  />
+                ))
+              )}
+            </Card>
+          );
+        })()}
       </div>
     </section>
   );
