@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import "./Wordmark.css";
 
 // Wordmark Law v2 (kernel §1 final): the pulse-C IS the C — "Compy" is ONE word, not logo-then-name.
@@ -8,8 +9,27 @@ import "./Wordmark.css";
 export function Wordmark({ size = 19, className = "" }: { size?: number; className?: string }) {
   const w = (18 / 19) * size;
   const h = (21 / 19) * size;
+  // Fidgeter's reward (shadow realm, Six Laws): triple-click the mark → the launch heartbeat redraws
+  // once. Pure delight — nothing changes, nothing unlocks. `cmp-shadow` marks a DELIBERATE knobless
+  // interaction: the sanctioned exception to the doorknob law (an egg must never wear a knob), so it
+  // stays invisible until found. Removing it leaves zero trace.
+  const [beat, setBeat] = useState(0);
+  const taps = useRef<number[]>([]);
+  const fidget = () => {
+    const now = Date.now();
+    taps.current = [...taps.current.filter((t) => now - t < 600), now];
+    if (taps.current.length >= 3) {
+      taps.current = [];
+      setBeat((b) => b + 1);
+    }
+  };
   return (
-    <span className={`cmp-wordmark ${className}`} style={{ fontSize: size }} aria-label="Compy">
+    <span
+      className={`cmp-wordmark cmp-shadow ${className}`}
+      style={{ fontSize: size }}
+      aria-label="Compy"
+      onClick={fidget}
+    >
       <svg
         className="cmp-wordmark-glyph"
         width={w}
@@ -25,6 +45,9 @@ export function Wordmark({ size = 19, className = "" }: { size?: number; classNa
           strokeLinecap="round"
         />
         <polyline
+          key={beat}
+          className={beat > 0 ? "cmp-wordmark-pulse" : ""}
+          pathLength={1}
           points="360,512 424,512 460,434 514,594 556,470 602,512 648,512"
           fill="none"
           stroke="var(--ix-accent-text, #7ff0d0)"

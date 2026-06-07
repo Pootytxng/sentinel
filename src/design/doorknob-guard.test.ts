@@ -7,7 +7,9 @@ import { describe, it, expect } from "vitest";
 // <button>/<a>/<Component> are interactive by semantics and are fine. A future surface that wires a
 // knobless <div onClick> now fails the build, named.
 
-const SANCTIONED = /(cmp-door|backdrop|modal|change-action-area)/;
+// cmp-shadow = a DELIBERATE knobless interaction (a shadow-realm egg) — the one sanctioned exception
+// to "every interactive wears a knob": eggs must stay invisible. Named + documented, never accidental.
+const SANCTIONED = /(cmp-door|backdrop|modal|change-action-area|cmp-shadow)/;
 const NON_SEMANTIC = new Set([
   "div", "li", "span", "section", "header", "footer", "p", "article", "aside", "main", "nav",
   "ul", "ol", "tr", "td", "figure", "label",

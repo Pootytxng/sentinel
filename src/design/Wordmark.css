@@ -16,3 +16,24 @@
 .cmp-wordmark-rest {
   margin-left: -0.053em; /* ≈ -1px @ 19px, scaled by em so it holds at any size */
 }
+
+/* Fidgeter's reward (shadow realm): the heartbeat redraws on a triple-click. pathLength=1 normalizes
+   the draw at any glyph size. Reduced-motion: no replay — the egg IS the motion, so it simply sleeps. */
+.cmp-wordmark-pulse {
+  animation: cmp-wordmark-redraw 720ms ease-out;
+}
+@keyframes cmp-wordmark-redraw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmp-wordmark-pulse {
+    animation: none;
+  }
+}
