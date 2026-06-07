@@ -388,6 +388,42 @@
   cursor: progress;
 }
 
+/* "Not for me" — a quiet, low-prominence decline (eligibility train); never competes with Apply. */
+.fix-dismiss {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-3);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+.fix-dismiss:hover {
+  color: var(--ix-text-1);
+  text-decoration: underline;
+}
+/* Restore — bring a dismissed rec back to the active lists. */
+.fix-restore {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.fix-restore:hover {
+  background: var(--ix-accent);
+  color: var(--ix-accent-ink, #06231c);
+  border-color: var(--ix-accent);
+}
+
 /* ── Full history (Layer 2) ── */
 .fix-hist-row {
   border-bottom: 1px solid var(--ix-glass-border);

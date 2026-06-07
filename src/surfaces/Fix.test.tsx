@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import Fix from "./Fix";
 
@@ -27,6 +27,9 @@ const baseProps = {
 };
 
 describe("Fix", () => {
+  // Dismissal (§2) persists to localStorage — isolate each test so dismissed state never leaks.
+  beforeEach(() => localStorage.clear());
+
   it("groups recs and shows real header counts", () => {
     const recs = [
       rec("game-mode", false), // appliable, outstanding
@@ -34,11 +37,26 @@ describe("Fix", () => {
       rec("amd-uxp", false), // not appliable → advisory
     ];
     render(<Fix recs={recs} {...baseProps} />);
+    // Honest split (eligibility train): worth-fixing · active · dismissed · not-for-this-rig.
     expect(
-      screen.getByText(/1 worth your attention · 0 active on this PC · 3 we'd leave alone/),
+      screen.getByText(/1 worth your attention · 0 active · 0 dismissed · 0 not for this rig/),
     ).toBeTruthy();
     // outstanding appliable rec is visible in Worth fixing
     expect(screen.getByText("Title game-mode")).toBeTruthy();
+  });
+
+  it("§2: 'Not for me' dismisses a rec into the Dismissed strip; restore brings it back", () => {
+    const recs = [rec("game-mode", false)];
+    render(<Fix recs={recs} {...baseProps} />);
+    // The rec is live with a quiet dismiss affordance.
+    expect(screen.getByText("Title game-mode")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Not for me" }));
+    // It left the active list; subtitle now counts 1 dismissed.
+    expect(screen.getByText(/0 worth your attention · 0 active · 1 dismissed/)).toBeTruthy();
+    // Restore from the (collapsed) Dismissed strip brings it back.
+    fireEvent.click(screen.getByText("Dismissed")); // expand the collapsible
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    expect(screen.getByText(/1 worth your attention · 0 active · 0 dismissed/)).toBeTruthy();
   });
 
   it("ledger §2: Active-on-PC shows a deduped active change with a ghost rollback", () => {

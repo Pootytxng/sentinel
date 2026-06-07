@@ -5,6 +5,7 @@ import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { useDismissed } from "./dismissed";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import "./Fix.css";
 
@@ -121,6 +122,7 @@ function FixRow({
   busy,
   onToggle,
   onWhatsThis,
+  onDismiss,
 }: {
   rec: Rec;
   applied: boolean;
@@ -128,6 +130,7 @@ function FixRow({
   busy: boolean;
   onToggle: () => void;
   onWhatsThis: (id: string) => void;
+  onDismiss: (id: string) => void;
 }) {
   return (
     <li className="fix-row">
@@ -139,6 +142,12 @@ function FixRow({
         </div>
         <p className="fix-row-reason">{rec.impact || rec.description}</p>
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
+        {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
+        {!applied && (
+          <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
+            Not for me
+          </button>
+        )}
       </div>
       <TrustSwitch
         applied={applied}
@@ -182,7 +191,15 @@ function CollapsibleSection({
 // A guided/advisory rec — Compy detected it but won't change it (vendor app / a Windows page with no
 // safe reversible switch). Carries the full where + steps + the allowlisted "Open it" deep link, so
 // classic Optimize is no longer needed for the detail (parity for the release default-flip).
-function GuidedRow({ rec, vendor }: { rec: Rec; vendor: GpuVendor }) {
+function GuidedRow({
+  rec,
+  vendor,
+  onDismiss,
+}: {
+  rec: Rec;
+  vendor: GpuVendor;
+  onDismiss: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const guide = GUIDED_STEPS[rec.id];
   const walkthrough = walkthroughForKey(rec.id);
@@ -195,6 +212,9 @@ function GuidedRow({ rec, vendor }: { rec: Rec; vendor: GpuVendor }) {
           <span className="fix-guided-tag">Guided</span>
         </div>
         <p className="fix-row-reason">{rec.impact || rec.description}</p>
+        <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
+          Not for me
+        </button>
         {guide && (
           <div className="fix-guided-actions">
             <button
@@ -362,9 +382,16 @@ export default function Fix({
   // plain-English reason, never silently dropped, never falsely offered.
   const notForThisRig = recs.filter((r) => r.eligible === false);
   const eligibleRecs = recs.filter((r) => r.eligible !== false);
-  const appliable = eligibleRecs.filter((r) => isAppliable(r.id));
+  // User dismissal ("Not for me"): deliberate, reversible. Dismissed = eligible + user-declined +
+  // not currently applied (an APPLIED rec can't be dismissed — roll it back instead; a dismissed rec
+  // that becomes applied externally just resolves normally). Dismissed leave the active denominator.
+  const { dismissed, dismiss, restore } = useDismissed();
+  const isDismissed = (r: Rec) => dismissed.has(r.id) && !r.currently_applied;
+  const dismissedRecs = eligibleRecs.filter(isDismissed);
+  const liveRecs = eligibleRecs.filter((r) => !isDismissed(r));
+  const appliable = liveRecs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
-  const advisory = eligibleRecs.filter((r) => !isAppliable(r.id));
+  const advisory = liveRecs.filter((r) => !isAppliable(r.id));
 
   // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
   // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
@@ -392,8 +419,9 @@ export default function Fix({
         <div>
           <h2 className="fix-title">Fix</h2>
           <p className="fix-subtitle">
-            {worthFixing.length} worth your attention · {active.length} active on this PC ·{" "}
-            {REFUSE_PILE.length} we'd leave alone. Every change is one click to undo.
+            {worthFixing.length} worth your attention · {active.length} active ·{" "}
+            {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Every change
+            is one click to undo.
           </p>
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
               it belongs where approval actually happens. */}
@@ -419,6 +447,7 @@ export default function Fix({
               busy={rowBusy(rec)}
               onToggle={() => onToggleRec(rec.id)}
               onWhatsThis={onOpenLibrary}
+              onDismiss={dismiss}
             />
           ))}
         </ul>
@@ -481,6 +510,31 @@ export default function Fix({
         </CollapsibleSection>
       )}
 
+      {/* Dismissed — what you deliberately declined ("Not for me"). Reversible; out of the active
+          denominator but one tap from restore, so a 100% reached by dismissing is a LABELED 100%. */}
+      {dismissedRecs.length > 0 && (
+        <CollapsibleSection title="Dismissed" count={dismissedRecs.length} tint="applied">
+          <p className="fix-refuse-intro">
+            You set these aside. They're out of your active count — restore any one anytime.
+          </p>
+          <ul className="fix-list">
+            {dismissedRecs.map((r) => (
+              <li key={r.id} className="fix-row">
+                <div className="fix-row-main">
+                  <div className="fix-row-head">
+                    <span className="fix-row-title">{r.title}</span>
+                  </div>
+                  <p className="fix-row-reason">{r.impact || r.description}</p>
+                </div>
+                <button className="fix-restore" onClick={() => restore(r.id)}>
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
+
       {/* Not worth touching — the refuse-pile. What Compy won't do, and why, with the autopsy link. */}
       <CollapsibleSection
         title="Not worth touching"
@@ -517,7 +571,7 @@ export default function Fix({
           </p>
           <ul className="fix-list">
             {advisory.map((rec) => (
-              <GuidedRow key={rec.id} rec={rec} vendor={vendor} />
+              <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} />
             ))}
           </ul>
         </CollapsibleSection>
