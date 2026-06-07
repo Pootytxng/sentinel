@@ -86,6 +86,14 @@ Velocity + Nova + Ember.
 This unblocks the dashboard-tab consolidation surfaces (Check / Play / Lab). Do NOT build those until
 their specs land (Cowork is writing them); this entry only records the decided IA.
 
+**STANDING PRIORITY — QoL / wayfinding (owner reiterated, 2026-06-06).** Intuitive pathing is a core
+objective, not a feature wave: every spec, audit, and train is reviewed against the wayfinding
+fundamentals — *navigation never teleports · bring the switch to the need · if it names a place, it
+takes you there · signpost at the moment of need, never condescend* (the "bathroom law," quoted in
+`2026-06-06-wayfinding-pass.md`). Cowork and HQ are expected to PROACTIVELY propose QoL improvements
+of their own volition under these laws — candidates ride behind tester-validated need, never ahead
+of imperatives (beta loop, honesty mechanics, distribution gates).
+
 **Check / Play / Lab — BUILT (2026-06-06) behind `compy_{check,play,lab}_v2`.** Per the spec
 `2026-06-06-check-play-lab.md`. Mechanism: a `railTabs` filter hides each absorbed classic from the
 rail when its flag is on, while `visibleTabs` keeps them NAVIGABLE (so the surfaces' links + the
