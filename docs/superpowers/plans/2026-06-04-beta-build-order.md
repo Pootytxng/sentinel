@@ -93,6 +93,17 @@ takes you there · signpost at the moment of need, never condescend* (the "bathr
 `2026-06-06-wayfinding-pass.md`). Cowork and HQ are expected to PROACTIVELY propose QoL improvements
 of their own volition under these laws — candidates ride behind tester-validated need, never ahead
 of imperatives (beta loop, honesty mechanics, distribution gates).
+**The "foam pit" law (owner, 2026-06-06):** *"No need to learn how to do a 5-point landing when the
+landing pad is a foam pit."* Keyboard shortcuts and other LEARNED affordances are never a navigation
+answer — most people never learn them, and an intuitive UI makes them unnecessary. Accelerators may
+exist ONLY as silent redundancy shadowing a visible control (e.g. Alt+Left / mouse-XButton1 behind
+the visible Back button), never as the path itself. Visible, instinctive, contextual pathing is the
+only pathing.
+**The "doorknob" law (owner, 2026-06-06 — CORE-PROMISE STATUS, owner-elevated):** *every door shows
+its knob, and nothing that isn't a door wears one.* Anything interactive must be perceptibly
+interactive AT REST (not hover-discovered); anything static must never look clickable. This is
+affordance-honesty — the UI being as honest about itself as Compy is about the PC — and sits on the
+same throne as the core promises, not adjacent to them. Spec: `2026-06-06-doorknob-pass.md`.
 
 **Check / Play / Lab — BUILT (2026-06-06) behind `compy_{check,play,lab}_v2`.** Per the spec
 `2026-06-06-check-play-lab.md`. Mechanism: a `railTabs` filter hides each absorbed classic from the
