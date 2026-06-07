@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./Wordmark.css";
 
 // Wordmark Law v2 (kernel §1 final): the pulse-C IS the C — "Compy" is ONE word, not logo-then-name.
@@ -15,6 +15,12 @@ export function Wordmark({ size = 19, className = "" }: { size?: number; classNa
   // stays invisible until found. Removing it leaves zero trace.
   const [beat, setBeat] = useState(0);
   const taps = useRef<number[]>([]);
+  // The Konami handshake (shadow realm) replays the heartbeat too, via a window event.
+  useEffect(() => {
+    const onBeat = () => setBeat((b) => b + 1);
+    window.addEventListener("compy:heartbeat", onBeat);
+    return () => window.removeEventListener("compy:heartbeat", onBeat);
+  }, []);
   const fidget = () => {
     const now = Date.now();
     taps.current = [...taps.current.filter((t) => now - t < 600), now];

@@ -1,0 +1,31 @@
+/* The Konami whisper (shadow realm) — a quiet line that fades on its own; never interrupts, never a
+   popup with buttons. pointer-events:none so it can't be interacted with (it's a wink, not a control).
+   Reduced-motion: it simply appears + unmounts on its timer, no fade. */
+.cmp-konami-whisper {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  color: var(--ix-text-2);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  animation: cmp-konami-fade 4200ms ease forwards;
+}
+@keyframes cmp-konami-fade {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  10%, 80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmp-konami-whisper {
+    animation: none;
+  }
+}

@@ -26,6 +26,7 @@ import Settings, { type PreviewFlag } from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/doorknob.css";
+import { KonamiWhisper } from "./design/KonamiWhisper";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
@@ -1228,6 +1229,7 @@ function App() {
 
   return (
     <LibraryContext.Provider value={libraryApi}>
+    <KonamiWhisper />
     <main className={ccActive || settingsActive ? "app app-cc" : "app"}>
       {showOnboarding && (
         <Onboarding
