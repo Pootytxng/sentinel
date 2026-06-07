@@ -23,6 +23,24 @@ README invites process/firewall scrutiny, ghosts after close contradict the core
   regression test for helper lifetime where feasible (orphan-detection logic exists from
   Gaming Mode work — reuse the pattern).
 
+**§1 EVIDENCE UPGRADE (live repro on the owner's machine, 2026-06-06):** a ghost was caught
+red-handed — NO visible window, yet TWO compy processes alive: one hidden window titled
+`gg.compy.app-siw` (a single-instance-plugin artifact) + one fully windowless. **Elevated
+hypothesis:** close doesn't fully exit → the ghost keeps holding the single-instance lock → the
+next launch *defers to the dead instance* (which has no window to focus) → nothing appears →
+**"Compy won't open."** This is likely the FULL shape of the beta "won't launch" report, not merely
+a Task-Manager-tidiness nit. So §1 has TWO halves, BOTH required:
+
+1. **Close = full process-tree exit** (above) — so no ghost is ever created in the first place.
+2. **Single-instance hardening (defense in depth)** — if a lock holder exists but has **no live
+   window**, a new launch must **reclaim the lock and surface a window**, NEVER silently defer to a
+   dead instance. (Audit the `tauri-plugin-single-instance` callback: focus the existing window IFF
+   one is alive; otherwise take over + start fresh. Confirm what the `-siw` hidden window is and
+   whether it, not the main window, is the lock holder that lingers.)
+
+- Added acceptance: **leave/force a ghost (or force-kill a running instance) → relaunch → a window
+  appears normally** — no silent no-op launch, ever.
+
 ## §2 Exact-article links (named-place law, Check straggler)
 
 **Report: Check → "not worth touching" → "why we refuse these" dumps into ALL of Learn.**
@@ -74,15 +92,39 @@ swap to the shared `Wordmark` component; grep-sweep for ANY remaining non-compon
 usages so the law holds everywhere (the guard for this is the component being the only
 sanctioned source).
 
+## §7 Autopsy URL pastes — honest local handling (no network, ever)
+
+**Report: pasting a link (YouTube / wikiHow article) into the autopsy "doesn't register."**
+Fetching URLs is OFF the table — "nothing leaves your PC" is a shipped promise, not a
+limitation (and the build-order already bans network egress in the local-only beta). But
+silent non-registration is a doorknob violation. Fix locally:
+
+- **Detect URL pastes** (input is/contains a URL with little other text) and respond with an
+  honest, in-voice explainer card — never silence: *"That's a link — and Compy never fetches
+  the internet (nothing leaves your PC; that's the deal). Bring me the words instead:"*
+- **Per-source coaching** on the same card:
+  - Webpage: "Open the page → Ctrl+A, Ctrl+C → paste here. I'll grade every claim."
+  - YouTube: "Open the video's transcript (⋯ menu → Show transcript) → copy → paste here."
+- The card reinforces the privacy promise at the exact moment it costs the user something —
+  that's the trust product behaving in character.
+- **NO domain/title grading of unread pages** (we never grade what we haven't read — honesty
+  law; and naming "snake-oil domains" is the Process Lasso lesson in defamation-adjacent
+  form). Out of scope, recorded: a future explicit opt-in fetch would be its own gated
+  arming plan (remote-rules precedent), owner decision, not this train.
+- Mixed paste (URL + substantial text): grade the text normally; ignore the URL.
+
 ## Acceptance
 
 - [ ] §1: zero compy processes in Task Manager ~2s after close, including mid-capture +
-      elevated-helper scenarios; regression coverage added.
+      elevated-helper scenarios; regression coverage added. AND: a ghost/force-killed instance →
+      relaunch → a window appears (single-instance never defers to a dead/windowless holder).
 - [ ] §2: refusal links open the exact entry (quick-look); no generic-Learn dumps remain.
 - [ ] §3: Play shows full monitoring inline; no dropdown; polling stays visibility-gated.
 - [ ] §4: consent sheet lists all; per-item receipts; one elevation; failure isolation;
       safe-tier only; copy promise-free.
 - [ ] §5: Learn opens calm (collapsed categories + start-here + filters); content unchanged.
 - [ ] §6: one Wordmark source everywhere, grep-verified.
+- [ ] §7: URL paste → the honest coaching card (never silent); YouTube + webpage variants;
+      mixed paste grades the text; zero network calls (grep/audit confirms no fetch).
 - [ ] Tests/guards green per section; copy locks untouched; zero new IPC beyond §4's
       orchestration of EXISTING apply commands; catalog unchanged.
