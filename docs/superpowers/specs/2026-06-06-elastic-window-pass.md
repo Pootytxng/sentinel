@@ -50,8 +50,36 @@ verify, don't assume; note any Tauri-side caveat found).
 
 ## 5. Acceptance
 
+## 6. REOPENED — owner drag-test FAILED (2026-06-06, post-`ea62670`)
+
+Owner verdict from the live drag-test: **"terrible snapping, all hugging to one side, forcing
+itself into a shape that doesn't match the window size — less malleable than before."** The
+pass does not ship (installer rebuild POSTPONED) until this is fixed and re-blessed live.
+
+Fix directions (diagnose, don't assume — but check these first):
+- **One-side hugging:** capped containers missing centering (`max-width` without
+  `margin-inline: auto`) — content pins left in the gap between breakpoints.
+- **Shape ≠ window:** competing responsive systems — shell-level viewport media queries AND
+  CommandCenter-internal breakpoints firing on different widths (window vs content-area minus
+  rail). UNIFY: one source of truth — container queries on the content area preferred;
+  whichever is chosen, only ONE system decides layout.
+- **Snapping:** too many discrete mode jumps. Breakpoints exist ONLY for the rail collapse;
+  everything else must be genuinely liquid (auto-fit/minmax grids, flex-wrap, clamp()) so
+  width changes produce smooth reflow, not lurches.
+- **Hardware cards (owner insight):** 5 cards can't tile symmetrically at any column count.
+  (a) Add a 6th card — **Network**: the named PHYSICAL adapter + state from the detection
+  train (data already exists via existing commands; zero new IPC). (b) Make the glance grid
+  COUNT-AGNOSTIC regardless: orphan cards span gracefully (designed wide-card, never a ragged
+  dangler) — rigs vary, so any count must look intentional.
+
+Re-acceptance: the owner repeats the erratic drag-test live and blesses the FEEL — plus:
+
 - [ ] Resize storm: drag from floor → ultrawide and back, erratically — no horizontal
       scrollbar, no clipped/overlapped text, no rail mangling at ANY width.
+- [ ] No one-side hugging at ANY width (content centered in its lane between breakpoints).
+- [ ] Layout shape always matches the actual window (one responsive system, verified).
+- [ ] Hardware glance: 6 cards incl. Network (named adapter); orphan-graceful at every
+      column count.
 - [ ] All six rooms + Settings usable at the 380×560 floor (walk each, act in each).
 - [ ] Narrow mode: icon-only rail + persistent current-room name + tooltips (wayfinding law
       amendment honored — no mystery icons without a location indicator).
