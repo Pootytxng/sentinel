@@ -90,3 +90,15 @@
   --accent-line: rgba(232, 176, 122, 0.3);
   --accent-glow: rgba(232, 176, 122, 0.36);
 }
+
+/* Hearth keeper (shadow realm, pure-craftsmanship tier): Hearth lit in December → a barely-there warm
+   wash over the ambient (palette-agnostic, ~2.5%). No UI, no mention — the egg nobody may ever
+   consciously notice. Static (reduced-motion unaffected). data-hearth-season set in theme.ts/main.tsx. */
+:root[data-itheme="hearth"][data-hearth-season="december"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(125% 90% at 50% 0%, rgba(255, 178, 112, 0.025), transparent 70%);
+}

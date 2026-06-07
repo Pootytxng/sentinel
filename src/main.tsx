@@ -23,7 +23,12 @@ if (isOverlay) {
 // Local-only, cosmetic; reversible (drop instrument.css + this block to fall back to the old accent).
 try {
   const it = localStorage.getItem("compy_theme");
-  document.documentElement.dataset.itheme = it === "midnight" || it === "hearth" ? it : "halfway";
+  const theme = it === "midnight" || it === "hearth" ? it : "halfway";
+  document.documentElement.dataset.itheme = theme;
+  // Hearth keeper (shadow realm): Hearth lit in December → ambient drifts a hair warmer. No UI ever.
+  if (theme === "hearth" && new Date().getMonth() === 11) {
+    document.documentElement.dataset.hearthSeason = "december";
+  }
 } catch {
   document.documentElement.dataset.itheme = "halfway";
 }

@@ -34,8 +34,21 @@ export function readInstrumentTheme(): InstrumentTheme {
   return "halfway";
 }
 
+// Hearth keeper (shadow realm, pure-craftsmanship tier): with the Hearth theme lit in December, the
+// ambient warmth drifts a hair warmer. No UI, no mention, ever — the egg nobody may ever consciously
+// notice. Palette-agnostic (warms whatever Hearth becomes), so it isn't blocked on the final hexes.
+export function applyHearthSeason(t: InstrumentTheme): void {
+  const root = document.documentElement;
+  if (t === "hearth" && new Date().getMonth() === 11) {
+    root.dataset.hearthSeason = "december";
+  } else {
+    delete root.dataset.hearthSeason;
+  }
+}
+
 export function applyInstrumentTheme(t: InstrumentTheme): void {
   document.documentElement.dataset.itheme = t;
+  applyHearthSeason(t);
   try {
     localStorage.setItem(THEME_KEY, t);
   } catch {
