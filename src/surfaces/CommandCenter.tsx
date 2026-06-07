@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppliedChange, GameReadiness, Priorities, PriorityItem, SessionSummary } from "../types";
 import { AmbientBackdrop } from "../design/AmbientBackdrop";
 import { Wordmark } from "../design/Wordmark";
@@ -122,6 +122,22 @@ function SignalRingGauge({ readiness, progress }: { readiness: GameReadiness | n
   const C = 2 * Math.PI * R;
   const dash = C * ring.ratio * progress;
 
+  // Patient-gaze (shadow realm, Six Laws): hold a steady gaze on a fully-Dialed ring for 10s and it
+  // takes one slow breath + whispers a different subline. Nothing changes, nothing unlocks. Hover-only
+  // (no knob — invisible until found); the breath is CSS-gated so reduced-motion = the text swap only.
+  const [breathing, setBreathing] = useState(false);
+  const gazeTimer = useRef(0);
+  const canGaze = ring.known && ring.dialed;
+  const onGazeStart = () => {
+    if (!canGaze) return;
+    gazeTimer.current = window.setTimeout(() => setBreathing(true), 10000);
+  };
+  const onGazeEnd = () => {
+    window.clearTimeout(gazeTimer.current);
+    setBreathing(false);
+  };
+  useEffect(() => () => window.clearTimeout(gazeTimer.current), []);
+
   if (!ring.known) {
     return (
       <div className="cc-ring" title="Scanning…">
@@ -136,8 +152,10 @@ function SignalRingGauge({ readiness, progress }: { readiness: GameReadiness | n
 
   return (
     <div
-      className={`cc-ring cc-ring-${ring.dialed ? "dialed" : "ready"}`}
+      className={`cc-ring cc-ring-${ring.dialed ? "dialed" : "ready"}${breathing ? " cc-ring-breathing" : ""}`}
       title={`${ring.ideal}/${ring.total} readiness checks ideal`}
+      onMouseEnter={onGazeStart}
+      onMouseLeave={onGazeEnd}
     >
       <svg className="cc-ring-svg" viewBox="0 0 120 120" aria-hidden="true">
         <circle className="cc-ring-track" cx="60" cy="60" r={R} />
@@ -152,7 +170,7 @@ function SignalRingGauge({ readiness, progress }: { readiness: GameReadiness | n
       </svg>
       <div className="cc-ring-center">
         <div className="cc-ring-label">{ring.label}</div>
-        <div className="cc-ring-sub">{ring.sub}</div>
+        <div className="cc-ring-sub">{breathing ? "Nothing to fix. Go play." : ring.sub}</div>
       </div>
     </div>
   );

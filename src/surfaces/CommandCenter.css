@@ -294,6 +294,17 @@
   animation: cc-pulse 1.6s ease-in-out infinite;
 }
 
+/* Patient-gaze (shadow realm): a fully-Dialed ring, gazed at for 10s, takes one slow breath. Pure
+   delight — nothing changes. Reduced-motion drops the breath (the subline still swaps in JS = text-only). */
+.cc-ring-breathing .cc-ring-svg {
+  transform-origin: center;
+  animation: cc-ring-breath 4s ease-in-out infinite;
+}
+@keyframes cc-ring-breath {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
 /* ── #1 limiter ───────────────────────────────────────────────────────────── */
 .cc-limiter-head {
   display: flex;
@@ -432,7 +443,8 @@
 /* Reduced motion → static end-state, no shimmer/pulse/thumb easing (spec §5). */
 @media (prefers-reduced-motion: reduce) {
   .cc-skel,
-  .cc-ring-shimmer {
+  .cc-ring-shimmer,
+  .cc-ring-breathing .cc-ring-svg {
     animation: none;
   }
 }
