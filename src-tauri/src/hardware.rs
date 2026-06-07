@@ -146,6 +146,12 @@ pub(crate) struct HardwareInfo {
     pub(crate) windows_version: Option<WindowsVersionInfo>,
     pub(crate) cpu_arch: Option<CpuArchInfo>,
     pub(crate) has_active_wired_ethernet: bool,
+    /// A physical wired-Ethernet PORT exists (regardless of whether a cable is plugged in) —
+    /// the eligibility signal for wired-only recs. Distinct from `has_active_wired_ethernet`
+    /// (currently connected).
+    pub(crate) has_wired_ethernet_port: bool,
+    /// Full classified adapter inventory — drives evidence-naming UI + the Export hardware section.
+    pub(crate) network_adapters: Vec<NetAdapterInfo>,
     pub(crate) game_storage: GameStorage,
 }
 
@@ -1164,6 +1170,15 @@ fn collect_hardware_inner() -> HardwareInfo {
         })
         .collect();
 
+    // Enumerate + classify network adapters once (eligibility/dismiss/detection train). Both the
+    // "currently connected wired" flag (diagnostics) and the "has a physical Ethernet port"
+    // flag (eligibility) are DERIVED from the same honest inventory — never adapter-class alone.
+    let network_adapters = detect_network_adapters();
+    let has_active_wired_ethernet = network_adapters
+        .iter()
+        .any(|a| a.physical && a.medium == "wired" && a.connected);
+    let has_wired_ethernet_port = network_adapters.iter().any(|a| a.physical && a.medium == "wired");
+
     HardwareInfo {
         cpu_brand,
         cpu_cores_logical: sys.cpus().len(),
@@ -1183,42 +1198,112 @@ fn collect_hardware_inner() -> HardwareInfo {
         display: detect_display_info(),
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
-        has_active_wired_ethernet: detect_has_active_wired_ethernet(),
+        has_active_wired_ethernet,
+        has_wired_ethernet_port,
+        network_adapters,
         game_storage: detect_game_storage(),
     }
 }
 
-// Win32_NetworkAdapter query: returns true iff there is at least one
-// physical, non-virtual, Ethernet-typed, connected adapter. Used to gate
-// the EEE rec — Wi-Fi / Bluetooth / virtual adapters are excluded.
-#[derive(Deserialize)]
-#[serde(rename = "Win32_NetworkAdapter")]
-#[serde(rename_all = "PascalCase")]
-pub(crate) struct Win32NetworkAdapter {
-    adapter_type: Option<String>,
-    physical_adapter: Option<bool>,
-    net_connection_status: Option<u16>,
+/// One enumerated network adapter, classified for honest evidence (eligibility/dismiss/detection).
+/// `physical` = a real NIC with a connector — NOT a VPN TAP / Hyper-V vSwitch / Bluetooth-PAN /
+/// USB-tether, which Windows also enumerates as "Ethernet"-class. `medium`: "wired" (802.3) /
+/// "wifi" (Native802_11) / "other". `name` is the InterfaceDescription — the evidence shown to users.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct NetAdapterInfo {
+    pub name: String,
+    pub physical: bool,
+    pub medium: String,
+    pub connected: bool,
 }
 
-pub(crate) fn detect_has_active_wired_ethernet() -> bool {
+// MSFT_NetAdapter (root\StandardCimv2) — unlike Win32_NetworkAdapter it exposes ConnectorPresent
+// (the real physical-NIC signal) + NdisPhysicalMedium (802.3 vs Native802_11), which is what makes
+// the virtual-vs-physical call honest.
+#[derive(Deserialize)]
+#[serde(rename = "MSFT_NetAdapter")]
+#[serde(rename_all = "PascalCase")]
+struct MsftNetAdapter {
+    name: Option<String>,
+    interface_description: Option<String>,
+    connector_present: Option<bool>,
+    ndis_physical_medium: Option<i64>,
+    media_connect_state: Option<i64>,
+    #[serde(rename = "PnPDeviceID")]
+    pnp_device_id: Option<String>,
+}
+
+// Belt-and-suspenders virtual exclusion (a SECOND signal — never the only one): name patterns of the
+// usual suspects that masquerade as Ethernet.
+const VIRTUAL_NAME_PATTERNS: &[&str] = &[
+    "tap-", "tap windows", "tap-windows", "tun", "hyper-v", "virtual", "vmware", "virtualbox",
+    "vbox", "loopback", "npcap", "bluetooth", "wan miniport", "wi-fi direct", "wifi direct",
+    "teredo", "isatap", "pseudo", "kernel debug", "packet scheduler", "qos packet",
+];
+
+pub(crate) fn name_is_virtual(name: &str) -> bool {
+    let n = name.to_lowercase();
+    VIRTUAL_NAME_PATTERNS.iter().any(|p| n.contains(p))
+}
+
+fn pnp_is_root_enumerated(pnp: Option<&str>) -> bool {
+    pnp.map(|p| p.to_uppercase().starts_with("ROOT\\")).unwrap_or(false)
+}
+
+// NDIS_PHYSICAL_MEDIUM: 14 = 802.3 (wired Ethernet), 9 = Native802_11 (Wi-Fi). Anything else stays
+// "other" — we classify strictly rather than guess "wired" from an unspecified medium.
+pub(crate) fn classify_medium(ndis_physical_medium: Option<i64>) -> &'static str {
+    match ndis_physical_medium {
+        Some(14) => "wired",
+        Some(9) => "wifi",
+        _ => "other",
+    }
+}
+
+/// Pure classifier (testable, no system access): decide if an adapter is a real physical NIC.
+/// Primary signal = ConnectorPresent; the root-enumerated + name-pattern checks are the second signal.
+pub(crate) fn is_physical_adapter(
+    connector_present: Option<bool>,
+    pnp_device_id: Option<&str>,
+    name: &str,
+) -> bool {
+    connector_present == Some(true) && !pnp_is_root_enumerated(pnp_device_id) && !name_is_virtual(name)
+}
+
+/// Enumerate + classify network adapters. Fail-soft to an empty inventory (claim NO wired rather than
+/// risk the false-positive we're fixing). Callers derive has_active_wired / has_port from this.
+pub(crate) fn detect_network_adapters() -> Vec<NetAdapterInfo> {
     on_wmi_thread(|| {
         let com = match COMLibrary::new() {
             Ok(c) => c,
-            Err(_) => return false,
+            Err(_) => return Vec::new(),
         };
-        let conn = match WMIConnection::new(com) {
+        let conn = match WMIConnection::with_namespace_path("ROOT\\StandardCimv2", com) {
             Ok(c) => c,
-            Err(_) => return false,
+            Err(_) => return Vec::new(),
         };
-        let results: Vec<Win32NetworkAdapter> = conn.query().unwrap_or_default();
-        results.iter().any(|a| {
-            a.physical_adapter == Some(true)
-                && a.net_connection_status == Some(2) // 2 = Connected
-                && a.adapter_type
-                    .as_deref()
-                    .map(|t| t.to_lowercase().contains("ethernet"))
-                    .unwrap_or(false)
-        })
+        let rows: Vec<MsftNetAdapter> = conn.query().unwrap_or_default();
+        rows.into_iter()
+            .filter_map(|a| {
+                let name = a
+                    .interface_description
+                    .or(a.name)
+                    .unwrap_or_default();
+                if name.trim().is_empty() {
+                    return None;
+                }
+                Some(NetAdapterInfo {
+                    physical: is_physical_adapter(
+                        a.connector_present,
+                        a.pnp_device_id.as_deref(),
+                        &name,
+                    ),
+                    medium: classify_medium(a.ndis_physical_medium).to_string(),
+                    connected: a.media_connect_state == Some(1),
+                    name,
+                })
+            })
+            .collect()
     })
 }
 
@@ -1322,5 +1407,55 @@ mod game_storage_tests {
             paths,
             vec!["C:\\Program Files (x86)\\Steam", "D:\\SteamLibrary"]
         );
+    }
+}
+
+#[cfg(test)]
+mod net_adapter_tests {
+    use super::{classify_medium, is_physical_adapter, name_is_virtual};
+
+    #[test]
+    fn medium_classified_strictly_from_ndis() {
+        assert_eq!(classify_medium(Some(14)), "wired"); // 802.3
+        assert_eq!(classify_medium(Some(9)), "wifi"); // Native802_11
+        assert_eq!(classify_medium(Some(0)), "other"); // unspecified — never guessed "wired"
+        assert_eq!(classify_medium(Some(10)), "other"); // bluetooth
+        assert_eq!(classify_medium(None), "other");
+    }
+
+    #[test]
+    fn real_nic_is_physical() {
+        // ConnectorPresent + PCI-enumerated + a real name → physical.
+        assert!(is_physical_adapter(
+            Some(true),
+            Some("PCI\\VEN_10EC&DEV_8168"),
+            "Realtek PCIe GbE Family Controller"
+        ));
+        assert!(is_physical_adapter(
+            Some(true),
+            Some("PCI\\VEN_8086"),
+            "Intel(R) Wi-Fi 6E AX211 160MHz"
+        ));
+    }
+
+    #[test]
+    fn virtual_adapters_are_not_physical_even_if_connectorpresent_lies() {
+        // The false-Ethernet bug: virtual adapters that claim ConnectorPresent/are "connected".
+        assert!(!is_physical_adapter(Some(true), Some("ROOT\\VMS_MP\\0000"), "Hyper-V Virtual Ethernet Adapter"));
+        assert!(!is_physical_adapter(Some(true), Some("ROOT\\NET\\0000"), "TAP-Windows Adapter V9"));
+        assert!(!is_physical_adapter(Some(true), Some("SW\\{...}"), "VMware Virtual Ethernet Adapter"));
+        // ConnectorPresent false → not physical regardless of name.
+        assert!(!is_physical_adapter(Some(false), Some("PCI\\..."), "Some NIC"));
+        assert!(!is_physical_adapter(None, None, "Unknown"));
+    }
+
+    #[test]
+    fn virtual_name_patterns_match_the_usual_suspects() {
+        assert!(name_is_virtual("TAP-Windows Adapter V9"));
+        assert!(name_is_virtual("Hyper-V Virtual Ethernet Adapter"));
+        assert!(name_is_virtual("Bluetooth Device (Personal Area Network)"));
+        assert!(name_is_virtual("VirtualBox Host-Only Ethernet Adapter"));
+        assert!(!name_is_virtual("Realtek PCIe GbE Family Controller"));
+        assert!(!name_is_virtual("Intel Ethernet Connection I219-V"));
     }
 }

@@ -91,12 +91,16 @@ fn pretty_source(s: &str) -> &str {
 }
 
 /// Pure: assemble the Markdown report from each source's serialized JSON.
+// Each section of the report is its own source Value — the arg list grows with the report, which is
+// fine for a single internal assembler.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_markdown_report(
     hardware: &Value,
     recommendations: &Value,
     trust_ledger: &Value,
     readiness: &Value,
     sessions: &Value,
+    diagnostics: &Value,
     rules_source: &str,
     exported_at: &str,
 ) -> String {
@@ -195,7 +199,32 @@ pub(crate) fn build_markdown_report(
         .unwrap_or_else(|| {
             format!("{} {}", vstr(hardware, "os_name"), vstr(hardware, "os_version"))
         });
-    let _ = writeln!(o, "- **OS:** {os}\n");
+    let _ = writeln!(o, "- **OS:** {os}");
+
+    // Network adapters — the detection-evidence inventory (detection-accuracy train). A tester's
+    // false-positive (e.g. a VPN's TAP adapter reading as Ethernet) self-identifies right here.
+    let adapters = obj_arr(hardware, "network_adapters");
+    if adapters.is_empty() {
+        let _ = writeln!(o, "- **Network adapters:** (details unavailable)\n");
+    } else {
+        let _ = writeln!(o, "- **Network adapters:**");
+        for a in adapters {
+            let physical = a.get("physical").and_then(|v| v.as_bool()).unwrap_or(false);
+            let kind = if physical {
+                match vstr(a, "medium").as_str() {
+                    "wired" => "physical · wired",
+                    "wifi" => "physical · Wi-Fi",
+                    _ => "physical · other",
+                }
+            } else {
+                "virtual"
+            };
+            let connected = a.get("connected").and_then(|v| v.as_bool()).unwrap_or(false);
+            let state = if connected { "connected" } else { "not connected" };
+            let _ = writeln!(o, "  - {} — {kind} · {state}", vstr(a, "name"));
+        }
+        let _ = writeln!(o);
+    }
 
     // ── Applied-by-Compy set (from the ledger, status applied) ──
     let applied_ids: HashSet<String> = as_arr(trust_ledger)
@@ -310,6 +339,25 @@ pub(crate) fn build_markdown_report(
     }
     let _ = writeln!(o);
 
+    // ── Diagnostics (detection evidence — so a tester's report can self-diagnose every claim) ──
+    let _ = writeln!(o, "## Diagnostics\n");
+    let diag_sections = as_arr(diagnostics);
+    if diag_sections.is_empty() {
+        let _ = writeln!(o, "- (none)\n");
+    }
+    for sec in diag_sections {
+        let _ = writeln!(o, "**{}**\n", vstr(sec, "name"));
+        for e in obj_arr(sec, "entries") {
+            let note = vstr(e, "note");
+            if note == "—" {
+                let _ = writeln!(o, "- {}: {}", vstr(e, "label"), vstr(e, "value"));
+            } else {
+                let _ = writeln!(o, "- {}: {} — _{}_", vstr(e, "label"), vstr(e, "value"), note);
+            }
+        }
+        let _ = writeln!(o);
+    }
+
     // ── Privacy & safety ──
     let _ = writeln!(o, "## Privacy & safety\n");
     let _ = writeln!(o, "- This report was generated **locally**. Compy sends nothing off your device — no telemetry, no account, no tracking.");
@@ -404,6 +452,8 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         serde_json::to_value(crate::readiness::get_game_readiness()).unwrap_or(Value::Null);
     let sessions =
         serde_json::to_value(crate::sessions::get_session_summaries()).unwrap_or(Value::Null);
+    let diagnostics =
+        serde_json::to_value(crate::diagnostics::get_diagnostics()).unwrap_or(Value::Null);
     let rules_source = crate::recommendations::get_rules_source().to_string();
 
     let markdown = build_markdown_report(
@@ -412,6 +462,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         &trust_ledger,
         &readiness,
         &sessions,
+        &diagnostics,
         &rules_source,
         &exported_at,
     );
@@ -436,6 +487,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         "trust_ledger": trust_ledger,
         "readiness": readiness,
         "sessions": sessions,
+        "diagnostics": diagnostics,
         "privacy": "Local export only. Compy collects no telemetry and has no account.",
     });
     let _ = std::fs::write(
@@ -484,7 +536,7 @@ mod export_tests {
             "disks": [{ "mount_point": "C:\\", "total_bytes": 999000000000u64,
                         "available_bytes": 200000000000u64, "file_system": "NTFS" }]
         });
-        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t");
         assert!(md.contains("C:\\"), "should list the logical volume");
         assert!(md.contains("NTFS"));
         assert!(md.contains("drive type unavailable"));
@@ -498,6 +550,7 @@ mod export_tests {
             &json!([]),
             &json!([]),
             &json!({}),
+            &json!([]),
             &json!([]),
             "embedded",
             "2026-05-31 12:00",
@@ -519,7 +572,7 @@ mod export_tests {
             "ram_total_bytes": 32_000_000_000u64, "samples": 100, "started_at": "x",
             "compy_changes_active": 2
         }]);
-        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, "embedded", "t");
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t");
         assert!(md.contains("game.exe"));
         assert!(md.contains("120.5 fps"));
         assert!(md.contains("64°C"));
@@ -537,7 +590,7 @@ mod export_tests {
             "id": "game-mode", "title": "Enable Game Mode", "category": "Windows",
             "severity": "safe", "currently_applied": true, "provenance": "verified"
         }]);
-        let md = build_markdown_report(&Value::Null, &recs, &ledger, &json!({}), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&Value::Null, &recs, &ledger, &json!({}), &json!([]), &json!([]), "embedded", "t");
         assert!(md.contains("Enable Game Mode"));
         assert!(md.contains("Trust Ledger (1 changes)"));
         assert!(md.contains("applied by Compy")); // cross-referenced from ledger
@@ -552,7 +605,7 @@ mod export_tests {
             "checks": [{ "id": "monitor-refresh", "label": "Monitor refresh rate",
                          "status": "attention", "detail": "Below max.", "value": "60 / 144 Hz" }]
         });
-        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &readiness, &json!([]), "embedded", "t");
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &readiness, &json!([]), &json!([]), "embedded", "t");
         assert!(md.contains("Ready 5 / Attention 2 / Unknown 1"));
         assert!(md.contains("Monitor refresh rate"));
         assert!(md.contains("[ATTENTION]"));
@@ -561,7 +614,7 @@ mod export_tests {
     #[test]
     fn report_handles_missing_hardware_fields_gracefully() {
         let hw = json!({ "cpu_brand": "Test CPU", "gpus": [ { "name": "Test GPU" } ] });
-        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t");
         assert!(md.contains("Test CPU"));
         assert!(md.contains("Test GPU"));
         assert!(md.contains("VRAM, driver age —")); // missing vram/driver age -> dash, no panic

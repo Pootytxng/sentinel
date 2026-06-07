@@ -170,15 +170,58 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
     });
 
     // ─── Network ─────────────────────────────────────────────────────────
+    // Detection-accuracy train: every row NAMES its evidence (the adapter), never a generic
+    // "Ethernet detected". Virtual adapters (VPN TAP / Hyper-V / BT-PAN) are excluded from "wired".
+    let mut network = Vec::<DiagnosticEntry>::new();
+    let connected_wired = hw
+        .network_adapters
+        .iter()
+        .find(|a| a.physical && a.medium == "wired" && a.connected);
+    let wired_port = hw
+        .network_adapters
+        .iter()
+        .find(|a| a.physical && a.medium == "wired");
+    let wired_state = if hw.network_adapters.is_empty() {
+        "Unknown — Windows didn't return adapter details".to_string()
+    } else if let Some(a) = connected_wired {
+        format!("Connected — {}", a.name)
+    } else if let Some(a) = wired_port {
+        format!("Port present, cable unplugged — {}", a.name)
+    } else {
+        "None — no physical Ethernet port (Wi-Fi / other only)".to_string()
+    };
+    network.push(DiagnosticEntry {
+        label: "Wired Ethernet".into(),
+        value: wired_state,
+        note: Some(
+            "Physical NIC + 802.3 medium + link state (virtual adapters excluded). Gates the Energy Efficient Ethernet rec.".into(),
+        ),
+    });
+    // Adapter inventory — each row self-identifies, so a false positive (e.g. a VPN's TAP adapter)
+    // is visible to the user AND to us via their Export.
+    for a in &hw.network_adapters {
+        let kind = if a.physical {
+            match a.medium.as_str() {
+                "wired" => "physical · wired",
+                "wifi" => "physical · Wi-Fi",
+                _ => "physical · other",
+            }
+        } else {
+            "virtual / not a physical NIC"
+        };
+        network.push(DiagnosticEntry {
+            label: format!("Adapter: {}", a.name),
+            value: format!(
+                "{} · {}",
+                kind,
+                if a.connected { "connected" } else { "not connected" }
+            ),
+            note: None,
+        });
+    }
     sections.push(DiagnosticSection {
         name: "Network".into(),
-        entries: vec![DiagnosticEntry {
-            label: "Active wired Ethernet detected".into(),
-            value: yes_no(hw.has_active_wired_ethernet),
-            note: Some(
-                "Required for the Energy Efficient Ethernet (EEE) recommendation to fire.".into(),
-            ),
-        }],
+        entries: network,
     });
 
     // ─── Background services ─────────────────────────────────────────────
