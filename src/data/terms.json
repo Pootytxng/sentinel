@@ -430,5 +430,13 @@
     "what": "The hardware reset for your motherboard's BIOS settings — it wipes them back to factory defaults. It's the escape hatch when a BIOS change stops the PC from booting.",
     "more": "CMOS is the tiny memory that holds your BIOS settings, kept alive by a coin battery on the board. You clear it with a dedicated button, a jumper, or by briefly pulling that battery with the PC unplugged. It only resets things like memory speed and fan curves — it never touches your files or your Windows install.",
     "related": ["uefi-bios", "xmp", "xmp-guide"]
+  },
+  {
+    "id": "cheat-code",
+    "name": "Cheat codes (and the \"FPS cheat code\" myth)",
+    "aliases": ["cheat code", "cheat codes", "konami", "konami code", "easter egg", "iddqd", "fps cheat", "secret tweak"],
+    "what": "Old games shipped with secret button sequences — the Konami code (up up down down left right left right B A), DOOM's IDDQD — that flipped on god mode or skipped levels. Developers left them in on purpose: a wink to anyone paying attention.",
+    "more": "There is no equivalent for frame rate. No registry string, no console command, no \"secret tweak\" makes a GPU draw frames the silicon can't draw — anyone selling you an \"FPS cheat code\" is selling exactly the kind of myth this library exists to call out. Real frames come from real hardware, honest settings, and measuring whether a change actually did anything. Compy has no cheats. Well. Almost.",
+    "related": ["one-percent-lows", "noise-floor"]
   }
 ]
