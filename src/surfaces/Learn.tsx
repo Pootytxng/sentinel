@@ -223,7 +223,7 @@ function AutopsyResultView({
             return (
               <li key={h.id}>
                 <button
-                  className="lx-hitrow"
+                  className="lx-hitrow cmp-door"
                   onClick={() => setOpenId(open ? null : h.id)}
                   aria-expanded={open}
                 >

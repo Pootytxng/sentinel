@@ -234,18 +234,13 @@ export default function Play({
       {deepMonitoring && (
         <div className="play-monitor">
           <button
-            className="play-monitor-head"
+            className="play-monitor-head cmp-door"
             onClick={() => setMonitorOpen((o) => !o)}
             aria-expanded={monitorOpen}
           >
             <span className="play-monitor-title">Full monitoring &amp; charts</span>
             <span className="play-monitor-sub">memory pressure · per-core · live graphs</span>
-            <span
-              className={`play-monitor-caret ${monitorOpen ? "play-monitor-caret-open" : ""}`}
-              aria-hidden="true"
-            >
-              ▸
-            </span>
+            <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
           </button>
           {monitorOpen && <div className="play-monitor-body">{deepMonitoring}</div>}
         </div>
@@ -268,7 +263,7 @@ export default function Play({
               return (
                 <li key={key} className={`play-session-item ${open ? "play-session-open" : ""}`}>
                   <button
-                    className="play-session"
+                    className="play-session cmp-door"
                     aria-expanded={open}
                     onClick={() => setOpenKey(open ? null : key)}
                   >
@@ -284,12 +279,7 @@ export default function Play({
                       <span className="play-session-nums">
                         {s.avg_fps.toFixed(0)} avg · {s.low1_fps_est.toFixed(0)} 1% low
                       </span>
-                      <span
-                        className={`play-session-caret ${open ? "play-session-caret-open" : ""}`}
-                        aria-hidden="true"
-                      >
-                        ▸
-                      </span>
+                      <span className="cmp-door-chevron" aria-hidden="true">▸</span>
                     </span>
                   </button>
                   {open && (

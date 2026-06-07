@@ -21,6 +21,13 @@ Ambient beauty that delights without claiming anything (a drifting background, a
 toggle, the launch pulse) is welcome and encouraged. The test for any effect: *does it testify, or
 does it lie?* If it neither testifies nor lies, it's allowed to simply be pretty.
 
+**Show every knob — wear none falsely (affordance-honesty; owner-elevated 2026-06-06 to CORE-PROMISE
+status, the sibling of "never lie").** *Every door shows its knob, and nothing that isn't a door wears
+one.* Anything interactive is perceptibly interactive AT REST (raised + bordered + chevron-chipped —
+never hover-discovered); anything static never looks clickable. A control that hides its interactivity
+is lying about what it is — the UI must be as honest about ITSELF as Compy is about the PC. Spec:
+`2026-06-06-doorknob-pass.md`; CI-enforced by the doorknob guard (`src/design/doorknob-guard.test.ts`).
+
 (This replaces the earlier, too-strict "never move for vibes" rule — corrected at owner's push
 2026-06-05. Austerity is not honesty; it's just one taste.)
 

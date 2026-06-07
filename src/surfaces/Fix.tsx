@@ -79,22 +79,24 @@ const REFUSE_PILE: { id: string; name: string; why: string }[] = [
   },
 ];
 
-function Chevron({ open }: { open: boolean }) {
+// The knob — an enclosed chevron CHIP (doorknob grammar), so an expandable reads as a door at rest.
+// The chip rotates via the parent .cmp-door[aria-expanded]; the glyph itself stays static.
+function Chevron() {
   return (
-    <svg
-      className={`fix-chev ${open ? "fix-chev-open" : ""}`}
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 6l6 6-6 6" />
-    </svg>
+    <span className="cmp-door-chevron" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </span>
   );
 }
 
@@ -177,8 +179,8 @@ function CollapsibleSection({
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <section className={`fix-group ${tint ? `fix-group-${tint}` : ""}`}>
-      <button className="fix-group-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Chevron open={open} />
+      <button className="fix-group-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Chevron />
         {icon && <span className="fix-group-icon">{icon}</span>}
         <span className="fix-group-title">{title}</span>
         <span className="fix-group-count">{count}</span>
@@ -218,7 +220,7 @@ function GuidedRow({
         {guide && (
           <div className="fix-guided-actions">
             <button
-              className="fix-guided-toggle"
+              className="fix-guided-toggle cmp-door"
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
             >
@@ -339,8 +341,8 @@ function HistoryRow({ change }: { change: AppliedChange }) {
   const rolledBack = change.status === "rolled_back" || !change.is_still_active;
   return (
     <li className={`fix-hist-row ${rolledBack ? "fix-hist-rolledback" : ""}`}>
-      <button className="fix-hist-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Chevron open={open} />
+      <button className="fix-hist-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <Chevron />
         <span className="fix-hist-title">{change.rec_title}</span>
         <span className="fix-hist-when">{humanizeWhen(change.applied_at)}</span>
         <span className="fix-hist-status">{rolledBack ? "✓ rolled back" : "active"}</span>

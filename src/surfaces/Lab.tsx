@@ -123,7 +123,7 @@ function LabSection({
   const [open, setOpen] = useState(false);
   return (
     <div className={`lab-card ${open ? "lab-card-open" : ""}`}>
-      <button className="lab-card-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button className="lab-card-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <svg
           className="lab-card-icon"
           viewBox="0 0 24 24"
@@ -143,9 +143,7 @@ function LabSection({
           <span className="lab-card-oneliner">{oneLiner}</span>
         </span>
         <span className="lab-card-summary">{summary}</span>
-        <span className={`lab-card-caret ${open ? "lab-card-caret-open" : ""}`} aria-hidden="true">
-          ▸
-        </span>
+        <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
       </button>
       {open && <div className="lab-card-body">{children}</div>}
     </div>

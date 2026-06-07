@@ -25,6 +25,7 @@ import { GUIDED_STEPS, openGuidedUri } from "./surfaces/guided";
 import Settings, { type PreviewFlag } from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
+import "./design/doorknob.css";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
@@ -3063,7 +3064,7 @@ function ChangeRow({
       data-rec-id={change.rec_id}
     >
       <div
-        className="change-header"
+        className="change-header cmp-door"
         onClick={() => setExpanded((v) => !v)}
         role="button"
         tabIndex={0}

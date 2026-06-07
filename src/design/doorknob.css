@@ -1,0 +1,74 @@
+/* Doorknob grammar (Doorknob Pass — core-promise affordance-honesty). ONE visual language for "doors":
+   expandable sections/rows + navigational rows. A door is perceptibly interactive AT REST — raised
+   fill + visible border + an ENCLOSED chevron chip (the knob) — hover is confirmation, never discovery.
+   Static panels stay FLAT (no .cmp-door, no border-as-knob). Tokens-only; reduced-motion keeps every
+   resting/state signal and only drops transitions. This is a SANCTIONED interactivity primitive
+   (doorknob-guard.test.ts): non-semantic clickable elements must carry a sanctioned class. */
+
+/* Additive interactive-signal layer (so it never fights an element's own card/border/layout): it
+   guarantees the feedback floor (cursor + hover + focus + active) and marks the element as a sanctioned
+   door. The visible RESTING knob is the .cmp-door-chevron chip below; the resting raised-card border
+   comes from each door's own surface class (every door must have one — the two-way sweep ensures it). */
+.cmp-door {
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, filter 160ms ease;
+}
+.cmp-door:hover {
+  filter: brightness(1.07);
+}
+.cmp-door:focus-visible {
+  outline: 2px solid var(--ix-accent);
+  outline-offset: 2px;
+}
+.cmp-door:active {
+  transform: translateY(1px);
+}
+
+/* The knob — an enclosed chevron chip at the door's trailing edge (never a floating glyph). */
+.cmp-door-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--ix-glass-border);
+  background: var(--ix-base, rgba(0, 0, 0, 0.15));
+  color: var(--ix-text-2);
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.cmp-door:hover .cmp-door-chevron {
+  color: var(--ix-accent-text, var(--ix-accent));
+  border-color: var(--ix-accent);
+}
+/* Trailing-knob modifier (navigational rows put the chip at the far edge). */
+.cmp-door-chevron-end {
+  margin-left: auto;
+}
+/* Expandable doors rotate the chip down when open (the glyph inside stays static — one rotation). */
+.cmp-door[aria-expanded="true"] .cmp-door-chevron {
+  transform: rotate(90deg);
+}
+
+/* Feedback floor (pillar §3): a visible keyboard-focus ring on EVERY interactive, app-wide — no
+   interactive element may be focus-invisible. Per-element hover/active live with each control. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="tab"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--ix-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmp-door,
+  .cmp-door-chevron {
+    transition: none;
+  }
+}
