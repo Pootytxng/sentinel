@@ -160,16 +160,24 @@
 }
 .cc-greeting {
   margin: 0;
-  font-size: 25px;
+  /* Fluid type (elastic-window §2) — shrinks in narrow windows, never clips/collides. */
+  font-size: clamp(18px, 4.5vw, 25px);
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
 }
 .cc-rigline {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: clamp(11px, 2.6vw, 12.5px);
   color: var(--ix-text-2);
   font-family: var(--font-mono, ui-monospace, monospace);
+}
+/* Each spec token stays whole; the line wraps only at the "·" separators (never "16 / threads"). */
+.cc-rig-token {
+  white-space: nowrap;
+}
+.cc-rig-sep {
+  white-space: normal;
 }
 .cc-recheck {
   flex-shrink: 0;
@@ -420,21 +428,63 @@
   }
 }
 
-/* Narrow windows — collapse the rail to a top strip so the surface never breaks. */
-@media (max-width: 760px) {
+/* ── Elastic window (elastic-window pass): three modes, no rail mangling, no clipped text ── */
+/* Medium — single-column content; the rail becomes a horizontal icon+label strip (NO wrapping). */
+@media (max-width: 1080px) {
   .cc-shell {
     grid-template-columns: 1fr;
+    padding: 18px 16px 32px;
   }
   .cc-rail {
     position: static;
     height: auto;
     flex-direction: row;
     align-items: center;
-    flex-wrap: wrap;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .cc-brand,
+  .cc-rig {
+    display: none;
   }
   .cc-rail-items {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: 100%;
+  }
+  .cc-rail-item {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    padding: 9px 8px;
+  }
+  .cc-rail-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* Narrow — icon-ONLY rail (labels hidden; title-attr tooltips carry the names; the greeting is the
+   room context). Header stacks so the greeting can never collide with Re-run. Hero stacks. */
+@media (max-width: 720px) {
+  .cc-rail-item span {
+    display: none;
+  }
+  .cc-rail-item {
+    flex: 0 0 auto;
+    padding: 9px 11px;
+  }
+  .cc-rail-items {
+    justify-content: space-between;
+  }
+  .cc-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .cc-recheck {
+    align-self: flex-start;
   }
   .cc-hero {
     flex-direction: column;

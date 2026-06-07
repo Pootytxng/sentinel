@@ -1125,6 +1125,10 @@ function App() {
     Diagnostics: "lab",
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
+  // Persistent room name for the narrow (icon-only-rail) layout — the wayfinding-law amendment so you
+  // always know where you are even when the rail shows only icons (elastic-window §1).
+  const activeRoomName =
+    HOME_RAIL.find((r) => r.id === activeHomeId)?.label ?? (activeTab === "Gaming" ? "Gaming" : "Compy");
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
   const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
 
@@ -1409,6 +1413,9 @@ function App() {
             </nav>
 
             <div className="content">
+              {/* Persistent room name — shown only in the narrow icon-only-rail layout (CSS), so the
+                  wayfinding law holds even when the rail is icons-only (elastic-window §1). */}
+              <div className="shell-room-name" aria-hidden="true">{activeRoomName}</div>
               {activeTab === "Overview" && <OverviewTab hw={hw} />}
               {activeTab === "Check" && (
                 <Check

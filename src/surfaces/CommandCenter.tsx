@@ -395,8 +395,16 @@ export default function CommandCenter(props: Props) {
             <BackButton onBack={onBack} canGoBack={canGoBack} />
             <div>
               <h1 className="cc-greeting">{greeting()}</h1>
+              {/* Each spec token is nowrap so the line wraps only at the "·" separators —
+                  never "16 / threads" (elastic-window §2). */}
               <p className="cc-rigline">
-                {cpu} · {hw.cpu_cores_logical} threads · {fmtGB(hw.ram_total_bytes)} · {os}
+                <span className="cc-rig-token">{cpu}</span>
+                <span className="cc-rig-sep"> · </span>
+                <span className="cc-rig-token">{hw.cpu_cores_logical} threads</span>
+                <span className="cc-rig-sep"> · </span>
+                <span className="cc-rig-token">{fmtGB(hw.ram_total_bytes)}</span>
+                <span className="cc-rig-sep"> · </span>
+                <span className="cc-rig-token">{os}</span>
               </p>
             </div>
             <button className="cc-recheck" onClick={onRunCheck}>

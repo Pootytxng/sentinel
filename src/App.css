@@ -459,6 +459,8 @@ html, body, #root {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 12px;
 }
 .section-header .section-title { margin-bottom: 0; }
@@ -2117,6 +2119,76 @@ body::before {
 
 .content { flex: 1; min-width: 0; }
 
+/* ── Elastic window (elastic-window pass): the shell adapts from a ~380px floor to ultrawide ── */
+.app { overflow-x: hidden; } /* belt-and-suspenders — never a horizontal scrollbar */
+
+/* Persistent current-room name — shown ONLY in the narrow icon-only-rail layout (wayfinding-law
+   amendment §1): you always know where you are even when the rail is icons-only. */
+.shell-room-name {
+  display: none;
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ix-text-2, #9aa7b8);
+}
+
+/* Medium — single-column; the rail becomes a horizontal icon+label strip on top (NO wrapping). */
+@media (max-width: 1080px) {
+  .app { padding: 16px 16px; }
+  .shell { flex-direction: column; gap: 12px; }
+  .rail {
+    position: static;
+    width: 100%;
+    flex-direction: row;
+    gap: 4px;
+  }
+  .rail-item {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    padding: 9px 8px;
+  }
+  .rail-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rail-gear {
+    margin-top: 0;
+    margin-left: auto;
+  }
+}
+
+/* Narrow — icon-ONLY rail (labels hidden; title tooltips + the room-name strip carry wayfinding);
+   the top header stacks so the wordmark/Export never collide. No rail wrap-into-rows, ever. */
+@media (max-width: 720px) {
+  .rail-label {
+    display: none;
+  }
+  .rail-item {
+    flex: 0 0 auto;
+    padding: 9px 11px;
+  }
+  .rail {
+    justify-content: space-between;
+  }
+  .rail-gear {
+    margin-left: 0;
+  }
+  .shell-room-name {
+    display: block;
+  }
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .header-right {
+    width: 100%;
+  }
+}
+
 /* ── Segmented filter (Optimize) ─────────────────────────────────────────── */
 .segmented { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .seg {
@@ -2401,7 +2473,7 @@ body::before {
   font-family: var(--font-mono);
   font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
 }
-.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 7px; }
 .theme-swatch {
   display: flex; flex-direction: column; gap: 7px;
   padding: 9px;
@@ -2547,7 +2619,8 @@ body::before {
 }
 .debrief-tiles {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* Auto-fit so tiles discover their own column count floor→ultrawide (elastic-window §2). */
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
