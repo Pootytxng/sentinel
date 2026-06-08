@@ -104,6 +104,12 @@ pub(crate) enum Snapshot {
     },
     GameMode {
         prior_enabled: Option<u32>,
+        // AllowAutoGameMode — the master "allow" Windows reconciles AutoGameModeEnabled against on
+        // login. Captured so rollback restores the exact pair. `#[serde(default)]` keeps pre-fix
+        // typed ledger entries (which lacked this field) deserializable, so a change applied before
+        // this fix stays undoable — rollback-first integrity (ARCHITECTURE_LOCKS §3).
+        #[serde(default)]
+        prior_allow: Option<u32>,
     },
     MouseAccel {
         prior_speed: String,
@@ -210,7 +216,7 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
                 None
             }
         }
-        Snapshot::GameMode { prior_enabled } => on_off(*prior_enabled),
+        Snapshot::GameMode { prior_enabled, .. } => on_off(*prior_enabled),
         Snapshot::GameBar { prior_enabled, .. } => on_off(*prior_enabled),
         Snapshot::MouseAccel { prior_speed, .. } => match prior_speed.trim() {
             "1" => Some("On".to_string()),
@@ -247,35 +253,60 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
     }
 }
 
+// Windows Game Mode lives in a PAIR of HKCU DWORDs under this key. The Settings toggle writes
+// BOTH; AllowAutoGameMode is the master the Game Bar service reconciles AutoGameModeEnabled
+// against on login, so writing only AutoGameModeEnabled gets reverted to 0 on the next reboot
+// (root cause of the "never stays on / re-apply loop" bug — owner export showed 5× applies).
+// Detect (lib::game_mode_enabled), apply, and rollback all reference these constants so the read
+// and write paths can never silently drift apart.
+pub(crate) const GAMEBAR_KEY: &str = "Software\\Microsoft\\GameBar";
+pub(crate) const GAME_MODE_ENABLED_VALUE: &str = "AutoGameModeEnabled";
+pub(crate) const GAME_MODE_ALLOW_VALUE: &str = "AllowAutoGameMode";
+
 pub(crate) fn apply_game_mode() -> Result<ApplyResult, String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let (key, _) = hkcu
-        .create_subkey("Software\\Microsoft\\GameBar")
+        .create_subkey(GAMEBAR_KEY)
         .map_err(|e| e.to_string())?;
-    let prior_enabled: Option<u32> = key.get_value("AutoGameModeEnabled").ok();
-    key.set_value("AutoGameModeEnabled", &1u32)
+    let prior_enabled: Option<u32> = key.get_value(GAME_MODE_ENABLED_VALUE).ok();
+    let prior_allow: Option<u32> = key.get_value(GAME_MODE_ALLOW_VALUE).ok();
+    // Mirror the Settings UI: set the whole pair so Windows has nothing to reconcile away.
+    key.set_value(GAME_MODE_ALLOW_VALUE, &1u32)
+        .map_err(|e| e.to_string())?;
+    key.set_value(GAME_MODE_ENABLED_VALUE, &1u32)
         .map_err(|e| e.to_string())?;
     Ok(ApplyResult {
         applied_action: AppliedAction::EnableGameMode,
         rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
-        snapshot: Snapshot::GameMode { prior_enabled },
+        snapshot: Snapshot::GameMode {
+            prior_enabled,
+            prior_allow,
+        },
         elevation_used: false,
     })
 }
 
-pub(crate) fn rollback_game_mode_typed(prior_enabled: Option<u32>) -> Result<(), String> {
+pub(crate) fn rollback_game_mode_typed(
+    prior_enabled: Option<u32>,
+    prior_allow: Option<u32>,
+) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let key = hkcu
-        .open_subkey_with_flags("Software\\Microsoft\\GameBar", KEY_SET_VALUE | KEY_READ)
+        .open_subkey_with_flags(GAMEBAR_KEY, KEY_SET_VALUE | KEY_READ)
         .map_err(|e| e.to_string())?;
-    match prior_enabled {
-        Some(v) => key
-            .set_value("AutoGameModeEnabled", &v)
-            .map_err(|e| e.to_string())?,
-        None => {
-            let _ = key.delete_value("AutoGameModeEnabled");
+    // Some(v) => restore the exact prior value; None => the value didn't exist at apply time
+    // (or is a pre-fix legacy entry that never captured it) => delete to restore the default.
+    let restore = |name: &str, prior: Option<u32>| -> Result<(), String> {
+        match prior {
+            Some(v) => key.set_value(name, &v).map_err(|e| e.to_string()),
+            None => {
+                let _ = key.delete_value(name);
+                Ok(())
+            }
         }
-    }
+    };
+    restore(GAME_MODE_ENABLED_VALUE, prior_enabled)?;
+    restore(GAME_MODE_ALLOW_VALUE, prior_allow)?;
     Ok(())
 }
 
@@ -1329,9 +1360,13 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
             R::RestoreServiceFromSnapshot { service },
             S::Service { prior_state, prior_start_mode },
         ) => rollback_service_disable_typed(service, prior_state, prior_start_mode),
-        (R::RestoreGameModeFromSnapshot, S::GameMode { prior_enabled }) => {
-            rollback_game_mode_typed(*prior_enabled)
-        }
+        (
+            R::RestoreGameModeFromSnapshot,
+            S::GameMode {
+                prior_enabled,
+                prior_allow,
+            },
+        ) => rollback_game_mode_typed(*prior_enabled, *prior_allow),
         (
             R::RestoreVisualEffectsFromSnapshot,
             S::VisualEffects {
@@ -1435,9 +1470,13 @@ pub(crate) fn synthesize_legacy_rollback(
                 .get("prior")
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32);
+            // Legacy entries predate the pair fix and never captured AllowAutoGameMode.
             Some((
                 RollbackAction::RestoreGameModeFromSnapshot,
-                Snapshot::GameMode { prior_enabled },
+                Snapshot::GameMode {
+                    prior_enabled,
+                    prior_allow: None,
+                },
             ))
         }
         "visual-effects" => {
@@ -1858,9 +1897,9 @@ mod restores_label_tests {
 
     #[test]
     fn boolean_registry_values_on_off() {
-        assert_eq!(label(&Snapshot::GameMode { prior_enabled: Some(1) }), Some("On".into()));
-        assert_eq!(label(&Snapshot::GameMode { prior_enabled: Some(0) }), Some("Off".into()));
-        assert_eq!(label(&Snapshot::GameMode { prior_enabled: None }), None);
+        assert_eq!(label(&Snapshot::GameMode { prior_enabled: Some(1), prior_allow: Some(1) }), Some("On".into()));
+        assert_eq!(label(&Snapshot::GameMode { prior_enabled: Some(0), prior_allow: Some(0) }), Some("Off".into()));
+        assert_eq!(label(&Snapshot::GameMode { prior_enabled: None, prior_allow: None }), None);
         assert_eq!(
             label(&Snapshot::FastStartup { prior_hiberboot: Some(1) }),
             Some("On".into())
@@ -1949,5 +1988,49 @@ mod restores_label_tests {
         assert_eq!(restores_label_from_snapshot(&json!({"foo": "bar"})), None);
         assert_eq!(restores_label_from_snapshot(&json!("legacy string")), None);
         assert_eq!(restores_label_from_snapshot(&json!(null)), None);
+    }
+
+    // ── Game Mode persistence fix (2026-06-08): apply + detect must agree on the value PAIR ──
+
+    // A typed GameMode snapshot written BEFORE this fix carried only `prior_enabled`. It must still
+    // deserialize (prior_allow -> None via #[serde(default)]) so a pre-fix apply stays undoable —
+    // rollback-first integrity (ARCHITECTURE_LOCKS §3).
+    #[test]
+    fn pre_fix_typed_game_mode_snapshot_still_deserializes() {
+        let pre_fix = json!({"kind": "game-mode", "prior_enabled": 0});
+        let snap: Snapshot =
+            serde_json::from_value(pre_fix).expect("pre-fix snapshot must deserialize");
+        assert!(matches!(
+            snap,
+            Snapshot::GameMode { prior_enabled: Some(0), prior_allow: None }
+        ));
+    }
+
+    // Read-after-write regression for the "never stays on" bug: a freshly applied Game Mode MUST be
+    // reported as enabled by the detection probe. The old apply wrote only AutoGameModeEnabled,
+    // which Windows reset on reboot and which a pair-aware detector reads as not-fully-on — that
+    // mismatch re-offered the rec and bloated the ledger (owner export: 5× applies). This locks
+    // apply and detect to the same pair. Touches real HKCU; captures + restores the exact prior
+    // state so it leaves the machine as it found it (restore runs BEFORE any assertion).
+    #[test]
+    fn game_mode_apply_reads_back_as_enabled() {
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let read = |name: &str| -> Option<u32> {
+            hkcu.open_subkey(GAMEBAR_KEY).and_then(|k| k.get_value(name)).ok()
+        };
+        let prior_enabled = read(GAME_MODE_ENABLED_VALUE);
+        let prior_allow = read(GAME_MODE_ALLOW_VALUE);
+
+        let result = apply_game_mode().expect("apply_game_mode");
+        let reads_enabled = crate::game_mode_enabled();
+        let snapshot_ok = matches!(
+            result.snapshot,
+            Snapshot::GameMode { prior_enabled: pe, prior_allow: pa }
+                if pe == prior_enabled && pa == prior_allow
+        );
+        rollback_game_mode_typed(prior_enabled, prior_allow).expect("restore prior state");
+
+        assert!(reads_enabled, "detection must read ON immediately after apply (both values set)");
+        assert!(snapshot_ok, "apply must snapshot the exact prior pair for rollback");
     }
 }

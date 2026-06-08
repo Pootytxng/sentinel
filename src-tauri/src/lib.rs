@@ -78,11 +78,16 @@ pub(crate) fn current_power_plan_name() -> Option<String> {
 }
 
 pub(crate) fn game_mode_enabled() -> bool {
+    // Game Mode is "on" only when BOTH halves of the pair are 1 — the exact state the Settings
+    // toggle and apply_game_mode produce. Reading only AutoGameModeEnabled (as before) reported
+    // ON for a state Windows then reset on reboot, which re-offered the rec and bloated the
+    // ledger. Shared constants keep this read locked to what actions::apply_game_mode writes.
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    hkcu.open_subkey("Software\\Microsoft\\GameBar")
-        .and_then(|k| k.get_value::<u32, _>("AutoGameModeEnabled"))
-        .map(|v| v == 1)
-        .unwrap_or(false)
+    let Ok(key) = hkcu.open_subkey(crate::actions::GAMEBAR_KEY) else {
+        return false;
+    };
+    let on = |name| key.get_value::<u32, _>(name).map(|v| v == 1).unwrap_or(false);
+    on(crate::actions::GAME_MODE_ENABLED_VALUE) && on(crate::actions::GAME_MODE_ALLOW_VALUE)
 }
 
 pub(crate) fn service_running(name: &str) -> bool {
@@ -724,7 +729,7 @@ mod safety_tests {
 
     #[test]
     fn snapshot_variants_roundtrip() {
-        assert!(roundtrips(&Snapshot::GameMode { prior_enabled: Some(1) }));
+        assert!(roundtrips(&Snapshot::GameMode { prior_enabled: Some(1), prior_allow: Some(1) }));
         assert!(roundtrips(&Snapshot::Service {
             prior_state: "Running".into(),
             prior_start_mode: "Automatic".into()
@@ -783,7 +788,7 @@ mod safety_tests {
             rec_id: "game-mode".into(),
             rec_title: "Enable Game Mode".into(),
             applied_at: "2026-01-01T00:00:00Z".into(),
-            snapshot: serde_json::to_value(&Snapshot::GameMode { prior_enabled: Some(0) }).unwrap(),
+            snapshot: serde_json::to_value(&Snapshot::GameMode { prior_enabled: Some(0), prior_allow: Some(0) }).unwrap(),
             status: "applied".into(),
             applied_action: Some(AppliedAction::EnableGameMode),
             rollback_action: Some(RollbackAction::RestoreGameModeFromSnapshot),
@@ -824,7 +829,7 @@ mod safety_tests {
         // Typed contract stored at apply time; rec_id is NOT in the live
         // catalog. Rollback must still resolve — proving independence from the
         // live recommendation set (ARCHITECTURE_LOCKS §1.5).
-        let snap = serde_json::to_value(&Snapshot::GameMode { prior_enabled: Some(0) }).unwrap();
+        let snap = serde_json::to_value(&Snapshot::GameMode { prior_enabled: Some(0), prior_allow: Some(0) }).unwrap();
         let change = change_with(
             Some(RollbackAction::RestoreGameModeFromSnapshot),
             snap,
@@ -832,7 +837,7 @@ mod safety_tests {
         );
         let (action, snapshot) = resolve_rollback(&change).expect("resolve from history alone");
         assert!(matches!(action, RollbackAction::RestoreGameModeFromSnapshot));
-        assert!(matches!(snapshot, Snapshot::GameMode { prior_enabled: Some(0) }));
+        assert!(matches!(snapshot, Snapshot::GameMode { prior_enabled: Some(0), .. }));
     }
 
     #[test]
@@ -841,7 +846,7 @@ mod safety_tests {
         let change = change_with(None, json!({"prior": 1}), "game-mode");
         let (action, snapshot) = resolve_rollback(&change).expect("legacy synthesis");
         assert!(matches!(action, RollbackAction::RestoreGameModeFromSnapshot));
-        assert!(matches!(snapshot, Snapshot::GameMode { prior_enabled: Some(1) }));
+        assert!(matches!(snapshot, Snapshot::GameMode { prior_enabled: Some(1), prior_allow: None }));
     }
 
     #[test]

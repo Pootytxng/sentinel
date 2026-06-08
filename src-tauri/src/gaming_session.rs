@@ -133,7 +133,7 @@ mod tests {
         SessionChange {
             label: label.into(),
             rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
-            snapshot: Snapshot::GameMode { prior_enabled: None },
+            snapshot: Snapshot::GameMode { prior_enabled: None, prior_allow: None },
             elevated_restore: elevated,
         }
     }
