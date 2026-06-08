@@ -113,6 +113,38 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🛠️ ELASTIC RE-FIX + BETA-FEEDBACK-TRAIN-#3 + SHADOW-REALM EGGS LANDED — 2026-06-07 (`main` @ `326edfb`).**
+> All on `main`, all green (npm **188** · cargo **223**, zero warnings; tsc+vite clean). On top of one-rail:
+> - **Elastic window §6 RE-FIX** (`22d42fc`) — the prior pass was reopened after a failed owner drag-test
+>   ("snapping / hugging one side / doesn't match the window"). Re-fix: **fill-then-center** caps (rooms 1600 /
+>   Home 1500) with `margin-inline:auto`; **ONE liquid system** (rail-collapse is the only discrete breakpoint;
+>   hero/grids reflow intrinsically via flex-wrap/auto-fit/clamp — chose intrinsic liquidity over container
+>   queries, recorded in the commit); left-pinned panes centered; a **6th Network card** makes the hardware
+>   glance count-agnostic (reuses detection-train data, zero IPC). **⏳ AWAITING owner LIVE re-drag-test — his
+>   feel is the acceptance.** The ONE installer rebuild is **POSTPONED until that re-bless.**
+> - **Beta Feedback Train #3 §1–§7** (specs `docs/superpowers/specs/2026-06-06-beta-feedback-3.md`): **§1 clean
+>   exit + single-instance hardening** (`3c427d7`) — THE "Compy won't open" root cause: the config-declared
+>   overlay window kept the process alive as a windowless ghost holding the single-instance lock (confirmed live).
+>   Fix: on main-window CloseRequested → `monitoring::shutdown_for_exit()` (drops the fps.alive heartbeat so the
+>   elevated helper self-exits ~0.5s) + `app.exit(0)`; AND the single-instance callback now RECREATES the main
+>   window when the lock holder has none (never a silent no-op). Regression tests in fps.rs. **§2** exact Learn
+>   links (`4263b19`); **§3** Play monitoring inline, no dropdown (`523f267`); **§4** "Apply all safe fixes (N)"
+>   (`d280679`) — frontend orchestration of the EXISTING apply (per-item ledger receipts, failure isolation,
+>   safe-tier only; **ZERO new IPC/mutation primitive**); **§5** Learn de-overload (`fe7a571`); **§6** wordmark→
+>   shared `Wordmark`, PulseC deleted (`713d8aa`); **§7** autopsy URL-paste honest coaching, **no fetch ever**
+>   (`326edfb`).
+>   - **§4 FLAGS before the gated rebuild ships it to beta:** (1) "one UAC prompt" is **deferred** — currently N
+>     prompts for N elevated items (batching needs a backend `actions.rs` change + its own elevation QA); (2) as
+>     a new mutating UX it wants a quick **apply-all → per-item-rollback QA** on a UAC-on machine (per the
+>     "new mutating feature needs its own QA" rule). Not blocking the build; blocking the beta ship.
+> - **Doorknob pass + 5 shadow-realm eggs** — affordance-honesty grammar + CI guard (`d0f3d47`, law mirrored into
+>   design-system kernel §0); eggs: Library "cheat code" deep cut, triple-click wordmark heartbeat (`cmp-shadow`
+>   = the sanctioned knobless-interaction exception), Hearth December warmth, Konami handshake (`679a03d`),
+>   patient-gaze ring breath (`f3725ac`). All reduced-motion-honored; removing any leaves zero trace.
+> - **OPEN (owner):** (1) elastic LIVE re-drag-test → then I run the ONE rebuild bundling elastic + doorknobs +
+>   5 eggs + Train #3; (2) §1 close→no-ghost + force-kill→relaunch→window check; (3) §4 apply-all QA. **Beta refs
+>   still pinned @ `16069fa` (untouched).**
+
 > **🧭 WAYFINDING + SHOW-ME WALKTHROUGHS LANDED (first-live-beta QoL) — 2026-06-06 (`main` @ `ee92773`).**
 > From the FIRST live beta feedback, two QoL trains shipped on top of the one-rail app:
 > - **Back button** (`4b14b6e`) — a 24/7 location-history back control in every surface header (Alt+Left;
