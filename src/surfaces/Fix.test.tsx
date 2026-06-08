@@ -3,13 +3,15 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import Fix from "./Fix";
 
 type Prov = "verified" | "measured-signal" | "expected-impact";
-const rec = (id: string, applied = false, provenance: Prov = "expected-impact") => ({
+type Sev = "safe" | "moderate" | "advanced";
+const rec = (id: string, applied = false, provenance: Prov = "expected-impact", severity?: Sev) => ({
   id,
   title: `Title ${id}`,
   description: "desc",
   impact: `impact ${id}`,
   currently_applied: applied,
   provenance,
+  severity,
 });
 
 const baseProps = {
@@ -21,6 +23,7 @@ const baseProps = {
   onToggleRec: vi.fn(),
   onToggleStartup: vi.fn(),
   onRollback: vi.fn(),
+  onApplyBatch: vi.fn().mockResolvedValue({ applied: 0, skipped: [] }),
   onOpenLibrary: vi.fn(),
   onDisablePreview: vi.fn(),
   vendor: "any" as const,
@@ -99,6 +102,31 @@ describe("Fix", () => {
     expect(autopsy).toHaveLength(3);
     fireEvent.click(autopsy[0]);
     expect(onOpenLibrary).toHaveBeenCalledWith("useplatformclock");
+  });
+
+  it("§4: 'Apply all safe fixes' lists SAFE-tier items in one consent sheet, then batches them", () => {
+    const onApplyBatch = vi.fn().mockResolvedValue({ applied: 2, skipped: [] });
+    const recs = [
+      rec("game-mode", false, "expected-impact", "safe"), // appliable + safe
+      rec("sysmain-disable", false, "expected-impact", "safe"), // appliable + safe
+    ];
+    render(<Fix recs={recs} {...baseProps} onApplyBatch={onApplyBatch} />);
+    // The bar shows the SAFE count and opens the single consent sheet.
+    fireEvent.click(screen.getByRole("button", { name: "Apply all safe fixes (2)" }));
+    expect(screen.getByText("Apply these 2 safe fixes?")).toBeTruthy();
+    // Approve → the batch runs over exactly those ids (App orchestrates the existing apply per item).
+    fireEvent.click(screen.getByRole("button", { name: "Apply all (2)" }));
+    expect(onApplyBatch).toHaveBeenCalledWith(["game-mode", "sysmain-disable"]);
+  });
+
+  it("§4: moderate-tier appliable recs are NOT swept into 'Apply all safe fixes'", () => {
+    const recs = [
+      rec("game-mode", false, "expected-impact", "safe"),
+      rec("sysmain-disable", false, "expected-impact", "moderate"), // appliable but NOT safe
+    ];
+    render(<Fix recs={recs} {...baseProps} />);
+    // Only ONE safe item → the bar (which needs ≥2) must not appear.
+    expect(screen.queryByRole("button", { name: /Apply all safe fixes/ })).toBeNull();
   });
 
   it("toggling a worth-fixing switch routes through onToggleRec with the rec id", () => {

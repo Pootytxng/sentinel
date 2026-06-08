@@ -24,6 +24,7 @@ type Rec = {
   provenance: "verified" | "measured-signal" | "expected-impact";
   eligible?: boolean;
   ineligible_reason?: string | null;
+  severity?: "safe" | "moderate" | "advanced"; // §4 "Apply all" targets SAFE-tier only
 };
 
 type Props = {
@@ -36,6 +37,7 @@ type Props = {
   onToggleRec: (recId: string) => void;
   onToggleStartup: (entry: StartupEntry) => void;
   onRollback: (c: AppliedChange) => void;
+  onApplyBatch: (recIds: string[]) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
   onOpenLibrary: (focusId: string) => void;
   onDisablePreview: () => void;
   vendor: GpuVendor;
@@ -375,6 +377,7 @@ export default function Fix({
   onToggleRec,
   onToggleStartup,
   onRollback,
+  onApplyBatch,
   onOpenLibrary,
   onDisablePreview,
   vendor,
@@ -394,6 +397,25 @@ export default function Fix({
   const appliable = liveRecs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
   const advisory = liveRecs.filter((r) => !isAppliable(r.id));
+
+  // §4 "Apply all safe fixes" — SAFE-tier only (moderate stays individual; advisory can't apply;
+  // dismissed/not-for-this-rig already excluded since this derives from worthFixing). One consent
+  // sheet → onApplyBatch runs the existing apply per item (per-item ledger receipts, failure
+  // isolation). Copy never promises performance.
+  const safeBatch = worthFixing.filter((r) => r.severity === "safe");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [batching, setBatching] = useState(false);
+  const [batchSummary, setBatchSummary] = useState<{
+    applied: number;
+    skipped: { title: string; reason: string }[];
+  } | null>(null);
+  const runApplyAll = async () => {
+    setBatching(true);
+    const res = await onApplyBatch(safeBatch.map((r) => r.id));
+    setBatching(false);
+    setSheetOpen(false);
+    setBatchSummary(res);
+  };
 
   // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
   // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
@@ -436,6 +458,24 @@ export default function Fix({
 
       {/* Worth fixing — the outstanding appliable recs, each with its trust-switch. */}
       <div className="fix-section-label">Worth fixing</div>
+      {safeBatch.length >= 2 && (
+        <div className="fix-applyall-bar">
+          <button className="fix-applyall" onClick={() => setSheetOpen(true)}>
+            Apply all safe fixes ({safeBatch.length})
+          </button>
+          <span className="fix-applyall-hint">reversible · one undo each · convenience, not a boost</span>
+        </div>
+      )}
+      {batchSummary && (
+        <p className="fix-applyall-summary" role="status">
+          Applied {batchSummary.applied}
+          {batchSummary.skipped.length > 0 &&
+            ` · ${batchSummary.skipped.length} skipped: ${batchSummary.skipped
+              .map((s) => s.title)
+              .join(", ")}`}
+          . Each is individually reversible below.
+        </p>
+      )}
       {worthFixing.length === 0 ? (
         <p className="fix-empty">Nothing worth fixing right now — your appliable settings are all set.</p>
       ) : (
@@ -453,6 +493,46 @@ export default function Fix({
             />
           ))}
         </ul>
+      )}
+
+      {/* §4 consent sheet — the ONE consent for the batch. Lists every item + its one-line change;
+          approve → sequential apply (per-item receipts, failure isolation). Copy never promises a boost.
+          Backdrop/modal classes are doorknob-sanctioned for their close handlers. */}
+      {sheetOpen && (
+        <div
+          className="fix-applyall-backdrop"
+          onClick={() => {
+            if (!batching) setSheetOpen(false);
+          }}
+        >
+          <div className="fix-applyall-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="fix-applyall-h">Apply these {safeBatch.length} safe fixes?</h3>
+            <p className="fix-applyall-note">
+              Each is reversible — Compy snapshots the prior state and writes a separate undo for every
+              one. This is convenience, not a performance boost.
+            </p>
+            <ul className="fix-applyall-list">
+              {safeBatch.map((r) => (
+                <li key={r.id} className="fix-applyall-item">
+                  <span className="fix-applyall-item-title">{r.title}</span>
+                  <span className="fix-applyall-item-what">{r.impact}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="fix-applyall-actions">
+              <button
+                className="fix-applyall-cancel"
+                disabled={batching}
+                onClick={() => setSheetOpen(false)}
+              >
+                Cancel
+              </button>
+              <button className="fix-applyall-go" disabled={batching} onClick={runApplyAll}>
+                {batching ? "Applying…" : `Apply all (${safeBatch.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.

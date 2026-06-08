@@ -988,6 +988,34 @@ function App() {
     }
   };
 
+  // Train #3 §4 — "Apply all safe fixes". Orchestrates the EXISTING, audited apply_recommendation
+  // command in sequence (zero new IPC, zero new mutation path): each apply writes its OWN ledger
+  // receipt, so rollback granularity is per-item, identical to applying them one-by-one. No per-rec
+  // confirm here — the Fix consent sheet IS the single consent. Per-item failure isolation: one
+  // failure is recorded and skipped, never aborts the rest. (Elevation is still per-elevated-item for
+  // now; batching N prompts into one needs a backend change + its own QA — tracked, not done here.)
+  const applyBatch = async (
+    recIds: string[],
+  ): Promise<{ applied: number; skipped: { title: string; reason: string }[] }> => {
+    setError(null);
+    let applied = 0;
+    const skipped: { title: string; reason: string }[] = [];
+    for (const id of recIds) {
+      const rec = (recs ?? []).find((r) => r.id === id);
+      if (!rec) continue;
+      setBusyId(id);
+      try {
+        await invoke<AppliedChange>("apply_recommendation", { recId: rec.id, recTitle: rec.title });
+        applied++;
+      } catch (e) {
+        skipped.push({ title: rec.title, reason: String(e) });
+      }
+    }
+    setBusyId(null);
+    await refresh();
+    return { applied, skipped };
+  };
+
   const rollback = async (change: AppliedChange) => {
     if (!window.confirm(`Roll back "${change.rec_title}" to its prior state?`)) return;
     setBusyId(change.id);
@@ -1453,6 +1481,7 @@ function App() {
                     }}
                     onToggleStartup={toggleStartup}
                     onRollback={rollback}
+                    onApplyBatch={applyBatch}
                     onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
                     onDisablePreview={() => {
                       setFixV2(false);
