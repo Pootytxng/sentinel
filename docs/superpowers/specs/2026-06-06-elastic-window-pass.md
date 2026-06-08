@@ -80,6 +80,26 @@ Re-acceptance: the owner repeats the erratic drag-test live and blesses the FEEL
 - [ ] Layout shape always matches the actual window (one responsive system, verified).
 - [ ] Hardware glance: 6 cards incl. Network (named adapter); orphan-graceful at every
       column count.
+
+## 7. Narrow nav v2 — the dots verdict (owner re-drag-test, 2026-06-06)
+
+Re-test verdict: **"feels great"** — except the narrow collapse, where the rooms compact into
+"~7 dots" (anonymous icons). That fails the doorknob law (doors without names or knobs) and
+leans on tooltips (hover-discovery) — retired.
+
+**Fix: the narrow icon-only rail/strip is REPLACED by a bottom room bar** (phone pattern):
+
+- ≤ narrow breakpoint: six equal-width cells — icon (~18px) ABOVE its room name (≥10.5px,
+  always visible). The six names are all ≤5 letters; at the 380px floor that's ~62px per
+  cell — fits by design.
+- Active room: accent tint + emphasized label. Cells are self-evidently tappable (it's a
+  labeled tab bar — the knob is the form itself).
+- Settings stays as the gear in the top header (it's not a room); back/export unaffected.
+- The persistent room-name header strip RETIRES in this mode (labels make it redundant).
+- Reduced-motion: no slide/bounce; instant state.
+
+Re-acceptance: at the 380×560 floor every room name is readable and tappable, the active room
+is obvious, zero anonymous dots anywhere, and the owner re-drags and blesses the feel.
 - [ ] All six rooms + Settings usable at the 380×560 floor (walk each, act in each).
 - [ ] Narrow mode: icon-only rail + persistent current-room name + tooltips (wayfinding law
       amendment honored — no mystery icons without a location indicator).
