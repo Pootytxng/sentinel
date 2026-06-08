@@ -488,24 +488,89 @@
 }
 /* Narrow — icon-ONLY rail (labels hidden; title-attr tooltips carry the names; the greeting is the
    room context). Header stacks so the greeting can never collide with Re-run. Hero stacks. */
+/* NARROW NAV V2 (elastic §7) — Home's rail becomes the same fixed BOTTOM ROOM BAR: six equal named
+   cells; Settings → a floating top-right gear; brand + rig already hidden above. */
 @media (max-width: 720px) {
-  .cc-rail-item span {
-    display: none;
-  }
-  .cc-rail-item {
-    flex: 0 0 auto;
-    padding: 9px 11px;
+  .cc-rail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    height: auto;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--ix-glass-border);
+    border-radius: 0;
+    background: var(--ix-glass-fill);
+    box-shadow: 0 -8px 24px -16px rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(12px);
+    z-index: 80;
   }
   .cc-rail-items {
-    justify-content: space-between;
+    flex: 1;
+    flex-direction: row;
+    gap: 0;
+    margin: 0;
+  }
+  .cc-rail-item {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 2px 7px;
+    justify-content: center;
+    align-items: center;
+  }
+  .cc-rail-item span {
+    display: block;
+    font-size: 10px;
+    line-height: 1;
+    text-align: center;
+  }
+  .cc-rail-item-on {
+    background: var(--accent-soft, rgba(46, 230, 192, 0.12));
+  }
+  .cc-rail-item-on span {
+    color: var(--ix-accent-text);
+    font-weight: 600;
+  }
+  /* Settings button is the direct cc-rail child (the rooms live inside cc-rail-items) → top-right gear. */
+  .cc-rail > .cc-rail-item {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    flex: none;
+    width: 42px;
+    height: 42px;
+    flex-direction: row;
+    padding: 0;
+    border: 1px solid var(--ix-glass-border);
+    border-radius: 10px;
+    background: var(--ix-glass-fill);
+    z-index: 81;
+  }
+  .cc-rail > .cc-rail-item span {
+    display: none;
+  }
+  .cc-main {
+    padding-bottom: 68px; /* clear the fixed bottom bar */
   }
   .cc-header {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+    padding-right: 52px; /* room for the floating gear */
   }
   .cc-recheck {
     align-self: flex-start;
   }
-  /* (Hero stacking is intrinsic now via flex-wrap — no breakpoint rule needed; elastic §6.) */
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-rail-item {
+    transition: none; /* §7: instant active state */
+  }
 }

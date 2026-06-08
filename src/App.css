@@ -2172,30 +2172,97 @@ body::before {
 
 /* Narrow — icon-ONLY rail (labels hidden; title tooltips + the room-name strip carry wayfinding);
    the top header stacks so the wordmark/Export never collide. No rail wrap-into-rows, ever. */
+/* NARROW NAV V2 (elastic §7) — the rail becomes a fixed BOTTOM ROOM BAR: six equal cells, icon above
+   an ALWAYS-visible name (doors with names, not anonymous dots). Settings lifts out to a floating
+   top-right gear; the room-name strip retires (labels make it redundant); active = accent tint +
+   emphasized label. Tooltips are no longer load-bearing. */
 @media (max-width: 720px) {
-  .rail-label {
-    display: none;
+  .rail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    box-shadow: 0 -8px 24px -16px rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    z-index: 80;
   }
   .rail-item {
-    flex: 0 0 auto;
-    padding: 9px 11px;
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 2px 7px;
+    justify-content: center;
+    align-items: center;
   }
-  .rail {
-    justify-content: space-between;
+  .rail-label {
+    display: block;
+    flex: none;
+    font-size: 10px;
+    line-height: 1;
+    overflow: visible;
+    text-overflow: clip;
+    text-align: center;
   }
+  .rail-item-on {
+    background: var(--accent-soft);
+  }
+  .rail-item-on::before {
+    display: none; /* the left accent bar doesn't belong on a bottom cell */
+  }
+  .rail-item-on .rail-label {
+    color: var(--accent-bright);
+    font-weight: 600;
+  }
+  /* Settings → floating top-right header gear (the 6 named cells own the floor). */
   .rail-gear {
-    margin-left: 0;
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    margin: 0;
+    width: 42px;
+    height: 42px;
+    flex: none;
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    z-index: 81;
+  }
+  .rail-gear .rail-label {
+    display: none;
+  }
+  .content {
+    padding-bottom: 68px; /* clear the fixed bottom bar */
   }
   .shell-room-name {
-    display: block;
+    display: none; /* retired — the bar's labels are the wayfinding now */
   }
   .header {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+    padding-right: 52px; /* leave room for the floating gear */
   }
   .header-right {
     width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-item {
+    transition: none; /* §7: instant active state */
   }
 }
 
