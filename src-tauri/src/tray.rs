@@ -26,9 +26,24 @@ use tauri::{
 // explicitly opts in — and if the webview never loads, close still safely exits.
 static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 static TRAY: OnceLock<TrayIcon> = OnceLock::new();
+// Tracks the icon's ACTUAL shown state. TrayIconBuilder::build() adds the icon visible, so it starts
+// true. We only call set_visible on a real change — calling set_visible(false) on an already-hidden
+// icon makes the tray-icon crate log "Error removing system tray icon" (a redundant NIM_DELETE), and
+// the frontend's default-OFF startup sync (doubled by React StrictMode in dev) would do exactly that.
+static TRAY_SHOWN: AtomicBool = AtomicBool::new(true);
 
 pub(crate) fn close_to_tray_enabled() -> bool {
     CLOSE_TO_TRAY.load(Ordering::Acquire)
+}
+
+/// Idempotent show/hide — only toggles the OS tray icon on an actual state change (no redundant
+/// NIM_ADD/NIM_DELETE, which the crate logs as an error). No-op when the tray failed to init.
+fn set_tray_visible(visible: bool) {
+    if let Some(tray) = TRAY.get() {
+        if TRAY_SHOWN.swap(visible, Ordering::AcqRel) != visible {
+            let _ = tray.set_visible(visible);
+        }
+    }
 }
 
 /// Pure flag store, split from the command so the §1-critical default/mechanics stay unit-testable
@@ -46,9 +61,7 @@ fn store_close_to_tray(enabled: bool) {
 #[tauri::command]
 pub(crate) fn set_close_to_tray(enabled: bool) {
     store_close_to_tray(enabled);
-    if let Some(tray) = TRAY.get() {
-        let _ = tray.set_visible(enabled);
-    }
+    set_tray_visible(enabled);
 }
 
 /// Restore the main window — show + focus it if it exists, recreate it if a prior unclean exit left
@@ -109,11 +122,10 @@ pub(crate) fn init(app: &AppHandle) -> tauri::Result<()> {
         builder = builder.icon(icon.clone());
     }
 
-    let tray = builder.build(app)?;
-    // Start hidden unless already opted in — the icon appears when the frontend syncs the flag ON
-    // (or immediately, for a user whose persisted preference is on). Default OFF => no icon, §1 exit.
-    let _ = tray.set_visible(close_to_tray_enabled());
-    let _ = TRAY.set(tray);
+    let _ = TRAY.set(builder.build(app)?);
+    // Reconcile the freshly-built (visible) icon to the opt-in flag — default OFF hides it exactly
+    // once (a clean NIM_DELETE of the present icon); the frontend's later sync is then a no-op.
+    set_tray_visible(close_to_tray_enabled());
     Ok(())
 }
 
