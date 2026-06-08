@@ -113,15 +113,17 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
-> **🛠️ ELASTIC RE-FIX + BETA-FEEDBACK-TRAIN-#3 + SHADOW-REALM EGGS LANDED — 2026-06-07 (`main` @ `326edfb`).**
+> **🛠️ ELASTIC RE-FIX (BLESSED) + BETA-TRAIN-#3 + EGGS + BUNDLED REBUILD SHIPPED — 2026-06-07 (`main` @ `6b39c31`).**
 > All on `main`, all green (npm **188** · cargo **223**, zero warnings; tsc+vite clean). On top of one-rail:
 > - **Elastic window §6 RE-FIX** (`22d42fc`) — the prior pass was reopened after a failed owner drag-test
 >   ("snapping / hugging one side / doesn't match the window"). Re-fix: **fill-then-center** caps (rooms 1600 /
 >   Home 1500) with `margin-inline:auto`; **ONE liquid system** (rail-collapse is the only discrete breakpoint;
 >   hero/grids reflow intrinsically via flex-wrap/auto-fit/clamp — chose intrinsic liquidity over container
 >   queries, recorded in the commit); left-pinned panes centered; a **6th Network card** makes the hardware
->   glance count-agnostic (reuses detection-train data, zero IPC). **⏳ AWAITING owner LIVE re-drag-test — his
->   feel is the acceptance.** The ONE installer rebuild is **POSTPONED until that re-bless.**
+>   glance count-agnostic (reuses detection-train data, zero IPC). **§7 NARROW NAV V2** (`6b39c31`): at <720px
+>   BOTH shells become a fixed **BOTTOM ROOM BAR** — six equal NAMED cells (icon over an always-visible name;
+>   Settings → floating top-right gear; the room-name strip retires) — fixing the "anonymous dots" doorknob-law
+>   miss the first re-drag-test caught. **✅ owner-BLESSED live, narrow nav included.**
 > - **Beta Feedback Train #3 §1–§7** (specs `docs/superpowers/specs/2026-06-06-beta-feedback-3.md`): **§1 clean
 >   exit + single-instance hardening** (`3c427d7`) — THE "Compy won't open" root cause: the config-declared
 >   overlay window kept the process alive as a windowless ghost holding the single-instance lock (confirmed live).
@@ -141,9 +143,14 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   design-system kernel §0); eggs: Library "cheat code" deep cut, triple-click wordmark heartbeat (`cmp-shadow`
 >   = the sanctioned knobless-interaction exception), Hearth December warmth, Konami handshake (`679a03d`),
 >   patient-gaze ring breath (`f3725ac`). All reduced-motion-honored; removing any leaves zero trace.
-> - **OPEN (owner):** (1) elastic LIVE re-drag-test → then I run the ONE rebuild bundling elastic + doorknobs +
->   5 eggs + Train #3; (2) §1 close→no-ghost + force-kill→relaunch→window check; (3) §4 apply-all QA. **Beta refs
->   still pinned @ `16069fa` (untouched).**
+> - **✅ BUNDLED REBUILD SHIPPED (2026-06-07):** unsigned `npm run tauri build` (1m07s, no OOM, `CODEGEN_UNITS=256`)
+>   from `6b39c31` → NSIS + MSI. **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `0D6A5C9AFB31495E186D670B402EB98FED3EFE8EE8B86B9152932B322A108DC5`** (2,690,746 B, built 18:48); the
+>   gitignored `beta-kit/` copy was refreshed + hash-matched (the stale-copy trap is closed).
+> - **PENDING (NOT Claude — owner/Cowork):** (1) **Cowork re-zips** `beta-kit/Compy-Beta-Kit.zip` with THIS
+>   installer (the 6/6 zip still holds the old one); (2) **owner runs the §4 apply-all → per-item-rollback QA**
+>   on the packaged build BEFORE the kit reaches testers (one-UAC-prompt batching stays deferred); (3) optional
+>   §1 close→no-ghost + force-kill→relaunch→window spot-check. **Beta refs still pinned @ `16069fa` (untouched).**
 
 > **🧭 WAYFINDING + SHOW-ME WALKTHROUGHS LANDED (first-live-beta QoL) — 2026-06-06 (`main` @ `ee92773`).**
 > From the FIRST live beta feedback, two QoL trains shipped on top of the one-rail app:
