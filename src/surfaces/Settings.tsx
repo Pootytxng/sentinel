@@ -49,7 +49,8 @@ const FLAG_ROWS: { id: PreviewFlag; label: string }[] = [
   { id: "lab", label: "Lab (Benchmark + Latency)" },
   { id: "arc", label: "First-run arc" },
   { id: "overlay", label: "In-game overlay" },
-  { id: "settings", label: "This Settings surface" },
+  // NOTE: no "settings" row here on purpose — Settings v2 is the only Settings surface, so a toggle
+  // that disables it is a self-lockout (dead gear, no way back in). The flag plumbing stays inert.
 ];
 
 function Toggle({

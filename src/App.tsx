@@ -1244,7 +1244,10 @@ function App() {
     : null;
   // Settings is a full-surface route (replaces the home/shell while open) so the surfaces under it
   // unmount and re-read their persisted prefs on return — no cross-surface live-sync needed.
-  const settingsActive = showSettings && settingsV2 && hw !== null;
+  // NOT gated on settingsV2: Settings v2 is the ONLY Settings surface (no classic fallback), and the
+  // settings flag was itself toggleable inside Settings → disabling it was a permanent self-lockout
+  // (dead gear, no way back in). The gear must always open Settings regardless of the stored flag.
+  const settingsActive = showSettings && hw !== null;
   // Only swap in the new home once hardware has resolved (avoids a blank first paint); any other
   // tab falls back to the classic shell, which is where the not-yet-reskinned surfaces still live.
   const ccActive = homeV2 && activeTab === "Overview" && hw !== null && !settingsActive;
@@ -1410,7 +1413,7 @@ function App() {
             else setActiveTab(tab);
           }}
           onRunCheck={() => setShowFirstCheck(true)}
-          onOpenSettings={settingsV2 ? () => setShowSettings(true) : undefined}
+          onOpenSettings={() => setShowSettings(true)}
           onBack={goBack}
           canGoBack={canGoBack}
         />
