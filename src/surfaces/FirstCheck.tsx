@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { Wordmark } from "../design/Wordmark";
+import { useConfirm } from "../design/ConfirmDialog";
 import { useScan, rowVerdict, type ScanRecLite } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./FirstCheck.css";
@@ -20,6 +21,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
   const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [greenOpen, setGreenOpen] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const finish = () => {
     try {
@@ -40,12 +42,12 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
   const applyLimiter = async (lim: PriorityItem) => {
     const rec = recFor(lim);
     if (!rec) return;
-    if (
-      !window.confirm(
-        `Apply "${rec.title}"?\n\nCompy snapshots the prior state so you can roll this back at any time.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `Apply "${rec.title}"?`,
+      body: "Compy snapshots the prior state so you can roll this back anytime.",
+      confirmLabel: "Apply",
+    });
+    if (!ok) return;
     setApplyingId(rec.id);
     try {
       await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });

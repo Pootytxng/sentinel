@@ -1,0 +1,88 @@
+/* Themed Confirm Dialog — matches the §4 apply-all sheet (obsidian glass), tokens only. */
+.cmp-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  animation: cmp-confirm-fade 140ms ease;
+}
+.cmp-confirm-modal {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px 22px;
+  border-radius: var(--ix-radius);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: var(--ix-glass-fill);
+  box-shadow: 0 30px 80px -28px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  animation: cmp-confirm-pop 160ms ease;
+}
+.cmp-confirm-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+}
+.cmp-confirm-body {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}
+.cmp-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.cmp-confirm-cancel,
+.cmp-confirm-go {
+  padding: 9px 18px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+.cmp-confirm-cancel {
+  border: 1px solid var(--ix-glass-border);
+  background: transparent;
+  color: var(--ix-text-2);
+}
+.cmp-confirm-cancel:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-glass-top);
+}
+/* Ink law: accent fill + dark ink label — NEVER white. */
+.cmp-confirm-go {
+  border: 1px solid transparent;
+  background: var(--ix-accent);
+  color: var(--ix-accent-ink);
+  font-weight: 600;
+}
+.cmp-confirm-go:hover {
+  background: var(--ix-accent-text, var(--ix-accent));
+}
+@keyframes cmp-confirm-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cmp-confirm-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmp-confirm-backdrop,
+  .cmp-confirm-modal {
+    animation: none;
+  }
+  .cmp-confirm-cancel,
+  .cmp-confirm-go {
+    transition: none;
+  }
+}

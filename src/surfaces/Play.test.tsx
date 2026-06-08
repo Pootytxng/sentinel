@@ -6,8 +6,17 @@ import type { SessionSummary } from "../types";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
 import Play from "./Play";
+import { ConfirmProvider } from "../design/ConfirmDialog";
 
 afterEach(cleanup);
+
+// Play embeds SessionDebrief, which uses useConfirm → render under the provider.
+const renderPlay = (extra: Partial<Parameters<typeof Play>[0]>) =>
+  render(
+    <ConfirmProvider>
+      <Play {...base} {...extra} />
+    </ConfirmProvider>,
+  );
 
 const session = (game: string, avg: number): SessionSummary => ({
   started_at: "2026-06-06T10:00:00Z",
@@ -26,6 +35,7 @@ const session = (game: string, avg: number): SessionSummary => ({
 
 const base = {
   active: true,
+  sessions: [] as SessionSummary[],
   sessionsSeenAt: "",
   priorities: null,
   recs: [],
@@ -38,7 +48,7 @@ const base = {
 
 describe("Play", () => {
   it("renders the live monitor + overlay cards and condensed session rows", () => {
-    render(<Play {...base} sessions={[session("game.exe", 120)]} />);
+    renderPlay({ sessions: [session("game.exe", 120)] });
     expect(screen.getByText("Live monitor")).toBeInTheDocument();
     expect(screen.getByText("In-game overlay")).toBeInTheDocument();
     // Game name is prettified for display — the ".exe" is stripped (smalls §4).
@@ -46,12 +56,12 @@ describe("Play", () => {
   });
 
   it("honest empty state when no sessions", () => {
-    render(<Play {...base} sessions={[]} />);
+    renderPlay({ sessions: [] });
     expect(screen.getByText(/Play a session to see this/)).toBeInTheDocument();
   });
 
   it("a session row expands the full debrief IN PLACE (no route) — navigation never teleports", () => {
-    render(<Play {...base} sessions={[session("doom.exe", 144)]} />);
+    renderPlay({ sessions: [session("doom.exe", 144)] });
     const row = screen.getByRole("button", { name: /doom/ });
     expect(row.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(row);

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import Overlay from "./Overlay";
+import { ConfirmProvider } from "./design/ConfirmDialog";
 
 // The overlay runs in a separate window labeled "overlay". Detect by the
 // window label (robust — avoids URL hash/encoding issues across dev & prod).
@@ -34,5 +35,13 @@ try {
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>{isOverlay ? <Overlay /> : <App />}</React.StrictMode>,
+  <React.StrictMode>
+    {isOverlay ? (
+      <Overlay />
+    ) : (
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
+    )}
+  </React.StrictMode>,
 );

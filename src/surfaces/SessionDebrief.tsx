@@ -8,6 +8,7 @@ import type {
   ComparisonResult,
 } from "../types";
 import { Term } from "../design/Term";
+import { useConfirm } from "../design/ConfirmDialog";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
 // (halfway-home §1, owner-greenlit). Locked copy unchanged. Styles are global (App.css / arc).
@@ -205,6 +206,7 @@ export function SessionDebrief({
   const [ctxOpen, setCtxOpen] = useState(false);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [reverting, setReverting] = useState(false);
+  const confirm = useConfirm();
   // Show a resolved comparison only if it's for THIS session's game (Moment 4).
   useEffect(() => {
     invoke<ComparisonResult | null>("get_latest_comparison")
@@ -344,13 +346,16 @@ export function SessionDebrief({
             } | null>("get_armed_comparison").catch(() => null);
             if (
               existing &&
-              (existing.rec_id !== topRec.id || existing.game !== s.process_name) &&
-              !window.confirm(
-                `A comparison is already armed (${existing.rec_title} · ${existing.game}). ` +
-                  `Applying this replaces that baseline with a fresh one. Continue?`,
-              )
+              (existing.rec_id !== topRec.id || existing.game !== s.process_name)
             ) {
-              return; // keep the pending comparison; don't apply a confounding change
+              const ok = await confirm({
+                title: "Replace the armed comparison?",
+                body:
+                  `A comparison is already armed (${existing.rec_title} · ${existing.game}). ` +
+                  "Applying this replaces that baseline with a fresh one.",
+                confirmLabel: "Replace & apply",
+              });
+              if (!ok) return; // keep the pending comparison; don't apply a confounding change
             }
             await apply(topRec);
             // Arm the cross-session comparison: this session's metrics are the baseline.

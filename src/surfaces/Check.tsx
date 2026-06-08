@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
+import { useConfirm } from "../design/ConfirmDialog";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useScan } from "./use-scan";
@@ -40,6 +41,7 @@ export default function Check({
   const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [fineOpen, setFineOpen] = useState(false);
+  const confirm = useConfirm();
 
   const linkedRec = (lim: PriorityItem) => {
     const id = lim.linked ?? lim.id;
@@ -53,12 +55,12 @@ export default function Check({
   const applyLimiter = async (lim: PriorityItem) => {
     const r = linkedRec(lim);
     if (!r) return;
-    if (
-      !window.confirm(
-        `Apply "${r.title}"?\n\nCompy snapshots the prior state so you can roll this back at any time.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `Apply "${r.title}"?`,
+      body: "Compy snapshots the prior state so you can roll this back anytime.",
+      confirmLabel: "Apply",
+    });
+    if (!ok) return;
     setApplyingId(r.id);
     try {
       await invoke("apply_recommendation", { recId: r.id, recTitle: r.title });

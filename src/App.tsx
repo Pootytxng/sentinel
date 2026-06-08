@@ -27,6 +27,7 @@ import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/g
 import "./App.css";
 import "./design/doorknob.css";
 import { KonamiWhisper } from "./design/KonamiWhisper";
+import { useConfirm } from "./design/ConfirmDialog";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
@@ -965,14 +966,16 @@ function App() {
     }
   };
 
+  const confirm = useConfirm();
+
   const apply = async (rec: Recommendation) => {
-    const downsideLine = rec.downside ? `\n\nTradeoff: ${rec.downside}` : "";
-    if (
-      !window.confirm(
-        `Apply "${rec.title}"?\n\nThis will change a Windows setting to match Compy's recommendation.\n\n${rec.description}${downsideLine}\n\nCompy will snapshot the prior state so you can roll this back at any time.`
-      )
-    )
-      return;
+    const tradeoff = rec.downside ? ` Tradeoff: ${rec.downside}` : "";
+    const ok = await confirm({
+      title: `Apply "${rec.title}"?`,
+      body: `${rec.description}${tradeoff} Compy snapshots the prior state so you can roll this back anytime.`,
+      confirmLabel: "Apply",
+    });
+    if (!ok) return;
     setBusyId(rec.id);
     setError(null);
     try {
@@ -1017,7 +1020,13 @@ function App() {
   };
 
   const rollback = async (change: AppliedChange) => {
-    if (!window.confirm(`Roll back "${change.rec_title}" to its prior state?`)) return;
+    const dest = change.restores_label ? ` It'll return to ${change.restores_label}.` : "";
+    const ok = await confirm({
+      title: `Roll back "${change.rec_title}"?`,
+      body: `Compy restores the setting to how it was before.${dest}`,
+      confirmLabel: "Roll back",
+    });
+    if (!ok) return;
     setBusyId(change.id);
     setError(null);
     try {
