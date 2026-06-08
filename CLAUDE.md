@@ -113,6 +113,27 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🔧 POST-REBUILD BENCH (reversible polish on `main`, NOT yet re-bundled into the kit) — 2026-06-08 (`main` @ `faa4c52`).**
+> All frontend-only, all green (npm **192**; cargo untouched at **223**). These rode the bench AFTER the
+> blessed `6b39c31` rebuild, so the shipped kit installer (NSIS `0D6A5C9A…`) does NOT include them — a
+> future owner-timed rebuild will fold them in:
+> - **Themed Confirm Dialog** (`4e6a078`) — killed the native `window.confirm` ("tauri.localhost says");
+>   one shared `ConfirmProvider`/`useConfirm` (promise-based) across all 5 sites (App apply+rollback, Check,
+>   FirstCheck, SessionDebrief); ink-law buttons; Esc/Enter/focus-trap/backdrop; outcome-stating copy. Zero
+>   native confirm/alert left in `src/`.
+> - **Overlay §2** (`fe8d1a4`) — "1%" → "1% low"; Full density adds `cpu <pct>%` (USAGE only, never CPU
+>   temp); standard unchanged. Zero new IPC (cpu already fetched).
+> - **Elastic §8 — rail mis-render fix** (`faa4c52`) — the reported "stray icon tile" on Check was
+>   `nav.rail` itself collapsing to a ~50px box at 720–900px: a LEGACY `@media (max-width:900px)` block
+>   (pre-elastic) set `.rail{width:50px}` and sat AFTER the elastic ≤1080 medium-strip block, overriding it.
+>   Deleted the legacy block → rail is always exactly vertical-column (>1080) / horizontal-strip (720–1080) /
+>   bottom-bar (<720). **Owner drag-verify pending.**
+> - **§4 one-elevation batching — PARKED (owner: fresh, 2026-06-08).** Not beta-blocking (apply-all works
+>   today via N UAC prompts). The verified design + de-risking (sink-to-defer + ONE inline elevated
+>   `-Command` + per-item try/catch + result-file IPC; only `exit`-user `power-ultimate` is moderate-tier →
+>   excluded) is recorded in `beta-feedback-3.md §4` (`5757950`) for a rested session — audited
+>   mutation/elevation boundary, rides its OWN elevation QA, does not ship until that passes.
+
 > **🛠️ ELASTIC RE-FIX (BLESSED) + BETA-TRAIN-#3 + EGGS + BUNDLED REBUILD SHIPPED — 2026-06-07 (`main` @ `6b39c31`).**
 > All on `main`, all green (npm **188** · cargo **223**, zero warnings; tsc+vite clean). On top of one-rail:
 > - **Elastic window §6 RE-FIX** (`22d42fc`) — the prior pass was reopened after a failed owner drag-test
