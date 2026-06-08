@@ -13,7 +13,7 @@ import {
   readOverlayDensity,
   persistOverlayDensity,
 } from "../design/theme";
-import { PulseC } from "../design/PulseC";
+import { Wordmark } from "../design/Wordmark";
 import { BackButton } from "../design/BackButton";
 import "./Settings.css";
 
@@ -171,7 +171,8 @@ export default function Settings({
         <header className="set-header">
           <span className="set-brand">
             <BackButton onBack={onBack} canGoBack={canGoBack} />
-            <PulseC size={22} />
+            {/* §6 — the shared Wordmark, the ONLY sanctioned brand source (no bespoke glyph). */}
+            <Wordmark size={22} />
             <h1 className="set-title">Settings</h1>
           </span>
           <button className="set-done" onClick={onClose}>
