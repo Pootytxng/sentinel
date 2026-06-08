@@ -25,9 +25,13 @@ footage — document any deliberate token exceptions in the report).
 ## 2. Densities (new setting: `compy_overlay_density`, default "standard")
 
 - **Minimal:** FPS numeral + tiny "fps" unit. Nothing else.
-- **Standard:** + one mono row: `1% <low> · <temp>°C · gpu <pct>%`.
-- **Full:** + a small frametime line (~120×20, last N samples from the existing stream; spikes
-  visible — that's the point). Pure SVG/canvas polyline updated on the existing tick.
+- **Standard:** + one mono row: `1% low <val> · <temp>°C · gpu <pct>%`. (Label it **"1% low"**,
+  never a bare "1%" — owner feedback: the bare percent reads as a riddle, not a metric.)
+- **Full:** + **`cpu <pct>%`** in the metric row (the overlay already fetches CPU usage via
+  `get_cpu_sensors` — zero new IPC; CPU% only, never CPU temp — no kernel driver) + a small
+  frametime line (~120×20, last N samples from the existing stream; spikes visible — that's the
+  point). Pure SVG/canvas polyline updated on the existing tick. Full row reads:
+  `1% low <val> · <temp>°C · cpu <pct>% · gpu <pct>%`.
 - Density picker lives in Settings (Behavior section) and/or the monitoring controls — owner's
   pick on placement, default Settings. Window size stays as configured; lower densities simply
   render less (no window resize logic this pass).

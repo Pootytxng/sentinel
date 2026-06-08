@@ -36,10 +36,21 @@ describe("Overlay", () => {
     expect(container.querySelector(".ovl2-ft")).toBeFalsy();
   });
 
-  it("standard density shows the 1%/temp/gpu metric row", () => {
+  it("standard density shows the '1% low' / temp / gpu row — and NO cpu (full-only)", () => {
     localStorage.setItem("compy_overlay_v2", "1");
     localStorage.setItem("compy_overlay_density", "standard");
     const { container } = render(<Overlay />);
     expect(container.querySelector(".ovl2-row")).toBeTruthy();
+    expect(screen.getByText(/1% low/)).toBeTruthy(); // labeled metric, not a bare "1%"
+    expect(screen.queryByText(/cpu/)).toBeNull(); // CPU usage is full-density only
+  });
+
+  it("full density adds cpu usage to the row (1% low · temp · cpu · gpu)", () => {
+    localStorage.setItem("compy_overlay_v2", "1");
+    localStorage.setItem("compy_overlay_density", "full");
+    render(<Overlay />);
+    expect(screen.getByText(/1% low/)).toBeTruthy();
+    expect(screen.getByText(/cpu/)).toBeTruthy(); // usage % only — never CPU temp
+    expect(screen.getByText(/gpu/)).toBeTruthy();
   });
 });

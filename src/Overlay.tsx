@@ -124,9 +124,16 @@ export default function Overlay() {
         </div>
         {density !== "minimal" && (
           <div className="ovl2-row">
-            <span>1% {sample ? Math.round(sample.low1_fps) : "—"}</span>
+            <span>1% low {sample ? Math.round(sample.low1_fps) : "—"}</span>
             <span className="ovl2-dot">·</span>
             <span>{gpu?.temperature_c ?? "—"}°C</span>
+            {/* §2: Full density adds CPU USAGE (never CPU temp — no kernel driver); data already fetched. */}
+            {density === "full" && (
+              <>
+                <span className="ovl2-dot">·</span>
+                <span>cpu {cpu ?? "—"}%</span>
+              </>
+            )}
             <span className="ovl2-dot">·</span>
             <span>gpu {gpu?.utilization_gpu_pct ?? "—"}%</span>
           </div>
