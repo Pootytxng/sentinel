@@ -8,6 +8,7 @@ import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { BackButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
+import { readCloseToTray } from "./design/theme";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
@@ -850,6 +851,11 @@ function App() {
   const [gamingEnabled, setGamingEnabled] = useState(false);
   useEffect(() => {
     invoke<boolean>("gaming_mode_enabled").then(setGamingEnabled).catch(() => {});
+  }, []);
+  // Sync the persisted close-to-tray preference to the backend on startup, so the close handler
+  // knows it before the user ever closes the window (default OFF = §1 clean exit until opt-in).
+  useEffect(() => {
+    invoke("set_close_to_tray", { enabled: readCloseToTray() }).catch(() => {});
   }, []);
   // While the Sessions tab is open, mark the latest debrief as seen — clears the "new" badge.
   useEffect(() => {

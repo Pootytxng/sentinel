@@ -24,6 +24,7 @@ mod readiness;
 mod recommendations;
 mod remote_rules;
 mod sessions;
+mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).
 use actions::*;
 use diagnostics::*;
 use export::*;
@@ -584,27 +585,11 @@ pub fn run() {
         // elevated --fps-capture helper returns from main.rs before this builder,
         // so it never registers here and is unaffected.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            use tauri::Manager;
-            match app.get_webview_window("main") {
-                Some(win) => {
-                    let _ = win.unminimize();
-                    let _ = win.show();
-                    let _ = win.set_focus();
-                }
-                None => {
-                    // Single-instance hardening (Train #3 §1, part 2 — defense in depth): the lock
-                    // holder is alive but has NO main window (a ghost from a prior unclean exit). The
-                    // old code did nothing here, so the plugin killed the second launch and NOTHING
-                    // appeared — the "Compy won't open" report. Revive the UI instead of a silent
-                    // no-op: recreate the main window (matches tauri.conf's main window).
-                    use tauri::{WebviewUrl, WebviewWindowBuilder};
-                    let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                        .title("Compy")
-                        .inner_size(800.0, 600.0)
-                        .min_inner_size(380.0, 560.0)
-                        .build();
-                }
-            }
+            // Single-instance hardening (Train #3 §1, part 2): a second launch focuses the existing
+            // window, OR recreates it when the lock holder has none — a ghost from a prior unclean
+            // exit (the old silent no-op was the "Compy won't open" report) OR a window hidden to the
+            // tray (relaunch-while-trayed restores it). Shared restore logic so both paths match.
+            crate::tray::show_or_recreate_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -660,24 +645,39 @@ pub fn run() {
             stop_gaming_session,
             get_gaming_session_state,
             recover_gaming_session,
+            tray::set_close_to_tray,
         ])
         .on_window_event(|window, event| {
-            // Close = quit (Train #3 §1 — clean exit). The overlay is a CONFIG-DECLARED window, so
-            // closing the main window would otherwise leave it (hidden) keeping the process alive as a
-            // windowless ghost — which both holds the single-instance lock (→ "Compy won't open") AND
-            // keeps the FPS heartbeat refreshing so the elevated helper never self-exits. So when MAIN
-            // closes: tear down capture (helper self-exits ~0.5s) + exit the whole app.
+            // Close behavior (Train #3 §1 — clean exit), now with the opt-in tray branch.
+            // The overlay is a CONFIG-DECLARED window, so closing main would otherwise leave it
+            // (hidden) keeping the process alive as a windowless GHOST — holding the single-instance
+            // lock (→ "Compy won't open") AND keeping the FPS heartbeat refreshing so the elevated
+            // helper never self-exits.
+            //   • Default (tray OFF): tear down capture + exit the whole app — exactly §1.
+            //   • Tray ON (opt-in): HIDE main to the VISIBLE tray icon (not a ghost — the icon is the
+            //     honest "still running" signal). Capture lifecycle untouched; the tray's Quit does
+            //     the full §1 teardown.
             use tauri::Manager;
             if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    crate::monitoring::shutdown_for_exit();
-                    window.app_handle().exit(0);
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if crate::tray::close_to_tray_enabled() {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        crate::monitoring::shutdown_for_exit();
+                        window.app_handle().exit(0);
+                    }
                 }
             }
         })
         .setup(|app| {
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
+            // Build the (always-present) tray icon; the close-to-tray BEHAVIOR stays gated on the
+            // opt-in flag, so an unconfigured user still gets the §1 clean exit.
+            if let Err(e) = crate::tray::init(app.handle()) {
+                eprintln!("[compy] tray init failed (continuing without tray): {e}");
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

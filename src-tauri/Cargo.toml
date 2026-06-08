@@ -18,7 +18,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `tray-icon` enables the opt-in "minimize to tray" (Behavior setting, default OFF — close still
+# fully exits per Train #3 §1). Backend-only API; adds no webview capability.
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 # Single-instance guard: a second launch focuses the existing main window instead
 # of starting another process — prevents two windows racing history.json. Backend

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   type InstrumentTheme,
   type Ambiance,
@@ -9,6 +10,8 @@ import {
   persistAmbiance,
   readStepAsideGame,
   persistStepAsideGame,
+  readCloseToTray,
+  persistCloseToTray,
   type OverlayDensity,
   readOverlayDensity,
   persistOverlayDensity,
@@ -122,6 +125,7 @@ export default function Settings({
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
+  const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [reduced, setReduced] = useState<boolean>(() => {
     try {
@@ -158,6 +162,12 @@ export default function Settings({
     persistStepAsideGame(v);
     // Let a mounted backdrop react immediately (it re-reads on this event).
     window.dispatchEvent(new Event("compy:stepaside-changed"));
+  };
+  // Close-to-tray: persist + sync the backend gate. Default OFF keeps the §1 clean exit until opt-in.
+  const changeCloseToTray = (v: boolean) => {
+    setCloseToTray(v);
+    persistCloseToTray(v);
+    invoke("set_close_to_tray", { enabled: v }).catch(() => {});
   };
   // Overlay density persists to localStorage; the overlay (separate window) reacts via `storage`.
   const changeDensity = (d: OverlayDensity) => {
@@ -237,6 +247,21 @@ export default function Settings({
               </div>
             </div>
             <Toggle on={stepAside} onChange={changeStepAside} ariaLabel="Step aside when I play" />
+          </div>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">When I close, keep Compy running in the tray</div>
+              <div className="set-row-sub">
+                Off (default): closing fully quits Compy. On: closing tucks it into the system tray —
+                you'll see the Compy icon there. Right-click it for Show or Quit; hover for live FPS
+                while you play.
+              </div>
+            </div>
+            <Toggle
+              on={closeToTray}
+              onChange={changeCloseToTray}
+              ariaLabel="When I close, keep Compy running in the tray"
+            />
           </div>
           <div className="set-row">
             <div className="set-row-text">

@@ -848,10 +848,13 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     break;
                 }
                 let elapsed = start.elapsed().as_secs() as u32;
+                // Tooltip carry-over: the live tray tooltip reuses this tick's data (no new IPC).
+                let mut tip: Option<(f64, f64)> = None;
                 if let Ok(txt) = std::fs::read_to_string(fps_out_path()) {
                     if let Ok(s) = serde_json::from_str::<FpsSample>(&txt) {
                         if s.fps > 0.0 {
                             acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps);
+                            tip = Some((s.fps, s.low1_fps));
                             if s.low1_fps > 0.0 && timeline.len() < 7200 {
                                 timeline.push((elapsed, s.low1_fps));
                             }
@@ -860,6 +863,11 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 }
                 let gpus = get_gpu_sensors();
                 let gpu_temp = gpus.iter().filter_map(|g| g.temperature_c).max();
+                // Update the (opt-in) tray tooltip from data we already have this tick.
+                match tip {
+                    Some((fps, low1)) => crate::tray::update_live(fps, low1, gpu_temp),
+                    None => crate::tray::set_monitoring_on(),
+                }
                 let gpu_usage = gpus.iter().filter_map(|g| g.utilization_gpu_pct).max();
                 let gpu_clock = gpus.iter().filter_map(|g| g.graphics_clock_mhz).max();
                 let cpu = get_cpu_sensors();
@@ -966,6 +974,7 @@ pub(crate) fn stop_fps_capture() {
     *fps_status_slot().lock().unwrap() = "idle".into();
     let _ = std::fs::remove_file(fps_alive_path());
     let _ = std::fs::remove_file(fps_out_path());
+    crate::tray::set_idle();
 }
 
 /// Latest captured frametimes for the active game (process name + per-frame ms), if the FPS

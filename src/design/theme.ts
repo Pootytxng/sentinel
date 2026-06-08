@@ -98,6 +98,28 @@ export function persistStepAsideGame(on: boolean): void {
   }
 }
 
+// Close-to-tray (opt-in "minimize to tray"). DEFAULT OFF — closing the window fully exits per
+// Train #3 §1 unless the user opts in. The backend mirrors this flag via the `set_close_to_tray`
+// command (synced on startup + on change); localStorage is the source of truth across launches.
+const CLOSE_TO_TRAY_KEY = "compy_close_to_tray";
+
+export function readCloseToTray(): boolean {
+  try {
+    return localStorage.getItem(CLOSE_TO_TRAY_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function persistCloseToTray(on: boolean): void {
+  try {
+    localStorage.setItem(CLOSE_TO_TRAY_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
 // In-game overlay density (spec 2026-06-06-overlay-redress §2). minimal = FPS only; standard = +
 // 1%/temp/gpu row; full = + frametime line. Read by the overlay window; set in Settings (the main
 // window) — they're separate windows, so the overlay reacts via the cross-window `storage` event.
