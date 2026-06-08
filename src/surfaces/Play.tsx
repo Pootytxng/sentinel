@@ -76,7 +76,6 @@ export default function Play({
   );
   const [armed, setArmed] = useState<ArmedLite>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
-  const [monitorOpen, setMonitorOpen] = useState(false);
 
   // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
   useEffect(() => {
@@ -229,20 +228,17 @@ export default function Play({
         </div>
       </div>
 
-      {/* Full monitoring — the deep classic Monitoring panels (memory pressure, per-core, charts)
-          embedded in place (no route). Mounted only when expanded so it polls only then. */}
+      {/* Full monitoring — the deep classic Monitoring panels (memory pressure, per-core, charts),
+          ALWAYS inline (§3: no dropdown — Play is monitoring's home turf, so it shouldn't be a door on
+          its own page). Polling stays gated by MonitoringTab's `active` prop (only while Play is the
+          live room), so the cost stays honest without a collapse. */}
       {deepMonitoring && (
         <div className="play-monitor">
-          <button
-            className="play-monitor-head cmp-door"
-            onClick={() => setMonitorOpen((o) => !o)}
-            aria-expanded={monitorOpen}
-          >
+          <div className="play-monitor-head">
             <span className="play-monitor-title">Full monitoring &amp; charts</span>
             <span className="play-monitor-sub">memory pressure · per-core · live graphs</span>
-            <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
-          </button>
-          {monitorOpen && <div className="play-monitor-body">{deepMonitoring}</div>}
+          </div>
+          <div className="play-monitor-body">{deepMonitoring}</div>
         </div>
       )}
 
