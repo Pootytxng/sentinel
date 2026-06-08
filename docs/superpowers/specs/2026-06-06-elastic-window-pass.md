@@ -100,6 +100,25 @@ leans on tooltips (hover-discovery) — retired.
 
 Re-acceptance: at the 380×560 floor every room name is readable and tappable, the active room
 is obvious, zero anonymous dots anywhere, and the owner re-drags and blesses the feel.
+
+## 8. Rail mis-render at medium width — the "stray tile" was nav.rail (owner Inspect, 2026-06-06)
+
+The reported floating "icon tile" on Check is `<nav class="rail">` itself, collapsing to a small
+orphaned box at MEDIUM width (the gap between the wide vertical rail and the <720 bottom bar) —
+the six nav glyphs squish into a square that reads as a stray mark. DOM: `main.app > div.shell
+(flex) > nav.rail + div.content`. The medium-width rail mode (intended: horizontal icon+label
+strip across the top of the content) isn't taking — the rail shrinks to content instead of
+laying out as the strip.
+
+Fix: close the breakpoint gap so the rail is ALWAYS exactly one of its three intended forms —
+wide vertical column · medium horizontal strip · narrow bottom bar — with NO width producing a
+shrunk box. Likely: the medium strip needs explicit full-width + horizontal flex direction (the
+shell's flex-direction switch and the rail's own layout must agree at the same breakpoint).
+Verify by dragging slowly through the wide→medium→narrow boundaries — the rail transforms
+cleanly at each, never collapses to a tile at any intermediate width.
+
+- [ ] No width (floor→ultrawide, dragged slowly through every boundary) renders the rail as an
+      orphaned box; it's always column / strip / bottom-bar, transitioning cleanly.
 - [ ] All six rooms + Settings usable at the 380×560 floor (walk each, act in each).
 - [ ] Narrow mode: icon-only rail + persistent current-room name + tooltips (wayfinding law
       amendment honored — no mystery icons without a location indicator).

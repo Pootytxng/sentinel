@@ -2490,23 +2490,13 @@ body::before {
   box-shadow: 0 0 16px -4px var(--accent-glow);
 }
 
-/* ── Responsive — narrow / half-screen windows ───────────────────────────── */
-@media (max-width: 900px) {
-  .app { padding: 16px; }
-  .rail { width: 50px; padding: 6px; }
-  .rail-label { display: none; }
-  .rail-item { justify-content: center; padding: 11px 0; gap: 0; }
-  .rail-badge {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    min-width: 15px;
-    height: 15px;
-    font-size: 9px;
-    padding: 0 3px;
-  }
-  .shell { gap: 12px; }
-}
+/* (elastic §8) The legacy `@media (max-width: 900px)` block was REMOVED. It collapsed `.rail` to
+   `width: 50px` + hid labels — and because it sat AFTER the elastic medium block (≤1080, which makes
+   the rail a full-width horizontal strip), at 720–900px it overrode `width:100%` back to 50px while
+   the shell was column + the rail was flex-row → the six glyphs squished into the reported orphaned
+   ~50px box. With it gone, the rail is always exactly one of its three forms: wide vertical column
+   (>1080) · medium horizontal strip (720–1080) · narrow bottom bar (<720). No intermediate width
+   shrinks it. */
 /* ── Theme picker ────────────────────────────────────────────────────────── */
 .theme-picker { position: relative; }
 .theme-trigger {
