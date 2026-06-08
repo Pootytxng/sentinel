@@ -113,6 +113,26 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🖥️ "YOUR HARDWARE" GRID RESTORED TO THE REAL HOME (owner regression) + REBUILD — 2026-06-08 (`main` @ `7b8758b`).**
+> Owner caught it live: the detailed hardware cards were NOT on the shipped Home. The CommandCenter
+> (`compy_home_v2`, release default) showed only the one-line `cc-rig` header summary; the full
+> "Your hardware" card grid (incl. the elastic §6 Network card) lived ONLY in the classic Overview
+> (flag-off), so it vanished from the default Home at redesign-ship. (Owner had explicitly signed off to
+> KEEP that grid.) Fix (`7b8758b`, spec `docs/superpowers/specs/2026-06-08-restore-hardware-grid-home.md`,
+> committed `5ac7ae7`): extracted the cards into a SHARED `src/surfaces/HardwareGrid.tsx` (+
+> `hardware-format.ts` for `fmtGB`/`fmtGHz`) rendered in BOTH the classic Overview AND the CommandCenter
+> Home (as a "Your hardware" section below Last Session) — one source, can't drift again. Exported
+> `HardwareInfo`/`GpuInfo` from App; CommandCenter's `hw` prop widened `HwSnapshot`→full `HardwareInfo`
+> (type-only import, erased → no runtime cycle); test mock expanded. The §6 Network card now shows on the
+> DEFAULT Home. Responsive via the existing elastic `.grid` (flex-wrap, `flex:1 1 260px`, `min-width:0` →
+> single column at the 380px floor). Frontend-only, tokens-only, ZERO new IPC; tsc+vite clean, npm **192**
+> green, /check clean. **OPEN (owner): eyeball the grid + its reflow at the floor.**
+> - **✅ REBUILD (2026-06-08 16:00):** owner-clarity build from `7b8758b` (`CODEGEN_UNITS=256`) folds in
+>   THIS grid restore on top of game-mode + tray + the bench. **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `4F2DAB74AF468A1C8E8B9FE3391B48CA4D79E0A839C8F44D0120236EC351CD49`** (2,741,048 B) + MSI — SUPERSEDES
+>   the 13:33 `64ED16C4…` build. Still owner-clarity only (installed app = current `main`); `beta-kit/` +
+>   frozen refs (`16069fa`) UNTOUCHED; tray + §4 apply-all QA still pending before any tester ship.
+
 > **🎮🪟 GAME-MODE PERSISTENCE FIX + OPT-IN TRAY LANDED, + ONE OWNER-CLARITY REBUILD — 2026-06-08 (`main` @ `1ede299`).**
 > Two owner items (spec `docs/superpowers/specs/2026-06-08-game-mode-fix-and-tray.md`, committed `c60f70c`):
 > - **(A) Game Mode persistence fix** (`d8c702e`) — correctness-class. Root cause of "never stays on
