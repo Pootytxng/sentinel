@@ -187,12 +187,15 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
               {phys.length === 0 ? (
                 <Detail k="Status" v="No physical adapter detected" />
               ) : (
+                // Stack name over status (names are long); the medium ("Ethernet"/"Wi-Fi") already
+                // shows in the card value, so the status drops it — just Connected / Not connected.
                 phys.map((a, i) => (
-                  <Detail
-                    key={i}
-                    k={a.name}
-                    v={a.connected ? `Connected · ${mediumLabel(a.medium)}` : "Not connected"}
-                  />
+                  <div key={i} className="net-adapter">
+                    <span className="net-adapter-name">{a.name}</span>
+                    <span className="net-adapter-status">
+                      {a.connected ? "Connected" : "Not connected"}
+                    </span>
+                  </div>
                 ))
               )}
             </Card>

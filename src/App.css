@@ -332,7 +332,29 @@ html, body, #root {
 .detail-value {
   color: var(--fg);
   text-align: right;
-  word-break: break-word;
+  /* Never break mid-word — wrap only at spaces/separators (same law as the "16 threads" elastic
+     fix). break-word/break-all here mangled long values ("Conne cted") when the column was starved. */
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+/* Network adapter rows STACK (full-width name over status). Adapter names are long ("Realtek PCIe
+   5GbE Family Controller"), so a name-left/status-right Detail row starved + mid-word-broke the
+   status. Stacked, the name wraps whole-word and the status sits full-width below it. */
+.net-adapter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.net-adapter-name {
+  color: var(--fg);
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.net-adapter-status {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .footer {
