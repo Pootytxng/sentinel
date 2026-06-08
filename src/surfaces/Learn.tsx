@@ -49,6 +49,30 @@ const FILTERS: { key: Filter; label: string }[] = [
 // Cycling placeholder examples (spec §2). Static first example under prefers-reduced-motion.
 const PLACEHOLDERS = ['xmp', 'frame gen', 'tiny11', 'deep scan', '1% lows'];
 
+// §5 de-overload — a one-line summary for the COLLAPSED row (the full body shows on expand).
+function oneLiner(entry: KnowledgeEntry): string {
+  switch (entry.type) {
+    case "tweak":
+      return entry.what;
+    case "term":
+      return entry.what;
+    case "trick":
+      return entry.pattern;
+    case "guide":
+      return entry.goal;
+  }
+}
+
+// §5 verdict filter chips — narrow tweaks by our verdict, alongside the type filters + search.
+const VERDICT_FILTERS: { key: TweakVerdict; label: string }[] = [
+  { key: "real", label: "Real" },
+  { key: "placebo", label: "Placebo" },
+  { key: "risky", label: "Risky" },
+];
+
+// §5 category order for the collapsed browse sections (guides first — they're the "start here" doers).
+const CATEGORY_ORDER: KnowledgeType[] = ["guide", "tweak", "term", "trick"];
+
 function EntryBody({ entry }: { entry: KnowledgeEntry }) {
   switch (entry.type) {
     case "tweak":
@@ -105,40 +129,51 @@ function typePill(type: KnowledgeType): string {
 
 function EntryCard({
   entry,
+  defaultOpen = false,
   onNavigate,
   registerRef,
   vendor,
 }: {
   entry: KnowledgeEntry;
+  defaultOpen?: boolean;
   onNavigate: (id: string) => void;
   registerRef: (el: HTMLDivElement | null) => void;
   vendor: GpuVendor;
 }) {
+  // §5 de-overload: rows are COMPRESSED to name + kind + one-liner and expand IN PLACE (the same
+  // expand grammar the autopsy uses). Deep-linked entries open by default. Zero copy changes.
+  const [open, setOpen] = useState(defaultOpen);
   const related = relatedIds(entry, KNOWLEDGE);
   const walkthrough = walkthroughForKey(entry.id);
   // Tweak cards take the verdict color on their edge; other types take their kind color.
   const accent = entry.type === "tweak" ? `lx-card-${entry.verdict}` : `lx-card-${entry.type}`;
   return (
-    <div ref={registerRef} className={`lx-card ${accent}`} data-kl-id={entry.id}>
-      <div className="lx-card-head">
+    <div ref={registerRef} className={`lx-card ${accent} ${open ? "lx-card-open" : ""}`} data-kl-id={entry.id}>
+      <button className="lx-card-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="lx-name">{entry.name}</span>
         <span className={`lx-typepill lx-typepill-${entry.type}`}>{typePill(entry.type)}</span>
-      </div>
-      <EntryBody entry={entry} />
-      {walkthrough && (
-        <details className="lx-walkthrough">
-          <summary>Show me the way</summary>
-          <Walkthrough walkthrough={walkthrough} vendor={vendor} />
-        </details>
-      )}
-      {related.length > 0 && (
-        <div className="lx-related">
-          <span className="lx-related-label">Related</span>
-          {related.map((id) => (
-            <button key={id} className="lx-chip" onClick={() => onNavigate(id)}>
-              {KNOWLEDGE_BY_ID.get(id)!.name}
-            </button>
-          ))}
+        {!open && <span className="lx-oneliner">{oneLiner(entry)}</span>}
+        <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
+      </button>
+      {open && (
+        <div className="lx-card-body">
+          <EntryBody entry={entry} />
+          {walkthrough && (
+            <details className="lx-walkthrough">
+              <summary>Show me the way</summary>
+              <Walkthrough walkthrough={walkthrough} vendor={vendor} />
+            </details>
+          )}
+          {related.length > 0 && (
+            <div className="lx-related">
+              <span className="lx-related-label">Related</span>
+              {related.map((id) => (
+                <button key={id} className="lx-chip" onClick={() => onNavigate(id)}>
+                  {KNOWLEDGE_BY_ID.get(id)!.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -371,6 +406,8 @@ export default function Learn({
   });
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [verdict, setVerdict] = useState<TweakVerdict | "all">("all"); // §5 verdict chips
+  const [openCats, setOpenCats] = useState<Set<KnowledgeType>>(new Set()); // §5 collapsed categories
   const [focused, setFocused] = useState<string | null>(focusId);
   const [phIdx, setPhIdx] = useState(0);
   const deferredQ = useDeferredValue(q); // keeps the input snappy; dataset is tiny so results are instant
@@ -383,6 +420,9 @@ export default function Learn({
       setFocused(focusId);
       setQ("");
       setFilter("all");
+      setVerdict("all");
+      const e = KNOWLEDGE_BY_ID.get(focusId);
+      if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category so it's reachable
     }
   }, [focusId]);
 
@@ -404,9 +444,14 @@ export default function Learn({
   }, []);
 
   const results = useMemo(() => {
-    const hits = searchKnowledge(deferredQ);
-    return filter === "all" ? hits : hits.filter((e) => e.type === filter);
-  }, [deferredQ, filter]);
+    let hits = searchKnowledge(deferredQ);
+    if (filter !== "all") hits = hits.filter((e) => e.type === filter);
+    if (verdict !== "all") hits = hits.filter((e) => e.type === "tweak" && e.verdict === verdict);
+    return hits;
+  }, [deferredQ, filter, verdict]);
+
+  // §5 "Start here" — the guides are the actionable entry points (capped). Shown only in pure browse.
+  const startHere = useMemo(() => KNOWLEDGE.filter((e) => e.type === "guide").slice(0, 5), []);
 
   // Scroll the focused entry into view and flash it once it's in the rendered list.
   useEffect(() => {
@@ -424,7 +469,10 @@ export default function Learn({
     setMode("browse");
     setQ("");
     setFilter("all");
+    setVerdict("all");
     setFocused(id);
+    const e = KNOWLEDGE_BY_ID.get(id);
+    if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category
   };
 
   return (
@@ -496,26 +544,105 @@ export default function Learn({
                   </button>
                 ))}
               </div>
-              <div className="lx-list">
-                {results.map((e) => (
-                  <EntryCard
-                    key={e.id}
-                    entry={e}
-                    onNavigate={navigateTo}
-                    vendor={vendor}
-                    registerRef={(el) => {
-                      if (el) cardRefs.current.set(e.id, el);
-                      else cardRefs.current.delete(e.id);
-                    }}
-                  />
+              {/* §5 verdict chips — narrow tweaks by our verdict, alongside the type filters. */}
+              <div className="lx-filters lx-vfilters" role="group" aria-label="Filter tweaks by verdict">
+                <button
+                  className={`lx-filter ${verdict === "all" ? "lx-filter-on" : ""}`}
+                  aria-pressed={verdict === "all"}
+                  onClick={() => setVerdict("all")}
+                >
+                  Any verdict
+                </button>
+                {VERDICT_FILTERS.map((v) => (
+                  <button
+                    key={v.key}
+                    className={`lx-filter lx-vfilter-${v.key} ${verdict === v.key ? "lx-filter-on" : ""}`}
+                    aria-pressed={verdict === v.key}
+                    onClick={() => setVerdict(v.key)}
+                  >
+                    {v.label}
+                  </button>
                 ))}
-                {results.length === 0 && (
-                  <div className="lx-empty">
-                    No entry for that yet — we only answer what we've verified. If you're unsure about a
-                    tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.
-                  </div>
-                )}
               </div>
+              {results.length === 0 ? (
+                <div className="lx-empty">
+                  No entry for that yet — we only answer what we've verified. If you're unsure about a
+                  tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.
+                </div>
+              ) : !deferredQ.trim() && filter === "all" && verdict === "all" ? (
+                // §5 PURE BROWSE — "Start here" strip + collapsed category sections (the calm open).
+                <>
+                  <div className="lx-starthere">
+                    <span className="lx-starthere-label">Start here</span>
+                    <div className="lx-starthere-row">
+                      {startHere.map((e) => (
+                        <button key={e.id} className="lx-starthere-chip" onClick={() => navigateTo(e.id)}>
+                          {e.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {CATEGORY_ORDER.map((type) => {
+                    const items = results.filter((e) => e.type === type);
+                    if (items.length === 0) return null;
+                    const isOpen = openCats.has(type);
+                    return (
+                      <div key={type} className="lx-cat">
+                        <button
+                          className="lx-cat-head cmp-door"
+                          aria-expanded={isOpen}
+                          onClick={() =>
+                            setOpenCats((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(type)) n.delete(type);
+                              else n.add(type);
+                              return n;
+                            })
+                          }
+                        >
+                          <span className="lx-cat-title">{TYPE_LABEL[type]}s</span>
+                          <span className="lx-cat-count">{items.length}</span>
+                          <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
+                        </button>
+                        {isOpen && (
+                          <div className="lx-list">
+                            {items.map((e) => (
+                              <EntryCard
+                                key={e.id === focused ? `${e.id}-f` : e.id}
+                                entry={e}
+                                defaultOpen={e.id === focused}
+                                onNavigate={navigateTo}
+                                vendor={vendor}
+                                registerRef={(el) => {
+                                  if (el) cardRefs.current.set(e.id, el);
+                                  else cardRefs.current.delete(e.id);
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                // Searching or filtering → a flat list of compressed matches (names stay visible).
+                <div className="lx-list">
+                  {results.map((e) => (
+                    <EntryCard
+                      key={e.id === focused ? `${e.id}-f` : e.id}
+                      entry={e}
+                      defaultOpen={e.id === focused}
+                      onNavigate={navigateTo}
+                      vendor={vendor}
+                      registerRef={(el) => {
+                        if (el) cardRefs.current.set(e.id, el);
+                        else cardRefs.current.delete(e.id);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
