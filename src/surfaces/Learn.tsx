@@ -73,6 +73,19 @@ const VERDICT_FILTERS: { key: TweakVerdict; label: string }[] = [
 // §5 category order for the collapsed browse sections (guides first — they're the "start here" doers).
 const CATEGORY_ORDER: KnowledgeType[] = ["guide", "tweak", "term", "trick"];
 
+// §7 — detect a URL PASTE into the autopsy. Fetching URLs is off the table ("nothing leaves your PC"
+// is a shipped promise), but silent non-registration is a doorknob violation. Returns the source kind
+// for in-voice coaching, or null. A mixed paste (URL + substantial prose) returns null → we grade the
+// prose and ignore the URL. NEVER fetches; pure string inspection.
+function detectUrlPaste(text: string): "youtube" | "webpage" | null {
+  const urls = text.match(/https?:\/\/\S+/gi);
+  if (!urls || urls.length === 0) return null;
+  const withoutUrls = text.replace(/https?:\/\/\S+/gi, " ").trim();
+  const words = withoutUrls ? withoutUrls.split(/\s+/).length : 0;
+  if (words >= 8) return null; // mixed paste with real text — grade the text, ignore the link
+  return /(?:youtube\.com|youtu\.be)/i.test(urls.join(" ")) ? "youtube" : "webpage";
+}
+
 function EntryBody({ entry }: { entry: KnowledgeEntry }) {
   switch (entry.type) {
     case "tweak":
@@ -338,6 +351,9 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
     persistAutopsy("", false);
   };
 
+  // §7 — a URL paste gets honest coaching, never silent non-registration (and never a fetch).
+  const urlKind = detectUrlPaste(text);
+
   return (
     <div className="lx-autopsy">
       <p className="lx-sub">
@@ -359,7 +375,7 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
       <div className="lx-autopsy-actions">
         <button
           className="lx-btn"
-          disabled={!text.trim()}
+          disabled={!text.trim() || !!urlKind}
           onClick={() => {
             setResult(autopsyScan(text));
             persistAutopsy(text, true);
@@ -373,8 +389,24 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
           </button>
         )}
       </div>
-      {result && (
-        <AutopsyResultView result={result} text={text} onNavigate={onNavigate} onClear={clear} />
+      {/* §7 — honest in-voice coaching for a pasted link; reinforces the privacy promise at the exact
+          moment it costs the user something. NO fetch, NO domain/title grading of unread pages. */}
+      {urlKind ? (
+        <div className="lx-urlcard" role="status">
+          <p className="lx-urlcard-lead">
+            That's a link — and Compy never fetches the internet (nothing leaves your PC; that's the
+            deal). Bring me the words instead:
+          </p>
+          <p className="lx-urlcard-how">
+            {urlKind === "youtube"
+              ? "Open the video's transcript (⋯ menu → Show transcript) → copy → paste here."
+              : "Open the page → Ctrl+A, Ctrl+C → paste here. I'll grade every claim."}
+          </p>
+        </div>
+      ) : (
+        result && (
+          <AutopsyResultView result={result} text={text} onNavigate={onNavigate} onClear={clear} />
+        )
       )}
     </div>
   );

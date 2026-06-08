@@ -637,3 +637,24 @@
     transition: none;
   }
 }
+
+/* ── §7 URL-paste coaching card (honest, no fetch) ─────────────────────────── */
+.lx-urlcard {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--ix-radius);
+  border: 1px solid var(--accent-line, rgba(46, 230, 192, 0.3));
+  background: var(--accent-soft, rgba(46, 230, 192, 0.08));
+}
+.lx-urlcard-lead {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ix-text-1);
+}
+.lx-urlcard-how {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}

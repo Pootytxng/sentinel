@@ -36,6 +36,40 @@ describe("Learn surface (reskin)", () => {
     expect(screen.queryByText("XMP / EXPO memory profile", { selector: title })).not.toBeInTheDocument();
   });
 
+  it("§7: pasting a bare YouTube link gets honest coaching — no fetch, grading disabled", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
+      target: { value: "https://www.youtube.com/watch?v=abc123" },
+    });
+    expect(screen.getByText(/Compy never fetches the internet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Show transcript/i)).toBeInTheDocument(); // YouTube-specific path
+    const grade = screen.getByRole("button", { name: "Grade this guide" }) as HTMLButtonElement;
+    expect(grade.disabled).toBe(true);
+  });
+
+  it("§7: a webpage link coaches the copy-the-text path", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
+      target: { value: "https://example.com/best-gaming-tweaks-2026" },
+    });
+    expect(screen.getByText(/Ctrl\+A, Ctrl\+C/i)).toBeInTheDocument();
+  });
+
+  it("§7: a mixed paste (link + real text) still grades the text, ignoring the link", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
+      target: {
+        value: "turn on game mode and force hpet from https://example.com to boost fps now please",
+      },
+    });
+    expect(screen.queryByText(/Compy never fetches the internet/i)).not.toBeInTheDocument();
+    const grade = screen.getByRole("button", { name: "Grade this guide" }) as HTMLButtonElement;
+    expect(grade.disabled).toBe(false);
+  });
+
   it("autopsy grades a guide, expands rows in place, and offers a full-entry link (continuity §3)", () => {
     open();
     fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
