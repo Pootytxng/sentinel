@@ -113,7 +113,42 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
-> **🔧 POST-REBUILD BENCH (reversible polish on `main`, NOT yet re-bundled into the kit) — 2026-06-08 (`main` @ `faa4c52`).**
+> **🎮🪟 GAME-MODE PERSISTENCE FIX + OPT-IN TRAY LANDED, + ONE OWNER-CLARITY REBUILD — 2026-06-08 (`main` @ `1ede299`).**
+> Two owner items (spec `docs/superpowers/specs/2026-06-08-game-mode-fix-and-tray.md`, committed `c60f70c`):
+> - **(A) Game Mode persistence fix** (`d8c702e`) — correctness-class. Root cause of "never stays on
+>   through reboot / kept needing re-apply" (owner export: applied 5×) was NOT a key-name mismatch
+>   (detect+apply already agreed on `AutoGameModeEnabled`): the apply wrote only HALF the pair, leaving
+>   `AllowAutoGameMode=0` — the master Windows reconciles against on login, which reset
+>   `AutoGameModeEnabled` to 0 on reboot. Fix mirrors the Settings UI: apply/detect/rollback the PAIR
+>   (`AllowAutoGameMode` + `AutoGameModeEnabled`) via shared `actions::` consts; `Snapshot::GameMode`
+>   gained `#[serde(default)] prior_allow` (pre-fix typed ledger entries still deserialize → rollback-
+>   first integrity intact). Read-after-write regression test (real HKCU, self-restoring) + pre-fix-
+>   snapshot deserialize test. Rollback contract unchanged; non-elevated HKCU only; old ledger dupes
+>   left (honest history) — detection just stops generating new ones. **Live-proven on the AMD dev rig;
+>   owner reboot-persist confirmation still nice-to-have but the mechanism is verified + doc-backed.**
+> - **(B) Opt-in system tray** (`1ede299`) — §1-COMPATIBLE BY DESIGN. Default OFF (close = full §1 clean
+>   exit). Settings → Behavior toggle makes close HIDE to a VISIBLE pulse-C tray icon (icon visibility
+>   tracks the flag — no stray icon when off); right-click Show/Quit (Quit = full §1 teardown);
+>   left-click + relaunch-while-trayed restore the window (reuses the §1 single-instance hardening,
+>   deduped into `tray::show_or_recreate_main`). v1 hover = TEXT tooltip with live stats from the
+>   EXISTING monitoring tick, zero new IPC ("Compy · 178 fps · 1% low 133 · gpu 65°C" / "monitoring
+>   off"; GPU temp only, never CPU). One tiny `set_close_to_tray(bool)` IPC syncs the persisted pref to
+>   the close gate (default-OFF `AtomicBool`, unit-tested via a GUI-free pure store split). Rich visual
+>   flyout = recorded **v2**, not now. `tauri` gains the backend-only `tray-icon` feature.
+> - **Verify:** cargo **226** green + zero warnings; §1 heartbeat regression still passes; npm **192**
+>   green + tsc/vite clean. **/check + /security clean on BOTH trains.** Capabilities/CSP/updater/
+>   remote-fetch/locked-gates all untouched.
+> - **✅ ONE OWNER-CLARITY REBUILD (2026-06-08 13:33):** `npm run tauri build` (`CODEGEN_UNITS=256`,
+>   14 GB free) from `1ede299` → folds in A + B **+ the post-rebuild bench (Confirm Dialog, overlay §2,
+>   rail fix) that was previously NOT re-bundled.** **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `64ED16C4CA4C1622EB3AC9B09C910E85AE6BB2B8F66E33297432BAA8260FAB35`** (2,741,750 B) + MSI
+>   (4,100,096 B) in `src-tauri/target/release/bundle/`. **This is for the OWNER's clarity (installed app
+>   = current `main`) — NOT a beta send: the `beta-kit/` zip + frozen beta refs (`16069fa`) are
+>   UNTOUCHED.** Tray + the §4 apply-all batching still want their own manual QA before any tester ship.
+> - **OPEN (owner, non-blocking):** install this build + eyeball the tray (toggle on → close → tray icon →
+>   hover tooltip while a game runs → Show/Quit); optional Game-Mode reboot-persist spot-check.
+
+> **🔧 POST-REBUILD BENCH (reversible polish on `main`, NOW folded into the 2026-06-08 13:33 owner-clarity build above; beta-kit still NOT re-bundled) — 2026-06-08 (`main` @ `faa4c52`).**
 > All frontend-only, all green (npm **192**; cargo untouched at **223**). These rode the bench AFTER the
 > blessed `6b39c31` rebuild, so the shipped kit installer (NSIS `0D6A5C9A…`) does NOT include them — a
 > future owner-timed rebuild will fold them in:
