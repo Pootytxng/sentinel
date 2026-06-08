@@ -74,6 +74,31 @@ this never becomes optimizer-rot bulk-flipping:
 - Copy law: "Apply all" never implies a performance promise — it's convenience, not a boost
   button.
 
+**§4 STATUS + ONE-ELEVATION DESIGN (recorded 2026-06-08 for clean execution).** Shipped v1 (`d280679`):
+the consent sheet + per-item receipts + failure isolation + safe-tier-only + copy law, via FRONTEND
+orchestration of the existing `apply_recommendation` (zero new IPC, zero new mutation primitive) — but
+it elevates per-item → **N UAC prompts**. The one-elevation batching is the deferred follow-up (owner
+GO 2026-06-07; rides its OWN elevation QA; readies, does not ship — do NOT rebuild the kit for it).
+Design (audited mutation/elevation boundary — care):
+- **Scope/de-risk (verified):** the safe-tier batch's ELEVATED set (reserved-storage-off, fast-startup-off,
+  nvidia-telemetry, hags-enable, + verify eee/nagle) is pure-PS — each does non-mutating *reads* then
+  one `run_elevated_powershell`. The non-elevated safe recs (game-mode, game-bar, visual-effects,
+  mouse-accel) are HKCU winreg (no UAC) → run their existing path unchanged, no batching. CRUCIALLY the
+  only `exit`-using elevated cmd, `apply_power_ultimate`, is **moderate-tier → excluded** → inline
+  PS composition is clean (no `exit` to abort the batch).
+- **Seam = a thread-local deferral sink in `run_elevated_powershell`:** in batch mode it pushes the
+  command to the sink + returns Ok (deferred) instead of running. The `apply_*` stay UNCHANGED (safe
+  because the elevated ones do only reads + the PS — no winreg writes — so deferring causes NO partial
+  mutation). Batch: enable sink → call each `apply_X` (non-elevated applies immediately + ledgers;
+  elevated defer their cmd, grouped per-rec by sink-length delta) → ONE inline elevated `-Command`
+  (`$ErrorActionPreference='Stop'`; per rec `try { <cmds>; 'id:ok'|Add-Content $rf } catch {
+  'id:fail'|Add-Content $rf }` to a temp RESULT file) → `run_elevated_powershell` once (one UAC) → parse
+  the result file → write a ledger receipt per OK item (the typed snapshot/rollback `apply_X` already
+  returned). Result FILE is data (no TOCTOU; reading ≠ executing) and the inline `-Command` keeps the
+  current elevation security model (no elevated script file). New orchestrator command only (reuses the
+  audited primitives — not a new mutation primitive). Regression test: one rec's cmd fails → skipped +
+  reported, the rest apply + ledger. /check + /security required.
+
 ## §5 Learn — de-overload pass (structure only; voice/content untouched)
 
 **Report: information overload in Learn.** 116 entries need progressive disclosure:
