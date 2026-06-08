@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppliedChange, GameReadiness, Priorities, PriorityItem, SessionSummary } from "../types";
+import type { HardwareInfo } from "../App";
 import { AmbientBackdrop } from "../design/AmbientBackdrop";
 import { Wordmark } from "../design/Wordmark";
 import { BackButton } from "../design/BackButton";
@@ -15,21 +16,13 @@ import {
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
+import { HardwareGrid } from "./HardwareGrid";
 import "./CommandCenter.css";
 
 // ─── Structural prop subsets ────────────────────────────────────────────────
-// HardwareInfo / Recommendation live (inline) in App.tsx; we accept the exact fields the surface
-// reads. Object covariance makes passing the fuller App objects type-safe without re-exporting them.
-type HwSnapshot = {
-  cpu_brand: string;
-  cpu_cores_logical: number;
-  ram_total_bytes: number;
-  os_name: string;
-  os_version: string;
-  gpus: { name: string }[];
-  cpu_arch: { family_label: string } | null;
-  windows_version: { product_name: string } | null;
-};
+// The Home now renders the shared HardwareGrid (the detailed "Your hardware" cards), which reads the
+// full hardware shape — so we take the real HardwareInfo (type-only import, erased at build → no
+// runtime cycle). The header still reads just a few fields off it.
 type Rec = {
   id: string;
   currently_applied: boolean;
@@ -37,7 +30,7 @@ type Rec = {
 };
 
 type Props = {
-  hw: HwSnapshot;
+  hw: HardwareInfo;
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   sessions: SessionSummary[];
@@ -453,6 +446,14 @@ export default function CommandCenter(props: Props) {
           />
 
           <LiveStrip sessions={sessions} progress={progress} />
+
+          {/* "Your hardware" — the detailed card grid (incl. the elastic §6 Network card), shared with
+              the classic Overview via HardwareGrid so the two Homes can't drift. Restores the owner-
+              approved grid to the default Home, below Last Session. Same `hw`, zero new IPC; the global
+              `.grid` reflows responsively (flex-wrap, min-width:0) down to the 380px floor. */}
+          <section className="cc-hardware">
+            <HardwareGrid hw={hw} />
+          </section>
           {/* Appearance controls (theme + ambiance) live in Settings → Appearance now (smalls §4) —
               the canvas stays clean; the rail's Settings gear is the way there. */}
         </div>

@@ -9,6 +9,8 @@ import { Wordmark } from "./design/Wordmark";
 import { BackButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
 import { readCloseToTray } from "./design/theme";
+import { HardwareGrid } from "./surfaces/HardwareGrid";
+import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import { LatencyTab } from "./surfaces/Latency";
@@ -40,7 +42,7 @@ type DiskInfo = {
   file_system: string;
 };
 
-type GpuInfo = {
+export type GpuInfo = {
   name: string;
   vram_bytes: number;
   driver_version: string;
@@ -90,7 +92,7 @@ type CpuArchInfo = {
 // shown to users), `medium` is "wired" | "wifi" | "other". Serialized snake_case by serde.
 type NetAdapterInfo = { name: string; physical: boolean; medium: string; connected: boolean };
 
-type HardwareInfo = {
+export type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
   cpu_cores_physical: number;
@@ -180,9 +182,6 @@ const APPLIABLE_REC_IDS = new Set<string>([
   "eee-disable",
 ]);
 
-const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");
-
 // Coarse "how long ago" for the Drift Watch "noticed …" line.
 function fmtAgo(iso: string): string {
   const then = new Date(iso).getTime();
@@ -194,14 +193,6 @@ function fmtAgo(iso: string): string {
   const days = Math.round(hrs / 24);
   return days === 1 ? "yesterday" : `${days} days ago`;
 }
-
-const fmtDriver = (g: GpuInfo) => {
-  const version = g.driver_version || "—";
-  if (g.driver_age_days == null) return version;
-  const months = Math.floor(g.driver_age_days / 30);
-  const age = months < 1 ? "<1 mo" : months === 1 ? "1 mo" : `${months} mo`;
-  return `${version} · ${age} old`;
-};
 
 // Tabs: Overview is always visible. The category tabs match Recommendation
 // .category strings exactly so filtering is a string equality check. Startup
@@ -1587,158 +1578,11 @@ function App() {
 // ─── Tabs ────────────────────────────────────────────────────────────────
 
 function OverviewTab({ hw }: { hw: HardwareInfo }) {
+  // The "Your hardware" grid now lives in the shared HardwareGrid (rendered here AND on the
+  // CommandCenter Home) so the two surfaces can never drift apart again.
   return (
     <section className="tab-pane">
-      <h2 className="section-title">Your hardware</h2>
-      <div className="grid">
-        <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand}>
-          {hw.cpu_arch?.architecture && hw.cpu_arch.architecture !== "Unknown" && (
-            <Detail
-              k="Architecture"
-              v={`${hw.cpu_arch.architecture}${
-                hw.cpu_arch.generation && hw.cpu_arch.generation !== hw.cpu_arch.architecture
-                  ? ` · ${hw.cpu_arch.generation}`
-                  : ""
-              }`}
-            />
-          )}
-          <Detail k="Logical cores" v={hw.cpu_cores_logical} />
-          <Detail k="Physical cores" v={hw.cpu_cores_physical} />
-          <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
-        </Card>
-
-        <Card label="Memory" value={fmtGB(hw.ram_total_bytes)}>
-          <Detail
-            k="In use"
-            v={`${fmtGB(hw.ram_used_bytes)} (${Math.round(
-              (hw.ram_used_bytes / hw.ram_total_bytes) * 100
-            )}%)`}
-          />
-          <Detail k="Swap" v={fmtGB(hw.swap_total_bytes)} />
-          {hw.memory_modules.length > 0 && (
-            <>
-              <div className="sub-divider">Modules</div>
-              {hw.memory_modules.map((m, i) => {
-                const cap = m.capacity_bytes > 0 ? fmtGB(m.capacity_bytes) : "—";
-                const speed = m.speed_mhz > 0 ? `${m.speed_mhz} MHz` : "";
-                const type_ = m.type_name !== "Unknown" ? m.type_name : "";
-                const desc = [type_, speed].filter(Boolean).join("-");
-                const mfg = m.manufacturer && m.manufacturer !== "Undefined"
-                  ? ` (${m.manufacturer})`
-                  : "";
-                return (
-                  <Detail
-                    key={i}
-                    k={`Slot ${i + 1}`}
-                    v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`}
-                  />
-                );
-              })}
-            </>
-          )}
-        </Card>
-
-        <Card
-          label="Graphics"
-          value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
-        >
-          {hw.gpus.length === 0 ? (
-            <Detail k="Status" v="DXGI and WMI both returned no adapters" />
-          ) : (
-            hw.gpus.map((g, i) => (
-              <div key={i} className="gpu-block">
-                {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
-                <Detail k="VRAM" v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
-                <Detail k="Driver" v={fmtDriver(g)} />
-                {g.current_refresh_rate_hz > 0 && (
-                  <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
-                )}
-              </div>
-            ))
-          )}
-          {hw.display && hw.display.width > 0 && (
-            <Detail
-              k="Display"
-              v={
-                hw.display.max_refresh_rate_hz > hw.display.current_refresh_rate_hz
-                  ? `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz (max ${hw.display.max_refresh_rate_hz} Hz)`
-                  : `${hw.display.width}×${hw.display.height} @ ${hw.display.current_refresh_rate_hz} Hz`
-              }
-            />
-          )}
-        </Card>
-
-        <Card
-          label="System"
-          value={hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`}
-        >
-          <Detail
-            k="Build"
-            v={
-              hw.windows_version
-                ? `${hw.windows_version.build}.${hw.windows_version.ubr}`
-                : hw.kernel_version
-            }
-          />
-          <Detail k="Hostname" v={hw.hostname} />
-        </Card>
-
-        <Card
-          label="Storage"
-          value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}
-        >
-          {hw.disks.map((d) => (
-            <Detail
-              key={d.mount_point}
-              k={d.mount_point}
-              v={`${fmtGB(d.available_bytes)} free of ${fmtGB(d.total_bytes)} · ${d.file_system}`}
-            />
-          ))}
-          {hw.physical_disks.length > 0 && (
-            <>
-              <div className="sub-divider">Physical drives</div>
-              {hw.physical_disks.map((p, i) => (
-                <Detail
-                  key={i}
-                  k={p.friendly_name || `Disk ${i + 1}`}
-                  v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}`}
-                />
-              ))}
-            </>
-          )}
-        </Card>
-
-        {/* Network (elastic §6, 6th card → the grid tiles symmetrically): named PHYSICAL adapter +
-            state, from the detection-train inventory (existing get_hardware data; zero new IPC). */}
-        {(() => {
-          const phys = (hw.network_adapters ?? []).filter((a) => a.physical);
-          const active = phys.find((a) => a.connected) ?? null;
-          const mediumLabel = (m: string) =>
-            m === "wired" ? "Ethernet" : m === "wifi" ? "Wi-Fi" : "Other";
-          const value = active
-            ? mediumLabel(active.medium)
-            : hw.has_wired_ethernet_port
-            ? "Ethernet — unplugged"
-            : phys.length > 0
-            ? "Not connected"
-            : "No adapter detected";
-          return (
-            <Card label="Network" value={value}>
-              {phys.length === 0 ? (
-                <Detail k="Status" v="No physical adapter detected" />
-              ) : (
-                phys.map((a, i) => (
-                  <Detail
-                    key={i}
-                    k={a.name}
-                    v={a.connected ? `Connected · ${mediumLabel(a.medium)}` : "Not connected"}
-                  />
-                ))
-              )}
-            </Card>
-          );
-        })()}
-      </div>
+      <HardwareGrid hw={hw} />
     </section>
   );
 }
@@ -2856,33 +2700,6 @@ function HistoryTab({
 }
 
 // ─── Reusable bits ───────────────────────────────────────────────────────
-
-function Card({
-  label,
-  value,
-  children,
-}: {
-  label: string;
-  value: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="card">
-      <div className="card-label">{label}</div>
-      <div className="card-value">{value}</div>
-      <div className="card-details">{children}</div>
-    </div>
-  );
-}
-
-function Detail({ k, v }: { k: string; v: string | number }) {
-  return (
-    <div className="detail">
-      <span className="detail-key">{k}</span>
-      <span className="detail-value">{v}</span>
-    </div>
-  );
-}
 
 const PROVENANCE_LABEL: Record<Provenance, string> = {
   verified: "Verified",
