@@ -217,21 +217,8 @@
   flex-direction: column;
   gap: 10px;
 }
-.check-library {
-  align-self: flex-start;
-  padding: 7px 14px;
-  border-radius: 9px;
-  border: 1px solid var(--ix-glass-border);
-  background: transparent;
-  color: var(--ix-accent-text);
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: border-color 160ms ease;
-}
-.check-library:hover {
-  border-color: var(--ix-accent);
-}
+/* (.check-library removed — §2 replaced the generic "read the Library" dump with per-row What's-this
+   links to the exact entry.) */
 
 @media (max-width: 620px) {
   .check-row {

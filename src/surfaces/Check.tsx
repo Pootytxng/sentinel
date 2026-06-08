@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
+import { WhatsThis } from "../design/WhatsThis";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useScan } from "./use-scan";
@@ -179,15 +180,16 @@ export default function Check({
                     <div className="check-row-main">
                       <div className="check-row-head">
                         <span className="check-row-title">{i.title}</span>
+                        {/* Named-place law (§2): link the SPECIFIC refusal to its EXACT Learn entry
+                            via the quick-look (resolves only where an entry exists) — no generic
+                            "read all of Learn" dump. */}
+                        <WhatsThis id={i.linked ?? i.id} onOpen={onOpenLibrary} />
                       </div>
                       <p className="check-row-reason">{i.reason}</p>
                     </div>
                   </li>
                 ))}
               </ul>
-              <button className="check-library" onClick={() => onOpenLibrary()}>
-                Why we refuse these — read the Library →
-              </button>
             </div>
           )}
         </div>
