@@ -10,6 +10,8 @@
 
 During a 2026-06-06 host audit of the owner's own rig, a **manually fixed 30,000 MB pagefile** (`AutomaticManagedPagefile = False`) was found — a classic optimizer-guide tweak, spending ~29 GB of NVMe for zero benefit on a 31 GB-RAM machine (observed peak usage: 7.8 GB). Fixed pagefiles are *literally on Compy's own optimizer-rot blocklist* — yet Compy today would never notice one, because Compy only audits changes it made. The doctor's own house had the mold. Real user, real artifact, real 20+ GB recovered.
 
+**Update 2026-06-08 — second find, same house.** Triaging a gaming-while-coding RAM squeeze on the same rig surfaced **memory compression disabled** (`Get-MMAgent → MemoryCompression: False`; Windows-default is ON) — a second optimizer-guide relic from the same era, actively *worsening* the user's exact pain (paging cold pages to disk instead of compressing them in RAM). Two independent rot artifacts on one machine, neither of which Compy could see today, is the strongest possible argument that pre-existing rot is a real and common blind spot — not a one-off. (Detector #9 below.)
+
 ## Problem
 
 Users don't arrive at Compy factory-fresh. They arrive **pre-rotted**: years of YouTube/Reddit "best tweaks" left fixed pagefiles, HPET/timer hacks, bcdedit flags, disabled services, and TCP "mega-packs" baked into Windows. Compy's Trust Ledger covers its own changes; the damage done *before* Compy installed is invisible. That's a blind spot in a product whose whole identity is "a rollback-first Windows configuration safety layer."
@@ -45,6 +47,7 @@ The owner's stated fear: building an honest tool that gets mistaken for a junk-c
   6. MPO disabled (`OverlayTestMode`).
   7. NIC offload mass-disable / TCP autotuning off (`netsh int tcp show global` deviations).
   8. `Win32PrioritySeparation` exotic values.
+  9. **Memory compression disabled** (`(Get-MMAgent).MemoryCompression=False`) — Windows-default is ON; guides that run `Disable-MMAgent -mc` to "cut CPU overhead" leave RAM-tight machines paging to disk instead of compressing in-RAM. **Second origin-story detector — found live on the owner's own rig 2026-06-08, alongside the fixed pagefile.** Read via `Get-MMAgent`; restore via `Enable-MMAgent -MemoryCompression` (reversible, reboot to take effect). Hardware-aware verdict: only flag when physical RAM is modest / under observed pressure — on a 128 GB workstation the user may have chosen this deliberately, so say so.
 - Surface: a quiet section in **Check** (it's an advisory limiter by nature) with detail expanding in place per the navigation law; optionally cross-linked from Fix. Each finding gets a Learn entry (the "What's this?" wiring already exists).
 - Copy tone: museum placard, not siren. *"Found: pagefile manually fixed at 30,000 MB. Windows default: automatic. On your 31 GB-RAM machine this spends ~29 GB of disk and changes nothing about game performance. Likely source: optimization guides circa 2018–2023. Safe to restore; fully reversible; needs one reboot."*
 
