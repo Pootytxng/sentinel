@@ -104,6 +104,26 @@ its knob, and nothing that isn't a door wears one.* Anything interactive must be
 interactive AT REST (not hover-discovered); anything static must never look clickable. This is
 affordance-honesty — the UI being as honest about itself as Compy is about the PC — and sits on the
 same throne as the core promises, not adjacent to them. Spec: `2026-06-06-doorknob-pass.md`.
+**The "right room" placement law (owner, 2026-06-08 — adamant):** NOTHING is bolted on. Every new
+addition or change MUST declare, before build, its perfectly-suited home in the six-home IA AND the
+navigation-law-compliant affordance it wears there — it threads into its naturally-fitting room, it
+never floats. A feature that spans concerns SPLITS across rooms at their natural seams rather than
+becoming one awkward blob — e.g. a *guide* → Learn (+ a "Show me the way" walkthrough), its *proof/
+measurement* → Lab (an instrument) and/or Play (a session/before-after comparison), an *advisory
+nudge* → Check (a limiter row that links to the guide). Every placed piece obeys the bathroom /
+foam-pit / doorknob / never-teleport laws. Any spec that doesn't name its home room(s) + affordance
+is incomplete and must not be built until it does. This is reviewed on EVERY spec and audit.
+**The "all original" law (owner, 2026-06-08 — adamant):** EVERYTHING Compy ships is our own creation.
+Competitor videos, other people's guides, forum posts, and articles are REFERENCE and market research
+ONLY — never copied into the product. The line: *facts and procedures aren't copyrightable* (the
+Adrenalin menu path "Performance → Tuning → Custom", a voltage-stepping method, what a setting does)
+so we state them freely — but *creative expression IS* (a creator's specific wording, screenshots,
+captured UI, diagrams, video frames), so all copy is written in Compy's own voice and all visuals are
+our own schematics drawn from scratch. This is already enforced by THE VOICE (original knowledge-layer
+copy) and the **schematic-never-screenshot** walkthrough rule (we draw a stylized representation, never
+capture anyone's UI/video; no vendor logos or trademark dress). Reviewer check on every content/visual
+addition: would this survive if the source saw it? If it's recognizably *theirs*, recreate it as
+*ours*. (Sits alongside the defamation rule — debunk techniques, never name a product a scam.)
 
 **Check / Play / Lab — BUILT (2026-06-06) behind `compy_{check,play,lab}_v2`.** Per the spec
 `2026-06-06-check-play-lab.md`. Mechanism: a `railTabs` filter hides each absorbed classic from the
