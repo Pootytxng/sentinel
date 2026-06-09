@@ -80,7 +80,11 @@ check-ins, not less rigor. `AskUserQuestion` is reserved for genuine forks in **
 - **Single source of truth: `C:\Users\Kuya\code\compy\`** (Windows-side). The old
   `\\wsl.localhost\...\var\www\compy` WSL/FastAPI scaffold is **superseded/stale** — do
   not use it. WSL is not needed (and breaks anti-cheat via Hyper-V).
-- GitHub remote: `Pootytxng/compy`, branch `main`.
+- GitHub remote: `Pootytxng/sentinel`, branch `main` (the repo on GitHub is still named `sentinel`
+  and resolves directly — verified via the API, NOT a redirect). The GitHub **repo** rename to
+  `compy` is **deferred to first-public-exposure** (bundled with the `compy.gg` domain step) — the
+  repo is private, so the name is outward-facing to no one yet; the 2026-06-04 rename was app-level
+  only (exe/crate/identifier/data-dir).
 - Dev loop: `npm run tauri dev` (from repo root). Tests: `cargo test --manifest-path src-tauri/Cargo.toml`.
   Fresh shells may need `export PATH="$HOME/.cargo/bin:$PATH"`. Git CRLF warnings are benign.
 - Runtime data: Trust Ledger at `%APPDATA%\Compy\history.json` (Roaming); FPS IPC +
