@@ -113,6 +113,32 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🧰 LIVE-DEMO POLISH TRAIN + OWNER-CLARITY REBUILD — 2026-06-08 (`main` @ `b957beb`).** A run of
+> small frontend fixes landed on `main` (each hot-reloaded into the live `npm run tauri dev` per the
+> standing dev-build workflow — see memory [[live-dev-build-standing-workflow]]), then folded into ONE
+> owner-clarity rebuild. All green; frontend-only unless noted; locked gates untouched.
+> - **Network card text fix** (`21cfe89`) — `.detail-value` no longer breaks mid-word (overflow-wrap/
+>   word-break: normal); Network card STACKS the long adapter name over its status; de-duped status.
+> - **Tray idempotent log** (`2cd3793`) — track the icon's shown state; only `set_visible` on a real
+>   change → kills the startup "Error removing system tray icon" noise (dev-log only, no behavior change;
+>   the ONE Rust change in this train).
+> - **Settings lockout fix + New-Look hub removal** (`b92f49b`, `46cb9b0`) — the gear always opens
+>   Settings (`settingsActive = showSettings && hw!==null`; `onOpenSettings` always wired), and the
+>   user-facing "New Look (Preview)" flag hub is GONE (parity closed: Fix `57f2e21`, Play `aaa4f79`).
+>   The `compy_*_v2` flags stay DEFAULT-ON + read localStorage once at startup = hidden dev A/B path
+>   (no UI). `settingsV2`/`compy_settings_v2` fully removed (self-heals a locked-out user). Post-beta
+>   cleanup recorded: [[retire-classic-surfaces-cleanup]].
+> - **"How we grade" glossary** (`b957beb`) — Real/Placebo/Risky are now DEFINED for the reader: a
+>   visible "How we grade" key on Learn + Autopsy, hover tooltips on every verdict chip, and a
+>   searchable "How Compy grades things" entry — ONE shared source (`src/data/verdict-glossary.ts`),
+>   can't drift. Safe aliases keep it out of the autopsy matcher (tested).
+> - **✅ REBUILD (2026-06-08 18:15):** owner-clarity build from `b957beb` (`CODEGEN_UNITS=256`, 15.4 GB
+>   free). **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `08F540F8FC7521FAAE6844E1DA7F915EC0DB42F88C46F3C2E5A9A3D57E868920`** (2,741,654 B) + MSI —
+>   SUPERSEDES the 16:00 `4F2DAB74…` build. Owner-clarity only (installed app = current `main`);
+>   `beta-kit/` + frozen refs (`16069fa`) UNTOUCHED; tray + §4 apply-all QA still pending before any
+>   tester ship. Cowork handles the reinstall.
+
 > **🖥️ "YOUR HARDWARE" GRID RESTORED TO THE REAL HOME (owner regression) + REBUILD — 2026-06-08 (`main` @ `7b8758b`).**
 > Owner caught it live: the detailed hardware cards were NOT on the shipped Home. The CommandCenter
 > (`compy_home_v2`, release default) showed only the one-line `cc-rig` header summary; the full
