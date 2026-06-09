@@ -319,6 +319,39 @@
 .lx-verdict-info {
   color: var(--ix-text-2);
 }
+
+/* "How we grade" KEY — the visible legend for the three verdicts (foam-pit law: meaning on the page,
+   not hover-only). Compact + calm; reuses the .lx-verdict chip styling per row. Tokens only. */
+.lx-gradekey {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 2px;
+  padding: 11px 13px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: var(--ix-glass-fill);
+  border-radius: var(--ix-radius);
+}
+.lx-gradekey-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ix-text-3);
+}
+.lx-gradekey-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.lx-gradekey-row .lx-verdict {
+  flex-shrink: 0;
+}
+.lx-gradekey-def {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ix-text-2);
+}
 .lx-typepill {
   color: var(--ix-text-2);
 }

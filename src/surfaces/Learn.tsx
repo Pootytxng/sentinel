@@ -9,6 +9,12 @@ import {
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
 import { autopsyScan, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
+import {
+  VERDICT_GLOSSARY,
+  VERDICT_GLOSSARY_ENTRY_ID,
+  verdictChip,
+  verdictDefinition,
+} from "../data/verdict-glossary";
 import { Icon } from "../design";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
@@ -30,11 +36,28 @@ const TYPE_LABEL: Record<KnowledgeType, string> = {
   guide: "Guide",
 };
 
-const VERDICT_LABEL: Record<TweakVerdict, string> = {
-  real: "Real",
-  placebo: "Placebo",
-  risky: "Risky — refused",
-};
+// Verdict chip labels + their meanings come from the shared verdict-glossary (single source — the
+// visible "How we grade" key, these chips' hover tooltips, and the Learn entry all read the same
+// definitions, so they can't drift). `verdictChip` replaced the old local VERDICT_LABEL.
+
+// The visible "How we grade" KEY — the foam-pit-law primary: the meaning is on the page, not hidden
+// behind hover. Rendered at the top of browse (giving the verdict filter chips meaning), above the
+// Autopsy claims, and AS the "How Compy grades things" entry's body. One component, one source.
+function GradeKey() {
+  return (
+    <div className="lx-gradekey" role="group" aria-label="How we grade">
+      <span className="lx-gradekey-title">How we grade</span>
+      {VERDICT_GLOSSARY.map((r) => (
+        <div key={r.verdict} className="lx-gradekey-row">
+          <span className={`lx-verdict lx-verdict-${r.verdict}`} title={r.definition}>
+            {r.chip}
+          </span>
+          <span className="lx-gradekey-def">{r.definition}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const GOLDEN_RULES = "One change at a time · restore point first · measure, don't vibe";
 
@@ -87,12 +110,26 @@ function detectUrlPaste(text: string): "youtube" | "webpage" | null {
 }
 
 function EntryBody({ entry }: { entry: KnowledgeEntry }) {
+  // The "How Compy grades things" entry renders the visible key as its body (same single source).
+  if (entry.id === VERDICT_GLOSSARY_ENTRY_ID && entry.type === "term") {
+    return (
+      <>
+        <p className="lx-what">{entry.what}</p>
+        <GradeKey />
+      </>
+    );
+  }
   switch (entry.type) {
     case "tweak":
       return (
         <>
           <div className="lx-row">
-            <span className={`lx-verdict lx-verdict-${entry.verdict}`}>{VERDICT_LABEL[entry.verdict]}</span>
+            <span
+              className={`lx-verdict lx-verdict-${entry.verdict}`}
+              title={verdictDefinition(entry.verdict)}
+            >
+              {verdictChip(entry.verdict)}
+            </span>
           </div>
           <p className="lx-what">{entry.what}</p>
           <p className="lx-why">{entry.why}</p>
@@ -194,7 +231,7 @@ function EntryCard({
 }
 
 function hitPill(h: AutopsyHit): { label: string; cls: string } {
-  if (h.type === "tweak" && h.verdict) return { label: VERDICT_LABEL[h.verdict], cls: `lx-verdict-${h.verdict}` };
+  if (h.type === "tweak" && h.verdict) return { label: verdictChip(h.verdict), cls: `lx-verdict-${h.verdict}` };
   if (h.type === "trick") return { label: "Scam pattern", cls: "lx-verdict-risky" };
   return { label: TYPE_LABEL[h.type], cls: "lx-verdict-info" };
 }
@@ -262,6 +299,8 @@ function AutopsyResultView({
       <p className="lx-result-note">
         Anything we don't recognize gets no verdict — we won't guess. Tap a row to read it right here.
       </p>
+      {/* Visible key above the graded claims, so the verdict chips below read in context (foam-pit). */}
+      {hits.length > 0 && <GradeKey />}
       {hits.length > 0 && (
         <ul className="lx-hitlist">
           {hits.map((h) => {
@@ -276,7 +315,12 @@ function AutopsyResultView({
                   aria-expanded={open}
                 >
                   <span className="lx-hitname">{h.name}</span>
-                  <span className={`lx-verdict ${pill.cls}`}>{pill.label}</span>
+                  <span
+                    className={`lx-verdict ${pill.cls}`}
+                    title={h.type === "tweak" && h.verdict ? verdictDefinition(h.verdict) : undefined}
+                  >
+                    {pill.label}
+                  </span>
                   {h.occurrences > 1 && <span className="lx-hitcount">×{h.occurrences}</span>}
                 </button>
                 {open && entry && (
@@ -591,11 +635,15 @@ export default function Learn({
                     className={`lx-filter lx-vfilter-${v.key} ${verdict === v.key ? "lx-filter-on" : ""}`}
                     aria-pressed={verdict === v.key}
                     onClick={() => setVerdict(v.key)}
+                    title={verdictDefinition(v.key)}
                   >
                     {v.label}
                   </button>
                 ))}
               </div>
+              {/* The visible "How we grade" key — gives the verdict filter chips above their meaning
+                  (foam-pit law: on the page, not hover-only). One source with the chips + the entry. */}
+              <GradeKey />
               {results.length === 0 ? (
                 <div className="lx-empty">
                   No entry for that yet — we only answer what we've verified. If you're unsure about a

@@ -7,6 +7,7 @@ import rawTweaks from "./tweaks.json";
 import rawTerms from "./terms.json";
 import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
+import { VERDICT_GLOSSARY, VERDICT_GLOSSARY_ENTRY_ID } from "./verdict-glossary";
 
 // Version field on the dataset root, for future migrations. Bump + migrate when a shape changes.
 export const KNOWLEDGE_VERSION = 1;
@@ -96,7 +97,24 @@ const GUIDES: GuideEntry[] = (rawGuides as Raw[]).map((t) => ({
   undo: String(t.undo),
 }));
 
-export const KNOWLEDGE: KnowledgeEntry[] = [...TWEAKS, ...TERMS, ...TRICKS, ...GUIDES];
+// Injected meta-entry: "How Compy grades things" — explains our own verdict vocabulary (from live-
+// demo feedback: a real target user asked what real/placebo/risky mean). Built from VERDICT_GLOSSARY
+// so the definitions can't drift from the visible key + hover tooltips. It lives in code, not a JSON
+// seed, because its body is DERIVED. Aliases are safe multi-word phrases only — bare "real"/"risky"/
+// "placebo" would pollute the Guide Autopsy's name+alias matcher; single-word findability ("grade",
+// "placebo", "real", "risky", "verdict") comes from the name + body via searchKnowledge (substring).
+const GRADING_ENTRY: TermEntry = {
+  type: "term",
+  id: VERDICT_GLOSSARY_ENTRY_ID,
+  name: "How Compy grades things",
+  aliases: ["how we grade", "how compy grades", "verdict glossary"],
+  related: [],
+  what:
+    "Compy gives every tweak one of three honest verdicts — Real, Placebo, or Risky — so you can tell what's worth your time before you change anything.",
+  more: VERDICT_GLOSSARY.map((r) => `${r.chip}: ${r.definition}`).join("  "),
+};
+
+export const KNOWLEDGE: KnowledgeEntry[] = [...TWEAKS, ...TERMS, ...TRICKS, ...GUIDES, GRADING_ENTRY];
 
 export const KNOWLEDGE_BY_ID: Map<string, KnowledgeEntry> = new Map(
   KNOWLEDGE.map((e) => [e.id, e]),
