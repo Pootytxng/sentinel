@@ -334,5 +334,14 @@
     "verdict": "real",
     "what": "Installing current GPU drivers from AMD/NVIDIA (not auto-tools).",
     "why": "New titles regularly gain real performance from launch drivers. Get them from the vendor directly; use DDU for a clean reinstall only when something's actually wrong. Compy tracks your driver age and tells you when it's stale."
+  },
+  {
+    "id": "aim-tweaks",
+    "name": "Registry \"aim\" tweaks",
+    "aliases": ["aim tweak", "aim boost", "aim registry", "aim config", "pro aim settings"],
+    "verdict": "placebo",
+    "what": "Registry edits, magic config files, and \"pro settings\" packs sold as sharpening your aim — steadier, snappier, more accurate.",
+    "why": "No registry key aims for you. Aim is muscle memory plus how fast your input reaches the game — and the input half is set by things you can actually measure: raw input on, mouse acceleration off, a high and stable polling rate, low input latency, and steady frametimes. Compy already checks those. Everything past them that's sold as an \"aim\" fix changes nothing you can test. Put the time into an aim trainer, not regedit.",
+    "related": ["input-latency", "polling-rate", "dpi-ppi", "low-latency-mode", "registry-fps-hacks"]
   }
 ]

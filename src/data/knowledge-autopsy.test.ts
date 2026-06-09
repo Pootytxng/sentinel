@@ -126,4 +126,13 @@ describe("autopsyScan", () => {
     const r = autopsyScan("do a startup cleanup tonight", fx2);
     expect(r.hits.map((h) => h.id)).toContain("startup-cleanup-guide");
   });
+
+  // Legit aim advice must NOT grade as placebo. The "Registry aim tweaks" placebo entry uses
+  // scam-specific aliases only — the generic "better aim"/"improve aim" were dropped for exactly
+  // this reason. Runs against the REAL dataset (default KNOWLEDGE), not a fixture.
+  it("does not grade benign aim advice as placebo (aim-tweaks aliases are scam-specific)", () => {
+    const r = autopsyScan("How to improve aim: mouse accel off.");
+    expect(r.hits.map((h) => h.id)).not.toContain("aim-tweaks");
+    expect(r.grade.placebo).toBe(0);
+  });
 });

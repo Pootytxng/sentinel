@@ -115,5 +115,14 @@
     "tell": "Lots of feelings, faces, and star ratings — and not a single repeatable before-and-after number anywhere.",
     "honest_version": "An honest tool leads with what it measured and how, and treats \"feels faster\" as a question to test, not proof.",
     "related": ["placebo-effect", "fps-claim-no-methodology", "fake-before-after", "benchmark"]
+  },
+  {
+    "id": "paid-one-click-optimizers",
+    "name": "Paid one-click \"PC optimizers\"",
+    "aliases": ["pc optimizer", "one-click optimizer", "game booster", "system optimizer", "pc booster", "optimizer suite"],
+    "pattern": "A paid app sells one button that supposedly makes your whole PC — and your games — faster. Inside, it bundles the familiar kit: a registry \"clean,\" a \"RAM optimizer,\" a sweep of service and telemetry toggles, and some automatic process-priority shuffling, then hands it all back as one big improvement you just paid for.",
+    "tell": "It sells a feeling, never a number — \"smoother,\" \"snappier,\" \"up to X% faster,\" with no before/after you can measure. The same one-click pitch is aimed at every PC no matter its hardware, and the few changes in there that genuinely help are mixed in with placebo and risk so the bundle looks worth the price.",
+    "honest_version": "Almost everything that actually helps in those suites is a free, built-in Windows setting you can flip yourself and undo in seconds — and several of the rest do nothing, or can cause instability. An honest tool tells you which is which for YOUR hardware, shows the measured effect, and never charges a subscription to toggle a setting Windows already has.",
+    "related": ["ram-cleaner-booster", "tweak-megapack-no-undo", "subscription-trap-local", "fake-optimization-score", "secret-windows-settings"]
   }
 ]

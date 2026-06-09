@@ -123,7 +123,7 @@ describe("knowledge dataset lint", () => {
   });
 
   it("ships the expected dataset volume (sanity floor)", () => {
-    expect(TWEAKS.length).toBe(42); // the frozen seed — do not regress
+    expect(TWEAKS.length).toBe(43); // 42 frozen seed + aim-tweaks (placebo debunk, owner 2026-06-08)
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);
