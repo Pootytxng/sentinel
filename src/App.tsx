@@ -25,7 +25,7 @@ import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
 import { SessionDebrief } from "./surfaces/SessionDebrief";
 import { GUIDED_STEPS, openGuidedUri } from "./surfaces/guided";
-import Settings, { type PreviewFlag } from "./surfaces/Settings";
+import Settings from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/doorknob.css";
@@ -761,8 +761,6 @@ const HOME_V2_KEY = "compy_home_v2";
 const FIX_V2_KEY = "compy_fix_v2";
 const LEARN_V2_KEY = "compy_learn_v2";
 const ARC_V2_KEY = "compy_arc_v2";
-const SETTINGS_V2_KEY = "compy_settings_v2";
-const OVERLAY_V2_KEY = "compy_overlay_v2";
 const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
 const LAB_V2_KEY = "compy_lab_v2";
@@ -820,15 +818,18 @@ function App() {
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
   // Instrument-surface preview flags — see readDevFlag.
-  const [homeV2, setHomeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
+  // v2-look flags: read ONCE from localStorage at startup (the hidden dev A/B path — set the key in
+  // devtools + reload to drop a surface to its classic version). No runtime setters / no UI anymore:
+  // the user-facing "New look" hub was removed now that parity is closed. `fixV2` keeps its setter
+  // for the Fix surface's own in-surface "disable preview" escape hatch. `settingsV2` is gone — the
+  // lockout fix made Settings always open (no classic settings surface ever existed).
+  const [homeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
   const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
-  const [learnV2, setLearnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
-  const [arcV2, setArcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
-  const [settingsV2, setSettingsV2] = useState<boolean>(() => readDevFlag(SETTINGS_V2_KEY));
-  const [overlayV2, setOverlayV2] = useState<boolean>(() => readDevFlag(OVERLAY_V2_KEY));
-  const [checkV2, setCheckV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
-  const [playV2, setPlayV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
-  const [labV2, setLabV2] = useState<boolean>(() => readDevFlag(LAB_V2_KEY));
+  const [learnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
+  const [arcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
+  const [checkV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
+  const [playV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
+  const [labV2] = useState<boolean>(() => readDevFlag(LAB_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
@@ -1252,24 +1253,6 @@ function App() {
   // tab falls back to the classic shell, which is where the not-yet-reskinned surfaces still live.
   const ccActive = homeV2 && activeTab === "Overview" && hw !== null && !settingsActive;
 
-  // Flip any surface's preview flag from one place (Settings preview-flags hub + footer toggles).
-  const setPreviewFlag = (flag: PreviewFlag, on: boolean) => {
-    const setters: Record<PreviewFlag, [string, (v: boolean) => void]> = {
-      home: [HOME_V2_KEY, setHomeV2],
-      fix: [FIX_V2_KEY, setFixV2],
-      learn: [LEARN_V2_KEY, setLearnV2],
-      arc: [ARC_V2_KEY, setArcV2],
-      settings: [SETTINGS_V2_KEY, setSettingsV2],
-      overlay: [OVERLAY_V2_KEY, setOverlayV2],
-      check: [CHECK_V2_KEY, setCheckV2],
-      play: [PLAY_V2_KEY, setPlayV2],
-      lab: [LAB_V2_KEY, setLabV2],
-    };
-    const [key, setter] = setters[flag];
-    setter(on);
-    persistFlag(key, on);
-  };
-
   return (
     <LibraryContext.Provider value={libraryApi}>
     <KonamiWhisper />
@@ -1374,8 +1357,6 @@ function App() {
           rulesSourceLabel={rulesSourceLabel}
           onBack={goBack}
           canGoBack={canGoBack}
-          flags={{ home: homeV2, fix: fixV2, learn: learnV2, arc: arcV2, settings: settingsV2, overlay: overlayV2, check: checkV2, play: playV2, lab: labV2 }}
-          onSetFlag={setPreviewFlag}
           onRerunSetup={() => {
             // Re-homed from the footer: replay the intro, then flow into the first check.
             setShowSettings(false);

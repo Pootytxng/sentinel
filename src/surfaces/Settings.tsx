@@ -24,8 +24,6 @@ import "./Settings.css";
 // every control changes pixels or a UI preference — NONE of it touches what Compy measures. Calm,
 // static surface (no canvas). Behind compy_settings_v2.
 
-export type PreviewFlag = "home" | "fix" | "learn" | "arc" | "settings" | "overlay" | "check" | "play" | "lab";
-
 // Theme identity swatches — a theme PICKER must show each theme's real colors, so these literal
 // kernel values are the justified exception to "tokens-only" (same pattern as the classic picker).
 const THEME_CARDS: { id: InstrumentTheme; label: string; swatch: [string, string, string] }[] = [
@@ -38,19 +36,6 @@ const DENSITIES: { id: OverlayDensity; label: string }[] = [
   { id: "minimal", label: "Minimal" },
   { id: "standard", label: "Standard" },
   { id: "full", label: "Full" },
-];
-
-const FLAG_ROWS: { id: PreviewFlag; label: string }[] = [
-  { id: "home", label: "Home — Command Center" },
-  { id: "check", label: "Check (Readiness + Priorities)" },
-  { id: "play", label: "Play (Monitoring + Sessions)" },
-  { id: "fix", label: "Fix surface" },
-  { id: "learn", label: "Learn (Library + Autopsy)" },
-  { id: "lab", label: "Lab (Benchmark + Latency)" },
-  { id: "arc", label: "First-run arc" },
-  { id: "overlay", label: "In-game overlay" },
-  // NOTE: no "settings" row here on purpose — Settings v2 is the only Settings surface, so a toggle
-  // that disables it is a self-lockout (dead gear, no way back in). The flag plumbing stays inert.
 ];
 
 function Toggle({
@@ -105,8 +90,6 @@ function LivePreview({ ambiance }: { ambiance: Ambiance }) {
 export default function Settings({
   appVersion,
   rulesSourceLabel,
-  flags,
-  onSetFlag,
   onRerunSetup,
   onRerunCheck,
   onClose,
@@ -117,8 +100,6 @@ export default function Settings({
   rulesSourceLabel: string;
   onBack: () => void;
   canGoBack: boolean;
-  flags: Record<PreviewFlag, boolean>;
-  onSetFlag: (flag: PreviewFlag, on: boolean) => void;
   onRerunSetup: () => void;
   onRerunCheck: () => void;
   onClose: () => void;
@@ -296,25 +277,10 @@ export default function Settings({
           </div>
         </section>
 
-        {/* ── Preview flags ── */}
-        <section className="set-section">
-          <h2 className="set-section-title">New look (preview)</h2>
-          <p className="set-section-help">
-            Each surface can run the new Instrument look or its classic version — flip any of them.
-          </p>
-          {FLAG_ROWS.map((f) => (
-            <div key={f.id} className="set-row">
-              <div className="set-row-text">
-                <div className="set-row-title">{f.label}</div>
-              </div>
-              <Toggle
-                on={flags[f.id]}
-                onChange={(v) => onSetFlag(f.id, v)}
-                ariaLabel={`New ${f.label} preview`}
-              />
-            </div>
-          ))}
-        </section>
+        {/* The "New look (preview)" flag hub was removed — parity with the classic surfaces is closed
+            (Fix 57f2e21, Play aaa4f79), so the toggles only confused users and footgunned them (the
+            Settings self-lockout). The flags still respect localStorage if set manually via devtools
+            (hidden dev A/B path), just no user-facing control. */}
 
         {/* ── Setup (re-homed from the global footer, halfway-home §0) ── */}
         <section className="set-section">
