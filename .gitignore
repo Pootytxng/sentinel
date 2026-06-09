@@ -33,3 +33,4 @@ dist-ssr
 # Beta distribution kit — locally-assembled artifacts (installer copy, README, invite) for handing
 # to testers. Built on demand from committed sources; never committed.
 beta-kit/
+business/
