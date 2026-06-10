@@ -117,6 +117,18 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **✅ §4 GATES PASSED + BETA-CAPABLE REBUILD + KIT RE-ZIPPED — 2026-06-09 (`main` @ `e19db67`).**
+> Owner live elevation QA = GREEN (ONE UAC prompt per batch · per-item rollback confirmed · UAC-cancel
+> honest) and the tray QA is done → the two §4 ship gates are CLOSED. Rebuild from `e19db67`
+> (`CODEGEN_UNITS=256`, 17.1 GB free, 38 s; suites re-verified first: cargo **242** · npm **226**).
+> **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+> `AF10BEC1F95ACB4327A8AFE8E33325D60F4298F81615D901760C199E63921D1B`** (2,761,175 B) + MSI
+> (4,124,672 B) — SUPERSEDES `6C24DB71…` and, for distribution, the kit's old `0D6A5C9A…`. **This build
+> CAN feed a beta send (owner's call on the send itself):** `beta-kit/Compy_0.1.0_x64-setup.exe` +
+> `Compy-Beta-Kit.zip` re-zipped same-structure (installer + guide PDF; invite text beside) and
+> hash-verified — bundle = kit copy = inside-zip ALL `AF10BEC1…` (stale-copy trap closed). Frozen beta
+> refs (`16069fa`, `beta/private-beta-001`) verified untouched.
+
 > **⚡ §4 ONE-ELEVATION BATCHING BUILT (QA-GATED, NOT SHIPPED) — 2026-06-09 (`main` @ `b4d2564`).**
 > The parked apply-all batching landed per the recorded design (spec `2026-06-06-beta-feedback-3.md`
 > §4 status block; owner GO same day). "Apply all safe fixes" now elevates ONCE for the whole batch:
