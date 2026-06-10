@@ -174,10 +174,16 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > CAN feed a beta send (owner's call on the send itself):** `beta-kit/Compy_0.1.0_x64-setup.exe` +
 > `Compy-Beta-Kit.zip` re-zipped same-structure (installer + guide PDF; invite text beside) and
 > hash-verified — bundle = kit copy = inside-zip ALL `AF10BEC1…` (stale-copy trap closed). Frozen beta
-> refs (`16069fa`, `beta/private-beta-001`) verified untouched. **CURRENCY NOTE (2026-06-10): `main`
-> has since advanced past this kit** (the autonomous-sprint train + the Hearth "Warm Ember" lock — all
-> reversible polish/hardening, no new gates) — if the send hasn't happened yet and the owner wants
-> testers on the latest, re-cut + re-zip first (owner-timed; the kit is NOT auto-refreshed).
+> refs (`16069fa`, `beta/private-beta-001`) verified untouched.
+> - **✅ KIT RE-CUT (owner-directed, 2026-06-10 08:11) from `17fd64d`** — folds in the autonomous-sprint
+>   hardening + Hearth "Warm Ember". **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `E8D5588B99E84831C278FA446D21DEFBD89BB0B16E2A11069B0F176FF0C50A47`** (2,761,462 B) + MSI
+>   (4,128,768 B) — SUPERSEDES `AF10BEC1…` everywhere incl. the kit. Triple-hash-verified (bundle =
+>   loose kit copy = inside `Compy-Beta-Kit.zip`); suites green on the exact HEAD (cargo 244 · npm 230).
+>   **No re-QA needed, verified not assumed:** the only shipped mutation-path change since the QA'd
+>   `e19db67` is the receipt-title cap (shape-preserving, test-pinned); the elevation-QA seam/harness
+>   are `#[cfg(test)]` — compiled OUT of this binary. Frozen refs re-verified untouched. **THIS is the
+>   send-ready kit; the send stays the owner's.**
 
 > **⚡ §4 ONE-ELEVATION BATCHING BUILT (QA-GATED, NOT SHIPPED) — 2026-06-09 (`main` @ `b4d2564`).**
 > The parked apply-all batching landed per the recorded design (spec `2026-06-06-beta-feedback-3.md`
