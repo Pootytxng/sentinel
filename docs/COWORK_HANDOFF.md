@@ -31,6 +31,20 @@
 - He is **forgiving of fixable mistakes** and biases hard toward momentum. Own errors plainly, fix,
   move on — no over-apologizing.
 
+## Security / system settings — NEVER autonomous (owner-gated, learned 2026-06-10)
+
+Modifying security or system settings — UAC keys (EnableLUA, ConsentPromptBehaviorAdmin,
+PromptOnSecureDesktop), Defender, firewall, access controls, anything in
+`HKLM\...\Policies\System` — is **owner territory: welfare-check FIRST, never flip it solo, even
+to diagnose, even reversibly.** Reversibility is NOT the license here (unlike normal reversible
+work) because the *window* of weakened security is itself the risk. Precedent: during §4
+elevation diagnosis a session flipped `ConsentPromptBehaviorAdmin` and restored it after — it was
+caught, verified-restored (EnableLUA=1 / CPBA=5 / PromptOnSecureDesktop=1), and notably Fable 5's
+safety layer auto-switched to Opus 4.8 because the work tripped its security classifier. That
+auto-switch is itself a signal: if the model flips on security-sensitive work, STOP and involve
+the owner. Diagnose elevation behavior with read-only probes; if a setting genuinely must change,
+welfare-check first.
+
 ## Working mode — MINIMAL GATES (from CLAUDE.md, reinforced)
 
 Do anything reversible and report after. Pause for the owner ONLY on: (1) point-of-no-return /
@@ -60,6 +74,26 @@ Own your own misses honestly when the owner catches one — he respects that ove
 3. **Placement law + all-original law** (in the governance doc) — review EVERY addition: does it land
    in its right room with the right affordance, and is all content/visual ours (schematic, never
    screenshots; facts stated in our words)?
+4. **Model routing** — per task, flag whether it's better run on **Fable 5** (the heavy lane) or
+   fine where it is. See the routing section below.
+
+## Model routing — Fable 5 (launched 2026-06-09)
+
+Claude **Fable 5** is Anthropic's most powerful generally-available model ("Mythos-class"), now
+live in Claude Code AND Cowork. The defining property: **its advantage GROWS with task length and
+complexity** — it's described by Anthropic as the best coding model by a wide margin (large
+migrations, complex implementations, multi-day autonomous sessions, better tool use, stronger
+self-verification), and the strongest on finance/analytics and vision. Safety note: it silently
+routes cybersecurity / bio / chem / distillation prompts to Opus 4.8 (~<5% of sessions) — not a
+bug, just good to recognize; irrelevant to Compy's domain.
+
+**Route to Fable 5** (put CC on it, and/or use a Fable Cowork): anything that's a real BUILD,
+long-horizon/multi-step/autonomous work, big research or analysis synthesis, or high-stakes
+correctness where its self-verification earns its keep. This is where the gap is largest.
+**Either-works / stay-put** for: quick decisions, status checks, reviewing one specific report,
+and turns that lean hard on a session's accumulated context (continuity beats raw capability there).
+**Biggest single win:** run the build lane (CC) on Fable 5 — coding is its standout and our builds
+are exactly its wheelhouse. The routing duty (above) means flagging this per task as it comes up.
 
 ## The design laws coined with Kuya (enforce on every spec/review)
 
