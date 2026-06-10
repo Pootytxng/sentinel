@@ -1,0 +1,103 @@
+/* Play tuning before/after — tokens only, sits beside the FPS comparison in the debrief. */
+.td-arm {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ix-line);
+  border-radius: 8px;
+  background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
+}
+.td-arm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.td-arm-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.td-arm-sub {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ix-text-2);
+}
+.td-arm-btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--ix-accent);
+  background: transparent;
+  color: var(--ix-accent-text);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.td-arm-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.td-measure {
+  margin-top: 12px;
+}
+.td-measure-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.td-measure-title {
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ix-text-3);
+}
+.td-clear {
+  border: none;
+  background: transparent;
+  color: var(--ix-text-3);
+  font-size: 11.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.td-clear:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.td-crash {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--ix-line);
+  border-radius: 8px;
+}
+.td-crash-q {
+  flex: 1 1 auto;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ix-text-2);
+}
+.td-crash-btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--ix-danger, #e5534b);
+  background: transparent;
+  color: var(--ix-danger, #e5534b);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.td-crash-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

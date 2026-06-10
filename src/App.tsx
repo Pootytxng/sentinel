@@ -1503,6 +1503,7 @@ function App() {
                   changes={changes}
                   rollback={rollback}
                   deepMonitoring={<MonitoringTab active={activeTab === "Play"} embedded />}
+                  vendor={detectedVendor}
                 />
               )}
               {activeTab === "Monitoring" && (

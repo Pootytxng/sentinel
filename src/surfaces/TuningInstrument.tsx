@@ -5,6 +5,7 @@ import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { prettyGameName } from "./game-name";
 import { TuningGuideBody } from "./TuningGuide";
+import { TuningVerdictCard } from "./TuningVerdict";
 import "./TuningInstrument.css";
 
 // The Lab "Tuning" instrument body (spec 2026-06-08) — the guide (shared single source) PLUS the
@@ -13,14 +14,6 @@ import "./TuningInstrument.css";
 // come from data the surface already holds (get_session_summaries / get_armed_comparison / the latest
 // comparison) — zero new IPC. Presentational: the measurement is computed by the shared
 // honest-measurement module and passed in, so this can't drift from the Play debrief's verdict.
-
-const VERDICT_CLASS: Record<TuningMeasurement["verdict"], string> = {
-  holding: "tg-v-holding",
-  "too-aggressive": "tg-v-bad",
-  "too-early": "tg-v-early",
-  "no-change": "tg-v-neutral",
-  confounded: "tg-v-neutral",
-};
 
 function smoothness(s: SessionSummary): string {
   const ratio = s.avg_fps > 0 ? s.low1_fps_est / s.avg_fps : 1;
@@ -41,7 +34,6 @@ export function TuningInstrument({
   recentSessions: SessionSummary[];
 }) {
   const walkthrough = walkthroughForKey(guide.id);
-  const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
 
   return (
     <div className="tg-instrument">
@@ -57,29 +49,7 @@ export function TuningInstrument({
         <div className="tg-readout-head">Stability &amp; thermal</div>
 
         {measurement ? (
-          <div className={`tg-verdict ${VERDICT_CLASS[measurement.verdict]}`}>
-            <div className="tg-verdict-head">{measurement.headline}</div>
-            <p className="tg-verdict-detail">{measurement.detail}</p>
-            <div className="tg-verdict-stats">
-              {measurement.baselinePeakTempC != null && measurement.afterPeakTempC != null && (
-                <span className="tg-stat">
-                  Peak temp <b>{measurement.baselinePeakTempC}°C → {measurement.afterPeakTempC}°C</b>
-                  {measurement.tempDropC != null && measurement.tempDropC > 0
-                    ? ` (−${measurement.tempDropC}°C)`
-                    : ""}
-                </span>
-              )}
-              {measurement.low1DeltaPct != null && (
-                <span className="tg-stat">
-                  1% low <b>{sign(measurement.low1DeltaPct)}%</b> vs baseline
-                </span>
-              )}
-              <span className="tg-stat tg-stat-muted">
-                {measurement.sessionsSince} session{measurement.sessionsSince === 1 ? "" : "s"} since the
-                tune
-              </span>
-            </div>
-          </div>
+          <TuningVerdictCard m={measurement} />
         ) : (
           <p className="tg-readout-empty">
             No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Play debrief —

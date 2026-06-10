@@ -4,6 +4,7 @@ import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "
 import { type OverlayDensity, readOverlayDensity, persistOverlayDensity } from "../design/theme";
 import { SessionDebrief } from "./SessionDebrief";
 import { prettyGameName } from "./game-name";
+import { type GpuVendor } from "./walkthroughs";
 import "./Play.css";
 
 // PLAY — live + debrief (halfway-home §1: navigation never teleports). The live-monitor card +
@@ -52,6 +53,7 @@ export default function Play({
   changes,
   rollback,
   deepMonitoring,
+  vendor = "any",
 }: {
   active: boolean;
   sessions: SessionSummary[];
@@ -64,6 +66,7 @@ export default function Play({
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
   deepMonitoring?: ReactNode;
+  vendor?: GpuVendor;
 }) {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
@@ -289,6 +292,8 @@ export default function Play({
                         onExport={onExport}
                         changes={changes}
                         rollback={rollback}
+                        vendor={vendor}
+                        sessions={sessions}
                       />
                     </div>
                   )}

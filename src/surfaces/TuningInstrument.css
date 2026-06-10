@@ -31,55 +31,6 @@
   color: var(--ix-text-2);
 }
 
-/* Verdict block — color carries the meaning, never a bare green "stable". */
-.tg-verdict {
-  border: 1px solid var(--ix-line);
-  border-left-width: 3px;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
-}
-.tg-verdict-head {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ix-text-1);
-}
-.tg-verdict-detail {
-  margin: 4px 0 8px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ix-text-2);
-}
-.tg-verdict-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-}
-.tg-stat {
-  font-size: 12px;
-  color: var(--ix-text-2);
-}
-.tg-stat b {
-  color: var(--ix-text-1);
-  font-weight: 600;
-}
-.tg-stat-muted {
-  color: var(--ix-text-3);
-}
-
-.tg-v-holding {
-  border-left-color: var(--ix-accent);
-}
-.tg-v-bad {
-  border-left-color: var(--ix-danger, #e5534b);
-}
-.tg-v-early {
-  border-left-color: var(--ix-amber, #d2a44c);
-}
-.tg-v-neutral {
-  border-left-color: var(--ix-text-3);
-}
-
 /* Recent-sessions strip — the always-on read-only gauge. */
 .tg-recent {
   margin-top: 12px;

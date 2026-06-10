@@ -9,6 +9,8 @@ import type {
 } from "../types";
 import { Term } from "../design/Term";
 import { useConfirm } from "../design/ConfirmDialog";
+import { TuningDebrief } from "./TuningDebrief";
+import { type GpuVendor } from "./walkthroughs";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
 // (halfway-home §1, owner-greenlit). Locked copy unchanged. Styles are global (App.css / arc).
@@ -192,6 +194,8 @@ export function SessionDebrief({
   changes,
   rollback,
   arcV2 = false,
+  vendor,
+  sessions,
 }: {
   s: SessionSummary;
   priorities: Priorities | null;
@@ -202,6 +206,10 @@ export function SessionDebrief({
   changes: AppliedChange[];
   rollback: (c: AppliedChange) => Promise<void>;
   arcV2?: boolean;
+  /** Tuning before/after (spec 2026-06-08) — provided only where the full session list + GPU vendor
+   *  are available (Play). Absent → the tuning cluster doesn't render (classic Sessions tab). */
+  vendor?: GpuVendor;
+  sessions?: SessionSummary[];
 }) {
   const [ctxOpen, setCtxOpen] = useState(false);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
@@ -309,6 +317,10 @@ export function SessionDebrief({
           </div>
         )
       )}
+
+      {/* Tuning before/after — temp + stability delta beside the FPS delta (spec §3). Read-only +
+          advisory: arming records a vendor-tool undervolt session-side, never a mutating ledger entry. */}
+      {vendor && sessions && <TuningDebrief s={s} vendor={vendor} sessions={sessions} />}
 
       <div className="debrief-ctx">
         <button className="debrief-ctx-head" onClick={() => setCtxOpen((o) => !o)}>
