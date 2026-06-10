@@ -99,6 +99,25 @@ Design (audited mutation/elevation boundary — care):
   audited primitives — not a new mutation primitive). Regression test: one rec's cmd fails → skipped +
   reported, the rest apply + ledger. /check + /security required.
 
+**✅ §4 ONE-ELEVATION BATCHING BUILT on `main` (owner GO 2026-06-09; commits `60ae751` backend,
+`a7920bf` frontend, `b4d2564` /check hardening).** Built exactly to the recorded design: thread-local
+RAII deferral sink in `run_elevated_powershell` (capture-instead-of-elevate, disarms on drop/panic,
+refuses nesting) → ONE inline elevated `-Command` (`$ErrorActionPreference='Stop'`, per-rec try/catch,
+`id:ok`/`id:fail` receipts to a result FILE in the data dir, parsed after exit-0) → a ledger receipt
+per CONFIRMED item only (fail + missing receipt both resolve to skipped — nothing is recorded that
+didn't verifiably happen). `power-ultimate` is HARD-rejected at validation (the only exit-using
+elevated cmd); phase-1 non-elevated receipts are saved BEFORE elevation so a UAC cancel never costs
+them; UAC decline skips all deferred items honestly. `apply_recommendation` now shares
+`dispatch_apply` + `build_applied_change` with the batch (one match, one receipt builder). Frontend:
+`applyBatch` = one `apply_recommendations_batch` invoke; consent sheet + summary contract unchanged.
+Tests: cargo 242 (+10: sink capture/disarm/nesting, compose structure + no-exit + unsafe-id rejection,
+receipt parsing, validation hard lines, fail-safe resolution, full-contract receipt shape, camelCase
+arg pin, and the failure-isolation regression against REAL non-elevated powershell.exe); npm 226;
+clippy + tsc clean; /check + /security clean. **NOT shipped: rides its own elevation QA on a UAC-on
+machine (one prompt → per-item receipts → per-item rollback → UAC-cancel honesty) + Cowork
+elevation/mutation-boundary audit before any tester build. Acceptance "one elevation" stays unchecked
+until that QA passes.**
+
 ## §5 Learn — de-overload pass (structure only; voice/content untouched)
 
 **Report: information overload in Learn.** 116 entries need progressive disclosure:

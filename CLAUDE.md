@@ -117,6 +117,25 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **⚡ §4 ONE-ELEVATION BATCHING BUILT (QA-GATED, NOT SHIPPED) — 2026-06-09 (`main` @ `b4d2564`).**
+> The parked apply-all batching landed per the recorded design (spec `2026-06-06-beta-feedback-3.md`
+> §4 status block; owner GO same day). "Apply all safe fixes" now elevates ONCE for the whole batch:
+> thread-local RAII deferral sink in `run_elevated_powershell` (capture-instead-of-elevate; disarms on
+> drop/panic; refuses nesting; safe because every batchable apply_* is reads → ONE PS → return, so
+> deferral causes no partial mutation) → ONE inline elevated `-Command` (EAP=Stop + per-rec try/catch +
+> `id:ok|fail` receipts to a result FILE) → ledger receipt per CONFIRMED item only (fail/missing both
+> skip — fail-safe), per-item rollback granularity unchanged. `power-ultimate` (the only exit-using
+> elevated cmd, moderate-tier) HARD-rejected from batches; phase-1 non-elevated receipts saved BEFORE
+> elevation (UAC cancel never costs them); decline = honest per-item skip. `apply_recommendation` and
+> the batch share ONE dispatch + receipt builder (no drift). Frontend: `applyBatch` = one
+> `apply_recommendations_batch` invoke; consent sheet/summary unchanged. **cargo 242 · npm 226 ·
+> clippy+tsc clean · /check (1 hardening fix folded: checked command attribution, `b4d2564`) +
+> /security clean (zero new primitives; capabilities/config untouched).** Commits: `60ae751` backend ·
+> `a7920bf` frontend · `b4d2564` hardening. **GATES: does NOT ship to testers until (1) its own
+> elevation QA on a UAC-on machine — one prompt → per-item receipts → per-item rollback → UAC-cancel
+> honesty — and (2) the Cowork elevation/mutation-boundary audit pass. beta-kit/ + frozen refs
+> (`16069fa`) untouched.**
+
 > **🔬 TUNING TRAIN VERIFIED + measureTuning FILTER FIX + COWORK HANDOFF + OWNER-CLARITY REBUILD —
 > 2026-06-09 (`main` @ `86315e2`).** The tuning-guides train (`ad4d05c`..`272f195`, spec
 > `docs/superpowers/specs/2026-06-08-tuning-guides-stability-measurement.md`) was RE-VERIFIED after the
