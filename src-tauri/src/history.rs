@@ -593,6 +593,37 @@ mod batch_apply_tests {
         assert!(missing.contains("not applied"));
     }
 
+    // The UAC-cancel / elevation-failure arm, proven deterministically (no real prompt): with
+    // elevation forced to fail, EVERY deferred (elevated) item is skipped with the honest "did not
+    // complete" reason and NOTHING is ledgered for them. Uses two elevated recs so phase 1 mutates
+    // nothing (they only read + defer), keeping this test side-effect-free on the real system.
+    #[test]
+    fn elevation_failure_skips_every_deferred_item_honestly() {
+        let _force = ForceElevationError::begin();
+        let before = load_history();
+        let before_ids: std::collections::HashSet<String> =
+            before.iter().map(|c| c.id.clone()).collect();
+        let report = apply_recommendations_batch(vec![
+            item("fast-startup-off"),
+            item("hags-enable"),
+        ])
+        .expect("a failed elevation is per-item skips, never a batch-level error");
+        assert_eq!(report.elevation_prompts, 1, "one elevation was attempted");
+        assert_eq!(report.applied, 0, "nothing applied when elevation fails");
+        assert_eq!(report.skipped, 2, "both deferred items skipped");
+        for o in &report.items {
+            assert_eq!(o.status, "skipped");
+            assert!(
+                o.reason.as_deref().unwrap_or("").contains("Elevation did not complete"),
+                "honest cancel reason"
+            );
+        }
+        // Fail-safe: no NEW ledger entry for either elevated item.
+        let after = load_history();
+        let new_count = after.iter().filter(|c| !before_ids.contains(&c.id)).count();
+        assert_eq!(new_count, 0, "a cancelled elevation must ledger nothing");
+    }
+
     // The shared receipt builder writes the FULL rollback contract — batch receipts are
     // byte-equivalent in shape to single-apply receipts (rollback granularity unchanged).
     #[test]
@@ -617,6 +648,114 @@ mod batch_apply_tests {
             Some("fast-startup"),
             "typed snapshot serialized with its tag"
         );
+    }
+}
+
+// §4 ELEVATION QA harness (owner-present, REAL UAC — never runs in the normal suite).
+// Run explicitly, one test at a time, with a human at the Secure Desktop:
+//   cargo test --manifest-path src-tauri/Cargo.toml manual_qa_batch -- --ignored --nocapture --test-threads=1
+//   cargo test --manifest-path src-tauri/Cargo.toml manual_qa_uac_cancel -- --ignored --nocapture --test-threads=1
+// These intentionally drive the PRODUCTION batch path end to end: real elevation, real registry
+// writes (idempotent values), real %APPDATA%\Compy\history.json receipts. The dev build's Trust
+// Ledger shows the entries live. Items chosen are safe-tier + guaranteed-idempotent writes.
+#[cfg(test)]
+mod manual_elevation_qa {
+    use super::*;
+
+    fn qa_item(rec_id: &str, rec_title: &str) -> BatchApplyItem {
+        BatchApplyItem {
+            rec_id: rec_id.into(),
+            rec_title: rec_title.into(),
+        }
+    }
+
+    /// Step 1 + 2 of the QA loop. TWO UAC prompts, click YES on both:
+    /// prompt #1 = the whole batch (the one-elevation claim), prompt #2 = the single rollback.
+    #[test]
+    #[ignore = "manual §4 elevation QA — real UAC; click YES twice"]
+    fn manual_qa_batch_one_prompt_receipts_and_per_item_rollback() {
+        let before = load_history().len();
+        let report = apply_recommendations_batch(vec![
+            qa_item("fast-startup-off", "QA · Disable Fast Startup"),
+            qa_item("hags-enable", "QA · Enable HAGS"),
+        ])
+        .expect("the batch must run (did the first UAC prompt get a YES?)");
+        println!("BATCH REPORT: {report:?}");
+        assert_eq!(report.elevation_prompts, 1, "ONE UAC prompt for the whole batch");
+        assert_eq!(report.applied, 2, "both elevated items applied");
+        assert_eq!(report.skipped, 0, "nothing skipped");
+
+        // One full-contract receipt PER item.
+        let after = load_history();
+        assert_eq!(after.len(), before + 2, "exactly one ledger receipt per item");
+        for rec in ["fast-startup-off", "hags-enable"] {
+            let c = after
+                .iter()
+                .rev()
+                .find(|c| c.rec_id == rec && c.rec_title.starts_with("QA · "))
+                .expect("QA receipt present");
+            assert_eq!(c.status, "applied");
+            assert!(c.applied_action.is_some() && c.rollback_action.is_some());
+            assert_eq!(c.elevation_used, Some(true));
+        }
+
+        // Per-item rollback granularity: roll back ONE (HAGS) — second UAC prompt, click YES.
+        let hags_id = after
+            .iter()
+            .rev()
+            .find(|c| c.rec_id == "hags-enable" && c.status == "applied")
+            .expect("hags QA entry")
+            .id
+            .clone();
+        rollback_change(hags_id.clone())
+            .expect("rollback must run (did the second UAC prompt get a YES?)");
+        let post = load_history();
+        let hags = post.iter().find(|c| c.id == hags_id).expect("hags entry");
+        assert_eq!(hags.status, "rolled_back", "the rolled-back item flips");
+        let fast = post
+            .iter()
+            .rev()
+            .find(|c| c.rec_id == "fast-startup-off" && c.rec_title.starts_with("QA · "))
+            .expect("fast-startup QA entry");
+        assert_eq!(fast.status, "applied", "the sibling STAYS applied");
+        assert_eq!(crate::hags_state(), Some(2), "exact prior state restored");
+        assert_eq!(crate::fast_startup_state(), Some(0), "sibling state intact");
+        println!("STEP 1+2 PASS: one prompt, per-item receipts, per-item rollback.");
+    }
+
+    /// Step 3 of the QA loop. ONE UAC prompt — click NO (cancel).
+    #[test]
+    #[ignore = "manual §4 elevation QA — real UAC; click NO (cancel)"]
+    fn manual_qa_uac_cancel_is_honest_per_item() {
+        let before = load_history().len();
+        let report = apply_recommendations_batch(vec![
+            qa_item("game-bar-disable", "QA · Game Bar off"), // non-elevated (HKCU)
+            qa_item("fast-startup-off", "QA · Fast Startup"), // elevated — CANCEL its prompt
+        ])
+        .expect("a cancelled elevation is a per-item skip, never a batch error");
+        println!("CANCEL REPORT: {report:?}");
+        assert_eq!(report.elevation_prompts, 1);
+        assert_eq!(report.applied, 1, "the non-elevated item still applied");
+        assert_eq!(report.skipped, 1, "the elevated item skipped");
+        let skipped = report
+            .items
+            .iter()
+            .find(|i| i.status == "skipped")
+            .expect("one skipped item");
+        assert_eq!(skipped.rec_id, "fast-startup-off");
+        let reason = skipped.reason.as_deref().unwrap_or("");
+        assert!(
+            reason.contains("Elevation did not complete"),
+            "honest reason, got: {reason}"
+        );
+        let after = load_history();
+        assert_eq!(after.len(), before + 1, "ONLY the non-elevated receipt landed");
+        assert_eq!(
+            crate::fast_startup_state(),
+            Some(0),
+            "cancelled item: nothing was changed (state from the earlier applies stands)"
+        );
+        println!("STEP 3 PASS: cancel = honest per-item skip; non-elevated item ledgered.");
     }
 }
 

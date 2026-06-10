@@ -370,6 +370,33 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+// Test-only: forces `run_elevated_powershell` to return the UAC-decline error WITHOUT spawning a
+// real elevation prompt, so the orchestrator's elevation-failure (UAC cancel) arm is deterministically
+// testable. Never compiled into the shipped binary.
+#[cfg(test)]
+thread_local! {
+    static FORCE_ELEVATION_ERROR: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
+}
+
+/// RAII guard that makes elevation fail on this thread for the guard's lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct ForceElevationError;
+
+#[cfg(test)]
+impl ForceElevationError {
+    pub(crate) fn begin() -> Self {
+        FORCE_ELEVATION_ERROR.with(|f| *f.borrow_mut() = true);
+        ForceElevationError
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceElevationError {
+    fn drop(&mut self) {
+        FORCE_ELEVATION_ERROR.with(|f| *f.borrow_mut() = false);
+    }
+}
+
 /// RAII guard for the deferral sink — the sink is disarmed when this drops (including on panic,
 /// so a poisoned command thread can never leak an armed sink into later invocations).
 pub(crate) struct ElevationDeferral {
@@ -475,6 +502,15 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     });
     if deferred {
         return Ok(());
+    }
+    // Test-only seam: deterministically simulate a UAC decline / failed elevation WITHOUT spawning
+    // runas (which would pop a real Secure-Desktop prompt). Production has neither the flag nor this
+    // branch — `#[cfg(test)]` removes it from the shipped binary entirely.
+    #[cfg(test)]
+    if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
+        return Err(
+            "Elevated step did not complete (exit code 1). Did you cancel the UAC prompt?".to_string(),
+        );
     }
     let status = runas::Command::new("powershell.exe")
         .args(&[
