@@ -562,12 +562,16 @@ export default function Learn({
       className={`lx-backdrop ${asPanel ? "lx-aspanel" : ""}`}
       onClick={asPanel ? undefined : onClose}
     >
-      <div className="lx-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="lx-modal"
+        onClick={(e) => e.stopPropagation()}
+        {...(asPanel ? {} : { role: "dialog", "aria-modal": true, "aria-labelledby": "lx-modal-title" })}
+      >
         <div className="lx-dotgrid" aria-hidden="true" />
         <div className="lx-inner">
           <div className="lx-head">
             <div>
-              <h2 className="lx-title">Learn</h2>
+              <h2 className="lx-title" id="lx-modal-title">Learn</h2>
               <p className="lx-tagline">
                 Look up any tweak, term, or scam you heard online — we only answer what we've verified.
               </p>

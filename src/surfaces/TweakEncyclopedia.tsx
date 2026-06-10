@@ -295,9 +295,15 @@ export default function Library({
 
   return (
     <div className="tweak-backdrop" onClick={onClose}>
-      <div className="tweak-modal kl-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="tweak-modal kl-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kl-modal-title"
+      >
         <div className="tweak-head">
-          <h2>Knowledge library</h2>
+          <h2 id="kl-modal-title">Knowledge library</h2>
           <button className="btn btn-small" onClick={onClose}>
             Close
           </button>

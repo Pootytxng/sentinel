@@ -645,9 +645,15 @@ function ReportModal({
   };
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-modal-title"
+      >
         <div className="modal-head">
-          <h2>Report exported</h2>
+          <h2 id="export-modal-title">Report exported</h2>
           <button className="btn btn-small" onClick={onClose}>
             Close
           </button>
