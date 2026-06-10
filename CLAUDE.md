@@ -174,7 +174,10 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > CAN feed a beta send (owner's call on the send itself):** `beta-kit/Compy_0.1.0_x64-setup.exe` +
 > `Compy-Beta-Kit.zip` re-zipped same-structure (installer + guide PDF; invite text beside) and
 > hash-verified — bundle = kit copy = inside-zip ALL `AF10BEC1…` (stale-copy trap closed). Frozen beta
-> refs (`16069fa`, `beta/private-beta-001`) verified untouched.
+> refs (`16069fa`, `beta/private-beta-001`) verified untouched. **CURRENCY NOTE (2026-06-10): `main`
+> has since advanced past this kit** (the autonomous-sprint train + the Hearth "Warm Ember" lock — all
+> reversible polish/hardening, no new gates) — if the send hasn't happened yet and the owner wants
+> testers on the latest, re-cut + re-zip first (owner-timed; the kit is NOT auto-refreshed).
 
 > **⚡ §4 ONE-ELEVATION BATCHING BUILT (QA-GATED, NOT SHIPPED) — 2026-06-09 (`main` @ `b4d2564`).**
 > The parked apply-all batching landed per the recorded design (spec `2026-06-06-beta-feedback-3.md`
@@ -409,8 +412,9 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   untouched (frontend-only). /check + /security clean on every train.
 > - **Installer:** unsigned `Compy_0.1.0` (NSIS `…/bundle/nsis/Compy_0.1.0_x64-setup.exe` + MSI) — rebuild
 >   after UI changes (`npm run tauri build`; close Diablo if free RAM < ~8 GB — cold release builds OOM).
-> - **OPEN (owner-only):** live smoke of the rebuilt installer; **Hearth + warm final hexes → kernel §4**;
->   the post-beta full rail-merge.
+> - **OPEN (owner-only):** live smoke of the rebuilt installer; the post-beta full rail-merge.
+>   (~~Hearth + warm final hexes → kernel §4~~ — ✅ CLOSED 2026-06-10: Hearth = "Warm Ember" locked,
+>   `7dcd7de`, contrast guard 4/4.)
 > - Canonical specs: `docs/superpowers/specs/2026-06-0{5,6}-*.md`; governance:
 >   `docs/superpowers/plans/2026-06-04-beta-build-order.md`. **Beta refs still pinned @ `16069fa` (untouched).**
 
