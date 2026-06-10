@@ -123,7 +123,11 @@ describe("knowledge dataset lint", () => {
   });
 
   it("ships the expected dataset volume (sanity floor)", () => {
-    expect(TWEAKS.length).toBe(43); // 42 frozen seed + aim-tweaks (placebo debunk, owner 2026-06-08)
+    // 42 frozen seed + aim-tweaks (owner 2026-06-08) + 3 sprint debunks (2026-06-10: disable-smt-gaming,
+    // nvidia-prefer-max-performance, cpu-affinity-games). These are Library EXPLAINERS (graded
+    // real/placebo/risky), NOT appliable recs — Compy applies none of them, so the ~29 appliable-catalog
+    // freeze is untouched. The pin stays exact as a curation drift-guard (bump it on deliberate additions).
+    expect(TWEAKS.length).toBe(46);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);

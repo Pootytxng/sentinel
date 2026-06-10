@@ -343,5 +343,32 @@
     "what": "Registry edits, magic config files, and \"pro settings\" packs sold as sharpening your aim — steadier, snappier, more accurate.",
     "why": "No registry key aims for you. Aim is muscle memory plus how fast your input reaches the game — and the input half is set by things you can actually measure: raw input on, mouse acceleration off, a high and stable polling rate, low input latency, and steady frametimes. Compy already checks those. Everything past them that's sold as an \"aim\" fix changes nothing you can test. Put the time into an aim trainer, not regedit.",
     "related": ["input-latency", "polling-rate", "dpi-ppi", "low-latency-mode", "registry-fps-hacks"]
+  },
+  {
+    "id": "disable-smt-gaming",
+    "name": "Disabling SMT / Hyper-Threading for gaming",
+    "aliases": ["disable hyperthreading", "disable smt", "smt off", "hyperthreading off", "fewer cores faster"],
+    "verdict": "placebo",
+    "what": "Turning off your CPU's second thread per core (Hyper-Threading on Intel, SMT on AMD) in BIOS, on the theory that fewer, 'cleaner' threads game better.",
+    "why": "On any modern 6-plus-core CPU this is a step backwards or a wash — you hand the game fewer threads to spread across and leave background work fighting it for what's left. It only ever helped ancient quad-cores choking on thread count, a problem today's CPUs don't have. There's no measurable win waiting here; if you want to prove it, change the one thing and watch your 1% low, which is exactly what it won't move. Compy never touches BIOS core settings.",
+    "related": ["core-unparking", "interrupt-affinity"]
+  },
+  {
+    "id": "nvidia-prefer-max-performance",
+    "name": "NVIDIA \"Prefer Maximum Performance\" power mode",
+    "aliases": ["prefer maximum performance", "nvidia power management mode", "max performance gpu", "stop gpu downclocking", "gpu power management"],
+    "verdict": "real",
+    "what": "An NVIDIA Control Panel setting that pins the GPU at high clocks instead of letting it drop them when it thinks it's idle.",
+    "why": "Real, but narrow. In a light esports title that never fully loads the card, the GPU can down-clock mid-match and add a little latency or a micro-stutter — locking clocks high stops that. In anything that actually loads the GPU it's already boosting, so this just burns a few extra watts and degrees for nothing. Worth a try on competitive titles, pointless elsewhere — set it per-game, not globally, and measure your 1% low before and after.",
+    "related": ["power-plan", "low-latency-mode", "fan-curves"]
+  },
+  {
+    "id": "cpu-affinity-games",
+    "name": "Pinning a game to specific CPU cores (affinity)",
+    "aliases": ["cpu affinity", "set affinity", "pin game to cores", "process lasso affinity", "disable cores for gaming"],
+    "verdict": "placebo",
+    "what": "Hand-assigning a game to a hand-picked set of CPU cores in Task Manager or a tool like Process Lasso, on the theory you're keeping it off the 'busy' ones.",
+    "why": "The Windows scheduler already places game threads better than a fixed list can, and it adapts as load shifts — a manual pin can't. At best it does nothing; at worst it starves the game of cores or, on a multi-die AMD chip, forces threads across the slow cross-die boundary you were trying to avoid. The thing that genuinely helps those chips is a one-complex setting, and Compy surfaces that as a measured, reversible suggestion — not a blanket affinity hack.",
+    "related": ["interrupt-affinity", "core-unparking"]
   }
 ]
