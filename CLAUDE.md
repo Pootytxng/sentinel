@@ -117,6 +117,25 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🔬 TUNING TRAIN VERIFIED + measureTuning FILTER FIX + COWORK HANDOFF + OWNER-CLARITY REBUILD —
+> 2026-06-09 (`main` @ `86315e2`).** The tuning-guides train (`ad4d05c`..`272f195`, spec
+> `docs/superpowers/specs/2026-06-08-tuning-guides-stability-measurement.md`) was RE-VERIFIED after the
+> prior session's report was lost to a PC restart: cargo **232** green · npm **226** green · clippy
+> zero warnings · tsc clean · fresh /check + /security clean. The 4 pre-existing Fix-comparison
+> regression tests in `comparison.rs` are **diff-proven byte-identical** across the train and passing —
+> the comparison-engine extension did not regress the Fix path. The one medium /check finding was fixed
+> same-day (`86315e2`): `measureTuning` now filters INSIDE the module (only the tune's OWN result —
+> `kind === "tuning"` + same game — can confound; stale fix / fix-era / other-game results never flip
+> the Lab readout), pinned by a regression test. Known-accepted LOW: `gpuRunningHot` has no recency
+> window (v1 trade-off — don't re-raise). **Cowork handoff doc added** (`402ef59`,
+> `docs/COWORK_HANDOFF.md`) — onboards every future Cowork session (relay model + style + duties + board).
+> - **✅ REBUILD (2026-06-09 21:06):** owner-clarity build from `86315e2` (`CODEGEN_UNITS=256`, 14.5 GB
+>   free, 38 s). **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `6C24DB7196D7CDFDFFD3E37ECA5490300E3D7C131E9299983E349934913C7435`** (2,750,267 B) + MSI
+>   (4,112,384 B) — SUPERSEDES the 2026-06-08 18:15 `08F540F8…` build. Owner-clarity only (installed app
+>   = current `main`); `beta-kit/` (last write 06-07 19:05) + frozen refs (`16069fa`) UNTOUCHED; tray +
+>   §4 apply-all QA still pending before any tester ship.
+
 > **🧰 LIVE-DEMO POLISH TRAIN + OWNER-CLARITY REBUILD — 2026-06-08 (`main` @ `b957beb`).** A run of
 > small frontend fixes landed on `main` (each hot-reloaded into the live `npm run tauri dev` per the
 > standing dev-build workflow — see memory [[live-dev-build-standing-workflow]]), then folded into ONE
