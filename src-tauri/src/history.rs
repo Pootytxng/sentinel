@@ -210,6 +210,11 @@ fn dispatch_apply(rec_id: &str) -> Result<ApplyResult, String> {
     }
 }
 
+/// Display-title cap for ledger receipts. Titles come from our own catalog (all < 100 chars);
+/// the cap is defense-in-depth at the webview trust boundary — a compromised UI must not be able
+/// to bloat history.json with megabyte "titles" through the apply commands.
+const MAX_REC_TITLE_LEN: usize = 200;
+
 /// Build the full-contract ledger receipt for a completed apply. Shared by the single apply and
 /// the batch (identical receipt either way — rollback granularity is per item, unchanged).
 fn build_applied_change(
@@ -222,7 +227,7 @@ fn build_applied_change(
     Ok(AppliedChange {
         id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
         rec_id: rec_id.to_string(),
-        rec_title: rec_title.to_string(),
+        rec_title: rec_title.chars().take(MAX_REC_TITLE_LEN).collect(),
         applied_at: Utc::now().to_rfc3339(),
         snapshot: snapshot_json,
         status: "applied".into(),
@@ -648,6 +653,24 @@ mod batch_apply_tests {
             Some("fast-startup"),
             "typed snapshot serialized with its tag"
         );
+    }
+
+    // Defense-in-depth at the webview boundary: a receipt title is capped so a compromised UI
+    // can't bloat history.json through the apply commands. Real catalog titles are untouched.
+    #[test]
+    fn receipt_titles_are_capped_but_real_titles_untouched() {
+        let result = || ApplyResult {
+            applied_action: AppliedAction::DisableFastStartup,
+            rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
+            snapshot: Snapshot::FastStartup { prior_hiberboot: Some(1) },
+            elevation_used: true,
+        };
+        let real = "Disable Fast Startup";
+        let c = build_applied_change("fast-startup-off", real, result()).expect("build");
+        assert_eq!(c.rec_title, real, "a real catalog title passes through unchanged");
+        let huge = "x".repeat(1_000_000);
+        let c = build_applied_change("fast-startup-off", &huge, result()).expect("build");
+        assert_eq!(c.rec_title.chars().count(), MAX_REC_TITLE_LEN, "a hostile title is capped");
     }
 }
 
