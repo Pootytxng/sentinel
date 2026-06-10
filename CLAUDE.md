@@ -117,9 +117,23 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **✅ §4 LIVE ELEVATION QA — ALL THREE STEPS DIRECTLY EVIDENCED + DETERMINISTIC CANCEL TEST —
+> 2026-06-10 (`main` @ `2b912b0`).** The full apply-all elevation QA passed with ground-truth
+> `history.json` evidence (verified via a committed `#[ignore]`d live-QA harness, `manual_elevation_qa`):
+> **(1) one prompt** — a 2-elevated-item batch wrote two ledger receipts **22µs apart** with
+> `elevation_prompts:1`; **(2) per-item rollback** — rolling back only HAGS flipped it to `rolled_back`
+> while its sibling stayed `applied`; **(3) UAC cancel honest** — clicking No gave `applied:1, skipped:1`,
+> the elevated item skipped with "Elevation did not complete," and the ledger gained ONLY the
+> non-elevated item (+1 entry — the cancelled item is never recorded, fail-safe). The cancel ARM is also
+> CI-proven deterministically via a test-only `ForceElevationError` seam (`#[cfg(test)]`, compiled out of
+> the shipped binary). cargo **243** green. NOTE: this dev rig auto-prompts normally (a real UAC dialog
+> appears — earlier `applied:2` runs were reflexive Yes-clicks, owner-confirmed, NOT silent elevation or
+> a bug). Test artifacts: the harness leaves `QA ·`-tagged entries in the live ledger (cleanup offered).
+>
 > **✅ §4 GATES PASSED + BETA-CAPABLE REBUILD + KIT RE-ZIPPED — 2026-06-09 (`main` @ `e19db67`).**
 > Owner live elevation QA = GREEN (ONE UAC prompt per batch · per-item rollback confirmed · UAC-cancel
-> honest) and the tray QA is done → the two §4 ship gates are CLOSED. Rebuild from `e19db67`
+> honest — all three now directly evidenced per the 2026-06-10 banner above) and the tray QA is done →
+> the two §4 ship gates are CLOSED. Rebuild from `e19db67`
 > (`CODEGEN_UNITS=256`, 17.1 GB free, 38 s; suites re-verified first: cargo **242** · npm **226**).
 > **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
 > `AF10BEC1F95ACB4327A8AFE8E33325D60F4298F81615D901760C199E63921D1B`** (2,761,175 B) + MSI
