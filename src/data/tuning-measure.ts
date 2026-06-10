@@ -25,17 +25,29 @@ export const TUNING_REAL_TEMP_DROP_C = 3; // a real temp improvement is a ≥3 �
 // one-off spike, never a standing banner (bathroom law: signpost at the moment of need).
 export const TUNING_HOT_THRESHOLD_C = 80;
 export const TUNING_HOT_MIN_SESSIONS = 3;
+// Recency window: "your GPU's been running warm" is a claim about NOW — sessions older than this
+// can't carry it (drivers, ambient, dust, and the games themselves all move on). Mirrors the
+// comparison engine's stale-baseline discipline (ARM_MAX_AGE_DAYS = 14 in comparison.rs).
+export const TUNING_HOT_WINDOW_DAYS = 14;
 
 /**
  * Sustained-warm signal for the Check nudge: the last `TUNING_HOT_MIN_SESSIONS` sessions that recorded
- * a GPU temp are ALL at/above the threshold. Returns the worst peak + the count, or null (not warranted
- * — too few temp'd sessions, or any recent run stayed cool). `sessions` is newest-first.
+ * a GPU temp — all started within the last `TUNING_HOT_WINDOW_DAYS` — are ALL at/above the threshold.
+ * Returns the worst peak + the count, or null (not warranted — too few RECENT temp'd sessions, or any
+ * recent run stayed cool). `sessions` is newest-first; `now` is injectable for tests. A session with
+ * an unparseable start time counts as NOT recent (fail-safe: never nudge off bad data).
  */
 export function gpuRunningHot(
   sessions: SessionSummary[],
+  now: number = Date.now(),
 ): { peakC: number; sessions: number } | null {
+  const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
   const temps = sessions
-    .filter((s) => typeof s.peak_gpu_temp_c === "number")
+    .filter((s) => {
+      if (typeof s.peak_gpu_temp_c !== "number") return false;
+      const started = Date.parse(s.started_at);
+      return Number.isFinite(started) && now - started <= windowMs;
+    })
     .slice(0, TUNING_HOT_MIN_SESSIONS)
     .map((s) => s.peak_gpu_temp_c as number);
   if (temps.length < TUNING_HOT_MIN_SESSIONS) return null;
@@ -171,6 +183,13 @@ export function measureTuning(
     headline = "Too aggressive";
     detail =
       "You reported a crash, hang, or artifacts — that's the limit. Step back up one increment in your tool, then keep measuring.";
+  } else if (sessionsSince === 0) {
+    // Honest-measurement law: with ZERO measured sessions there is nothing to call — claiming
+    // "no measurable change" here would be a null verdict invented from no data.
+    verdict = "too-early";
+    headline = "Nothing measured yet";
+    detail =
+      "Compy hasn't seen a session of this game since the tune. Play one and the comparison starts — temps and frames against your baseline.";
   } else if (confounded) {
     verdict = "confounded";
     headline = "Can't cleanly attribute this";

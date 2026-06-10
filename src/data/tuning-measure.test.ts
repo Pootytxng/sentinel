@@ -200,4 +200,58 @@ describe("gpuRunningHot — the Check nudge signal (bathroom law)", () => {
       ]),
     ).toBeNull();
   });
+
+  it("stays silent when the hot sessions are STALE — warmth is a claim about now (recency window)", () => {
+    const NOW = Date.parse("2026-07-15T12:00:00Z"); // > 14 days after the fixture sessions
+    // Three hot sessions, all older than the window → no nudge off month-old history.
+    expect(gpuRunningHot([sess({ peak_gpu_temp_c: 90 }), sess({ peak_gpu_temp_c: 90 }), sess({ peak_gpu_temp_c: 90 })], NOW)).toBeNull();
+    // Two recent hot + one stale hot → the stale one can't complete the evidence window.
+    expect(
+      gpuRunningHot(
+        [
+          sess({ started_at: "2026-07-14T12:00:00Z", peak_gpu_temp_c: 90 }),
+          sess({ started_at: "2026-07-13T12:00:00Z", peak_gpu_temp_c: 90 }),
+          sess({ started_at: "2026-05-01T12:00:00Z", peak_gpu_temp_c: 90 }),
+        ],
+        NOW,
+      ),
+    ).toBeNull();
+    // Three recent hot → fires.
+    expect(
+      gpuRunningHot(
+        [
+          sess({ started_at: "2026-07-14T12:00:00Z", peak_gpu_temp_c: 90 }),
+          sess({ started_at: "2026-07-13T12:00:00Z", peak_gpu_temp_c: 88 }),
+          sess({ started_at: "2026-07-12T12:00:00Z", peak_gpu_temp_c: 86 }),
+        ],
+        NOW,
+      ),
+    ).toEqual({ peakC: 90, sessions: 3 });
+  });
+
+  it("an unparseable session start time counts as NOT recent (never nudge off bad data)", () => {
+    expect(
+      gpuRunningHot([
+        sess({ peak_gpu_temp_c: 90, started_at: "not a date" }),
+        sess({ peak_gpu_temp_c: 90 }),
+        sess({ peak_gpu_temp_c: 90 }),
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe("measureTuning — zero-session honesty (honest-measurement law)", () => {
+  it("ZERO measured sessions is 'nothing measured yet', never an invented null verdict", () => {
+    const m = measureTuning(baseline(), [])!;
+    expect(m.sessionsSince).toBe(0);
+    expect(m.verdict).toBe("too-early");
+    expect(m.headline).toBe("Nothing measured yet");
+    expect(m.headline).not.toMatch(/no measurable change/i);
+  });
+
+  it("a reported crash still wins over the empty window (real data beats no data)", () => {
+    const m = measureTuning(baseline({ crash_reported: true }), [])!;
+    expect(m.verdict).toBe("too-aggressive");
+    expect(m.crashReported).toBe(true);
+  });
 });
