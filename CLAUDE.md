@@ -137,6 +137,19 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🧪 AUTONOMOUS IMPROVEMENT SPRINT — 2026-06-10 (`main` @ `d51f6f0`+).** Owner-mandated broad
+> reversible sprint; full running log + ranked owner-deferred list in
+> `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-10.md`. Landed (all green, each pushed): design-law sweep
+> (zero violations); **hardening** — `gpuRunningHot` 14-day recency window + `measureTuning`
+> zero-session honesty (`4d01be9`), receipt-title cap at the webview boundary (`2ab405d`); **a11y** —
+> dialog semantics on the 3 content modals (`19c4fbb`); **perf** — `AmbientBackdrop` stops polling
+> `get_fps_status` unless step-aside is on (`387958f`); **knowledge growth** — 3 honest Library debunks
+> (SMT-off / NVIDIA max-perf / CPU affinity, `63e8a54`, tweak curation pin 43→46, NOT appliable-catalog
+> growth); **scope-only spec** for the tuning follow-ons + wave-2 share card (`d51f6f0`). cargo **244** ·
+> npm **230** · clippy+tsc clean. Locked gates + security/system settings + frozen refs all untouched.
+> Owner-deferred (copy/taste, see the log): site hero "Faster frames" tension w/ the no-promise
+> positioning; the "116 entries" → ~120 count; a minor README §5 wording nit.
+
 > **✅ §4 LIVE ELEVATION QA — ALL THREE STEPS DIRECTLY EVIDENCED + DETERMINISTIC CANCEL TEST —
 > 2026-06-10 (`main` @ `2b912b0`).** The full apply-all elevation QA passed with ground-truth
 > `history.json` evidence (verified via a committed `#[ignore]`d live-QA harness, `manual_elevation_qa`):
@@ -191,8 +204,9 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > the comparison-engine extension did not regress the Fix path. The one medium /check finding was fixed
 > same-day (`86315e2`): `measureTuning` now filters INSIDE the module (only the tune's OWN result —
 > `kind === "tuning"` + same game — can confound; stale fix / fix-era / other-game results never flip
-> the Lab readout), pinned by a regression test. Known-accepted LOW: `gpuRunningHot` has no recency
-> window (v1 trade-off — don't re-raise). **Cowork handoff doc added** (`402ef59`,
+> the Lab readout), pinned by a regression test. (The then-accepted LOW — `gpuRunningHot` had no
+> recency window — was CLOSED in the 2026-06-10 sprint, see banner above.) **Cowork handoff doc added**
+> (`402ef59`,
 > `docs/COWORK_HANDOFF.md`) — onboards every future Cowork session (relay model + style + duties + board).
 > - **✅ REBUILD (2026-06-09 21:06):** owner-clarity build from `86315e2` (`CODEGEN_UNITS=256`, 14.5 GB
 >   free, 38 s). **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
