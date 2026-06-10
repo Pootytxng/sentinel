@@ -186,36 +186,43 @@ fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
     std::fs::write(path, json).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
-    let _lock = HISTORY_LOCK
-        .lock()
-        .map_err(|_| "history lock poisoned".to_string())?;
-    let result: ApplyResult = match rec_id.as_str() {
-        "game-mode" => apply_game_mode()?,
-        "visual-effects" => apply_visual_effects()?,
-        "sysmain-disable" => apply_service_disable(KnownService::SysMain)?,
-        "nvidia-telemetry" => apply_service_disable(KnownService::NvTelemetryContainer)?,
-        "power-ultimate" => apply_power_ultimate()?,
-        "nagle-disable" => apply_nagle_disable()?,
-        "hags-enable" => apply_hags_enable()?,
-        "mouse-accel-off" => apply_mouse_accel_off()?,
-        "game-bar-disable" => apply_game_bar_disable()?,
-        "diagtrack-disable" => apply_service_disable(KnownService::DiagTrack)?,
-        "windows-search-disable" => apply_service_disable(KnownService::WSearch)?,
-        "fast-startup-off" => apply_fast_startup_off()?,
-        "reserved-storage-off" => apply_reserved_storage_off()?,
-        "usb-selective-suspend-off" => apply_usb_selective_suspend_off()?,
-        "pcie-aspm-off" => apply_pcie_aspm_off()?,
-        "eee-disable" => apply_eee_disable()?,
-        other => return Err(format!("'{}' is not yet supported for one-click apply", other)),
-    };
+/// The ONE dispatch from rec id to its audited apply_* — `apply_recommendation` and the §4 batch
+/// orchestrator both go through here, so there is no second copy of the match to drift.
+fn dispatch_apply(rec_id: &str) -> Result<ApplyResult, String> {
+    match rec_id {
+        "game-mode" => apply_game_mode(),
+        "visual-effects" => apply_visual_effects(),
+        "sysmain-disable" => apply_service_disable(KnownService::SysMain),
+        "nvidia-telemetry" => apply_service_disable(KnownService::NvTelemetryContainer),
+        "power-ultimate" => apply_power_ultimate(),
+        "nagle-disable" => apply_nagle_disable(),
+        "hags-enable" => apply_hags_enable(),
+        "mouse-accel-off" => apply_mouse_accel_off(),
+        "game-bar-disable" => apply_game_bar_disable(),
+        "diagtrack-disable" => apply_service_disable(KnownService::DiagTrack),
+        "windows-search-disable" => apply_service_disable(KnownService::WSearch),
+        "fast-startup-off" => apply_fast_startup_off(),
+        "reserved-storage-off" => apply_reserved_storage_off(),
+        "usb-selective-suspend-off" => apply_usb_selective_suspend_off(),
+        "pcie-aspm-off" => apply_pcie_aspm_off(),
+        "eee-disable" => apply_eee_disable(),
+        other => Err(format!("'{}' is not yet supported for one-click apply", other)),
+    }
+}
+
+/// Build the full-contract ledger receipt for a completed apply. Shared by the single apply and
+/// the batch (identical receipt either way — rollback granularity is per item, unchanged).
+fn build_applied_change(
+    rec_id: &str,
+    rec_title: &str,
+    result: ApplyResult,
+) -> Result<AppliedChange, String> {
     let snapshot_json = serde_json::to_value(&result.snapshot)
         .map_err(|e| format!("snapshot serialize: {}", e))?;
-    let change = AppliedChange {
+    Ok(AppliedChange {
         id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
-        rec_id,
-        rec_title,
+        rec_id: rec_id.to_string(),
+        rec_title: rec_title.to_string(),
         applied_at: Utc::now().to_rfc3339(),
         snapshot: snapshot_json,
         status: "applied".into(),
@@ -224,11 +231,217 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
         app_version_at_apply: Some(env!("CARGO_PKG_VERSION").to_string()),
         ruleset_version_at_apply: Some("1.0.0-baseline".to_string()),
         elevation_used: Some(result.elevation_used),
-    };
+    })
+}
+
+#[tauri::command]
+pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
+    let _lock = HISTORY_LOCK
+        .lock()
+        .map_err(|_| "history lock poisoned".to_string())?;
+    let result = dispatch_apply(&rec_id)?;
+    let change = build_applied_change(&rec_id, &rec_title, result)?;
     let mut history = load_history();
     history.push(change.clone());
     save_history(&history)?;
     Ok(into_view(change))
+}
+
+// ─── §4 one-elevation batch apply (spec 2026-06-06-beta-feedback-3 §4) ──────────────────
+// Orchestration ONLY — reuses the audited dispatch_apply / run_elevated_powershell / receipt
+// primitives; it introduces no new mutation primitive. One UAC prompt for the whole batch; one
+// ledger receipt PER item (rollback granularity unchanged); per-item failure isolation.
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BatchApplyItem {
+    pub rec_id: String,
+    pub rec_title: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct BatchItemOutcome {
+    rec_id: String,
+    rec_title: String,
+    status: String, // "applied" | "skipped"
+    reason: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub(crate) struct BatchApplyReport {
+    items: Vec<BatchItemOutcome>,
+    applied: usize,
+    skipped: usize,
+    /// 0 or 1 — the whole point of the batch. Surfaced so the UI/QA can assert it honestly.
+    elevation_prompts: usize,
+}
+
+fn outcome_applied(rec_id: &str, rec_title: &str) -> BatchItemOutcome {
+    BatchItemOutcome {
+        rec_id: rec_id.to_string(),
+        rec_title: rec_title.to_string(),
+        status: "applied".into(),
+        reason: None,
+    }
+}
+
+fn outcome_skipped(rec_id: &str, rec_title: &str, reason: String) -> BatchItemOutcome {
+    BatchItemOutcome {
+        rec_id: rec_id.to_string(),
+        rec_title: rec_title.to_string(),
+        status: "skipped".into(),
+        reason: Some(reason),
+    }
+}
+
+/// Pure receipt → outcome mapping (fail-safe direction: ONLY an explicit `ok` receipt earns a
+/// ledger entry; `fail` and MISSING are both not-applied). Split out so the failure-isolation
+/// contract is unit-testable without elevation.
+fn resolve_receipt(receipts: &std::collections::HashMap<String, bool>, rec_id: &str) -> Result<(), String> {
+    match receipts.get(rec_id) {
+        Some(true) => Ok(()),
+        Some(false) => Err(
+            "The elevated step failed for this item — it was skipped and nothing was changed for it."
+                .to_string(),
+        ),
+        None => Err(
+            "No completion receipt was written for this item — treating it as not applied (nothing is recorded that didn't verifiably happen)."
+                .to_string(),
+        ),
+    }
+}
+
+#[tauri::command]
+pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<BatchApplyReport, String> {
+    // ── Validation — BEFORE the lock and before any mutation. The whole batch is refused (not
+    // partially run) on a malformed request: it indicates a caller bug, not a per-item condition.
+    if items.is_empty() {
+        return Err("nothing to apply".to_string());
+    }
+    let mut seen = std::collections::HashSet::new();
+    for it in &items {
+        if !APPLIABLE_REC_IDS.contains(&it.rec_id.as_str()) {
+            return Err(format!("'{}' is not appliable", it.rec_id));
+        }
+        // The one exit-using elevated command would abort sibling items mid-script — and it's
+        // moderate-tier, outside the safe batch by design. Hard boundary, not a skip.
+        if it.rec_id == "power-ultimate" {
+            return Err("'power-ultimate' cannot ride a batch — apply it individually".to_string());
+        }
+        if !seen.insert(it.rec_id.clone()) {
+            return Err(format!("duplicate rec '{}' in batch", it.rec_id));
+        }
+    }
+
+    let _lock = HISTORY_LOCK
+        .lock()
+        .map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history();
+    let mut outcomes: Vec<BatchItemOutcome> = Vec::new();
+    let mut applied = 0usize;
+
+    struct Deferred {
+        rec_id: String,
+        rec_title: String,
+        result: ApplyResult,
+        cmds: std::ops::Range<usize>,
+    }
+    let mut staged: Vec<Deferred> = Vec::new();
+
+    // ── Phase 1 — every apply runs with the deferral sink armed. Non-elevated recs mutate
+    // (HKCU) and receipt immediately, exactly like a single apply. Elevated recs perform their
+    // READS and park their one PS command (no partial mutation — see the sink's safety note).
+    let all_cmds: Vec<String> = {
+        let guard = ElevationDeferral::begin()?;
+        let mut cursor = 0usize;
+        for it in &items {
+            match dispatch_apply(&it.rec_id) {
+                Err(e) => outcomes.push(outcome_skipped(&it.rec_id, &it.rec_title, e)),
+                Ok(result) => {
+                    let now = guard.deferred_count();
+                    if now == cursor {
+                        // No elevated step → the mutation already happened → honest receipt now.
+                        let change = build_applied_change(&it.rec_id, &it.rec_title, result)?;
+                        history.push(change);
+                        applied += 1;
+                        outcomes.push(outcome_applied(&it.rec_id, &it.rec_title));
+                    } else {
+                        staged.push(Deferred {
+                            rec_id: it.rec_id.clone(),
+                            rec_title: it.rec_title.clone(),
+                            result,
+                            cmds: cursor..now,
+                        });
+                        cursor = now;
+                    }
+                }
+            }
+        }
+        guard.take_deferred()
+    };
+    // Persist phase-1 receipts before the elevation step — a cancelled UAC must never cost the
+    // non-elevated items their ledger entries.
+    if applied > 0 {
+        save_history(&history)?;
+    }
+
+    // ── Phase 2 — ONE elevation for every deferred command, receipts to a result FILE (data,
+    // not code: reading it never executes anything), then a ledger receipt per confirmed item.
+    let mut elevation_prompts = 0usize;
+    if !staged.is_empty() {
+        let receipts_path = compy_data_dir().join(format!(
+            "elevation-batch-{}.receipts",
+            Utc::now().timestamp_millis()
+        ));
+        std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&receipts_path);
+        let script_items: Vec<(String, Vec<String>)> = staged
+            .iter()
+            .map(|d| (d.rec_id.clone(), all_cmds[d.cmds.clone()].to_vec()))
+            .collect();
+        let script = compose_batch_script(&script_items, &receipts_path.to_string_lossy())?;
+        elevation_prompts = 1;
+        match run_elevated_powershell(&script) {
+            Err(e) => {
+                // UAC declined or the elevated process failed to run: NOTHING elevated was
+                // applied. Honest per-item skip; the phase-1 items stand on their own receipts.
+                for d in staged {
+                    outcomes.push(outcome_skipped(
+                        &d.rec_id,
+                        &d.rec_title,
+                        format!("Elevation did not complete — nothing was changed for this item. ({e})"),
+                    ));
+                }
+            }
+            Ok(()) => {
+                let text = std::fs::read_to_string(&receipts_path).unwrap_or_default();
+                let receipts = parse_batch_receipts(&text);
+                for d in staged {
+                    match resolve_receipt(&receipts, &d.rec_id) {
+                        Ok(()) => {
+                            let change = build_applied_change(&d.rec_id, &d.rec_title, d.result)?;
+                            history.push(change);
+                            applied += 1;
+                            outcomes.push(outcome_applied(&d.rec_id, &d.rec_title));
+                        }
+                        Err(reason) => {
+                            outcomes.push(outcome_skipped(&d.rec_id, &d.rec_title, reason))
+                        }
+                    }
+                }
+                save_history(&history)?;
+            }
+        }
+        let _ = std::fs::remove_file(&receipts_path);
+    }
+
+    let skipped = outcomes.iter().filter(|o| o.status == "skipped").count();
+    Ok(BatchApplyReport {
+        items: outcomes,
+        applied,
+        skipped,
+        elevation_prompts,
+    })
 }
 
 #[tauri::command]
@@ -318,6 +531,78 @@ fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
 // History-owned behavior: the recomputed ledger view and the on-disk round
 // trip. The typed apply/rollback contract itself is pinned by `safety_tests`
 // in lib.rs; here we prove the records persist honestly and fail safe.
+#[cfg(test)]
+mod batch_apply_tests {
+    use super::*;
+
+    fn item(rec_id: &str) -> BatchApplyItem {
+        BatchApplyItem {
+            rec_id: rec_id.into(),
+            rec_title: format!("title for {rec_id}"),
+        }
+    }
+
+    // Validation refuses the WHOLE batch before any lock/mutation — these run the real command
+    // function safely because every rejection path returns before phase 1.
+    #[test]
+    fn batch_refuses_empty_unknown_duplicate_and_power_ultimate() {
+        assert!(apply_recommendations_batch(vec![]).is_err(), "empty");
+        assert!(
+            apply_recommendations_batch(vec![item("not-a-real-rec")]).is_err(),
+            "unknown id must refuse the batch"
+        );
+        assert!(
+            apply_recommendations_batch(vec![item("fast-startup-off"), item("fast-startup-off")])
+                .is_err(),
+            "duplicate ids must refuse the batch"
+        );
+        let err = apply_recommendations_batch(vec![item("hags-enable"), item("power-ultimate")])
+            .expect_err("power-ultimate is the exit-using elevated command — never batchable");
+        assert!(err.contains("power-ultimate"));
+    }
+
+    // The fail-safe receipt contract: ONLY an explicit ok earns a ledger entry; an explicit fail
+    // and a MISSING receipt are both not-applied. (The PS-level isolation proof lives in
+    // actions::batch_elevation_tests::real_powershell_batch_isolates_a_failing_item.)
+    #[test]
+    fn receipt_resolution_is_fail_safe() {
+        let mut receipts = std::collections::HashMap::new();
+        receipts.insert("alpha".to_string(), true);
+        receipts.insert("bravo".to_string(), false);
+        assert!(resolve_receipt(&receipts, "alpha").is_ok());
+        let failed = resolve_receipt(&receipts, "bravo").expect_err("explicit fail");
+        assert!(failed.contains("skipped"));
+        let missing = resolve_receipt(&receipts, "charlie").expect_err("missing receipt");
+        assert!(missing.contains("not applied"));
+    }
+
+    // The shared receipt builder writes the FULL rollback contract — batch receipts are
+    // byte-equivalent in shape to single-apply receipts (rollback granularity unchanged).
+    #[test]
+    fn batch_receipts_carry_the_full_rollback_contract() {
+        let result = ApplyResult {
+            applied_action: AppliedAction::DisableFastStartup,
+            rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
+            snapshot: Snapshot::FastStartup {
+                prior_hiberboot: Some(1),
+            },
+            elevation_used: true,
+        };
+        let c = build_applied_change("fast-startup-off", "Disable Fast Startup", result)
+            .expect("build");
+        assert_eq!(c.rec_id, "fast-startup-off");
+        assert_eq!(c.status, "applied");
+        assert!(c.applied_action.is_some());
+        assert!(c.rollback_action.is_some());
+        assert_eq!(c.elevation_used, Some(true));
+        assert_eq!(
+            c.snapshot.get("kind").and_then(|k| k.as_str()),
+            Some("fast-startup"),
+            "typed snapshot serialized with its tag"
+        );
+    }
+}
+
 #[cfg(test)]
 mod history_tests {
     use super::*;

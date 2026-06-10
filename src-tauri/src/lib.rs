@@ -640,6 +640,7 @@ pub fn run() {
             overlay_visible,
             set_overlay_corner,
             apply_recommendation,
+            history::apply_recommendations_batch,
             rollback_change,
             get_applied_changes,
             get_startup_entries,

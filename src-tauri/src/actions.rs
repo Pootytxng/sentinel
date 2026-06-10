@@ -358,7 +358,124 @@ pub(crate) fn apply_visual_effects() -> Result<ApplyResult, String> {
 // rather than running Compy itself elevated, which would force a UAC
 // prompt on every launch.
 
+// ─── §4 one-elevation batching: the deferral sink (spec 2026-06-06-beta-feedback-3 §4) ───
+// Thread-local on purpose: arming it can only affect the ONE thread that armed it (the batch
+// orchestrator's command thread). While armed, `run_elevated_powershell` CAPTURES the command
+// instead of elevating. This is safe ONLY because every batchable apply_* performs reads before
+// its single elevated call and no mutation after it — deferring therefore causes no partial
+// mutation. The rollback path never runs under an armed sink (the orchestrator is the only
+// arm-er and it never rolls back).
+thread_local! {
+    static ELEVATION_SINK: std::cell::RefCell<Option<Vec<String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard for the deferral sink — the sink is disarmed when this drops (including on panic,
+/// so a poisoned command thread can never leak an armed sink into later invocations).
+pub(crate) struct ElevationDeferral {
+    _private: (),
+}
+
+impl ElevationDeferral {
+    /// Arm the sink on this thread. Refuses to nest — a batch inside a batch is a logic error.
+    pub(crate) fn begin() -> Result<Self, String> {
+        ELEVATION_SINK.with(|s| {
+            let mut slot = s.borrow_mut();
+            if slot.is_some() {
+                return Err("an elevation batch is already active on this thread".to_string());
+            }
+            *slot = Some(Vec::new());
+            Ok(ElevationDeferral { _private: () })
+        })
+    }
+
+    /// How many elevated commands have been captured so far (the orchestrator reads this after
+    /// each apply to attribute captured commands to the rec that produced them).
+    pub(crate) fn deferred_count(&self) -> usize {
+        ELEVATION_SINK.with(|s| s.borrow().as_ref().map(|v| v.len()).unwrap_or(0))
+    }
+
+    /// Take every captured command and disarm the sink (consumes the guard).
+    pub(crate) fn take_deferred(self) -> Vec<String> {
+        ELEVATION_SINK.with(|s| s.borrow_mut().take().unwrap_or_default())
+    }
+}
+
+impl Drop for ElevationDeferral {
+    fn drop(&mut self) {
+        ELEVATION_SINK.with(|s| *s.borrow_mut() = None);
+    }
+}
+
+/// Compose the ONE inline elevated `-Command` for a batch: per rec, `try { <its cmds> ;
+/// receipt 'id:ok' } catch { receipt 'id:fail' }` appended to a result FILE — per-item failure
+/// isolation inside a single elevation. `$ErrorActionPreference='Stop'` promotes errors to
+/// terminating so a failed step lands in `catch` (a per-cmd `-ErrorAction SilentlyContinue`,
+/// where an apply deliberately tolerates a step, still overrides — same semantics as today's
+/// per-item elevation). Rec ids pass `ps_safe` (allowlist shape) and the result path is
+/// single-quote-escaped; the captured commands themselves come from the audited apply_* builders
+/// unchanged. No `exit` may appear at this layer — the only exit-using elevated command
+/// (power-ultimate) is rejected by the orchestrator before composition.
+pub(crate) fn compose_batch_script(
+    items: &[(String, Vec<String>)],
+    result_path: &str,
+) -> Result<String, String> {
+    if items.is_empty() {
+        return Err("nothing to compose".to_string());
+    }
+    let mut script = String::from("$ErrorActionPreference='Stop'; ");
+    script.push_str(&format!("$rf='{}'; ", result_path.replace('\'', "''")));
+    for (rec_id, cmds) in items {
+        ps_safe(rec_id)?; // alphanumeric/._- only — safe inside the receipt literals below
+        if cmds.is_empty() {
+            return Err(format!("rec '{}' deferred no commands", rec_id));
+        }
+        let joined = cmds
+            .iter()
+            .map(|c| c.trim().trim_end_matches(';').trim_end())
+            .collect::<Vec<_>>()
+            .join("; ");
+        script.push_str(&format!(
+            "try {{ {joined}; Add-Content -LiteralPath $rf -Value '{rec_id}:ok' }} catch {{ Add-Content -LiteralPath $rf -Value '{rec_id}:fail' }}; "
+        ));
+    }
+    Ok(script)
+}
+
+/// Parse the batch result file: one `<rec_id>:ok` / `<rec_id>:fail` line per rec. Unknown or
+/// malformed lines are ignored (the orchestrator treats a MISSING receipt as not-applied — the
+/// fail-safe direction: we only ever ledger a receipt that explicitly says ok).
+pub(crate) fn parse_batch_receipts(text: &str) -> std::collections::HashMap<String, bool> {
+    let mut receipts = std::collections::HashMap::new();
+    for line in text.lines() {
+        if let Some((id, status)) = line.trim().rsplit_once(':') {
+            match status {
+                "ok" => {
+                    receipts.insert(id.to_string(), true);
+                }
+                "fail" => {
+                    receipts.insert(id.to_string(), false);
+                }
+                _ => {}
+            }
+        }
+    }
+    receipts
+}
+
 pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
+    // §4 batching: an armed sink on THIS thread captures instead of elevating (see above).
+    let deferred = ELEVATION_SINK.with(|s| {
+        if let Some(sink) = s.borrow_mut().as_mut() {
+            sink.push(command.to_string());
+            true
+        } else {
+            false
+        }
+    });
+    if deferred {
+        return Ok(());
+    }
     let status = runas::Command::new("powershell.exe")
         .args(&[
             "-NoProfile",
@@ -438,6 +555,102 @@ mod ps_injection_tests {
         ] {
             assert!(ps_safe(t).is_err(), "should reject unsafe token {t:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod batch_elevation_tests {
+    use super::{compose_batch_script, parse_batch_receipts, run_elevated_powershell, ElevationDeferral};
+
+    #[test]
+    fn sink_captures_instead_of_elevating_and_disarms_on_take() {
+        let guard = ElevationDeferral::begin().expect("arm");
+        // With the sink armed this CAPTURES — it must not launch anything (no UAC in tests).
+        run_elevated_powershell("Get-Date | Out-Null").expect("captured, not run");
+        run_elevated_powershell("Get-Item X").expect("captured, not run");
+        assert_eq!(guard.deferred_count(), 2);
+        let cmds = guard.take_deferred();
+        assert_eq!(cmds, vec!["Get-Date | Out-Null".to_string(), "Get-Item X".to_string()]);
+        // Disarmed after take: a fresh guard arms cleanly (would Err if a sink leaked).
+        let fresh = ElevationDeferral::begin().expect("sink must be disarmed after take");
+        assert_eq!(fresh.deferred_count(), 0);
+    }
+
+    #[test]
+    fn sink_disarms_on_drop_and_refuses_to_nest() {
+        {
+            let _guard = ElevationDeferral::begin().expect("arm");
+            assert!(ElevationDeferral::begin().is_err(), "nesting must be refused");
+        }
+        // Dropped (not taken) → still disarmed.
+        let fresh = ElevationDeferral::begin().expect("sink must be disarmed after drop");
+        drop(fresh);
+    }
+
+    #[test]
+    fn compose_builds_per_rec_try_catch_with_receipts() {
+        let items = vec![
+            ("fast-startup-off".to_string(), vec!["cmdA1; ".to_string()]),
+            ("hags-enable".to_string(), vec!["cmdB1".to_string(), "cmdB2;".to_string()]),
+        ];
+        let s = compose_batch_script(&items, r"C:\Users\o'brien\receipts.txt").expect("compose");
+        assert!(s.starts_with("$ErrorActionPreference='Stop'; "), "errors must terminate into catch");
+        assert!(s.contains(r"$rf='C:\Users\o''brien\receipts.txt'"), "path single-quote-escaped");
+        assert!(s.contains("try { cmdA1; Add-Content -LiteralPath $rf -Value 'fast-startup-off:ok' }"));
+        assert!(s.contains("catch { Add-Content -LiteralPath $rf -Value 'fast-startup-off:fail' }"));
+        assert!(s.contains("try { cmdB1; cmdB2; Add-Content -LiteralPath $rf -Value 'hags-enable:ok' }"));
+        assert!(!s.contains("exit"), "no exit may ever appear in a composed batch");
+    }
+
+    #[test]
+    fn compose_rejects_unsafe_ids_and_empty_input() {
+        // A rec id is embedded in receipt literals — anything outside the ps_safe allowlist is refused.
+        let bad = vec![("a'; calc; '".to_string(), vec!["x".to_string()])];
+        assert!(compose_batch_script(&bad, "rf").is_err());
+        assert!(compose_batch_script(&[], "rf").is_err());
+        let empty_cmds = vec![("fast-startup-off".to_string(), Vec::new())];
+        assert!(compose_batch_script(&empty_cmds, "rf").is_err());
+    }
+
+    #[test]
+    fn parse_receipts_maps_ok_fail_and_ignores_garbage() {
+        let r = parse_batch_receipts("fast-startup-off:ok\nhags-enable:fail\n\nnot a receipt\nx:maybe\n");
+        assert_eq!(r.get("fast-startup-off"), Some(&true));
+        assert_eq!(r.get("hags-enable"), Some(&false));
+        assert_eq!(r.len(), 2);
+    }
+
+    /// THE failure-isolation regression at the PowerShell level, proven against a REAL
+    /// (non-elevated) powershell.exe: one rec's command fails → its receipt says fail, every
+    /// other rec still runs and receipts ok. This is exactly the script the elevated batch runs —
+    /// elevation changes the token, not the semantics.
+    #[test]
+    fn real_powershell_batch_isolates_a_failing_item() {
+        let dir = std::env::temp_dir().join(format!("compy-batch-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let rf = dir.join("receipts.txt");
+        let _ = std::fs::remove_file(&rf);
+        let items = vec![
+            ("alpha-ok".to_string(), vec!["Get-Date | Out-Null".to_string()]),
+            (
+                "bravo-fail".to_string(),
+                vec![r"Get-Item -LiteralPath 'C:\__compy_no_such_path__\x' | Out-Null".to_string()],
+            ),
+            ("charlie-ok".to_string(), vec!["$null = 1".to_string()]),
+        ];
+        let script = compose_batch_script(&items, rf.to_string_lossy().as_ref()).expect("compose");
+        let status = super::quiet_command("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .status()
+            .expect("powershell runs");
+        assert!(status.success(), "the batch script itself must exit 0 (failures are caught per item)");
+        let text = std::fs::read_to_string(&rf).expect("receipt file written");
+        let receipts = parse_batch_receipts(&text);
+        assert_eq!(receipts.get("alpha-ok"), Some(&true));
+        assert_eq!(receipts.get("bravo-fail"), Some(&false), "the failing item must receipt fail");
+        assert_eq!(receipts.get("charlie-ok"), Some(&true), "items after a failure still run");
+        let _ = std::fs::remove_file(&rf);
+        let _ = std::fs::remove_dir(&dir);
     }
 }
 
