@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   measureTuning,
   postTuneSessions,
+  gpuRunningHot,
   TUNING_MIN_SECS,
 } from "./tuning-measure";
 import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types";
@@ -161,5 +162,30 @@ describe("measureTuning", () => {
     expect(m.fpsImproved).toBe(true);
     expect(m.tempReal).toBe(false);
     expect(m.verdict).toBe("holding");
+  });
+});
+
+describe("gpuRunningHot — the Check nudge signal (bathroom law)", () => {
+  it("fires only on SUSTAINED warmth — the last 3 temp'd sessions all at/over the threshold", () => {
+    const hot = gpuRunningHot([sess({ peak_gpu_temp_c: 84 }), sess({ peak_gpu_temp_c: 82 }), sess({ peak_gpu_temp_c: 81 })]);
+    expect(hot).toEqual({ peakC: 84, sessions: 3 });
+  });
+
+  it("stays silent when a recent session ran cool (not sustained)", () => {
+    expect(
+      gpuRunningHot([sess({ peak_gpu_temp_c: 84 }), sess({ peak_gpu_temp_c: 68 }), sess({ peak_gpu_temp_c: 82 })]),
+    ).toBeNull();
+  });
+
+  it("stays silent with too few temp'd sessions (not enough evidence)", () => {
+    expect(gpuRunningHot([sess({ peak_gpu_temp_c: 90 }), sess({ peak_gpu_temp_c: 90 })])).toBeNull();
+    // Sessions without a recorded GPU temp don't count toward the window.
+    expect(
+      gpuRunningHot([
+        sess({ peak_gpu_temp_c: 90 }),
+        sess({ peak_gpu_temp_c: null }),
+        sess({ peak_gpu_temp_c: 90 }),
+      ]),
+    ).toBeNull();
   });
 });

@@ -1450,6 +1450,7 @@ function App() {
                   onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
                   onChanged={refresh}
                   vendor={detectedVendor}
+                  sessions={sessions}
                 />
               )}
               {activeTab === "Readiness" && (

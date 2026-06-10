@@ -21,6 +21,28 @@ export const TUNING_MIN_SESSIONS = 3; // "holding up so far" needs ≥ 3 session
 export const TUNING_MIN_SECS = 3 * 3600; // … AND ~3 hours of play with no crash
 export const TUNING_REAL_TEMP_DROP_C = 3; // a real temp improvement is a ≥3 °C drop (else sensor noise)
 
+// The Check nudge fires only when the GPU has run warm across SUSTAINED recent sessions — never a
+// one-off spike, never a standing banner (bathroom law: signpost at the moment of need).
+export const TUNING_HOT_THRESHOLD_C = 80;
+export const TUNING_HOT_MIN_SESSIONS = 3;
+
+/**
+ * Sustained-warm signal for the Check nudge: the last `TUNING_HOT_MIN_SESSIONS` sessions that recorded
+ * a GPU temp are ALL at/above the threshold. Returns the worst peak + the count, or null (not warranted
+ * — too few temp'd sessions, or any recent run stayed cool). `sessions` is newest-first.
+ */
+export function gpuRunningHot(
+  sessions: SessionSummary[],
+): { peakC: number; sessions: number } | null {
+  const temps = sessions
+    .filter((s) => typeof s.peak_gpu_temp_c === "number")
+    .slice(0, TUNING_HOT_MIN_SESSIONS)
+    .map((s) => s.peak_gpu_temp_c as number);
+  if (temps.length < TUNING_HOT_MIN_SESSIONS) return null;
+  if (temps.some((t) => t < TUNING_HOT_THRESHOLD_C)) return null; // not sustained
+  return { peakC: Math.max(...temps), sessions: temps.length };
+}
+
 export type TuningVerdict =
   | "holding" // Holding up so far
   | "too-aggressive" // step back one increment

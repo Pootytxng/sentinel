@@ -220,10 +220,57 @@
 /* (.check-library removed — §2 replaced the generic "read the Library" dump with per-row What's-this
    links to the exact entry.) */
 
+/* Advisory tuning nudge — only when the GPU's been running warm (bathroom law). A signpost, not a
+   fix toggle: the link travels to the Learn guide (named-place law / deliberate travel). */
+.check-nudge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--ix-line);
+  border-left: 3px solid var(--ix-amber, #d2a44c);
+  border-radius: var(--ix-radius);
+  background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
+}
+.check-nudge-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.check-nudge-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.check-nudge-reason {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ix-text-2);
+}
+.check-nudge-link {
+  flex: 0 0 auto;
+  border: 1px solid var(--ix-accent);
+  background: transparent;
+  color: var(--ix-accent-text);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+}
+.check-nudge-link:hover {
+  background: var(--ix-accent-wash, rgba(255, 255, 255, 0.04));
+}
+
 @media (max-width: 620px) {
   .check-row {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+  .check-nudge {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

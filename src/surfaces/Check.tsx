@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { PriorityItem } from "../types";
+import type { PriorityItem, SessionSummary } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { tuningGuideForVendor } from "../data/tuning-guides";
+import { gpuRunningHot } from "../data/tuning-measure";
 import { useScan } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./Check.css";
@@ -32,11 +34,13 @@ export default function Check({
   onOpenLibrary,
   onChanged,
   vendor,
+  sessions = [],
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
   onChanged: () => void;
   vendor: GpuVendor;
+  sessions?: SessionSummary[];
 }) {
   const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
@@ -80,6 +84,13 @@ export default function Check({
   const drifts = readiness?.drifts ?? [];
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+  // Advisory tuning nudge (spec 2026-06-08) — appears ONLY when recent sessions ran sustained-warm
+  // (bathroom law: signposted at the moment of need, never a standing "try undervolting!" banner).
+  // AMD-only in v1 (the guide is AMD). It's a named-place link to the Learn guide (deliberate travel),
+  // not a one-click fix (doorknob) — Compy never tunes the voltage for you.
+  const tuningGuide = tuningGuideForVendor(vendor);
+  const hot = tuningGuide ? gpuRunningHot(sessions) : null;
+
   return (
     <section className="check-root">
       <header className="check-head">
@@ -111,6 +122,22 @@ export default function Check({
               <p className="check-drift-detail">{d.detail}</p>
             </div>
           ))}
+
+          {/* Advisory tuning nudge — bathroom law: only when the GPU's been running warm. */}
+          {hot && tuningGuide && (
+            <div className="check-nudge">
+              <div className="check-nudge-main">
+                <span className="check-nudge-title">Your GPU's been running warm</span>
+                <p className="check-nudge-reason">
+                  Peaked at {hot.peakC}°C across your last {hot.sessions} sessions — an undervolt
+                  usually drops that for free, cooler and quieter, with frames held.
+                </p>
+              </div>
+              <button className="check-nudge-link" onClick={() => onOpenLibrary(tuningGuide.id)}>
+                Cooler &amp; quieter — undervolt guide →
+              </button>
+            </div>
+          )}
 
           <div className="check-section-label">Biggest limiters</div>
           {limiters.length === 0 ? (
