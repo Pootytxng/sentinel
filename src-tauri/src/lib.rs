@@ -505,6 +505,38 @@ fn dismiss_comparison() {
     comparison::clear_result();
 }
 
+// Tuning baseline (spec 2026-06-08) — a user change made in a vendor tool (e.g. an Adrenalin
+// undervolt). No Compy apply, no ledger entry, no mutation: this only records the baseline so the
+// next same-game sessions can MEASURE whether the tune held up, reusing the comparison engine.
+#[tauri::command]
+fn arm_tuning(
+    guide_id: String,
+    label: String,
+    game: String,
+    baseline_avg_fps: f64,
+    baseline_low1_fps: f64,
+    baseline_peak_temp_c: Option<u32>,
+) -> Result<(), String> {
+    comparison::arm_tuning(
+        guide_id,
+        label,
+        game,
+        baseline_avg_fps,
+        baseline_low1_fps,
+        baseline_peak_temp_c,
+    )
+}
+
+#[tauri::command]
+fn report_tuning_crash() -> Result<(), String> {
+    comparison::report_tuning_crash()
+}
+
+#[tauri::command]
+fn clear_tuning() {
+    comparison::clear_tuning();
+}
+
 #[tauri::command]
 fn get_trial_state() -> benchmark_trial::TrialState {
     benchmark_trial::trial_state()
@@ -636,6 +668,9 @@ pub fn run() {
             get_latest_comparison,
             get_armed_comparison,
             dismiss_comparison,
+            arm_tuning,
+            report_tuning_crash,
+            clear_tuning,
             get_trial_state,
             get_benchmark_state,
             set_benchmark_baseline,

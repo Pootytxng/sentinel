@@ -78,6 +78,7 @@ export type Recommendation = {
 };
 
 // Cross-session comparison result (mirrors comparison.rs serde).
+export type ComparisonKind = "fix" | "tuning";
 export type ComparisonResult = {
   rec_id: string;
   rec_title: string;
@@ -90,6 +91,26 @@ export type ComparisonResult = {
   delta_low1_pct: number;
   noise_floor_pct: number;
   verdict: "improved" | "no-change" | "regressed" | "confounded" | "expired";
+  // Tuning extension (spec 2026-06-08) — optional/back-compat (older result files omit them).
+  kind?: ComparisonKind;
+  baseline_peak_temp_c?: number | null;
+  after_peak_temp_c?: number | null;
+  delta_temp_c?: number | null;
+  crash_reported?: boolean;
+};
+
+// The armed baseline, as the tuning surfaces read it (get_armed_comparison). A superset of the lite
+// shape Play already uses; all tuning fields are optional/back-compat.
+export type ArmedComparison = {
+  rec_id: string;
+  rec_title: string;
+  game: string;
+  baseline_avg_fps: number;
+  baseline_low1_fps: number;
+  armed_at: string;
+  kind?: ComparisonKind;
+  baseline_peak_temp_c?: number | null;
+  crash_reported?: boolean;
 };
 
 // ── Latency / Diagnostics (mirrors src-tauri/src/latency.rs serde, snake_case) ──
