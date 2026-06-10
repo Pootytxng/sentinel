@@ -395,10 +395,16 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
         ));
         std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(&receipts_path);
-        let script_items: Vec<(String, Vec<String>)> = staged
-            .iter()
-            .map(|d| (d.rec_id.clone(), all_cmds[d.cmds.clone()].to_vec()))
-            .collect();
+        // Checked (never indexed) command attribution: by construction every staged range lies
+        // inside all_cmds, but a panic HERE would poison HISTORY_LOCK for the whole session — so
+        // an impossible mismatch aborts the batch BEFORE elevation instead.
+        let mut script_items: Vec<(String, Vec<String>)> = Vec::with_capacity(staged.len());
+        for d in &staged {
+            let cmds = all_cmds.get(d.cmds.clone()).ok_or_else(|| {
+                "internal error: deferred-command attribution mismatch — the elevated batch was aborted before anything ran".to_string()
+            })?;
+            script_items.push((d.rec_id.clone(), cmds.to_vec()));
+        }
         let script = compose_batch_script(&script_items, &receipts_path.to_string_lossy())?;
         elevation_prompts = 1;
         match run_elevated_powershell(&script) {
