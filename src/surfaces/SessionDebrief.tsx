@@ -215,10 +215,12 @@ export function SessionDebrief({
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [reverting, setReverting] = useState(false);
   const confirm = useConfirm();
-  // Show a resolved comparison only if it's for THIS session's game (Moment 4).
+  // Show a resolved comparison only if it's for THIS session's game (Moment 4). A TUNING result is
+  // NOT a fix comparison — it has no ledger entry to revert — so it's excluded here and rendered by
+  // the dedicated TuningDebrief instead (no duplicate card, no meaningless revert button).
   useEffect(() => {
     invoke<ComparisonResult | null>("get_latest_comparison")
-      .then((c) => setComparison(c && c.game === s.process_name ? c : null))
+      .then((c) => setComparison(c && c.game === s.process_name && c.kind !== "tuning" ? c : null))
       .catch(() => {});
   }, [s.process_name]);
   const ratio = s.avg_fps > 0 ? Math.min(1, s.low1_fps_est / s.avg_fps) : 1;

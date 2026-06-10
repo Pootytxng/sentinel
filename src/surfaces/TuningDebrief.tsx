@@ -31,11 +31,15 @@ export function TuningDebrief({
 
   const refresh = useCallback(() => {
     invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});
-    invoke<ComparisonResult | null>("get_latest_comparison").then(setComparison).catch(() => {});
-  }, []);
+    // Only a TUNING result for THIS game feeds the verdict's confound/expiry guard — a stale fix
+    // result must never flip a tuning measurement to "confounded".
+    invoke<ComparisonResult | null>("get_latest_comparison")
+      .then((c) => setComparison(c && c.kind === "tuning" && c.game === s.process_name ? c : null))
+      .catch(() => {});
+  }, [s.process_name]);
   useEffect(() => {
     if (guide) refresh();
-  }, [guide, refresh, s.process_name]);
+  }, [guide, refresh]);
 
   if (!guide || !s.process_name) return null;
 
@@ -101,7 +105,7 @@ export function TuningDebrief({
     return (
       <div className="td-arm">
         <div className="td-arm-text">
-          <span className="td-arm-title">Tuned in {tuneLabel.replace("Undervolt ", "")}? Measure it.</span>
+          <span className="td-arm-title">Undervolted since this session? Measure it.</span>
           <span className="td-arm-sub">
             Undervolted in Adrenalin since this session? Arm an undervolt check and Compy measures your
             next sessions — did temps drop and frames hold? It never touches your voltage.
