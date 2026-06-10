@@ -136,7 +136,7 @@ describe("measureTuning", () => {
   });
 
   it("CONFOUNDED: a Compy fix landed mid-window → no attribution (but not when a crash is real)", () => {
-    const confound = { verdict: "confounded" } as ComparisonResult;
+    const confound = { verdict: "confounded", kind: "tuning", game: "game.exe" } as ComparisonResult;
     const m = measureTuning(baseline(), threeGoodSessions(), confound)!;
     expect(m.verdict).toBe("confounded");
     expect(m.headline).toMatch(/Can't cleanly attribute/i);
@@ -146,10 +146,22 @@ describe("measureTuning", () => {
   });
 
   it("EXPIRED baseline is surfaced honestly via the confounded branch copy", () => {
-    const expired = { verdict: "expired" } as ComparisonResult;
+    const expired = { verdict: "expired", kind: "tuning", game: "game.exe" } as ComparisonResult;
     const m = measureTuning(baseline(), threeGoodSessions(), expired)!;
     expect(m.verdict).toBe("confounded");
     expect(m.detail).toMatch(/too old to compare/i);
+  });
+
+  it("only the tune's OWN result confounds — a stale fix result or another game's never does", () => {
+    // A stale, un-dismissed FIX result (Lab passes the unfiltered latest comparison) — no flip.
+    const staleFix = { verdict: "confounded", kind: "fix", game: "game.exe" } as ComparisonResult;
+    expect(measureTuning(baseline(), threeGoodSessions(), staleFix)!.verdict).toBe("holding");
+    // A fix-era result without a kind field counts as fix → also filtered out.
+    const fixEra = { verdict: "expired", game: "game.exe" } as ComparisonResult;
+    expect(measureTuning(baseline(), threeGoodSessions(), fixEra)!.verdict).toBe("holding");
+    // Another game's tuning result — no flip either.
+    const otherGame = { verdict: "confounded", kind: "tuning", game: "other.exe" } as ComparisonResult;
+    expect(measureTuning(baseline(), threeGoodSessions(), otherGame)!.verdict).toBe("holding");
   });
 
   it("HOLDING via an FPS gain even without a temp drop, once the window is met", () => {

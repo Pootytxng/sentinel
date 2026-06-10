@@ -85,10 +85,10 @@ have shaped real features). The arc: package → smoke → twenty friends → a 
 - **Tuning-guides feature** — BUILT + pushed (HEAD ~272f195); static audit passed (zero mutation,
   schematic-only, honest-measurement invariant coded). ✅ CC re-verified 2026-06-09 (the lost
   report is replaced): cargo 232 / npm 225 / clippy + tsc clean / /security clean; the 4 Fix-path
-  comparison regression tests are diff-proven byte-identical and passing. One OPEN medium /check
-  finding: Lab.tsx feeds the unfiltered latest comparison into `measureTuning` (TuningDebrief
-  filters kind+game; Lab doesn't) — fix recipe = filter inside `measureTuning`, one test. Spec-built;
-  NOT shipped.
+  comparison regression tests are diff-proven byte-identical and passing. The one medium /check
+  finding (Lab.tsx fed the unfiltered latest comparison into `measureTuning`) is FIXED same day:
+  the kind+game filter now lives inside `measureTuning` so no caller can get it wrong, pinned by a
+  regression test (npm 226 green). Spec-built; NOT shipped.
 - **Owner live checks** (his eyes only) — tray loop, overlay over a real game at each density, the
   VRR walkthrough, and Hearth's candlelight → send the hexes to lock kernel §4.
 - **Beta path** — installer rebuild + the tray manual QA + the §4 apply-all per-item-rollback QA

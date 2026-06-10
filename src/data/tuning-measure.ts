@@ -157,7 +157,14 @@ export function measureTuning(
   let headline: string;
   let detail: string;
 
-  const confounded = result != null && (result.verdict === "confounded" || result.verdict === "expired");
+  // Only the tune's OWN result may confound it: it must be a TUNING result for THIS baseline's game.
+  // A stale fix result — or another game's tuning result — left un-dismissed must never flip this
+  // measurement (Lab passes the unfiltered latest comparison; the filter lives here so no caller can
+  // get it wrong). Fix-era results without a kind field count as fix → filtered out.
+  const ownResult =
+    result != null && result.kind === "tuning" && result.game === baseline.game ? result : null;
+  const confounded =
+    ownResult != null && (ownResult.verdict === "confounded" || ownResult.verdict === "expired");
 
   if (crashReported) {
     verdict = "too-aggressive";
@@ -168,7 +175,7 @@ export function measureTuning(
     verdict = "confounded";
     headline = "Can't cleanly attribute this";
     detail =
-      result?.verdict === "expired"
+      ownResult?.verdict === "expired"
         ? "This tune baseline is too old to compare fairly — drivers and games have moved on. Re-arm a fresh baseline after your next session."
         : "Another change landed between sessions, so Compy won't credit the tune for this delta. Re-arm after things settle.";
   } else if (fpsRegressed) {
