@@ -55,9 +55,8 @@ current).
   EXPLAINERS, not appliable recs — Compy applies none, so the ~29 appliable-catalog freeze + the
   optimizer-rot blocklist are untouched. The Library's exact-count curation drift-guard bumped 43→46
   (same mechanism the owner used for aim-tweaks). Lint green (no dupes/dangling-links/empties/banned
-  words). **Flagged for owner awareness:** the tweak Library is owner-curated (exact-count pinned); the
-  sprint mandate explicitly invited "grow debunks," so this is sanctioned, but the owner controls that
-  list — revert is one commit if they'd rather keep it frozen.
+  words). **✅ RATIFIED by the owner (2026-06-10):** the 3 debunks stay — they're knowledge, not
+  appliable catalog.
 - `d51f6f0` — SCOPE-ONLY spec `2026-06-10-tuning-followons-and-share-card-SCOPE.md`: NVIDIA undervolt
   (guide-only now, measurement gated on a verified NVML session), AMD CPU PBO (measures 1% low not CPU
   temp; stability proves over days), wave-2 local-only share card. Nothing built; each names its home
@@ -86,12 +85,10 @@ capabilities/CSP — all untouched and unread-only-diagnosed where relevant.
 
 ## Owner-deferred (ranked)
 
-1. **[Site copy · brand-honesty] Hero headline "Faster frames."** — `site/index.html:111` leads with
-   "Faster frames. Zero snake oil." but `BETA_TESTER_README` §1 states Compy "is **not** an FPS
-   booster and it doesn't promise frames." Not strictly false (real tweaks can help), but it's in
-   tension with Compy's own honest-measurement positioning — the one place the marketing voice
-   undercuts the product's whole pitch. Suggest aligning (e.g. "Real frames. Zero snake oil." /
-   "Honest frames..."). Outward-facing + voice → owner/Cowork call. (Site is parked, not deployed.)
+1. **[Site copy · brand-honesty] Hero headline "Faster frames."** — ✅ RESOLVED by the owner
+   (2026-06-10): headline is now **"Faster where it's real. Zero snake oil."** (owner's wording),
+   mirrored into the `<title>` + `og:title` tags that carried the same phrase. The site no longer
+   promises frames the product explicitly doesn't (BETA_TESTER_README §1).
 2. **[Site copy · factual] "116 entries"** — ✅ FIXED this sprint (`site/index.html` → "120+ entries and
    counting", drift-proof). The real count is now ~124 (tweaks 46 · terms 55 · tricks 14 · guides 7 ·
    +1 tuning · +1 grading). A factual correction on a parked asset, within the "polish site/" grant —
