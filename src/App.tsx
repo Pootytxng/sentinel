@@ -21,6 +21,7 @@ import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
 import { prettyGameName } from "./surfaces/game-name";
 import { gpuVendor } from "./surfaces/walkthroughs";
+import type { BatchApplyReport } from "./types";
 import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
 import { SessionDebrief } from "./surfaces/SessionDebrief";
@@ -989,32 +990,33 @@ function App() {
     }
   };
 
-  // Train #3 §4 — "Apply all safe fixes". Orchestrates the EXISTING, audited apply_recommendation
-  // command in sequence (zero new IPC, zero new mutation path): each apply writes its OWN ledger
-  // receipt, so rollback granularity is per-item, identical to applying them one-by-one. No per-rec
-  // confirm here — the Fix consent sheet IS the single consent. Per-item failure isolation: one
-  // failure is recorded and skipped, never aborts the rest. (Elevation is still per-elevated-item for
-  // now; batching N prompts into one needs a backend change + its own QA — tracked, not done here.)
+  // Train #3 §4 — "Apply all safe fixes", now via the ONE-elevation batch orchestrator
+  // (apply_recommendations_batch): one consent sheet (in Fix), ONE UAC prompt for every elevated
+  // item, per-item ledger receipts + failure isolation in the backend (same audited apply path per
+  // item — rollback granularity unchanged, each individually undoable). A batch-level refusal
+  // (validation) applies nothing and is surfaced honestly on every item.
   const applyBatch = async (
     recIds: string[],
   ): Promise<{ applied: number; skipped: { title: string; reason: string }[] }> => {
     setError(null);
-    let applied = 0;
-    const skipped: { title: string; reason: string }[] = [];
-    for (const id of recIds) {
-      const rec = (recs ?? []).find((r) => r.id === id);
-      if (!rec) continue;
-      setBusyId(id);
-      try {
-        await invoke<AppliedChange>("apply_recommendation", { recId: rec.id, recTitle: rec.title });
-        applied++;
-      } catch (e) {
-        skipped.push({ title: rec.title, reason: String(e) });
-      }
+    const items = recIds
+      .map((id) => (recs ?? []).find((r) => r.id === id))
+      .filter((r): r is Recommendation => !!r)
+      .map((r) => ({ recId: r.id, recTitle: r.title }));
+    if (items.length === 0) return { applied: 0, skipped: [] };
+    try {
+      const report = await invoke<BatchApplyReport>("apply_recommendations_batch", { items });
+      return {
+        applied: report.applied,
+        skipped: report.items
+          .filter((i) => i.status === "skipped")
+          .map((i) => ({ title: i.rec_title, reason: i.reason ?? "" })),
+      };
+    } catch (e) {
+      return { applied: 0, skipped: items.map((i) => ({ title: i.recTitle, reason: String(e) })) };
+    } finally {
+      await refresh();
     }
-    setBusyId(null);
-    await refresh();
-    return { applied, skipped };
   };
 
   const rollback = async (change: AppliedChange) => {

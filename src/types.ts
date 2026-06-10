@@ -99,6 +99,21 @@ export type ComparisonResult = {
   crash_reported?: boolean;
 };
 
+// §4 one-elevation batch apply (mirrors history.rs BatchApplyReport / BatchItemOutcome serde).
+export type BatchItemOutcome = {
+  rec_id: string;
+  rec_title: string;
+  status: "applied" | "skipped";
+  reason?: string | null;
+};
+export type BatchApplyReport = {
+  items: BatchItemOutcome[];
+  applied: number;
+  skipped: number;
+  /** 0 or 1 — the whole point of the batch (honest count for the UI/QA). */
+  elevation_prompts: number;
+};
+
 // The armed baseline, as the tuning surfaces read it (get_armed_comparison). A superset of the lite
 // shape Play already uses; all tuning fields are optional/back-compat.
 export type ArmedComparison = {

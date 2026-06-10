@@ -561,6 +561,17 @@ mod batch_apply_tests {
         assert!(err.contains("power-ultimate"));
     }
 
+    // Pins the webview-side arg shape: the frontend sends camelCase items; a drift here would
+    // fail silently at runtime (Tauri arg deserialization), so the contract is a test.
+    #[test]
+    fn batch_item_deserializes_from_the_frontend_camel_case_shape() {
+        let it: BatchApplyItem =
+            serde_json::from_str(r#"{"recId":"fast-startup-off","recTitle":"Disable Fast Startup"}"#)
+                .expect("camelCase arg shape");
+        assert_eq!(it.rec_id, "fast-startup-off");
+        assert_eq!(it.rec_title, "Disable Fast Startup");
+    }
+
     // The fail-safe receipt contract: ONLY an explicit ok earns a ledger entry; an explicit fail
     // and a MISSING receipt are both not-applied. (The PS-level isolation proof lives in
     // actions::batch_elevation_tests::real_powershell_batch_isolates_a_failing_item.)
