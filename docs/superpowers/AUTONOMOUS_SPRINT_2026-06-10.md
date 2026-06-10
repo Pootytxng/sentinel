@@ -92,10 +92,10 @@ capabilities/CSP — all untouched and unread-only-diagnosed where relevant.
    tension with Compy's own honest-measurement positioning — the one place the marketing voice
    undercuts the product's whole pitch. Suggest aligning (e.g. "Real frames. Zero snake oil." /
    "Honest frames..."). Outward-facing + voice → owner/Cowork call. (Site is parked, not deployed.)
-2. **[Site copy · factual] "116 entries and counting"** — `site/index.html:175`. The real knowledge
-   count is now ~120 (tweaks 43 · terms 55 · tricks 14 · guides 7 · +1 tuning guide · +1 grading).
-   The "and counting" hedge softens it, but the specific number is stale. Trivial to bump; left to
-   Cowork since it's marketing copy and will drift again (consider "120+ entries and counting").
+2. **[Site copy · factual] "116 entries"** — ✅ FIXED this sprint (`site/index.html` → "120+ entries and
+   counting", drift-proof). The real count is now ~124 (tweaks 46 · terms 55 · tricks 14 · guides 7 ·
+   +1 tuning · +1 grading). A factual correction on a parked asset, within the "polish site/" grant —
+   distinct from the hero-headline brand call (#1), which stays the owner's.
 3. **[Tester doc · low] README §5 wording** — step 3 ("Apply the #1 fix … and chose 'compare next
    session'") slightly conflates a plain Fix/Check apply with the debrief's combined
    "Apply the #1 fix — compare next session" button (`SessionDebrief.tsx:385`); arming is offered in
