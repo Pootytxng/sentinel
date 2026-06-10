@@ -6,7 +6,12 @@ the session/sensor monitoring that already exists. **Compy never applies a volta
 measurement is the differentiator: anyone can link a YouTube undervolt video; only Compy proves, on
 YOUR silicon, that temps dropped and frames held without new instability.*
 
-**Status: SPEC ONLY. Do NOT build until the owner gives the build GO.**
+**Status: BUILT on `main` (owner GO given 2026-06-09) — pending owner LIVE verification + the legal
+pass on the UV discretion copy before any public ship.** v1 landed in small revertable commits
+(`12d8647`→`20cf150`): single source → Learn entry → tuning-baseline backend → shared honest-measurement
+module → Lab instrument → Play before/after → Check nudge, then a /check fix. cargo 232 + npm 225 green,
+zero warnings, /check + /security clean. NO mutation/apply/elevation; nothing in the appliable catalog;
+locked gates untouched. Acceptance boxes below are code-complete; the unchecked notes are owner/live items.
 
 ---
 
@@ -147,26 +152,29 @@ schematic-never-screenshot rule); the spec names it so CC builds the tuning cont
 - **Follow-up gates:** NVIDIA UV (needs a verified NVML session per rule #5), Ryzen CPU UV (PBO Curve
   Optimizer, BIOS), and the overclock chapter (heavier banner) each ride their own gate.
 
-## Acceptance (when the owner gives the build GO)
-- [ ] **Single source:** `tuning-guides.json` is the one source; the Learn entry is derived/injected
-      from it and the Lab instrument renders from it — no duplicated guide copy (they can't drift).
-- [ ] **Learn:** rig-matched AMD undervolt guide + vendor-aware "Show me the way" schematic; expands
+## Acceptance (code-complete on `main`; owner/live items noted)
+- [x] **Single source:** `tuning-guides.json` is the one source; the Learn entry is derived/injected
+      from it (`tuning-guides.ts`) and the Lab instrument renders from it — no duplicated guide copy
+      (no-drift test).
+- [x] **Learn:** rig-matched AMD undervolt guide + vendor-aware "Show me the way" schematic; expands
       in place; method/ranges/discretion visible (foam-pit); no apply button (doorknob); searchable.
-- [ ] **Lab:** "Tuning" instrument (inline collapsible) shows the guide + the read-only Stability &
-      thermal readout reusing existing sensor/session data; **zero new IPC**.
-- [ ] **Play:** tuning before/after via the existing comparison + `SessionDebrief`, expanding in
+- [x] **Lab:** "Tuning" instrument (inline collapsible) shows the guide + the read-only Stability &
+      thermal readout reusing existing sensor/session data; **zero new IPC** (existing reads only).
+- [x] **Play:** tuning before/after via the existing comparison + `SessionDebrief`, expanding in
       place; temp + stability delta beside the FPS delta; FPS judged on the existing noise floor;
       "holding up so far" gated on ≥3 sessions AND ~3h no-crash; temps real at ~3 °C+ drop.
-- [ ] **Check:** advisory nudge appears **only** when temps warrant (bathroom law); named-place link
-      to the Learn guide (deliberate travel); advisory, not a fix button (doorknob). *(v1-or-fast-follow.)*
-- [ ] **Honest-measurement law** honored verbatim — never "STABLE," always time-qualified; the
-      crash/artifact self-check is asked once at the debrief.
-- [ ] **Originality ("all original" law):** all guide copy in Compy's own voice; all walkthrough
-      visuals are our own schematics (never screenshots, no vendor logos/trademark dress); facts
-      stated in our own words.
-- [ ] **AMD-only in v1;** NVIDIA/Intel/CPU and overclock are gated follow-ups.
-- [ ] **Zero apply/mutation/elevation;** nothing in the appliable catalog; locked gates untouched;
-      guards green; reduced-motion clean.
+- [x] **Check:** advisory nudge appears **only** when temps warrant (bathroom law); named-place link
+      to the Learn guide (deliberate travel); advisory, not a fix button (doorknob).
+- [x] **Honest-measurement law** honored verbatim — never "STABLE," always time-qualified; the
+      crash/artifact self-check is asked once at the debrief. (Test asserts no bare "stable".)
+- [x] **Originality ("all original" law):** all guide copy in Compy's own voice; the walkthrough is our
+      own schematic (no screenshots/vendor logos); facts stated in our own words.
+- [x] **AMD-only in v1;** NVIDIA/Intel/CPU and overclock are gated follow-ups (vendor-gated in code).
+- [x] **Zero apply/mutation/elevation;** nothing in the appliable catalog; locked gates untouched;
+      guards green. (Reduced-motion: the only motion is the existing `<Walkthrough>`, already honored.)
+- [ ] **OWNER / LIVE:** eyeball the guide + Lab readout + Play arm→measure→crash loop on the AMD rig;
+      a live ≥3-session/~3h "holding up so far" pass; the **legal pass on the UV discretion copy before
+      public** (beta copy approved).
 
 ---
 
