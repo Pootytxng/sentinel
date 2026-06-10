@@ -67,28 +67,29 @@
   --accent-glow: rgba(124, 156, 255, 0.36);
 }
 
-/* HEARTH — the warm-cozy variant (owner asked to keep). Same neutral discipline, warm base + amber
-   accent. Basic values this pass; owner live-tunes the warmth later (spec §2: "port later"). */
+/* HEARTH = "Warm Ember" — LOCKED owner decision, 2026-06-10 (design-system kernel §4). Same neutral
+   discipline, warm base + amber accent over an ember accent-2. Tuned live by the owner; the legacy
+   --accent* block derives from --ix-accent (keep in sync on any future retune). */
 :root[data-itheme="hearth"] {
-  --ix-accent: #e8b07a;
-  --ix-accent-text: #ffd9a8;
-  --ix-accent-ink: #2a1606;
-  --ix-accent-2: #d4847c;
-  --ix-streak-1: #e8a96a;
-  --ix-streak-2: #d4847c;
+  --ix-accent: #f0b878;
+  --ix-accent-text: #ffe0b4;
+  --ix-accent-ink: #2a1304;
+  --ix-accent-2: #b65f54;
+  --ix-streak-1: #edaa5e;
+  --ix-streak-2: #b65f54;
   --ix-streak-3: #f0c585;
-  --ix-base: #14100c;
-  --ix-text-1: #f5ece4;
-  --ix-text-2: #c2b3a5;
+  --ix-base: #15100a;
+  --ix-text-1: #f5ede2;
+  --ix-text-2: #c0b0a0;
   --ix-text-3: #8a7866;
-  --ix-glass-fill: rgba(26, 20, 15, 0.74);
+  --ix-glass-fill: rgba(24, 17, 11, 0.75);
 
-  --accent: #e8b07a;
-  --accent-bright: #ffd9a8;
-  --accent-hover: #ffd9a8;
-  --accent-soft: rgba(232, 176, 122, 0.13);
-  --accent-line: rgba(232, 176, 122, 0.3);
-  --accent-glow: rgba(232, 176, 122, 0.36);
+  --accent: #f0b878;
+  --accent-bright: #ffe0b4;
+  --accent-hover: #ffe0b4;
+  --accent-soft: rgba(240, 184, 120, 0.13);
+  --accent-line: rgba(240, 184, 120, 0.3);
+  --accent-glow: rgba(240, 184, 120, 0.36);
 }
 
 /* Hearth keeper (shadow realm, pure-craftsmanship tier): Hearth lit in December → a barely-there warm

@@ -29,7 +29,7 @@ import "./Settings.css";
 const THEME_CARDS: { id: InstrumentTheme; label: string; swatch: [string, string, string] }[] = [
   { id: "halfway", label: "Halfway", swatch: ["#0b0c10", "#2ee6c0", "#7c9cff"] },
   { id: "midnight", label: "Midnight", swatch: ["#090b12", "#2ee6c0", "#7c9cff"] },
-  { id: "hearth", label: "Hearth", swatch: ["#14100c", "#e8b07a", "#d4847c"] },
+  { id: "hearth", label: "Hearth", swatch: ["#15100a", "#f0b878", "#b65f54"] },
 ];
 
 const DENSITIES: { id: OverlayDensity; label: string }[] = [

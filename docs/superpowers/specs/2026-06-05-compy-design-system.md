@@ -107,6 +107,35 @@ fixes it with TWO warm hues on a plum base for depth).
 
 Theme switch is a first-class, easy toggle (lives in Settings + quick-switch). Persists locally.
 
+**SHIPPED SLOTS (halfway-home, 2026-06-06):** the provisional names above were superseded by the
+shipped trio **Halfway (default) · Midnight · Hearth** (`data-itheme`, managed in Settings →
+Appearance). Halfway/Midnight carry the neutral-charcoal + teal-on-controls palette per the
+halfway-home spec.
+
+**🔒 HEARTH = "WARM EMBER" — LOCKED (owner decision, 2026-06-10).** The warm slot's final values,
+tuned live by the owner — these replace every provisional warm/Ember value above for the shipped
+Hearth theme (source of truth: `src/design/instrument.css` `[data-itheme="hearth"]`):
+
+| Token | Value | Provenance |
+|---|---|---|
+| `--ix-base` | `#15100a` | owner pick |
+| `--ix-accent` | `#f0b878` | owner pick |
+| `--ix-accent-2` | `#b65f54` | owner pick |
+| `--ix-streak-1` | `#edaa5e` | owner pick |
+| `--ix-streak-2` | `#b65f54` | harmonized → ember accent-2 |
+| `--ix-streak-3` | `#f0c585` | kept warm gold |
+| `--ix-text-1` | `#f5ede2` | harmonized warm off-white |
+| `--ix-text-2` | `#c0b0a0` | owner pick |
+| `--ix-text-3` | `#8a7866` | kept warm muted |
+| `--ix-glass-fill` | `rgba(24,17,11,0.75)` | owner pick |
+| `--ix-accent-text` | `#ffe0b4` | harmonized warm light |
+| `--ix-accent-ink` | `#2a1304` | harmonized dark warm ink |
+
+The legacy `--accent*` block derives from `--ix-accent` (kept in sync in the same CSS rule); the
+Settings picker swatch mirrors base/accent/accent-2. Contrast floor enforced by
+`theme-contrast.test.ts` (WCAG incl. ink-on-accent, all three themes) — any future retune must pass
+it, never the other way around.
+
 ## 5. Core tokens (provisional starting values)
 
 - **Text:** primary `#eaf2f1` (warm `#f6ece6` on Ember) · secondary `#8fa0a0` · tertiary `#5a6a6a`.
