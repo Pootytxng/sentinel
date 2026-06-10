@@ -1,0 +1,49 @@
+[
+  {
+    "id": "amd-gpu-undervolt",
+    "vendor": "amd",
+    "kind": "undervolt",
+    "name": "Undervolt your Radeon — cooler and quieter, usually for free",
+    "aliases": [
+      "undervolt",
+      "under volt",
+      "adrenalin",
+      "lower temps",
+      "quieter gpu",
+      "gpu voltage",
+      "radeon tuning",
+      "mv"
+    ],
+    "goal": "Lower temps and fan noise — often with the same or slightly better performance, because a cooler card holds its boost longer. An undervolt that goes too far just gets unstable and resets; you nudge it back and you're fine. It's the safest knob on the card.",
+    "tool": "You'll use AMD's own tool — Adrenalin — nothing to install.",
+    "steps": [
+      "Right-click the desktop → AMD Software: Adrenalin Edition.",
+      "Performance → Tuning → Custom; turn on GPU Tuning, set voltage to Manual.",
+      "Lower max voltage (mV) by a small step — 25 to 50 mV to start. Apply.",
+      "Play a demanding game or loop a benchmark for 20 to 30 minutes.",
+      "Stable? Drop another 25 to 50 mV and retest. Crash, artifacts, or a black screen? Step back up one increment — that's your limit."
+    ],
+    "range": "Many recent Radeons settle around 50 to 120 mV under stock — but this is the silicon lottery; your chip's stable point is its own. Find it by stepping, don't paste a number from a video.",
+    "discretion": "Advisory. You're making the change in AMD's tool, at your discretion — an undervolt won't hurt the hardware, but confirming stability is on you, and you should check your card's warranty terms. Compy never touches your voltage — it just measures whether it worked.",
+    "undo": "Adrenalin → Performance → Tuning → Reset.",
+    "walkthrough": {
+      "group": "tuning",
+      "title": "Undervolt your Radeon (Adrenalin)",
+      "pairsWith": ["amd-gpu-undervolt"],
+      "biosGeneric": false,
+      "variants": [
+        {
+          "vendor": "amd",
+          "label": "AMD Adrenalin",
+          "steps": [
+            { "caption": "Adrenalin → Performance", "x": 14, "y": 20, "label": "Performance" },
+            { "caption": "Tuning → Custom", "x": 42, "y": 22, "label": "Tuning · Custom" },
+            { "caption": "GPU Tuning on, voltage → Manual", "x": 40, "y": 54, "label": "Manual mV" },
+            { "caption": "Lower max voltage 25–50 mV, Apply", "x": 70, "y": 54, "label": "Lower mV" },
+            { "caption": "Stress 20–30 min, watch for resets", "x": 70, "y": 82, "label": "Stress test" }
+          ]
+        }
+      ]
+    }
+  }
+]

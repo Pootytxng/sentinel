@@ -8,6 +8,7 @@ import rawTerms from "./terms.json";
 import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
 import { VERDICT_GLOSSARY, VERDICT_GLOSSARY_ENTRY_ID } from "./verdict-glossary";
+import { TUNING_GUIDE_ENTRIES } from "./tuning-guides";
 
 // Version field on the dataset root, for future migrations. Bump + migrate when a shape changes.
 export const KNOWLEDGE_VERSION = 1;
@@ -114,7 +115,17 @@ const GRADING_ENTRY: TermEntry = {
   more: VERDICT_GLOSSARY.map((r) => `${r.chip}: ${r.definition}`).join("  "),
 };
 
-export const KNOWLEDGE: KnowledgeEntry[] = [...TWEAKS, ...TERMS, ...TRICKS, ...GUIDES, GRADING_ENTRY];
+// Tuning guides (spec 2026-06-08) are injected as derived `guide` entries from their single source
+// (tuning-guides.ts) — same pattern as GRADING_ENTRY — so the Learn library stays searchable/browsable
+// over them without duplicating the guide copy.
+export const KNOWLEDGE: KnowledgeEntry[] = [
+  ...TWEAKS,
+  ...TERMS,
+  ...TRICKS,
+  ...GUIDES,
+  ...TUNING_GUIDE_ENTRIES,
+  GRADING_ENTRY,
+];
 
 export const KNOWLEDGE_BY_ID: Map<string, KnowledgeEntry> = new Map(
   KNOWLEDGE.map((e) => [e.id, e]),

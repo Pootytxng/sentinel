@@ -1,4 +1,5 @@
 import raw from "../data/walkthroughs.json";
+import { TUNING_WALKTHROUGHS } from "../data/tuning-guides";
 
 // Show-me walkthroughs (spec 2026-06-06) — data-driven animated SCHEMATICS (never screenshots) of the
 // out-of-Compy path for advisory recs. Adding one = adding JSON (the knowledge-layer pattern). The
@@ -17,7 +18,9 @@ export type Walkthrough = {
   variants: WalkthroughVariant[];
 };
 
-export const WALKTHROUGHS: Walkthrough[] = raw as Walkthrough[];
+// The tuning-guide walkthroughs (their own schematics, no vendor screenshots) carry in the SAME single
+// source as the guide copy (tuning-guides.ts) and register here so walkthroughForKey resolves them.
+export const WALKTHROUGHS: Walkthrough[] = [...(raw as Walkthrough[]), ...TUNING_WALKTHROUGHS];
 export const KNOWN_VENDORS = ["amd", "nvidia", "intel", "any"] as const;
 export type GpuVendor = (typeof KNOWN_VENDORS)[number];
 
