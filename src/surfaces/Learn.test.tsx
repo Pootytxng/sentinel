@@ -70,6 +70,23 @@ describe("Learn surface (reskin)", () => {
     expect(grade.disabled).toBe(false);
   });
 
+  it("the AMD undervolt guide is searchable and expands its rich advisory body in place (no apply button)", async () => {
+    open();
+    fireEvent.change(searchBox(), { target: { value: "undervolt" } });
+    const card = (await screen.findByText(/Undervolt your Radeon/i, { selector: title }));
+    // Expand the card in place (never teleports) — the foam-pit body is then visible.
+    fireEvent.click(card.closest("button")!);
+    expect(screen.getByText(/A "normal" number\?/i)).toBeInTheDocument(); // typical range, visible
+    expect(screen.getByText(/silicon lottery/i)).toBeInTheDocument();
+    expect(screen.getByText(/Discretion:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Compy never touches your voltage/i)).toBeInTheDocument();
+    expect(screen.getByText(/Undo:/i)).toBeInTheDocument();
+    // doorknob: advisory prose — there is nothing to apply (Compy never tunes for you).
+    expect(screen.queryByRole("button", { name: /^Apply/i })).not.toBeInTheDocument();
+    // "Show me the way" schematic is offered (the walkthrough resolves by the entry id).
+    expect(screen.getByText("Show me the way")).toBeInTheDocument();
+  });
+
   it("autopsy grades a guide, expands rows in place, and offers a full-entry link (continuity §3)", () => {
     open();
     fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));

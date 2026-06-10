@@ -1,0 +1,41 @@
+/* Shared tuning-guide body — tokens only (Instrument theme vars), no fixed colors, so it inherits the
+   active theme in both Learn and Lab. Mirrors the Learn guide-body type scale. */
+.tg-body {
+  display: block;
+}
+.tg-goal {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--ix-text-1);
+  line-height: 1.5;
+}
+.tg-tool {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--ix-accent-text);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.tg-steps {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  color: var(--ix-text-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.tg-steps li {
+  margin-bottom: 4px;
+}
+.tg-line {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ix-text-2);
+  line-height: 1.55;
+}
+.tg-line b {
+  color: var(--ix-text-1);
+  font-weight: 500;
+}
+.tg-undo b {
+  color: var(--ix-amber);
+}

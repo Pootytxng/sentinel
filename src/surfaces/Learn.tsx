@@ -18,6 +18,8 @@ import {
 import { Icon } from "../design";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { TUNING_GUIDE_BY_ID } from "../data/tuning-guides";
+import { TuningGuideBody } from "./TuningGuide";
 import "./Learn.css";
 
 // Learn — the Instrument reskin of the knowledge library (Library + Guide Autopsy). RESKIN ONLY:
@@ -119,6 +121,10 @@ function EntryBody({ entry }: { entry: KnowledgeEntry }) {
       </>
     );
   }
+  // Tuning guides render their rich advisory body (goal/tool/steps/range/discretion/undo) from the
+  // shared single source — same component the Lab Tuning instrument uses, so they can't drift.
+  const tuning = TUNING_GUIDE_BY_ID.get(entry.id);
+  if (tuning) return <TuningGuideBody guide={tuning} />;
   switch (entry.type) {
     case "tweak":
       return (
