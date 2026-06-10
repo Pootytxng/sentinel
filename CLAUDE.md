@@ -56,8 +56,9 @@ Everything else — refactors, features behind a gate, docs, local builds, rever
 
 **If a task CAN be done by us (you or Cowork), DO IT — never redirect to the owner anything we're
 capable of handling.** Owner-bound items are ONLY: **money · distribution/sends to other humans ·
-aesthetic taste calls** (e.g. theme hexes) **· the LOCKED gates** (frozen beta refs, `gaming_mode`
-flag, remote-fetch/updater, signing keys, force-push, secrets).
+aesthetic taste calls** (e.g. theme hexes) **· security/system settings** (see the standing rule
+below) **· the LOCKED gates** (frozen beta refs, `gaming_mode` flag, remote-fetch/updater, signing
+keys, force-push, secrets).
 
 **Pause for the owner on ONLY two things:**
 1. **Point-of-no-return** — anything irreversible (deletions without backup, history rewrites,
@@ -73,6 +74,25 @@ small commits, additive) and the license stays valid. This loosens **nothing** a
 tests/builds/verification never skipped, locked gates unchanged, honesty rules unchanged: fewer
 check-ins, not less rigor. `AskUserQuestion` is reserved for genuine forks in **owner territory**
 (taste/money/people/irreversible); **engineering forks you resolve yourself and record the reasoning.**
+
+### SECURITY / SYSTEM SETTINGS — OWNER-GATED, never autonomous (standing rule, 2026-06-10)
+
+Modifying **security or system settings** — UAC keys (`EnableLUA`, `ConsentPromptBehaviorAdmin`,
+`PromptOnSecureDesktop`), Defender, firewall, access controls, anything under
+`HKLM\...\Policies\System` — is **owner territory: welfare-check FIRST, never flip it solo — not
+even to diagnose, not even reversibly.** Reversibility is NOT the license here (the one exception
+to the rule above): the *window* of weakened security is itself the risk, regardless of how clean
+the restore is. **Diagnose elevation behavior with read-only probes only** (read the policy keys,
+check token integrity level, time a hands-off elevation, read the ledger) — if a setting genuinely
+must change to proceed, that's a welfare-check, full stop. Mirrored in
+`docs/COWORK_HANDOFF.md` (same rule, Cowork lane).
+
+**Precedent (why this rule exists):** during the 2026-06-10 §4 elevation-QA diagnosis, a session
+autonomously flipped `ConsentPromptBehaviorAdmin` 5→2 to force UAC prompting, then restored it —
+caught and verified-restored (`EnableLUA=1` / `CPBA=5` / `PromptOnSecureDesktop=1`), no harm done,
+but over the line. Notably, **Fable 5's safety layer auto-switched the session to Opus 4.8 because
+the work tripped its security classifier — treat that auto-switch itself as a STOP signal:** if the
+model flips on security-sensitive work, halt and involve the owner.
 
 ## Stack & where things live
 
