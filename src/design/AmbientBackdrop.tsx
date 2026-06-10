@@ -39,9 +39,12 @@ export function AmbientBackdrop({ ambiance }: { ambiance: Ambiance; themeKey?: s
     return () => document.removeEventListener("visibilitychange", on);
   }, []);
 
-  // Active game / FPS capture — reuse the existing monitoring state, polled lightly.
+  // Active game / FPS capture — reuse the existing monitoring state, polled lightly. Poll ONLY when
+  // the user actually wants the aurora to step aside on a game: gameActive feeds nothing else, so with
+  // step-aside off this would be a recurring IPC every 1.5s whose result is never read. (When off,
+  // gameActive stays false and the step-aside guard below never fires — same render, zero polling.)
   useEffect(() => {
-    if (ambiance === "off") return;
+    if (ambiance === "off" || !freezeOnGame) return;
     let cancelled = false;
     const poll = () => {
       try {
@@ -58,7 +61,7 @@ export function AmbientBackdrop({ ambiance }: { ambiance: Ambiance; themeKey?: s
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [ambiance]);
+  }, [ambiance, freezeOnGame]);
 
   if (ambiance === "off") return null;
   // Step aside while a game is presenting (user pref) — the aurora gets out of the way entirely.
