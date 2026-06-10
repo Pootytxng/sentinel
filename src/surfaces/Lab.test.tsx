@@ -23,4 +23,17 @@ describe("Lab", () => {
     fireEvent.click(benchHeader);
     expect(benchHeader.getAttribute("aria-expanded")).toBe("true");
   });
+
+  it("shows the Tuning instrument only on AMD rigs (v1 verified-sensor scope)", () => {
+    // Default / NVIDIA: no tuning instrument until its own verified-sensor gate.
+    render(<Lab vendor="nvidia" />);
+    expect(screen.queryByRole("button", { name: /Tuning/ })).not.toBeInTheDocument();
+    cleanup();
+    // AMD: the Tuning section appears and expands in place.
+    render(<Lab vendor="amd" />);
+    const tuneHeader = screen.getByRole("button", { name: /Tuning/ });
+    fireEvent.click(tuneHeader);
+    expect(tuneHeader.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/A "normal" number\?/i)).toBeInTheDocument();
+  });
 });

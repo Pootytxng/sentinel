@@ -1530,7 +1530,10 @@ function App() {
                 />
               )}
               {activeTab === "Lab" && (
-                <Lab diagnostics={<DiagnosticsTab sections={diagnostics} />} />
+                <Lab
+                  diagnostics={<DiagnosticsTab sections={diagnostics} />}
+                  vendor={detectedVendor}
+                />
               )}
               {activeTab === "Latency" && <LatencyTab />}
               {activeTab === "Benchmark" && <BenchmarkTab />}

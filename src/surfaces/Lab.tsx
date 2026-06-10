@@ -1,8 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { BenchmarkState, LatencyReport, Verdict } from "../types";
+import type {
+  BenchmarkState,
+  LatencyReport,
+  Verdict,
+  SessionSummary,
+  ArmedComparison,
+  ComparisonResult,
+} from "../types";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
+import { tuningGuideForVendor } from "../data/tuning-guides";
+import { measureTuning } from "../data/tuning-measure";
+import { TuningInstrument } from "./TuningInstrument";
+import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
 
 // LAB — the measured instruments, visible to everyone (halfway-home §1: navigation never teleports).
@@ -21,15 +32,35 @@ function fmtDate(iso: string | null): string {
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
 }
 
-export default function Lab({ diagnostics }: { diagnostics?: ReactNode }) {
+export default function Lab({
+  diagnostics,
+  vendor = "any",
+}: {
+  diagnostics?: ReactNode;
+  vendor?: GpuVendor;
+}) {
   const [bench, setBench] = useState<BenchmarkState | null>(null);
   const [latency, setLatency] = useState<LatencyReport | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [armed, setArmed] = useState<ArmedComparison | null>(null);
+  const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
 
-  // Recent-results summary — existing commands, read once on mount (no polling).
+  // v1 ships the AMD GPU undervolt guide only — the hardware-verified path (locked rule #5). No tuning
+  // instrument on non-AMD rigs until their own verified-sensor gate (NVIDIA NVML, Intel, Ryzen PBO).
+  const tuningGuide = tuningGuideForVendor(vendor);
+
+  // Recent-results summary — existing commands, read once on mount (no polling, ZERO new IPC).
   useEffect(() => {
     invoke<BenchmarkState>("get_benchmark_state").then(setBench).catch(() => {});
     invoke<LatencyReport>("get_latency_diagnostics").then(setLatency).catch(() => {});
-  }, []);
+    if (tuningGuide) {
+      invoke<SessionSummary[]>("get_session_summaries").then(setSessions).catch(() => {});
+      invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});
+      invoke<ComparisonResult | null>("get_latest_comparison").then(setLatestCmp).catch(() => {});
+    }
+  }, [tuningGuide]);
+
+  const measurement = measureTuning(armed, sessions, latestCmp);
 
   const benchSummary = bench
     ? bench.efficacy
@@ -44,6 +75,8 @@ export default function Lab({ diagnostics }: { diagnostics?: ReactNode }) {
         latency.timer_current_ms != null ? ` · timer ${latency.timer_current_ms.toFixed(2)}ms` : ""
       }`
     : "—";
+
+  const tuningSummary = measurement ? measurement.headline : "Undervolt guide + stability";
 
   return (
     <section className="lab-root">
@@ -72,6 +105,25 @@ export default function Lab({ diagnostics }: { diagnostics?: ReactNode }) {
           <LatencyTab />
         </LabSection>
 
+        {/* Tuning — the guide (shared single source) + the read-only stability/thermal readout that
+            measures whether a vendor-tool undervolt actually held up. AMD-only in v1 (the verified
+            sensor path). A gauge, not a control — nothing here changes the system. */}
+        {tuningGuide && (
+          <LabSection
+            icon="tune"
+            name="Tuning"
+            oneLiner="Undervolt in AMD's own tool — Compy measures whether temps dropped and frames held."
+            summary={tuningSummary}
+          >
+            <TuningInstrument
+              guide={tuningGuide}
+              vendor={vendor}
+              measurement={measurement}
+              recentSessions={sessions.slice(0, 5)}
+            />
+          </LabSection>
+        )}
+
         {/* Diagnostics — read-only forensics, re-homed into Lab as a third instrument (one-rail §1). */}
         {diagnostics && (
           <LabSection
@@ -98,6 +150,14 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   pulse: <path d="M3 12h4l2-6 4 12 2-6h6" />,
+  tune: (
+    <>
+      <line x1="4" y1="8" x2="20" y2="8" />
+      <line x1="4" y1="16" x2="20" y2="16" />
+      <circle cx="9" cy="8" r="2.4" />
+      <circle cx="15" cy="16" r="2.4" />
+    </>
+  ),
   terminal: (
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
