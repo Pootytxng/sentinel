@@ -156,9 +156,16 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > 4000-char boundary cap, nothing auto-sent) · **overlay stranded-monitor FIX** (`f6c0fce` — owner
 > hit live: FreeSync OSD toggle swapped primary; corner math now anchors to primary_monitor via
 > shared pure helper, show_overlay pulls it home). cargo **266** · npm **240** · clippy+tsc+vite
-> clean · /check + /security run per phase. **The kit testers are receiving (`5F2549E7`, Drive)
-> predates ALL of this — incl. the overlay fix. Re-cut/re-host timing = owner's call.** Owner
-> eyeballs pending: Export feedback flow · overlay returns to main monitor · driver-freshness pass.
+> clean · /check + /security run per phase. Owner eyeballs pending: Export feedback flow ·
+> overlay returns to main monitor · driver-freshness pass.
+> **✅ KIT RE-CUT (owner-directed, 2026-06-11) from `69e91fe`** — carries the FULL wave above.
+> **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+> `39F08D75A939CF722B52CCC7E5BF9010F7C8377744E2ACF08E3703600C7FFE93`** (2,775,197 B) + MSI
+> (4,149,248 B) — SUPERSEDES `5F2549E7…` everywhere incl. the kit + the Drive-hosted copy.
+> Triple-hash-verified (bundle = loose kit = in-zip); suites green on the exact HEAD (cargo **266**
+> · npm **240** · clippy+tsc clean); built `CODEGEN_UNITS=256`, no OOM. Frozen refs (`16069fa`,
+> `beta/private-beta-001`) re-verified untouched. **NOTHING hosted/sent — re-hosting the Drive
+> file + tester comms stay the owner's.**
 > - **EEE apply bug (`5041fe8`, elevation/mutation boundary — Cowork audit pending):** (1) honest
 >   elevation attribution — a real UAC decline (launch error 1223) is now the ONLY outcome that says
 >   declined (`ELEVATION_DECLINED_MSG`, shared with the §4 test seam); a non-zero exit says "you
