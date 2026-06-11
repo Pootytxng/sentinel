@@ -56,6 +56,10 @@ means fewer check-ins, not less verification.
 - Item 2 audit M1/M2 — diagnostics.rs structural contracts (+5) + Latency/SessionDebrief/Benchmark/
   FirstCheck render-honesty tests (+11), additive only · `726cf4a` · cargo 280 · npm 253 · clippy
   -D warnings · tsc+vite clean · /security N/A-clean (test-only diff, zero production change).
+- Item 3 audit L1+L4 — lock_status() poison-recovery helper over the 7 FPS-status unwraps ·
+  `4fa6c31` · cargo 280 · npm 253 · clippy -D warnings · tsc+vite clean. L4: /security skill doc
+  (in ~/.claude/skills, OUTSIDE the repo) corrected to the real strict CSP + capability set
+  (core/opener/notification + the 3-URL ms-settings allowlist) — future audits judge reality.
 
 ## Owner-deferred (taste / money / mutation-ship — Fable parks here, owner decides)
 - Leftovers user-facing name ("Leftovers" recommended). Pricing shape (Q4). Any mutation flip/ship.
