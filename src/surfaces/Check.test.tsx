@@ -8,12 +8,14 @@ const leftoversMock = vi.hoisted(() => ({
     checked: number;
     unavailable: { id: string; title: string; reason: string }[];
   },
+  nics: [] as { name: string; driver_date: string; driver_age_days: number | null; vendor: string }[],
 }));
 
 // useScan polls real commands on mount; mock invoke to feed a tiny readiness/priorities scan.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     if (cmd === "get_leftovers") return Promise.resolve(leftoversMock.report);
+    if (cmd === "get_nic_driver_info") return Promise.resolve(leftoversMock.nics);
     if (cmd === "get_game_readiness")
       return Promise.resolve({
         checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
@@ -219,6 +221,58 @@ describe("Check", () => {
       screen.getByText(/Couldn't check Boot timer flags \(bcdedit\) — needs admin to check\./),
     ).toBeInTheDocument();
     expect(screen.queryByText(/matches stock where it matters/)).not.toBeInTheDocument();
+  });
+
+  it("NIC driver win-source: a stale network driver gets the honest maybe + copyable Realtek link", async () => {
+    leftoversMock.nics = [
+      { name: "Realtek PCIe GbE Family Controller", driver_date: "2022-03-01", driver_age_days: 1200, vendor: "realtek" },
+    ];
+    render(
+      <ConfirmProvider>
+        <Check
+          isAppliable={() => false}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+          gpus={[{ name: "AMD Radeon RX 9070 XT", driver_age_days: 20 }]}
+        />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Biggest limiters")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Your Realtek driver \(Realtek PCIe GbE Family Controller\) is 1200 days\s+old\. Newer ones may be available/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("https://www.realtek.com/Download")).toBeInTheDocument();
+    expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument();
+    leftoversMock.nics = [];
+  });
+
+  it("NIC driver win-source: recent drivers get one quiet line; unreadable dates claim nothing", async () => {
+    leftoversMock.nics = [
+      { name: "Intel I226-V", driver_date: "2026-05-01", driver_age_days: 41, vendor: "intel" },
+    ];
+    const ui = (
+      <ConfirmProvider>
+        <Check
+          isAppliable={() => false}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+          gpus={[{ name: "AMD Radeon RX 9070 XT", driver_age_days: 20 }]}
+        />
+      </ConfirmProvider>
+    );
+    const { unmount } = render(ui);
+    expect(await screen.findByText(/Network driver is recent too/)).toBeInTheDocument();
+    unmount();
+    // One unreadable date → NO claim either way (silence beats overclaiming).
+    leftoversMock.nics = [
+      { name: "Intel I226-V", driver_date: "", driver_age_days: null, vendor: "intel" },
+    ];
+    render(ui);
+    expect(await screen.findByText(/Driver is recent — 20 days old/)).toBeInTheDocument();
+    expect(screen.queryByText(/Network driver/)).not.toBeInTheDocument();
+    leftoversMock.nics = [];
   });
 
   it("every leftovers detector resolves to a real Learn entry — no dead What's-this links", () => {

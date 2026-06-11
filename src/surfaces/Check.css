@@ -158,6 +158,11 @@
 .check-driver-advisory {
   border-left-color: var(--ix-amber);
 }
+.check-driver-nic {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--ix-glass-border);
+}
 .check-driver-url {
   display: flex;
   align-items: center;

@@ -799,6 +799,88 @@ pub(crate) fn detect_memory_modules() -> Vec<MemoryModuleInfo> {
 
 // CIM_DATETIME looks like "20240312123045.000000-420". We only need the date
 // portion; year/month/day are positions 0..4, 4..6, 6..8.
+// ── NIC driver freshness (R2 driver win-source v1) — LAZY, off the hot path ────────────────────
+// Win32_PnPSignedDriver is slow to enumerate, so this NEVER rides get_hardware_info /
+// collect_hardware; it has its own read-only command the Check surface calls lazily behind the
+// driver-freshness card (the R1 item-6 fork, resolved this way on purpose).
+
+#[derive(Serialize, Clone)]
+pub(crate) struct NicDriverInfo {
+    pub(crate) name: String,
+    pub(crate) driver_date: String, // ISO, "" if unknown
+    pub(crate) driver_age_days: Option<i64>,
+    /// Lowercase vendor key for the UI's copyable support-link map ("unknown" → no link shown).
+    pub(crate) vendor: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_PnPSignedDriver")]
+#[serde(rename_all = "PascalCase")]
+struct PnpSignedDriver {
+    device_name: Option<String>,
+    driver_date: Option<String>, // CIM_DATETIME
+    manufacturer: Option<String>,
+}
+
+pub(crate) fn nic_vendor(manufacturer: &str, name: &str) -> &'static str {
+    let s = format!("{manufacturer} {name}").to_lowercase();
+    if s.contains("intel") || s.contains("killer") {
+        "intel" // Killer NICs are Intel-supported today
+    } else if s.contains("realtek") {
+        "realtek"
+    } else if s.contains("qualcomm") || s.contains("atheros") {
+        "qualcomm"
+    } else if s.contains("broadcom") {
+        "broadcom"
+    } else if s.contains("mediatek") {
+        "mediatek"
+    } else {
+        "unknown"
+    }
+}
+
+/// Pure row mapper: Microsoft-manufactured NET entries are virtual plumbing (WAN Miniport,
+/// Hyper-V, loopback) — not a user-updatable NIC driver, so they're dropped. Every kept row
+/// carries its device name, so any heuristic miss self-identifies in the UI/export.
+fn nic_driver_from(
+    device_name: Option<String>,
+    manufacturer: Option<String>,
+    driver_date: Option<String>,
+) -> Option<NicDriverInfo> {
+    let name = device_name?;
+    let manufacturer = manufacturer.unwrap_or_default();
+    if manufacturer.eq_ignore_ascii_case("microsoft") {
+        return None;
+    }
+    let raw = driver_date.unwrap_or_default();
+    Some(NicDriverInfo {
+        vendor: nic_vendor(&manufacturer, &name).to_string(),
+        driver_age_days: cim_date_age_days(&raw),
+        driver_date: cim_date_iso(&raw),
+        name,
+    })
+}
+
+fn collect_nic_drivers() -> Vec<NicDriverInfo> {
+    let Ok(com) = COMLibrary::new() else { return Vec::new() };
+    let Ok(conn) = WMIConnection::new(com) else { return Vec::new() };
+    let rows: Vec<PnpSignedDriver> = conn
+        .raw_query("SELECT DeviceName, DriverDate, Manufacturer FROM Win32_PnPSignedDriver WHERE DeviceClass = 'NET'")
+        .unwrap_or_default();
+    let mut seen = std::collections::HashSet::new();
+    rows.into_iter()
+        .filter_map(|d| nic_driver_from(d.device_name, d.manufacturer, d.driver_date))
+        .filter(|n| seen.insert(n.name.clone())) // multi-port adapters: one row per name
+        .collect()
+}
+
+/// LAZY read-only IPC — deliberately its own command so the slow PnPSignedDriver enumeration
+/// never lags the hot hardware path.
+#[tauri::command]
+pub(crate) fn get_nic_driver_info() -> Vec<NicDriverInfo> {
+    on_wmi_thread(collect_nic_drivers)
+}
+
 pub(crate) fn cim_date_age_days(cim: &str) -> Option<i64> {
     if cim.len() < 8 {
         return None;
@@ -1451,6 +1533,50 @@ mod game_storage_tests {
             paths,
             vec!["C:\\Program Files (x86)\\Steam", "D:\\SteamLibrary"]
         );
+    }
+}
+
+#[cfg(test)]
+mod nic_driver_tests {
+    use super::{nic_driver_from, nic_vendor};
+
+    #[test]
+    fn microsoft_virtual_net_entries_are_dropped() {
+        // WAN Miniport / Hyper-V plumbing is not a user-updatable NIC driver.
+        assert!(nic_driver_from(
+            Some("WAN Miniport (IP)".into()),
+            Some("Microsoft".into()),
+            Some("20200101000000.000000-000".into()),
+        )
+        .is_none());
+        // A nameless row can't be a receipt — dropped rather than guessed.
+        assert!(nic_driver_from(None, Some("Intel".into()), None).is_none());
+    }
+
+    #[test]
+    fn real_nics_keep_name_vendor_and_honest_age() {
+        let n = nic_driver_from(
+            Some("Realtek PCIe GbE Family Controller".into()),
+            Some("Realtek".into()),
+            Some("20220301000000.000000-000".into()),
+        )
+        .expect("real NIC kept");
+        assert_eq!(n.vendor, "realtek");
+        assert_eq!(n.driver_date, "2022-03-01");
+        assert!(n.driver_age_days.unwrap_or(0) > 1000, "a 2022 driver is years old");
+        // Unparseable date stays honestly unknown — never a fabricated age.
+        let u = nic_driver_from(Some("Intel I226-V".into()), Some("Intel".into()), None).expect("kept");
+        assert_eq!(u.driver_age_days, None);
+        assert_eq!(u.driver_date, "");
+    }
+
+    #[test]
+    fn vendor_classification_covers_the_common_nics() {
+        assert_eq!(nic_vendor("Intel", "Intel(R) Ethernet I226-V"), "intel");
+        assert_eq!(nic_vendor("Rivet Networks", "Killer E3100G"), "intel");
+        assert_eq!(nic_vendor("Realtek", "Realtek PCIe GbE"), "realtek");
+        assert_eq!(nic_vendor("Qualcomm Atheros", "QCA61x4A"), "qualcomm");
+        assert_eq!(nic_vendor("Somebody", "Mystery NIC 9000"), "unknown");
     }
 }
 

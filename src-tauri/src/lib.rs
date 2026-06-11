@@ -633,6 +633,7 @@ pub fn run() {
             get_recommendations,
             get_diagnostics,
             get_leftovers,
+            get_nic_driver_info,
             get_gpu_sensors,
             get_cpu_sensors,
             monitoring::get_memory_pressure,

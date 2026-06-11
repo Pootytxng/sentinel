@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem, SessionSummary } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
@@ -50,6 +50,13 @@ const VENDOR_SUPPORT: Partial<Record<GpuVendor, { label: string; url: string }>>
   amd: { label: "AMD", url: "https://www.amd.com/en/support" },
   nvidia: { label: "NVIDIA", url: "https://www.nvidia.com/Download/index.aspx" },
   intel: { label: "Intel", url: "https://www.intel.com/content/www/us/en/download-center/home.html" },
+};
+
+// NIC driver freshness (R2 driver win-source v1) — mirrors the Rust NicDriverInfo shape.
+type NicDriverInfo = { name: string; driver_date: string; driver_age_days: number | null; vendor: string };
+const NIC_SUPPORT: Record<string, { label: string; url: string }> = {
+  intel: { label: "Intel", url: "https://www.intel.com/content/www/us/en/download-center/home.html" },
+  realtek: { label: "Realtek", url: "https://www.realtek.com/Download" },
 };
 
 // Pure threshold logic. Age is a FACT we read locally; "newer exists" stays a MAYBE — we cannot
@@ -170,16 +177,29 @@ export default function Check({
   // Driver freshness (read-only advisory) — only rendered when the caller wires hardware in,
   // so surfaces/tests that don't pass gpus see nothing rather than a spurious "unreadable".
   const driver = gpus.length > 0 ? driverFreshness(gpus) : null;
-  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const copyDriverUrl = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      setCopiedUrl(true);
-      setTimeout(() => setCopiedUrl(false), 1500);
+      setCopiedUrl(url);
+      setTimeout(() => setCopiedUrl(null), 1500);
     } catch {
       /* clipboard blocked — the URL text stays visible to select manually */
     }
   };
+
+  // NIC driver freshness — LAZY: fetched once, only when the driver card actually renders
+  // (its own command keeps the slow Win32_PnPSignedDriver read off the hardware hot path).
+  const [nicDrivers, setNicDrivers] = useState<NicDriverInfo[] | null>(null);
+  useEffect(() => {
+    if (!driver || nicDrivers !== null) return;
+    invoke<NicDriverInfo[]>("get_nic_driver_info")
+      .then((r) => setNicDrivers(r ?? []))
+      .catch(() => setNicDrivers([]));
+  }, [driver, nicDrivers]);
+  const staleNics = (nicDrivers ?? []).filter(
+    (n) => n.driver_age_days != null && n.driver_age_days > 90,
+  );
 
   return (
     <section className="check-root">
@@ -242,10 +262,42 @@ export default function Check({
                 <div className="check-driver-url">
                   <code className="check-driver-url-text">{driver.url}</code>
                   <button className="check-driver-copy" onClick={() => copyDriverUrl(driver.url!)}>
-                    {copiedUrl ? "Copied ✓" : "Copy link"}
+                    {copiedUrl === driver.url ? "Copied ✓" : "Copy link"}
                   </button>
                 </div>
               )}
+              {/* NIC drivers (win-source v1): same honesty rules — age is a fact, "newer exists"
+                  is a maybe, the link is copyable text only. Unreadable dates show nothing. */}
+              {staleNics.map((n) => {
+                const support = NIC_SUPPORT[n.vendor];
+                return (
+                  <div key={n.name} className="check-driver-nic">
+                    <p className="check-row-reason">
+                      Your {support?.label ?? "network"} driver ({n.name}) is {n.driver_age_days} days
+                      old. Newer ones may be available — worth checking your vendor's page.
+                    </p>
+                    {support && (
+                      <div className="check-driver-url">
+                        <code className="check-driver-url-text">{support.url}</code>
+                        <button className="check-driver-copy" onClick={() => copyDriverUrl(support.url)}>
+                          {copiedUrl === support.url ? "Copied ✓" : "Copy link"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* The quiet pass line claims "recent" ONLY when every NIC date was readable —
+                  a partial read stays silent rather than overclaiming. */}
+              {nicDrivers !== null &&
+                nicDrivers.length > 0 &&
+                staleNics.length === 0 &&
+                nicDrivers.every((n) => n.driver_age_days != null) && (
+                  <p className="check-row-reason check-leftover-note">
+                    Network driver{nicDrivers.length === 1 ? " is" : "s are"} recent too — nothing
+                    worth chasing.
+                  </p>
+                )}
             </div>
           )}
 
