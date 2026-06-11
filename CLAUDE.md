@@ -94,6 +94,14 @@ but over the line. Notably, **Fable 5's safety layer auto-switched the session t
 the work tripped its security classifier — treat that auto-switch itself as a STOP signal:** if the
 model flips on security-sensitive work, halt and involve the owner.
 
+### TOKEN DISCIPLINE — terse reports (standing rule, 2026-06-10)
+
+Chat reports are pasted into Cowork, so verbosity burns the owner's budget twice. **Every report:**
+commit hash(es) · 1–2 line what-changed · one verification line (cargo/npm/clippy/tsc/check/security)
+· flags / owner-decisions. Nothing else. Mechanism, rationale, and design detail go in the commit
+message + spec, NOT the chat. Don't re-explain known context or restate the board. **Rigor unchanged**
+— tests/audits/verification never skipped, only reported concisely. Mirrored in `docs/COWORK_HANDOFF.md`.
+
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).

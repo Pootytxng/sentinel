@@ -45,6 +45,13 @@ auto-switch is itself a signal: if the model flips on security-sensitive work, S
 the owner. Diagnose elevation behavior with read-only probes; if a setting genuinely must change,
 welfare-check first.
 
+## Token discipline — terse reports (standing rule, 2026-06-10)
+
+CC's chat reports get pasted here, so verbosity costs twice. CC reports ONLY: commit hash(es) ·
+1–2 line what-changed · one verification line · flags/owner-decisions. Mechanism + rationale live
+in commit messages + specs — read those when auditing, don't ask CC to re-narrate. Same rule
+applies to Cowork's own outputs where practical. Rigor unchanged; only the reporting is compressed.
+
 ## Working mode — MINIMAL GATES (from CLAUDE.md, reinforced)
 
 Do anything reversible and report after. Pause for the owner ONLY on: (1) point-of-no-return /
