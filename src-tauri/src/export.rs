@@ -448,8 +448,17 @@ fn build_discord_block(
     o
 }
 
+/// Webview-boundary cap for the user-typed feedback (defense-in-depth, same posture as the
+/// receipt-title cap): three short answers fit comfortably; a compromised webview can't bloat
+/// the report/memory with an unbounded string. Char-boundary safe.
+const FEEDBACK_MAX_CHARS: usize = 4000;
+fn cap_feedback(feedback: Option<String>) -> Option<String> {
+    feedback.map(|f| f.chars().take(FEEDBACK_MAX_CHARS).collect())
+}
+
 #[tauri::command]
 pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, String> {
+    let feedback = cap_feedback(feedback);
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let hardware = serde_json::to_value(crate::hardware::get_hardware_info()).unwrap_or(Value::Null);
     let recommendations =
@@ -633,6 +642,17 @@ mod export_tests {
         let fb = md.rfind("## Tester feedback").unwrap();
         let privacy = md.rfind("## Privacy & safety").unwrap();
         assert!(fb > privacy, "feedback must follow the privacy section");
+    }
+
+    #[test]
+    fn feedback_is_capped_at_the_webview_boundary() {
+        let huge = "x".repeat(FEEDBACK_MAX_CHARS * 3);
+        let capped = cap_feedback(Some(huge)).unwrap();
+        assert_eq!(capped.chars().count(), FEEDBACK_MAX_CHARS);
+        assert_eq!(cap_feedback(None), None);
+        // Multi-byte input truncates on a char boundary (no panic, no broken UTF-8).
+        let multi = "é".repeat(FEEDBACK_MAX_CHARS + 5);
+        assert_eq!(cap_feedback(Some(multi)).unwrap().chars().count(), FEEDBACK_MAX_CHARS);
     }
 
     #[test]
