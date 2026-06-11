@@ -137,6 +137,29 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🩹 TWO TESTER-FOUND HONESTY FIXES — 2026-06-10 (`main` @ `4d0ddfd`). KIT IS STALE AGAIN.**
+> - **EEE apply bug (`5041fe8`, elevation/mutation boundary — Cowork audit pending):** (1) honest
+>   elevation attribution — a real UAC decline (launch error 1223) is now the ONLY outcome that says
+>   declined (`ELEVATION_DECLINED_MSG`, shared with the §4 test seam); a non-zero exit says "you
+>   approved... the operation itself failed" and a TEST enforces the word *cancel* never appears there
+>   (the old code had the two exactly backwards — accepted-but-failed showed "Did you cancel the UAC
+>   prompt?"). (2) EEE resolution — apply writes the DRIVER'S OWN disabled token (ValidDisplayValues;
+>   unknown vocabulary → gate, never guess), enumeration matches registry keywords (`*EEE`/`GigaEEE`/
+>   `EEELink`…) + broadened names, detection judges by the same comparator, and a new
+>   `eee-switch-exposed` HardwareInfo gate marks switchless rigs "Not for this rig" (incl. unplugged-
+>   cable rigs that were previously offered a guaranteed-fail apply). Boundary intact: snapshot-before-
+>   mutation, 3-field `EeeNicSnapshot` unchanged (old ledger entries roll back identically), no new
+>   mutation primitive, scripts stay `exit`-free (§4-batchable). cargo **252** · /check + /security
+>   clean. **PENDING: tester Export (adapter inventory) → pin the exact NIC property name + alias test.**
+> - **Overlay frametime graph (`4d0ddfd`, frontend-only):** min/max auto-scale (stable frametimes
+>   stretched to full-height noise) → FIXED RTSS-style scale (ceiling ≈3.5× frame budget, 20–50 ms;
+>   unknown refresh → 0–50 ms) + a faint dashed frame-budget line (absent, never guessed, when refresh
+>   unknown). Refresh relays main→overlay via the EXISTING localStorage channel — zero new IPC. Play/
+>   deep-monitoring verified: no session-length frametime view exists to fix (aggregates by design;
+>   `stutter_timeline` data exists unrendered — future scoping option). npm **234**.
+> - **⚠️ KIT CURRENCY: `E8D5588B…` predates BOTH fixes** — sending it ships the exact tester-found
+>   bugs they fix. Re-cut before any send (owner-timed; not auto-refreshed).
+
 > **🧪 AUTONOMOUS IMPROVEMENT SPRINT — 2026-06-10 (`main` @ `d51f6f0`+).** Owner-mandated broad
 > reversible sprint; full running log + ranked owner-deferred list in
 > `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-10.md`. Landed (all green, each pushed): design-law sweep
