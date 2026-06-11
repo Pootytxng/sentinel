@@ -60,6 +60,12 @@ means fewer check-ins, not less verification.
   `4fa6c31` · cargo 280 · npm 253 · clippy -D warnings · tsc+vite clean. L4: /security skill doc
   (in ~/.claude/skills, OUTSIDE the repo) corrected to the real strict CSP + capability set
   (core/opener/notification + the 3-URL ms-settings allowlist) — future audits judge reality.
+- Item 4 Leftovers detectors 2–8 — bcdedit (needs-admin honest) · MMCSS · core-parking (Ryzen/
+  high-perf plans excused) · Defender-POLICY read (managed-PC honesty) · MPO=5 · TCP-autotuning
+  (locale-honest) · Win32PrioritySeparation; unavailable now {id,title,reason}, UI names unchecked
+  probes · `a500c2b` · cargo 286 (+11 incl. live probe smoke) · npm 253 · clippy -D warnings ·
+  tsc+vite clean · /security clean (fixed-arg reads only, HKLM read-only incl. policy keys, zero
+  mutation/IPC/capability change).
 
 ## Owner-deferred (taste / money / mutation-ship — Fable parks here, owner decides)
 - Leftovers user-facing name ("Leftovers" recommended). Pricing shape (Q4). Any mutation flip/ship.
