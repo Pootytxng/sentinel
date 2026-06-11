@@ -99,4 +99,50 @@ describe("Check", () => {
     );
     expect(screen.queryByText(/running warm/i)).not.toBeInTheDocument();
   });
+
+  it("driver freshness: a >90-day driver shows the honest advisory with a copyable vendor URL", async () => {
+    render(
+      <ConfirmProvider>
+        <Check
+          isAppliable={() => false}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+          gpus={[{ name: "AMD Radeon RX 9070 XT", driver_age_days: 200 }]}
+        />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Biggest limiters")).toBeInTheDocument();
+    // Age is a fact; "newer exists" stays a maybe — never "out of date", no version claim.
+    expect(screen.getByText(/Your AMD driver is 200 days old/)).toBeInTheDocument();
+    expect(screen.getByText(/Newer ones may be available/)).toBeInTheDocument();
+    expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument();
+    // Copyable TEXT + a copy button — never a launch link (capabilities untouched).
+    expect(screen.getByText("https://www.amd.com/en/support")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Copy link/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("driver freshness: unreadable date is a neutral skip; a recent driver is a quiet pass", async () => {
+    const checkWith = (age: number | null) => (
+      <ConfirmProvider>
+        <Check
+          isAppliable={() => false}
+          onOpenLibrary={vi.fn()}
+          onChanged={vi.fn()}
+          vendor="any"
+          gpus={[{ name: "AMD Radeon RX 9070 XT", driver_age_days: age }]}
+        />
+      </ConfirmProvider>
+    );
+    const { rerender } = render(checkWith(null));
+    expect(await screen.findByText("Biggest limiters")).toBeInTheDocument();
+    // Missing data is a skip, not an alarm — no age, no nudge, no URL.
+    expect(screen.getByText(/Driver date unreadable — skip/)).toBeInTheDocument();
+    expect(screen.queryByText(/days old/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy link/ })).not.toBeInTheDocument();
+    rerender(checkWith(20));
+    expect(screen.getByText(/Driver is recent — 20 days old\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy link/ })).not.toBeInTheDocument();
+  });
 });

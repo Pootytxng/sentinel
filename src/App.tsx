@@ -1469,6 +1469,7 @@ function App() {
                   onChanged={refresh}
                   vendor={detectedVendor}
                   sessions={sessions}
+                  gpus={hw?.gpus ?? []}
                 />
               )}
               {activeTab === "Readiness" && (

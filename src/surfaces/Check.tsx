@@ -5,12 +5,42 @@ import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
 import { Walkthrough } from "../design/Walkthrough";
-import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
+import { walkthroughForKey, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
 import { useScan } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./Check.css";
+
+// Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
+type GpuDriverInfo = { name: string; driver_age_days: number | null };
+
+// Stable vendor support roots for the COPYABLE url (spec 2026-06-10-driver-freshness-check).
+// Never a launch button — opening external https would need an owner-gated allowlist change.
+const VENDOR_SUPPORT: Partial<Record<GpuVendor, { label: string; url: string }>> = {
+  amd: { label: "AMD", url: "https://www.amd.com/en/support" },
+  nvidia: { label: "NVIDIA", url: "https://www.nvidia.com/Download/index.aspx" },
+  intel: { label: "Intel", url: "https://www.intel.com/content/www/us/en/download-center/home.html" },
+};
+
+// Pure threshold logic. Age is a FACT we read locally; "newer exists" stays a MAYBE — we cannot
+// know the latest driver without the network (remote fetch is gated off), so never "out of date",
+// never a version claim. Unreadable date → neutral skip, no alarm. Vendor comes from the GPU's own
+// name (not the app-level vendor prop) so the advisory names the right driver on mixed rigs.
+function driverFreshness(gpus: GpuDriverInfo[]):
+  | { tone: "skip" | "pass"; message: string; url?: undefined }
+  | { tone: "advisory"; message: string; url: string | null } {
+  const gpu = gpus.find((g) => g.driver_age_days != null);
+  if (!gpu) return { tone: "skip", message: "Driver date unreadable — skip" };
+  const age = gpu.driver_age_days as number;
+  if (age <= 90) return { tone: "pass", message: `Driver is recent — ${age} days old.` };
+  const v = VENDOR_SUPPORT[gpuVendor(gpu.name)];
+  return {
+    tone: "advisory",
+    message: `Your ${v?.label ?? "GPU"} driver is ${age} days old. Newer ones may be available — worth checking your vendor's page.`,
+    url: v?.url ?? null,
+  };
+}
 
 // CHECK — the consolidation surface that absorbs Readiness + Priorities (spec 2026-06-06-check-play-lab).
 // Top: the shared scan (radar + streaming rows from useScan — same core as the first-run arc). Below:
@@ -35,12 +65,14 @@ export default function Check({
   onChanged,
   vendor,
   sessions = [],
+  gpus = [],
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
   onChanged: () => void;
   vendor: GpuVendor;
   sessions?: SessionSummary[];
+  gpus?: GpuDriverInfo[];
 }) {
   const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
@@ -91,6 +123,20 @@ export default function Check({
   const tuningGuide = tuningGuideForVendor(vendor);
   const hot = tuningGuide ? gpuRunningHot(sessions) : null;
 
+  // Driver freshness (read-only advisory) — only rendered when the caller wires hardware in,
+  // so surfaces/tests that don't pass gpus see nothing rather than a spurious "unreadable".
+  const driver = gpus.length > 0 ? driverFreshness(gpus) : null;
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const copyDriverUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 1500);
+    } catch {
+      /* clipboard blocked — the URL text stays visible to select manually */
+    }
+  };
+
   return (
     <section className="check-root">
       <header className="check-head">
@@ -136,6 +182,26 @@ export default function Check({
               <button className="check-nudge-link" onClick={() => onOpenLibrary(tuningGuide.id)}>
                 Cooler &amp; quieter — undervolt guide →
               </button>
+            </div>
+          )}
+
+          {/* Driver freshness — honest age advisory. The URL is copyable TEXT (doorknob: the copy
+              button is the only control); never a launcher, never "out of date", never a version. */}
+          {driver && (
+            <div className={`check-driver check-driver-${driver.tone}`}>
+              <div className="check-row-head">
+                <span className="check-row-title">Driver freshness</span>
+                {driver.tone === "advisory" && <span className="check-advisory">advisory</span>}
+              </div>
+              <p className="check-row-reason">{driver.message}</p>
+              {driver.tone === "advisory" && driver.url && (
+                <div className="check-driver-url">
+                  <code className="check-driver-url-text">{driver.url}</code>
+                  <button className="check-driver-copy" onClick={() => copyDriverUrl(driver.url!)}>
+                    {copiedUrl ? "Copied ✓" : "Copy link"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
