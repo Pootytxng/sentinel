@@ -162,18 +162,38 @@ fn history_path() -> PathBuf {
 // load/save are split into path-parameterized cores so the JSON round-trip and
 // the corrupt-file-fails-safe behavior are unit-testable without touching the
 // real %APPDATA% history file. The no-arg wrappers preserve prior behavior.
-fn load_history() -> Vec<AppliedChange> {
+fn load_history() -> Result<Vec<AppliedChange>, String> {
     load_history_from(&history_path())
 }
 
-fn load_history_from(path: &Path) -> Vec<AppliedChange> {
+fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
     if !path.exists() {
-        return Vec::new();
+        return Ok(Vec::new()); // first run — genuinely no history
     }
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    let parsed = std::fs::read_to_string(path)
+        .map_err(|e| format!("read: {e}"))
+        .and_then(|s| serde_json::from_str(&s).map_err(|e| format!("parse: {e}")));
+    match parsed {
+        Ok(h) => Ok(h),
+        Err(e) => {
+            // H1 fix (audit 2026-06-11): an unreadable EXISTING ledger must never be silently
+            // treated as empty — under the old code the next save would overwrite the
+            // recoverable file and permanently erase every rollback contract. Set the damaged
+            // file aside byte-for-byte (best effort) and fail LOUD. Every save sits behind a
+            // successful load, so the recoverable bytes can never be clobbered either way.
+            let corrupt = path.with_extension("json.corrupt");
+            let preserved = std::fs::rename(path, &corrupt).is_ok();
+            Err(format!(
+                "The Trust Ledger could not be read ({e}). {}",
+                if preserved {
+                    "The damaged file was set aside as history.json.corrupt — nothing was \
+                     overwritten, and Compy will not record changes over it."
+                } else {
+                    "The damaged file was left in place — Compy will not record changes over it."
+                }
+            ))
+        }
+    }
 }
 
 fn save_history(h: &[AppliedChange]) -> Result<(), String> {
@@ -183,7 +203,13 @@ fn save_history(h: &[AppliedChange]) -> Result<(), String> {
 
 fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
     let json = serde_json::to_string_pretty(h).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    // Crash-safe (H1): write the full new ledger BESIDE the live one, then atomically swap it
+    // in (same-volume rename; std maps to MoveFileEx + REPLACE_EXISTING on Windows). A crash
+    // mid-write can only ever leave a stale-but-valid history.json plus an ignorable .tmp —
+    // never a torn ledger.
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, json).map_err(|e| format!("write: {e}"))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("swap: {e}"))
 }
 
 /// The ONE dispatch from rec id to its audited apply_* — `apply_recommendation` and the §4 batch
@@ -244,9 +270,12 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
+    // Load BEFORE dispatching (H1): if the ledger can't record a receipt, the change must not
+    // happen at all — never mutate what can't be written down. Same audited dispatch + receipt
+    // as before; only the refusal moved ahead of the mutation.
+    let mut history = load_history()?;
     let result = dispatch_apply(&rec_id)?;
     let change = build_applied_change(&rec_id, &rec_title, result)?;
-    let mut history = load_history();
     history.push(change.clone());
     save_history(&history)?;
     Ok(into_view(change))
@@ -341,7 +370,8 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history();
+    // H1: refuse the whole batch before phase 1 if the ledger can't record receipts.
+    let mut history = load_history()?;
     let mut outcomes: Vec<BatchItemOutcome> = Vec::new();
     let mut applied = 0usize;
 
@@ -460,7 +490,9 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
-    let mut history = load_history();
+    // H1: a corrupt ledger refuses the rollback loudly (the file is preserved for recovery)
+    // rather than reporting "change not found" against a silently-empty list.
+    let mut history = load_history()?;
     let idx = history
         .iter()
         .position(|c| c.id == change_id)
@@ -481,14 +513,21 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
-    load_history().into_iter().map(into_view).collect()
+    // Read-only VIEW. The signature stays infallible (export + the benchmark trial runner
+    // consume it), so a corrupt ledger degrades to an empty view here — but never to data
+    // loss: load_history has already set the damaged file aside untouched, and every
+    // MUTATING command (apply / batch / rollback) refuses loudly instead of saving over it.
+    // Surfacing ledger health in the Fix surface is a recorded follow-up.
+    load_history().unwrap_or_default().into_iter().map(into_view).collect()
 }
 
 /// Total Trust-Ledger entry count (append-only, so monotonic). Used as a confound watermark by the
 /// cross-session comparison engine: if the ledger advanced between arming and the next session,
 /// another change landed and the delta can't be honestly attributed.
 pub(crate) fn ledger_len() -> usize {
-    load_history().len()
+    // On an unreadable ledger this reads 0 — which DIFFERS from any non-zero armed watermark,
+    // so the comparison engine refuses attribution (the fail-safe direction for honesty).
+    load_history().unwrap_or_default().len()
 }
 
 /// Read-only roll-up of the Trust Ledger for surfaces that need counts rather
@@ -504,7 +543,9 @@ pub(crate) struct AppliedChangesSummary {
 }
 
 pub(crate) fn applied_changes_summary() -> AppliedChangesSummary {
-    summarize_history(&load_history())
+    // Read-only roll-up: an unreadable ledger summarizes as zeros (the preserved .corrupt
+    // file is untouchable by saves; mutating commands surface the error loudly).
+    summarize_history(&load_history().unwrap_or_default())
 }
 
 // Collapse history to the LATEST entry per rec_id, then summarize current state.
@@ -605,7 +646,7 @@ mod batch_apply_tests {
     #[test]
     fn elevation_failure_skips_every_deferred_item_honestly() {
         let _force = ForceElevationError::begin();
-        let before = load_history();
+        let before = load_history().expect("real ledger readable");
         let before_ids: std::collections::HashSet<String> =
             before.iter().map(|c| c.id.clone()).collect();
         let report = apply_recommendations_batch(vec![
@@ -624,7 +665,7 @@ mod batch_apply_tests {
             );
         }
         // Fail-safe: no NEW ledger entry for either elevated item.
-        let after = load_history();
+        let after = load_history().expect("real ledger readable");
         let new_count = after.iter().filter(|c| !before_ids.contains(&c.id)).count();
         assert_eq!(new_count, 0, "a cancelled elevation must ledger nothing");
     }
@@ -697,7 +738,7 @@ mod manual_elevation_qa {
     #[test]
     #[ignore = "manual §4 elevation QA — real UAC; click YES twice"]
     fn manual_qa_batch_one_prompt_receipts_and_per_item_rollback() {
-        let before = load_history().len();
+        let before = load_history().expect("ledger readable").len();
         let report = apply_recommendations_batch(vec![
             qa_item("fast-startup-off", "QA · Disable Fast Startup"),
             qa_item("hags-enable", "QA · Enable HAGS"),
@@ -709,7 +750,7 @@ mod manual_elevation_qa {
         assert_eq!(report.skipped, 0, "nothing skipped");
 
         // One full-contract receipt PER item.
-        let after = load_history();
+        let after = load_history().expect("ledger readable");
         assert_eq!(after.len(), before + 2, "exactly one ledger receipt per item");
         for rec in ["fast-startup-off", "hags-enable"] {
             let c = after
@@ -732,7 +773,7 @@ mod manual_elevation_qa {
             .clone();
         rollback_change(hags_id.clone())
             .expect("rollback must run (did the second UAC prompt get a YES?)");
-        let post = load_history();
+        let post = load_history().expect("ledger readable");
         let hags = post.iter().find(|c| c.id == hags_id).expect("hags entry");
         assert_eq!(hags.status, "rolled_back", "the rolled-back item flips");
         let fast = post
@@ -750,7 +791,7 @@ mod manual_elevation_qa {
     #[test]
     #[ignore = "manual §4 elevation QA — real UAC; click NO (cancel)"]
     fn manual_qa_uac_cancel_is_honest_per_item() {
-        let before = load_history().len();
+        let before = load_history().expect("ledger readable").len();
         let report = apply_recommendations_batch(vec![
             qa_item("game-bar-disable", "QA · Game Bar off"), // non-elevated (HKCU)
             qa_item("fast-startup-off", "QA · Fast Startup"), // elevated — CANCEL its prompt
@@ -771,7 +812,7 @@ mod manual_elevation_qa {
             reason.contains("Elevation did not complete"),
             "honest reason, got: {reason}"
         );
-        let after = load_history();
+        let after = load_history().expect("ledger readable");
         assert_eq!(after.len(), before + 1, "ONLY the non-elevated receipt landed");
         assert_eq!(
             crate::fast_startup_state(),
@@ -863,7 +904,7 @@ mod history_tests {
             record("hags-enable", "rolled_back"),
         ];
         save_history_to(&path, &records).unwrap();
-        let back = load_history_from(&path);
+        let back = load_history_from(&path).expect("round-trip load");
         assert_eq!(back.len(), 2);
         assert_eq!(back[0].rec_id, "game-mode");
         assert_eq!(back[1].status, "rolled_back");
@@ -874,22 +915,81 @@ mod history_tests {
     fn missing_history_file_loads_empty() {
         let path = std::env::temp_dir().join("compy-hist-definitely-absent-9z.json");
         let _ = std::fs::remove_file(&path);
-        assert!(load_history_from(&path).is_empty());
+        assert!(load_history_from(&path).expect("missing file is a clean first run").is_empty());
     }
 
     #[test]
-    fn corrupt_history_file_fails_safe_to_empty() {
-        // Garbage on disk must never panic or fabricate entries — it loads as if
-        // there were no history, so the app stays usable and nothing is "undone"
-        // against a phantom record.
-        let path =
-            std::env::temp_dir().join(format!("compy-hist-corrupt-{}.json", std::process::id()));
-        std::fs::write(&path, b"{ this is not valid json ]]]").unwrap();
-        assert!(
-            load_history_from(&path).is_empty(),
-            "corrupt history must load as empty, not panic"
+    fn corrupt_history_is_preserved_and_fails_loud_never_silently_empty() {
+        // H1 (audit 2026-06-11): garbage on disk must never panic, fabricate entries, OR load
+        // as silently empty (the old behavior — a later save would then overwrite the
+        // recoverable file and permanently erase every rollback contract). It errors loudly
+        // and the original bytes are set aside untouched.
+        let dir =
+            std::env::temp_dir().join(format!("compy-hist-corrupt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        let garbage: &[u8] = b"{ this is not valid json ]]]";
+        std::fs::write(&path, garbage).unwrap();
+        let err = load_history_from(&path)
+            .err()
+            .expect("a corrupt EXISTING ledger must error");
+        assert!(err.contains("could not be read"), "loud, plain-English error: {err}");
+        let corrupt = path.with_extension("json.corrupt");
+        assert_eq!(
+            std::fs::read(&corrupt).unwrap(),
+            garbage,
+            "the recoverable bytes are preserved EXACTLY, where no save will touch them"
         );
-        std::fs::remove_file(&path).ok();
+        assert!(!path.exists(), "the damaged live file was set aside");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn torn_write_never_loses_the_ledger() {
+        // The H1 scenario end to end: a valid ledger, then a torn/truncated overwrite (what a
+        // crash mid-write left under the OLD in-place fs::write) → the load refuses and
+        // preserves; it never returns empty for a later save to overwrite.
+        let dir = std::env::temp_dir().join(format!("compy-hist-torn-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
+        let full = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, &full[..full.len() / 2]).unwrap(); // torn mid-token
+        assert!(
+            load_history_from(&path).is_err(),
+            "a torn ledger must surface, never silently empty"
+        );
+        assert!(
+            path.with_extension("json.corrupt").exists(),
+            "the torn bytes are preserved for recovery"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_is_an_atomic_swap_leaving_no_tmp() {
+        // The other half of H1: saves go to a temp file then rename over the live ledger, so
+        // a crash mid-write can only leave stale-but-valid data — and a successful save
+        // leaves no .tmp residue.
+        let dir = std::env::temp_dir().join(format!("compy-hist-atomic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
+        save_history_to(
+            &path,
+            &[record("game-mode", "applied"), record("hags-enable", "applied")],
+        )
+        .unwrap();
+        assert_eq!(
+            load_history_from(&path).expect("swap result valid").len(),
+            2,
+            "the second save atomically replaced the first"
+        );
+        assert!(
+            !path.with_extension("json.tmp").exists(),
+            "no tmp residue after a successful swap"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -908,7 +1008,7 @@ mod history_tests {
         let path =
             std::env::temp_dir().join(format!("compy-hist-legacy-{}.json", std::process::id()));
         std::fs::write(&path, serde_json::to_string(&legacy).unwrap()).unwrap();
-        let loaded = load_history_from(&path);
+        let loaded = load_history_from(&path).expect("legacy ledger loads");
         assert_eq!(loaded.len(), 1);
         assert!(loaded[0].applied_action.is_none());
         assert!(loaded[0].rollback_action.is_none());
