@@ -963,7 +963,7 @@ function App() {
     setExporting(true);
     setError(null);
     try {
-      setReport(await invoke<ExportResult>("export_report"));
+      setReport(await invoke<ExportResult>("export_report", { feedback: null }));
     } catch (e) {
       setError(String(e));
     } finally {
