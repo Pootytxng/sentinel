@@ -83,6 +83,19 @@ Own your own misses honestly when the owner catches one — he respects that ove
    screenshots; facts stated in our words)?
 4. **Model routing** — per task, flag whether it's better run on **Fable 5** (the heavy lane) or
    fine where it is. See the routing section below.
+5. **Shorthand-audit protocol** (owner directive 2026-06-10) — the owner should NEVER paste CC's full
+   report here. He says only *"CC done — <task>, advise"*. You then read git directly (the commit is
+   ground truth), diff against the spec's hard lines, grep for violations, and verify the test/build
+   claims yourself. Only ask for CC's one verify-line if it's a number you can't cheaply re-derive.
+6. **Dev-build-launch + NEEDS-YOU flag** (owner directive 2026-06-10) — when a CC task produces a
+   VISUAL/behavioral change the owner must eyeball, APPEND to that CC prompt: *"After committing, run
+   `npm run tauri dev` so the owner can see the change live."* AND open your response with a loud
+   🔴 **NEEDS YOU** line naming exactly what to test, so gated owner actions are unmissable and never
+   silently stall productivity. Codeful/test-only changes don't need it.
+7. **Persist feedback to disk immediately** (learned 2026-06-10) — the relay only remembers what's
+   WRITTEN TO A FILE. A thread swap lost a full owner feedback/overview once (only a one-line board
+   distillation survived). Any feedback dump → write it to a dated spec doc BEFORE acting on it.
+   Latest is `docs/superpowers/specs/2026-06-10-tester-feedback-overview.md` (the 3-lane triage).
 
 ## Model routing — Fable 5 (launched 2026-06-09)
 
@@ -123,6 +136,20 @@ have shaped real features). The arc: package → smoke → twenty friends → a 
 
 ## Current board (update as you go)
 
+- **🚀 BETA IS SENDING (2026-06-10/11)** — owner hosted the send-ready kit (`5F2549E7`, from `fc940fe`)
+  on **Google Drive** (link live) and is DMing testers the link + `beta-kit/invite-message.txt`. Drive,
+  NOT Discord, because a tester's MalwareBytes Browser Guard blocked Discord's CDN (`cdn.discordapp.com`
+  — false "phishing" over-block, NOT Compy). **FPS self-measurement fix is FIELD-CONFIRMED** — owner's
+  live game test shows the overlay now reads ≈ the in-game/Steam counter (the msedgewebview2 self-measure
+  bug is dead). Kit fully field-validated. Owner-side from here: collect Export reports + the "describe
+  Compy in one sentence" answers.
+- **Next Cowork task (teed up)** — spec the **Fix-tab reword**: read more inviting/outcome-framed WITHOUT
+  promising FPS gains (no-snake-oil law — we just killed that exact over-promise on the site). Target:
+  "the changes actually worth making for your rig" — earned, tailored, reversible. THEN a separate **Lab
+  welcoming pass** (make the instrument-heavy Lab comprehensible/inviting for newcomers). Owner's
+  roadmap-overview take is recorded: filter every future item through reversible + honest + catalog-frozen;
+  most self-sequence (signing/legal = public gate, NVML/Intel = vendor-honesty rule #5, remote rules =
+  triple-gated arming plan, mobile/paramedic/per-game = post-beta).
 - **Tuning-guides feature** — BUILT + pushed (HEAD ~272f195); static audit passed (zero mutation,
   schematic-only, honest-measurement invariant coded). ✅ CC re-verified 2026-06-09 (the lost
   report is replaced): cargo 232 / npm 225 / clippy + tsc clean / /security clean; the 4 Fix-path
