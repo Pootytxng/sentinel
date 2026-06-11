@@ -95,6 +95,12 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
 - **M3 retirement spec is READY** — `docs/superpowers/specs/2026-06-11-classic-retirement-M3-spec.md`
   (inventory verified by grep, 8-step plan, shared-CSS hazard flagged, revert tag, fresh attended
   session required). Owner schedules it.
+- **Pagefile dark resolver — DEFERRED, needs an owner call (dark wave 2):** the restore-FORWARD is
+  clean (`AutomaticManagedPagefile=$true`, fixed command), but the ROLLBACK must put the user's exact
+  `PagingFiles` REG_MULTI_SZ back — a **path string** (`C:\pagefile.sys 30000 30000`), external
+  snapshot data. That collides with the wave's integer-only-interpolation hard line, and rollback-
+  first integrity forbids landing a restore I can't exactly reverse. Two ways forward, your pick:
+  **(a)** restrict to the common case — validate the single entry as `^<DriveLetter>:\pagefile.sys <u32> <u32>$`, store drive-letter (one validated `[A-Za-z]` char) + two u32 sizes, **refuse** exotic/multi-pagefile setups; rollback reconstructs from the validated letter + integers (one non-integer token, provably metacharacter-free). **(b)** sanction the existing EEE-resolver precedent — single-quote the path with PS `''`-escaping (already shipping for adapter names). I recommend **(a)** (tightest, matches the origin-story 30 GB case, refuses what it can't exactly reverse). bcdedit also stays deferred (boot-store writes = highest blast radius, owner-present wave). Everything is dark regardless; this only decides how the eventual pagefile restore is built.
 
 ## Running log (Fable appends — what · commit · verify · hard-line self-audit)
 - R2-1 Leftovers Learn entries — memory-compression-off tweak entry (pin 46→47, curation NOT
@@ -131,3 +137,8 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
   near-zero value vs real shipped-shell risk; the shrink rides M3 step 7 for free.
 - R2-8 M3 prep — retirement spec written (inventory grep-verified, 8 steps, hazards, revert
   tag); execution explicitly deferred to a fresh attended session.
+- **Dark wave 2** (spec `2026-06-11-leftovers-v2-dark-wave2.md`) — MPO + core-parking + TCP
+  autotuning resolvers BUILT DARK · `7682c4a` · cargo 307 (+3 adversarial) · npm 256 · clippy
+  -D warnings · tsc+vite clean · /security: gate false + zero restore IPC re-confirmed, integer-
+  only elevated commands, additive · hard-lines ✓. PAGEFILE deferred (Review Queue, above);
+  bcdedit/Defender excluded by spec.
