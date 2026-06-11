@@ -147,7 +147,18 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
-> **🩹 TWO TESTER-FOUND HONESTY FIXES — 2026-06-10 (`main` @ `4d0ddfd`). KIT IS STALE AGAIN.**
+> **🌊 2026-06-10/11 OWNER-FEEDBACK WAVE LANDED (`main` @ `cc2a1ba`) — THE SENDING KIT IS BEHIND.**
+> Built from the Cowork 3-lane triage (`docs/superpowers/specs/2026-06-10-tester-feedback-overview.md`)
+> + two live owner reports: **Fix-tab reword** (`f1a1f27`, per-rig framing, no gains promise) ·
+> **Lab welcoming pass** (`7d9f52a`, knobless welcome band, doorknob-pinned) · **driver freshness
+> advisory in Check** (`078bc1d`, honest age, copyable vendor URL, zero new IPC) · **structured
+> feedback capture in Export** (`bd7520d`+`cc2a1ba`, 3 optional prompts → "## Tester feedback",
+> 4000-char boundary cap, nothing auto-sent) · **overlay stranded-monitor FIX** (`f6c0fce` — owner
+> hit live: FreeSync OSD toggle swapped primary; corner math now anchors to primary_monitor via
+> shared pure helper, show_overlay pulls it home). cargo **266** · npm **240** · clippy+tsc+vite
+> clean · /check + /security run per phase. **The kit testers are receiving (`5F2549E7`, Drive)
+> predates ALL of this — incl. the overlay fix. Re-cut/re-host timing = owner's call.** Owner
+> eyeballs pending: Export feedback flow · overlay returns to main monitor · driver-freshness pass.
 > - **EEE apply bug (`5041fe8`, elevation/mutation boundary — Cowork audit pending):** (1) honest
 >   elevation attribution — a real UAC decline (launch error 1223) is now the ONLY outcome that says
 >   declined (`ELEVATION_DECLINED_MSG`, shared with the §4 test seam); a non-zero exit says "you
