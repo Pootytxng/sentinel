@@ -22,6 +22,11 @@
 //! - Counts present *calls* (IDXGISwapChain::Present), which is the frame rate
 //!   the game submits — very close to what overlays report, but not the full
 //!   present-completion correlation PresentMon does across multiple providers.
+//! - Frametimes are keyed per (process, swapchain): a process presenting two
+//!   chains (game + engine UI/overlay) reads each chain's true cadence instead
+//!   of a bimodal interleave that halves the average (the 323-vs-161 tester
+//!   signature, 2026-06-10). If the swapchain payload can't be parsed, that
+//!   pid degrades to a single shared key — fail-open on attribution.
 //! - Frame timing uses the event's QPC timestamp converted with
 //!   QueryPerformanceFrequency. On the common case (QPC at 10 MHz) this is
 //!   exact; if a system reports a different clock the FPS will be off by a
@@ -67,30 +72,49 @@ const PRESENTER_DENYLIST: &[&str] = &[
     "textinputhost.exe",
 ];
 
-/// PURE: pick "the game" among presenter candidates — most frames wins, and a denylisted name
-/// (compositor / shell / Compy's own UI incl. its msedgewebview2.exe renderers) can NEVER win,
-/// regardless of how many frames it presented. THE GUARD (tester-found, 2026-06-10): a session
-/// must never be recorded against Compy's own processes — Compy never measures itself.
+/// One (process, swapchain) presenter candidate in the current stats window.
+pub(crate) struct PresenterCandidate {
+    pub pid: u32,
+    pub name: String,
+    pub swapchain: u64,
+    pub recent: Vec<f64>,
+}
+
+/// PURE: pick "the game" among per-(pid, swapchain) candidates — TWO stages:
+///  1. The dominant PROCESS by total frames across its swapchains, where a denylisted name
+///     (compositor / shell / Compy's own UI incl. its msedgewebview2.exe renderers) can NEVER win
+///     regardless of frame counts (tester-found guard, 2026-06-10: Compy never measures itself).
+///  2. WITHIN the winning process, the dominant SWAPCHAIN — its frametimes alone feed the report,
+///     so a second in-process chain (engine UI / overlay) can no longer poison the average with
+///     interleaved tiny deltas (the 323-vs-161 signature; see the regression test).
 pub(crate) fn select_game_presenter(
-    candidates: Vec<(u32, String, Vec<f64>)>,
+    candidates: Vec<PresenterCandidate>,
 ) -> Option<(u32, String, Vec<f64>)> {
-    let mut best: Option<(u32, String, Vec<f64>)> = None;
-    for (pid, name, recent) in candidates {
-        if recent.len() < 2 {
+    // Stage 1 — dominant allowed process by TOTAL recent frames.
+    let mut totals: HashMap<u32, (String, usize)> = HashMap::new();
+    for c in &candidates {
+        if c.recent.len() < 2 {
             continue;
         }
-        if PRESENTER_DENYLIST.iter().any(|d| name.eq_ignore_ascii_case(d)) {
+        if PRESENTER_DENYLIST.iter().any(|d| c.name.eq_ignore_ascii_case(d)) {
             continue;
         }
-        let take = match &best {
-            Some((_, _, b)) => recent.len() > b.len(),
-            None => true,
-        };
-        if take {
-            best = Some((pid, name, recent));
-        }
+        let entry = totals.entry(c.pid).or_insert((c.name.clone(), 0));
+        entry.1 += c.recent.len();
     }
-    best
+    // Deterministic tie-breaks (by pid / by swapchain id): HashMap iteration order varies per
+    // tick, and a flapping winner would alternate the reported stream between reports.
+    let (&win_pid, (win_name, _)) = totals
+        .iter()
+        .max_by_key(|(pid, (_, total))| (*total, std::cmp::Reverse(**pid)))?;
+    let win_name = win_name.clone();
+
+    // Stage 2 — dominant swapchain within the winner.
+    candidates
+        .into_iter()
+        .filter(|c| c.pid == win_pid && c.recent.len() >= 2)
+        .max_by_key(|c| (c.recent.len(), std::cmp::Reverse(c.swapchain)))
+        .map(|c| (win_pid, win_name, c.recent))
 }
 
 // How far back the per-second stats window looks, and how often we report.
@@ -105,13 +129,45 @@ struct Sample {
     /// "the last second", never for the frametime magnitude itself.
     at: Instant,
     /// Frame interval in milliseconds, computed from the QPC delta between
-    /// consecutive presents of the same process.
+    /// consecutive presents of the same (process, swapchain).
     frametime_ms: f64,
 }
 
 struct Tracker {
     last_qpc: i64,
     samples: Vec<Sample>,
+}
+
+impl Tracker {
+    fn new() -> Self {
+        Tracker {
+            last_qpc: 0,
+            samples: Vec::new(),
+        }
+    }
+
+    /// One present observed on THIS tracker's key. Computes the delta to the previous present on
+    /// the SAME key — what "same key" means is the whole honesty story: keyed per (pid, swapchain),
+    /// a process presenting two chains yields each chain's true cadence; keyed per pid alone, the
+    /// interleaved deltas go bimodal and poison the average (the 323-vs-161 tester signature —
+    /// see the regression test).
+    fn record(&mut self, qpc: i64, freq: f64, at: Instant) {
+        if self.last_qpc != 0 && qpc > self.last_qpc {
+            let dt_ms = (qpc - self.last_qpc) as f64 * 1000.0 / freq;
+            // Ignore absurd intervals: 0 (duplicate timestamp) or > 1 s (idle / alt-tabbed).
+            if dt_ms > 0.0 && dt_ms < 1000.0 {
+                self.samples.push(Sample {
+                    at,
+                    frametime_ms: dt_ms,
+                });
+                if self.samples.len() > 2000 {
+                    let excess = self.samples.len() - 2000;
+                    self.samples.drain(0..excess);
+                }
+            }
+        }
+        self.last_qpc = qpc;
+    }
 }
 
 // Cap on the number of per-frame frametimes shipped in each report. At a few
@@ -225,14 +281,38 @@ fn perf_frequency() -> i64 {
     }
 }
 
+/// Parse the swapchain address from a DXGI Present_Start payload (the field PresentMon keys on).
+/// Pointer-sized per the EMITTING process, so try the pointer read first, then raw widths.
+/// 0 = couldn't parse → that pid's events degrade to a single shared key (the old pid-level
+/// behavior) rather than being dropped — fail-open on attribution, never on counting.
+fn parse_swapchain(record: &EventRecord, schema_locator: &SchemaLocator) -> u64 {
+    let Ok(schema) = schema_locator.event_schema(record) else {
+        return 0;
+    };
+    let parser = ferrisetw::parser::Parser::create(record, &schema);
+    if let Ok(p) = parser.try_parse::<ferrisetw::parser::Pointer>("pIDXGISwapChain") {
+        return *p as u64;
+    }
+    if let Ok(v) = parser.try_parse::<u64>("pIDXGISwapChain") {
+        return v;
+    }
+    if let Ok(v) = parser.try_parse::<u32>("pIDXGISwapChain") {
+        return v as u64;
+    }
+    0
+}
+
 pub fn run_capture() {
     let opts = parse_opts();
     let freq = perf_frequency() as f64;
-    let state: Arc<Mutex<HashMap<u32, Tracker>>> = Arc::new(Mutex::new(HashMap::new()));
+    // Keyed by (pid, swapchain) — NOT pid alone. A process presenting two chains (game + engine
+    // UI / overlay) interleaves presents; pid-level deltas go bimodal and halve the average
+    // (the 323-vs-161 tester signature). Per-chain keying restores each chain's true cadence.
+    let state: Arc<Mutex<HashMap<(u32, u64), Tracker>>> = Arc::new(Mutex::new(HashMap::new()));
     let cb_state = state.clone();
 
     let provider = Provider::by_guid(DXGI_PROVIDER_GUID)
-        .add_callback(move |record: &EventRecord, _schema: &SchemaLocator| {
+        .add_callback(move |record: &EventRecord, schema_locator: &SchemaLocator| {
             if record.event_id() != PRESENT_START_EVENT_ID {
                 return;
             }
@@ -240,31 +320,14 @@ pub fn run_capture() {
             if pid == 0 {
                 return;
             }
+            let swapchain = parse_swapchain(record, schema_locator);
             let qpc = record.raw_timestamp();
             let Ok(mut map) = cb_state.lock() else {
                 return;
             };
-            let tr = map.entry(pid).or_insert(Tracker {
-                last_qpc: 0,
-                samples: Vec::new(),
-            });
-            if tr.last_qpc != 0 && qpc > tr.last_qpc {
-                let dt_ms = (qpc - tr.last_qpc) as f64 * 1000.0 / freq;
-                // Ignore absurd intervals: 0 (duplicate timestamp) or > 1 s
-                // (the process was idle / alt-tabbed). Those aren't real frames.
-                if dt_ms > 0.0 && dt_ms < 1000.0 {
-                    tr.samples.push(Sample {
-                        at: Instant::now(),
-                        frametime_ms: dt_ms,
-                    });
-                    // Cap the ring so a long session doesn't grow unbounded.
-                    if tr.samples.len() > 2000 {
-                        let excess = tr.samples.len() - 2000;
-                        tr.samples.drain(0..excess);
-                    }
-                }
-            }
-            tr.last_qpc = qpc;
+            map.entry((pid, swapchain))
+                .or_insert_with(Tracker::new)
+                .record(qpc, freq, Instant::now());
         })
         .build();
 
@@ -325,13 +388,13 @@ pub fn run_capture() {
             !tr.samples.is_empty()
         });
 
-        // The "game" is the process presenting the most frames in the last
-        // second, EXCLUDING the compositor/shell/Compy's own UI (see the denylist). In borderless
-        // mode DWM composites at the game's rate, and Compy's own webview can composite even
-        // faster — either would otherwise win the "most frames" race and get mislabelled as the
-        // game. Names are resolved here; the pick itself is the pure, guard-tested function below.
-        let mut candidates: Vec<(u32, String, Vec<f64>)> = Vec::new();
-        for (pid, tr) in map.iter() {
+        // The "game" is the dominant allowed process, then ITS dominant swapchain — the pick is
+        // the pure, guard-tested select_game_presenter (Compy's own UI / compositor / shell can
+        // never win; per-chain frametimes keep a second in-process chain from poisoning the
+        // average). Names resolve once per pid here.
+        let mut names: HashMap<u32, String> = HashMap::new();
+        let mut candidates: Vec<PresenterCandidate> = Vec::new();
+        for ((pid, swapchain), tr) in map.iter() {
             let recent: Vec<f64> = tr
                 .samples
                 .iter()
@@ -341,7 +404,16 @@ pub fn run_capture() {
             if recent.len() < 2 {
                 continue;
             }
-            candidates.push((*pid, resolve_process_name(*pid), recent));
+            let name = names
+                .entry(*pid)
+                .or_insert_with(|| resolve_process_name(*pid))
+                .clone();
+            candidates.push(PresenterCandidate {
+                pid: *pid,
+                name,
+                swapchain: *swapchain,
+                recent,
+            });
         }
         let best = select_game_presenter(candidates);
 
@@ -396,10 +468,16 @@ pub fn run_capture() {
 
 #[cfg(test)]
 mod presenter_selection_tests {
-    use super::select_game_presenter;
+    use super::{select_game_presenter, PresenterCandidate, Tracker};
+    use std::time::Instant;
 
-    fn cand(pid: u32, name: &str, frames: usize) -> (u32, String, Vec<f64>) {
-        (pid, name.to_string(), vec![6.2; frames])
+    fn cand(pid: u32, name: &str, swapchain: u64, frames: usize) -> PresenterCandidate {
+        PresenterCandidate {
+            pid,
+            name: name.to_string(),
+            swapchain,
+            recent: vec![6.2; frames],
+        }
     }
 
     // THE GUARD (tester Export, 2026-06-10): a PoE session was recorded as
@@ -408,9 +486,9 @@ mod presenter_selection_tests {
     #[test]
     fn compys_own_webview_never_wins_even_with_the_most_frames() {
         let picked = select_game_presenter(vec![
-            cand(100, "PathOfExile.exe", 161),
-            cand(200, "msedgewebview2.exe", 329),
-            cand(300, "compy.exe", 500),
+            cand(100, "PathOfExile.exe", 0xA, 161),
+            cand(200, "msedgewebview2.exe", 0xB, 329),
+            cand(300, "compy.exe", 0xC, 500),
         ])
         .expect("the game is picked");
         assert_eq!(picked.1, "PathOfExile.exe");
@@ -419,9 +497,9 @@ mod presenter_selection_tests {
     #[test]
     fn denylist_is_case_insensitive() {
         let picked = select_game_presenter(vec![
-            cand(100, "game.exe", 10),
-            cand(200, "MsEdgeWebView2.EXE", 400),
-            cand(300, "DWM.exe", 400),
+            cand(100, "game.exe", 0xA, 10),
+            cand(200, "MsEdgeWebView2.EXE", 0xB, 400),
+            cand(300, "DWM.exe", 0xC, 400),
         ])
         .expect("the game is picked");
         assert_eq!(picked.1, "game.exe");
@@ -432,9 +510,9 @@ mod presenter_selection_tests {
         // Compy idling with no game running: the webview + compositor present constantly —
         // the honest answer is "nothing is presenting", never our own UI dressed up as a game.
         assert!(select_game_presenter(vec![
-            cand(200, "msedgewebview2.exe", 400),
-            cand(300, "dwm.exe", 300),
-            cand(400, "compy.exe", 100),
+            cand(200, "msedgewebview2.exe", 0xA, 400),
+            cand(300, "dwm.exe", 0xB, 300),
+            cand(400, "compy.exe", 0xC, 100),
         ])
         .is_none());
     }
@@ -442,12 +520,78 @@ mod presenter_selection_tests {
     #[test]
     fn most_frames_wins_among_legitimate_presenters() {
         let picked = select_game_presenter(vec![
-            cand(100, "game.exe", 161),
-            cand(200, "other-app.exe", 30),
-            cand(300, "tiny.exe", 1), // <2 samples → not a candidate at all
+            cand(100, "game.exe", 0xA, 161),
+            cand(200, "other-app.exe", 0xB, 30),
+            cand(300, "tiny.exe", 0xC, 1), // <2 samples → not a candidate at all
         ])
         .expect("picked");
         assert_eq!(picked.1, "game.exe");
+    }
+
+    #[test]
+    fn process_dominance_counts_all_its_chains_but_reports_the_dominant_one() {
+        // The game presents main (161) + a small UI chain (30): its TOTAL (191) must beat a
+        // 170-frame background app, and the REPORTED frametimes must be the main chain's alone.
+        let picked = select_game_presenter(vec![
+            cand(100, "game.exe", 0xA1, 161),
+            cand(100, "game.exe", 0xB2, 30),
+            cand(200, "background.exe", 0xC3, 170),
+        ])
+        .expect("picked");
+        assert_eq!(picked.1, "game.exe");
+        assert_eq!(picked.2.len(), 161, "the dominant chain's frames, not the merged set");
+    }
+
+    /// THE 323/161 SIGNATURE REGRESSION (tester, 2026-06-10). Two swapchains in one process
+    /// present as interleaved pairs: main chain every ~6.21 ms (161 fps), a second chain ~0.05 ms
+    /// behind each present. Keyed by PID ALONE the deltas go bimodal (~0.05/~6.16) — the average
+    /// halves and live fps reads ~322 while p99 stays ~6.2 (low1 ~161): the exact mismatch the
+    /// tester saw vs Steam. Keyed per (pid, swapchain) each chain reads its true ~161 cadence.
+    #[test]
+    fn interleaved_chains_poison_pid_keying_but_not_swapchain_keying() {
+        let freq = 10_000_000.0; // QPC at 10 MHz
+        let main_period = 62_100; // 6.21 ms in QPC ticks → 161.0 fps
+        let lag = 500; // the second chain presents 0.05 ms behind the main one
+        let now = Instant::now();
+
+        // ── The OLD world: one tracker keyed by pid alone sees both chains interleaved.
+        let mut pid_only = Tracker::new();
+        // ── The FIX: each chain has its own tracker.
+        let mut chain_a = Tracker::new();
+        let mut chain_b = Tracker::new();
+
+        for n in 1..=200i64 {
+            let t_main = n * main_period;
+            let t_ui = t_main + lag;
+            pid_only.record(t_main, freq, now);
+            pid_only.record(t_ui, freq, now);
+            chain_a.record(t_main, freq, now);
+            chain_b.record(t_ui, freq, now);
+        }
+
+        let fps_of = |deltas: &[f64]| 1000.0 / (deltas.iter().sum::<f64>() / deltas.len() as f64);
+        let p99_low1_of = |deltas: &[f64]| {
+            let mut sorted: Vec<f64> = deltas.to_vec();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let idx = (((sorted.len() as f64) * 0.99).ceil() as usize).min(sorted.len()) - 1;
+            1000.0 / sorted[idx]
+        };
+
+        let old_deltas: Vec<f64> = pid_only.samples.iter().map(|s| s.frametime_ms).collect();
+        let old_fps = fps_of(&old_deltas);
+        let old_low1 = p99_low1_of(&old_deltas);
+        // The bug signature: live fps ~2× while the 1% low stays at the true cadence.
+        assert!(old_fps > 300.0 && old_fps < 345.0, "old keying over-reads: {old_fps}");
+        assert!(old_low1 > 155.0 && old_low1 < 168.0, "old low1 stays true: {old_low1}");
+
+        let new_deltas: Vec<f64> = chain_a.samples.iter().map(|s| s.frametime_ms).collect();
+        let new_fps = fps_of(&new_deltas);
+        let new_low1 = p99_low1_of(&new_deltas);
+        // The fix: the main chain reads its true ~161 cadence — fps and low1 agree.
+        assert!(new_fps > 155.0 && new_fps < 168.0, "per-chain fps is honest: {new_fps}");
+        assert!((new_fps - new_low1).abs() < 5.0, "steady cadence: fps ≈ low1");
+        // And the second chain tracks its own (identical) cadence rather than poisoning the main.
+        assert!(chain_b.samples.len() > 100);
     }
 }
 
