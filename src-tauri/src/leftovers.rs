@@ -703,9 +703,16 @@ fn probe_tcp() -> Value {
     }
 }
 
+/// Leftovers v2 restore gate — DARK (R2-5). Stays false until the restore path passes its own
+/// live UAC QA and the owner flips it deliberately. While false, history::restore_leftover
+/// refuses before any lock/mutation; no Tauri command exposes the path either way.
+pub(crate) fn restore_gate() -> bool {
+    false
+}
+
 /// Read-only PowerShell probe: `(Get-MMAgent).MemoryCompression` prints True/False. Anything
 /// else (missing cmdlet, error, garbled output) is honestly None — never guessed.
-fn read_memory_compression() -> Option<bool> {
+pub(crate) fn read_memory_compression() -> Option<bool> {
     let out = crate::actions::quiet_command("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", "(Get-MMAgent).MemoryCompression"])
         .output()

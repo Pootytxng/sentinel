@@ -765,6 +765,7 @@ mod safety_tests {
             app_version_at_apply: None,
             ruleset_version_at_apply: None,
             elevation_used: None,
+            provenance: None,
         }
     }
 
@@ -836,6 +837,7 @@ mod safety_tests {
             app_version_at_apply: Some("0.1.0".into()),
             ruleset_version_at_apply: Some("1.0.0-baseline".into()),
             elevation_used: Some(true),
+            provenance: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

@@ -74,6 +74,10 @@ pub(crate) struct AppliedChange {
     pub(crate) ruleset_version_at_apply: Option<String>,
     #[serde(default)]
     pub(crate) elevation_used: Option<bool>,
+    /// Leftovers v2 (R2-5, dark): "leftover_adopted" marks a restore-to-stock receipt. Additive +
+    /// optional — every pre-existing ledger entry deserializes with None.
+    #[serde(default)]
+    pub(crate) provenance: Option<String>,
 }
 
 // AppliedChange + a freshly-computed `is_still_active` flag. We never persist
@@ -262,7 +266,38 @@ fn build_applied_change(
         app_version_at_apply: Some(env!("CARGO_PKG_VERSION").to_string()),
         ruleset_version_at_apply: Some("1.0.0-baseline".to_string()),
         elevation_used: Some(result.elevation_used),
+        provenance: None,
     })
+}
+
+/// Leftovers v2 (R2-5, DARK): restore one leftover to its Windows default. NOT a Tauri command —
+/// zero webview reachability — and additionally refused while `leftovers::restore_gate()` is
+/// false (double-dark). Mirrors apply_recommendation exactly: lock → load BEFORE mutate (H1) →
+/// one resolver → receipt with provenance "leftover_adopted" → atomic save. Undo rides the
+/// standard typed rollback path like any other ledger entry.
+#[allow(dead_code)] // dark until the gate flips after its own live UAC QA (owner-gated)
+pub(crate) fn restore_leftover(
+    detector_id: &str,
+    display_title: &str,
+) -> Result<AppliedChangeView, String> {
+    if !crate::leftovers::restore_gate() {
+        return Err("Leftovers restore is not enabled in this build.".to_string());
+    }
+    let _lock = HISTORY_LOCK
+        .lock()
+        .map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history()?;
+    let result = match detector_id {
+        "memory-compression-off" => crate::actions::restore_memory_compression(),
+        "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
+        "win32-priority-separation" => crate::actions::restore_priority_separation(),
+        other => Err(format!("no restore resolver exists for '{other}' yet")),
+    }?;
+    let mut change = build_applied_change(detector_id, display_title, result)?;
+    change.provenance = Some("leftover_adopted".to_string());
+    history.push(change.clone());
+    save_history(&history)?;
+    Ok(into_view(change))
 }
 
 #[tauri::command]
@@ -823,6 +858,96 @@ mod manual_elevation_qa {
     }
 }
 
+// ─── Leftovers v2 restore — dark-path tests + the adversarial rollback audit (R2-5) ────────
+#[cfg(test)]
+mod leftover_restore_tests {
+    use super::*;
+
+    #[test]
+    fn dark_gate_refuses_before_any_lock_mutation_or_receipt() {
+        let before = load_history().expect("real ledger readable").len();
+        let err = restore_leftover("memory-compression-off", "QA never runs")
+            .err()
+            .expect("the dark gate must refuse");
+        assert!(err.contains("not enabled"), "honest gate message: {err}");
+        let after = load_history().expect("readable").len();
+        assert_eq!(before, after, "a refused restore must never write a receipt");
+    }
+
+    #[test]
+    fn unreadable_prior_refuses_before_elevation_is_even_attempted() {
+        // Adversarial: rollback-first integrity means never mutating what couldn't be
+        // snapshotted. With elevation forced to error, a Some(prior) reaches the elevation
+        // seam (declined), while a None prior must fail EARLIER with the snapshot refusal.
+        let _force = ForceElevationError::begin();
+        let declined = restore_memory_compression_with(Some(false))
+            .err()
+            .expect("forced elevation error");
+        assert_eq!(declined, ELEVATION_DECLINED_MSG, "reached elevation: {declined}");
+        let refused = restore_memory_compression_with(None).err().expect("must refuse");
+        assert!(
+            refused.contains("can't be snapshotted"),
+            "refusal precedes elevation: {refused}"
+        );
+    }
+
+    #[test]
+    fn rollback_scripts_restore_exact_priors_including_absent_value_deletion() {
+        // The rotted value comes back EXACTLY: present priors are Set, absent priors are
+        // Remove — and no script ever contains 'exit' (the §4 batchability invariant).
+        let s = mmcss_rollback_script(Some(1), None);
+        assert!(s.contains("'SystemResponsiveness' -Value 1"));
+        assert!(s.contains("Remove-ItemProperty") && s.contains("'NetworkThrottlingIndex'"));
+        let s2 = priority_separation_rollback_script(Some(38));
+        assert!(s2.contains("'Win32PrioritySeparation' -Value 38"));
+        let s3 = priority_separation_rollback_script(None);
+        assert!(s3.contains("Remove-ItemProperty"));
+        for script in [mmcss_restore_script(), priority_separation_restore_script(), s, s2, s3] {
+            assert!(!script.to_lowercase().contains("exit"), "exit-free: {script}");
+        }
+        // The restore scripts write the documented stock values, nothing else.
+        assert!(mmcss_restore_script().contains("'SystemResponsiveness' -Value 20"));
+        assert!(mmcss_restore_script().contains("'NetworkThrottlingIndex' -Value 10"));
+        assert!(priority_separation_restore_script().contains("-Value 2"));
+    }
+
+    #[test]
+    fn blind_rollback_fails_loud_and_mismatched_pairs_are_contract_violations() {
+        // A hand-edited entry with no prior must never guess a direction.
+        let err = rollback_memory_compression_typed(None).expect_err("loud");
+        assert!(err.contains("cannot roll back blind"));
+        // The (action, snapshot) pair contract holds for the new variants too.
+        let mismatch = dispatch_rollback(
+            &RollbackAction::RestoreMemoryCompressionFromSnapshot,
+            &Snapshot::PrioritySeparation { prior_value: Some(2) },
+        );
+        assert!(mismatch.is_err(), "mismatched pair must be a contract violation");
+    }
+
+    #[test]
+    fn provenance_is_additive_and_old_ledgers_still_deserialize() {
+        // New variants + provenance round-trip; entries WITHOUT provenance load as None.
+        let json = serde_json::json!([{
+            "id": "memory-compression-off-1",
+            "rec_id": "memory-compression-off",
+            "rec_title": "Restore memory compression",
+            "applied_at": "2026-06-11T00:00:00Z",
+            "snapshot": { "kind": "memory-compression", "prior_enabled": false },
+            "status": "applied",
+            "rollback_action": { "kind": "restore-memory-compression-from-snapshot" },
+            "provenance": "leftover_adopted"
+        }]);
+        let parsed: Vec<AppliedChange> = serde_json::from_value(json).expect("parses");
+        assert_eq!(parsed[0].provenance.as_deref(), Some("leftover_adopted"));
+        let legacy = serde_json::json!([{
+            "id": "x", "rec_id": "game-mode", "rec_title": "t",
+            "applied_at": "2026-01-01T00:00:00Z", "snapshot": {"prior": 1}, "status": "applied"
+        }]);
+        let parsed: Vec<AppliedChange> = serde_json::from_value(legacy).expect("old shape parses");
+        assert_eq!(parsed[0].provenance, None, "pre-v2 ledgers are untouched by the new field");
+    }
+}
+
 #[cfg(test)]
 mod history_tests {
     use super::*;
@@ -841,6 +966,7 @@ mod history_tests {
             app_version_at_apply: None,
             ruleset_version_at_apply: None,
             elevation_used: None,
+            provenance: None,
         }
     }
 

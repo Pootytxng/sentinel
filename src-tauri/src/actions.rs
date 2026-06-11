@@ -69,6 +69,12 @@ pub(crate) enum AppliedAction {
     DisableUsbSelectiveSuspendOnAc,
     DisablePcieAspmOnAc,
     DisableEnergyEfficientEthernet,
+    // ── Leftovers v2 restore (R2-5, BUILT DARK — gate off, no IPC; ships only after its own
+    // live UAC QA + owner sign-off). Each restores a Windows STOCK default; the snapshot holds
+    // the rotted value, so even the restore is reversible ("you can get your rot back").
+    RestoreMemoryCompressionDefault,
+    RestoreMmcssDefaults,
+    RestorePrioritySeparationDefault,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -93,6 +99,10 @@ pub(crate) enum RollbackAction {
     // a single typed rollback handler covers both rec ids.
     RestorePowerPlanSettingFromSnapshot,
     RestoreEnergyEfficientEthernetFromSnapshot,
+    // Leftovers v2 (dark): undo a restore — put the user's pre-restore (rotted) value back.
+    RestoreMemoryCompressionFromSnapshot,
+    RestoreMmcssFromSnapshot,
+    RestorePrioritySeparationFromSnapshot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -154,6 +164,19 @@ pub(crate) enum Snapshot {
     // Advanced EEE / etc.) — snapshot stores the resolved name per adapter.
     EeeNicProperty {
         adapters: Vec<EeeNicSnapshot>,
+    },
+    // ── Leftovers v2 (dark) — the pre-restore (rotted) values, so a restore is undoable. ──
+    // None for a registry value means "was absent" (rollback deletes it); the memory-compression
+    // apply REFUSES when its prior is unreadable, so its None never reaches a rollback blind.
+    MemoryCompression {
+        prior_enabled: Option<bool>,
+    },
+    Mmcss {
+        prior_system_responsiveness: Option<u32>,
+        prior_network_throttling: Option<u32>,
+    },
+    PrioritySeparation {
+        prior_value: Option<u32>,
     },
 }
 
@@ -250,6 +273,24 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
         Snapshot::PowerPlanSetting { .. }
         | Snapshot::NagleNics { .. }
         | Snapshot::EeeNicProperty { .. } => None,
+        // Leftovers v2 (dark): the pre-restore value, plainly named for the ledger card.
+        Snapshot::MemoryCompression { prior_enabled } => {
+            prior_enabled.map(|on| if on { "On" } else { "Off" }.to_string())
+        }
+        Snapshot::Mmcss {
+            prior_system_responsiveness,
+            prior_network_throttling,
+        } => match (prior_system_responsiveness, prior_network_throttling) {
+            (None, None) => Some("Windows defaults (values absent)".to_string()),
+            (sr, nti) => Some(format!(
+                "SystemResponsiveness {} · NetworkThrottlingIndex {}",
+                sr.map_or("absent".to_string(), |v| v.to_string()),
+                nti.map_or("absent".to_string(), |v| v.to_string()),
+            )),
+        },
+        Snapshot::PrioritySeparation { prior_value } => {
+            prior_value.map(|v| format!("{v} (0x{v:X})"))
+        }
     }
 }
 
@@ -1716,6 +1757,149 @@ pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), Strin
     Ok(())
 }
 
+// ─── Leftovers v2 restore resolvers (R2-5 — BUILT DARK) ──────────────────
+//
+// DARK on two independent layers: leftovers::restore_gate() returns false AND no Tauri command
+// exposes these (zero webview reachability). They ride the same audited contract as every apply:
+// snapshot BEFORE mutation, ONE elevated PS per restore (no partial mutation), fail-loud rollback,
+// and the snapshot holds the user's rotted value so the restore itself is reversible.
+// Script builders are PURE so their content is unit-testable without elevation. All interpolated
+// values are u32 integers — no string ever enters an elevated command here.
+//
+// Deliberately ABSENT: a Defender-policy resolver. Writing HKLM\...\Policies is the absolute
+// security-settings rail — even a restore-to-stock goes through the owner, never autonomous code.
+
+fn mmcss_path() -> &'static str {
+    "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"
+}
+fn priority_control_path() -> &'static str {
+    "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl"
+}
+
+fn set_or_remove_dword(path: &str, name: &str, value: Option<u32>) -> String {
+    match value {
+        Some(v) => format!("Set-ItemProperty -Path '{path}' -Name '{name}' -Value {v} -Type DWord"),
+        None => format!(
+            "Remove-ItemProperty -Path '{path}' -Name '{name}' -ErrorAction SilentlyContinue"
+        ),
+    }
+}
+
+pub(crate) fn mmcss_restore_script() -> String {
+    // Windows stock: SystemResponsiveness 20 · NetworkThrottlingIndex 10.
+    format!(
+        "{}; {}",
+        set_or_remove_dword(mmcss_path(), "SystemResponsiveness", Some(20)),
+        set_or_remove_dword(mmcss_path(), "NetworkThrottlingIndex", Some(10)),
+    )
+}
+pub(crate) fn mmcss_rollback_script(sr: Option<u32>, nti: Option<u32>) -> String {
+    format!(
+        "{}; {}",
+        set_or_remove_dword(mmcss_path(), "SystemResponsiveness", sr),
+        set_or_remove_dword(mmcss_path(), "NetworkThrottlingIndex", nti),
+    )
+}
+pub(crate) fn priority_separation_restore_script() -> String {
+    set_or_remove_dword(priority_control_path(), "Win32PrioritySeparation", Some(2))
+}
+pub(crate) fn priority_separation_rollback_script(prior: Option<u32>) -> String {
+    set_or_remove_dword(priority_control_path(), "Win32PrioritySeparation", prior)
+}
+
+/// Read both MMCSS priors directly (HKLM reads need no elevation). Err = the KEY itself was
+/// unreadable — the apply refuses rather than mutating what it couldn't snapshot. An absent
+/// value is a legitimate prior (rollback deletes it).
+fn read_mmcss_priors() -> Result<(Option<u32>, Option<u32>), String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    let path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
+    match RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((None, None)),
+        Err(e) => Err(format!("cannot snapshot MMCSS values: {e}")),
+        Ok(k) => Ok((
+            k.get_value::<u32, _>("SystemResponsiveness").ok(),
+            k.get_value::<u32, _>("NetworkThrottlingIndex").ok(),
+        )),
+    }
+}
+
+fn read_priority_separation_prior() -> Result<Option<u32>, String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    match RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"SYSTEM\CurrentControlSet\Control\PriorityControl") {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot snapshot Win32PrioritySeparation: {e}")),
+        Ok(k) => Ok(k.get_value::<u32, _>("Win32PrioritySeparation").ok()),
+    }
+}
+
+/// Restore memory compression to the Windows default (ON). Takes the prior explicitly so the
+/// refusal contract is unit-testable: an UNREADABLE prior refuses BEFORE any elevation — never
+/// mutate what couldn't be snapshotted (rollback-first integrity).
+pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<ApplyResult, String> {
+    let Some(prior_enabled) = prior else {
+        return Err(
+            "Memory compression state could not be read — refusing to restore what can't be snapshotted."
+                .to_string(),
+        );
+    };
+    run_elevated_powershell("Enable-MMAgent -MemoryCompression")?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestoreMemoryCompressionDefault,
+        rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
+        snapshot: Snapshot::MemoryCompression { prior_enabled: Some(prior_enabled) },
+        elevation_used: true,
+    })
+}
+
+pub(crate) fn restore_memory_compression() -> Result<ApplyResult, String> {
+    restore_memory_compression_with(crate::leftovers::read_memory_compression())
+}
+
+pub(crate) fn rollback_memory_compression_typed(prior_enabled: Option<bool>) -> Result<(), String> {
+    match prior_enabled {
+        Some(true) => run_elevated_powershell("Enable-MMAgent -MemoryCompression"),
+        Some(false) => run_elevated_powershell("Disable-MMAgent -MemoryCompression"),
+        // Unreachable for entries this code writes (the apply refuses a None prior) — but a
+        // hand-edited/corrupt entry must fail LOUD, never guess a security-of-state direction.
+        None => Err("This entry has no recorded prior state — cannot roll back blind.".to_string()),
+    }
+}
+
+pub(crate) fn restore_mmcss_defaults() -> Result<ApplyResult, String> {
+    let (sr, nti) = read_mmcss_priors()?; // refuses on an unreadable key
+    run_elevated_powershell(&mmcss_restore_script())?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestoreMmcssDefaults,
+        rollback_action: RollbackAction::RestoreMmcssFromSnapshot,
+        snapshot: Snapshot::Mmcss {
+            prior_system_responsiveness: sr,
+            prior_network_throttling: nti,
+        },
+        elevation_used: true,
+    })
+}
+
+pub(crate) fn rollback_mmcss_typed(sr: Option<u32>, nti: Option<u32>) -> Result<(), String> {
+    run_elevated_powershell(&mmcss_rollback_script(sr, nti))
+}
+
+pub(crate) fn restore_priority_separation() -> Result<ApplyResult, String> {
+    let prior = read_priority_separation_prior()?; // refuses on an unreadable key
+    run_elevated_powershell(&priority_separation_restore_script())?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestorePrioritySeparationDefault,
+        rollback_action: RollbackAction::RestorePrioritySeparationFromSnapshot,
+        snapshot: Snapshot::PrioritySeparation { prior_value: prior },
+        elevation_used: true,
+    })
+}
+
+pub(crate) fn rollback_priority_separation_typed(prior: Option<u32>) -> Result<(), String> {
+    run_elevated_powershell(&priority_separation_rollback_script(prior))
+}
+
 // ─── Mouse acceleration off (HKCU, no admin) ─────────────────────────────
 
 pub(crate) fn apply_mouse_accel_off() -> Result<ApplyResult, String> {
@@ -2012,6 +2196,17 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
         ),
         (R::RestoreEnergyEfficientEthernetFromSnapshot, S::EeeNicProperty { adapters }) => {
             rollback_eee_disable_typed(adapters)
+        }
+        // Leftovers v2 (dark) — undoing a restore puts the recorded rotted value back exactly.
+        (R::RestoreMemoryCompressionFromSnapshot, S::MemoryCompression { prior_enabled }) => {
+            rollback_memory_compression_typed(*prior_enabled)
+        }
+        (
+            R::RestoreMmcssFromSnapshot,
+            S::Mmcss { prior_system_responsiveness, prior_network_throttling },
+        ) => rollback_mmcss_typed(*prior_system_responsiveness, *prior_network_throttling),
+        (R::RestorePrioritySeparationFromSnapshot, S::PrioritySeparation { prior_value }) => {
+            rollback_priority_separation_typed(*prior_value)
         }
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
@@ -2349,6 +2544,7 @@ mod rollback_tests {
             app_version_at_apply: None,
             ruleset_version_at_apply: None,
             elevation_used: None,
+            provenance: None,
         }
     }
 
