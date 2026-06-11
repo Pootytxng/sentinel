@@ -39,25 +39,29 @@ rollback-integrity risk found.
 
 ### MEDIUM
 
-**M1 · Frontend test gaps cluster on the live measurement surfaces.** Untested (0 test files):
+**M1 · Frontend test gaps cluster on the live measurement surfaces.** *(✅ TREATED `726cf4a` +
+`5f737b6` — all four surfaces + pure-module edges now covered.)* Untested (0 test files):
 `Benchmark.tsx` (508 lines — orchestrates runs/polling), `SessionDebrief.tsx` (381),
 `Latency.tsx` (180), `FirstCheck.tsx` (168 — the first-run arc), plus render-only smalls
 (`HardwareGrid` 197, `ScanStream`, `TuningGuide`, `TuningVerdict`, dark-gated `GamingMode`).
 The mutation-adjacent surfaces (Fix, Check, Play, Settings) ARE tested. Reversible: additive tests.
 
 **M2 · `diagnostics.rs` (254 lines) and `gaming_orchestrator.rs` (149) have zero unit tests.**
+*(✅ diagnostics TREATED `726cf4a` — 5 structural-contract tests; orchestrator still rides its F1 QA gate.)*
 Diagnostics is read-only but Export consumes its shape; the orchestrator is dark-gated (and
 `gaming_session.rs` underneath it has 6 tests) — still, it's the only mutation-adjacent module
 with none of its own. Reversible: additive tests; orchestrator already rides the F1 QA gate.
 
 **M3 · Bundle/dead-code debt: one 495 kB chunk at vite's warn threshold; App.tsx = 3,022 lines
-still carrying the retired classic surfaces** (default-off since the v2 flip; the preview-flag UI
+still carrying the retired classic surfaces** *(📋 SPEC READY —
+`docs/superpowers/specs/2026-06-11-classic-retirement-M3-spec.md`; execution = fresh attended session.)* (default-off since the v2 flip; the preview-flag UI
 is already gone). The recorded post-beta cleanup (retire classic surfaces) would cut both this
 and the dead-code surface in one stroke. Reversible: deletion behind git history.
 
 ### LOW
 
-**L1 · 7 production `.lock().unwrap()` on the FPS status mutex** (`monitoring.rs:730-1004`).
+**L1 · 7 production `.lock().unwrap()` on the FPS status mutex** *(✅ TREATED `4fa6c31` —
+poison-recovering `lock_status()`.)* (`monitoring.rs:730-1004`).
 Accepted project pattern (process-local, poison ≈ impossible for a string store), but a poisoned
 lock would cascade-panic all status reads; `unwrap_or_else(|p| p.into_inner())` would degrade
 gracefully. Cosmetic hardening. (Only other prod expect: `recommendations.rs:175` on the
@@ -71,7 +75,8 @@ All have cleanups; none leak. Event-push consolidation is a recorded future idea
 timing report intervals (known "deeper increment"). Honest as shipped (current readout is
 capability-qualified).
 
-**L4 · Security-skill doc drift:** `/security` skill text says "CSP is null for the trusted
+**L4 · Security-skill doc drift:** *(✅ TREATED 2026-06-11 — skill text now matches the real
+strict CSP + capability set.)* `/security` skill text says "CSP is null for the trusted
 beta" and "capabilities: core:default + opener:default only" — **reality is stricter/different**:
 config carries a strict CSP (`default-src 'self'`; loose CSP is dev-only `devCsp`) and
 capabilities also include `notification:default` + 3 fixed `ms-settings:` opener URLs. Future

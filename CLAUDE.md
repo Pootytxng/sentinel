@@ -147,6 +147,15 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🌙 R1+R2 AUTONOMOUS MARATHONS LANDED — 2026-06-11.** R1 (`AUTONOMOUS_SPRINT_2026-06-11.md`,
+> items 1–5): Leftovers detector v1+2–8 (read-only rot detection, Check section) · audit M1/M2/L1/L4
+> treated · latency guilty-device receipts. R2 (`...-R2.md`, owner napping, all reversible):
+> Leftovers Learn layer + CI law-guards · NIC driver win-source v1 · edge tests · **Leftovers v2
+> restore BUILT DARK (double-gated: restore_gate()=false + zero IPC; Defender resolver deliberately
+> absent per the security rail; adversarially audited)** · a11y · M3 retirement spec READY. Suites
+> at cargo **304** · npm **256**, clippy `-D warnings` clean throughout. Review Queue for the owner
+> in the R2 doc. Nothing flipped/hosted; gates + frozen refs untouched.
+>
 > **🌊 2026-06-10/11 OWNER-FEEDBACK WAVE LANDED (`main` @ `cc2a1ba`) — THE SENDING KIT IS BEHIND.**
 > Built from the Cowork 3-lane triage (`docs/superpowers/specs/2026-06-10-tester-feedback-overview.md`)
 > + two live owner reports: **Fix-tab reword** (`f1a1f27`, per-rig framing, no gains promise) ·

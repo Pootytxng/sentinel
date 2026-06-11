@@ -136,6 +136,16 @@ have shaped real features). The arc: package → smoke → twenty friends → a 
 
 ## Current board (update as you go)
 
+- **🌙 R2 UNATTENDED MARATHON LANDED (2026-06-11, owner was napping)** — full log + Review Queue in
+  `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-11-R2.md`. Landed reversible: Leftovers Learn layer
+  (`5e8fb98`) · charter law-guards in CI, caught+fixed real copy (`9a163f5`) · NIC driver win-source
+  v1 (`7dc1478`) · pure-module edge tests (`5f737b6`) · **Leftovers v2 restore BUILT DARK** — 3
+  resolvers, double-gated, adversarially audited, Defender resolver deliberately ABSENT per the
+  security rail (`9cfec24`) · a11y semantics (`d00ae34`) · M3 retirement spec READY (execution =
+  fresh attended session). **Review Queue for the owner:** v2 remaining-resolver decisions (esp.
+  Defender), gate-flip QA plan, R2-7 bundle-split skip recommendation. Nothing flipped, nothing
+  hosted, gates/refs untouched.
+
 - **🟢 Tree-truncation scare (2026-06-11) — RESOLVED, false alarm:** root cause was a stale
   sandbox-mount view on Cowork's side, not real corruption. CC verified the four named files INTACT
   at HEAD before acting (zero diff; cargo 268 · npm 240 · tsc + vite green) — NO restore was run,
