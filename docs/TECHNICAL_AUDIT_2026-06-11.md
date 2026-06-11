@@ -32,7 +32,10 @@ rollback-integrity risk found.
   write to a temp file + `rename` (atomic same-volume), and on parse failure preserve the bad
   file as `history.json.corrupt` + fail loud instead of returning empty. Same in-place pattern
   (lower stakes — no undo data) in `sessions.json` / `drift.json` / benchmark stores.
-- NOT fixed here per the report-only mandate; recommend this as the first treatment.
+- ~~NOT fixed here per the report-only mandate; recommend this as the first treatment.~~
+  **✅ TREATED same day — `2be02a5`** (atomic tmp+rename save · corrupt file preserved as
+  `history.json.corrupt` + fail-loud · apply loads before dispatch — never mutate what can't
+  be recorded; +3 tests, cargo 268, clippy `-D warnings` clean).
 
 ### MEDIUM
 
