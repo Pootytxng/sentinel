@@ -18,6 +18,7 @@ mod gaming_session;
 mod hardware;
 mod history;
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
+mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
 mod monitoring;
 mod priorities;
 mod readiness;
@@ -30,6 +31,7 @@ use diagnostics::*;
 use export::*;
 use hardware::*;
 use history::*;
+use leftovers::*;
 use monitoring::*;
 use priorities::*;
 use readiness::*;
@@ -630,6 +632,7 @@ pub fn run() {
             get_hardware_info,
             get_recommendations,
             get_diagnostics,
+            get_leftovers,
             get_gpu_sensors,
             get_cpu_sensors,
             monitoring::get_memory_pressure,

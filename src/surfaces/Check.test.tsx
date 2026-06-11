@@ -1,9 +1,19 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
+// Settable per-test leftovers response (vi.mock factories are hoisted — this must be too).
+const leftoversMock = vi.hoisted(() => ({
+  report: { findings: [], checked: 2, unavailable: [] } as {
+    findings: unknown[];
+    checked: number;
+    unavailable: string[];
+  },
+}));
+
 // useScan polls real commands on mount; mock invoke to feed a tiny readiness/priorities scan.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
+    if (cmd === "get_leftovers") return Promise.resolve(leftoversMock.report);
     if (cmd === "get_game_readiness")
       return Promise.resolve({
         checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
@@ -144,5 +154,59 @@ describe("Check", () => {
     rerender(checkWith(20));
     expect(screen.getByText(/Driver is recent — 20 days old\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy link/ })).not.toBeInTheDocument();
+  });
+
+  it("leftovers: on-demand only — a finding renders as a receipt card (museum tone)", async () => {
+    leftoversMock.report = {
+      findings: [
+        {
+          id: "pagefile-fixed",
+          title: "Pagefile manually fixed",
+          current_value: "Fixed at 30000–30000 MB (C:\\pagefile.sys)",
+          stock_default: "Automatic (system-managed size)",
+          matched_tweak: '"Set a fixed pagefile size" — optimization guides circa 2015–2023',
+          mechanism_cost: "A fixed size either wastes disk or caps Windows below what a game may commit.",
+          verdict: "On your 31 GB-RAM machine a fixed 29 GB pagefile spends ~29 GB of disk and changes nothing about game performance.",
+          uncertain_source: true,
+          restore_note: "Safe to restore to automatic; fully reversible; takes effect after a reboot.",
+        },
+      ],
+      checked: 2,
+      unavailable: [],
+    };
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    // On-demand: nothing scanned, nothing shown until the user asks (charter: zero perceived scanning).
+    expect(screen.queryByText(/Pagefile manually fixed/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
+    // Receipts, not adjectives: found value · stock default · matched tweak · rig verdict · rule #5 line.
+    expect(await screen.findByText("Pagefile manually fixed")).toBeInTheDocument();
+    expect(screen.getByText(/Found: Fixed at 30000.*Windows default: Automatic/)).toBeInTheDocument();
+    expect(screen.getByText(/optimization guides circa 2015–2023/)).toBeInTheDocument();
+    expect(screen.getByText(/yours to keep/)).toBeInTheDocument();
+  });
+
+  it("leftovers: clean result is first-class; unreadable probes are never counted clean", async () => {
+    leftoversMock.report = { findings: [], checked: 2, unavailable: [] };
+    const ui = (
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>
+    );
+    const { unmount } = render(ui);
+    fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
+    expect(
+      await screen.findByText(/No leftover tweaks found — your Windows config matches stock/),
+    ).toBeInTheDocument();
+    unmount();
+    // One probe unreadable → the bold "matches stock" claim must NOT appear (honest scope).
+    leftoversMock.report = { findings: [], checked: 1, unavailable: ["memory-compression-off"] };
+    render(ui);
+    fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
+    expect(await screen.findByText(/1 couldn't be read, so nothing is claimed/)).toBeInTheDocument();
+    expect(screen.queryByText(/matches stock where it matters/)).not.toBeInTheDocument();
   });
 });

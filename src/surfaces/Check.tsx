@@ -15,6 +15,25 @@ import "./Check.css";
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
 type GpuDriverInfo = { name: string; driver_age_days: number | null };
 
+// Leftovers v1 (read-only) — mirrors the Rust LeftoversReport shape.
+type Leftover = {
+  id: string;
+  title: string;
+  current_value: string;
+  stock_default: string;
+  matched_tweak: string;
+  mechanism_cost: string;
+  verdict: string;
+  uncertain_source: boolean;
+  restore_note: string;
+};
+type LeftoversReport = { findings: Leftover[]; checked: number; unavailable: string[] };
+
+// Finding id → the Learn entry that explains its family (WhatsThis renders only where one exists).
+const LEFTOVER_LEARN_ID: Record<string, string> = {
+  "pagefile-fixed": "pagefile-disable",
+};
+
 // Stable vendor support roots for the COPYABLE url (spec 2026-06-10-driver-freshness-check).
 // Never a launch button — opening external https would need an owner-gated allowlist change.
 const VENDOR_SUPPORT: Partial<Record<GpuVendor, { label: string; url: string }>> = {
@@ -122,6 +141,21 @@ export default function Check({
   // not a one-click fix (doorknob) — Compy never tunes the voltage for you.
   const tuningGuide = tuningGuideForVendor(vendor);
   const hot = tuningGuide ? gpuRunningHot(sessions) : null;
+
+  // Leftovers v1 — strictly ON-DEMAND (charter: no scan on launch, no background scanning).
+  // Read-only: checking changes nothing; v1 wires no restore.
+  const [leftovers, setLeftovers] = useState<LeftoversReport | null>(null);
+  const [leftoversBusy, setLeftoversBusy] = useState(false);
+  const runLeftovers = async () => {
+    setLeftoversBusy(true);
+    try {
+      setLeftovers(await invoke<LeftoversReport>("get_leftovers"));
+    } catch {
+      /* surfaced as the still-empty section; the button stays available to retry */
+    } finally {
+      setLeftoversBusy(false);
+    }
+  };
 
   // Driver freshness (read-only advisory) — only rendered when the caller wires hardware in,
   // so surfaces/tests that don't pass gpus see nothing rather than a spurious "unreadable".
@@ -289,6 +323,67 @@ export default function Check({
           )}
         </div>
       )}
+
+      {/* Leftovers v1 — pre-existing optimizer rot, read-only, ON-DEMAND. Museum placard, never a
+          siren: receipts (found vs stock default), the matched guide-era tweak, the mechanism cost,
+          and a hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes
+          are reported as unchecked, never counted clean. No restore action exists in v1. */}
+      <div className="check-leftovers">
+        <div className="check-section-label check-section-label-muted">Leftovers</div>
+        <p className="check-leftovers-blurb">
+          Tweaks an old guide may have left on this PC before Compy existed. Read-only — checking
+          changes nothing.
+        </p>
+        <button className="check-leftovers-run" disabled={leftoversBusy} onClick={runLeftovers}>
+          {leftoversBusy ? "Checking…" : "Check for leftover tweaks"}
+        </button>
+        {leftovers && leftovers.findings.length === 0 && (
+          <p className="check-leftovers-clean" role="status">
+            {leftovers.unavailable.length === 0
+              ? "No leftover tweaks found — your Windows config matches stock where it matters."
+              : `No leftovers in the ${leftovers.checked} setting${
+                  leftovers.checked === 1 ? "" : "s"
+                } we could read — ${leftovers.unavailable.length} couldn't be read, so nothing is claimed about ${
+                  leftovers.unavailable.length === 1 ? "it" : "them"
+                }.`}
+          </p>
+        )}
+        {leftovers && leftovers.findings.length > 0 && (
+          <>
+            <ul className="check-list">
+              {leftovers.findings.map((f) => (
+                <li key={f.id} className="check-row check-row-info check-leftover-row">
+                  <div className="check-row-main">
+                    <div className="check-row-head">
+                      <span className="check-row-title">{f.title}</span>
+                      <WhatsThis id={LEFTOVER_LEARN_ID[f.id] ?? f.id} onOpen={onOpenLibrary} />
+                      <span className="check-advisory">advisory</span>
+                    </div>
+                    <p className="check-row-reason">
+                      Found: {f.current_value} · Windows default: {f.stock_default}
+                    </p>
+                    <p className="check-row-reason">
+                      {f.mechanism_cost} {f.verdict}
+                    </p>
+                    <p className="check-row-reason check-leftover-note">
+                      Matches: {f.matched_tweak}. {f.restore_note}
+                      {f.uncertain_source &&
+                        " If you set this on purpose, it's yours to keep — Compy can't tell who set it."}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {leftovers.unavailable.length > 0 && (
+              <p className="check-leftover-note">
+                {leftovers.unavailable.length} more setting
+                {leftovers.unavailable.length === 1 ? "" : "s"} couldn't be read — nothing is
+                claimed about {leftovers.unavailable.length === 1 ? "it" : "them"}.
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </section>
   );
 }
