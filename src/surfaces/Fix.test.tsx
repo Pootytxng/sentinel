@@ -42,7 +42,7 @@ describe("Fix", () => {
     render(<Fix recs={recs} {...baseProps} />);
     // Honest split (eligibility train): worth-fixing · active · dismissed · not-for-this-rig.
     expect(
-      screen.getByText(/1 worth your attention · 0 active · 0 dismissed · 0 not for this rig/),
+      screen.getByText(/1 worth a look · 0 active · 0 dismissed · 0 not for this rig/),
     ).toBeTruthy();
     // outstanding appliable rec is visible in Worth fixing
     expect(screen.getByText("Title game-mode")).toBeTruthy();
@@ -55,11 +55,11 @@ describe("Fix", () => {
     expect(screen.getByText("Title game-mode")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Not for me" }));
     // It left the active list; subtitle now counts 1 dismissed.
-    expect(screen.getByText(/0 worth your attention · 0 active · 1 dismissed/)).toBeTruthy();
+    expect(screen.getByText(/0 worth a look · 0 active · 1 dismissed/)).toBeTruthy();
     // Restore from the (collapsed) Dismissed strip brings it back.
     fireEvent.click(screen.getByText("Dismissed")); // expand the collapsible
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
-    expect(screen.getByText(/1 worth your attention · 0 active · 0 dismissed/)).toBeTruthy();
+    expect(screen.getByText(/1 worth a look · 0 active · 0 dismissed/)).toBeTruthy();
   });
 
   it("ledger §2: Active-on-PC shows a deduped active change with a ghost rollback", () => {
@@ -90,7 +90,7 @@ describe("Fix", () => {
 
   it("honest empty state when nothing is worth fixing", () => {
     render(<Fix recs={[rec("game-mode", true)]} {...baseProps} />);
-    expect(screen.getByText(/Nothing worth fixing right now/)).toBeTruthy();
+    expect(screen.getByText(/Your rig's already dialed in/)).toBeTruthy();
   });
 
   it("refuse-pile autopsy links open the correct Library entry", () => {
@@ -113,7 +113,7 @@ describe("Fix", () => {
     render(<Fix recs={recs} {...baseProps} onApplyBatch={onApplyBatch} />);
     // The bar shows the SAFE count and opens the single consent sheet.
     fireEvent.click(screen.getByRole("button", { name: "Apply all safe fixes (2)" }));
-    expect(screen.getByText("Apply these 2 safe fixes?")).toBeTruthy();
+    expect(screen.getByText("Apply these 2 changes to your rig?")).toBeTruthy();
     // Approve → the batch runs over exactly those ids (App orchestrates the existing apply per item).
     fireEvent.click(screen.getByRole("button", { name: "Apply all (2)" }));
     expect(onApplyBatch).toHaveBeenCalledWith(["game-mode", "sysmain-disable"]);

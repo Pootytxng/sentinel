@@ -443,9 +443,9 @@ export default function Fix({
         <div>
           <h2 className="fix-title">Fix</h2>
           <p className="fix-subtitle">
-            {worthFixing.length} worth your attention · {active.length} active ·{" "}
-            {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Every change
-            is one click to undo.
+            {worthFixing.length} worth a look · {active.length} active ·{" "}
+            {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Tailored to
+            your hardware — every change is one click to undo.
           </p>
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
               it belongs where approval actually happens. */}
@@ -457,13 +457,13 @@ export default function Fix({
       </header>
 
       {/* Worth fixing — the outstanding appliable recs, each with its trust-switch. */}
-      <div className="fix-section-label">Worth fixing</div>
+      <div className="fix-section-label">Worth making for your rig</div>
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
           <button className="fix-applyall" onClick={() => setSheetOpen(true)}>
             Apply all safe fixes ({safeBatch.length})
           </button>
-          <span className="fix-applyall-hint">reversible · one undo each · convenience, not a boost</span>
+          <span className="fix-applyall-hint">reversible · one undo each · cleaner setup, not a magic boost</span>
         </div>
       )}
       {batchSummary && (
@@ -477,7 +477,7 @@ export default function Fix({
         </p>
       )}
       {worthFixing.length === 0 ? (
-        <p className="fix-empty">Nothing worth fixing right now — your appliable settings are all set.</p>
+        <p className="fix-empty">Your rig's already dialed in — nothing here needs a change right now.</p>
       ) : (
         <ul className="fix-list">
           {worthFixing.map((rec) => (
@@ -506,10 +506,11 @@ export default function Fix({
           }}
         >
           <div className="fix-applyall-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="fix-applyall-h">Apply these {safeBatch.length} safe fixes?</h3>
+            <h3 className="fix-applyall-h">Apply these {safeBatch.length} changes to your rig?</h3>
             <p className="fix-applyall-note">
               Each is reversible — Compy snapshots the prior state and writes a separate undo for every
-              one. This is convenience, not a performance boost.
+              one. These tidy up how your rig is set up for you — not a performance boost, and every
+              one is reversible.
             </p>
             <ul className="fix-applyall-list">
               {safeBatch.map((r) => (
