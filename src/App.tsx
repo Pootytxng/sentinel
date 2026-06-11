@@ -624,15 +624,41 @@ function SessionsTab({
 // Export Snapshot (F5): read-only local report. Mirrors the Rust ExportResult.
 type ExportResult = { path: string; json_path: string; markdown: string; discord: string };
 
-function ReportModal({
+export function ReportModal({
   report,
   onClose,
   onOpenFolder,
+  onReexport,
 }: {
   report: ExportResult;
   onClose: () => void;
   onOpenFolder: () => void;
+  onReexport: (feedback: string | null) => Promise<void>;
 }) {
+  // Structured feedback capture (spec 2026-06-11): three OPTIONAL prompts, formatted into the
+  // report ONLY when filled and ONLY when the user clicks re-export (never on keystroke, never
+  // pre-filled, never auto-sent — the answers exist solely in the file the user chooses to share).
+  const [fbWhat, setFbWhat] = useState("");
+  const [fbConfusing, setFbConfusing] = useState("");
+  const [fbNext, setFbNext] = useState("");
+  const [fbState, setFbState] = useState<"idle" | "busy" | "added" | "failed">("idle");
+  const feedbackBlock = () => {
+    const parts: string[] = [];
+    if (fbWhat.trim()) parts.push(`**In one sentence:** ${fbWhat.trim()}`);
+    if (fbConfusing.trim()) parts.push(`**Confusing/off:** ${fbConfusing.trim()}`);
+    if (fbNext.trim()) parts.push(`**Want next:** ${fbNext.trim()}`);
+    return parts.length > 0 ? parts.join("\n\n") : null;
+  };
+  const addFeedback = async () => {
+    setFbState("busy");
+    try {
+      await onReexport(feedbackBlock()); // blank → null → backend appends nothing
+      setFbState("added");
+      setTimeout(() => setFbState("idle"), 2000);
+    } catch {
+      setFbState("failed");
+    }
+  };
   // Two distinct copies (tester friction, 2026-06-10): the compact SUMMARY card vs the FULL
   // Markdown report — the old single "Copy for Discord" copied the summary while testers believed
   // they were sharing the full diagnostics. Each button says exactly what it copies (doorknob law),
@@ -663,6 +689,38 @@ function ReportModal({
           </button>
         </div>
         <p className="muted modal-path">Saved to {report.path}</p>
+        <div className="export-feedback">
+          <div className="export-feedback-head">
+            Before you share — help us improve <span className="muted">(optional)</span>
+          </div>
+          <label className="export-feedback-field">
+            <span>In one sentence, what is Compy to you?</span>
+            <textarea rows={2} value={fbWhat} onChange={(e) => setFbWhat(e.target.value)} />
+          </label>
+          <label className="export-feedback-field">
+            <span>Anything confuse you or feel off?</span>
+            <textarea rows={2} value={fbConfusing} onChange={(e) => setFbConfusing(e.target.value)} />
+          </label>
+          <label className="export-feedback-field">
+            <span>What would you want next?</span>
+            <textarea rows={2} value={fbNext} onChange={(e) => setFbNext(e.target.value)} />
+          </label>
+          <div className="export-feedback-actions">
+            <button
+              className="btn"
+              onClick={addFeedback}
+              disabled={fbState === "busy" || feedbackBlock() === null}
+            >
+              {fbState === "busy"
+                ? "Re-exporting…"
+                : fbState === "added"
+                  ? "Feedback added ✓"
+                  : fbState === "failed"
+                    ? "Failed — try again"
+                    : "Add my feedback & re-export"}
+            </button>
+          </div>
+        </div>
         <pre className="report-preview">{report.markdown}</pre>
         <div className="modal-actions">
           <button className="btn" onClick={onOpenFolder}>
@@ -1323,6 +1381,9 @@ function App() {
           onClose={() => setReport(null)}
           onOpenFolder={() => {
             invoke("open_export_folder").catch((e) => setError(String(e)));
+          }}
+          onReexport={async (feedback) => {
+            setReport(await invoke<ExportResult>("export_report", { feedback }));
           }}
         />
       )}

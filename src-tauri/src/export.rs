@@ -103,6 +103,7 @@ pub(crate) fn build_markdown_report(
     diagnostics: &Value,
     rules_source: &str,
     exported_at: &str,
+    feedback: Option<&str>,
 ) -> String {
     let mut o = String::new();
     let _ = writeln!(o, "# Compy Report\n");
@@ -364,6 +365,13 @@ pub(crate) fn build_markdown_report(
     let _ = writeln!(o, "- You choose where (and whether) to share this file.");
     let _ = writeln!(o, "- Recommendation rules source: **{}**.", pretty_source(rules_source));
 
+    // ── Tester feedback (optional, user-typed) — only ever what the user wrote; blank appends
+    // NOTHING (no empty headers, no pre-fill). Local like the rest: it exists only in this file.
+    if let Some(f) = feedback.map(str::trim).filter(|f| !f.is_empty()) {
+        let _ = writeln!(o, "\n## Tester feedback\n");
+        let _ = writeln!(o, "{f}");
+    }
+
     o
 }
 
@@ -441,7 +449,7 @@ fn build_discord_block(
 }
 
 #[tauri::command]
-pub(crate) fn export_report() -> Result<ExportResult, String> {
+pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, String> {
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let hardware = serde_json::to_value(crate::hardware::get_hardware_info()).unwrap_or(Value::Null);
     let recommendations =
@@ -465,6 +473,7 @@ pub(crate) fn export_report() -> Result<ExportResult, String> {
         &diagnostics,
         &rules_source,
         &exported_at,
+        feedback.as_deref(),
     );
     // Built before the JSON bundle below moves the source Values.
     let discord = build_discord_block(&hardware, &readiness, &sessions, &trust_ledger, &exported_at);
@@ -536,7 +545,7 @@ mod export_tests {
             "disks": [{ "mount_point": "C:\\", "total_bytes": 999000000000u64,
                         "available_bytes": 200000000000u64, "file_system": "NTFS" }]
         });
-        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t", None);
         assert!(md.contains("C:\\"), "should list the logical volume");
         assert!(md.contains("NTFS"));
         assert!(md.contains("drive type unavailable"));
@@ -554,6 +563,7 @@ mod export_tests {
             &json!([]),
             "embedded",
             "2026-05-31 12:00",
+            None,
         );
         assert!(md.contains("# Compy Report"));
         assert!(md.contains("## Privacy & safety"));
@@ -572,7 +582,7 @@ mod export_tests {
             "ram_total_bytes": 32_000_000_000u64, "samples": 100, "started_at": "x",
             "compy_changes_active": 2
         }]);
-        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t");
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t", None);
         assert!(md.contains("game.exe"));
         assert!(md.contains("120.5 fps"));
         assert!(md.contains("64°C"));
@@ -590,7 +600,7 @@ mod export_tests {
             "id": "game-mode", "title": "Enable Game Mode", "category": "Windows",
             "severity": "safe", "currently_applied": true, "provenance": "verified"
         }]);
-        let md = build_markdown_report(&Value::Null, &recs, &ledger, &json!({}), &json!([]), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&Value::Null, &recs, &ledger, &json!({}), &json!([]), &json!([]), "embedded", "t", None);
         assert!(md.contains("Enable Game Mode"));
         assert!(md.contains("Trust Ledger (1 changes)"));
         assert!(md.contains("applied by Compy")); // cross-referenced from ledger
@@ -605,16 +615,44 @@ mod export_tests {
             "checks": [{ "id": "monitor-refresh", "label": "Monitor refresh rate",
                          "status": "attention", "detail": "Below max.", "value": "60 / 144 Hz" }]
         });
-        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &readiness, &json!([]), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &readiness, &json!([]), &json!([]), "embedded", "t", None);
         assert!(md.contains("Ready 5 / Attention 2 / Unknown 1"));
         assert!(md.contains("Monitor refresh rate"));
         assert!(md.contains("[ATTENTION]"));
     }
 
     #[test]
+    fn tester_feedback_section_appears_when_provided() {
+        let md = build_markdown_report(
+            &Value::Null, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]),
+            "embedded", "t", Some("**In one sentence:** my rig's safety net"),
+        );
+        assert!(md.contains("## Tester feedback"));
+        assert!(md.contains("my rig's safety net"));
+        // The section lands at the END — after Privacy & safety.
+        let fb = md.rfind("## Tester feedback").unwrap();
+        let privacy = md.rfind("## Privacy & safety").unwrap();
+        assert!(fb > privacy, "feedback must follow the privacy section");
+    }
+
+    #[test]
+    fn no_feedback_section_when_none_or_blank() {
+        let none = build_markdown_report(
+            &Value::Null, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]),
+            "embedded", "t", None,
+        );
+        assert!(!none.contains("Tester feedback"), "None must add no header");
+        let blank = build_markdown_report(
+            &Value::Null, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]),
+            "embedded", "t", Some("   \n\t  "),
+        );
+        assert!(!blank.contains("Tester feedback"), "whitespace-only must add no empty section");
+    }
+
+    #[test]
     fn report_handles_missing_hardware_fields_gracefully() {
         let hw = json!({ "cpu_brand": "Test CPU", "gpus": [ { "name": "Test GPU" } ] });
-        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t");
+        let md = build_markdown_report(&hw, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t", None);
         assert!(md.contains("Test CPU"));
         assert!(md.contains("Test GPU"));
         assert!(md.contains("VRAM, driver age —")); // missing vram/driver age -> dash, no panic
