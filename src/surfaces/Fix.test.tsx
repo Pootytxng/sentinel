@@ -44,7 +44,7 @@ describe("Fix", () => {
     expect(
       screen.getByText(/1 worth a look · 0 active · 0 dismissed · 0 not for this rig/),
     ).toBeTruthy();
-    // outstanding appliable rec is visible in Worth fixing
+    // outstanding appliable rec is visible in the worth-making section
     expect(screen.getByText("Title game-mode")).toBeTruthy();
   });
 

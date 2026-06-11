@@ -456,7 +456,7 @@ export default function Fix({
         </button>
       </header>
 
-      {/* Worth fixing — the outstanding appliable recs, each with its trust-switch. */}
+      {/* Worth making for your rig — the outstanding appliable recs, each with its trust-switch. */}
       <div className="fix-section-label">Worth making for your rig</div>
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
