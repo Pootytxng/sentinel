@@ -506,12 +506,12 @@ fn detect_priority_separation(probes: &Value) -> Outcome {
             id: "win32-priority-separation".into(),
             title: "Foreground-priority value changed".into(),
             current_value: format!("Win32PrioritySeparation = {v} (0x{v:X})"),
-            stock_default: "2 (0x2) — Windows' shipped foreground boost".into(),
+            stock_default: "2 (0x2) — Windows' shipped foreground preference".into(),
             matched_tweak: "\"Win32PrioritySeparation tweaks\" — foreground-boost guides".into(),
             mechanism_cost:
                 "Exotic values re-slice scheduler quanta in ways that can starve the background work games rely on (audio, voice, streaming)."
                     .into(),
-            verdict: "The shipped value already boosts the foreground; the guide values trade stability for a placebo.".into(),
+            verdict: "The shipped value already favors the foreground; the guide values trade stability for a placebo.".into(),
             uncertain_source: true,
             restore_note: "Safe to restore to 2; fully reversible; takes effect immediately.".into(),
         }),
@@ -1004,6 +1004,93 @@ mod leftovers_tests {
                 "unknown reason: {}",
                 u.reason
             );
+        }
+    }
+
+    // ── Law guards (R2 item 2) — the anti-snake-oil charter locked in CI ───────────────────────
+
+    /// One fixture where every probe shows its detector's rotted pattern → all 9 fire.
+    fn fully_rotted() -> Value {
+        let mut p = probes(
+            Some(false),
+            json!([{ "name": "C:\\pagefile.sys", "initial_mb": 30000, "maximum_mb": 30000 }]),
+            Some(false),
+            Some(31),
+        );
+        p["bcdedit"] = json!({ "readable": true, "needs_admin": false, "useplatformclock": true, "disabledynamictick": false });
+        p["mmcss"] = json!({ "readable": true, "system_responsiveness": 0, "network_throttling": 4294967295u64 });
+        p["core_parking"] = json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "Balanced" });
+        p["defender_policy"] = json!({ "readable": true, "disable_realtime": 1, "disable_antispyware": null });
+        p["mpo"] = json!({ "readable": true, "overlay_test_mode": 5 });
+        p["tcp"] = json!({ "readable": true, "autotuning_disabled": true });
+        p["w32ps"] = json!({ "readable": true, "value": 38 });
+        p
+    }
+
+    #[test]
+    fn law_every_detector_can_fire_and_every_finding_carries_a_full_receipt() {
+        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        assert_eq!(
+            r.findings.len(),
+            DETECTORS.len(),
+            "every curated detector must fire on its own rotted fixture (a silent detector is a lie)"
+        );
+        for f in &r.findings {
+            // Charter rule #3 — receipts, not adjectives: every field of the receipt is present.
+            for (field, v) in [
+                ("current_value", &f.current_value),
+                ("stock_default", &f.stock_default),
+                ("matched_tweak", &f.matched_tweak),
+                ("mechanism_cost", &f.mechanism_cost),
+                ("verdict", &f.verdict),
+                ("restore_note", &f.restore_note),
+            ] {
+                assert!(!v.trim().is_empty(), "{}: empty {} — a finding without its receipt", f.id, field);
+            }
+        }
+    }
+
+    #[test]
+    fn law_no_boost_promises_no_alarm_anywhere_in_finding_copy() {
+        // Charter rule #4 — counting, not alarm; honest-measurement — never promise a gain.
+        // (Honest NEGATIONS like "no measured FPS win" are fine; these tokens never are.)
+        let banned = ["boost", "speed up", "speeds up", "guaranteed", "instantly faster", "unlock fps"];
+        let alarm = ["danger", "warning!", "critical!", "fix now", "issues found"];
+        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        for f in &r.findings {
+            let copy = format!(
+                "{} {} {} {} {} {}",
+                f.title, f.current_value, f.stock_default, f.mechanism_cost, f.verdict, f.restore_note
+            )
+            .to_lowercase();
+            for b in banned {
+                assert!(!copy.contains(b), "{}: promise language '{b}' in: {copy}", f.id);
+            }
+            for a in alarm {
+                assert!(!copy.contains(a), "{}: alarm language '{a}' in: {copy}", f.id);
+            }
+            assert!(!f.title.contains('!'), "{}: exclamation in title — sirens are not placards", f.id);
+        }
+    }
+
+    #[test]
+    fn law_report_shape_has_no_score_no_gauge_fields() {
+        // Charter rule #4 structurally: the serialized report is findings + counting ONLY.
+        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        let v = serde_json::to_value(&r).expect("serializes");
+        let keys: Vec<&str> = v.as_object().expect("object").keys().map(|s| s.as_str()).collect();
+        assert_eq!(keys.len(), 3, "exactly findings/checked/unavailable — no scores, no grades: {keys:?}");
+        for k in ["findings", "checked", "unavailable"] {
+            assert!(keys.contains(&k));
+        }
+    }
+
+    #[test]
+    fn law_every_finding_admits_origin_uncertainty() {
+        // Charter rule #5: we can never prove who set a value — no finding pretends otherwise.
+        let r = evaluate_leftovers(&fully_rotted(), &no_endorsements());
+        for f in &r.findings {
+            assert!(f.uncertain_source, "{}: must carry the origin-uncertainty flag", f.id);
         }
     }
 
