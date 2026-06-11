@@ -291,6 +291,10 @@ pub(crate) fn restore_leftover(
         "memory-compression-off" => crate::actions::restore_memory_compression(),
         "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
         "win32-priority-separation" => crate::actions::restore_priority_separation(),
+        // Dark wave 2 (2026-06-11). Pagefile + bcdedit + Defender intentionally have NO resolver.
+        "mpo-disabled" => crate::actions::restore_mpo_default(),
+        "core-parking-forced" => crate::actions::restore_core_parking_default(),
+        "tcp-autotuning-off" => crate::actions::restore_tcp_autotuning_default(),
         other => Err(format!("no restore resolver exists for '{other}' yet")),
     }?;
     let mut change = build_applied_change(detector_id, display_title, result)?;
@@ -922,6 +926,70 @@ mod leftover_restore_tests {
             &Snapshot::PrioritySeparation { prior_value: Some(2) },
         );
         assert!(mismatch.is_err(), "mismatched pair must be a contract violation");
+    }
+
+    #[test]
+    fn wave2_restore_scripts_are_integer_only_and_exit_free() {
+        // Dark wave 2 adversarial: every elevated command is fixed-literal or integer-interpolated —
+        // no external string, and exit-free (§4-batchable invariant).
+        let scripts = [
+            mpo_rollback_script(Some(5)),
+            mpo_rollback_script(None),
+            core_parking_script(0, 0),
+            core_parking_script(100, 100),
+            tcp_autotuning_script(true).to_string(),
+            tcp_autotuning_script(false).to_string(),
+        ];
+        for s in &scripts {
+            assert!(!s.to_lowercase().contains("exit"), "exit-free: {s}");
+            // The only non-literal tokens are digits, the fixed GUIDs, and SCHEME_CURRENT — assert
+            // no stray quoting that would indicate an interpolated free-form string slipped in.
+            assert!(!s.contains("''"), "no PS string-escaping artifacts (= no external string): {s}");
+        }
+        // MPO restores default by DELETING the value; rollback with a prior SETS it back exactly.
+        assert!(mpo_rollback_script(Some(5)).contains("OverlayTestMode' -Value 5"));
+        assert!(mpo_rollback_script(None).contains("Remove-ItemProperty"));
+        // Core-parking touches AC + DC + re-activates; restore re-allows parking (0%).
+        let cp = core_parking_script(0, 0);
+        assert!(cp.contains("setacvalueindex") && cp.contains("setdcvalueindex") && cp.contains("setactive"));
+        assert!(cp.contains(SUB_PROCESSOR_GUID) && cp.contains(CPMINCORES_GUID));
+        // TCP is fixed both ways.
+        assert_eq!(tcp_autotuning_script(false), "netsh int tcp set global autotuninglevel=normal");
+        assert_eq!(tcp_autotuning_script(true), "netsh int tcp set global autotuninglevel=disabled");
+    }
+
+    #[test]
+    fn wave2_blind_rollback_fails_loud_and_pairs_are_contract_checked() {
+        // Core-parking with no recorded AC prior must fail loud, never guess.
+        assert!(rollback_core_parking_typed(None, Some(50)).is_err());
+        // A desktop with no DC profile mirrors AC — not an error.
+        assert!(core_parking_script(75, 75).contains("75"));
+        // Mismatched (action, snapshot) pairs are contract violations for every wave-2 variant.
+        for (a, s) in [
+            (
+                RollbackAction::RestoreMpoFromSnapshot,
+                Snapshot::TcpAutotuning { prior_disabled: true },
+            ),
+            (
+                RollbackAction::RestoreCoreParkingFromSnapshot,
+                Snapshot::Mpo { prior_overlay_test_mode: Some(5) },
+            ),
+            (
+                RollbackAction::RestoreTcpAutotuningFromSnapshot,
+                Snapshot::CoreParking { prior_ac_pct: Some(0), prior_dc_pct: Some(0) },
+            ),
+        ] {
+            assert!(dispatch_rollback(&a, &s).is_err(), "mismatched pair must be rejected");
+        }
+    }
+
+    #[test]
+    fn wave2_dark_gate_still_refuses_the_new_detectors() {
+        // The gate covers every detector id uniformly — the new resolvers are as dark as the rest.
+        for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
+            let err = restore_leftover(id, "QA never runs").err().expect("dark gate refuses");
+            assert!(err.contains("not enabled"), "{id}: {err}");
+        }
     }
 
     #[test]

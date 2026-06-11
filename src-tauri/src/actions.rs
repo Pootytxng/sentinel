@@ -75,6 +75,12 @@ pub(crate) enum AppliedAction {
     RestoreMemoryCompressionDefault,
     RestoreMmcssDefaults,
     RestorePrioritySeparationDefault,
+    // Leftovers v2 dark wave 2 (2026-06-11): MPO / core-parking / TCP autotuning. All
+    // integer-or-fixed-command — no external string enters an elevated command. (Pagefile +
+    // bcdedit + Defender deliberately NOT here — see the spec / Review Queue.)
+    RestoreMpoDefault,
+    RestoreCoreParkingDefault,
+    RestoreTcpAutotuningDefault,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -103,6 +109,10 @@ pub(crate) enum RollbackAction {
     RestoreMemoryCompressionFromSnapshot,
     RestoreMmcssFromSnapshot,
     RestorePrioritySeparationFromSnapshot,
+    // Dark wave 2.
+    RestoreMpoFromSnapshot,
+    RestoreCoreParkingFromSnapshot,
+    RestoreTcpAutotuningFromSnapshot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -177,6 +187,17 @@ pub(crate) enum Snapshot {
     },
     PrioritySeparation {
         prior_value: Option<u32>,
+    },
+    // Dark wave 2 — all integer priors (None = the value was absent → rollback removes it).
+    Mpo {
+        prior_overlay_test_mode: Option<u32>,
+    },
+    CoreParking {
+        prior_ac_pct: Option<u32>,
+        prior_dc_pct: Option<u32>,
+    },
+    TcpAutotuning {
+        prior_disabled: bool,
     },
 }
 
@@ -290,6 +311,16 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
         },
         Snapshot::PrioritySeparation { prior_value } => {
             prior_value.map(|v| format!("{v} (0x{v:X})"))
+        }
+        // Dark wave 2 — the pre-restore (rotted) value, named for the ledger card.
+        Snapshot::Mpo { prior_overlay_test_mode } => {
+            prior_overlay_test_mode.map(|v| format!("OverlayTestMode {v}"))
+        }
+        Snapshot::CoreParking { prior_ac_pct, .. } => {
+            prior_ac_pct.map(|v| format!("min unparked {v}%"))
+        }
+        Snapshot::TcpAutotuning { prior_disabled } => {
+            Some(if *prior_disabled { "disabled" } else { "normal" }.to_string())
         }
     }
 }
@@ -1900,6 +1931,151 @@ pub(crate) fn rollback_priority_separation_typed(prior: Option<u32>) -> Result<(
     run_elevated_powershell(&priority_separation_rollback_script(prior))
 }
 
+// ─── Leftovers v2 dark wave 2 (2026-06-11) — MPO / core-parking / TCP autotuning ─────────
+// Same dark contract as R2-5: gated off + no IPC, snapshot-before-mutate, ONE elevated PS per
+// restore, fail-loud rollback, pure script builders. Every interpolated value is a u32 (or a
+// fixed literal command); no external string ever enters an elevated command (the integer-only
+// hard line — which is why pagefile, whose rollback needs the user's REG_MULTI_SZ path string,
+// is NOT here; see the Review Queue).
+
+const DWM_PATH: &str = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm";
+// Power-plan SUBGROUP + SETTING GUIDs for processor core-parking minimum. FIXED CONSTANTS (mine,
+// like every registry-path literal here) — never external data.
+pub(crate) const SUB_PROCESSOR_GUID: &str = "54533251-82be-4824-96c1-47b60b740d00";
+pub(crate) const CPMINCORES_GUID: &str = "0cc5b647-c1df-4637-891a-dec35c318583";
+
+// Read priors directly (registry/powercfg/netsh reads need no elevation). Err = the SOURCE was
+// unreadable → the restore refuses BEFORE elevation (never mutate what couldn't be snapshotted).
+
+fn read_mpo_prior() -> Result<Option<u32>, String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    match RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"SOFTWARE\Microsoft\Windows\Dwm") {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot snapshot OverlayTestMode: {e}")),
+        Ok(k) => Ok(k.get_value::<u32, _>("OverlayTestMode").ok()),
+    }
+}
+
+/// Parse `powercfg /q SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` for the AC + DC index values.
+/// Locale-tolerant: keys off the hex "0x.." token on the AC/DC index lines, not localized words.
+fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
+    let out = quiet_command("powercfg")
+        .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
+        .output()
+        .map_err(|e| format!("cannot read core parking: {e}"))?;
+    if !out.status.success() {
+        return Err("powercfg core-parking query failed".to_string());
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let hex_on = |needle: &str| -> Option<u32> {
+        text.lines()
+            .find(|l| l.contains(needle))
+            .and_then(|l| l.rsplit("0x").next())
+            .and_then(|h| u32::from_str_radix(h.trim(), 16).ok())
+    };
+    // At least the AC index must parse, or we don't have a snapshot to reverse against.
+    let ac = hex_on("AC Power Setting Index");
+    let dc = hex_on("DC Power Setting Index");
+    if ac.is_none() {
+        return Err("could not parse the core-parking AC index — refusing to restore blind".to_string());
+    }
+    Ok((ac, dc))
+}
+
+fn read_tcp_autotuning_disabled() -> Result<bool, String> {
+    let out = quiet_command("netsh")
+        .args(["int", "tcp", "show", "global"])
+        .output()
+        .map_err(|e| format!("cannot read TCP global: {e}"))?;
+    if !out.status.success() {
+        return Err("netsh TCP query failed".to_string());
+    }
+    let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
+    match text.lines().find(|l| l.contains("auto-tuning") || l.contains("autotuning")) {
+        Some(l) if l.contains("disabled") => Ok(true),
+        Some(l) if l.contains("normal") || l.contains("experimental") || l.contains("restricted") => {
+            Ok(false)
+        }
+        // Non-English output or unexpected shape: refuse rather than guess a state to reverse to.
+        _ => Err("could not read the TCP auto-tuning level — refusing to restore blind".to_string()),
+    }
+}
+
+// Pure script builders (unit-tested without elevation; integers only).
+pub(crate) fn mpo_rollback_script(prior: Option<u32>) -> String {
+    set_or_remove_dword(DWM_PATH, "OverlayTestMode", prior)
+}
+pub(crate) fn core_parking_script(ac_pct: u32, dc_pct: u32) -> String {
+    // ONE elevated PS invocation runs all three statements. SCHEME_CURRENT (not an explicit GUID)
+    // is the standard powercfg idiom for a SETTING-index write — the 070c3c9 stored-GUID contract
+    // concerns whole-plan SWITCHING (force-activating a plan), not a per-setting index on the
+    // already-active plan, so there's no plan-switch to drift here.
+    format!(
+        "powercfg -setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}; \
+         powercfg -setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}; \
+         powercfg -setactive SCHEME_CURRENT"
+    )
+}
+pub(crate) fn tcp_autotuning_script(disabled: bool) -> &'static str {
+    if disabled {
+        "netsh int tcp set global autotuninglevel=disabled"
+    } else {
+        "netsh int tcp set global autotuninglevel=normal"
+    }
+}
+
+// ── MPO: restore default-on by removing OverlayTestMode ──
+pub(crate) fn restore_mpo_default() -> Result<ApplyResult, String> {
+    let prior = read_mpo_prior()?;
+    run_elevated_powershell(&set_or_remove_dword(DWM_PATH, "OverlayTestMode", None))?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestoreMpoDefault,
+        rollback_action: RollbackAction::RestoreMpoFromSnapshot,
+        snapshot: Snapshot::Mpo { prior_overlay_test_mode: prior },
+        elevation_used: true,
+    })
+}
+pub(crate) fn rollback_mpo_typed(prior: Option<u32>) -> Result<(), String> {
+    run_elevated_powershell(&mpo_rollback_script(prior))
+}
+
+// ── Core parking: re-allow parking (min unparked → 0% AC+DC) so the override is lifted ──
+pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
+    let (ac, dc) = read_core_parking_priors()?;
+    run_elevated_powershell(&core_parking_script(0, 0))?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestoreCoreParkingDefault,
+        rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
+        snapshot: Snapshot::CoreParking { prior_ac_pct: ac, prior_dc_pct: dc },
+        elevation_used: true,
+    })
+}
+pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>) -> Result<(), String> {
+    match (ac, dc) {
+        // DC may legitimately be absent on a desktop with no battery profile — restore AC, mirror to DC.
+        (Some(a), dc) => run_elevated_powershell(&core_parking_script(a, dc.unwrap_or(a))),
+        (None, _) => {
+            Err("This entry has no recorded prior core-parking value — cannot roll back blind.".to_string())
+        }
+    }
+}
+
+// ── TCP receive-window auto-tuning: restore "normal" ──
+pub(crate) fn restore_tcp_autotuning_default() -> Result<ApplyResult, String> {
+    let prior_disabled = read_tcp_autotuning_disabled()?;
+    run_elevated_powershell(tcp_autotuning_script(false))?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestoreTcpAutotuningDefault,
+        rollback_action: RollbackAction::RestoreTcpAutotuningFromSnapshot,
+        snapshot: Snapshot::TcpAutotuning { prior_disabled },
+        elevation_used: true,
+    })
+}
+pub(crate) fn rollback_tcp_autotuning_typed(prior_disabled: bool) -> Result<(), String> {
+    run_elevated_powershell(tcp_autotuning_script(prior_disabled))
+}
+
 // ─── Mouse acceleration off (HKCU, no admin) ─────────────────────────────
 
 pub(crate) fn apply_mouse_accel_off() -> Result<ApplyResult, String> {
@@ -2207,6 +2383,15 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
         ) => rollback_mmcss_typed(*prior_system_responsiveness, *prior_network_throttling),
         (R::RestorePrioritySeparationFromSnapshot, S::PrioritySeparation { prior_value }) => {
             rollback_priority_separation_typed(*prior_value)
+        }
+        (R::RestoreMpoFromSnapshot, S::Mpo { prior_overlay_test_mode }) => {
+            rollback_mpo_typed(*prior_overlay_test_mode)
+        }
+        (R::RestoreCoreParkingFromSnapshot, S::CoreParking { prior_ac_pct, prior_dc_pct }) => {
+            rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct)
+        }
+        (R::RestoreTcpAutotuningFromSnapshot, S::TcpAutotuning { prior_disabled }) => {
+            rollback_tcp_autotuning_typed(*prior_disabled)
         }
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
