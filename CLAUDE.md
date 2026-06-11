@@ -115,8 +115,10 @@ message + spec, NOT the chat. Don't re-explain known context or restate the boar
   only (exe/crate/identifier/data-dir).
 - Dev loop: `npm run tauri dev` (from repo root). Tests: `cargo test --manifest-path src-tauri/Cargo.toml`.
   Fresh shells may need `export PATH="$HOME/.cargo/bin:$PATH"`. Git CRLF warnings are benign.
-- Runtime data: Trust Ledger at `%APPDATA%\Compy\history.json` (Roaming); FPS IPC +
-  `launch-debug.log` (debug only) at `%LOCALAPPDATA%\Compy\` (Local).
+- Runtime data: Trust Ledger at `%APPDATA%\Compy\history.json` (Roaming); FPS IPC
+  (`fps.json`/`fps.alive`) at `%APPDATA%\Compy\runtime\` (Roaming — the install/runtime
+  separation, packaging polish #4; live-verified 2026-06-10). `%LOCALAPPDATA%\Compy\` is the
+  NSIS per-user INSTALL dir (exe + `launch-debug.log`, debug only) — never IPC.
 
 ### Rust module map (post-refactor — `lib.rs` carved into safety-boundary modules)
 
