@@ -211,6 +211,39 @@ pub(crate) fn msi_report() -> MsiSummary {
     summarize_msi(&read_msi_devices())
 }
 
+/// One named line-IRQ receipt — "name the guilty device" (sprint item 5). Only devices VERIFIED
+/// on a line interrupt (msi_active == Some(false)) are listed; an unknown state never accuses.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LineIrqReceipt {
+    pub name: String,
+    /// The sharper case: the device advertises MSI capability yet runs on a line IRQ.
+    pub advertises_msi: bool,
+    /// True for GPU/NIC/NVMe-class devices — the ones where interrupt latency is felt.
+    pub latency_sensitive: bool,
+}
+
+/// Pure: every device verified on a legacy line interrupt, latency-sensitive devices first
+/// (then advertised-but-inactive, then name) so the list reads worst-first deterministically.
+pub(crate) fn line_irq_receipts(devices: &[MsiDevice]) -> Vec<LineIrqReceipt> {
+    let mut out: Vec<LineIrqReceipt> = devices
+        .iter()
+        .filter(|d| d.msi_active == Some(false))
+        .map(|d| LineIrqReceipt {
+            name: d.name.clone(),
+            advertises_msi: d.msi_on,
+            latency_sensitive: is_latency_sensitive(&d.name),
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        (b.latency_sensitive, b.advertises_msi, &a.name).cmp(&(
+            a.latency_sensitive,
+            a.advertises_msi,
+            &b.name,
+        ))
+    });
+    out
+}
+
 fn is_latency_sensitive(name: &str) -> bool {
     let n = name.to_lowercase();
     ["geforce", "radeon", "nvidia", "ethernet", "gbe", "network", "wi-fi", "wifi", "nvme", "wireless"]
@@ -774,8 +807,12 @@ pub(crate) fn shared_controller_advisory(loads: &[UsbControllerLoad]) -> Option<
 /// Live: build the USB-controller → input-device map (read-only WMI: `Win32_USBController`,
 /// `Win32_USBControllerDevice`, `Win32_PnPEntity`). No elevation, no network. Empty on any error.
 ///
-/// TODO (deeper increment): verify *real* HID polling rate by timing report intervals rather than
-/// trusting the advertised rate — that needs opening the HID device, so it's a separate step.
+/// Polling-rate honesty (was TODO:777, resolved 2026-06-11): the on-demand mouse measurement
+/// (`measure_mouse_polling`) already times REAL report intervals via raw input rather than
+/// trusting an advertised rate — so the global case is measured, not assumed. Per-device HID
+/// verification (opening each HID handle to time its own reports) remains a deliberate
+/// non-goal for now: it adds a device-open I/O surface for marginal gain over the measured
+/// global rate. Revisit only if a tester's topology makes per-device attribution matter.
 pub(crate) fn read_usb_topology() -> Vec<UsbControllerLoad> {
     #[derive(serde::Deserialize)]
     #[serde(rename = "Win32_USBController")]
@@ -1140,6 +1177,8 @@ pub(crate) struct LatencyReport {
     pub msi: MsiSummary,
     pub msi_active: MsiActiveSummary,
     pub msi_advisory: Option<String>,
+    /// Named per-device receipts for everything verified on a line IRQ (worst-first).
+    pub line_irq_receipts: Vec<LineIrqReceipt>,
     pub timer: Option<TimerResolution>,
     /// `timer.current_ms()` precomputed for the UI (the method isn't serialized).
     pub timer_current_ms: Option<f64>,
@@ -1167,6 +1206,7 @@ fn gather_latency_report_inner() -> LatencyReport {
     let msi = summarize_msi(&msi_devices);
     let msi_active = summarize_msi_active(&msi_devices);
     let msi_advisory = msi_active_advisory(&msi_devices);
+    let line_irq = line_irq_receipts(&msi_devices);
     let timer = read_timer_resolution();
     let timer_current_ms = timer.as_ref().map(|t| t.current_ms());
     let cpu = read_cpu_topology();
@@ -1178,6 +1218,7 @@ fn gather_latency_report_inner() -> LatencyReport {
         msi,
         msi_active,
         msi_advisory,
+        line_irq_receipts: line_irq,
         timer,
         timer_current_ms,
         cpu,
@@ -1342,6 +1383,32 @@ mod latency_tests {
 
     fn dev_full(name: &str, on: bool, id: &str, active: Option<bool>) -> MsiDevice {
         MsiDevice { name: name.into(), msi_on: on, instance_id: id.to_uppercase(), msi_active: active }
+    }
+
+    // ── "Name the guilty device" receipts (sprint item 5) ─────────────────────────────────────
+
+    #[test]
+    fn line_irq_receipts_name_only_verified_offenders_worst_first() {
+        let devices = vec![
+            dev_full("USB Host Controller", false, "a", Some(false)), // not sensitive, no MSI claim
+            dev_full("Intel Ethernet I226-V", true, "b", Some(false)), // sensitive + advertises = worst
+            dev_full("NVIDIA GeForce RTX 3060 Ti", false, "c", Some(false)), // sensitive
+            dev_full("Audio Device", true, "d", Some(true)),          // active on MSI — innocent
+            dev_full("Mystery Device", true, "e", None),              // UNKNOWN — never accused
+        ];
+        let r = line_irq_receipts(&devices);
+        assert_eq!(r.len(), 3, "only verified line-IRQ devices are named");
+        assert_eq!(r[0].name, "Intel Ethernet I226-V", "sensitive + advertised-but-inactive first");
+        assert!(r[0].advertises_msi && r[0].latency_sensitive);
+        assert_eq!(r[1].name, "NVIDIA GeForce RTX 3060 Ti");
+        assert_eq!(r[2].name, "USB Host Controller");
+        assert!(!r.iter().any(|x| x.name == "Mystery Device"), "unknown state is not an accusation");
+    }
+
+    #[test]
+    fn line_irq_receipts_empty_when_everything_is_clean_or_unknown() {
+        let devices = vec![dev_full("GPU", true, "a", Some(true)), dev("NIC", true)];
+        assert!(line_irq_receipts(&devices).is_empty());
     }
 
     #[test]

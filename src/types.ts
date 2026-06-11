@@ -144,11 +144,13 @@ export type UsbControllerLoad = {
 };
 export type PollingRate = { reports: number; median_hz: number; min_interval_ms: number; max_interval_ms: number; jitter_ms: number };
 
+export type LineIrqReceipt = { name: string; advertises_msi: boolean; latency_sensitive: boolean };
 export type LatencyReport = {
   msi_devices: MsiDevice[];
   msi: MsiSummary;
   msi_active: MsiActiveSummary;
   msi_advisory: string | null;
+  line_irq_receipts: LineIrqReceipt[];
   timer: TimerResolution | null;
   timer_current_ms: number | null;
   cpu: CpuTopology | null;

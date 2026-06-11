@@ -25,6 +25,9 @@ const fullReport: LatencyReport = {
   msi: { total: 6, msi_on: 5, msi_off: 1 },
   msi_active: { active_on: 4, active_off: 1, unknown: 1, advertised_but_inactive: 1 },
   msi_advisory: "One device advertises MSI but runs on a line IRQ.",
+  line_irq_receipts: [
+    { name: "Intel Ethernet I226-V", advertises_msi: true, latency_sensitive: true },
+  ],
   timer: null,
   timer_current_ms: 15.6,
   cpu: { logical_processors: 16, physical_cores: 8, l3_complexes: 1 },
@@ -58,6 +61,10 @@ describe("LatencyTab (audit M1)", () => {
       screen.getByText(/4 of 6 capable devices confirmed on MSI.*1 advertise it but run on a line IRQ.*1 undetermined/),
     ).toBeInTheDocument();
     expect(screen.getByText(fullReport.msi_advisory!)).toBeInTheDocument();
+    // "Name the guilty device": the verified line-IRQ offender is NAMED with its state.
+    expect(screen.getByText("Intel Ethernet I226-V")).toBeInTheDocument();
+    expect(screen.getByText(/advertises MSI · verified running on a line IRQ/)).toBeInTheDocument();
+    expect(screen.getByText("latency-sensitive")).toBeInTheDocument();
     // CPU topology + USB inventory name their evidence.
     expect(screen.getByText(/8 cores \/ 16 threads/)).toBeInTheDocument();
     expect(screen.getByText("USB xHCI Controller")).toBeInTheDocument();

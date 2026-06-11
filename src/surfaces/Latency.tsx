@@ -100,6 +100,25 @@ export function LatencyTab() {
           {msi_active.unknown > 0 && ` · ${msi_active.unknown} undetermined`}
         </p>
         {report.msi_advisory && <p className="lat-advisory">{report.msi_advisory}</p>}
+        {/* Name the guilty device: every VERIFIED line-IRQ device, worst-first — receipts the
+            user can act on per device, not just a count. Unknown states are never listed. */}
+        {report.line_irq_receipts.length > 0 && (
+          <ul className="lat-list">
+            {report.line_irq_receipts.map((d) => (
+              <li key={d.name}>
+                <span className="lat-ctrl">{d.name}</span>
+                <span className="lat-devs">
+                  {d.advertises_msi
+                    ? "advertises MSI · verified running on a line IRQ"
+                    : "no MSI support advertised · on a line IRQ"}
+                </span>
+                {d.latency_sensitive && (
+                  <span className="lat-shared lat-shared-warn">latency-sensitive</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card>
