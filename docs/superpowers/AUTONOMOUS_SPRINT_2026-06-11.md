@@ -71,6 +71,18 @@ means fewer check-ins, not less verification.
   (global rate already MEASURED via raw input; per-device HID-open recorded as deliberate
   non-goal) · `3fc4e4a` · cargo 288 (+2) · npm 253 · clippy -D warnings · tsc+vite clean ·
   /security clean (pure fn over existing data, zero new probes/IPC).
+- Item 6 driver win-source — NOT built; forkier than scoped (one-line note per discipline): the
+  only honest data source for non-GPU driver age is Win32_PnPSignedDriver, and the fork is real —
+  querying it inside get_hardware_info lags the HOT path every refresh, vs adding a new lazy IPC
+  (surface-area decision). Needs a small spec picking the lane (recommend: lazy probe behind the
+  existing driver-freshness card, its own command, NET class only). Parked for Cowork/owner.
+- Item 7 M3 classic-surface retirement — NOT started, deliberately: a ~3,000-line deletion through
+  the SHIPPED default surfaces is wrong to begin at the tail of a long session while testers are
+  actively installing kit 39F08D75 (asymmetric blast radius). It deserves a fresh session as its
+  own train per the existing memory + this doc. All prep is in place (parity closed, hub removed).
+
+**Sprint status:** items 1–5 of 7 landed green (5 feature/fix commits + logs); 6 parked on a real
+fork, 7 deferred to a fresh train. Locked gates, frozen refs, security settings: untouched.
 
 ## Owner-deferred (taste / money / mutation-ship — Fable parks here, owner decides)
 - Leftovers user-facing name ("Leftovers" recommended). Pricing shape (Q4). Any mutation flip/ship.
