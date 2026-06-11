@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { type OverlayDensity, readOverlayDensity } from "./design/theme";
+import { type OverlayDensity, readOverlayDensity, readDisplayRefreshHz } from "./design/theme";
 import "./Overlay.css";
 
 // Minimal shapes — the overlay only reads a few fields from the same sensor
@@ -67,12 +67,15 @@ export default function Overlay() {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [v2, setV2] = useState<boolean>(readOverlayV2);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
+  const [refreshHz, setRefreshHz] = useState<number | null>(readDisplayRefreshHz);
 
-  // React to Settings (main window) flipping the flag / density — `storage` fires in OTHER windows.
+  // React to the main window flipping the flag / density / relaying the monitor refresh —
+  // `storage` fires in OTHER windows.
   useEffect(() => {
     const on = () => {
       setV2(readOverlayV2());
       setDensity(readOverlayDensity());
+      setRefreshHz(readDisplayRefreshHz());
     };
     window.addEventListener("storage", on);
     return () => window.removeEventListener("storage", on);
@@ -139,7 +142,7 @@ export default function Overlay() {
           </div>
         )}
         {density === "full" && sample && sample.recent_frametimes_ms.length > 1 && (
-          <Frametimeline samples={sample.recent_frametimes_ms} />
+          <Frametimeline samples={sample.recent_frametimes_ms} refreshHz={refreshHz} />
         )}
       </div>
     );
@@ -188,24 +191,58 @@ export default function Overlay() {
   );
 }
 
-// Frametime polyline (Full density) — the last N samples from the existing stream, scaled to their
-// own min/max so spikes are visible (that's the point). Pure SVG, updated on the existing tick.
-function Frametimeline({ samples }: { samples: number[] }) {
+// Frametime scale (pure, exported for tests). FIXED Y-scale, RTSS-style — the owner/tester-found
+// honesty fix (2026-06-10): the old min/max auto-scale stretched STABLE frametimes (the good case)
+// to fill the full height, rendering rock-steady pacing as jagged noise. A fixed ceiling means
+// stable = a near-flat line low in the graph, and only genuine jumps rise. The ceiling anchors to
+// the monitor's frame budget (≈3.5× budget, bounded 20–50 ms) so 60/120/165/240 Hz all put "flat
+// at budget" at the same visual height; unknown refresh falls back to a plain 0–50 ms window.
+export function frametimeScale(budgetMs: number | null): { ceilingMs: number; budgetMs: number | null } {
+  if (budgetMs == null || !Number.isFinite(budgetMs) || budgetMs <= 0) {
+    return { ceilingMs: 50, budgetMs: null };
+  }
+  return { ceilingMs: Math.min(50, Math.max(20, budgetMs * 3.5)), budgetMs };
+}
+
+// Frametime polyline (Full density) — last N samples from the existing stream on the FIXED scale
+// above, plus a faint dashed reference line at the frame budget (1000/refresh ms): flat at or
+// under the line = good, visible at a glance. Spikes past the ceiling pin to the top (still
+// unmissable). Pure static SVG on the existing tick — no animation, reduced-motion clean.
+export function Frametimeline({
+  samples,
+  refreshHz,
+}: {
+  samples: number[];
+  refreshHz: number | null;
+}) {
   const pts = samples.slice(-40);
   const W = 116;
   const H = 18;
-  const max = Math.max(...pts);
-  const min = Math.min(...pts);
-  const range = max - min || 1;
+  const { ceilingMs, budgetMs } = frametimeScale(
+    refreshHz != null && refreshHz > 0 ? 1000 / refreshHz : null,
+  );
+  const y = (ms: number) => H - (Math.min(ms, ceilingMs) / ceilingMs) * (H - 2) - 1;
   const points = pts
     .map((v, i) => {
       const x = pts.length > 1 ? (i / (pts.length - 1)) * W : 0;
-      const y = H - ((v - min) / range) * (H - 2) - 1;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
+      return `${x.toFixed(1)},${y(v).toFixed(1)}`;
     })
     .join(" ");
   return (
     <svg className="ovl2-ft" viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
+      {budgetMs != null && (
+        <line
+          className="ovl2-ft-budget"
+          x1="0"
+          x2={W}
+          y1={y(budgetMs).toFixed(1)}
+          y2={y(budgetMs).toFixed(1)}
+          stroke="var(--ix-text-3)"
+          strokeOpacity="0.45"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
+      )}
       <polyline points={points} fill="none" stroke="var(--ix-accent)" strokeWidth="1.2" />
     </svg>
   );

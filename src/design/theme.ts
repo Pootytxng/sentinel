@@ -98,6 +98,32 @@ export function persistStepAsideGame(on: boolean): void {
   }
 }
 
+// Monitor refresh rate, relayed main-window → overlay window via localStorage (the same
+// cross-window channel as the overlay flag/density — zero IPC). The MAIN window writes it when
+// hardware lands; the OVERLAY reads it to anchor the frametime graph's fixed scale + the frame-
+// budget reference line (1000/refresh ms). null = unknown → the graph falls back to a 0–50 ms
+// scale and honestly draws NO budget line rather than guessing one.
+const DISPLAY_REFRESH_KEY = "compy_display_refresh_hz";
+
+export function readDisplayRefreshHz(): number | null {
+  try {
+    const v = Number(localStorage.getItem(DISPLAY_REFRESH_KEY));
+    return Number.isFinite(v) && v >= 24 && v <= 1000 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistDisplayRefreshHz(hz: number | null | undefined): void {
+  try {
+    if (hz != null && Number.isFinite(hz) && hz >= 24 && hz <= 1000) {
+      localStorage.setItem(DISPLAY_REFRESH_KEY, String(hz));
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 // Close-to-tray (opt-in "minimize to tray"). DEFAULT OFF — closing the window fully exits per
 // Train #3 §1 unless the user opts in. The backend mirrors this flag via the `set_close_to_tray`
 // command (synced on startup + on change); localStorage is the source of truth across launches.

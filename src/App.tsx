@@ -8,7 +8,7 @@ import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { BackButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
-import { readCloseToTray } from "./design/theme";
+import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { HardwareGrid } from "./surfaces/HardwareGrid";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
@@ -931,6 +931,9 @@ function App() {
         invoke<Priorities>("get_priorities"),
       ]);
       setHw(info);
+      // Relay the monitor's refresh to the OVERLAY window (localStorage — the existing cross-window
+      // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
+      persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
       setRecs(recommendations);
       setChanges(history);
       setStartup(startupEntries);
