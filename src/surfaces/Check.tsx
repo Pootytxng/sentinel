@@ -27,7 +27,8 @@ type Leftover = {
   uncertain_source: boolean;
   restore_note: string;
 };
-type LeftoversReport = { findings: Leftover[]; checked: number; unavailable: string[] };
+type UnavailableProbe = { id: string; title: string; reason: string };
+type LeftoversReport = { findings: Leftover[]; checked: number; unavailable: UnavailableProbe[] };
 
 // Finding id → the Learn entry that explains its family (WhatsThis renders only where one exists).
 const LEFTOVER_LEARN_ID: Record<string, string> = {
@@ -349,39 +350,41 @@ export default function Check({
           </p>
         )}
         {leftovers && leftovers.findings.length > 0 && (
-          <>
-            <ul className="check-list">
-              {leftovers.findings.map((f) => (
-                <li key={f.id} className="check-row check-row-info check-leftover-row">
-                  <div className="check-row-main">
-                    <div className="check-row-head">
-                      <span className="check-row-title">{f.title}</span>
-                      <WhatsThis id={LEFTOVER_LEARN_ID[f.id] ?? f.id} onOpen={onOpenLibrary} />
-                      <span className="check-advisory">advisory</span>
-                    </div>
-                    <p className="check-row-reason">
-                      Found: {f.current_value} · Windows default: {f.stock_default}
-                    </p>
-                    <p className="check-row-reason">
-                      {f.mechanism_cost} {f.verdict}
-                    </p>
-                    <p className="check-row-reason check-leftover-note">
-                      Matches: {f.matched_tweak}. {f.restore_note}
-                      {f.uncertain_source &&
-                        " If you set this on purpose, it's yours to keep — Compy can't tell who set it."}
-                    </p>
+          <ul className="check-list">
+            {leftovers.findings.map((f) => (
+              <li key={f.id} className="check-row check-row-info check-leftover-row">
+                <div className="check-row-main">
+                  <div className="check-row-head">
+                    <span className="check-row-title">{f.title}</span>
+                    <WhatsThis id={LEFTOVER_LEARN_ID[f.id] ?? f.id} onOpen={onOpenLibrary} />
+                    <span className="check-advisory">advisory</span>
                   </div>
-                </li>
-              ))}
-            </ul>
-            {leftovers.unavailable.length > 0 && (
-              <p className="check-leftover-note">
-                {leftovers.unavailable.length} more setting
-                {leftovers.unavailable.length === 1 ? "" : "s"} couldn't be read — nothing is
-                claimed about {leftovers.unavailable.length === 1 ? "it" : "them"}.
-              </p>
-            )}
-          </>
+                  <p className="check-row-reason">
+                    Found: {f.current_value} · Windows default: {f.stock_default}
+                  </p>
+                  <p className="check-row-reason">
+                    {f.mechanism_cost} {f.verdict}
+                  </p>
+                  <p className="check-row-reason check-leftover-note">
+                    Matches: {f.matched_tweak}. {f.restore_note}
+                    {f.uncertain_source &&
+                      " If you set this on purpose, it's yours to keep — Compy can't tell who set it."}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* Whatever couldn't be read is NAMED with its reason (e.g. bcdedit: needs admin) —
+            an unchecked setting is never folded into "nothing found". */}
+        {leftovers && leftovers.unavailable.length > 0 && (
+          <ul className="check-leftover-unchecked">
+            {leftovers.unavailable.map((u) => (
+              <li key={u.id}>
+                Couldn't check {u.title} — {u.reason}.
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </section>

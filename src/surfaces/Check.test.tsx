@@ -6,7 +6,7 @@ const leftoversMock = vi.hoisted(() => ({
   report: { findings: [], checked: 2, unavailable: [] } as {
     findings: unknown[];
     checked: number;
-    unavailable: string[];
+    unavailable: { id: string; title: string; reason: string }[];
   },
 }));
 
@@ -202,11 +202,21 @@ describe("Check", () => {
       await screen.findByText(/No leftover tweaks found — your Windows config matches stock/),
     ).toBeInTheDocument();
     unmount();
-    // One probe unreadable → the bold "matches stock" claim must NOT appear (honest scope).
-    leftoversMock.report = { findings: [], checked: 1, unavailable: ["memory-compression-off"] };
+    // One probe unreadable → the bold "matches stock" claim must NOT appear (honest scope),
+    // and the unchecked setting is NAMED with its reason.
+    leftoversMock.report = {
+      findings: [],
+      checked: 1,
+      unavailable: [
+        { id: "bcdedit-timer-flags", title: "Boot timer flags (bcdedit)", reason: "needs admin to check" },
+      ],
+    };
     render(ui);
     fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
     expect(await screen.findByText(/1 couldn't be read, so nothing is claimed/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Couldn't check Boot timer flags \(bcdedit\) — needs admin to check\./),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/matches stock where it matters/)).not.toBeInTheDocument();
   });
 });
