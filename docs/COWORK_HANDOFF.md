@@ -136,6 +136,29 @@ have shaped real features). The arc: package → smoke → twenty friends → a 
 
 ## Current board (update as you go)
 
+- **🟢 Tree-truncation scare (2026-06-11) — RESOLVED, false alarm:** root cause was a stale
+  sandbox-mount view on Cowork's side, not real corruption. CC verified the four named files INTACT
+  at HEAD before acting (zero diff; cargo 268 · npm 240 · tsc + vite green) — NO restore was run,
+  nothing was lost. Standing lesson: verify the working tree directly before any destructive restore.
+- **🌊 OWNER-FEEDBACK WAVE #2 LANDED + OWNER-EYEBALLED (2026-06-11, `main` @ `69e91fe`)** — all
+  Cowork-specced, CC-built, audited green: Fix-tab reword (`f1a1f27`) · Lab welcoming pass (`7d9f52a`,
+  doorknob-test-pinned) · Fix consent-note dedup (`9958c48`) · driver-freshness advisory in Check
+  (`078bc1d`, owner-confirmed 13-day pass renders) · structured feedback capture in Export (`bd7520d`
+  +`cc2a1ba` 4000-char cap, honest empty→no-section, owner-verified) · **overlay stranded-monitor FIX
+  (`f6c0fce`)** — FreeSync OSD toggle swapped primary; corner math now anchors to `primary_monitor`
+  (fallback current), shared `position_overlay` helper, 3 tests. **Owner LIVE-CONFIRMED both eyeballs:
+  overlay returns to main monitor + Export report carries the new feedback section.**
+- **✅ KIT RE-CUT FROM `69e91fe` (2026-06-11) — verified, ready to host, NOT yet sent.** NSIS
+  `Compy_0.1.0_x64-setup.exe` **SHA-256 `39F08D75A939CF722B52CCC7E5BF9010F7C8377744E2ACF08E3703600C7FFE93`**
+  (2,775,197 B) + MSI (4,149,248 B). Triple-hash-verified (bundle = loose `beta-kit/` copy = inside
+  `Compy-Beta-Kit.zip`); frozen refs (`16069fa`, `beta/private-beta-001`) re-verified untouched.
+  SUPERSEDES `5F2549E7…` everywhere. Owner-side from here: set the new zip's Drive share to "Anyone
+  with the link · Viewer", replace the old Drive file, DM testers. **Re-download DM drafted:**
+  `beta-kit/redownload-message.txt` (leads with overlay fix + new Export feedback box). **Drive heads-up
+  to include:** the zip is too big for Drive's virus scan → testers see "Download anyway", pairs with
+  the expected SmartScreen warning.
+- **Cowork project-instructions rewrite drafted** (`beta-kit/cowork-project-instructions.txt`) — owner
+  to paste into the project's instruction field (relay + shorthand-audit + NEEDS-YOU flag + persist-to-disk).
 - **🚀 BETA IS SENDING (2026-06-10/11)** — owner hosted the send-ready kit (`5F2549E7`, from `fc940fe`)
   on **Google Drive** (link live) and is DMing testers the link + `beta-kit/invite-message.txt`. Drive,
   NOT Discord, because a tester's MalwareBytes Browser Guard blocked Discord's CDN (`cdn.discordapp.com`
