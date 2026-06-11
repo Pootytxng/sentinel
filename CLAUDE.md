@@ -157,8 +157,22 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   unknown). Refresh relays main→overlay via the EXISTING localStorage channel — zero new IPC. Play/
 >   deep-monitoring verified: no session-length frametime view exists to fix (aggregates by design;
 >   `stutter_timeline` data exists unrendered — future scoping option). npm **234**.
-> - **⚠️ KIT CURRENCY: `E8D5588B…` predates BOTH fixes** — sending it ships the exact tester-found
->   bugs they fix. Re-cut before any send (owner-timed; not auto-refreshed).
+> - **🎯 FPS SELF-MEASUREMENT FIX (`af7cc02`, measurement core — Cowork audit pending):** tester
+>   Export root-caused the ~2× live read: a PoE session recorded as "msedgewebview2.exe · 329 avg" —
+>   Compy's OWN WebView2 renderer out-presented the game and won the dominant-presenter pick (the
+>   denylist comment promised webview exclusion but only listed compy.exe; Tauri webviews are
+>   msedgewebview2.exe children). Fix: webview denylisted + the pick extracted into pure
+>   `select_game_presenter` with guard tests (Compy's own processes can NEVER win; all-denied →
+>   honest None). Sessions/comparisons/tuning attribute correctly now; affected testers' old
+>   webview-attributed sessions remain in their local history (honest record). Diagnosis doc:
+>   `2026-06-10-fps-double-read-DIAGNOSIS.md` (RESOLVED). Live game-session re-verify recommended.
+> - **Also landed same day:** EEE I226-V pin (`059d0d7` — Intel On/Off vocabulary applies + stays
+>   active; dev-rig Realtek inventory pinned; speed-enum excluded) · Export share honesty
+>   (`4fe46cb` — "Copy full report" + "Copy summary card" replace the misleading "Copy for
+>   Discord"). cargo **258** · npm **234** · clippy+tsc clean.
+> - **⚠️ KIT CURRENCY: `E8D5588B…` predates ALL of these tester-found fixes** (EEE, overlay
+>   frametime, FPS self-measurement, export share) — sending it ships every bug this wave fixed,
+>   incl. self-corrupting session data. Re-cut before any send (owner-timed; not auto-refreshed).
 
 > **🧪 AUTONOMOUS IMPROVEMENT SPRINT — 2026-06-10 (`main` @ `d51f6f0`+).** Owner-mandated broad
 > reversible sprint; full running log + ranked owner-deferred list in
