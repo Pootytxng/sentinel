@@ -180,7 +180,8 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   parse failure) + two-stage pure selection (dominant allowed process → its dominant chain) with
 >   deterministic tie-breaks; the 323/161 signature is a synthetic regression test (pid-keying reads
 >   ~322/161, per-chain reads true ~161 with fps≈low1). cargo **260** · clippy clean · FpsReport
->   shape unchanged. Owner live game re-test = field confirmation (should read ~Steam).
+>   shape unchanged. ✅ **FIELD-CONFIRMED 2026-06-10** — owner live game test: overlay ≈ the
+>   in-game/Steam counter; the self-measure bug is dead in the field.
 > - **Also landed same day:** EEE I226-V pin (`059d0d7` — Intel On/Off vocabulary applies + stays
 >   active; dev-rig Realtek inventory pinned; speed-enum excluded) · Export share honesty
 >   (`4fe46cb` — "Copy full report" + "Copy summary card" replace the misleading "Copy for
@@ -195,7 +196,10 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   (bundle = loose = in-zip); suites green on the exact HEAD (cargo **260** · npm **234**);
 >   QA-evidence claim verified in code (elevation change = message attribution only; EEE keeps
 >   reads→one-PS exit-free; FPS read-only). Frozen refs re-verified. **THIS is the send-ready kit;
->   the send stays the owner's.** Owner live game re-test still the FPS field confirmation.
+>   the send stays the owner's.** ✅ FPS field confirmation LANDED (owner live test, see above).
+>   **🚀 BETA SENDING (2026-06-10/11):** owner hosts this kit on **Google Drive** + DMs testers the
+>   link + `beta-kit/invite-message.txt` (Drive, not Discord — a tester's MalwareBytes Browser Guard
+>   false-blocked Discord's CDN). Owner-side from here: collect Exports + one-sentence answers.
 
 > **🧪 AUTONOMOUS IMPROVEMENT SPRINT — 2026-06-10 (`main` @ `d51f6f0`+).** Owner-mandated broad
 > reversible sprint; full running log + ranked owner-deferred list in
