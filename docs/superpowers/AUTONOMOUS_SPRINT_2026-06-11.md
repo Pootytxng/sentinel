@@ -66,6 +66,11 @@ means fewer check-ins, not less verification.
   probes · `a500c2b` · cargo 286 (+11 incl. live probe smoke) · npm 253 · clippy -D warnings ·
   tsc+vite clean · /security clean (fixed-arg reads only, HKLM read-only incl. policy keys, zero
   mutation/IPC/capability change).
+- Item 5 latency guilty-device receipts — pure line_irq_receipts (worst-first, unknown never
+  accused) + additive report field + named list in the Latency card; TODO:777 resolved honestly
+  (global rate already MEASURED via raw input; per-device HID-open recorded as deliberate
+  non-goal) · `3fc4e4a` · cargo 288 (+2) · npm 253 · clippy -D warnings · tsc+vite clean ·
+  /security clean (pure fn over existing data, zero new probes/IPC).
 
 ## Owner-deferred (taste / money / mutation-ship — Fable parks here, owner decides)
 - Leftovers user-facing name ("Leftovers" recommended). Pricing shape (Q4). Any mutation flip/ship.
