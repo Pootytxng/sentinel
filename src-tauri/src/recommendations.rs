@@ -135,6 +135,10 @@ pub(crate) enum Condition {
     StorageBelowFreePercent { mount_prefix: String, percent: f64 },
     HasActiveWiredEthernet,
     HasWiredEthernetPort,
+    /// An Up wired adapter exposes an EEE property WITH a recognized disable value (collected once
+    /// into HardwareInfo so rec evaluation stays pure/testable). Hardware-capability gate: keeps
+    /// the rec visible as "Not for this rig" instead of offering an apply that can only fail.
+    EeeSwitchExposed,
     MemoryIntegrityOrVbsActive,
     DisplayHdrCapable,
 }
@@ -146,6 +150,9 @@ pub(crate) fn hardware_ineligibility_reason(cond: &Condition, _hw: &HardwareInfo
     match cond {
         Condition::HasActiveWiredEthernet | Condition::HasWiredEthernetPort => Some(
             "Needs a wired Ethernet port — this rig has none (Wi-Fi / other only).".into(),
+        ),
+        Condition::EeeSwitchExposed => Some(
+            "No connected wired adapter exposes an Energy-Efficient-Ethernet switch Compy can safely flip — either the cable isn't plugged in right now, or this adapter's driver doesn't offer the setting.".into(),
         ),
         Condition::DisplayHdrCapable => Some("Your display isn't HDR-capable.".into()),
         Condition::AllHdd => Some("Only for HDD-only systems — this rig has an SSD/NVMe.".into()),
@@ -233,6 +240,7 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
         }
         Condition::HasActiveWiredEthernet => hw.has_active_wired_ethernet,
         Condition::HasWiredEthernetPort => hw.has_wired_ethernet_port,
+        Condition::EeeSwitchExposed => hw.eee_switch_exposed,
         Condition::MemoryIntegrityOrVbsActive => memory_integrity_or_vbs_active(),
         Condition::DisplayHdrCapable => hw
             .display
@@ -921,9 +929,10 @@ mod rec_tests {
         assert!(!eee.eligible, "EEE must be ineligible on a portless rig");
         assert!(eee.ineligible_reason.is_some(), "ineligible recs carry a plain-English reason");
 
-        // With a physical Ethernet port it's eligible again.
+        // With a physical port AND an exposed EEE switch it's eligible again.
         let wired = HardwareInfo {
             has_wired_ethernet_port: true,
+            eee_switch_exposed: true,
             ..Default::default()
         };
         let eee2 = build_recommendations(&wired)
@@ -932,6 +941,24 @@ mod rec_tests {
             .expect("present");
         assert!(eee2.eligible);
         assert!(eee2.ineligible_reason.is_none());
+
+        // Tester-found (2026-06-10): a wired port whose driver does NOT expose a flippable EEE
+        // switch must be ineligible with the EEE-specific reason — never offered a failing apply.
+        let wired_no_switch = HardwareInfo {
+            has_wired_ethernet_port: true,
+            eee_switch_exposed: false,
+            ..Default::default()
+        };
+        let eee3 = build_recommendations(&wired_no_switch)
+            .into_iter()
+            .find(|r| r.id == "eee-disable")
+            .expect("kept, not dropped");
+        assert!(!eee3.eligible, "no exposed switch → not for this rig");
+        let reason = eee3.ineligible_reason.expect("carries a reason");
+        assert!(
+            reason.contains("Energy-Efficient-Ethernet switch"),
+            "the EEE-specific reason, not the port reason: {reason}"
+        );
     }
 
     #[test]

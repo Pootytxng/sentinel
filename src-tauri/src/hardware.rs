@@ -150,6 +150,10 @@ pub(crate) struct HardwareInfo {
     /// the eligibility signal for wired-only recs. Distinct from `has_active_wired_ethernet`
     /// (currently connected).
     pub(crate) has_wired_ethernet_port: bool,
+    /// An Up wired adapter exposes an EEE switch Compy can safely flip (matched property AND a
+    /// recognized disabled value). Gates the eee-disable rec so a failing apply is never offered
+    /// on rigs whose driver hides or renames the switch (tester-found, 2026-06-10).
+    pub(crate) eee_switch_exposed: bool,
     /// Full classified adapter inventory — drives evidence-naming UI + the Export hardware section.
     pub(crate) network_adapters: Vec<NetAdapterInfo>,
     pub(crate) game_storage: GameStorage,
@@ -1178,6 +1182,13 @@ fn collect_hardware_inner() -> HardwareInfo {
         .iter()
         .any(|a| a.physical && a.medium == "wired" && a.connected);
     let has_wired_ethernet_port = network_adapters.iter().any(|a| a.physical && a.medium == "wired");
+    // Only worth probing when a connected wired adapter exists (the EEE enumeration filters on
+    // Status -eq 'Up' anyway — this just skips a PowerShell spawn on Wi-Fi-only rigs).
+    let eee_switch_exposed = has_active_wired_ethernet
+        && matches!(
+            crate::actions::resolve_eee(),
+            crate::actions::EeeResolution::Ready(_)
+        );
 
     HardwareInfo {
         cpu_brand,
@@ -1200,6 +1211,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         windows_version: detect_windows_version(),
         has_active_wired_ethernet,
         has_wired_ethernet_port,
+        eee_switch_exposed,
         network_adapters,
         game_storage: detect_game_storage(),
     }

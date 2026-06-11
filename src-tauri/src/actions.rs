@@ -490,6 +490,33 @@ pub(crate) fn parse_batch_receipts(text: &str) -> std::collections::HashMap<Stri
     receipts
 }
 
+/// The one message allowed to say the user declined. Reused by the test seam so the simulated
+/// decline and the real one can never drift apart.
+pub(crate) const ELEVATION_DECLINED_MSG: &str =
+    "You didn't approve the elevation prompt — nothing was changed.";
+
+/// Honest attribution for a `runas` outcome (pure — unit-tested with synthetic results). THE TRUST
+/// RULE (tester-found, 2026-06-10): the app must NEVER tell a user they cancelled when they didn't.
+/// A real UAC decline surfaces from ShellExecuteEx as os error 1223 (ERROR_CANCELLED) — a LAUNCH
+/// error, not an exit code — and that is the ONLY outcome allowed to mention declining. A non-zero
+/// EXIT CODE means the user APPROVED elevation and the elevated command itself failed (the previous
+/// code mapped exactly that case to "Did you cancel the UAC prompt?" — backwards, and the decline
+/// path never said "cancelled" at all).
+pub(crate) fn elevation_outcome(
+    result: std::io::Result<std::process::ExitStatus>,
+) -> Result<(), String> {
+    const ERROR_CANCELLED: i32 = 1223; // ShellExecuteEx: the user dismissed the UAC prompt
+    match result {
+        Err(e) if e.raw_os_error() == Some(ERROR_CANCELLED) => Err(ELEVATION_DECLINED_MSG.into()),
+        Err(e) => Err(format!("could not launch elevated process: {}", e)),
+        Ok(s) if !s.success() => Err(format!(
+            "You approved the elevation, but the operation itself failed (exit code {}) — the prompt was fine; the command hit an error.",
+            s.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
+        )),
+        Ok(_) => Ok(()),
+    }
+}
+
 pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     // §4 batching: an armed sink on THIS thread captures instead of elevating (see above).
     let deferred = ELEVATION_SINK.with(|s| {
@@ -503,33 +530,25 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     if deferred {
         return Ok(());
     }
-    // Test-only seam: deterministically simulate a UAC decline / failed elevation WITHOUT spawning
-    // runas (which would pop a real Secure-Desktop prompt). Production has neither the flag nor this
-    // branch — `#[cfg(test)]` removes it from the shipped binary entirely.
+    // Test-only seam: deterministically simulate a UAC DECLINE without spawning runas (which would
+    // pop a real Secure-Desktop prompt). Returns the same constant as a real decline so the
+    // simulated and real paths can't drift. `#[cfg(test)]` removes it from the shipped binary.
     #[cfg(test)]
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
-        return Err(
-            "Elevated step did not complete (exit code 1). Did you cancel the UAC prompt?".to_string(),
-        );
+        return Err(ELEVATION_DECLINED_MSG.to_string());
     }
-    let status = runas::Command::new("powershell.exe")
-        .args(&[
-            "-NoProfile",
-            "-NonInteractive",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-            command,
-        ])
-        .status()
-        .map_err(|e| format!("could not launch elevated process: {}", e))?;
-    if !status.success() {
-        return Err(format!(
-            "Elevated step did not complete (exit code {}). Did you cancel the UAC prompt?",
-            status.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into())
-        ));
-    }
-    Ok(())
+    elevation_outcome(
+        runas::Command::new("powershell.exe")
+            .args(&[
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                command,
+            ])
+            .status(),
+    )
 }
 
 /// Defense-in-depth against elevated-command injection. Any value interpolated into a
@@ -687,6 +706,140 @@ mod batch_elevation_tests {
         assert_eq!(receipts.get("charlie-ok"), Some(&true), "items after a failure still run");
         let _ = std::fs::remove_file(&rf);
         let _ = std::fs::remove_dir(&dir);
+    }
+}
+
+#[cfg(test)]
+mod elevation_attribution_tests {
+    use super::{elevation_outcome, ELEVATION_DECLINED_MSG};
+    use std::os::windows::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    // THE TRUST RULE (tester-found): never tell a user they cancelled when they didn't.
+
+    #[test]
+    fn a_real_uac_decline_is_the_only_outcome_that_says_declined() {
+        // ShellExecuteEx decline = launch error ERROR_CANCELLED (1223).
+        let err = elevation_outcome(Err(std::io::Error::from_raw_os_error(1223)))
+            .expect_err("decline is an error");
+        assert_eq!(err, ELEVATION_DECLINED_MSG);
+        assert!(err.contains("didn't approve"));
+    }
+
+    #[test]
+    fn an_approved_elevation_whose_command_fails_never_mentions_cancelling() {
+        // Non-zero EXIT CODE = the user approved, the elevated command itself failed — the exact
+        // case the old message blamed on the user ("Did you cancel the UAC prompt?").
+        let err = elevation_outcome(Ok(ExitStatus::from_raw(1))).expect_err("failure is an error");
+        assert!(err.contains("You approved the elevation"), "got: {err}");
+        assert!(err.contains("exit code 1"), "got: {err}");
+        let lower = err.to_lowercase();
+        assert!(!lower.contains("cancel"), "must never blame the user: {err}");
+        assert!(!lower.contains("didn't approve"), "must never blame the user: {err}");
+    }
+
+    #[test]
+    fn success_and_other_launch_failures_map_honestly() {
+        assert!(elevation_outcome(Ok(ExitStatus::from_raw(0))).is_ok());
+        let err = elevation_outcome(Err(std::io::Error::from_raw_os_error(2)))
+            .expect_err("launch failure is an error");
+        assert!(err.contains("could not launch elevated process"), "got: {err}");
+        assert!(!err.to_lowercase().contains("cancel"), "got: {err}");
+    }
+}
+
+#[cfg(test)]
+mod eee_resolution_tests {
+    use super::*;
+
+    fn prop(name: &str, current: &str, valid: &[&str]) -> EeeProperty {
+        EeeProperty {
+            adapter_name: "Ethernet".into(),
+            display_name: name.into(),
+            current_value: current.into(),
+            valid_values: valid.iter().map(|v| v.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn parses_four_field_lines_and_skips_malformed() {
+        let out = "Ethernet|Energy Efficient Ethernet|Enabled|Enabled~Disabled\n\
+                   Ethernet 2|EEE|On|On~Off\n\
+                   garbage line\n\
+                   old|three|fields\n";
+        let props = parse_eee_property_lines(out);
+        assert_eq!(props.len(), 2);
+        assert_eq!(props[0].valid_values, vec!["Enabled".to_string(), "Disabled".to_string()]);
+        assert_eq!(props[1].current_value, "On");
+    }
+
+    #[test]
+    fn picks_the_drivers_own_disabled_token_never_assumes_english_disabled() {
+        // The tester-found failure: drivers whose vocabulary is Off/0 rejected the literal
+        // 'Disabled' write, which then read as a false UAC cancel.
+        assert_eq!(pick_disabled_value(&["Enabled".into(), "Disabled".into()]), Some("Disabled".into()));
+        assert_eq!(pick_disabled_value(&["On".into(), "Off".into()]), Some("Off".into()));
+        assert_eq!(pick_disabled_value(&["1".into(), "0".into()]), Some("0".into()));
+        // A vocabulary we don't recognize (e.g. localized) → None: gate, don't guess.
+        assert_eq!(pick_disabled_value(&["Aktiviert".into(), "Deaktiviert".into()]), None);
+        // Driver reported nothing → legacy fallback to the literal attempt.
+        assert_eq!(eee_disable_value_for(&prop("EEE", "Enabled", &[])), Some("Disabled".into()));
+    }
+
+    #[test]
+    fn resolution_classifies_honestly() {
+        assert_eq!(resolve_eee_from(vec![]), EeeResolution::NoEligibleAdapter);
+        // Properties exist but none has a recognized off-token → gate as no-switch.
+        assert_eq!(
+            resolve_eee_from(vec![prop("EEE", "Ein", &["Ein", "Aus"])]),
+            EeeResolution::NoDisableSwitch
+        );
+        // Mixed: keep only the safely-flippable ones.
+        let r = resolve_eee_from(vec![
+            prop("EEE", "Ein", &["Ein", "Aus"]),
+            prop("Green Ethernet", "On", &["On", "Off"]),
+        ]);
+        match r {
+            EeeResolution::Ready(props) => {
+                assert_eq!(props.len(), 1);
+                assert_eq!(props[0].display_name, "Green Ethernet");
+            }
+            other => panic!("expected Ready, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn detection_reads_the_drivers_vocabulary_not_just_english() {
+        // The "EEE state reads wrong" half of the tester report.
+        assert!(eee_value_is_disabled(&prop("EEE", "Off", &["On", "Off"])));
+        assert!(eee_value_is_disabled(&prop("EEE", "Disabled", &["Enabled", "Disabled"])));
+        assert!(eee_value_is_disabled(&prop("EEE", "0", &["1", "0"])));
+        assert!(!eee_value_is_disabled(&prop("EEE", "On", &["On", "Off"])));
+        assert!(!eee_value_is_disabled(&prop("EEE", "Enabled", &["Enabled", "Disabled"])));
+    }
+
+    #[test]
+    fn apply_script_writes_picked_values_and_exits_deterministically() {
+        let targets = vec![
+            (prop("EEE", "On", &["On", "Off"]), "Off".to_string()),
+            (prop("Energy Efficient Ethernet", "Enabled", &["Enabled", "Disabled"]), "Disabled".to_string()),
+        ];
+        let ps = build_eee_apply_script(&targets);
+        assert!(ps.contains("-DisplayValue 'Off'"), "uses the driver's own token");
+        assert!(ps.contains("-DisplayValue 'Disabled'"));
+        assert!(ps.ends_with("$null = 0"), "deterministic exit 0 — a skipped pair must never masquerade as an elevation failure");
+        assert!(!ps.contains("exit"), "never exit — eee-disable is §4-batchable");
+        // Quote-escaping for adapter names with apostrophes.
+        let quoted = build_eee_apply_script(&[(
+            EeeProperty {
+                adapter_name: "Bob's NIC".into(),
+                display_name: "EEE".into(),
+                current_value: "On".into(),
+                valid_values: vec!["On".into(), "Off".into()],
+            },
+            "Off".into(),
+        )]);
+        assert!(quoted.contains("'Bob''s NIC'"));
     }
 }
 
@@ -1176,63 +1329,198 @@ pub(crate) fn rollback_power_plan_setting_typed(
 // Wi-Fi, Bluetooth, virtual adapters, and adapters where no EEE-shaped
 // property exists are all excluded automatically.
 
-pub(crate) fn enumerate_eee_eligible_adapters() -> Vec<EeeNicSnapshot> {
-    let ps = r#"
-$adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
-    $_.Status -eq 'Up' -and $_.PhysicalMediaType -eq '802.3'
+/// One EEE-shaped advanced property on an Up wired adapter, with the driver's accepted values so
+/// the apply can pick the REAL "disabled" token instead of assuming the literal "Disabled" (drivers
+/// vary: "Off", "Disable", localized strings — the tester-found apply failure, 2026-06-10).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EeeProperty {
+    pub adapter_name: String,
+    pub display_name: String,
+    pub current_value: String,
+    /// `ValidDisplayValues` from the driver; empty when the driver doesn't report them.
+    pub valid_values: Vec<String>,
 }
-foreach ($a in $adapters) {
-    $props = Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -match 'Energy[- ]?Efficient[- ]?Ethernet|Green Ethernet|Advanced EEE|^EEE$|EEE PHY' }
-    foreach ($p in $props) {
-        Write-Output ($a.Name + '|' + $p.DisplayName + '|' + $p.DisplayValue)
-    }
+
+// Vendor-name coverage: display names AND registry keywords (the INF-standardized `*EEE` plus the
+// common vendor keywords) — either match qualifies. Extend from real tester adapter inventories
+// (Export → network adapter section), never by guessing.
+const EEE_DISPLAY_NAME_PATTERN: &str =
+    "Energy[- ]?Efficient[- ]?Ethernet|Green Ethernet|Advanced EEE|^EEE$|EEE PHY|802\\.3az";
+const EEE_REGISTRY_KEYWORD_PATTERN: &str =
+    "^\\*?EEE$|EEELink|GigaEEE|EnergyEfficientEthernet|AdvancedEEE";
+
+/// How EEE resolves on this rig — drives honest gating (never offer an apply that can only fail).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum EeeResolution {
+    /// No Up, wired adapter exposes an EEE-shaped property at all.
+    NoEligibleAdapter,
+    /// EEE-shaped properties exist, but none offers a value Compy recognizes as "disabled" —
+    /// we will not guess at a driver's vocabulary.
+    NoDisableSwitch,
+    /// Properties Compy can safely flip (every entry has a pickable disabled value).
+    Ready(Vec<EeeProperty>),
 }
-"#;
-    let output = quiet_command("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps])
-        .output();
-    let stdout = match output {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
-        Err(_) => return Vec::new(),
-    };
+
+/// PURE: parse enumeration output lines `adapter|displayName|currentValue|valid~values~list`.
+/// Malformed lines are skipped (defensive — PS output is process output, not a trusted file).
+pub(crate) fn parse_eee_property_lines(stdout: &str) -> Vec<EeeProperty> {
     stdout
         .lines()
         .filter_map(|line| {
-            let parts: Vec<&str> = line.splitn(3, '|').collect();
-            if parts.len() != 3 {
+            let parts: Vec<&str> = line.splitn(4, '|').collect();
+            if parts.len() != 4 {
                 return None;
             }
-            Some(EeeNicSnapshot {
+            Some(EeeProperty {
                 adapter_name: parts[0].trim().to_string(),
-                property_display_name: parts[1].trim().to_string(),
-                prior_value: parts[2].trim().to_string(),
+                display_name: parts[1].trim().to_string(),
+                current_value: parts[2].trim().to_string(),
+                valid_values: parts[3]
+                    .split('~')
+                    .map(|v| v.trim().to_string())
+                    .filter(|v| !v.is_empty())
+                    .collect(),
             })
         })
         .collect()
 }
 
-pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
-    let adapters = enumerate_eee_eligible_adapters();
-    if adapters.is_empty() {
-        return Err(
-            "No active wired Ethernet adapter with an Energy Efficient Ethernet property was found. Compy only modifies adapters where the property already exists."
-                .into(),
-        );
+/// PURE: the driver's "disabled" token, by preference order, case-insensitive. None = the driver's
+/// vocabulary has nothing Compy recognizes as off — honesty says gate, not guess.
+pub(crate) fn pick_disabled_value(valid_values: &[String]) -> Option<String> {
+    for pref in ["disabled", "disable", "off", "0"] {
+        if let Some(v) = valid_values.iter().find(|v| v.trim().eq_ignore_ascii_case(pref)) {
+            return Some(v.trim().to_string());
+        }
     }
+    None
+}
 
-    // Build the apply script — set every eligible (adapter, property) pair
-    // to "Disabled". -NoRestart keeps the link up across the change so we
-    // don't bounce the user's connection.
+/// PURE: the value the apply would write for this property. Empty valid-values (driver didn't
+/// report them) falls back to the literal "Disabled" — the long-standing behavior for drivers
+/// that don't enumerate; a NON-empty list without a recognized token returns None (we KNOW
+/// "Disabled" isn't accepted — that write is the tester-found false-cancel failure).
+pub(crate) fn eee_disable_value_for(p: &EeeProperty) -> Option<String> {
+    if p.valid_values.is_empty() {
+        return Some("Disabled".to_string());
+    }
+    pick_disabled_value(&p.valid_values)
+}
+
+/// PURE: is this property currently in its disabled state? Honest comparator — matches the
+/// driver's own disabled token when known, plus the universal disabled-ish spellings; never
+/// assumes the English "Disabled" is the only truth (the tester-found misread).
+pub(crate) fn eee_value_is_disabled(p: &EeeProperty) -> bool {
+    let cur = p.current_value.trim();
+    if cur.to_lowercase().contains("disab") || cur.eq_ignore_ascii_case("off") || cur == "0" {
+        return true;
+    }
+    eee_disable_value_for(p)
+        .map(|v| cur.eq_ignore_ascii_case(&v))
+        .unwrap_or(false)
+}
+
+/// PURE: classify a set of enumerated properties (split from the live probe for tests).
+pub(crate) fn resolve_eee_from(props: Vec<EeeProperty>) -> EeeResolution {
+    if props.is_empty() {
+        return EeeResolution::NoEligibleAdapter;
+    }
+    let ready: Vec<EeeProperty> = props
+        .into_iter()
+        .filter(|p| eee_disable_value_for(p).is_some())
+        .collect();
+    if ready.is_empty() {
+        EeeResolution::NoDisableSwitch
+    } else {
+        EeeResolution::Ready(ready)
+    }
+}
+
+/// Live enumeration + classification. Eligibility filter unchanged from the cross-LLM review
+/// (Status Up · PhysicalMediaType 802.3 · property exists); matching is broadened to display-name
+/// OR registry-keyword, and the driver's ValidDisplayValues ride along for honest value picking.
+pub(crate) fn resolve_eee() -> EeeResolution {
+    let ps = format!(
+        r#"
+$adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {{
+    $_.Status -eq 'Up' -and $_.PhysicalMediaType -eq '802.3'
+}}
+foreach ($a in $adapters) {{
+    $props = Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue |
+        Where-Object {{ $_.DisplayName -match '{names}' -or ($_.RegistryKeyword -and $_.RegistryKeyword -match '{keywords}') }}
+    foreach ($p in $props) {{
+        $valid = @($p.ValidDisplayValues) -join '~'
+        Write-Output ($a.Name + '|' + $p.DisplayName + '|' + $p.DisplayValue + '|' + $valid)
+    }}
+}}
+"#,
+        names = EEE_DISPLAY_NAME_PATTERN,
+        keywords = EEE_REGISTRY_KEYWORD_PATTERN,
+    );
+    let output = quiet_command("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .output();
+    let stdout = match output {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Err(_) => return EeeResolution::NoEligibleAdapter,
+    };
+    resolve_eee_from(parse_eee_property_lines(&stdout))
+}
+
+/// PURE: build the apply script from (property, picked-disabled-value) pairs. The trailing
+/// `$null = 0` makes the script's exit code deterministic-success: a per-pair SilentlyContinue
+/// failure must never bleed into the host exit code and masquerade as an elevation problem (the
+/// false-cancel chain) — detection recomputes the real state afterwards and stays honest. NEVER
+/// `exit` here: eee-disable is safe-tier batchable and the §4 composition rule bans it.
+pub(crate) fn build_eee_apply_script(targets: &[(EeeProperty, String)]) -> String {
     let mut ps = String::new();
-    for a in &adapters {
+    for (p, value) in targets {
         ps.push_str(&format!(
-            "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue 'Disabled' -NoRestart -ErrorAction SilentlyContinue; ",
-            a.adapter_name.replace('\'', "''"),
-            a.property_display_name.replace('\'', "''"),
+            "Set-NetAdapterAdvancedProperty -Name '{}' -DisplayName '{}' -DisplayValue '{}' -NoRestart -ErrorAction SilentlyContinue; ",
+            p.adapter_name.replace('\'', "''"),
+            p.display_name.replace('\'', "''"),
+            value.replace('\'', "''"),
         ));
     }
-    run_elevated_powershell(&ps)?;
+    ps.push_str("$null = 0");
+    ps
+}
+
+pub(crate) fn apply_eee_disable() -> Result<ApplyResult, String> {
+    let props = match resolve_eee() {
+        EeeResolution::NoEligibleAdapter => {
+            return Err(
+                "No active wired Ethernet adapter exposes an Energy-Efficient-Ethernet property — nothing to change on this rig."
+                    .into(),
+            )
+        }
+        EeeResolution::NoDisableSwitch => {
+            return Err(
+                "This adapter's driver exposes EEE, but not a 'Disabled'-style value Compy recognizes — left untouched rather than guessing at the driver's vocabulary."
+                    .into(),
+            )
+        }
+        EeeResolution::Ready(props) => props,
+    };
+
+    // Pair each property with ITS driver's disabled token (Ready guarantees one exists), and
+    // snapshot prior state BEFORE the mutation — same 3-field snapshot shape as ever.
+    let targets: Vec<(EeeProperty, String)> = props
+        .into_iter()
+        .filter_map(|p| eee_disable_value_for(&p).map(|v| (p, v)))
+        .collect();
+    let adapters: Vec<EeeNicSnapshot> = targets
+        .iter()
+        .map(|(p, _)| EeeNicSnapshot {
+            adapter_name: p.adapter_name.clone(),
+            property_display_name: p.display_name.clone(),
+            prior_value: p.current_value.clone(),
+        })
+        .collect();
+
+    let ps = build_eee_apply_script(&targets);
+    run_elevated_powershell(&ps)
+        .map_err(|e| format!("Couldn't change Energy Efficient Ethernet — {}", e))?;
 
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableEnergyEfficientEthernet,
@@ -1255,7 +1543,11 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
             a.prior_value.replace('\'', "''"),
         ));
     }
-    run_elevated_powershell(&ps)?;
+    // Same deterministic-exit-0 tail as the apply: a silently-skipped pair must never read as an
+    // elevation failure (restored values come from the snapshot = the driver's own prior strings).
+    ps.push_str("$null = 0");
+    run_elevated_powershell(&ps)
+        .map_err(|e| format!("Couldn't restore Energy Efficient Ethernet — {}", e))?;
     Ok(())
 }
 

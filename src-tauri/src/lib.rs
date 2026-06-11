@@ -355,16 +355,17 @@ pub(crate) fn pcie_aspm_off_on_ac() -> bool {
 }
 
 pub(crate) fn eee_disabled_on_any_eligible_adapter() -> bool {
-    let entries = enumerate_eee_eligible_adapters();
-    if entries.is_empty() {
-        return false;
+    // ON (in the recommended sense — EEE off) iff EVERY resolvable property reads disabled,
+    // judged by the HONEST comparator (the driver's own disabled token / "Off" / "0" — never
+    // just the English "Disabled", which misread Off-vocabulary drivers; tester-found 2026-06-10).
+    // Unresolvable (no adapter / no recognizable switch) is conservatively NOT-disabled — the rec
+    // is ineligible upstream in that case, so this never drives a false offer.
+    match crate::actions::resolve_eee() {
+        crate::actions::EeeResolution::Ready(props) => {
+            props.iter().all(crate::actions::eee_value_is_disabled)
+        }
+        _ => false,
     }
-    // ON (in the recommended sense — EEE off) iff EVERY eligible adapter
-    // is Disabled. If any eligible adapter still has EEE enabled, the rec
-    // is NOT in the recommended state.
-    entries
-        .iter()
-        .all(|e| e.prior_value.to_lowercase().contains("disab"))
 }
 
 

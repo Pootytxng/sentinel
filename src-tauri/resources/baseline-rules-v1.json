@@ -143,7 +143,8 @@
       "provenance": "expected-impact",
       "downside": "Slightly higher idle network power draw on the adapter (a fraction of a watt).",
       "applies_to_template": "Wired Ethernet adapter with an EEE-shaped property exposed by the driver",
-      "conditions": [{ "kind": "has-wired-ethernet-port" }],
+      "conditions": [{ "kind": "has-wired-ethernet-port" },
+      { "kind": "eee-switch-exposed" }],
       "apply_kind": "eee-disable",
       "state_kind": "eee-disabled-on-eligible-adapters"
     },
