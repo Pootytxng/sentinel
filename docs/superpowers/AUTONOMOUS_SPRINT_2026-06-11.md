@@ -53,6 +53,9 @@ means fewer check-ins, not less verification.
   (+7) · npm 242 (+2) · clippy -D warnings · tsc+vite clean · /security clean (no args on the new
   command, fixed-literal PS read, zero mutation). Note: no Learn entry exists yet for
   memory-compression (WhatsThis auto-hides); pagefile maps to the existing pagefile-disable autopsy.
+- Item 2 audit M1/M2 — diagnostics.rs structural contracts (+5) + Latency/SessionDebrief/Benchmark/
+  FirstCheck render-honesty tests (+11), additive only · `726cf4a` · cargo 280 · npm 253 · clippy
+  -D warnings · tsc+vite clean · /security N/A-clean (test-only diff, zero production change).
 
 ## Owner-deferred (taste / money / mutation-ship — Fable parks here, owner decides)
 - Leftovers user-facing name ("Leftovers" recommended). Pricing shape (Q4). Any mutation flip/ship.
