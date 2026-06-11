@@ -55,11 +55,43 @@ const PRESENTER_DENYLIST: &[&str] = &[
     "dwm.exe",
     "explorer.exe",
     "compy.exe",
+    // Compy's OWN UI renderer: Tauri webviews run as msedgewebview2.exe CHILD processes — the
+    // "compy.exe" entry above never covered them, so the continuously-compositing webview could
+    // out-present the game and win the dominant-presenter race: Compy measured ITSELF (tester
+    // Export, 2026-06-10: a PoE session recorded as "msedgewebview2.exe · 329 avg"). No game runs
+    // inside a WebView2 renderer, so the blanket name exclusion is honest for every app's webview.
+    "msedgewebview2.exe",
     "applicationframehost.exe",
     "searchhost.exe",
     "startmenuexperiencehost.exe",
     "textinputhost.exe",
 ];
+
+/// PURE: pick "the game" among presenter candidates — most frames wins, and a denylisted name
+/// (compositor / shell / Compy's own UI incl. its msedgewebview2.exe renderers) can NEVER win,
+/// regardless of how many frames it presented. THE GUARD (tester-found, 2026-06-10): a session
+/// must never be recorded against Compy's own processes — Compy never measures itself.
+pub(crate) fn select_game_presenter(
+    candidates: Vec<(u32, String, Vec<f64>)>,
+) -> Option<(u32, String, Vec<f64>)> {
+    let mut best: Option<(u32, String, Vec<f64>)> = None;
+    for (pid, name, recent) in candidates {
+        if recent.len() < 2 {
+            continue;
+        }
+        if PRESENTER_DENYLIST.iter().any(|d| name.eq_ignore_ascii_case(d)) {
+            continue;
+        }
+        let take = match &best {
+            Some((_, _, b)) => recent.len() > b.len(),
+            None => true,
+        };
+        if take {
+            best = Some((pid, name, recent));
+        }
+    }
+    best
+}
 
 // How far back the per-second stats window looks, and how often we report.
 const REPORT_INTERVAL_MS: u64 = 500;
@@ -294,11 +326,11 @@ pub fn run_capture() {
         });
 
         // The "game" is the process presenting the most frames in the last
-        // second, EXCLUDING the compositor/shell (dwm.exe et al.). In borderless
-        // mode DWM composites at the game's rate and would otherwise win the
-        // "most frames" race and get mislabelled as the game. We resolve each
-        // candidate's name here and skip the denylist.
-        let mut best: Option<(u32, String, Vec<f64>)> = None;
+        // second, EXCLUDING the compositor/shell/Compy's own UI (see the denylist). In borderless
+        // mode DWM composites at the game's rate, and Compy's own webview can composite even
+        // faster — either would otherwise win the "most frames" race and get mislabelled as the
+        // game. Names are resolved here; the pick itself is the pure, guard-tested function below.
+        let mut candidates: Vec<(u32, String, Vec<f64>)> = Vec::new();
         for (pid, tr) in map.iter() {
             let recent: Vec<f64> = tr
                 .samples
@@ -309,21 +341,9 @@ pub fn run_capture() {
             if recent.len() < 2 {
                 continue;
             }
-            let name = resolve_process_name(*pid);
-            if PRESENTER_DENYLIST
-                .iter()
-                .any(|d| name.eq_ignore_ascii_case(d))
-            {
-                continue;
-            }
-            let take = match &best {
-                Some((_, _, b)) => recent.len() > b.len(),
-                None => true,
-            };
-            if take {
-                best = Some((*pid, name, recent));
-            }
+            candidates.push((*pid, resolve_process_name(*pid), recent));
         }
+        let best = select_game_presenter(candidates);
 
         if let Some((pid, process_name, frametimes)) = best {
             let frames = frametimes.len();
@@ -371,6 +391,63 @@ pub fn run_capture() {
                 report.process_name, report.pid, report.fps, report.avg_frametime_ms, report.low1_fps, frames
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod presenter_selection_tests {
+    use super::select_game_presenter;
+
+    fn cand(pid: u32, name: &str, frames: usize) -> (u32, String, Vec<f64>) {
+        (pid, name.to_string(), vec![6.2; frames])
+    }
+
+    // THE GUARD (tester Export, 2026-06-10): a PoE session was recorded as
+    // "msedgewebview2.exe · 329 avg" — Compy's own webview out-presented the game and won the
+    // dominant-presenter race. Compy must never measure itself, no matter the frame counts.
+    #[test]
+    fn compys_own_webview_never_wins_even_with_the_most_frames() {
+        let picked = select_game_presenter(vec![
+            cand(100, "PathOfExile.exe", 161),
+            cand(200, "msedgewebview2.exe", 329),
+            cand(300, "compy.exe", 500),
+        ])
+        .expect("the game is picked");
+        assert_eq!(picked.1, "PathOfExile.exe");
+    }
+
+    #[test]
+    fn denylist_is_case_insensitive() {
+        let picked = select_game_presenter(vec![
+            cand(100, "game.exe", 10),
+            cand(200, "MsEdgeWebView2.EXE", 400),
+            cand(300, "DWM.exe", 400),
+        ])
+        .expect("the game is picked");
+        assert_eq!(picked.1, "game.exe");
+    }
+
+    #[test]
+    fn only_denied_presenters_means_no_game_not_a_false_one() {
+        // Compy idling with no game running: the webview + compositor present constantly —
+        // the honest answer is "nothing is presenting", never our own UI dressed up as a game.
+        assert!(select_game_presenter(vec![
+            cand(200, "msedgewebview2.exe", 400),
+            cand(300, "dwm.exe", 300),
+            cand(400, "compy.exe", 100),
+        ])
+        .is_none());
+    }
+
+    #[test]
+    fn most_frames_wins_among_legitimate_presenters() {
+        let picked = select_game_presenter(vec![
+            cand(100, "game.exe", 161),
+            cand(200, "other-app.exe", 30),
+            cand(300, "tiny.exe", 1), // <2 samples → not a candidate at all
+        ])
+        .expect("picked");
+        assert_eq!(picked.1, "game.exe");
     }
 }
 

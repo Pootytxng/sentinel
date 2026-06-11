@@ -1,9 +1,15 @@
-# FPS live-read ~2× over-read — DIAGNOSIS (read-only; fix gated on tester data)
+# FPS live-read ~2× over-read — DIAGNOSIS (RESOLVED: self-attribution, fixed same day)
 
-> **STATUS: DIAGNOSED, NOT FIXED.** Owner-ordered read-only investigation (2026-06-10). No counting
-> changed. The fix below is GATED on the tester's Export + the locked-2× question. Tester symptom:
-> Steam live = 161 ≈ Compy 1% low = 161, Compy LIVE fps ≈ 323 (≈2×). Frame-gen ruled out (FSR
-> upscaling only, no AFMF).
+> **STATUS: ROOT CAUSE FOUND VIA TESTER EXPORT + FIXED (2026-06-10).** The Export showed the session
+> recorded against **`msedgewebview2.exe`** — Compy's OWN WebView2 renderer. The denylist comment
+> said "and Compy's own webview windows" but only listed `compy.exe`; Tauri's webviews are
+> `msedgewebview2.exe` children, so the continuously-compositing UI out-presented the game and won
+> the dominant-presenter pick: **Compy measured itself.** Fix: `msedgewebview2.exe` added to the
+> denylist + the pick extracted into pure `select_game_presenter` with guard tests (Compy's own
+> processes can never win; all-denied → honest None, never a false game). The per-(pid,swapchain)
+> theory below was the right mechanism family but the wrong pid — kept as reference; the
+> swapchain-keying idea remains a possible future hardening for true in-GAME multi-swapchain cases,
+> NOT needed for this bug. Original read-only diagnosis preserved below.
 
 ## Finding 1 — there is no separate live counter to over-read
 
