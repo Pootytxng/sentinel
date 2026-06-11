@@ -818,6 +818,52 @@ mod eee_resolution_tests {
         assert!(!eee_value_is_disabled(&prop("EEE", "Enabled", &["Enabled", "Disabled"])));
     }
 
+    // PIN — Intel I226-V (tester's NIC, Export 2026-06-10). Intel's igc driver exposes the switch
+    // as DisplayName "Energy-Efficient Ethernet" / keyword *EEE with an On/OFF vocabulary. The old
+    // pipeline wrote the literal 'Disabled' (rejected) and detection did contains("disab") — which
+    // can NEVER read "Off" as disabled, producing the tester's "applied · no longer active (changed
+    // outside Compy)" false drift. The new pipeline must apply with the driver's own token AND keep
+    // reading it as active.
+    #[test]
+    fn i226v_on_off_vocabulary_applies_and_stays_active() {
+        let i226v_before = prop("Energy-Efficient Ethernet", "On", &["On", "Off"]);
+        // Resolves as flippable, with the driver's own token — never the literal 'Disabled'.
+        match resolve_eee_from(vec![i226v_before.clone()]) {
+            EeeResolution::Ready(props) => assert_eq!(props.len(), 1),
+            other => panic!("I226-V must resolve Ready, got {other:?}"),
+        }
+        assert_eq!(eee_disable_value_for(&i226v_before), Some("Off".into()));
+        // After the write, the read-back is "Off" — the comparator reads it as DISABLED (active
+        // rec), where the old contains("disab") read it as drifted.
+        let i226v_after = prop("Energy-Efficient Ethernet", "Off", &["On", "Off"]);
+        assert!(eee_value_is_disabled(&i226v_after));
+        assert!(!"Off".to_lowercase().contains("disab"), "the old detection could never pass this");
+    }
+
+    // PIN — the AMD dev rig's real Realtek inventory (live probe 2026-06-10): three flippable
+    // switches (Disabled/Enabled vocab) resolve; the "EEE Max Support Speed" enum — a speed list,
+    // not a switch — has no disable token and is excluded rather than guessed at.
+    #[test]
+    fn realtek_inventory_resolves_switches_and_excludes_the_speed_enum() {
+        let r = resolve_eee_from(vec![
+            prop("Energy-Efficient Ethernet", "Enabled", &["Disabled", "Enabled"]),
+            prop("Advanced EEE", "Enabled", &["Disabled", "Enabled"]),
+            prop("Green Ethernet", "Enabled", &["Disabled", "Enabled"]),
+            prop(
+                "EEE Max Support Speed",
+                "1.0 Gbps Full Duplex",
+                &["10 Mbps Full Duplex", "1.0 Gbps Full Duplex"],
+            ),
+        ]);
+        match r {
+            EeeResolution::Ready(props) => {
+                assert_eq!(props.len(), 3, "the speed enum must be excluded");
+                assert!(props.iter().all(|p| eee_disable_value_for(p) == Some("Disabled".into())));
+            }
+            other => panic!("expected Ready, got {other:?}"),
+        }
+    }
+
     #[test]
     fn apply_script_writes_picked_values_and_exits_deterministically() {
         let targets = vec![
