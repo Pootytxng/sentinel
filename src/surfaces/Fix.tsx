@@ -509,8 +509,7 @@ export default function Fix({
             <h3 className="fix-applyall-h">Apply these {safeBatch.length} changes to your rig?</h3>
             <p className="fix-applyall-note">
               Each is reversible — Compy snapshots the prior state and writes a separate undo for every
-              one. These tidy up how your rig is set up for you — not a performance boost, and every
-              one is reversible.
+              one. These tidy up how your rig is set up for you — not a performance boost.
             </p>
             <ul className="fix-applyall-list">
               {safeBatch.map((r) => (
