@@ -32,7 +32,8 @@ vi.mock("@tauri-apps/api/core", () => ({
   }),
 }));
 
-import Check from "./Check";
+import Check, { LEFTOVER_LEARN_ID } from "./Check";
+import { KNOWLEDGE_BY_ID } from "../data/knowledge";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { fireEvent } from "@testing-library/react";
 import type { SessionSummary } from "../types";
@@ -218,5 +219,26 @@ describe("Check", () => {
       screen.getByText(/Couldn't check Boot timer flags \(bcdedit\) — needs admin to check\./),
     ).toBeInTheDocument();
     expect(screen.queryByText(/matches stock where it matters/)).not.toBeInTheDocument();
+  });
+
+  it("every leftovers detector resolves to a real Learn entry — no dead What's-this links", () => {
+    // Mirrors the backend DETECTORS list (leftovers.rs) — extend BOTH when adding a detector.
+    const detectorIds = [
+      "pagefile-fixed",
+      "memory-compression-off",
+      "bcdedit-timer-flags",
+      "mmcss-tampering",
+      "core-parking-forced",
+      "defender-policy-off",
+      "mpo-disabled",
+      "tcp-autotuning-off",
+      "win32-priority-separation",
+    ];
+    for (const id of detectorIds) {
+      const learnId = LEFTOVER_LEARN_ID[id] ?? id;
+      expect(KNOWLEDGE_BY_ID.has(learnId), `${id} → ${learnId} must resolve in the Library`).toBe(true);
+    }
+    // The section/empty-state explainer is a real entry too.
+    expect(KNOWLEDGE_BY_ID.has("leftovers")).toBe(true);
   });
 });

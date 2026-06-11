@@ -370,5 +370,13 @@
     "what": "Hand-assigning a game to a hand-picked set of CPU cores in Task Manager or a tool like Process Lasso, on the theory you're keeping it off the 'busy' ones.",
     "why": "The Windows scheduler already places game threads better than a fixed list can, and it adapts as load shifts — a manual pin can't. At best it does nothing; at worst it starves the game of cores or, on a multi-die AMD chip, forces threads across the slow cross-die boundary you were trying to avoid. The thing that genuinely helps those chips is a one-complex setting, and Compy surfaces that as a measured, reversible suggestion — not a blanket affinity hack.",
     "related": ["interrupt-affinity", "core-unparking"]
+  },
+  {
+    "id": "memory-compression-off",
+    "name": "Disable memory compression",
+    "aliases": ["disable-mmagent", "memory compression", "mmagent", "compressed memory"],
+    "verdict": "placebo",
+    "what": "Turns off Windows' in-RAM compression of idle memory pages (Disable-MMAgent -mc).",
+    "why": "Sold as cutting CPU overhead, but the overhead is tiny and the cost is real: under memory pressure cold pages go to disk instead of staying compressed in RAM — slower exactly when you're squeezed (game + browser + voice chat). Stock (on) is the right call on almost every rig; Compy's Leftovers check flags this when an old guide left it off."
   }
 ]

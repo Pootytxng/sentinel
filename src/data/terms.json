@@ -438,5 +438,13 @@
     "what": "Old games shipped with secret button sequences — the Konami code (up up down down left right left right B A), DOOM's IDDQD — that flipped on god mode or skipped levels. Developers left them in on purpose: a wink to anyone paying attention.",
     "more": "There is no equivalent for frame rate. No registry string, no console command, no \"secret tweak\" makes a GPU draw frames the silicon can't draw — anyone selling you an \"FPS cheat code\" is selling exactly the kind of myth this library exists to call out. Real frames come from real hardware, honest settings, and measuring whether a change actually did anything. Compy has no cheats. Well. Almost.",
     "related": ["one-percent-lows", "noise-floor"]
+  },
+  {
+    "id": "leftovers",
+    "name": "Leftovers (pre-existing tweaks)",
+    "aliases": ["leftover tweaks", "optimizer rot", "old tweaks", "past tweaks"],
+    "what": "Tweaks an old guide changed on your PC before Compy existed — found by checking a short, curated list of known patterns against your current settings, on demand and read-only.",
+    "more": "Compy only flags exact, documented patterns — never a heuristic scan, never \"registry junk\". Every finding shows its receipt: the value found, the Windows default, and what it actually costs, in plain English for your hardware. \"Nothing found\" is a first-class result, and a setting Compy can't read is named as unchecked rather than counted clean. If you set something on purpose, it's yours to keep — Compy can't tell who set it, and says so.",
+    "related": ["pagefile-disable", "memory-compression-off", "useplatformclock", "tcp-mega-packs"]
   }
 ]

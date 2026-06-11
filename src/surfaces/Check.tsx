@@ -31,8 +31,17 @@ type UnavailableProbe = { id: string; title: string; reason: string };
 type LeftoversReport = { findings: Leftover[]; checked: number; unavailable: UnavailableProbe[] };
 
 // Finding id → the Learn entry that explains its family (WhatsThis renders only where one exists).
-const LEFTOVER_LEARN_ID: Record<string, string> = {
+// Exported so the law-guard test can verify every detector resolves to a REAL entry (no dead links).
+// memory-compression-off resolves by its own id (entry added 2026-06-11).
+export const LEFTOVER_LEARN_ID: Record<string, string> = {
   "pagefile-fixed": "pagefile-disable",
+  "bcdedit-timer-flags": "useplatformclock",
+  "mmcss-tampering": "mmcss-systemresponsiveness",
+  "core-parking-forced": "core-unparking",
+  "defender-policy-off": "disable-defender",
+  "mpo-disabled": "mpo-disable",
+  "tcp-autotuning-off": "tcp-mega-packs",
+  "win32-priority-separation": "win32priorityseparation",
 };
 
 // Stable vendor support roots for the COPYABLE url (spec 2026-06-10-driver-freshness-check).
@@ -330,7 +339,9 @@ export default function Check({
           and a hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes
           are reported as unchecked, never counted clean. No restore action exists in v1. */}
       <div className="check-leftovers">
-        <div className="check-section-label check-section-label-muted">Leftovers</div>
+        <div className="check-section-label check-section-label-muted">
+          Leftovers <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
+        </div>
         <p className="check-leftovers-blurb">
           Tweaks an old guide may have left on this PC before Compy existed. Read-only — checking
           changes nothing.
