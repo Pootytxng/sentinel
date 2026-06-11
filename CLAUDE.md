@@ -175,9 +175,17 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   active; dev-rig Realtek inventory pinned; speed-enum excluded) · Export share honesty
 >   (`4fe46cb` — "Copy full report" + "Copy summary card" replace the misleading "Copy for
 >   Discord"). cargo **258** · npm **234** · clippy+tsc clean.
-> - **⚠️ KIT CURRENCY: `E8D5588B…` predates ALL of these tester-found fixes** (EEE, overlay
->   frametime, FPS self-measurement, export share) — sending it ships every bug this wave fixed,
->   incl. self-corrupting session data. Re-cut before any send (owner-timed; not auto-refreshed).
+> - **✅ KIT RE-CUT (owner-directed, 2026-06-10 18:17) from `fc940fe`** — carries the FULL
+>   tester-feedback wave (EEE attribution + I226-V pin · overlay frametime fixed-scale · FPS
+>   self-measurement + (pid,swapchain) keying `c3c8300` · export-share UX). NOTE: owner's order
+>   named `d883c4f`; cut from HEAD `fc940fe` instead so the owner-GO'd swapchain completion rides
+>   (delta = c3c8300 + docs only — flagged in the report). **NSIS `Compy_0.1.0_x64-setup.exe`
+>   SHA-256 `5F2549E7EDD6BC94440D3C24ECCC0CB784005DAC520DE2490BB81F3260021F18`** (2,774,150 B) +
+>   MSI (4,145,152 B) — SUPERSEDES `E8D5588B…` everywhere incl. the kit. Triple-hash-verified
+>   (bundle = loose = in-zip); suites green on the exact HEAD (cargo **260** · npm **234**);
+>   QA-evidence claim verified in code (elevation change = message attribution only; EEE keeps
+>   reads→one-PS exit-free; FPS read-only). Frozen refs re-verified. **THIS is the send-ready kit;
+>   the send stays the owner's.** Owner live game re-test still the FPS field confirmation.
 
 > **🧪 AUTONOMOUS IMPROVEMENT SPRINT — 2026-06-10 (`main` @ `d51f6f0`+).** Owner-mandated broad
 > reversible sprint; full running log + ranked owner-deferred list in
