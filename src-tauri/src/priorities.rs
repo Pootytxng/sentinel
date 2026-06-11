@@ -326,6 +326,18 @@ mod priority_tests {
     }
 
     #[test]
+    fn null_and_garbage_signals_yield_empty_buckets_never_a_panic() {
+        // Edge (R2-4): the pure builder over completely absent inputs must not panic and must
+        // not FABRICATE a limiter — empty signals are an empty (honest) ranking.
+        let p = build_priorities(&Value::Null, &Value::Null, &Value::Null, &Value::Null);
+        assert!(p.limiters.is_empty(), "no signals → no invented limiters");
+        assert!(p.session_hint.is_none());
+        // Wrong-shaped inputs (arrays/strings/numbers where objects belong) degrade identically.
+        let p = build_priorities(&json!([1, 2, 3]), &json!("nope"), &json!(42), &json!({}));
+        assert!(p.limiters.is_empty());
+    }
+
+    #[test]
     fn ranking_with_no_sessions_has_no_hint() {
         let p = build_priorities(&readiness(vec![chk("monitor-refresh", "attention")]), &json!([]), &json!([]), &json!([]));
         assert!(p.session_hint.is_none());

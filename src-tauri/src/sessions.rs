@@ -253,6 +253,31 @@ mod session_tests {
     }
 
     #[test]
+    fn zero_sample_accumulator_never_fabricates_averages() {
+        // Edge (R2-4): a session that recorded sensors but no FPS frames must not invent
+        // numbers — averages stay zero, the game name stays honestly empty, no NaN/panic.
+        let mut acc = SessionAccumulator::new("t".into(), 0);
+        acc.record_sensors(Some(60), Some(95), Some(8_000_000_000), Some(32_000_000_000));
+        assert!(!acc.has_data(), "sensors alone are not a game session");
+        let s = acc.finalize(120);
+        assert_eq!(s.samples, 0);
+        assert_eq!(s.avg_fps, 0.0, "no frames → no fabricated average");
+        assert!(s.avg_fps.is_finite() && s.low1_fps_est.is_finite(), "never NaN");
+        assert!(s.process_name.is_empty(), "no presenting game was ever seen");
+        assert_eq!(s.peak_gpu_temp_c, Some(60), "peaks are still honest observations");
+    }
+
+    #[test]
+    fn single_sample_session_is_exact() {
+        let mut acc = SessionAccumulator::new("t".into(), 0);
+        acc.record_fps("game.exe", 144.0, 6.9, 120.0);
+        let s = acc.finalize(MIN_SESSION_SECS);
+        assert_eq!(s.samples, 1);
+        assert_eq!(s.avg_fps, 144.0);
+        assert_eq!(s.low1_fps_est, 120.0);
+    }
+
+    #[test]
     fn trivially_short_sessions_are_dropped() {
         assert!(!meets_min_duration(0));
         assert!(!meets_min_duration(MIN_SESSION_SECS - 1));

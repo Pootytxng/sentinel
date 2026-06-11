@@ -631,6 +631,25 @@ mod export_tests {
     }
 
     #[test]
+    fn unicode_titles_and_feedback_round_trip_unmangled() {
+        // Edge (R2-4): real tester data is multi-byte (accents, CJK, emoji) — the report and the
+        // BOM-prefixed file form must carry it unmangled, alongside the feedback section.
+        let recs = json!([{ "id": "x", "title": "Émoji ✨ tweak — テスト", "category": "c",
+                            "severity": "safe", "currently_applied": false, "provenance": "verified" }]);
+        let md = build_markdown_report(
+            &Value::Null, &recs, &json!([]), &json!({}), &json!([]), &json!([]),
+            "embedded", "t", Some("multi-byte answer: déjà vu ✓"),
+        );
+        assert!(md.contains("Émoji ✨ tweak — テスト"));
+        assert!(md.contains("déjà vu ✓"));
+        let bom = markdown_with_bom(&md);
+        assert!(
+            bom.trim_start_matches('\u{FEFF}').contains("## Tester feedback"),
+            "BOM and the feedback section coexist"
+        );
+    }
+
+    #[test]
     fn tester_feedback_section_appears_when_provided() {
         let md = build_markdown_report(
             &Value::Null, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]),
