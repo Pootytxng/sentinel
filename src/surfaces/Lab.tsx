@@ -84,8 +84,37 @@ export default function Lab({
       <div className="lab-inner">
         <header className="lab-head">
           <h2 className="lab-title">Lab</h2>
-          <p className="lab-sub">The measured instruments — prove it, don't vibe it.</p>
+          <p className="lab-sub">
+            Your rig's instrument panel. Everything here only measures — nothing in Lab changes
+            your PC. Start with Benchmark.
+          </p>
         </header>
+
+        {/* Welcome band — a static signpost for newcomers (bathroom law): what each instrument
+            answers, in plain words. Deliberately KNOBLESS (doorknob law): no cmp-door, no click
+            handler — the four cards below stay the only doors in the room. */}
+        <div className="lab-welcome">
+          <span className="lab-welcome-row">
+            <span className="lab-welcome-term">Benchmark</span>
+            <span className="lab-welcome-gloss">did a change actually move anything?</span>
+          </span>
+          <span className="lab-welcome-row">
+            <span className="lab-welcome-term">Latency</span>
+            <span className="lab-welcome-gloss">what's slowing the trip from mouse to screen?</span>
+          </span>
+          {tuningGuide && (
+            <span className="lab-welcome-row">
+              <span className="lab-welcome-term">Tuning</span>
+              <span className="lab-welcome-gloss">did your AMD undervolt hold up?</span>
+            </span>
+          )}
+          {diagnostics && (
+            <span className="lab-welcome-row">
+              <span className="lab-welcome-term">Diagnostics</span>
+              <span className="lab-welcome-gloss">the raw facts Compy read about this rig.</span>
+            </span>
+          )}
+        </div>
 
         <LabSection
           icon="chart"
