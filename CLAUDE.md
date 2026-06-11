@@ -165,7 +165,12 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   `select_game_presenter` with guard tests (Compy's own processes can NEVER win; all-denied →
 >   honest None). Sessions/comparisons/tuning attribute correctly now; affected testers' old
 >   webview-attributed sessions remain in their local history (honest record). Diagnosis doc:
->   `2026-06-10-fps-double-read-DIAGNOSIS.md` (RESOLVED). Live game-session re-verify recommended.
+>   `2026-06-10-fps-double-read-DIAGNOSIS.md` (RESOLVED). **COMPLETED by `c3c8300` (owner GO):**
+>   trackers keyed per **(pid, swapchain)** (payload `pIDXGISwapChain`, fail-open to pid-keying on
+>   parse failure) + two-stage pure selection (dominant allowed process → its dominant chain) with
+>   deterministic tie-breaks; the 323/161 signature is a synthetic regression test (pid-keying reads
+>   ~322/161, per-chain reads true ~161 with fps≈low1). cargo **260** · clippy clean · FpsReport
+>   shape unchanged. Owner live game re-test = field confirmation (should read ~Steam).
 > - **Also landed same day:** EEE I226-V pin (`059d0d7` — Intel On/Off vocabulary applies + stays
 >   active; dev-rig Realtek inventory pinned; speed-enum excluded) · Export share honesty
 >   (`4fe46cb` — "Copy full report" + "Copy summary card" replace the misleading "Copy for

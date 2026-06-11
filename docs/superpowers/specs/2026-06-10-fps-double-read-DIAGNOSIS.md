@@ -7,9 +7,11 @@
 > the dominant-presenter pick: **Compy measured itself.** Fix: `msedgewebview2.exe` added to the
 > denylist + the pick extracted into pure `select_game_presenter` with guard tests (Compy's own
 > processes can never win; all-denied → honest None, never a false game). The per-(pid,swapchain)
-> theory below was the right mechanism family but the wrong pid — kept as reference; the
-> swapchain-keying idea remains a possible future hardening for true in-GAME multi-swapchain cases,
-> NOT needed for this bug. Original read-only diagnosis preserved below.
+> theory below was the right mechanism family but the wrong pid — and was subsequently BUILT as
+> the completing hardening (`c3c8300`, owner GO): trackers keyed per (pid, swapchain) via the
+> `pIDXGISwapChain` payload (fail-open to pid-keying on parse failure), two-stage dominant pick
+> (process → its dominant chain), and the 323/161 signature pinned as a synthetic regression test.
+> Original read-only diagnosis preserved below.
 
 ## Finding 1 — there is no separate live counter to over-read
 
