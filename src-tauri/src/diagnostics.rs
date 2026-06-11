@@ -268,3 +268,90 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
 // Remote rules can only select among these variants. Unknown variants reject
 // at parse time. Privileged behavior never decodes free-form strings.
 
+// ─── Diagnostics tests (audit M2) ─────────────────────────────────────────
+//
+// get_diagnostics assembles LIVE probes, so these pin the machine-independent
+// invariants Export + the Diagnostics surface depend on: the fixed section
+// set, rows that always exist, receipts that are never empty strings, and the
+// serde shape (note skipped when None). Values themselves are rig-specific —
+// asserting them would just re-test the probes.
+#[cfg(test)]
+mod diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn yes_no_renders_plain_english() {
+        assert_eq!(yes_no(true), "Yes");
+        assert_eq!(yes_no(false), "No");
+    }
+
+    #[test]
+    fn sections_are_the_fixed_set_in_order() {
+        let names: Vec<String> = get_diagnostics().into_iter().map(|s| s.name).collect();
+        assert_eq!(
+            names,
+            vec!["Power & boot", "Security", "Display", "Storage", "Network", "Background services"],
+            "the section set/order is a UI + Export contract"
+        );
+    }
+
+    #[test]
+    fn every_entry_carries_a_nonempty_label_and_value() {
+        // The graceful-degradation contract: a probe that can't read still yields an honest
+        // string ("Unknown…", "Not detected", "Not configured") — never an empty receipt.
+        for section in get_diagnostics() {
+            assert!(!section.entries.is_empty(), "section '{}' must not be empty", section.name);
+            for e in &section.entries {
+                assert!(!e.label.trim().is_empty(), "empty label in '{}'", section.name);
+                assert!(!e.value.trim().is_empty(), "empty value for '{}'", e.label);
+                if let Some(n) = &e.note {
+                    assert!(!n.trim().is_empty(), "a present note must not be blank: '{}'", e.label);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fixed_rows_always_exist_regardless_of_rig() {
+        let sections = get_diagnostics();
+        let labels_of = |name: &str| -> Vec<String> {
+            sections
+                .iter()
+                .find(|s| s.name == name)
+                .map(|s| s.entries.iter().map(|e| e.label.clone()).collect())
+                .unwrap_or_default()
+        };
+        let power = labels_of("Power & boot");
+        assert!(power.iter().any(|l| l == "Active power plan"));
+        assert!(power.iter().any(|l| l == "Fast Startup"));
+        assert!(power.iter().any(|l| l.contains("HAGS")));
+        assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
+        // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").
+        assert!(labels_of("Network").iter().any(|l| l == "Wired Ethernet"));
+        let services = labels_of("Background services");
+        for svc in ["DiagTrack", "SysMain", "WSearch"] {
+            assert!(services.iter().any(|l| l.contains(svc)), "missing service row {svc}");
+        }
+    }
+
+    #[test]
+    fn serde_shape_skips_absent_notes() {
+        // Export + the TS surface read this shape; `note` must be ABSENT (not null) when None.
+        let v = serde_json::to_value(get_diagnostics()).expect("serializes");
+        let sections = v.as_array().expect("array of sections");
+        assert!(!sections.is_empty());
+        let mut saw_noteless = false;
+        for s in sections {
+            for e in s.get("entries").and_then(|x| x.as_array()).unwrap_or(&vec![]) {
+                assert!(e.get("label").is_some() && e.get("value").is_some());
+                if e.get("note").is_none() {
+                    saw_noteless = true;
+                } else {
+                    assert!(!e["note"].is_null(), "a serialized note must be a string, never null");
+                }
+            }
+        }
+        assert!(saw_noteless, "at least one entry exercises the skip_serializing_if path");
+    }
+}
+
