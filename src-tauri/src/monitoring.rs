@@ -1056,6 +1056,16 @@ pub(crate) fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
     // (e.g. an old GPU-selection that picked the wrong adapter). Harmless in
     // release — it just reloads the same bundled page.
     let _ = w.eval("window.location.reload()");
+    // Stranded-overlay fix: after a primary-display reshuffle (e.g. a FreeSync OSD toggle swaps
+    // display indices) the overlay can sit on a monitor that no longer hosts the game and never
+    // come home. If it isn't on the primary, pull it there now ("top-left" = the frontend's
+    // default corner; the frontend re-applies the persisted corner right after show, which now
+    // also anchors to primary). Best-effort — a positioning failure must never block show.
+    if let (Ok(Some(primary)), Ok(Some(current))) = (w.primary_monitor(), w.current_monitor()) {
+        if primary.position() != current.position() {
+            let _ = position_overlay(&w, "top-left");
+        }
+    }
     Ok(())
 }
 
@@ -1076,35 +1086,110 @@ pub(crate) fn overlay_visible(app: tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// Pure corner math (physical pixels, DPI-scaled margin): the overlay's top-left for a given
+/// corner of a monitor rect. Extracted so both anchor paths (set_overlay_corner, show_overlay)
+/// share ONE computation and it stays unit-testable against arbitrary monitor origins
+/// (multi-monitor offsets, negative coordinates). Math byte-identical to the pre-fix inline form.
+fn corner_position(
+    corner: &str,
+    mpos: (i32, i32),
+    msize: (u32, u32),
+    wsize: (u32, u32),
+    scale: f64,
+) -> Result<(i32, i32), String> {
+    let margin = (24.0 * scale).round() as i32;
+    let left = mpos.0 + margin;
+    let top = mpos.1 + margin;
+    let right = mpos.0 + (msize.0 as i32 - wsize.0 as i32 - margin).max(margin);
+    let bottom = mpos.1 + (msize.1 as i32 - wsize.1 as i32 - margin).max(margin);
+    match corner {
+        "top-left" => Ok((left, top)),
+        "top-right" => Ok((right, top)),
+        "bottom-left" => Ok((left, bottom)),
+        "bottom-right" => Ok((right, bottom)),
+        other => Err(format!("unknown corner: {other}")),
+    }
+}
+
+/// Anchor the overlay to `corner` of the PRIMARY monitor — where the game runs. Falls back to
+/// the overlay's current monitor only when no primary is reported. Anchoring to primary (not
+/// `current_monitor`) is the stranded-overlay fix: after a primary-display reshuffle "current"
+/// is the stale screen, so corner math computed there could never bring the overlay home.
+fn position_overlay(w: &tauri::WebviewWindow, corner: &str) -> Result<(), String> {
+    let monitor = match w.primary_monitor() {
+        Ok(Some(m)) => m,
+        _ => w
+            .current_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "no monitor for the overlay".to_string())?,
+    };
+    let wsize = w.outer_size().map_err(|e| e.to_string())?;
+    let (x, y) = corner_position(
+        corner,
+        (monitor.position().x, monitor.position().y),
+        (monitor.size().width, monitor.size().height),
+        (wsize.width, wsize.height),
+        monitor.scale_factor(),
+    )?;
+    w.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+}
+
 /// Reposition the overlay to a screen corner: "top-left" | "top-right" | "bottom-left" |
-/// "bottom-right". Computed in physical pixels off the overlay's current monitor (DPI-safe), with
-/// a margin. The frontend persists the choice and re-applies it on show.
+/// "bottom-right". Computed in physical pixels off the PRIMARY monitor (DPI-safe), with a
+/// margin. The frontend persists the choice and re-applies it on show.
 #[tauri::command]
 pub(crate) fn set_overlay_corner(app: tauri::AppHandle, corner: String) -> Result<(), String> {
     use tauri::Manager;
     let w = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window not found".to_string())?;
-    let monitor = w
-        .current_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no monitor for the overlay".to_string())?;
-    let msize = monitor.size();
-    let mpos = monitor.position();
-    let wsize = w.outer_size().map_err(|e| e.to_string())?;
-    let margin = (24.0 * monitor.scale_factor()).round() as i32;
-    let left = mpos.x + margin;
-    let top = mpos.y + margin;
-    let right = mpos.x + (msize.width as i32 - wsize.width as i32 - margin).max(margin);
-    let bottom = mpos.y + (msize.height as i32 - wsize.height as i32 - margin).max(margin);
-    let (x, y) = match corner.as_str() {
-        "top-left" => (left, top),
-        "top-right" => (right, top),
-        "bottom-left" => (left, bottom),
-        "bottom-right" => (right, bottom),
-        other => return Err(format!("unknown corner: {other}")),
-    };
-    w.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+    position_overlay(&w, &corner)
+}
+
+#[cfg(test)]
+mod overlay_corner_tests {
+    use super::corner_position;
+
+    // 2560x1440 monitor at a given origin, 300x120 overlay, scale 1.0 → margin 24.
+    const MSIZE: (u32, u32) = (2560, 1440);
+    const WSIZE: (u32, u32) = (300, 120);
+
+    #[test]
+    fn corners_compute_from_the_given_monitor_origin() {
+        // Primary at (0,0).
+        assert_eq!(corner_position("top-left", (0, 0), MSIZE, WSIZE, 1.0), Ok((24, 24)));
+        assert_eq!(
+            corner_position("bottom-right", (0, 0), MSIZE, WSIZE, 1.0),
+            Ok((2560 - 300 - 24, 1440 - 120 - 24))
+        );
+        // The same corner on a monitor whose origin is offset (a second display to the right) —
+        // the stranded-bug regression shape: the math must follow the GIVEN monitor's origin.
+        assert_eq!(
+            corner_position("top-left", (2560, 0), MSIZE, WSIZE, 1.0),
+            Ok((2560 + 24, 24))
+        );
+        // Negative origin (a display arranged left of primary) stays correct in i32 space.
+        assert_eq!(
+            corner_position("top-right", (-2560, 0), MSIZE, WSIZE, 1.0),
+            Ok((-2560 + 2560 - 300 - 24, 24))
+        );
+    }
+
+    #[test]
+    fn margin_scales_with_dpi_and_small_monitors_clamp() {
+        // 150% scale → margin 36.
+        assert_eq!(corner_position("top-left", (0, 0), MSIZE, WSIZE, 1.5), Ok((36, 36)));
+        // Pathologically small monitor: right/bottom clamp to the margin, never negative drift.
+        assert_eq!(
+            corner_position("bottom-right", (0, 0), (100, 100), WSIZE, 1.0),
+            Ok((24, 24))
+        );
+    }
+
+    #[test]
+    fn unknown_corner_is_an_error() {
+        assert!(corner_position("center", (0, 0), MSIZE, WSIZE, 1.0).is_err());
+    }
 }
 
 #[cfg(test)]
