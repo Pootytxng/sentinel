@@ -682,6 +682,12 @@ pub(crate) fn fps_status_slot() -> &'static Mutex<String> {
     static S: OnceLock<Mutex<String>> = OnceLock::new();
     S.get_or_init(|| Mutex::new("idle".to_string()))
 }
+/// Lock the status slot, recovering from poisoning (audit L1): the slot holds a plain String
+/// that is always valid mid-assignment-or-not, so a panicked writer must never cascade-panic
+/// every later status read/write — recover the inner value and carry on.
+fn lock_status() -> std::sync::MutexGuard<'static, String> {
+    fps_status_slot().lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 pub(crate) fn touch_alive() {
     // The helper checks this file's mtime; the contents don't matter.
     let _ = std::fs::write(fps_alive_path(), b"alive");
@@ -727,7 +733,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     let _ = std::fs::remove_file(fps_out_path());
     touch_alive();
     fps_active().store(true, Ordering::Release);
-    *fps_status_slot().lock().unwrap() = "starting".into();
+    *lock_status() = "starting".into();
 
     let exe = std::env::current_exe().map_err(|e| format!("cannot find own exe: {e}"))?;
 
@@ -766,17 +772,17 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             .spawn()
         {
             Ok(mut child) => {
-                *fps_status_slot().lock().unwrap() = "running".into();
+                *lock_status() = "running".into();
                 // Reflect helper exit (self-exit on heartbeat stale, or crash).
                 std::thread::spawn(move || {
                     let _ = child.wait();
                     fps_active().store(false, Ordering::Release);
-                    *fps_status_slot().lock().unwrap() = "stopped".into();
+                    *lock_status() = "stopped".into();
                 });
             }
             Err(e) => {
                 fps_active().store(false, Ordering::Release);
-                *fps_status_slot().lock().unwrap() = format!("failed to launch helper: {e}");
+                *lock_status() = format!("failed to launch helper: {e}");
             }
         }
     } else {
@@ -806,7 +812,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 Ok(s) if s.success() => "stopped",
                 _ => "declined",
             };
-            *fps_status_slot().lock().unwrap() = msg.into();
+            *lock_status() = msg.into();
         });
     }
 
@@ -971,7 +977,7 @@ pub(crate) fn uac_disabled() -> bool {
 pub(crate) fn stop_fps_capture() {
     use std::sync::atomic::Ordering;
     fps_active().store(false, Ordering::Release);
-    *fps_status_slot().lock().unwrap() = "idle".into();
+    *lock_status() = "idle".into();
     let _ = std::fs::remove_file(fps_alive_path());
     let _ = std::fs::remove_file(fps_out_path());
     crate::tray::set_idle();
@@ -1001,7 +1007,7 @@ pub(crate) fn latest_frametimes() -> Option<(String, Vec<f64>)> {
 pub(crate) fn get_fps_status() -> FpsStatus {
     use std::sync::atomic::Ordering;
     let active = fps_active().load(Ordering::Acquire);
-    let status = fps_status_slot().lock().unwrap().clone();
+    let status = lock_status().clone();
     // Only surface a sample if it's fresh (< 3 s old) — otherwise the helper
     // has stalled or the game stopped presenting.
     let sample = (|| {
