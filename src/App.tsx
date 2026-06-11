@@ -633,12 +633,16 @@ function ReportModal({
   onClose: () => void;
   onOpenFolder: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const copyDiscord = async () => {
+  // Two distinct copies (tester friction, 2026-06-10): the compact SUMMARY card vs the FULL
+  // Markdown report — the old single "Copy for Discord" copied the summary while testers believed
+  // they were sharing the full diagnostics. Each button says exactly what it copies (doorknob law),
+  // with per-button feedback so there's no ambiguity about which landed on the clipboard.
+  const [copied, setCopied] = useState<"summary" | "full" | null>(null);
+  const copy = async (kind: "summary" | "full") => {
     try {
-      await navigator.clipboard.writeText(report.discord);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(kind === "summary" ? report.discord : report.markdown);
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 1500);
     } catch {
       /* clipboard blocked — the block is still visible to select manually */
     }
@@ -664,8 +668,11 @@ function ReportModal({
           <button className="btn" onClick={onOpenFolder}>
             Open folder
           </button>
-          <button className="btn" onClick={copyDiscord}>
-            {copied ? "Copied!" : "Copy for Discord"}
+          <button className="btn" onClick={() => copy("full")}>
+            {copied === "full" ? "Copied!" : "Copy full report"}
+          </button>
+          <button className="btn" onClick={() => copy("summary")}>
+            {copied === "summary" ? "Copied!" : "Copy summary card"}
           </button>
           <button className="btn btn-small" onClick={onClose}>
             Close
