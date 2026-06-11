@@ -223,6 +223,8 @@ export default function Play({
                 className={`play-corner ${corner === c ? "play-corner-on" : ""}`}
                 onClick={() => chooseCorner(c)}
                 title={c.replace("-", " ")}
+                aria-label={`Move the overlay to the ${c.replace("-", " ")} corner`}
+                aria-pressed={corner === c}
               >
                 {glyph}
               </button>

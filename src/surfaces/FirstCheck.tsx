@@ -147,7 +147,11 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
             {/* Green strip — collapsed, expandable */}
             {greenChecks.length > 0 && (
               <div className="fc-green">
-                <button className="fc-green-head" onClick={() => setGreenOpen((o) => !o)}>
+                <button
+                  className="fc-green-head"
+                  onClick={() => setGreenOpen((o) => !o)}
+                  aria-expanded={greenOpen}
+                >
                   <span>{greenChecks.length} checks already perfect — nothing to sell you here</span>
                   <span className="fc-green-caret">{greenOpen ? "▾" : "▸"}</span>
                 </button>

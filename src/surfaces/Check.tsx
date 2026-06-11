@@ -345,7 +345,11 @@ export default function Check({
 
           {alreadyFine.length > 0 && (
             <div className="check-fine">
-              <button className="check-fine-head" onClick={() => setFineOpen((o) => !o)}>
+              <button
+                className="check-fine-head"
+                onClick={() => setFineOpen((o) => !o)}
+                aria-expanded={fineOpen}
+              >
                 <span>{alreadyFine.length} already fine — nothing to sell you here</span>
                 <span>{fineOpen ? "▾" : "▸"}</span>
               </button>
@@ -413,7 +417,7 @@ export default function Check({
           </p>
         )}
         {leftovers && leftovers.findings.length > 0 && (
-          <ul className="check-list">
+          <ul className="check-list" aria-label="Leftover tweaks found on this PC">
             {leftovers.findings.map((f) => (
               <li key={f.id} className="check-row check-row-info check-leftover-row">
                 <div className="check-row-main">

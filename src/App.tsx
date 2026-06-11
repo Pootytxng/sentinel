@@ -2072,6 +2072,8 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
                   className={`btn-small ${overlayCorner === corner ? "btn-small-on" : ""}`}
                   onClick={() => chooseCorner(corner)}
                   title={corner.replace("-", " ")}
+                  aria-label={`Move the overlay to the ${corner.replace("-", " ")} corner`}
+                  aria-pressed={overlayCorner === corner}
                 >
                   {glyph}
                 </button>

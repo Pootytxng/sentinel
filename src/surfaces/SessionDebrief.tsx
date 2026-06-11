@@ -325,7 +325,11 @@ export function SessionDebrief({
       {vendor && sessions && <TuningDebrief s={s} vendor={vendor} sessions={sessions} />}
 
       <div className="debrief-ctx">
-        <button className="debrief-ctx-head" onClick={() => setCtxOpen((o) => !o)}>
+        <button
+          className="debrief-ctx-head"
+          onClick={() => setCtxOpen((o) => !o)}
+          aria-expanded={ctxOpen}
+        >
           <span>During this session: {s.compy_changes_active} Compy changes active</span>
           <span>{ctxOpen ? "▾" : "▸"}</span>
         </button>
