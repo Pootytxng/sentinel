@@ -1,273 +1,133 @@
-<!DOCTYPE html>
+<!doctype html>
+<!-- GENERATED LANDING TEMPLATE (R3 Lane A2) — `node site/generate.mjs` fills the slots below and
+     writes site/index.html. Hero copy is a DRAFT in the doctrine §5 voice: the OWNER taste-gates
+     it before any publish (site stays dark until then). Swap points all live in src/data/site.ts
+     (SITE_URL / WAITLIST_EMBED / KOFI_URL) — one file, then regenerate. -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Compy — faster where it's real, zero snake oil</title>
-<meta name="description" content="A rollback-first PC optimization dashboard that reads your actual hardware, grades the internet's 'FPS hacks', and never makes a change it can't undo. Fully local, anti-cheat safe.">
-<meta property="og:title" content="Compy — faster where it's real, zero snake oil">
-<meta property="og:description" content="Reads your actual rig. Grades the snake oil. Every change reversible. Fully local.">
-<meta property="og:type" content="website">
-<!-- [KUYA: add og:image when a banner render exists, e.g. <meta property="og:image" content="https://compy.gg/og.png">] -->
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect x="32" y="32" width="960" height="960" rx="240" fill="%230c0e11"/><path d="M672 320 A240 240 0 1 0 672 704" fill="none" stroke="%232ee6c0" stroke-width="136" stroke-linecap="round"/><polyline points="376,512 448,512 512,392 568,632 616,512 680,512" fill="none" stroke="%23b9ffe8" stroke-width="108" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
-<style>
-:root{
-  --bg:#0b0c10; --surface:rgba(255,255,255,.04); --line:rgba(255,255,255,.09);
-  --t1:#f2f3f7; --t2:#b8bcc8; --t3:#828896;
-  --teal:#2ee6c0; --ink:#06231c; --blue:#7c9cff;
-  --amber:#f0b35c; --mute:#9aa1b0;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--t1);font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-.mono{font-family:ui-monospace,Consolas,"Cascadia Mono",monospace}
-.wrap{max-width:1020px;margin:0 auto;padding:0 22px}
-a{color:var(--teal);text-decoration:none}
-a:hover{text-decoration:underline}
-
-header{position:sticky;top:0;z-index:10;background:rgba(11,12,16,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.nav{display:flex;align-items:center;gap:12px;padding:14px 0}
-.mark{display:flex;align-items:center;gap:0;font-weight:600;font-size:19px;letter-spacing:-.01em;color:var(--t1)}
-.mark svg{display:block;flex:none}
-.chip{font-size:12px;border:1px solid rgba(46,230,192,.45);color:var(--teal);border-radius:999px;padding:3px 11px;margin-left:auto;white-space:nowrap}
-
-.hero{position:relative;overflow:hidden;padding:84px 0 64px}
-.blob{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;animation:drift 22s ease-in-out infinite}
-@keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(34px,-20px)}}
-.hero h1{font-size:clamp(34px,6vw,56px);line-height:1.08;letter-spacing:-.015em;margin:0 0 18px;
-  background:linear-gradient(92deg,#f2f3f7,#bfeee2 45%,#cfe0ff 75%,#f2f3f7);background-size:220% 100%;
-  -webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 10s ease infinite}
-@keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-.hero p.lead{font-size:19px;color:var(--t2);max-width:620px;margin:0 0 26px}
-.cta{display:inline-block;background:var(--teal);color:var(--ink);font-weight:600;font-size:16px;border-radius:12px;padding:13px 22px;box-shadow:0 0 26px rgba(46,230,192,.28)}
-.cta:hover{text-decoration:none;filter:brightness(1.06)}
-.ghost{display:inline-block;border:1px solid var(--line);color:var(--t2);border-radius:12px;padding:12px 18px;margin-left:10px}
-.ghost:hover{text-decoration:none;border-color:rgba(255,255,255,.2)}
-.trustline{margin-top:18px;font-size:13.5px;color:var(--t3)}
-.trustline b{color:var(--t2);font-weight:500}
-
-.debrief{margin-top:44px;max-width:560px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:16px 18px}
-.debrief .cap{font-size:11.5px;color:var(--t3);letter-spacing:.02em;margin-bottom:8px}
-.debrief .game{font-size:15px;color:var(--t1);margin-bottom:10px}
-.statrow{display:flex;gap:26px;flex-wrap:wrap}
-.statrow .n{font-size:24px;font-weight:600}
-.statrow .l{font-size:11.5px;color:var(--t3);margin-top:2px}
-.verdictline{margin-top:12px;font-size:13.5px;color:#7fd6b4}
-
-section{padding:58px 0;border-top:1px solid rgba(255,255,255,.05)}
-h2{font-size:clamp(24px,3.6vw,32px);letter-spacing:-.01em;margin-bottom:10px}
-.kicker{font-size:13px;color:var(--teal);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
-.sub{color:var(--t2);max-width:640px;margin-bottom:30px}
-
-.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-.card{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:20px 22px}
-.card h3{font-size:17px;margin-bottom:8px}
-.card p{font-size:14.5px;color:var(--t2)}
-
-.vchip{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:3px 10px;margin-bottom:10px}
-.v-real{background:rgba(46,230,192,.14);color:var(--teal)}
-.v-placebo{background:rgba(154,161,176,.16);color:var(--mute)}
-.v-risky{background:rgba(240,179,92,.14);color:var(--amber)}
-.libnote{margin-top:18px;font-size:13.5px;color:var(--t3)}
-
-.never li{list-style:none;display:flex;gap:12px;align-items:baseline;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:15.5px;color:var(--t2)}
-.never li::before{content:"—";color:var(--teal);font-weight:600}
-.never li b{color:var(--t1);font-weight:600}
-
-details{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:10px;padding:0 18px}
-summary{cursor:pointer;font-size:15.5px;font-weight:500;padding:14px 0;color:var(--t1);list-style:none;display:flex;justify-content:space-between;gap:10px}
-summary::after{content:"+";color:var(--t3);font-size:18px}
-details[open] summary::after{content:"–"}
-details p{font-size:14.5px;color:var(--t2);padding:0 0 16px}
-
-.band{position:relative;overflow:hidden;text-align:center;border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:46px 24px;margin:64px 0}
-.band h2{margin-bottom:8px}
-.band p{color:var(--t2);max-width:560px;margin:0 auto 22px}
-
-footer{border-top:1px solid var(--line);padding:30px 0 44px;font-size:13.5px;color:var(--t3)}
-footer .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-footer a{color:var(--t3)}
-footer a:hover{color:var(--t2)}
-
-@media (prefers-reduced-motion: reduce){.blob,.hero h1{animation:none}}
-@media (max-width:640px){.ghost{margin-left:0;margin-top:10px}.statrow{gap:18px}}
-</style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — the PC optimizer that tells you the truth</title>
+<meta name="description" content="Compy reads your actual hardware, grades PC tweaks honestly (real, placebo, or risky), measures what actually changed, and makes every change reversible. Measured, not promised." />
+<link rel="stylesheet" href="library.css" />
 </head>
 <body>
-
-<header>
-  <div class="wrap nav">
-    <span class="mark" aria-label="Compy">
-      <svg width="18" height="21" viewBox="218 218 510 588" aria-hidden="true"><path d="M672 320 A240 240 0 1 0 672 704" fill="none" stroke="#2ee6c0" stroke-width="104" stroke-linecap="round"/><polyline points="360,512 424,512 460,434 514,594 556,470 602,512 648,512" fill="none" stroke="#7ff0d0" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="margin-left:-1px">ompy</span>
-    </span>
-    <span class="chip">Private beta</span>
-  </div>
+<header class="wrap topbar">
+  <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
+  <span class="beta-chip">Private beta · invite only</span>
 </header>
 
-<div class="hero">
-  <div class="blob" style="width:380px;height:300px;top:-120px;right:4%;background:rgba(46,230,192,.07)"></div>
-  <div class="blob" style="width:340px;height:280px;bottom:-140px;left:14%;background:rgba(124,156,255,.06);animation-delay:-11s"></div>
-  <div class="wrap" style="position:relative">
-    <h1>Faster where it's real.<br>Zero snake oil.</h1>
-    <p class="lead">Compy reads your actual hardware, tells you which tweaks are real, which are placebo, and which will wreck your week — then never makes a change it can't undo with one click.</p>
-    <!-- [KUYA: point this at your real invite channel when live] -->
-    <a class="cta" href="#invite">Ask for a beta invite</a>
-    <a class="ghost" href="#how">See how it works</a>
-    <p class="trustline"><b>Fully local</b> · no account · no telemetry · <b>anti-cheat safe</b> — Compy never touches the game</p>
-
-    <div class="debrief">
-      <p class="cap">A real session debrief looks like this</p>
-      <p class="game">Apex Legends · 1h 12m</p>
-      <div class="statrow mono">
-        <div><div class="n">144</div><div class="l">avg fps</div></div>
-        <div><div class="n" style="color:var(--teal)">97</div><div class="l">1% low</div></div>
-        <div><div class="n">62°</div><div class="l">peak gpu</div></div>
-      </div>
-      <p class="verdictline">Smooth — no stutter events. Measured, not vibes.</p>
-    </div>
-  </div>
-</div>
-
-<section id="how">
-  <div class="wrap">
-    <p class="kicker">Why it's different</p>
-    <h2>Built for your rig, not "a PC"</h2>
-    <p class="sub">Every tweak video on the internet was recorded on somebody else's computer. Compy starts from yours.</p>
-    <div class="grid3">
-      <div class="card">
-        <h3>It reads YOUR hardware</h3>
-        <p>Generic guides don't know what's in your case. Compy does — it detects your CPU, GPU, RAM, and drives, and only recommends what makes sense for that exact combination. No folklore, no 2019 hand-me-down tweaks.</p>
-      </div>
-      <div class="card">
-        <h3>Everything has an undo</h3>
-        <p>Before Compy changes anything, it records exactly what it's about to touch and what it was before — in a local Trust Ledger you can read. One click puts it back. If a change can't be undone, Compy refuses to make it. Hard rule, not a promise.</p>
-      </div>
-      <div class="card">
-        <h3>It grades the snake oil</h3>
-        <p>HPET hacks, registry "FPS boosts", magic tweak packs — Compy's Library calls each one what it is: real, placebo, or risky. Sometimes the most honest answer is "don't touch that," and Compy will say it to your face.</p>
+<main>
+  <div class="wrap hero">
+    <div class="reveal">
+      <p class="kicker">Measured, not promised</p>
+      <h1>We won't promise<br />you <span class="strike">more FPS</span>.</h1>
+      <p class="hero-sub">
+        Every optimizer promises speed. Most deliver placebo — some break things.
+        Compy reads <strong>your actual hardware</strong>, grades the internet's favorite tweaks
+        honestly — real, placebo, or risky — and <strong>measures what actually changed on your
+        rig</strong>. When a fix is real, you see the numbers. When it isn't, you see that too.
+        And everything it changes, it can undo: exact prior state, kept in a receipt on your PC.
+      </p>
+      <div class="cta-row">
+        <a class="btn" href="#waitlist">Join the waitlist</a>
+        <a class="link-quiet" href="#library">Read the debunks →</a>
       </div>
     </div>
+    <aside class="reveal reveal-late" aria-label="What a Compy receipt looks like">
+      <div class="receipt">
+        <div class="receipt-head"><span>Trust Ledger</span><span>receipt</span></div>
+        <div class="receipt-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
+        <div class="receipt-row"><span>snapshot</span><span>prior state saved</span></div>
+        <div class="receipt-row"><span class="k">rolled back</span><span>21:50</span></div>
+        <div class="receipt-row"><span>restored</span><span class="receipt-ok">exact prior value ✓</span></div>
+        <div class="receipt-note">Every change Compy makes is recorded with its undo — on your PC, nowhere else.</div>
+      </div>
+    </aside>
   </div>
-</section>
 
-<section>
   <div class="wrap">
-    <p class="kicker">The Library</p>
-    <h2>Every internet "FPS hack", graded</h2>
-    <p class="sub">Straight from Compy's built-in encyclopedia — the same verdicts you get in the app:</p>
-    <div class="grid3">
-      <div class="card">
-        <span class="vchip v-risky">Risky — refused</span>
+    <div class="verdict-key" id="grades">
+      <div class="verdict-cell">
+        <span class="chip chip-real">Real</span>
+        <p>It actually does something. A measurable or well-proven effect on your games — worth doing.</p>
+      </div>
+      <div class="verdict-cell">
+        <span class="chip chip-placebo">Placebo</span>
+        <p>All hype, no effect. Popular online, but it changes nothing you can measure. We skip these so you don't waste time chasing them.</p>
+      </div>
+      <div class="verdict-cell">
+        <span class="chip chip-risky">Risky — refused</span>
+        <p>Not worth the downside. It might do something, but it brings real tradeoffs — instability, a security hole, or things breaking — so Compy refuses it, or lets you decide with eyes open.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="wrap" id="library">
+    <h2>From the Library</h2>
+    <p class="section-sub">
+      Compy ships a library of 126 tweaks, terms, and guides, graded honestly.
+      A few of the internet's favorites:
+    </p>
+    <div class="debunks">
+      <a class="card" href="useplatformclock.html">
+        <span class="chip chip-risky">Risky — refused</span>
         <h3>Force HPET / useplatformclock</h3>
-        <p>On modern Windows this almost always <em>raises</em> latency and causes stutter — the OS already picks the best timer. A classic forum tweak that backfires.</p>
-      </div>
-      <div class="card">
-        <span class="vchip v-placebo">Placebo</span>
-        <h3>Random registry "FPS boosts"</h3>
-        <p>Assorted forum and video registry edits promising free FPS. Almost all placebo or actively harmful — no measurable effect, easy to break settings. Compy refuses the lot.</p>
-      </div>
-      <div class="card">
-        <span class="vchip v-real">Real</span>
-        <h3>XMP / EXPO memory profile</h3>
-        <p>Your RAM runs slower than its rating out of the box. Enabling its profile is the #1 low-risk BIOS win — real gains in CPU-bound games and 1% lows.</p>
-      </div>
+        <p>Forces Windows to use the High Precision Event Timer via a boot flag.</p>
+        <span class="read">Read the honest verdict →</span>
+      </a>
+      <a class="card" href="timer-resolution.html">
+        <span class="chip chip-placebo">Placebo</span>
+        <h3>Forcing 0.5 ms global timer resolution</h3>
+        <p>Forces Windows' interrupt timer to its finest interval system-wide.</p>
+        <span class="read">Read the honest verdict →</span>
+      </a>
+      <a class="card" href="pagefile-disable.html">
+        <span class="chip chip-risky">Risky — refused</span>
+        <h3>Disable / fix the pagefile</h3>
+        <p>Turns off or hard-caps Windows' virtual memory file.</p>
+        <span class="read">Read the honest verdict →</span>
+      </a>
     </div>
-    <p class="libnote">120+ entries and counting — the tweaks, the jargon, and the tricks scammers use to sell you nothing.</p>
-  </div>
-</section>
+    <p class="browse-all"><a class="link-quiet" href="library/index.html">Browse the full library — all 126 entries →</a></p>
+  </section>
 
-<section>
-  <div class="wrap">
-    <p class="kicker">Receipts</p>
-    <h2>Proof, not vibes</h2>
-    <p class="sub">Compy measures real frame times from Windows' own event stream — the same data the pros use — and tells you what actually changed. There's no made-up "optimization score" here. If a tweak did nothing on your rig, Compy says so. That honesty is the whole point.</p>
-    <ul class="never" style="max-width:680px">
-      <li><b>Session debriefs</b> — average FPS, 1% lows, peak temps, stutter events, every time you play.</li>
-      <li><b>Before / after verdicts</b> — arm a comparison, change one thing, get a measured answer.</li>
-      <li><b>An honest noise floor</b> — small differences get called what they are: noise.</li>
-    </ul>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <p class="kicker">Hard rules</p>
-    <h2>What Compy will never do</h2>
-    <ul class="never" style="max-width:680px;margin-top:20px">
-      <li><b>No kernel driver.</b> Ever.</li>
-      <li><b>No game injection.</b> Anti-cheat never sees Compy because there's nothing to see — measurement is external.</li>
-      <li><b>No telemetry.</b> Nothing leaves your PC. There's no server to send it to.</li>
-      <li><b>No change without your explicit OK.</b> Compy recommends; you decide.</li>
-      <li><b>No change it can't undo.</b> The rollback is captured before the change is made.</li>
-    </ul>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <p class="kicker">Questions you should ask</p>
-    <h2>FAQ</h2>
-    <div style="max-width:680px;margin-top:20px">
-      <details>
-        <summary>Is it safe with anti-cheat (Valorant, Faceit, EA AC…)?</summary>
-        <p>Yes. Compy never injects into games and never loads a kernel driver. Performance is measured from outside the game using Windows' own event tracing, and the overlay never draws over exclusive-fullscreen. To anti-cheat, Compy is just another desktop app.</p>
-      </details>
-      <details>
-        <summary>Why does Windows warn me when I install the beta?</summary>
-        <p>Beta builds aren't code-signed yet, so Windows shows its standard "unknown publisher" caution for any new developer. That warning disappears with the signed public release; beta testers get a short walkthrough in the README.</p>
-      </details>
-      <details>
-        <summary>Will it work on my PC?</summary>
-        <p>Windows 10/11. AMD GPUs are fully verified today; NVIDIA support is implemented and being hardware-verified during the beta; Intel Arc is planned. Compy tells you on first run exactly what it can and can't read on your machine — honestly.</p>
-      </details>
-      <details>
-        <summary>What does it cost?</summary>
-        <p>Free during the beta. After that, the beta crew helps decide what's fair — no rented features, no subscription ambush, and the promise that what's local stays local.</p>
-      </details>
-      <details>
-        <summary>When can I get it?</summary>
-        <p>Compy is in a small invite beta right now — real rigs, real games, brutal feedback. Public release comes when it's signed, sealed, and proven.</p>
-      </details>
+  <section class="wrap" id="waitlist">
+    <div class="waitlist">
+      <h2>Get the launch email</h2>
+      <p class="section-sub">
+        Compy is in a private, invite-only beta. Leave an email and you'll get exactly one
+        message when the public beta opens.
+      </p>
+      <!-- WAITLIST PLACEHOLDER SLOT (Zero-Budget Law): no provider chosen, no account exists.
+           To go live: paste the chosen free-tier provider's embed into WAITLIST_EMBED in
+           src/data/site.ts and re-run `node site/generate.mjs`. -->
+      <form class="waitlist-form" data-waitlist>
+        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
+        <button class="btn" type="submit">Notify me</button>
+      </form>
+      <p class="waitlist-pending" data-waitlist-pending>
+        The waitlist isn't wired up yet — this page is a preview. Nothing was sent or stored.
+      </p>
+      <p class="waitlist-note">No spam, no tracking. The app works the same way — it sends nothing off your PC.</p>
     </div>
-  </div>
-</section>
-
-<!-- TESTIMONIALS — uncomment and fill from beta harvest (the "sentence you'd tell a friend" question)
-<section>
-  <div class="wrap">
-    <p class="kicker">From the beta crew</p>
-    <h2>In their words</h2>
-    <div class="grid3">
-      <div class="card"><p>"[BETA SENTENCE 1]"</p><p style="margin-top:8px;color:var(--t3);font-size:13px">— [handle], [rig one-liner]</p></div>
-      <div class="card"><p>"[BETA SENTENCE 2]"</p><p style="margin-top:8px;color:var(--t3);font-size:13px">— [handle], [rig one-liner]</p></div>
-      <div class="card"><p>"[BETA SENTENCE 3]"</p><p style="margin-top:8px;color:var(--t3);font-size:13px">— [handle], [rig one-liner]</p></div>
-    </div>
-  </div>
-</section>
--->
-
-<div class="wrap" id="invite">
-  <div class="band">
-    <div class="blob" style="width:300px;height:240px;top:-100px;left:8%;background:rgba(46,230,192,.06)"></div>
-    <h2>Want in?</h2>
-    <p>Compy is running a small invite beta — if you play on PC, care about your frames, and can give honest feedback, that's the whole application.</p>
-    <!-- [KUYA: replace href with your real channel — Discord invite / email / form] -->
-    <a class="cta" href="#invite">Ask for an invite</a>
-  </div>
-</div>
+  </section>
+</main>
 
 <footer>
-  <div class="wrap row">
-    <span class="mark" aria-label="Compy" style="font-size:15px;color:var(--t2)">
-      <svg width="13" height="15" viewBox="218 218 510 588" aria-hidden="true"><path d="M672 320 A240 240 0 1 0 672 704" fill="none" stroke="#2ee6c0" stroke-width="104" stroke-linecap="round"/><polyline points="360,512 424,512 460,434 514,594 556,470 602,512 648,512" fill="none" stroke="#7ff0d0" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="margin-left:-1px">ompy</span>
-    </span>
-    <span>Fully local. No account, no telemetry, nothing leaves your PC.</span>
-    <span style="margin-left:auto">
-      <!-- [KUYA: wire when docs are public] -->
-      <a href="#">Privacy</a> · <a href="#">EULA</a> · © 2026 Compy
-    </span>
+  <div class="wrap">
+    <span class="promise">Local-only by design · no telemetry · no account</span>
+    <!-- KO-FI PLACEHOLDER SLOT: set KOFI_URL in src/data/site.ts and regenerate. -->
+    <span>© 2026 Pootytxng · Compy is in private beta</span>
   </div>
 </footer>
-
+<script>
+  // The ONLY script on the page: honest interception while no waitlist service is wired.
+  // Setting WAITLIST_EMBED in src/data/site.ts removes this block on regeneration.
+  document.querySelector("[data-waitlist]").addEventListener("submit", function (e) {
+    e.preventDefault();
+    document.querySelector("[data-waitlist-pending]").style.display = "block";
+  });
+</script>
 </body>
 </html>

@@ -116,6 +116,8 @@ h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration
 .chip-real { color: var(--real); border: 1px solid color-mix(in srgb, var(--real) 45%, transparent); }
 .chip-placebo { color: var(--placebo); border: 1px solid color-mix(in srgb, var(--placebo) 45%, transparent); }
 .chip-risky { color: var(--risky); border: 1px solid color-mix(in srgb, var(--risky) 45%, transparent); }
+/* Non-tweak entry types (full-library pages) — quiet, never verdict-colored. */
+.chip-term, .chip-trick, .chip-guide { color: var(--ink-2); border: 1px solid var(--hairline); }
 .verdict-cell p { margin: 12px 0 0; color: var(--ink-2); font-size: 15px; }
 
 /* ── Sections ── */
@@ -176,6 +178,15 @@ h2 {
   padding: 28px; text-align: center;
 }
 .cta-box p { margin: 0 auto 18px; }
+
+/* ── Full-library index (site/library/index.html) ── */
+.article ul.toc { list-style: none; padding: 0; margin: 0; }
+.article ul.toc li { margin: 7px 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.article ul.toc a { color: var(--ink); text-decoration: none; }
+.article ul.toc a:hover { color: var(--accent); }
+.article dl dt { font-family: var(--mono); color: var(--ink); margin-top: 14px; }
+.article dl dd { margin: 2px 0 0; color: var(--ink-2); }
+.browse-all { margin-top: 28px; }
 
 /* ── Footer ── */
 footer {
