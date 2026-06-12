@@ -1,0 +1,13 @@
+# Cloudflare Pages config for the dark site (spec 2026-06-12-waitlist-wiring).
+# Drives `npx wrangler pages deploy`: uploads dist-site/ (the gitignored publish artifact,
+# rebuilt from committed sources), bundles functions/ (the same-origin waitlist endpoint),
+# and applies the D1 binding to the `compy` Pages project. No secrets live here — the
+# database_id is an identifier, not a credential; auth is wrangler's local OAuth.
+name = "compy"
+pages_build_output_dir = "dist-site"
+compatibility_date = "2026-06-12"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "compy_waitlist"
+database_id = "74810997-9c7e-4fba-8d11-2eacbd6ba685"

@@ -15,9 +15,19 @@ export const SITE_URL = "https://compy.gg";
 /** The doctrine §5 voice line that travels on every shared artifact. */
 export const SITE_TAGLINE = "Measured, not promised — Compy.";
 
-/** Waitlist embed snippet (provider HTML form/iframe). Empty = the site renders an honest
- *  placeholder slot instead. Owner swap: paste the chosen free-tier provider's embed. */
-export const WAITLIST_EMBED = "";
+/** The REAL waitlist form (spec 2026-06-12-waitlist-wiring) — a native same-origin POST to our
+ *  own Pages Function (/api/waitlist → D1). No provider, no third-party script, works with JS
+ *  off (303 back to /?waitlist=ok). The hidden "website" field is the spam honeypot — humans
+ *  never see it; bots fill it and get silently dropped. The page script progressive-enhances
+ *  this into an inline fetch + thanks state. */
+export const WAITLIST_SLOT = [
+  `      <form class="waitlist-form" method="POST" action="/api/waitlist" data-waitlist>`,
+  `        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />`,
+  `        <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />`,
+  `        <button class="btn" type="submit">Notify me</button>`,
+  `      </form>`,
+  `      <p class="waitlist-pending" data-waitlist-status role="status"></p>`,
+].join("\n");
 
 /** Ko-fi (or similar $0 bridge) profile URL. Empty = the site omits the support link entirely.
  *  Owner swap: the real profile URL once an account exists. */

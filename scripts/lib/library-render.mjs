@@ -41,7 +41,7 @@ export async function loadLibrary() {
       site: {
         SITE_URL: site.SITE_URL,
         SITE_TAGLINE: site.SITE_TAGLINE,
-        WAITLIST_EMBED: site.WAITLIST_EMBED,
+        WAITLIST_SLOT: site.WAITLIST_SLOT,
         KOFI_URL: site.KOFI_URL,
       },
     };

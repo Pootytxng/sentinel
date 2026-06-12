@@ -138,41 +138,41 @@ const debunkCards = picks
   })
   .join("\n");
 
-// Waitlist: a real embed when the owner sets one (src/data/site.ts), an HONEST preview otherwise.
-const waitlistSlot = site.WAITLIST_EMBED
-  ? site.WAITLIST_EMBED
-  : [
-      `      <!-- WAITLIST PLACEHOLDER SLOT (Zero-Budget Law): no provider chosen, no account exists.`,
-      `           To go live: paste the chosen free-tier provider's embed into WAITLIST_EMBED in`,
-      `           src/data/site.ts and re-run \`node site/generate.mjs\`. -->`,
-      `      <form class="waitlist-form" data-waitlist>`,
-      `        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />`,
-      `        <button class="btn" type="submit">Notify me</button>`,
-      `      </form>`,
-      `      <p class="waitlist-pending" data-waitlist-pending>`,
-      `        The waitlist isn't wired up yet — this page is a preview. Nothing was sent or stored.`,
-      `      </p>`,
-    ].join("\n");
+// Waitlist: the REAL same-origin form (spec 2026-06-12-waitlist-wiring) — native POST to our
+// own Pages Function; the slot HTML is the swap point in src/data/site.ts.
+const waitlistSlot = site.WAITLIST_SLOT;
 
 // The ONE page script (test-pinned: at most one <script> block): the IntersectionObserver
 // scroll reveals (§B0b — html.rv arms them only when the API exists AND reduced-motion is off;
-// without it everything is simply visible) + the honest waitlist interception while no
-// waitlist service is wired (that part disappears when WAITLIST_EMBED is set + regenerated).
-const waitlistJs = site.WAITLIST_EMBED
-  ? ""
-  : [
-      ``,
-      `  // Honest interception while no waitlist service is wired. Setting WAITLIST_EMBED in`,
-      `  // src/data/site.ts removes this block on regeneration.`,
-      `  document.querySelector("[data-waitlist]").addEventListener("submit", function (e) {`,
-      `    e.preventDefault();`,
-      `    document.querySelector("[data-waitlist-pending]").style.display = "block";`,
-      `  });`,
-    ].join("\n");
+// without it everything is simply visible) + the waitlist progressive enhancement: same-origin
+// fetch to /api/waitlist with an inline thanks/error state, plus the ?waitlist= flag handling
+// for the no-JS 303 round-trip. ZERO third-party requests either way.
+const waitlistJs = [
+  ``,
+  `  // Waitlist progressive enhancement — same-origin /api/waitlist only (no JS still works:`,
+  `  // the form natively POSTs and comes back as /?waitlist=ok).`,
+  `  var wlForm = document.querySelector("[data-waitlist]");`,
+  `  var wlStatus = document.querySelector("[data-waitlist-status]");`,
+  `  var WL_THANKS = "You're on the list — one email at launch, nothing else.";`,
+  `  var WL_INVALID = "That doesn't look like an email address — check it and try again.";`,
+  `  var WL_ERROR = "Couldn't save that right now — try again in a minute.";`,
+  `  function wlShow(msg) { if (wlStatus) { wlStatus.textContent = msg; wlStatus.style.display = "block"; } }`,
+  `  var wlFlag = new URLSearchParams(location.search).get("waitlist");`,
+  `  if (wlFlag === "ok") wlShow(WL_THANKS);`,
+  `  else if (wlFlag === "invalid") wlShow(WL_INVALID);`,
+  `  else if (wlFlag === "error") wlShow(WL_ERROR);`,
+  `  if (wlForm) wlForm.addEventListener("submit", function (e) {`,
+  `    e.preventDefault();`,
+  `    fetch("/api/waitlist", { method: "POST", body: new FormData(wlForm), headers: { accept: "application/json" } })`,
+  `      .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })`,
+  `      .then(function (j) { if (j.ok) { wlShow(WL_THANKS); wlForm.reset(); } else wlShow(j.error || WL_ERROR); })`,
+  `      .catch(function () { wlShow(WL_ERROR); });`,
+  `  });`,
+].join("\n");
 
 const pageScript = [
   `<script>`,
-  `  // The ONLY script on the page: scroll reveals + (until a provider exists) the waitlist note.`,
+  `  // The ONLY script on the page: scroll reveals + the same-origin waitlist enhancement.`,
   `  (function () {`,
   `    var rm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)");`,
   `    if ("IntersectionObserver" in window && !(rm && rm.matches)) {`,
