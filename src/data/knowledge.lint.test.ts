@@ -127,10 +127,12 @@ describe("knowledge dataset lint", () => {
     // nvidia-prefer-max-performance, cpu-affinity-games) + memory-compression-off (2026-06-11, the
     // Leftovers detector's explainer — R1 flagged the WhatsThis gap) + 4 R3 Lane F debunks
     // (2026-06-12: game-boosters, ram-cleaners, app-hw-accel-off, dns-for-gaming — search-intent
-    // picks pairing with the dark-site pages). These are Library EXPLAINERS (graded real/placebo/
-    // risky), NOT appliable recs — Compy applies none of them, so the ~29 appliable-catalog freeze
-    // is untouched. The pin stays exact as a curation drift-guard.
-    expect(TWEAKS.length).toBe(51);
+    // picks pairing with the dark-site pages) + 4 R5 Lane 2 debunks (2026-06-12: run-as-admin-fps,
+    // high-priority-games, defrag-ssd, gpu-overclocking — popular-myth gaps in the coverage map).
+    // These are Library EXPLAINERS (graded real/placebo/risky), NOT appliable recs — Compy applies
+    // none of them, so the ~29 appliable-catalog freeze is untouched. The pin stays exact as a
+    // curation drift-guard.
+    expect(TWEAKS.length).toBe(55);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);

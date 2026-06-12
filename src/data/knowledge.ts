@@ -1,5 +1,6 @@
 // Knowledge layer — one searchable, offline, bundled library across four entry types.
-// tweaks.json (the frozen 42-entry seed) stays byte-for-byte unchanged; this module injects the
+// tweaks.json grows by curated, owner-visible additions only (count pinned exactly in
+// knowledge.lint.test.ts with the rationale per batch); this module injects the
 // `type` discriminator and normalizes optional fields so everything shares one shape and one index.
 // Static + bundled — no network, no remote fetch, no new capabilities.
 

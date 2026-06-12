@@ -422,5 +422,41 @@
     "what": "Switching to a third-party 'gaming DNS' expecting lower in-game latency.",
     "why": "DNS answers one question — which IP a name points to — and it's asked when you connect, not while you play. Once you're in a match, packets flow straight to that IP; DNS isn't in the path anymore, so it can't lower ping. A faster resolver can shave a moment off page loads and server-list lookups, which is real — but it isn't in-game latency.",
     "related": ["tcp-mega-packs"]
+  },
+  {
+    "id": "run-as-admin-fps",
+    "name": "Running games as administrator for FPS",
+    "aliases": ["run as admin", "run as administrator", "admin mode game", "launch game elevated"],
+    "verdict": "placebo",
+    "what": "Launching a game with 'Run as administrator' expecting Windows to give it more CPU or GPU.",
+    "why": "Administrator rights change what a program is ALLOWED to touch, not how fast it runs — an elevated game gets the same cores, the same scheduling, the same GPU time as a normal one, so there's no frame to gain. It's a legitimate troubleshooting step for a specific failure (a launcher that can't write its own folder, an anti-cheat driver that needs an elevated install) — use it to fix THAT, then go back. Leaving it on permanently hands every mod, overlay, and script the game loads the keys to your whole system, for a gain of exactly nothing.",
+    "related": ["high-priority-games", "anti-cheat"]
+  },
+  {
+    "id": "high-priority-games",
+    "name": "Setting a game to High priority in Task Manager",
+    "aliases": ["high priority", "realtime priority", "task manager priority", "process priority", "priority hack"],
+    "verdict": "placebo",
+    "what": "Raising a game's CPU priority to High — or Realtime — in Task Manager so Windows favors it over everything else.",
+    "why": "Priority only decides who wins when threads are FIGHTING for a core, and on a healthy rig running one game, nothing is fighting — Windows already favors the window you're playing in, so High changes nothing you can measure. Realtime is worse than nothing: it lets the game starve the system threads that feed it, which surfaces as crackling audio and stutters you didn't have before. And the setting dies with the process, so the ritual silently resets every launch. If something heavy genuinely competes with your game, the honest fix is closing it — and measuring the difference.",
+    "related": ["cpu-affinity-games", "game-boosters"]
+  },
+  {
+    "id": "defrag-ssd",
+    "name": "Defragging an SSD for speed",
+    "aliases": ["defrag ssd", "defragment ssd", "disk defragmenter", "defrag for gaming"],
+    "verdict": "risky",
+    "what": "Running a full defragmenter pass on an SSD the way you would on an old hard drive.",
+    "why": "Defrag fixes a mechanical problem: a spinning drive's read head physically traveling between scattered pieces of a file. An SSD has no moving parts and reads scattered pieces as fast as neat ones, so there is no speed to win back — but a full defrag pass still burns through write cycles, the thing an SSD has a finite budget of. Windows already knows the difference: its built-in Optimize Drives gives an SSD a TRIM pass (a housekeeping hint that marks deleted space reusable), not a defrag. Leave the schedule alone and skip the third-party defragmenters.",
+    "related": ["nvme-ssd-hdd"]
+  },
+  {
+    "id": "gpu-overclocking",
+    "name": "GPU overclocking for FPS",
+    "aliases": ["overclock gpu", "gpu oc", "afterburner overclock", "core clock", "memory clock"],
+    "verdict": "risky",
+    "what": "Pushing your graphics card's core and memory clocks past stock with a tool like MSI Afterburner.",
+    "why": "The gains are real but small — a stable overclock typically buys a few percent — and the cost of overshooting is weeks of 'random' crashes that look like driver bugs, game bugs, anything but the slider you moved last month. If you go in, go like a tester: one small step at a time, a stress run and a measured before/after per step, and write down what you changed so you can walk it back. Undervolting is the calmer cousin — often the same performance, cooler and quieter. Compy never overclocks anything; it can tell you whether your GPU is even the limiter first, so you know if there's anything here for you at all.",
+    "related": ["undervolting", "thermal-throttling", "fan-curves"]
   }
 ]
