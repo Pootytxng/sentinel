@@ -214,7 +214,7 @@ function LimiterCard({
     return (
       <section className="cc-panel cc-limiter cc-limiter-clear">
         <div className="cc-panel-eyebrow">Your #1 limiter</div>
-        <h3 className="cc-limiter-title">Nothing worth fixing today</h3>
+        <h3 className="cc-limiter-title">Measured clean today</h3>
         <p className="cc-limiter-reason">
           No limiter stands out on this rig right now. A lesser tool would invent one — Compy won't.
         </p>

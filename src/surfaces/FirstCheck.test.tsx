@@ -29,20 +29,20 @@ afterEach(cleanup);
 beforeEach(() => localStorage.clear());
 
 describe("FirstCheck (audit M1)", () => {
-  it("clean rig verdict is the honest no-upsell arc: nothing worth fixing, nothing invented", async () => {
+  it("clean rig verdict celebrates the measured win without inventing work (doctrine voice)", async () => {
     render(
       <ConfirmProvider>
         <FirstCheck onDone={vi.fn()} />
       </ConfirmProvider>,
     );
     expect(
-      await screen.findByText("Ready to play — nothing worth fixing today"),
+      await screen.findByText("Ready to play — this rig measured clean"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Everything on this rig is already where it should be\./),
+      screen.getByText(/Every check came back right — measured on this rig, not assumed\./),
     ).toBeInTheDocument();
     // The anti-snake-oil close: green checks are named, work is never invented.
-    expect(screen.getByText(/1 checks already perfect — nothing to sell you here/)).toBeInTheDocument();
+    expect(screen.getByText(/1 checks measured perfect — confirmed right on this rig/)).toBeInTheDocument();
     expect(screen.getByText(/won't invent work to look busy/)).toBeInTheDocument();
   });
 

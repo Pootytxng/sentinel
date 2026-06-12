@@ -87,6 +87,6 @@ describe("CommandCenter", () => {
         priorities={{ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null }}
       />,
     );
-    expect(screen.getByText(/Nothing worth fixing today/)).toBeTruthy();
+    expect(screen.getByText(/Measured clean today/)).toBeTruthy();
   });
 });

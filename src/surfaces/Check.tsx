@@ -316,7 +316,7 @@ export default function Check({
           <div className="check-section-label">Biggest limiters</div>
           {limiters.length === 0 ? (
             <p className="check-clear">
-              Nothing worth fixing today — this rig is already where it should be.
+              Measured clean — every check came back right on this rig. Nothing to change today.
             </p>
           ) : (
             <ul className="check-list">
@@ -392,7 +392,7 @@ export default function Check({
                 onClick={() => setFineOpen((o) => !o)}
                 aria-expanded={fineOpen}
               >
-                <span>{alreadyFine.length} already fine — nothing to sell you here</span>
+                <span>{alreadyFine.length} measured fine — confirmed right on this rig</span>
                 <span>{fineOpen ? "▾" : "▸"}</span>
               </button>
               {fineOpen && (

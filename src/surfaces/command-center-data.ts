@@ -87,7 +87,7 @@ export function postureLine(
   const sentence =
     limiterCount > 0
       ? `Ready to play — ${limiterCount} worth fixing.`
-      : "Ready to play — nothing worth fixing today.";
+      : "Ready to play — this rig measured clean today.";
   const changeNote =
     activeChanges > 0
       ? `${activeChanges} safe change${activeChanges === 1 ? "" : "s"} active & reversible. `

@@ -78,9 +78,9 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
     expect(p.reassurance).toMatch(/1 safe change active/);
   });
 
-  it("ready with zero limiters → 'nothing worth fixing today'", () => {
+  it("ready with zero limiters → the measured-clean win sentence", () => {
     const p = postureLine(readiness([check("ready", "SSD")]), priorities(0), 0);
-    expect(p.sentence).toBe("Ready to play — nothing worth fixing today.");
+    expect(p.sentence).toBe("Ready to play — this rig measured clean today.");
   });
 
   it("attention readiness drives an attention tone", () => {

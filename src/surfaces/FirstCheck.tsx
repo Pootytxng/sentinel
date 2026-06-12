@@ -89,13 +89,13 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
             <div className="fc-tag">VERDICT</div>
             <h1 className="fc-headline">
               {fixCount === 0
-                ? "Ready to play — nothing worth fixing today"
+                ? "Ready to play — this rig measured clean"
                 : `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`}
             </h1>
             <p className="fc-subtitle">
               {fixCount === 0
-                ? "Everything on this rig is already where it should be."
-                : "Both reversible. Everything else on this rig is already where it should be."}
+                ? "Every check came back right — measured on this rig, not assumed."
+                : `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else came back right — measured on this rig, not assumed.`}
             </p>
 
             {/* #1 biggest limiter spotlight */}
@@ -152,7 +152,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
                   onClick={() => setGreenOpen((o) => !o)}
                   aria-expanded={greenOpen}
                 >
-                  <span>{greenChecks.length} checks already perfect — nothing to sell you here</span>
+                  <span>{greenChecks.length} checks measured perfect — confirmed right on this rig</span>
                   <span className="fc-green-caret">{greenOpen ? "▾" : "▸"}</span>
                 </button>
                 {greenOpen && (
