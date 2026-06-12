@@ -14,6 +14,9 @@ dist-ssr
 dist-web
 # Full-library site pages (node site/generate.mjs) — same: generated pre-deploy, never committed
 site/library/
+# Dark-site deploy artifact (landing + curated debunks + full library, publish-shaped) —
+# assembled on demand from committed sources + the generator; never committed.
+dist-site/
 *.local
 # Local-only operational files (e.g. BETA_TESTER_TRACKER.local.md) — real tester data never enters git.
 *.local.md
