@@ -1,14 +1,28 @@
 <!doctype html>
-<!-- GENERATED LANDING TEMPLATE (R3 Lane A2) — `node site/generate.mjs` fills the slots below and
-     writes site/index.html. Hero copy is a DRAFT in the doctrine §5 voice: the OWNER taste-gates
-     it before any publish (site stays dark until then). Swap points all live in src/data/site.ts
-     (SITE_URL / WAITLIST_EMBED / KOFI_URL) — one file, then regenerate. -->
+<!-- GENERATED LANDING TEMPLATE (R4a, spec 2026-06-12-doctrine-voice-baptism §B0) —
+     `node site/generate.mjs` fills the slots and writes site/index.html. Publish-grade pass:
+     mobile-first, Instrument-adjacent, doctrine voice. Owner taste-gates before any publish;
+     the site stays DARK until the publish ladder. Swap points: src/data/site.ts
+     (SITE_URL / WAITLIST_EMBED / KOFI_URL) — one file, then regenerate.
+
+     ART SLOTS (Cowork supplies via the §D Higgsfield lane — curated into site/assets/):
+       · hero art      → site/assets/hero.webp   (suggested 960×720, schematic/instrument style;
+                         replaces the CSS receipt visual's backdrop, alt text required)
+       · OG share card → site/assets/og.png      (1200×630) — then uncomment the og:image metas.
+     Until those exist the page ships ZERO raster assets — the receipt visual is CSS-built. -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Compy — the PC optimizer that tells you the truth</title>
-<meta name="description" content="Compy reads your actual hardware, grades PC tweaks honestly (real, placebo, or risky), measures what actually changed, and makes every change reversible. Measured, not promised." />
+<title>Compy — Measured, not promised.</title>
+<meta name="description" content="Compy reads your actual hardware, grades the internet's favorite PC tweaks honestly — real, placebo, or risky — measures what actually changed on your rig, and keeps every change reversible with a receipt." />
+<meta property="og:title" content="Compy — Measured, not promised." />
+<meta property="og:description" content="The PC optimizer that proves it: per-rig verdicts, measured before/afters, and a receipt for every change." />
+<meta property="og:type" content="website" />
+<!-- OG IMAGE SLOT (1200×630, site/assets/og.png — §D lane):
+<meta property="og:image" content="assets/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+-->
 <link rel="stylesheet" href="library.css" />
 </head>
 <body>
@@ -18,22 +32,24 @@
 </header>
 
 <main>
+  <!-- ── Hero: the identity ── -->
   <div class="wrap hero">
     <div class="reveal">
-      <p class="kicker">Measured, not promised</p>
-      <h1>We won't promise<br />you <span class="strike">more FPS</span>.</h1>
+      <p class="kicker">A rollback-first safety layer for your gaming PC</p>
+      <h1>Measured,<br />not promised.</h1>
       <p class="hero-sub">
-        Every optimizer promises speed. Most deliver placebo — some break things.
-        Compy reads <strong>your actual hardware</strong>, grades the internet's favorite tweaks
-        honestly — real, placebo, or risky — and <strong>measures what actually changed on your
-        rig</strong>. When a fix is real, you see the numbers. When it isn't, you see that too.
-        And everything it changes, it can undo: exact prior state, kept in a receipt on your PC.
+        Every optimizer promises speed. Compy <strong>proves what's true on your rig</strong>:
+        it reads your actual hardware, grades the internet's favorite tweaks — real, placebo,
+        or risky — and measures what actually changed. When a fix is real, you see the numbers.
+        When it isn't, you see that too. Everything it changes, it can undo.
       </p>
       <div class="cta-row">
         <a class="btn" href="#waitlist">Join the waitlist</a>
         <a class="link-quiet" href="#library">Read the debunks →</a>
       </div>
     </div>
+    <!-- HERO ART SLOT (§D): when site/assets/hero.webp lands, it backs this aside —
+         the CSS receipt stays in the foreground either way (it IS the product's soul). -->
     <aside class="reveal reveal-late" aria-label="What a Compy receipt looks like">
       <div class="receipt">
         <div class="receipt-head"><span>Trust Ledger</span><span>receipt</span></div>
@@ -46,6 +62,31 @@
     </aside>
   </div>
 
+  <!-- ── Three receipts-style value cards ── -->
+  <section class="wrap" id="receipts">
+    <div class="value-cards">
+      <div class="value-card">
+        <div class="value-head"><span>01</span><span>per-rig</span></div>
+        <h3>Reads <em>your</em> hardware</h3>
+        <p>Verdicts are tailored to the PC in front of you — GPU, CPU, drives, display — never
+        copied off a YouTube "best settings" list. If a tweak isn't for your rig, Compy says so.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-head"><span>02</span><span>measured</span></div>
+        <h3>Measures what changed</h3>
+        <p>Frames, 1% lows, temps — before and after, on your own sessions. Real improvements get
+        named loudly. No measurable change gets called exactly that.</p>
+      </div>
+      <div class="value-card">
+        <div class="value-head"><span>03</span><span>reversible</span></div>
+        <h3>Keeps the receipt</h3>
+        <p>Every change is snapshotted first and undoable later — exact prior state, kept on your
+        PC. Rollback isn't a feature here; it's the foundation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Verdict key (generated from the app's own glossary — can't drift) ── -->
   <div class="wrap">
     <div class="verdict-key" id="grades">
       <div class="verdict-cell">
@@ -63,6 +104,7 @@
     </div>
   </div>
 
+  <!-- ── Debunk-library showcase ── -->
   <section class="wrap" id="library">
     <h2>From the Library</h2>
     <p class="section-sub">
@@ -158,6 +200,7 @@
     <p class="browse-all"><a class="link-quiet" href="library/index.html">Browse the full library — all 130 entries →</a></p>
   </section>
 
+  <!-- ── Waitlist (placeholder slot — Zero-Budget) ── -->
   <section class="wrap" id="waitlist">
     <div class="waitlist">
       <h2>Get the launch email</h2>
@@ -176,15 +219,33 @@
         The waitlist isn't wired up yet — this page is a preview. Nothing was sent or stored.
       </p>
       <p class="waitlist-note">No spam, no tracking. The app works the same way — it sends nothing off your PC.</p>
+    <!-- KO-FI PLACEHOLDER SLOT: set KOFI_URL in src/data/site.ts and regenerate. -->
+    </div>
+  </section>
+
+  <!-- ── Future download (honest placeholder — no fake button, doorknob law) ── -->
+  <section class="wrap" id="download">
+    <div class="download-note">
+      <h2>Download</h2>
+      <p>The public build will live right here. Until then Compy ships by invite only — the
+      waitlist above is the door.</p>
     </div>
   </section>
 </main>
 
+<!-- ── Honesty-creed footer ── -->
 <footer>
-  <div class="wrap">
-    <span class="promise">Local-only by design · no telemetry · no account</span>
-    <!-- KO-FI PLACEHOLDER SLOT: set KOFI_URL in src/data/site.ts and regenerate. -->
-    <span>© 2026 Pootytxng · Compy is in private beta</span>
+  <div class="wrap creed">
+    <p class="creed-line">Measured, not promised.</p>
+    <ul class="creed-list">
+      <li>No fabricated numbers — anywhere, ever.</li>
+      <li>No fear UX, no invented problems, no "847 issues found".</li>
+      <li>Every change reversible, with the receipt to prove it.</li>
+      <li>Local-only by design · no telemetry · no account.</li>
+    </ul>
+    <div class="foot-meta">
+      <span>© 2026 Pootytxng · Compy is in private beta</span>
+    </div>
   </div>
 </footer>
 <script>
