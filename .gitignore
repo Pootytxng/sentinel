@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# Library→web export artifact (npm run export:library) — built from committed sources on demand
+dist-web
 *.local
 # Local-only operational files (e.g. BETA_TESTER_TRACKER.local.md) — real tester data never enters git.
 *.local.md

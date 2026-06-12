@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "export:library": "node scripts/export-library.mjs"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
