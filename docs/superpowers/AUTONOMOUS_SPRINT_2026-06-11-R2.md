@@ -104,16 +104,18 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
   first integrity forbids landing a restore I can't exactly reverse. Two ways forward, your pick:
   **(a)** restrict to the common case — validate the single entry as `^<DriveLetter>:\pagefile.sys <u32> <u32>$`, store drive-letter (one validated `[A-Za-z]` char) + two u32 sizes, **refuse** exotic/multi-pagefile setups; rollback reconstructs from the validated letter + integers (one non-integer token, provably metacharacter-free). **(b)** sanction the existing EEE-resolver precedent — single-quote the path with PS `''`-escaping (already shipping for adapter names). I recommend **(a)** (tightest, matches the origin-story 30 GB case, refuses what it can't exactly reverse). bcdedit also stays deferred (boot-store writes = highest blast radius, owner-present wave). Everything is dark regardless; this only decides how the eventual pagefile restore is built.
 
-- **Memory-compression resolver — elevated-prior-read DESIGN NEED (logged from the live QA,
-  2026-06-11, deliberately NOT fixed):** the resolver's prior read (`Get-MMAgent`) is admin-only
-  (ca01347), and Compy runs non-elevated — so `restore_leftover("memory-compression-off")` ALWAYS
-  refuses honestly ("could not be read — refusing to restore what can't be snapshotted", verified
-  live: refusal precedes elevation, zero receipt). Today's behavior is the correct fail-safe, but
-  it means this resolver can never actually run for any user. Design need for an owner-decided
-  wave: take the prior INSIDE the one elevated context — a single elevated script that reads the
-  prior, writes it to a result file (the §4 receipt-file pattern), THEN mutates — preserving
-  snapshot-before-mutate ordering within the elevation. Wants its own spec + the same live QA
-  before it lands; until then memcompress stays detect-only ("needs admin to check").
+- ~~Memory-compression resolver — elevated-prior-read DESIGN NEED~~ **✅ BUILT DARK 2026-06-12
+  (owner-directed "proceed with expert-opinion items")** — spec
+  `docs/superpowers/specs/2026-06-12-memcompress-elevated-prior-read.md`. Exactly the design
+  recorded here: one elevated script banks the prior to a result file BEFORE Enable-MMAgent
+  (EAP=Stop makes the order binding), receipt earned only on prior + `done:ok` (the §4 fail-safe
+  direction), rollback contract untouched, gate still false + zero IPC. Test-pinned (order /
+  parse fail-safe / decline-writes-nothing). **Two owner decisions remain:** (1) live-QA fixture
+  sanction — the manual loop toggles real memory compression (`Disable-MMAgent` seed /
+  `Enable-MMAgent` cleanup, 6 prompts incl. elevated read-backs); (2) the honest-detection gap —
+  non-elevated Check still says "needs admin", so the UI can't surface this finding without an
+  elevated re-check design (recorded in the spec). Original design-need text preserved in git
+  history (`526aeaf`).
 
 ## Running log (Fable appends — what · commit · verify · hard-line self-audit)
 - **✅ FIELD-CONFIRMED on the owner's rig (2026-06-11 evening):** Past Tweaks end-to-end live —

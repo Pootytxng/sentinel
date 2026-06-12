@@ -879,9 +879,10 @@ mod manual_elevation_qa {
 // These drive the DARK restore path through the #[cfg(test)] QA gate-bypass seam
 // (leftovers::QaRestoreGateBypass) — restore_gate() itself stays false; none of this exists in a
 // shipped binary. Fixture writes are the documented benign QA set ONLY (W32PS 0x26 ↔ stock 2;
-// OverlayTestMode 5 ↔ delete), each loop asserts the rig STARTS clean before writing anything,
-// and each loop ends back at Windows stock. Receipts are real %APPDATA%\Compy\history.json
-// entries, "QA · "-tagged (cleanup offered after the QA pass).
+// OverlayTestMode 5 ↔ delete; memcompress Disable↔Enable-MMAgent — SANCTION PENDING, see its
+// test), each loop asserts the rig STARTS clean before writing anything, and each loop ends back
+// at Windows stock. Receipts are real %APPDATA%\Compy\history.json entries, "QA · "-tagged
+// (cleanup offered after the QA pass).
 #[cfg(test)]
 mod manual_restore_qa {
     use super::*;
@@ -1057,31 +1058,89 @@ mod manual_restore_qa {
         );
     }
 
-    /// Known-limit check — NO UAC prompt fires. The memory-compression resolver's prior read
-    /// (Get-MMAgent) is admin-only (ca01347) and Compy runs non-elevated, so the restore must
-    /// refuse BEFORE any elevation with the honest can't-snapshot message and write nothing.
-    /// Deliberately NOT fixed here — the elevated-prior-read design need goes to the R2 Review
-    /// Queue instead.
+    /// Memcompress full loop — SIX UAC prompts (the prior is admin-only, so state verification
+    /// also rides elevated read-backs). ⚠ FIXTURE NOT YET OWNER-SANCTIONED: this loop toggles
+    /// real memory compression (seed = Disable-MMAgent, cleanup = Enable-MMAgent, the Windows
+    /// default). Do NOT run until the owner sanctions that pair. The 2026-06-12 elevated-prior-
+    /// read redesign replaced the old always-refuse arm this harness previously pinned.
     #[test]
-    #[ignore = "manual leftovers-restore QA — no prompt; verifies the non-elevated refusal honesty"]
-    fn manual_restore_qa_memcompress_refuses_non_elevated() {
+    #[ignore = "manual leftovers-restore QA — real UAC ×6; OWNER FIXTURE SANCTION REQUIRED (toggles memory compression)"]
+    fn manual_restore_qa_memcompress_full_loop() {
         let (state, needs_admin) = crate::leftovers::read_memory_compression_probe();
         assert!(
             state.is_none() && needs_admin,
-            "this check requires a NON-elevated run (probe read {state:?}, needs_admin={needs_admin}) — run it from a normal shell"
+            "this loop exercises the admin-only-prior arm — run it from a normal (non-elevated) shell (probe read {state:?})"
         );
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
-        let before = load_history().expect("ledger readable").len();
-        let err = restore_leftover("memory-compression-off", "QA · never lands")
-            .err()
-            .expect("must refuse non-elevated");
-        println!("REFUSAL MESSAGE: {err}");
+        let before_len = load_history().expect("ledger readable").len();
+
+        // Elevated read-back helper: the only way to verify ground truth when the read is
+        // admin-only. Result file is data out, same pattern as the resolver itself.
+        let read_back = |label: &str| -> bool {
+            let path = crate::compy_data_dir().join(format!("qa-memcompress-{label}.result"));
+            let _ = std::fs::remove_file(&path);
+            let script = format!(
+                "$rf='{}'; Add-Content -LiteralPath $rf -Value \"state:$((Get-MMAgent).MemoryCompression)\"",
+                path.to_string_lossy().replace('\'', "''")
+            );
+            run_elevated_powershell(&script).expect("read-back (did the prompt get a YES?)");
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let _ = std::fs::remove_file(&path);
+            match text.trim() {
+                "state:True" => true,
+                "state:False" => false,
+                other => panic!("unparseable read-back: {other:?}"),
+            }
+        };
+
+        println!("\nUAC PROMPT 1/6 — SEED the rotted fixture (Disable-MMAgent). Click YES.");
+        run_elevated_powershell("Disable-MMAgent -MemoryCompression")
+            .expect("seed (did the prompt get a YES?)");
+
+        // Detection stays HONEST about the admin-only read: the detector must report
+        // "needs admin", never a finding it can't see.
+        let report = serde_json::to_value(crate::leftovers::get_leftovers()).expect("serializes");
+        let unavailable: Vec<&str> = report
+            .get("unavailable")
+            .and_then(|u| u.as_array())
+            .map(|us| us.iter().filter_map(|u| u.get("id").and_then(|i| i.as_str())).collect())
+            .unwrap_or_default();
         assert!(
-            err.contains("could not be read") && err.contains("refusing"),
-            "honest refusal names the unreadable prior, never blames the user: {err}"
+            unavailable.contains(&"memory-compression-off"),
+            "non-elevated detection honestly reports needs-admin, got unavailable: {unavailable:?}"
         );
-        assert_eq!(load_history().expect("readable").len(), before, "no receipt on refusal");
-        println!("MEMCOMPRESS LIMIT CONFIRMED: non-elevated prior read refuses before elevation, ledgers nothing.");
+        println!("DETECTION HONEST: memory-compression-off reports needs-admin (not a guessed finding).");
+
+        println!("\nUAC PROMPT 2/6 — RESTORE (one elevation banks prior THEN enables). Click YES.");
+        let view = restore_leftover("memory-compression-off", "QA · Past tweak restore")
+            .expect("restore runs (did the prompt get a YES?)");
+        let after = load_history().expect("ledger readable");
+        assert_eq!(after.len(), before_len + 1, "exactly one receipt");
+        let receipt = after.iter().find(|c| c.id == view.id).expect("receipt present");
+        assert_receipt(receipt, "memory-compression");
+        assert_eq!(
+            receipt.snapshot.get("prior_enabled").and_then(|v| v.as_bool()),
+            Some(false),
+            "snapshot banked the rotted prior (compression OFF) from INSIDE the elevation"
+        );
+
+        println!("\nUAC PROMPT 3/6 — READ-BACK: compression should now be ON. Click YES.");
+        assert!(read_back("post-restore"), "restore enabled memory compression");
+
+        println!("\nUAC PROMPT 4/6 — ROLLBACK (the rotted OFF must come back). Click YES.");
+        rollback_change(view.id.clone()).expect("rollback runs (did the prompt get a YES?)");
+        let post = load_history().expect("ledger readable");
+        assert_eq!(post.iter().find(|c| c.id == view.id).expect("entry").status, "rolled_back");
+
+        println!("\nUAC PROMPT 5/6 — READ-BACK: compression should be OFF again. Click YES.");
+        assert!(!read_back("post-rollback"), "rollback restored the rotted OFF exactly");
+
+        println!("\nUAC PROMPT 6/6 — CLEANUP to Windows stock (Enable-MMAgent). Click YES.");
+        run_elevated_powershell("Enable-MMAgent -MemoryCompression")
+            .expect("cleanup (did the prompt get a YES?)");
+        println!(
+            "MEMCOMPRESS LOOP PASS: seed OFF → needs-admin honest → restore (receipt prior=false, banked in-elevation) → ON → rollback → OFF → stock ON."
+        );
     }
 }
 
@@ -1123,6 +1182,55 @@ mod leftover_restore_tests {
         assert!(err.contains("not enabled"), "gate refusal returns on drop: {err}");
         let after = load_history().expect("readable").len();
         assert_eq!(before, after, "neither the decline nor the refusal may write a receipt");
+    }
+
+    // ── Memcompress elevated-prior-read (2026-06-12, dark) — the adversarial set ──────────────
+
+    #[test]
+    fn memcompress_combined_script_banks_the_prior_before_mutating() {
+        let s = memcompress_combined_restore_script(r"C:\Users\o'brien\AppData\res.result");
+        // Order is the contract: EAP=Stop first, prior read + bank BEFORE the mutation, the
+        // confirmation marker LAST — so a failure at any step can never leave a mutation that
+        // precedes its snapshot.
+        let idx = |needle: &str| s.find(needle).unwrap_or_else(|| panic!("missing {needle}: {s}"));
+        assert!(s.starts_with("$ErrorActionPreference='Stop';"));
+        assert!(idx("Get-MMAgent") < idx("prior:$p"), "prior read precedes its banking");
+        assert!(idx("prior:$p") < idx("Enable-MMAgent"), "snapshot banks BEFORE the mutation");
+        assert!(idx("Enable-MMAgent") < idx("done:ok"), "confirmation is the last act");
+        assert!(!s.to_lowercase().contains("exit"), "exit-free: {s}");
+        assert!(s.contains("o''brien"), "result path is single-quote-escaped");
+    }
+
+    #[test]
+    fn memcompress_result_parse_is_fail_safe() {
+        assert_eq!(parse_memcompress_restore_result("prior:False\ndone:ok"), Ok(false));
+        assert_eq!(parse_memcompress_restore_result("prior:True\r\ndone:ok"), Ok(true));
+        // Prior banked but the mutation never confirmed → no snapshot is earned.
+        let e = parse_memcompress_restore_result("prior:False").expect_err("unconfirmed");
+        assert!(e.contains("did not confirm") && e.contains("nothing was recorded"), "{e}");
+        // No prior at all (empty / tampered / done-only) → refuse, never guess a direction.
+        for text in ["", "done:ok", "prior:Garbage\ndone:ok"] {
+            let e = parse_memcompress_restore_result(text).expect_err("must refuse");
+            assert!(e.contains("nothing was recorded"), "{text:?}: {e}");
+        }
+    }
+
+    #[test]
+    fn memcompress_unreadable_prior_now_rides_one_elevation_and_a_decline_writes_nothing() {
+        // The redesign: an admin-only prior no longer refuses outright — it takes the prior
+        // INSIDE one elevated context. Deterministically: with elevation forced to decline and
+        // the QA seam open, the resolver reaches the elevation seam (decline) regardless of which
+        // arm ran (readable prior → plain path; unreadable → combined path) and ledgers nothing.
+        let before = load_history().expect("readable").len();
+        {
+            let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+            let _force = ForceElevationError::begin();
+            let err = restore_leftover("memory-compression-off", "QA seam test")
+                .err()
+                .expect("forced decline");
+            assert_eq!(err, ELEVATION_DECLINED_MSG, "{err}");
+        }
+        assert_eq!(load_history().expect("readable").len(), before, "decline ledgers nothing");
     }
 
     #[test]

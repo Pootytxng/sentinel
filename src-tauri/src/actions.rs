@@ -1813,7 +1813,9 @@ pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), Strin
 // snapshot BEFORE mutation, ONE elevated PS per restore (no partial mutation), fail-loud rollback,
 // and the snapshot holds the user's rotted value so the restore itself is reversible.
 // Script builders are PURE so their content is unit-testable without elevation. All interpolated
-// values are u32 integers — no string ever enters an elevated command here.
+// values are u32 integers, plus ONE sanctioned non-integer: the app-derived, single-quote-escaped
+// result-file path in the memcompress combined script (the §4 batch-receipts precedent — data out,
+// never input in).
 //
 // Deliberately ABSENT: a Defender-policy resolver. Writing HKLM\...\Policies is the absolute
 // security-settings rail — even a restore-to-stock goes through the owner, never autonomous code.
@@ -1902,8 +1904,79 @@ pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<App
     })
 }
 
+/// Combined elevated script for the admin-only-prior case (Get-MMAgent needs admin, ca01347):
+/// capture the prior INSIDE the one elevated context — `$ErrorActionPreference='Stop'` makes the
+/// order binding (prior is written to the result file BEFORE Enable-MMAgent can run; any earlier
+/// failure aborts before the mutation). The result path is app-derived + single-quote-escaped
+/// (the §4 compose_batch_script precedent); the file is DATA out, never input in. Exit-free.
+pub(crate) fn memcompress_combined_restore_script(result_path: &str) -> String {
+    format!(
+        "$ErrorActionPreference='Stop'; $rf='{}'; $p=(Get-MMAgent).MemoryCompression; Add-Content -LiteralPath $rf -Value \"prior:$p\"; Enable-MMAgent -MemoryCompression; Add-Content -LiteralPath $rf -Value 'done:ok'",
+        result_path.replace('\'', "''")
+    )
+}
+
+/// Fail-safe parse of the combined script's result file: a snapshot is accepted ONLY when the
+/// prior parsed AND the mutation confirmed (`done:ok`) — the §4 "only an explicit ok earns a
+/// ledger entry" direction. Anything else refuses with an honest, state-naming message.
+pub(crate) fn parse_memcompress_restore_result(text: &str) -> Result<bool, String> {
+    let mut prior: Option<bool> = None;
+    let mut done = false;
+    for line in text.lines() {
+        match line.trim() {
+            "prior:True" => prior = Some(true),
+            "prior:False" => prior = Some(false),
+            "done:ok" => done = true,
+            _ => {}
+        }
+    }
+    match (prior, done) {
+        (Some(p), true) => Ok(p),
+        (Some(_), false) => Err(
+            "The elevated step captured the prior state but did not confirm the change — nothing was recorded. Re-run the check to see the current state."
+                .to_string(),
+        ),
+        (None, _) => Err(
+            "The elevated step did not report the prior state — nothing was recorded (a change is never recorded without its undo). Re-run the check to see the current state."
+                .to_string(),
+        ),
+    }
+}
+
+/// The admin-only-prior arm: ONE elevated invocation that snapshots then mutates (see the script
+/// builder above). Receipt-worthy only on a confirmed prior + confirmed mutation.
+fn restore_memory_compression_elevated_read() -> Result<ApplyResult, String> {
+    let dir = crate::compy_data_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let path = dir.join(format!("memcompress-restore-{millis}.result"));
+    let _ = std::fs::remove_file(&path);
+    let run = run_elevated_powershell(&memcompress_combined_restore_script(&path.to_string_lossy()));
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let _ = std::fs::remove_file(&path);
+    // A decline or elevated failure propagates first (EAP=Stop means nothing mutated without the
+    // prior already banked); then the fail-safe parse decides whether a snapshot was earned.
+    run?;
+    let prior = parse_memcompress_restore_result(&text)?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestoreMemoryCompressionDefault,
+        rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
+        snapshot: Snapshot::MemoryCompression { prior_enabled: Some(prior) },
+        elevation_used: true,
+    })
+}
+
 pub(crate) fn restore_memory_compression() -> Result<ApplyResult, String> {
-    restore_memory_compression_with(crate::leftovers::read_memory_compression())
+    // Readable prior (elevated context / future probe): the plain snapshot-then-mutate path.
+    // Unreadable (Get-MMAgent is admin-only for a normal user — the field case, ca01347): the
+    // prior is taken INSIDE the one elevated context instead of refusing outright.
+    match crate::leftovers::read_memory_compression() {
+        Some(prior) => restore_memory_compression_with(Some(prior)),
+        None => restore_memory_compression_elevated_read(),
+    }
 }
 
 pub(crate) fn rollback_memory_compression_typed(prior_enabled: Option<bool>) -> Result<(), String> {
