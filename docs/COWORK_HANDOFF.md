@@ -154,13 +154,28 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **🌐 SITE IS LIVE — DEPLOYED 2026-06-12 22:26 (CC, wrangler direct upload, owner OAuth'd).**
+  **https://compy-bd6.pages.dev** — bare `compy.pages.dev` was TAKEN on Cloudflare, project landed as
+  `compy-bd6` (stops mattering when `compy.gg` attaches). 147 files from `dist-site/`; verified live:
+  root 200 + R4b hero · `/library/index.html` 200 ("All 130 Compy Blackbook entries") · curated +
+  deep library pages 200 via Pages' pretty-URL 308s — the folder-flattening failure mode absent.
+  No GitHub connection (repo stays private); OAuth token in wrangler's local config only. **DARK —
+  no announce; the send is the owner's.** Cowork next: live re-audit + the owner's live-glow
+  taste-gate; freshen 130→136 entries (regen+redeploy) only AFTER the owner skims R5's six new
+  Blackbook entries (R5 log Review Queue #2).
 - **✅ dist-site AUDIT CLEAN — DEPLOY-READY + R5 MARATHON HANDED TO CC (2026-06-12, Cowork).**
   CC's `dist-site/` verified on the REAL disk: index.html + library.css **byte-identical to audited
   `ebf87fc`** (CR-normalized), `library/index.html` resolves over **130** entry pages, landing renders
   "all 130 entries" (count is COMPUTED from `KNOWLEDGE.length` via `{{ENTRY_COUNT}}`, not asserted — the
   earlier 130-overclaim flag is RESOLVED), zero outbound across all 130+ pages, no source leak, 632KB.
   **Deploy teed for owner's return** (dark URL, non-urgent; pair the `compy.pages.dev` upload with his
-  live-glow taste-gate eyeball). **R5 unattended marathon** spec'd at
+  live-glow taste-gate eyeball). **DEPLOY PIVOTED → wrangler/CC (2026-06-12):** the Chrome-dashboard
+  route is blocked — Claude-in-Chrome screenshot tool erroring (`clip.scale` deserialize bug) AND a
+  dashboard folder-upload can't preserve `dist-site/library/` subpaths (130 pages → flattened →
+  broken Blackbook link). So CC deploys via `wrangler pages deploy dist-site --project-name compy`
+  (direct upload, no GitHub connection, repo stays private); owner does the one-time `wrangler login`
+  Allow-click. Then Cowork re-audits the LIVE url (200 + Blackbook door resolves) + owner eyeballs the
+  live glow. Freshen 130→134 entries (regen+redeploy) only AFTER owner skims CC's R5 new Blackbook entries. **R5 unattended marathon** spec'd at
   `docs/superpowers/specs/2026-06-12-R5-unattended-marathon.md` (Lanes: §B visual refinement non-taste ·
   Blackbook content growth · hardening/a11y/law-guards · doc nits; all reversible/gated; council strip +
   Review Queue per lane; log → `AUTONOMOUS_SPRINT_2026-06-12-R5.md`) — handed to CC while owner rests.

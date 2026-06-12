@@ -182,6 +182,13 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🌐 THE DARK SITE IS LIVE — 2026-06-12 (CC deploy, owner OAuth'd): https://compy-bd6.pages.dev**
+> (bare `compy.pages.dev` was taken; moot once `compy.gg` attaches). wrangler direct upload of
+> `dist-site/` (147 files), NO GitHub connection; live-verified root + Blackbook index + deep pages
+> all 200. **DARK — no announce; the send is the owner's.** Live copy says 130 entries (pre-R5
+> artifact by design); regen+redeploy AFTER the owner skims R5's six new entries. Board detail in
+> `docs/COWORK_HANDOFF.md`.
+>
 > **🌙 R5 UNATTENDED MARATHON LANDED — 2026-06-12** (`AUTONOMOUS_SPRINT_2026-06-12-R5.md`, owner
 > resting; spec `2026-06-12-R5-unattended-marathon.md`). Four lanes, six commits, all reversible:
 > **L1** theme-correctness — last bare teal washes (Settings + onboarding arc) now follow the active
