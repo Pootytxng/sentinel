@@ -213,7 +213,14 @@ fn detect_pagefile(probes: &Value) -> Outcome {
 // `(Get-MMAgent).MemoryCompression` (read-only PowerShell).
 fn detect_memory_compression(probes: &Value) -> Outcome {
     match probes.get("memory_compression").and_then(Value::as_bool) {
-        None => return Outcome::Unavailable(REASON_UNREADABLE),
+        None => {
+            // Get-MMAgent is admin-only — say so, rather than a generic "couldn't read".
+            let needs_admin = probes
+                .get("memory_compression_needs_admin")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            return Outcome::Unavailable(if needs_admin { REASON_NEEDS_ADMIN } else { REASON_UNREADABLE });
+        }
         Some(true) => return Outcome::Clean,
         Some(false) => {}
     }
@@ -540,35 +547,46 @@ struct PageFileSettingProbe {
 fn gather_probes() -> Value {
     // Each probe degrades to null on failure — the evaluator then reports that detector as
     // "unavailable" rather than ever assuming clean. No probe writes anything.
-    let (mut auto_pf, mut ram_bytes): (Option<bool>, Option<u64>) = (None, None);
-    let mut pagefiles: Vec<Value> = Vec::new();
-    if let Ok(com) = COMLibrary::new() {
-        if let Ok(conn) = WMIConnection::new(com) {
-            if let Ok(rows) = conn.query::<ComputerSystemProbe>() {
-                if let Some(cs) = rows.into_iter().next() {
-                    auto_pf = cs.automatic_managed_pagefile;
-                    ram_bytes = cs.total_physical_memory;
+    //
+    // The WMI reads MUST run on the dedicated MTA worker (hardware::on_wmi_thread):
+    // `COMLibrary::new()` requests MTA and fails with RPC_E_CHANGED_MODE on the WebView2 STA
+    // thread Tauri sync commands run on — the exact trap hardware.rs documents. Field-found
+    // 2026-06-11: the owner's rig reported "pagefile sizing unreadable" because this probe ran
+    // on the command thread (unit tests missed it — test threads aren't STA).
+    let (auto_pf, ram_bytes, pagefiles) = crate::hardware::on_wmi_thread(|| {
+        let (mut auto_pf, mut ram_bytes): (Option<bool>, Option<u64>) = (None, None);
+        let mut pagefiles: Vec<Value> = Vec::new();
+        if let Ok(com) = COMLibrary::new() {
+            if let Ok(conn) = WMIConnection::new(com) {
+                if let Ok(rows) = conn.query::<ComputerSystemProbe>() {
+                    if let Some(cs) = rows.into_iter().next() {
+                        auto_pf = cs.automatic_managed_pagefile;
+                        ram_bytes = cs.total_physical_memory;
+                    }
+                }
+                if let Ok(rows) = conn.query::<PageFileSettingProbe>() {
+                    pagefiles = rows
+                        .into_iter()
+                        .map(|p| {
+                            json!({
+                                "name": p.name,
+                                "initial_mb": p.initial_size,
+                                "maximum_mb": p.maximum_size,
+                            })
+                        })
+                        .collect();
                 }
             }
-            if let Ok(rows) = conn.query::<PageFileSettingProbe>() {
-                pagefiles = rows
-                    .into_iter()
-                    .map(|p| {
-                        json!({
-                            "name": p.name,
-                            "initial_mb": p.initial_size,
-                            "maximum_mb": p.maximum_size,
-                        })
-                    })
-                    .collect();
-            }
         }
-    }
+        (auto_pf, ram_bytes, pagefiles)
+    });
 
+    let (memory_compression, mc_needs_admin) = read_memory_compression_probe();
     json!({
         "automatic_managed_pagefile": auto_pf,
         "pagefiles": pagefiles,
-        "memory_compression": read_memory_compression(),
+        "memory_compression": memory_compression,
+        "memory_compression_needs_admin": mc_needs_admin,
         "ram_total_bytes": ram_bytes,
         "bcdedit": probe_bcdedit(),
         "mmcss": read_hklm_u32s(
@@ -710,21 +728,29 @@ pub(crate) fn restore_gate() -> bool {
     false
 }
 
-/// Read-only PowerShell probe: `(Get-MMAgent).MemoryCompression` prints True/False. Anything
-/// else (missing cmdlet, error, garbled output) is honestly None — never guessed.
-pub(crate) fn read_memory_compression() -> Option<bool> {
-    let out = crate::actions::quiet_command("powershell.exe")
+/// Read-only PowerShell probe: `(Get-MMAgent).MemoryCompression` prints True/False. Get-MMAgent
+/// is an ADMIN-ONLY read (PermissionDenied, Windows error 5 — verified live on the dev rig
+/// 2026-06-11), and Compy runs non-elevated — so a failed read that produced error output is
+/// reported as (None, needs_admin=true) and the detector says "needs admin to check" honestly.
+/// PowerShell exits 0 even on that non-terminating error, so stderr is the signal, not the code.
+pub(crate) fn read_memory_compression_probe() -> (Option<bool>, bool) {
+    let Ok(out) = crate::actions::quiet_command("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", "(Get-MMAgent).MemoryCompression"])
         .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
+    else {
+        return (None, false);
+    };
     match String::from_utf8_lossy(&out.stdout).trim() {
-        "True" => Some(true),
-        "False" => Some(false),
-        _ => None,
+        "True" => (Some(true), false),
+        "False" => (Some(false), false),
+        _ => (None, !out.stderr.is_empty() || !out.status.success()),
     }
+}
+
+/// The state alone — the leftovers-v2 restore reads its prior through this (an elevated future
+/// context would see Some; non-elevated it stays None and the restore refuses, as designed).
+pub(crate) fn read_memory_compression() -> Option<bool> {
+    read_memory_compression_probe().0
 }
 
 /// Rec ids the engine would endorse on THIS rig (eligible — applied or not). Read through the
@@ -1099,6 +1125,30 @@ mod leftovers_tests {
         for f in &r.findings {
             assert!(f.uncertain_source, "{}: must carry the origin-uncertainty flag", f.id);
         }
+    }
+
+    #[test]
+    fn memory_compression_admin_only_read_reports_needs_admin_honestly() {
+        // Field-found 2026-06-11: Get-MMAgent is PermissionDenied non-elevated (error 5), so a
+        // failed read with the needs-admin marker must say "needs admin to check" — the same
+        // honest degrade bcdedit gets — never the generic unreadable.
+        let p = with(
+            probes(Some(true), json!([]), None, Some(31)),
+            "memory_compression_needs_admin",
+            json!(true),
+        );
+        let r = evaluate_leftovers(&p, &no_endorsements());
+        let u = r
+            .unavailable
+            .iter()
+            .find(|u| u.id == "memory-compression-off")
+            .expect("unavailable");
+        assert_eq!(u.reason, REASON_NEEDS_ADMIN);
+        // Without the marker (e.g. cmdlet genuinely absent), the generic reason stands.
+        let p = probes(Some(true), json!([]), None, Some(31));
+        let r = evaluate_leftovers(&p, &no_endorsements());
+        let u = r.unavailable.iter().find(|u| u.id == "memory-compression-off").expect("listed");
+        assert_eq!(u.reason, REASON_UNREADABLE);
     }
 
     #[test]
