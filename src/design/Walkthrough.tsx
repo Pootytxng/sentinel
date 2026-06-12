@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type Walkthrough as WT,
   type WalkthroughStep,
@@ -93,7 +93,11 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
   }, [variantIdx]);
 
   // R3 Lane D — count each walkthrough actually shown (mount = the user opened it). Local-only.
+  // Ref guard: StrictMode re-runs mount effects in dev (refs persist) — keep the count honest.
+  const counted = useRef(false);
   useEffect(() => {
+    if (counted.current) return;
+    counted.current = true;
     bumpLocalStat("walkthroughsOpened");
   }, []);
 
