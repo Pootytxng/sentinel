@@ -104,6 +104,17 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
   first integrity forbids landing a restore I can't exactly reverse. Two ways forward, your pick:
   **(a)** restrict to the common case — validate the single entry as `^<DriveLetter>:\pagefile.sys <u32> <u32>$`, store drive-letter (one validated `[A-Za-z]` char) + two u32 sizes, **refuse** exotic/multi-pagefile setups; rollback reconstructs from the validated letter + integers (one non-integer token, provably metacharacter-free). **(b)** sanction the existing EEE-resolver precedent — single-quote the path with PS `''`-escaping (already shipping for adapter names). I recommend **(a)** (tightest, matches the origin-story 30 GB case, refuses what it can't exactly reverse). bcdedit also stays deferred (boot-store writes = highest blast radius, owner-present wave). Everything is dark regardless; this only decides how the eventual pagefile restore is built.
 
+- **Memory-compression resolver — elevated-prior-read DESIGN NEED (logged from the live QA,
+  2026-06-11, deliberately NOT fixed):** the resolver's prior read (`Get-MMAgent`) is admin-only
+  (ca01347), and Compy runs non-elevated — so `restore_leftover("memory-compression-off")` ALWAYS
+  refuses honestly ("could not be read — refusing to restore what can't be snapshotted", verified
+  live: refusal precedes elevation, zero receipt). Today's behavior is the correct fail-safe, but
+  it means this resolver can never actually run for any user. Design need for an owner-decided
+  wave: take the prior INSIDE the one elevated context — a single elevated script that reads the
+  prior, writes it to a result file (the §4 receipt-file pattern), THEN mutates — preserving
+  snapshot-before-mutate ordering within the elevation. Wants its own spec + the same live QA
+  before it lands; until then memcompress stays detect-only ("needs admin to check").
+
 ## Running log (Fable appends — what · commit · verify · hard-line self-audit)
 - **✅ FIELD-CONFIRMED on the owner's rig (2026-06-11 evening):** Past Tweaks end-to-end live —
   display rename visible (`2be129f`), the stale-flag lockout self-heal un-hid the v2 Check
@@ -157,3 +168,26 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
   adversarial) · clippy -D warnings · tsc+vite clean · gate false + zero restore IPC re-confirmed ·
   hard-lines ✓. The full v2 resolver set is now 7 of 9 dark-built; bcdedit (owner-present wave) +
   Defender (guided-only, never a write) remain excluded by design.
+- **✅ LIVE UAC QA — v2 restore path, FIRST TWO RESOLVERS FIELD-PROVEN (owner-present,
+  2026-06-11):** harness `20ffe35` (mirrors §4 manual_elevation_qa: #[ignore] tests, real
+  %APPDATA% ledger receipts, one at a time). The dark path is driven through a #[cfg(test)]-ONLY
+  thread-local RAII gate-bypass seam (leftovers::QaRestoreGateBypass, mirrors ForceElevationError,
+  compiled OUT of shipped binaries); restore_gate() itself untouched + still false, pinned by a
+  NEW deterministic test (armed seam + forced decline → past the gate, zero receipt; guard drop →
+  dark again). Live results, all ground-truth `history.json` + registry evidence:
+  - **W32PS full loop PASS** — rig started clean (2) → seeded 0x26 → get_leftovers flagged it →
+    restore wrote receipt (provenance `leftover_adopted`, snapshot `prior_value=38`, full typed
+    contract, detector quiet, registry=2) → rollback put **0x26 back EXACTLY** (status
+    `rolled_back`) → cleanup to stock 2. Four announced UAC prompts, owner-clicked.
+  - **MPO full loop PASS** — seeded OverlayTestMode=5 → flagged → restore DELETED the value
+    (receipt snapshot `prior=5`) → rollback SET 5 back EXACTLY → cleanup deleted (stock absent).
+    The absent-prior delete/recreate arm is live-proven.
+  - **Memcompress known limit CONFIRMED** (no prompt): non-elevated prior read refuses BEFORE
+    elevation with the honest can't-snapshot message, zero receipt — design need logged in the
+    Review Queue above; deliberately not fixed in this wave.
+  cargo **313** · clippy -D warnings · tsc+vite clean · /security clean (zero new reachable
+  surface; 4 fixed-literal QA scripts, #[cfg(test)] only) · hard-lines: restore_gate() false in
+  production, zero restore IPC, frozen refs untouched, only documented fixture values written,
+  every loop ended at Windows stock ✓. QA `·`-tagged receipts remain in the live ledger
+  (honest record; cleanup offered to the owner). Remaining before any gate flip: the other 5
+  resolvers' loops (mmcss/core-parking/tcp/pagefile + the memcompress design), owner sign-off.
