@@ -291,7 +291,8 @@ pub(crate) fn restore_leftover(
         "memory-compression-off" => crate::actions::restore_memory_compression(),
         "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
         "win32-priority-separation" => crate::actions::restore_priority_separation(),
-        // Dark wave 2 (2026-06-11). Pagefile + bcdedit + Defender intentionally have NO resolver.
+        // Dark wave 2 (2026-06-11). bcdedit + Defender intentionally have NO resolver.
+        "pagefile-fixed" => crate::actions::restore_pagefile_automatic(),
         "mpo-disabled" => crate::actions::restore_mpo_default(),
         "core-parking-forced" => crate::actions::restore_core_parking_default(),
         "tcp-autotuning-off" => crate::actions::restore_tcp_autotuning_default(),
@@ -989,6 +990,92 @@ mod leftover_restore_tests {
         for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
             let err = restore_leftover(id, "QA never runs").err().expect("dark gate refuses");
             assert!(err.contains("not enabled"), "{id}: {err}");
+        }
+    }
+
+    // ── Pagefile resolver (option (a)) — the adversarial set ──────────────────────────────────
+
+    #[test]
+    fn pagefile_parser_accepts_only_the_validated_single_fixed_entry() {
+        let ok = parse_manual_pagefile_entry(&["C:\\pagefile.sys 30000 30000".into()])
+            .expect("the origin-story layout parses");
+        assert_eq!(ok, ('C', 30000, 30000));
+        // Case-insensitive path, letter normalized upper.
+        assert_eq!(
+            parse_manual_pagefile_entry(&["d:\\PAGEFILE.SYS 8192 16384".into()]).expect("ok"),
+            ('D', 8192, 16384)
+        );
+        // Every exotic layout REFUSES with the honest left-as-is message — never a guess:
+        let refusals: Vec<Vec<String>> = vec![
+            vec![],                                                  // disabled — no entry
+            vec!["C:\\pagefile.sys 1 1".into(), "D:\\pagefile.sys 1 1".into()], // multi-pagefile
+            vec!["?:\\pagefile.sys 30000 30000".into()],             // ?: auto-form
+            vec!["C:\\pagefile.sys 0 0".into()],                     // system-managed-size form
+            vec!["C:\\pagefile.sys 30000".into()],                   // missing max
+            vec!["C:\\pagefile.sys 30000 30000 extra".into()],       // trailing junk
+            vec!["C:\\other.sys 30000 30000".into()],                // not pagefile.sys
+            vec!["C:\\pagefile.sys 3e4 30000".into()],               // non-integer size
+        ];
+        for entries in refusals {
+            let err = parse_manual_pagefile_entry(&entries).expect_err("must refuse");
+            assert!(err.contains("unusual") && err.contains("left as-is"), "{entries:?}: {err}");
+        }
+    }
+
+    #[test]
+    fn pagefile_exotic_layout_refuses_before_elevation_and_takes_no_snapshot() {
+        // With elevation forced to error: a VALID layout reaches the elevation seam (declined),
+        // an exotic one fails EARLIER with the layout refusal — no mutation path was entered.
+        let _force = ForceElevationError::begin();
+        let declined = restore_pagefile_automatic_with(vec!["C:\\pagefile.sys 30000 30000".into()])
+            .err()
+            .expect("forced elevation error");
+        assert_eq!(declined, ELEVATION_DECLINED_MSG);
+        let refused = restore_pagefile_automatic_with(vec![]).err().expect("refuses");
+        assert!(refused.contains("left as-is"), "refusal precedes elevation: {refused}");
+    }
+
+    #[test]
+    fn pagefile_rollback_rebuilds_a_provably_clean_entry_and_fails_loud_on_garbage() {
+        let s = pagefile_rollback_script('C', 30000, 30000).expect("builds");
+        // The rebuilt entry is exactly letter + fixed literal + digits — nothing else.
+        assert!(s.contains("@('C:\\pagefile.sys 30000 30000')"), "exact entry: {s}");
+        assert!(s.contains("AutomaticManagedPagefile=$false"), "manual mode precedes the entry");
+        assert!(s.contains("-Type MultiString"));
+        // No silent reboot, ever — in either direction; and exit-free.
+        for script in [s.as_str(), PAGEFILE_RESTORE_SCRIPT] {
+            assert!(!script.to_lowercase().contains("restart-computer"), "no silent reboot: {script}");
+            assert!(!script.to_lowercase().contains("exit"), "exit-free: {script}");
+        }
+        // A hand-edited snapshot with garbage fails LOUD at script-build time.
+        assert!(pagefile_rollback_script(';', 30000, 30000).is_err(), "non-letter refused");
+        assert!(pagefile_rollback_script('C', 0, 30000).is_err(), "zero size refused");
+    }
+
+    #[test]
+    fn pagefile_dark_gate_pair_contract_and_snapshot_roundtrip_hold() {
+        // Gate: as dark as every other resolver.
+        let err = restore_leftover("pagefile-fixed", "QA never runs").err().expect("dark");
+        assert!(err.contains("not enabled"));
+        // Pair contract: the new variant rejects mismatches.
+        assert!(dispatch_rollback(
+            &RollbackAction::RestorePagefileFromSnapshot,
+            &Snapshot::Mpo { prior_overlay_test_mode: None },
+        )
+        .is_err());
+        // The char-carrying snapshot round-trips through serde (ledger durability).
+        let snap = Snapshot::PagefileManual {
+            prior_drive_letter: 'C',
+            prior_initial_mb: 30000,
+            prior_maximum_mb: 30000,
+        };
+        let back: Snapshot =
+            serde_json::from_value(serde_json::to_value(&snap).expect("ser")).expect("de");
+        match back {
+            Snapshot::PagefileManual { prior_drive_letter, prior_initial_mb, prior_maximum_mb } => {
+                assert_eq!((prior_drive_letter, prior_initial_mb, prior_maximum_mb), ('C', 30000, 30000));
+            }
+            _ => panic!("wrong variant after round-trip"),
         }
     }
 

@@ -81,6 +81,9 @@ pub(crate) enum AppliedAction {
     RestoreMpoDefault,
     RestoreCoreParkingDefault,
     RestoreTcpAutotuningDefault,
+    // The origin-story resolver (option (a), Cowork call 2026-06-11): re-enable Windows-managed
+    // paging. Reboot required to take effect — stated, never silent.
+    RestorePagefileAutomatic,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -113,6 +116,7 @@ pub(crate) enum RollbackAction {
     RestoreMpoFromSnapshot,
     RestoreCoreParkingFromSnapshot,
     RestoreTcpAutotuningFromSnapshot,
+    RestorePagefileFromSnapshot,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -198,6 +202,15 @@ pub(crate) enum Snapshot {
     },
     TcpAutotuning {
         prior_disabled: bool,
+    },
+    // Pagefile, option (a): ONLY the validated single-entry layout is ever snapshotted —
+    // one ASCII drive letter + two u32 sizes. Exotic/multi-pagefile layouts are REFUSED at
+    // apply time, so this snapshot is always reconstructible into a provably
+    // metacharacter-free PagingFiles entry (the no-string-into-elevated invariant).
+    PagefileManual {
+        prior_drive_letter: char,
+        prior_initial_mb: u32,
+        prior_maximum_mb: u32,
     },
 }
 
@@ -321,6 +334,11 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
         }
         Snapshot::TcpAutotuning { prior_disabled } => {
             Some(if *prior_disabled { "disabled" } else { "normal" }.to_string())
+        }
+        Snapshot::PagefileManual { prior_drive_letter, prior_initial_mb, prior_maximum_mb } => {
+            Some(format!(
+                "Fixed {prior_initial_mb}–{prior_maximum_mb} MB on {prior_drive_letter}:"
+            ))
         }
     }
 }
@@ -2061,6 +2079,108 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>) -> R
     }
 }
 
+// ── Pagefile (the origin-story resolver — option (a), Cowork call 2026-06-11) ──
+// Restore-forward = ONE fixed command re-enabling Windows-managed paging. Rollback must put the
+// user's exact rotted PagingFiles entry back, and that value is a PATH STRING — so option (a)
+// restricts the resolver to the validated common case: exactly one entry shaped
+// `<Letter>:\pagefile.sys <init> <max>`. Anything else (multi-pagefile, ?:-form, disabled, odd
+// paths) is REFUSED honestly at apply time — "unusual layout — left as-is" — and no snapshot is
+// taken, so rollback can ALWAYS rebuild the entry from one validated ASCII letter + two u32s:
+// provably metacharacter-free. REBOOT REQUIRED to take effect (both directions) — the detector's
+// restore_note says so up front; no script here ever touches Restart-Computer (test-pinned).
+
+pub(crate) const PAGEFILE_RESTORE_SCRIPT: &str = "$cs = Get-CimInstance Win32_ComputerSystem; $cs | Set-CimInstance -Property @{AutomaticManagedPagefile=$true}";
+const MEMORY_MGMT_PATH: &str =
+    "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
+
+/// Pure, validation-gated parse of the PagingFiles REG_MULTI_SZ. Ok ONLY for the single
+/// fixed-size entry option (a) covers; every other layout refuses with the honest message.
+pub(crate) fn parse_manual_pagefile_entry(entries: &[String]) -> Result<(char, u32, u32), String> {
+    const REFUSE: &str =
+        "This PC's pagefile layout is unusual — left as-is (no automatic restore is offered for it).";
+    if entries.len() != 1 {
+        return Err(REFUSE.to_string()); // zero (disabled) or multi-pagefile setups
+    }
+    let mut parts = entries[0].split_whitespace();
+    let (Some(path), Some(init), Some(max), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err(REFUSE.to_string());
+    };
+    let mut chars = path.chars();
+    let letter = match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() => c.to_ascii_uppercase(),
+        _ => return Err(REFUSE.to_string()),
+    };
+    if !chars.as_str().eq_ignore_ascii_case(":\\pagefile.sys") {
+        return Err(REFUSE.to_string());
+    }
+    let (Ok(init_mb), Ok(max_mb)) = (init.parse::<u32>(), max.parse::<u32>()) else {
+        return Err(REFUSE.to_string());
+    };
+    if init_mb == 0 || max_mb == 0 {
+        return Err(REFUSE.to_string()); // "0 0" = system-managed-size form, not the fixed rot
+    }
+    Ok((letter, init_mb, max_mb))
+}
+
+/// Pure rollback-script builder. Inputs were validated at apply time; re-validated here anyway so
+/// a hand-edited ledger entry fails LOUD instead of building a command from garbage.
+pub(crate) fn pagefile_rollback_script(letter: char, init_mb: u32, max_mb: u32) -> Result<String, String> {
+    if !letter.is_ascii_alphabetic() || init_mb == 0 || max_mb == 0 {
+        return Err(
+            "This entry's recorded pagefile layout is invalid — cannot roll back blind.".to_string(),
+        );
+    }
+    let letter = letter.to_ascii_uppercase();
+    // Every character is from the validated set: one ASCII letter, the fixed literal path, digits.
+    let entry = format!("{letter}:\\pagefile.sys {init_mb} {max_mb}");
+    Ok(format!(
+        "$cs = Get-CimInstance Win32_ComputerSystem; $cs | Set-CimInstance -Property @{{AutomaticManagedPagefile=$false}}; \
+         Set-ItemProperty -Path '{MEMORY_MGMT_PATH}' -Name 'PagingFiles' -Value @('{entry}') -Type MultiString"
+    ))
+}
+
+fn read_pagingfiles() -> Result<Vec<String>, String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    match RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management")
+    {
+        Err(e) => Err(format!("cannot snapshot the pagefile configuration: {e}")),
+        Ok(k) => match k.get_value::<Vec<String>, _>("PagingFiles") {
+            Ok(v) => Ok(v),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()), // → parse refuses
+            Err(e) => Err(format!("cannot snapshot the pagefile configuration: {e}")),
+        },
+    }
+}
+
+/// Takes the entries explicitly so the refusal contract is unit-testable: exotic layouts and
+/// unreadable state refuse BEFORE any elevation (never mutate what can't be exactly reversed).
+pub(crate) fn restore_pagefile_automatic_with(entries: Vec<String>) -> Result<ApplyResult, String> {
+    let (letter, init_mb, max_mb) = parse_manual_pagefile_entry(&entries)?;
+    run_elevated_powershell(PAGEFILE_RESTORE_SCRIPT)?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RestorePagefileAutomatic,
+        rollback_action: RollbackAction::RestorePagefileFromSnapshot,
+        snapshot: Snapshot::PagefileManual {
+            prior_drive_letter: letter,
+            prior_initial_mb: init_mb,
+            prior_maximum_mb: max_mb,
+        },
+        elevation_used: true,
+    })
+}
+
+pub(crate) fn restore_pagefile_automatic() -> Result<ApplyResult, String> {
+    restore_pagefile_automatic_with(read_pagingfiles()?)
+}
+
+pub(crate) fn rollback_pagefile_typed(letter: char, init_mb: u32, max_mb: u32) -> Result<(), String> {
+    run_elevated_powershell(&pagefile_rollback_script(letter, init_mb, max_mb)?)
+}
+
 // ── TCP receive-window auto-tuning: restore "normal" ──
 pub(crate) fn restore_tcp_autotuning_default() -> Result<ApplyResult, String> {
     let prior_disabled = read_tcp_autotuning_disabled()?;
@@ -2393,6 +2513,10 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
         (R::RestoreTcpAutotuningFromSnapshot, S::TcpAutotuning { prior_disabled }) => {
             rollback_tcp_autotuning_typed(*prior_disabled)
         }
+        (
+            R::RestorePagefileFromSnapshot,
+            S::PagefileManual { prior_drive_letter, prior_initial_mb, prior_maximum_mb },
+        ) => rollback_pagefile_typed(*prior_drive_letter, *prior_initial_mb, *prior_maximum_mb),
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
             action
