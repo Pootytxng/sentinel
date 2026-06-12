@@ -5,7 +5,8 @@
 
 /* ══ M1 · Onboarding ═══════════════════════════════════════════════════════ */
 .onb-backdrop.arc-v2 {
-  background: radial-gradient(120% 90% at 50% 0%, rgba(46, 230, 192, 0.06), transparent 60%),
+  /* Wash follows the active theme's accent (Hearth must glow warm, not teal) — same 6% intensity. */
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--ix-accent, #2ee6c0) 6%, transparent), transparent 60%),
     var(--ix-base, #07090e);
 }
 .arc-v2 .onb-card {
@@ -122,7 +123,8 @@
 
 /* ══ M2 · First-check landing ══════════════════════════════════════════════ */
 .fc-backdrop.arc-v2 {
-  background: radial-gradient(120% 90% at 50% 0%, rgba(46, 230, 192, 0.06), transparent 60%),
+  /* Wash follows the active theme's accent (Hearth must glow warm, not teal) — same 6% intensity. */
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--ix-accent, #2ee6c0) 6%, transparent), transparent 60%),
     var(--ix-base, #07090e);
 }
 .arc-v2 .fc-screen {

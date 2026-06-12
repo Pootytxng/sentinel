@@ -5,7 +5,8 @@
   position: relative;
   min-height: 100vh;
   overflow-y: auto;
-  background: radial-gradient(120% 80% at 50% 0%, rgba(46, 230, 192, 0.05), transparent 60%),
+  /* Wash follows the active theme's accent (Hearth must glow warm, not teal) — same 5% intensity. */
+  background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--ix-accent, #2ee6c0) 5%, transparent), transparent 60%),
     var(--ix-base, #07090e);
 }
 .set-shell {
