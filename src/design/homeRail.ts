@@ -9,7 +9,10 @@ export const HOME_RAIL: { id: HomeRailId; label: string; icon: string }[] = [
   { id: "home", label: "Home", icon: "gauge" },
   { id: "check", label: "Check", icon: "check" },
   { id: "play", label: "Play", icon: "play" },
-  { id: "fix", label: "Fix", icon: "fix" },
+  // Label "Tune" (owner-approved 2026-06-12, naming-proposals B3): "Fix" framed the PC as broken —
+  // a fear frame the doctrine retired. The id stays "fix": it's the persisted nav key (location
+  // history / parity guard) — renaming the id would orphan stored history for zero user value.
+  { id: "fix", label: "Tune", icon: "fix" },
   { id: "learn", label: "Learn", icon: "learn" },
   { id: "lab", label: "Lab", icon: "lab" },
 ];

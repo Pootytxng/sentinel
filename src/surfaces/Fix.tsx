@@ -441,11 +441,11 @@ export default function Fix({
     <section className="fix-root">
       <header className="fix-header">
         <div>
-          <h2 className="fix-title">Fix</h2>
+          <h2 className="fix-title">Tune</h2>
           <p className="fix-subtitle">
             {worthFixing.length} worth a look · {active.length} active ·{" "}
-            {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Tailored to
-            your hardware — every change is one click to undo.
+            {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Measured
+            changes for YOUR rig — every one is one click to undo.
           </p>
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
               it belongs where approval actually happens. */}
