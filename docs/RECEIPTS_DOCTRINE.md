@@ -58,7 +58,7 @@ This is the grand re-opening. We were never open; now we are, and the door says 
    ("your GPU is the limiter"); stop letting the pharmacy keep the money. Affiliate links on
    limiter verdicts + web reports (Amazon/Newegg-class). Plain retailer links until owner has
    affiliate accounts; tags swap in later. Most passive once built.
-2. **Content engine** — the ~120-entry Library/Learn corpus published to compy.gg as debunk/SEO
+2. **Content engine** — the 130+-entry (and growing) Blackbook corpus published to compy.gg as debunk/SEO
    pages + share-card virality + build-in-public. 6–12 mo ramp, near-passive after; feeds #1.
 3. **Compy Pro** ($3–4/mo or ~$25/yr) — sell the RECURRING surfaces already built: session history
    depth, comparisons, multi-rig, overlay customization, deep monitoring. Built dark behind a flag
