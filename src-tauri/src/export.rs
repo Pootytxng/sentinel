@@ -364,6 +364,7 @@ pub(crate) fn build_markdown_report(
     let _ = writeln!(o, "- This report was generated **locally**. Compy sends nothing off your device — no telemetry, no account, no tracking.");
     let _ = writeln!(o, "- You choose where (and whether) to share this file.");
     let _ = writeln!(o, "- Recommendation rules source: **{}**.", pretty_source(rules_source));
+    let _ = writeln!(o, "\n_{SITE_TAGLINE}_ · {SITE_URL}");
 
     // ── Tester feedback (optional, user-typed) — only ever what the user wrote; blank appends
     // NOTHING (no empty headers, no pre-fill). Local like the rest: it exists only in this file.
@@ -380,6 +381,17 @@ pub(crate) fn build_markdown_report(
 /// stays BOM-free; the JSON export is left BOM-free (JSON parsers may reject a BOM).
 fn markdown_with_bom(markdown: &str) -> String {
     format!("\u{FEFF}{markdown}")
+}
+
+/// Where shared artifacts point home (R3 Lane A4). PAIRED with `src/data/site.ts` — the two are
+/// one logical constant split across the language boundary; swap BOTH when a real URL exists.
+/// Plain printable text only: nothing in the app ever fetches it.
+pub(crate) const SITE_URL: &str = "https://compy.gg";
+pub(crate) const SITE_TAGLINE: &str = "Measured, not promised — Compy.";
+
+/// `SITE_URL` without its scheme, for compact one-line footers ("compy.gg").
+fn site_host() -> &'static str {
+    SITE_URL.trim_start_matches("https://").trim_start_matches("http://")
 }
 
 /// A compact, Discord-pasteable summary — wrapped in a code fence so it renders monospace. ~8 lines:
@@ -444,7 +456,8 @@ fn build_discord_block(
             vf64(s, "low1_fps_est").unwrap_or(0.0),
         );
     }
-    o.push_str("compy.gg\n```");
+    let _ = writeln!(o, "measured, not promised · {}", site_host());
+    o.push_str("```");
     o
 }
 
@@ -559,6 +572,19 @@ mod export_tests {
         assert!(md.contains("NTFS"));
         assert!(md.contains("drive type unavailable"));
         assert!(!md.contains("- **Storage:** —"), "must not show the dash when a drive exists");
+    }
+
+    #[test]
+    fn shared_artifacts_carry_the_site_footer() {
+        // R3 Lane A4: the full report and the summary card both point home via the paired
+        // SITE_URL/SITE_TAGLINE constants (one logical constant with src/data/site.ts).
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t", None);
+        assert!(md.contains(SITE_TAGLINE), "report footer carries the tagline");
+        assert!(md.contains(SITE_URL), "report footer carries the site URL");
+        let card = build_discord_block(&Value::Null, &json!({}), &json!([]), &json!([]), "t");
+        assert!(card.contains("measured, not promised"), "card carries the tagline line");
+        assert!(card.contains(site_host()), "card carries the bare host");
+        assert!(card.trim_end().ends_with("```"), "card stays a closed code fence");
     }
 
     #[test]
