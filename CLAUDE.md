@@ -156,6 +156,26 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > at cargo **304** · npm **256**, clippy `-D warnings` clean throughout. Review Queue for the owner
 > in the R2 doc. Nothing flipped/hosted; gates + frozen refs untouched.
 >
+> **✅ v2-RESTORE LIVE UAC QA — FIRST TWO RESOLVERS FIELD-PROVEN (owner-present, 2026-06-11 night).**
+> Harness `20ffe35` mirrors the §4 manual_elevation_qa precedent; the dark path is driven through a
+> **#[cfg(test)]-ONLY** thread-local RAII gate-bypass seam (compiled out of shipped binaries —
+> `restore_gate()` untouched + still false, pinned by a new deterministic test). Live ground-truth
+> `history.json` + registry evidence: **W32PS loop PASS** (seed 0x26 → flagged → restore receipt
+> `leftover_adopted` + snapshot `prior_value=38` → rollback put 0x26 back EXACTLY → stock 2) ·
+> **MPO loop PASS** (5 → flagged → restore-DELETE w/ `prior=5` → rollback 5 exact → absent; the
+> absent-prior arm live-proven) · **memcompress known limit CONFIRMED** (non-elevated `Get-MMAgent`
+> prior read refuses BEFORE elevation, zero receipt — elevated-prior-read design need logged in the
+> R2 Review Queue, deliberately unfixed). QA log: `526aeaf` in the R2 doc. Remaining before any gate
+> flip: the other resolvers' loops + owner sign-off. Six `QA ·` receipts remain in the live ledger
+> (cleanup offered). **Same-night owner-feedback overlay pair:** (1) **density dead-knob lockout
+> FIX** (`48ee900`) — stale `compy_overlay_v2="0"` (the removed New Look hub's leftover) pinned the
+> overlay to the CLASSIC layout, which ignores density; CDP-probed live (the relay was healthy —
+> shared localStorage + cross-window storage event both proven on this rig), fixed with the
+> `a335f13` self-heal pattern; the stale-flag lockout class is now closed codebase-wide.
+> (2) **Background On/Off** (`1aaa342`) — owner-asked see-through overlay: no plate, RTSS-outline
+> legibility, control beside Density in Play + Settings, same storage relay. Suites now cargo
+> **313** · npm **257**, clippy/tsc/vite clean.
+>
 > **🌊 2026-06-10/11 OWNER-FEEDBACK WAVE LANDED (`main` @ `cc2a1ba`) — THE SENDING KIT IS BEHIND.**
 > Built from the Cowork 3-lane triage (`docs/superpowers/specs/2026-06-10-tester-feedback-overview.md`)
 > + two live owner reports: **Fix-tab reword** (`f1a1f27`, per-rig framing, no gains promise) ·

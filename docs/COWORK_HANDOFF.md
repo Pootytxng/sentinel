@@ -136,6 +136,19 @@ have shaped real features). The arc: package → smoke → twenty friends → a 
 
 ## Current board (update as you go)
 
+- **✅ v2-RESTORE LIVE UAC QA PASSED — W32PS + MPO field-proven (owner-present, 2026-06-11 night)**
+  — harness `20ffe35` (§4-precedent #[ignore] tests; #[cfg(test)]-only gate-bypass seam, compiled
+  out of shipped binaries; `restore_gate()` still false + test-pinned). Both loops: seed → flagged →
+  restore (receipt `leftover_adopted` + exact rotted snapshot) → rollback restores the rotted value
+  EXACTLY → cleanup to stock. Memcompress non-elevated refusal confirmed honest; its elevated-
+  prior-read design need is in the R2 Review Queue. QA log `526aeaf`. Before any gate flip: the
+  remaining resolvers' loops (fixture values need owner sanction) + owner sign-off. Six `QA ·`
+  ledger receipts remain (cleanup offered).
+- **🛠️ Same-night overlay pair (owner-found + owner-asked):** density dead-knob lockout FIXED
+  (`48ee900` — stale `compy_overlay_v2="0"` pinned the overlay to the classic layout that ignores
+  density; CDP-probed live, a335f13 self-heal pattern, stale-flag class closed codebase-wide) ·
+  **Background On/Off** landed (`1aaa342` — see-through overlay, RTSS-outline legibility, control
+  in Play + Settings). Suites cargo **313** · npm **257**.
 - **🌙 R2 UNATTENDED MARATHON LANDED (2026-06-11, owner was napping)** — full log + Review Queue in
   `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-11-R2.md`. Landed reversible: Leftovers Learn layer
   (`5e8fb98`) · charter law-guards in CI, caught+fixed real copy (`9a163f5`) · NIC driver win-source
