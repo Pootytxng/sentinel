@@ -757,6 +757,8 @@ type Priorities = {
   already_fine: PriorityItem[];
   not_worth_touching: PriorityItem[];
   session_hint: string | null;
+  // R3 Lane B — rendered by Check (the classic PrioritiesTab ignores it on purpose).
+  upgrade_path: import("./types").UpgradePath | null;
 };
 
 function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {

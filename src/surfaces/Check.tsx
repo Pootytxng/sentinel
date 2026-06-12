@@ -145,6 +145,18 @@ export default function Check({
     }
   };
 
+  // Upgrade-path links are copy-only (R3 Lane B): clipboard, per-button feedback, no navigation.
+  const [copiedRetail, setCopiedRetail] = useState<string | null>(null);
+  const copyRetailLink = async (key: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedRetail(key);
+      setTimeout(() => setCopiedRetail(null), 1500);
+    } catch {
+      /* clipboard blocked — the tooltip already names the retailer; nothing else to do */
+    }
+  };
+
   const checks = readiness?.checks ?? [];
   const limiters = priorities?.limiters ?? [];
   const alreadyFine = priorities?.already_fine ?? [];
@@ -341,6 +353,36 @@ export default function Check({
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* R3 Lane B: upgrade-path advisory — renders ONLY when a verdict already names hardware
+              as the limiter (GPU-limited session / HDD install drive). Links are plain retailer
+              searches, COPY-only in-app (no navigation, no opener); the disclosure always rides. */}
+          {priorities?.upgrade_path && (
+            <div className="check-upgrade">
+              <div className="check-section-label">Upgrade path (advisory)</div>
+              {priorities.upgrade_path.items.map((item) => (
+                <div key={item.kind} className="check-upgrade-item">
+                  <span className="check-upgrade-title">{item.title}</span>
+                  <p className="check-row-reason">{item.why}</p>
+                  <div className="check-upgrade-links">
+                    {item.links.map((l) => (
+                      <button
+                        key={l.retailer}
+                        className="btn btn-small"
+                        title={`Copies a plain ${l.retailer} search link to open in your browser. No affiliate tag today.`}
+                        onClick={() => copyRetailLink(`${item.kind}-${l.retailer}`, l.url)}
+                      >
+                        {copiedRetail === `${item.kind}-${l.retailer}`
+                          ? "Copied!"
+                          : `Copy ${l.retailer} search link`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p className="check-upgrade-disclosure">{priorities.upgrade_path.disclosure}</p>
+            </div>
           )}
 
           {alreadyFine.length > 0 && (

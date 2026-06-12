@@ -6,7 +6,10 @@
 // Receipts law note: SITE_URL is the *intended* home (domain purchase is owner-gated on waitlist
 // signal); nothing in the app fetches it — it is plain copyable/printable text, never a request.
 
-/** Where shared artifacts point home. Owner swap: real hosted URL when one exists. */
+/** Where shared artifacts point home. Owner swap order (R3 spec §3 hosting decision): first the
+ *  real Cloudflare Pages URL (`https://<project>.pages.dev`) at publish time, then
+ *  `https://compy.gg` when the domain trigger fires. Until a real URL exists this stays the
+ *  recorded intended domain — never an invented subdomain. */
 export const SITE_URL = "https://compy.gg";
 
 /** The doctrine §5 voice line that travels on every shared artifact. */

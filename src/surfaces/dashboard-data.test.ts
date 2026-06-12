@@ -22,7 +22,7 @@ describe("activeChangeCount", () => {
 describe("topLimiters", () => {
   const p = (titles: string[]): Priorities => ({
     limiters: titles.map((t, i) => ({ id: `l${i}`, title: t, reason: "r", linked: null, confidence: "high", status: "attention" })),
-    already_fine: [], not_worth_touching: [], session_hint: null,
+    already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null,
   });
   it("returns the first n limiters", () => {
     expect(topLimiters(p(["a", "b", "c", "d"]), 3).map((x) => x.title)).toEqual(["a", "b", "c"]);
@@ -33,7 +33,7 @@ describe("topLimiters", () => {
 describe("leaveAloneCount", () => {
   it("sums already_fine + not_worth_touching", () => {
     const p: Priorities = {
-      limiters: [], session_hint: null,
+      limiters: [], session_hint: null, upgrade_path: null,
       already_fine: [{ id: "a", title: "", reason: "", linked: null, confidence: "high", status: "ready" }],
       not_worth_touching: [
         { id: "b", title: "", reason: "", linked: null, confidence: "low", status: "ready" },

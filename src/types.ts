@@ -31,7 +31,12 @@ export type Drift = { id: string; label: string; detail: string; noticed_at: str
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
 
 export type PriorityItem = { id: string; title: string; reason: string; linked: string | null; confidence: Confidence; status: PriorityStatus };
-export type Priorities = { limiters: PriorityItem[]; already_fine: PriorityItem[]; not_worth_touching: PriorityItem[]; session_hint: string | null };
+// R3 Lane B: advisory upgrade path — present only when a verdict names hardware as the limiter.
+// Links are plain retailer searches (no affiliate tags); in-app they are COPY-only, never opened.
+export type RetailLink = { retailer: string; url: string };
+export type UpgradeSuggestion = { kind: string; title: string; why: string; links: RetailLink[] };
+export type UpgradePath = { items: UpgradeSuggestion[]; disclosure: string };
+export type Priorities = { limiters: PriorityItem[]; already_fine: PriorityItem[]; not_worth_touching: PriorityItem[]; session_hint: string | null; upgrade_path: UpgradePath | null };
 
 export type SessionSummary = {
   started_at: string;

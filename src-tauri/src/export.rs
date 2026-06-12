@@ -359,6 +359,21 @@ pub(crate) fn build_markdown_report(
         let _ = writeln!(o);
     }
 
+    // ── Upgrade path (R3 Lane B — advisory; ONLY when a verdict already names hardware) ──
+    // Same pure source as the in-app block (priorities::build_upgrade_path) — one qualifying
+    // logic, one link table; the report renders real Markdown anchors (the user's own browser
+    // opens them — no opener-allowlist involvement).
+    if let Some(up) = crate::priorities::build_upgrade_path(readiness, sessions) {
+        let _ = writeln!(o, "## Upgrade path (advisory)\n");
+        for item in &up.items {
+            let _ = writeln!(o, "- **{}** — {}", item.title, item.why);
+            for l in item.links {
+                let _ = writeln!(o, "  - [{} search]({})", l.retailer, l.url);
+            }
+        }
+        let _ = writeln!(o, "\n_{}_\n", up.disclosure);
+    }
+
     // ── Privacy & safety ──
     let _ = writeln!(o, "## Privacy & safety\n");
     let _ = writeln!(o, "- This report was generated **locally**. Compy sends nothing off your device — no telemetry, no account, no tracking.");
@@ -384,8 +399,9 @@ fn markdown_with_bom(markdown: &str) -> String {
 }
 
 /// Where shared artifacts point home (R3 Lane A4). PAIRED with `src/data/site.ts` — the two are
-/// one logical constant split across the language boundary; swap BOTH when a real URL exists.
-/// Plain printable text only: nothing in the app ever fetches it.
+/// one logical constant split across the language boundary; swap BOTH when a real URL exists
+/// (swap order per the R3 §3 hosting decision: `https://<project>.pages.dev` first, then
+/// `https://compy.gg`). Plain printable text only: nothing in the app ever fetches it.
 pub(crate) const SITE_URL: &str = "https://compy.gg";
 pub(crate) const SITE_TAGLINE: &str = "Measured, not promised — Compy.";
 
@@ -572,6 +588,19 @@ mod export_tests {
         assert!(md.contains("NTFS"));
         assert!(md.contains("drive type unavailable"));
         assert!(!md.contains("- **Storage:** —"), "must not show the dash when a drive exists");
+    }
+
+    #[test]
+    fn upgrade_path_renders_as_anchors_only_when_hardware_is_named() {
+        // R3 Lane B: a GPU-limited session puts the advisory block + disclosure + real Markdown
+        // anchors in the report; without a qualifying verdict the section is entirely absent.
+        let sessions = json!([{ "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t", None);
+        assert!(md.contains("## Upgrade path (advisory)"));
+        assert!(md.contains("never affects verdicts"), "disclosure always renders with the links");
+        assert!(md.contains("](https://www.amazon.com/s?k=graphics+card)"), "real anchor");
+        let none = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &json!([]), &json!([]), "embedded", "t", None);
+        assert!(!none.contains("Upgrade path"), "no hardware verdict → no links, no section");
     }
 
     #[test]

@@ -43,6 +43,94 @@ pub(crate) struct Priorities {
     not_worth_touching: Vec<PriorityItem>,
     /// Conservative per-session hint, only when a real F3 session exists.
     session_hint: Option<String>,
+    /// R3 Lane B: advisory upgrade-path block — present ONLY when a verdict
+    /// already names hardware as the limiter. Never invents a detection.
+    upgrade_path: Option<UpgradePath>,
+}
+
+// ── Upgrade path (R3 Lane B — advisory-only, doctrine money stack #1 groundwork) ──────────────
+//
+// THE single retailer-link table. Plain SEARCH links — no affiliate tags, no tracking params.
+// A later affiliate-tag swap happens HERE and nowhere else (the frontend + the export both render
+// from this module via the Priorities payload / build_upgrade_path — one source, no drift).
+// Rust-side on purpose: exported reports must never render link URLs that came from the webview.
+
+#[derive(Serialize, Clone, Copy, Debug)]
+pub(crate) struct RetailLink {
+    pub(crate) retailer: &'static str,
+    pub(crate) url: &'static str,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct UpgradeSuggestion {
+    /// "gpu" | "ssd" — stable key for the UI.
+    pub(crate) kind: &'static str,
+    pub(crate) title: &'static str,
+    /// Time-and-sample-qualified reason derived from the measured signal (receipts law).
+    pub(crate) why: String,
+    pub(crate) links: &'static [RetailLink],
+}
+
+#[derive(Serialize, Debug)]
+pub(crate) struct UpgradePath {
+    pub(crate) items: Vec<UpgradeSuggestion>,
+    /// Mandatory — renders wherever the links render, no exceptions.
+    pub(crate) disclosure: &'static str,
+}
+
+pub(crate) const AFFILIATE_DISCLOSURE: &str =
+    "If you buy through Compy links we may earn a commission — it never affects verdicts.";
+
+const GPU_LINKS: &[RetailLink] = &[
+    RetailLink { retailer: "Amazon", url: "https://www.amazon.com/s?k=graphics+card" },
+    RetailLink { retailer: "Newegg", url: "https://www.newegg.com/p/pl?d=graphics+card" },
+];
+const SSD_LINKS: &[RetailLink] = &[
+    RetailLink { retailer: "Amazon", url: "https://www.amazon.com/s?k=nvme+ssd" },
+    RetailLink { retailer: "Newegg", url: "https://www.newegg.com/p/pl?d=nvme+ssd" },
+];
+
+/// One threshold for "this session looked GPU-limited", shared by the session hint and the
+/// upgrade path so the two can never disagree.
+const GPU_LIMITED_PCT: u64 = 95;
+
+/// Peak GPU usage of the most recent session, only when it crosses the GPU-limited threshold.
+fn gpu_limited_pct(sessions: &Value) -> Option<u64> {
+    let s = sessions.as_array().and_then(|a| a.first())?;
+    let gpu = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
+    (gpu >= GPU_LIMITED_PCT).then_some(gpu)
+}
+
+/// Qualifying rows ONLY (right-room law): (1) the conservative GPU-limited session verdict,
+/// (2) the install-drive HDD readiness attention. Anything else → None (no block at all).
+pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<UpgradePath> {
+    let mut items = Vec::new();
+    if let Some(gpu) = gpu_limited_pct(sessions) {
+        items.push(UpgradeSuggestion {
+            kind: "gpu",
+            title: "GPU was the measured limiter",
+            why: format!(
+                "In your most recent monitored session, GPU usage peaked very high (~{gpu}%) — \
+                 the GPU was the bottleneck in that session. If you want more headroom, a GPU \
+                 upgrade is the hardware lever; no Windows tweak changes this."
+            ),
+            links: GPU_LINKS,
+        });
+    }
+    if let Some((st, _, _)) = check(readiness, "install-drive") {
+        if status_from(&st) == PriorityStatus::Attention {
+            items.push(UpgradeSuggestion {
+                kind: "ssd",
+                title: "Games are on an HDD",
+                why: "Your game install drive check found HDD storage — load times and texture \
+                      streaming are hardware-limited there. An SSD/NVMe drive is the fix Compy \
+                      can't apply for you."
+                    .into(),
+                links: SSD_LINKS,
+            });
+        }
+    }
+    (!items.is_empty()).then_some(UpgradePath { items, disclosure: AFFILIATE_DISCLOSURE })
 }
 
 #[derive(Clone, Copy)]
@@ -270,6 +358,7 @@ pub(crate) fn build_priorities(
         already_fine,
         not_worth_touching,
         session_hint: build_session_hint(sessions),
+        upgrade_path: build_upgrade_path(readiness, sessions),
     }
 }
 
@@ -281,7 +370,7 @@ fn build_session_hint(sessions: &Value) -> Option<String> {
     let avg = s.get("avg_fps").and_then(Value::as_f64).unwrap_or(0.0);
     let low1 = s.get("low1_fps_est").and_then(Value::as_f64).unwrap_or(0.0);
     let varied = avg > 0.0 && low1 > 0.0 && low1 < avg * 0.7;
-    if gpu >= 95 {
+    if gpu >= GPU_LIMITED_PCT {
         Some(format!(
             "Recent session hint: GPU usage peaked very high (~{gpu}%), so this session looked mostly GPU-limited."
         ))
@@ -350,6 +439,54 @@ mod priority_tests {
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
         let hint = p.session_hint.expect("hint present");
         assert!(hint.contains("GPU-limited"));
+    }
+
+    // ── Upgrade path (R3 Lane B) — qualifying logic pinned ──
+
+    #[test]
+    fn upgrade_path_absent_without_a_hardware_verdict() {
+        // No signals, software-only attention rows, inconclusive GPU — all → NO block at all.
+        let p = build_priorities(&Value::Null, &Value::Null, &Value::Null, &Value::Null);
+        assert!(p.upgrade_path.is_none(), "no signals → no upgrade path");
+        let software = readiness(vec![chk("power-profile", "attention"), chk("gpu-driver-age", "attention")]);
+        let p = build_priorities(&software, &json!([]), &json!([]), &json!([]));
+        assert!(p.upgrade_path.is_none(), "software limiters must never grow retail links");
+        let inconclusive = json!([{ "peak_gpu_usage_pct": 90, "avg_fps": 100.0, "low1_fps_est": 90.0 }]);
+        assert!(build_upgrade_path(&readiness(vec![]), &inconclusive).is_none(), "86–94% stays inconclusive");
+    }
+
+    #[test]
+    fn gpu_limited_session_qualifies_for_the_gpu_upgrade_row() {
+        let sessions = json!([{ "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let up = build_upgrade_path(&readiness(vec![]), &sessions).expect("qualifies");
+        assert_eq!(up.items.len(), 1);
+        assert_eq!(up.items[0].kind, "gpu");
+        assert!(up.items[0].why.contains("~98%"), "why is sample-qualified with the measured peak");
+        assert!(up.items[0].why.contains("most recent monitored session"), "why is time-qualified");
+        assert!(!up.items[0].links.is_empty());
+        assert!(up.items[0].links.iter().all(|l| !l.url.contains("tag=") && !l.url.contains("affiliate")),
+            "plain search links only — no affiliate tags until the owner has accounts");
+    }
+
+    #[test]
+    fn hdd_install_drive_qualifies_for_the_ssd_upgrade_row() {
+        let r = readiness(vec![chk("install-drive", "attention")]);
+        let up = build_upgrade_path(&r, &json!([])).expect("qualifies");
+        assert_eq!(up.items.len(), 1);
+        assert_eq!(up.items[0].kind, "ssd");
+        // Ready install-drive must NOT qualify.
+        let fine = readiness(vec![chk("install-drive", "ready")]);
+        assert!(build_upgrade_path(&fine, &json!([])).is_none());
+    }
+
+    #[test]
+    fn upgrade_path_always_carries_the_disclosure() {
+        let sessions = json!([{ "peak_gpu_usage_pct": 99 }]);
+        let r = readiness(vec![chk("install-drive", "attention")]);
+        let up = build_upgrade_path(&r, &sessions).expect("both qualify");
+        assert_eq!(up.items.len(), 2);
+        assert_eq!(up.disclosure, AFFILIATE_DISCLOSURE);
+        assert!(up.disclosure.contains("never affects verdicts"));
     }
 
     #[test]

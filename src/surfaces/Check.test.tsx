@@ -11,6 +11,17 @@ const leftoversMock = vi.hoisted(() => ({
   nics: [] as { name: string; driver_date: string; driver_age_days: number | null; vendor: string }[],
 }));
 
+// Settable priorities payload (R3 Lane B: upgrade_path arrives on this existing command).
+const prioritiesMock = vi.hoisted(() => ({
+  payload: {
+    limiters: [],
+    already_fine: [],
+    not_worth_touching: [],
+    session_hint: null,
+    upgrade_path: null,
+  } as Record<string, unknown>,
+}));
+
 // useScan polls real commands on mount; mock invoke to feed a tiny readiness/priorities scan.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
@@ -27,8 +38,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         dismissed_ids: [],
         drifts: [],
       });
-    if (cmd === "get_priorities")
-      return Promise.resolve({ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null });
+    if (cmd === "get_priorities") return Promise.resolve(prioritiesMock.payload);
     if (cmd === "get_recommendations") return Promise.resolve([]);
     return Promise.resolve(null);
   }),
@@ -40,7 +50,16 @@ import { ConfirmProvider } from "../design/ConfirmDialog";
 import { fireEvent } from "@testing-library/react";
 import type { SessionSummary } from "../types";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  prioritiesMock.payload = {
+    limiters: [],
+    already_fine: [],
+    not_worth_touching: [],
+    session_hint: null,
+    upgrade_path: null,
+  };
+});
 
 function sess(temp: number | null): SessionSummary {
   return {
@@ -294,5 +313,50 @@ describe("Check", () => {
     }
     // The section/empty-state explainer is a real entry too.
     expect(KNOWLEDGE_BY_ID.has("leftovers")).toBe(true);
+  });
+
+  // ── Upgrade path (R3 Lane B) ──
+
+  it("renders the upgrade-path advisory with copy-only links AND the disclosure when hardware is named", async () => {
+    prioritiesMock.payload = {
+      limiters: [],
+      already_fine: [],
+      not_worth_touching: [],
+      session_hint: null,
+      upgrade_path: {
+        items: [
+          {
+            kind: "gpu",
+            title: "GPU was the measured limiter",
+            why: "In your most recent monitored session, GPU usage peaked very high (~98%).",
+            links: [{ retailer: "Amazon", url: "https://www.amazon.com/s?k=graphics+card" }],
+          },
+        ],
+        disclosure: "If you buy through Compy links we may earn a commission — it never affects verdicts.",
+      },
+    };
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Upgrade path (advisory)")).toBeInTheDocument();
+    expect(screen.getByText("GPU was the measured limiter")).toBeInTheDocument();
+    // The disclosure ALWAYS renders with the links (mandatory — receipts law on money surfaces).
+    expect(screen.getByText(/never affects verdicts/)).toBeInTheDocument();
+    // Links are copy BUTTONS, not anchors — no in-app navigation surface.
+    expect(screen.getByRole("button", { name: /Copy Amazon search link/ })).toBeInTheDocument();
+    expect(document.querySelector(".check-upgrade a")).toBeNull();
+  });
+
+  it("renders NO upgrade-path block when no verdict names hardware", async () => {
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    await screen.findByText("SSD check"); // scan settled
+    expect(screen.queryByText("Upgrade path (advisory)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/never affects verdicts/)).not.toBeInTheDocument();
   });
 });

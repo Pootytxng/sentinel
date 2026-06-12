@@ -371,6 +371,29 @@
   color: var(--ix-text-3);
 }
 
+/* ── Upgrade path (R3 Lane B — advisory; copy-only links + mandatory disclosure) ── */
+.check-upgrade {
+  margin-top: 18px;
+}
+.check-upgrade-item {
+  margin: 10px 0 0;
+}
+.check-upgrade-title {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.check-upgrade-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.check-upgrade-disclosure {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  color: var(--ix-text-3);
+}
+
 @media (max-width: 620px) {
   .check-row {
     flex-direction: column;
