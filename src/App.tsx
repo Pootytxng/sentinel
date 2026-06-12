@@ -22,6 +22,7 @@ import Check from "./surfaces/Check";
 import { prettyGameName } from "./surfaces/game-name";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
+import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
 import { SessionDebrief } from "./surfaces/SessionDebrief";
@@ -667,6 +668,7 @@ export function ReportModal({
   const copy = async (kind: "summary" | "full") => {
     try {
       await navigator.clipboard.writeText(kind === "summary" ? report.discord : report.markdown);
+      if (kind === "summary") bumpLocalStat("shareCardsCopied"); // R3 Lane D
       setCopied(kind);
       setTimeout(() => setCopied(null), 1500);
     } catch {
@@ -722,6 +724,11 @@ export function ReportModal({
           </div>
         </div>
         <pre className="report-preview">{report.markdown}</pre>
+        {/* R3 Lane D — the quiet local-stats line: honest, this-PC-only counters (the future
+            opt-in telemetry's seed data). Hidden until there is anything to say. */}
+        {statsLine(readLocalStats()) && (
+          <p className="muted export-local-stats">{statsLine(readLocalStats())}</p>
+        )}
         <div className="modal-actions">
           <button className="btn" onClick={onOpenFolder}>
             Open folder
@@ -969,6 +976,7 @@ function App() {
     setError(null);
     try {
       setReport(await invoke<ExportResult>("export_report", { feedback: null }));
+      bumpLocalStat("reportsExported"); // R3 Lane D — local-only counter, best-effort
     } catch (e) {
       setError(String(e));
     } finally {

@@ -3068,3 +3068,9 @@ body::before {
 .tweak-launch:hover {
   border-color: var(--accent);
 }
+
+/* R3 Lane D — the quiet local-stats line in the Export modal. */
+.export-local-stats {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+}

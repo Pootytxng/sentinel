@@ -6,6 +6,7 @@ import {
   resolveVariant,
 } from "../surfaces/walkthroughs";
 import { openGuidedUri } from "../surfaces/guided";
+import { bumpLocalStat } from "../data/local-stats";
 import "./Walkthrough.css";
 
 // Animated schematic walkthrough (spec 2026-06-06). A token-only abstracted window + a cursor that
@@ -90,6 +91,11 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
   useEffect(() => {
     setActive(0);
   }, [variantIdx]);
+
+  // R3 Lane D — count each walkthrough actually shown (mount = the user opened it). Local-only.
+  useEffect(() => {
+    bumpLocalStat("walkthroughsOpened");
+  }, []);
 
   useEffect(() => {
     if (reduced || paused || steps.length <= 1) return;
