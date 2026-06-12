@@ -95,7 +95,9 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
 - **M3 retirement spec is READY** — `docs/superpowers/specs/2026-06-11-classic-retirement-M3-spec.md`
   (inventory verified by grep, 8-step plan, shared-CSS hazard flagged, revert tag, fresh attended
   session required). Owner schedules it.
-- **Pagefile dark resolver — DEFERRED, needs an owner call (dark wave 2):** the restore-FORWARD is
+- ~~Pagefile dark resolver — DEFERRED~~ **✅ RESOLVED — owner greenlit option (a); BUILT DARK
+  `1dceded`** (validated single-entry layout only, 8 refusal cases test-pinned, rollback rebuilds
+  from letter+u32s, no-silent-reboot pinned). Original fork record kept below for the audit trail: the restore-FORWARD is
   clean (`AutomaticManagedPagefile=$true`, fixed command), but the ROLLBACK must put the user's exact
   `PagingFiles` REG_MULTI_SZ back — a **path string** (`C:\pagefile.sys 30000 30000`), external
   snapshot data. That collides with the wave's integer-only-interpolation hard line, and rollback-
@@ -142,3 +144,9 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
   -D warnings · tsc+vite clean · /security: gate false + zero restore IPC re-confirmed, integer-
   only elevated commands, additive · hard-lines ✓. PAGEFILE deferred (Review Queue, above);
   bcdedit/Defender excluded by spec.
+- **Pagefile resolver (option (a), owner-directed)** — validation-gated parse (exotic/multi/?:/
+  zero-size layouts refuse honestly, "left as-is"), snapshot = letter+two u32s, rollback rebuilds
+  the entry provably metacharacter-free, reboot stated never silent · `1dceded` · cargo 311 (+4
+  adversarial) · clippy -D warnings · tsc+vite clean · gate false + zero restore IPC re-confirmed ·
+  hard-lines ✓. The full v2 resolver set is now 7 of 9 dark-built; bcdedit (owner-present wave) +
+  Defender (guided-only, never a write) remain excluded by design.
