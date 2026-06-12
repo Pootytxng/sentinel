@@ -150,6 +150,12 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **🏃 RECEIPTS MARATHON R3 LAUNCHED (2026-06-12, owner GO — longest CC run yet).** Spec:
+  `docs/superpowers/specs/2026-06-12-receipts-marathon-R3.md`. Lanes: A dark-site build-out
+  (generator unification + landing + curated debunks + share-card loop) · B affiliate advisory
+  (copyable/export-only, disclosure law) · C telemetry groundwork (spec + dark build, zero
+  network) · D local KPI counters · E Pro dark scaffold · F library growth. All hard-false-gated
+  or static; capabilities/CSP/network/mutation untouched by hard line. Cowork audits on "CC done."
 - **💰 RECEIPTS DOCTRINE ADOPTED (2026-06-12) — the grand re-opening.** Owner blessed the full
   monetization pivot: `docs/RECEIPTS_DOCTRINE.md` is canonical product law (CLAUDE.md + this doc
   aligned same day; council + transformation plan in `docs/superpowers/specs/2026-06-12-*.md`).
