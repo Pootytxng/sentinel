@@ -50,6 +50,14 @@
   Free FOREVER (trust engine, per doctrine §1): all safety/rollback, the Library, Check/Fix,
   readiness, basic monitoring + overlay, Export.
 
+- **LANE F COMPLETE** — `835c7fd` four honest search-intent debunks (game-boosters · ram-cleaners/
+  ISLC · app-hw-accel-off · dns-for-gaming), curation pin 47→51, three promoted to curated picks
+  (site now 14 curated pages; library count 130 derived everywhere). Appliable catalog untouched.
+- **RUN CLOSED 2026-06-12.** All six lanes landed; zero Review-Queue *skips* (every item fit the
+  hard lines). Final suites: **cargo 328 · npm 277 · tsc + clippy -D warnings clean.** Frozen refs
+  + locked gates + capabilities/CSP untouched; zero-outbound grep-verified; site dark; nothing
+  hosted/sent. D+E audit note: one /check finding (StrictMode dev double-count) fixed `35304eb`.
+
 ## Review Queue (owner)
 
 - **Landing copy taste-gate (Lane A2):** the 2026-06-06 money-last landing was SUPERSEDED by the
