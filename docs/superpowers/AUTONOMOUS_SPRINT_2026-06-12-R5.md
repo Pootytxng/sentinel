@@ -139,3 +139,13 @@ Outsider: An app this polished with a gorgeous undeployed site is now clearly in
 Executor: Owner's return sequence: Review Queue item 1 (deploy + taste-gate), then item 2 (skim), then rest.
 Chairman: Clean marathon, honest findings, gates intact — open the door next.
 ```
+
+## ADDENDUM — Lane 2b · `1b9fd76`
+
+Second depth batch before close (the compounding lane earned it): `clean-install-windows`
+**[placebo]** (the wipe isn't what helps — removing rot is; Check finds the actual rot first)
+and `exclusive-fullscreen-fps` **[placebo]** (2014's borderless-costs-FPS rule is dead on
+Win10/11; pick by a measured session). Pin 55→57; corpus 134 hand-curated / 136 total. All
+guards green (npm 300 · tsc · vite). Owner skim item #2 now covers SIX entries (`c14063e` +
+`1b9fd76`). With this, Lane 2's unattended-safe shortlist is exhausted — remaining candidates
+(more-RAM-for-FPS, fTPM-stutter) carry hardware-purchase/BIOS nuance better done attended.
