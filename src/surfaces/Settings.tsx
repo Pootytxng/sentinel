@@ -21,6 +21,7 @@ import {
 } from "../design/theme";
 import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
+import ReceiptsConsent from "./ReceiptsConsent";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -338,6 +339,11 @@ export default function Settings({
             </button>
           </div>
         </section>
+
+        {/* ── Receipts (R3 Lane C — DARK: renders nothing while the backend gate is hard-false;
+            when a future owner-signed build flips it, the consent + inspect surface appears HERE,
+            in the privacy-adjacent room). ── */}
+        <ReceiptsConsent />
 
         {/* ── About ── */}
         <section className="set-section">

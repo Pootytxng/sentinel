@@ -22,6 +22,7 @@ mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detectio
 mod monitoring;
 mod priorities;
 mod readiness;
+mod receipts; // Receipts telemetry GROUNDWORK — DARK (gate hard-false; payload logic only, the send path does not exist).
 mod recommendations;
 mod remote_rules;
 mod sessions;
@@ -658,6 +659,8 @@ pub fn run() {
             export_report,
             open_export_folder,
             get_priorities,
+            receipts::get_receipts_gate,
+            receipts::preview_receipt_payload,
             get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,

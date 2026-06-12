@@ -333,3 +333,21 @@
     transition: none;
   }
 }
+
+/* ── Receipts consent (R3 Lane C — dark today; styles ready for the gated future) ── */
+.receipts-hint {
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  max-width: 56ch;
+}
+.receipts-preview {
+  margin: 10px 0 0;
+  padding: 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  background: var(--ix-bg-1);
+  border: 1px solid var(--ix-border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
