@@ -140,12 +140,22 @@ spec/review through: *does this move money — or trust-at-scale that converts �
 a claim or loosening a locked gate?* Aggressive is sanctioned; scammy is rejected on ROI grounds
 (brand damage kills the funnel) before ethics even enters the room.
 
+**ZERO-BUDGET LAW (standing owner constraint, 2026-06-12):** the owner is bootstrapping on $0 —
+every phase ships on free tiers first (free `*.pages.dev`/`github.io` subdomain before the domain;
+free-tier forms/email; Workers free tier; Ko-fi as the $0 donations bridge). Any spend is
+owner-gated and must name its payback + KPI trigger (domain ← waitlist signal · signing ← first
+paid surface via Azure Trusted Signing ~$10/mo · entity+Paddle ← Pro launch · **paid ads ← never
+before 1.0**). Organic-first: friends + the owner's Discord community = the named seed channel.
+Never tee up a spend without the free alternative it beats.
+
 ## Current board (update as you go)
 
 - **💰 RECEIPTS DOCTRINE ADOPTED (2026-06-12) — the grand re-opening.** Owner blessed the full
   monetization pivot: `docs/RECEIPTS_DOCTRINE.md` is canonical product law (CLAUDE.md + this doc
   aligned same day; council + transformation plan in `docs/superpowers/specs/2026-06-12-*.md`).
-  Phase 0 (doc alignment) + Phase 1 (Library→web exporter for compy.gg) handed to CC. Next:
+  Phase 0 (doc alignment) + Phase 1 (Library→web exporter) ✅ LANDED 2026-06-12 (`f3b2f2e`..`421dd13`:
+  doctrine committed, pointer sweep, `npm run export:library` → 126 entries/127 pages to
+  `dist-web/library/`, 8 tests, /check + /security clean — hosting stays owner-gated). Next:
   Phase 2 = compy.gg one-pager + waitlist (Cowork drafts copy; owner hosts; KPI = 14-day signups).
   Owner errands queued for later phases: affiliate accounts, entity + merchant-of-record, cert.
 - **✅ v2-RESTORE LIVE UAC QA PASSED — W32PS + MPO field-proven (owner-present, 2026-06-11 night)**
