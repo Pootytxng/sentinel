@@ -490,7 +490,9 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   shows the way), Fix guided rows, + matching Learn entries. Vendor-variant auto-selected from the GPU;
 >   deep links open ONLY via the existing allowlist (no new entries). npm **181/181**.
 > - **OPEN (owner):** rebuild the installer for wave 2 (these ship before wave-2 invites); live-verify
->   XButton1 + eyeball the VRR loop. Wayfinding §1-forward-button is a recorded trivial follow-up.
+>   XButton1 + eyeball the VRR loop. (~~Wayfinding §1-forward-button follow-up~~ — ✅ CLOSED
+>   2026-06-11, `03ff98b`: Forward beside Back in all three headers, Alt+Right + XButton2,
+>   browser-model dual stack.)
 >
 > **🎨 WHOLE-APP RESKIN → "HALFWAY HOME" → "ONE RAIL" LANDED, AND THE REDESIGN NOW SHIPS BY DEFAULT —
 > 2026-06-06 (`main` @ `1c6b6af`).** The app wears the **Instrument** design system end to end, dialed
