@@ -20,7 +20,7 @@ import {
   persistOverlayBackdrop,
 } from "../design/theme";
 import { Wordmark } from "../design/Wordmark";
-import { BackButton } from "../design/BackButton";
+import { BackButton, ForwardButton } from "../design/BackButton";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -98,11 +98,15 @@ export default function Settings({
   onClose,
   onBack,
   canGoBack,
+  onForward,
+  canGoForward,
 }: {
   appVersion: string;
   rulesSourceLabel: string;
   onBack: () => void;
   canGoBack: boolean;
+  onForward: () => void;
+  canGoForward: boolean;
   onRerunSetup: () => void;
   onRerunCheck: () => void;
   onClose: () => void;
@@ -171,6 +175,7 @@ export default function Settings({
         <header className="set-header">
           <span className="set-brand">
             <BackButton onBack={onBack} canGoBack={canGoBack} />
+            <ForwardButton onForward={onForward} canGoForward={canGoForward} />
             {/* §6 — the shared Wordmark, the ONLY sanctioned brand source (no bespoke glyph). */}
             <Wordmark size={22} />
             <h1 className="set-title">Settings</h1>

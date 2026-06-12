@@ -64,6 +64,8 @@ const baseProps = {
   onRunCheck: vi.fn(),
   onBack: vi.fn(),
   canGoBack: false,
+  onForward: vi.fn(),
+  canGoForward: false,
 };
 
 describe("CommandCenter", () => {

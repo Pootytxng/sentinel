@@ -10,6 +10,8 @@ const baseProps = {
   rulesSourceLabel: "Rules: Built-in",
   onBack: vi.fn(),
   canGoBack: false,
+  onForward: vi.fn(),
+  canGoForward: false,
   onRerunSetup: vi.fn(),
   onRerunCheck: vi.fn(),
   onClose: vi.fn(),

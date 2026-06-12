@@ -3,7 +3,7 @@ import type { AppliedChange, GameReadiness, Priorities, PriorityItem, SessionSum
 import type { HardwareInfo } from "../App";
 import { AmbientBackdrop } from "../design/AmbientBackdrop";
 import { Wordmark } from "../design/Wordmark";
-import { BackButton } from "../design/BackButton";
+import { BackButton, ForwardButton } from "../design/BackButton";
 import { NavGlyph } from "../design/NavGlyph";
 import { HOME_RAIL, type HomeRailId } from "../design/homeRail";
 import {
@@ -49,6 +49,8 @@ type Props = {
   onOpenSettings?: () => void;
   onBack: () => void;
   canGoBack: boolean;
+  onForward: () => void;
+  canGoForward: boolean;
 };
 
 const fmtGB = (b: number) => (b > 0 ? `${(b / 1024 ** 3).toFixed(0)} GB` : "—");
@@ -323,6 +325,8 @@ export default function CommandCenter(props: Props) {
     onOpenSettings,
     onBack,
     canGoBack,
+    onForward,
+    canGoForward,
   } = props;
 
   const reduced = useReducedMotion();
@@ -404,6 +408,7 @@ export default function CommandCenter(props: Props) {
         <div className="cc-main">
           <header className="cc-header">
             <BackButton onBack={onBack} canGoBack={canGoBack} />
+            <ForwardButton onForward={onForward} canGoForward={canGoForward} />
             <div>
               <h1 className="cc-greeting">{greeting()}</h1>
               {/* Each spec token is nowrap so the line wraps only at the "·" separators —

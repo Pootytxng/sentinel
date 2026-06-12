@@ -6,7 +6,7 @@ import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
-import { BackButton } from "./design/BackButton";
+import { BackButton, ForwardButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { HardwareGrid } from "./surfaces/HardwareGrid";
@@ -1254,53 +1254,84 @@ function App() {
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
   const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
 
-  // ── Back navigation (wayfinding §1) — an app-level location-history stack ───────────────────────
-  // A "location" is the active room/tab (or Settings). In-place expansions are NOT location changes,
-  // so they never push (they don't touch activeTab/showSettings). The effect watches the derived
-  // location and pushes the PREVIOUS one on a forward move; back-moves set isBackNav so they don't
-  // re-push. Frontend-only, zero IPC. Forward is out of scope; stack capped at 50.
+  // ── Back/Forward navigation (wayfinding §1 + its recorded forward follow-up) — two app-level
+  // location stacks, browser model. A "location" is the active room/tab (or Settings). In-place
+  // expansions are NOT location changes, so they never push (they don't touch activeTab/
+  // showSettings). The effect watches the derived location: a normal move pushes the previous
+  // location onto Back and CLEARS Forward (a fresh navigation kills the re-walk branch); a
+  // back-move banks the departed location onto Forward; a forward-move banks it onto Back.
+  // Frontend-only, zero IPC; both stacks capped at 50.
   const currentLocation = showSettings ? "settings" : `tab:${activeTab}`;
   const [navHistory, setNavHistory] = useState<string[]>([]);
+  const [fwdHistory, setFwdHistory] = useState<string[]>([]);
   const prevLocationRef = useRef(currentLocation);
-  const isBackNavRef = useRef(false);
+  const navKindRef = useRef<"normal" | "back" | "forward">("normal");
   useEffect(() => {
     if (currentLocation === prevLocationRef.current) return;
-    if (isBackNavRef.current) {
-      isBackNavRef.current = false;
-    } else {
-      const prev = prevLocationRef.current;
+    const prev = prevLocationRef.current;
+    const kind = navKindRef.current;
+    navKindRef.current = "normal";
+    if (kind === "back") {
+      setFwdHistory((f) => [...f, prev].slice(-50));
+    } else if (kind === "forward") {
       setNavHistory((h) => [...h, prev].slice(-50));
+    } else {
+      setNavHistory((h) => [...h, prev].slice(-50));
+      setFwdHistory([]);
     }
     prevLocationRef.current = currentLocation;
   }, [currentLocation]);
+  const navigateTo = useCallback((target: string) => {
+    if (target === "settings") {
+      setShowSettings(true);
+    } else {
+      setShowSettings(false);
+      setActiveTab(target.slice(4) as Tab);
+    }
+  }, []);
+  // Pop-inside-the-updater keeps pop+navigate atomic; double-invoke-safe under StrictMode (same
+  // base state → same target + same slice both times) — the idiom the original goBack shipped with.
   const goBack = useCallback(() => {
     setNavHistory((h) => {
       if (h.length === 0) return h;
-      const target = h[h.length - 1];
-      isBackNavRef.current = true;
-      if (target === "settings") {
-        setShowSettings(true);
-      } else {
-        setShowSettings(false);
-        setActiveTab(target.slice(4) as Tab);
-      }
+      navKindRef.current = "back";
+      navigateTo(h[h.length - 1]);
       return h.slice(0, -1);
     });
-  }, []);
+  }, [navigateTo]);
+  const goForward = useCallback(() => {
+    setFwdHistory((f) => {
+      if (f.length === 0) return f;
+      navKindRef.current = "forward";
+      navigateTo(f[f.length - 1]);
+      return f.slice(0, -1);
+    });
+  }, [navigateTo]);
   const canGoBack = navHistory.length > 0;
+  const canGoForward = fwdHistory.length > 0;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Alt+Left = back (Windows convention). NO Backspace binding (it conflicts with text inputs).
+      // Alt+Left / Alt+Right = back / forward (Windows convention). NO Backspace binding (it
+      // conflicts with text inputs).
       if (e.altKey && e.key === "ArrowLeft") {
         e.preventDefault();
         goBack();
       }
+      if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        goForward();
+      }
     };
-    // Mouse XButton1 (the side "back" button) — fires as button 3 if the webview surfaces it.
+    // Mouse XButton1/XButton2 (the side back/forward buttons) — buttons 3/4 if the webview
+    // surfaces them.
     const onMouseUp = (e: MouseEvent) => {
       if (e.button === 3) {
         e.preventDefault();
         goBack();
+      }
+      if (e.button === 4) {
+        e.preventDefault();
+        goForward();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1309,7 +1340,7 @@ function App() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [goBack]);
+  }, [goBack, goForward]);
 
   // ── Command Center (new home) wiring ──────────────────────────────────────
   // Resolve the #1 limiter + its linked recommendation so the trust-switch routes through the SAME
@@ -1393,6 +1424,7 @@ function App() {
       {!ccActive && !settingsActive && (
         <header className="header">
         <BackButton onBack={goBack} canGoBack={canGoBack} />
+        <ForwardButton onForward={goForward} canGoForward={canGoForward} />
         <div>
           <h1><Wordmark size={24} /></h1>
           <p className="tag">Hardware-aware PC optimization</p>
@@ -1439,6 +1471,8 @@ function App() {
           rulesSourceLabel={rulesSourceLabel}
           onBack={goBack}
           canGoBack={canGoBack}
+          onForward={goForward}
+          canGoForward={canGoForward}
           onRerunSetup={() => {
             // Re-homed from the footer: replay the intro, then flow into the first check.
             setShowSettings(false);
@@ -1479,6 +1513,8 @@ function App() {
           onOpenSettings={() => setShowSettings(true)}
           onBack={goBack}
           canGoBack={canGoBack}
+          onForward={goForward}
+          canGoForward={canGoForward}
         />
       ) : hw ? (
         <div className="shell">
