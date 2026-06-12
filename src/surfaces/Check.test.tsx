@@ -184,9 +184,9 @@ describe("Check", () => {
     );
     // On-demand: nothing scanned, nothing shown until the user asks (charter: zero perceived scanning).
     expect(screen.queryByText(/Pagefile manually fixed/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for past tweaks" }));
     // Receipts, not adjectives: found value · stock default · matched tweak · rig verdict · rule #5 line.
-    expect(await screen.findByText("Pagefile manually fixed")).toBeInTheDocument();
+    expect(await screen.findByText("Past tweak · Pagefile manually fixed")).toBeInTheDocument();
     expect(screen.getByText(/Found: Fixed at 30000.*Windows default: Automatic/)).toBeInTheDocument();
     expect(screen.getByText(/optimization guides circa 2015–2023/)).toBeInTheDocument();
     expect(screen.getByText(/yours to keep/)).toBeInTheDocument();
@@ -200,9 +200,9 @@ describe("Check", () => {
       </ConfirmProvider>
     );
     const { unmount } = render(ui);
-    fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for past tweaks" }));
     expect(
-      await screen.findByText(/No leftover tweaks found — your Windows config matches stock/),
+      await screen.findByText(/No past tweaks found — your Windows config matches stock/),
     ).toBeInTheDocument();
     unmount();
     // One probe unreadable → the bold "matches stock" claim must NOT appear (honest scope),
@@ -215,7 +215,7 @@ describe("Check", () => {
       ],
     };
     render(ui);
-    fireEvent.click(screen.getByRole("button", { name: "Check for leftover tweaks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for past tweaks" }));
     expect(await screen.findByText(/1 couldn't be read, so nothing is claimed/)).toBeInTheDocument();
     expect(
       screen.getByText(/Couldn't check Boot timer flags \(bcdedit\) — needs admin to check\./),

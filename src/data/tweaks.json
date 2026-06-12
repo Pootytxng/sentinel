@@ -377,6 +377,6 @@
     "aliases": ["disable-mmagent", "memory compression", "mmagent", "compressed memory"],
     "verdict": "placebo",
     "what": "Turns off Windows' in-RAM compression of idle memory pages (Disable-MMAgent -mc).",
-    "why": "Sold as cutting CPU overhead, but the overhead is tiny and the cost is real: under memory pressure cold pages go to disk instead of staying compressed in RAM — slower exactly when you're squeezed (game + browser + voice chat). Stock (on) is the right call on almost every rig; Compy's Leftovers check flags this when an old guide left it off."
+    "why": "Sold as cutting CPU overhead, but the overhead is tiny and the cost is real: under memory pressure cold pages go to disk instead of staying compressed in RAM — slower exactly when you're squeezed (game + browser + voice chat). Stock (on) is the right call on almost every rig; Compy's Past Tweaks check flags this when an old guide left it off."
   }
 ]

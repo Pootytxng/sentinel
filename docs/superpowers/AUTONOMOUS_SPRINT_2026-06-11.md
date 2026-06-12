@@ -85,4 +85,6 @@ means fewer check-ins, not less verification.
 fork, 7 deferred to a fresh train. Locked gates, frozen refs, security settings: untouched.
 
 ## Owner-deferred (taste / money / mutation-ship — Fable parks here, owner decides)
-- Leftovers user-facing name ("Leftovers" recommended). Pricing shape (Q4). Any mutation flip/ship.
+- ~~Leftovers user-facing name~~ **RESOLVED 2026-06-11: owner picked "Past Tweaks"** (display
+  strings only; code identifiers + the persisted leftover_adopted provenance keep "leftovers").
+  Pricing shape (Q4). Any mutation flip/ship.

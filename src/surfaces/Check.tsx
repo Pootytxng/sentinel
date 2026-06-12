@@ -395,21 +395,23 @@ export default function Check({
           and a hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes
           are reported as unchecked, never counted clean. No restore action exists in v1. */}
       <div className="check-leftovers">
+        {/* Display name "Past Tweaks" (owner pick 2026-06-11) — code identifiers, command names,
+            ids, and the persisted leftover_adopted provenance deliberately keep "leftovers". */}
         <div className="check-section-label check-section-label-muted">
-          Leftovers <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
+          Past Tweaks <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
         </div>
         <p className="check-leftovers-blurb">
           Tweaks an old guide may have left on this PC before Compy existed. Read-only — checking
           changes nothing.
         </p>
         <button className="check-leftovers-run" disabled={leftoversBusy} onClick={runLeftovers}>
-          {leftoversBusy ? "Checking…" : "Check for leftover tweaks"}
+          {leftoversBusy ? "Checking…" : "Check for past tweaks"}
         </button>
         {leftovers && leftovers.findings.length === 0 && (
           <p className="check-leftovers-clean" role="status">
             {leftovers.unavailable.length === 0
-              ? "No leftover tweaks found — your Windows config matches stock where it matters."
-              : `No leftovers in the ${leftovers.checked} setting${
+              ? "No past tweaks found — your Windows config matches stock where it matters."
+              : `No past tweaks in the ${leftovers.checked} setting${
                   leftovers.checked === 1 ? "" : "s"
                 } we could read — ${leftovers.unavailable.length} couldn't be read, so nothing is claimed about ${
                   leftovers.unavailable.length === 1 ? "it" : "them"
@@ -417,12 +419,12 @@ export default function Check({
           </p>
         )}
         {leftovers && leftovers.findings.length > 0 && (
-          <ul className="check-list" aria-label="Leftover tweaks found on this PC">
+          <ul className="check-list" aria-label="Past tweaks found on this PC">
             {leftovers.findings.map((f) => (
               <li key={f.id} className="check-row check-row-info check-leftover-row">
                 <div className="check-row-main">
                   <div className="check-row-head">
-                    <span className="check-row-title">{f.title}</span>
+                    <span className="check-row-title">Past tweak · {f.title}</span>
                     <WhatsThis id={LEFTOVER_LEARN_ID[f.id] ?? f.id} onOpen={onOpenLibrary} />
                     <span className="check-advisory">advisory</span>
                   </div>
