@@ -15,6 +15,9 @@ import {
   type OverlayDensity,
   readOverlayDensity,
   persistOverlayDensity,
+  type OverlayBackdrop,
+  readOverlayBackdrop,
+  persistOverlayBackdrop,
 } from "../design/theme";
 import { Wordmark } from "../design/Wordmark";
 import { BackButton } from "../design/BackButton";
@@ -109,6 +112,7 @@ export default function Settings({
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
+  const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [reduced, setReduced] = useState<boolean>(() => {
     try {
       return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -151,10 +155,14 @@ export default function Settings({
     persistCloseToTray(v);
     invoke("set_close_to_tray", { enabled: v }).catch(() => {});
   };
-  // Overlay density persists to localStorage; the overlay (separate window) reacts via `storage`.
+  // Overlay density/backdrop persist to localStorage; the overlay (separate window) reacts via `storage`.
   const changeDensity = (d: OverlayDensity) => {
     setDensity(d);
     persistOverlayDensity(d);
+  };
+  const changeBackdrop = (b: OverlayBackdrop) => {
+    setBackdrop(b);
+    persistOverlayBackdrop(b);
   };
 
   return (
@@ -271,6 +279,27 @@ export default function Settings({
                   onClick={() => changeDensity(d.id)}
                 >
                   {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">In-game overlay background</div>
+              <div className="set-row-sub">
+                Off makes the overlay see-through — the numbers float on the game, outlined so they
+                stay readable.
+              </div>
+            </div>
+            <div className="set-seg" role="group" aria-label="Overlay background">
+              {(["on", "off"] as OverlayBackdrop[]).map((b) => (
+                <button
+                  key={b}
+                  className={`set-seg-btn ${backdrop === b ? "set-seg-on" : ""}`}
+                  aria-pressed={backdrop === b}
+                  onClick={() => changeBackdrop(b)}
+                >
+                  {b === "on" ? "On" : "Off"}
                 </button>
               ))}
             </div>

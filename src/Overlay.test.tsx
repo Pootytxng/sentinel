@@ -58,6 +58,16 @@ describe("Overlay", () => {
     expect(screen.getByText(/cpu/)).toBeTruthy(); // usage % only — never CPU temp
     expect(screen.getByText(/gpu/)).toBeTruthy();
   });
+
+  it("backdrop off renders the see-through pill (ovl2-nobg); default keeps the plate", () => {
+    localStorage.setItem("compy_overlay_v2", "1");
+    const plated = render(<Overlay />);
+    expect(plated.container.querySelector(".ovl2-nobg")).toBeFalsy(); // default = plate on
+    cleanup();
+    localStorage.setItem("compy_overlay_backdrop", "off");
+    const bare = render(<Overlay />);
+    expect(bare.container.querySelector(".ovl2-nobg")).toBeTruthy();
+  });
 });
 
 // The frametime graph's FIXED scale (owner/tester honesty fix, 2026-06-10): stable frametimes

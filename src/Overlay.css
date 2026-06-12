@@ -123,3 +123,21 @@ html.overlay-mode #root {
   display: block;
   margin-top: 1px;
 }
+
+/* Backdrop OFF (owner option, 2026-06-11): no plate at all — text floats on the game, carrying
+   its own readability via the same RTSS-style black outline the classic overlay shipped with.
+   The border stays (transparent) so toggling never shifts layout; the frametime graph gets a
+   drop-shadow for the same any-scene legibility. */
+.ovl2.ovl2-nobg {
+  background: transparent;
+  border-color: transparent;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 0 4px rgba(0, 0, 0, 0.95);
+}
+.ovl2.ovl2-nobg .ovl2-ft {
+  filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000);
+}

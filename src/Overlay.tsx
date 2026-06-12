@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { type OverlayDensity, readOverlayDensity, readDisplayRefreshHz } from "./design/theme";
+import {
+  type OverlayDensity,
+  type OverlayBackdrop,
+  readOverlayDensity,
+  readOverlayBackdrop,
+  readDisplayRefreshHz,
+} from "./design/theme";
 import "./Overlay.css";
 
 // Minimal shapes — the overlay only reads a few fields from the same sensor
@@ -70,14 +76,16 @@ export default function Overlay() {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [v2, setV2] = useState<boolean>(readOverlayV2);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
+  const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [refreshHz, setRefreshHz] = useState<number | null>(readDisplayRefreshHz);
 
-  // React to the main window flipping the flag / density / relaying the monitor refresh —
-  // `storage` fires in OTHER windows.
+  // React to the main window flipping the flag / density / backdrop / relaying the monitor
+  // refresh — `storage` fires in OTHER windows.
   useEffect(() => {
     const on = () => {
       setV2(readOverlayV2());
       setDensity(readOverlayDensity());
+      setBackdrop(readOverlayBackdrop());
       setRefreshHz(readDisplayRefreshHz());
     };
     window.addEventListener("storage", on);
@@ -123,7 +131,7 @@ export default function Overlay() {
   if (v2) {
     const fpsNum = sample ? Math.round(sample.fps) : null;
     return (
-      <div className={`ovl2 ovl2-${density}`}>
+      <div className={`ovl2 ovl2-${density}${backdrop === "off" ? " ovl2-nobg" : ""}`}>
         <div className="ovl2-fps">
           <span className="ovl2-fps-num">{fpsNum ?? "—"}</span>
           <span className="ovl2-unit">fps</span>

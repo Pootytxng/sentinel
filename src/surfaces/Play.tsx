@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "../types";
-import { type OverlayDensity, readOverlayDensity, persistOverlayDensity } from "../design/theme";
+import {
+  type OverlayDensity,
+  type OverlayBackdrop,
+  readOverlayDensity,
+  persistOverlayDensity,
+  readOverlayBackdrop,
+  persistOverlayBackdrop,
+} from "../design/theme";
 import { SessionDebrief } from "./SessionDebrief";
 import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
@@ -74,6 +81,7 @@ export default function Play({
   const [fpsBusy, setFpsBusy] = useState(false);
   const [overlayOn, setOverlayOn] = useState(false);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
+  const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [corner, setCorner] = useState<string>(
     () => localStorage.getItem("compy_overlay_corner") ?? "top-left",
   );
@@ -139,6 +147,10 @@ export default function Play({
   const chooseDensity = (d: OverlayDensity) => {
     setDensity(d);
     persistOverlayDensity(d); // overlay window reacts via the cross-window storage event
+  };
+  const chooseBackdrop = (b: OverlayBackdrop) => {
+    setBackdrop(b);
+    persistOverlayBackdrop(b); // same relay as density
   };
   const chooseCorner = async (c: string) => {
     setCorner(c);
@@ -212,6 +224,19 @@ export default function Play({
                 onClick={() => chooseDensity(d)}
               >
                 {d.charAt(0).toUpperCase() + d.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="play-field-label">Background</div>
+          <div className="play-seg" role="group" aria-label="Overlay background">
+            {(["on", "off"] as OverlayBackdrop[]).map((b) => (
+              <button
+                key={b}
+                className={`play-seg-btn ${backdrop === b ? "play-seg-on" : ""}`}
+                aria-pressed={backdrop === b}
+                onClick={() => chooseBackdrop(b)}
+              >
+                {b === "on" ? "On" : "Off"}
               </button>
             ))}
           </div>

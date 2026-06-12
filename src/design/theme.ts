@@ -171,3 +171,26 @@ export function persistOverlayDensity(d: OverlayDensity): void {
     /* ignore */
   }
 }
+
+// In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
+// fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
+// trick the classic overlay shipped with). Same cross-window relay as density.
+export type OverlayBackdrop = "on" | "off";
+const OVERLAY_BACKDROP_KEY = "compy_overlay_backdrop";
+
+export function readOverlayBackdrop(): OverlayBackdrop {
+  try {
+    if (localStorage.getItem(OVERLAY_BACKDROP_KEY) === "off") return "off";
+  } catch {
+    /* ignore — default on */
+  }
+  return "on";
+}
+
+export function persistOverlayBackdrop(b: OverlayBackdrop): void {
+  try {
+    localStorage.setItem(OVERLAY_BACKDROP_KEY, b);
+  } catch {
+    /* ignore */
+  }
+}
