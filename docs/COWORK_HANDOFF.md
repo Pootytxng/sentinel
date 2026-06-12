@@ -150,6 +150,17 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **✅ OWNER TASTE DECISION (2026-06-12): Fix → "Tune" APPROVED** ("i like tune more than fix").
+  Execute as a small dedicated train AFTER the baptism proposals land (homeRail shared module +
+  parity guard = safe one-point swap; sweep strings/tests/Learn references). Other B3 naming
+  proposals still await the owner's pass when `2026-06-12-naming-proposals.md` lands.
+- **🗣️ DOCTRINE BAPTISM + STAGED DESIGN REFRESH QUEUED (2026-06-12).** Spec:
+  `2026-06-12-doctrine-voice-baptism-design-refresh.md`. §A copy sweep (kill defensive voice —
+  caught live: "nothing to sell you here"; naming PROPOSALS only, Fix→"Tune" recommended, owner
+  taste-gates) → §B visual-refinement marathon R4 (Fable 5, polish Instrument, no IA reversal) →
+  §C full overhaul GATED on owner verdict after B (mockups-first). §D Higgsfield = site/marketing
+  imagery only (all-original; in-app stays CSS). Also in flight: tailored-tuning-gates +
+  walkthrough-stepper + build-stamp spec (`2026-06-12-tailored-tuning-gates-*.md`).
 - **🏃 RECEIPTS MARATHON R3 LAUNCHED (2026-06-12, owner GO — longest CC run yet).** Spec:
   `docs/superpowers/specs/2026-06-12-receipts-marathon-R3.md`. Lanes: A dark-site build-out
   (generator unification + landing + curated debunks + share-card loop) · B affiliate advisory
