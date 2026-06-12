@@ -28,6 +28,10 @@
   yourself and record the reasoning; reserve real questions for owner territory (taste/money/people/
   irreversible). When you do recommend, put the recommended option first.
 - **Explain in user-impact terms,** not internals. He thinks like a user, not a deep-systems engineer.
+- **File reviews get CLICKABLE CARDS, never bare paths** (learned 2026-06-12): inline code-styled
+  paths render as red text he can't click. Anything the owner must open → present it as a file
+  card (Cowork: `present_files`) and/or give the plain `C:\...` path to paste into Explorer.
+  App-window reviews: say explicitly "this one's in the running Compy dev window, not a file."
 - He is **forgiving of fixable mistakes** and biases hard toward momentum. Own errors plainly, fix,
   move on — no over-apologizing.
 
@@ -150,6 +154,10 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **✅ OWNER TASTE DECISIONS #2 (2026-06-12): Learn → "Blackbook"** (rail label + plain doorknob
+  descriptor "what actually works — measured"; site hub = "The Compy Blackbook") **+ the
+  Sarah & Caleb plain-language law** (standing: jargon never defined with jargon; jargon-list CI
+  guard; plain ≠ vague). Spec: `2026-06-12-blackbook-rename-plain-language-law.md`. Handed to CC.
 - **✅ FOUR TRAINS LANDED 2026-06-12 (CC, `69c5dbd..83b91af`):** (1) tailored-tuning spec —
   §A evidence-gated tuning offers (`efa740b`: the one ungated push closed; offers quote the
   measured signal; NVIDIA pinned) + §B walkthrough single-panel stepper (`53f4855`) + §C
