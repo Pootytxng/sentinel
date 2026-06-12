@@ -1,0 +1,111 @@
+<!doctype html>
+<!-- CC REFERENCE DRAFT (2026-06-12, council step) — NOT generated, NOT deployed. The live landing
+     is site/index.html (Cowork's lane). This draft exists as raw material for the council refresh:
+     anti-promise hero, Trust-Ledger receipt visual, verdict key, debunk cards, waitlist block.
+     Cowork mines or discards it; the generator only emits the debunk article pages. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — the PC optimizer that tells you the truth</title>
+<meta name="description" content="Compy reads your actual hardware, grades PC tweaks honestly (real, placebo, or risky), and makes every change it applies reversible. No FPS promises — receipts instead." />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="wrap topbar">
+  <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
+  <span class="beta-chip">Private beta · invite only</span>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="reveal">
+      <p class="kicker">A rollback-first safety layer for your gaming PC</p>
+      <h1>We won't promise<br />you <span class="strike">more FPS</span>.</h1>
+      <p class="hero-sub">
+        Every optimizer promises speed. Most deliver placebo — some break things.
+        Compy reads <strong>your actual hardware</strong>, tells you which tweaks are real,
+        which are placebo, and which will hurt — and <strong>everything it changes, it can
+        undo</strong>. Exact prior state, kept in a receipt on your PC.
+      </p>
+      <div class="cta-row">
+        <a class="btn" href="#waitlist">Join the waitlist</a>
+        <a class="link-quiet" href="#library">Read the debunks →</a>
+      </div>
+    </div>
+    <aside class="reveal reveal-late" aria-label="What a Compy receipt looks like">
+      <div class="receipt">
+        <div class="receipt-head"><span>Trust Ledger</span><span>receipt</span></div>
+        <div class="receipt-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
+        <div class="receipt-row"><span>snapshot</span><span>prior state saved</span></div>
+        <div class="receipt-row"><span class="k">rolled back</span><span>21:50</span></div>
+        <div class="receipt-row"><span>restored</span><span class="receipt-ok">exact prior value ✓</span></div>
+        <div class="receipt-note">Every change Compy makes is recorded with its undo — on your PC, nowhere else.</div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="wrap">
+    <div class="verdict-key" id="grades">
+      <div class="verdict-cell">
+        <span class="chip chip-real">Real</span>
+        <p>Measurably does something on hardware like yours — worth a look, still reversible.</p>
+      </div>
+      <div class="verdict-cell">
+        <span class="chip chip-placebo">Placebo</span>
+        <p>Changes a setting, changes nothing you can feel or measure. You can stop doing these.</p>
+      </div>
+      <div class="verdict-cell">
+        <span class="chip chip-risky">Risky</span>
+        <p>Can cause stutter, crashes, or broken Windows behavior. Compy refuses to apply these at all.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="wrap" id="library">
+    <h2>From the Library</h2>
+    <p class="section-sub">
+      Compy ships a library of {{ENTRY_COUNT}} tweaks and terms, graded honestly. Three of
+      the internet's favorites:
+    </p>
+    <div class="debunks">
+{{DEBUNK_CARDS}}
+    </div>
+  </section>
+
+  <section class="wrap" id="waitlist">
+    <div class="waitlist">
+      <h2>Get the launch email</h2>
+      <p class="section-sub">
+        Compy is in a private, invite-only beta. Leave an email and you'll get exactly one
+        message when the public beta opens.
+      </p>
+      <form class="waitlist-form" data-waitlist>
+        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
+        <button class="btn" type="submit">Notify me</button>
+      </form>
+      <p class="waitlist-pending" data-waitlist-pending>
+        The waitlist isn't wired up yet — this page is a preview. Nothing was sent or stored.
+      </p>
+      <p class="waitlist-note">No spam, no tracking. The app works the same way — it sends nothing off your PC.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="promise">Local-only by design · no telemetry · no account</span>
+    <span>© {{YEAR}} Pootytxng · Compy is in private beta</span>
+  </div>
+</footer>
+
+<script>
+  // The ONLY script on the page: honest interception while no waitlist service is wired.
+  // Swap the form's `action` to the owner-chosen service and delete this block to go live.
+  document.querySelector("[data-waitlist]").addEventListener("submit", function (e) {
+    e.preventDefault();
+    document.querySelector("[data-waitlist-pending]").style.display = "block";
+  });
+</script>
+</body>
+</html>

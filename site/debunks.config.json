@@ -1,0 +1,4 @@
+{
+  "_comment": "The three Library entries published on the landing page. Provisional picks (CC, 2026-06-12) — Cowork/owner can swap by id; every id must exist in src/data/tweaks.json. Re-run `node site/generate.mjs` after changing.",
+  "picks": ["useplatformclock", "timer-resolution", "pagefile-disable"]
+}

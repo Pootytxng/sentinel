@@ -37,3 +37,22 @@ Preview locally any time: double-click `index.html`.
 Never lie: no invented user counts, no fake reviews, no "up to X% FPS" promises. Numbers on
 the page are framed as *examples of what Compy shows*, not guarantees. The anti-snake-oil
 positioning only works if the storefront itself contains none.
+
+## Debunk article pages (council step — CC, 2026-06-12)
+
+The monetization council (`docs/superpowers/specs/2026-06-12-monetization-council.md`) made the
+Library the acquisition engine. The machinery now lives here, ADDITIVE beside the landing:
+
+- `node site/generate.mjs` renders `site/<id>.html` (+ `library.css`) from the app's OWN
+  `src/data/tweaks.json` + `terms.json` — the storefront can never drift from the in-app
+  Library. Re-run after Library edits. `site/index.html` is never touched by the generator.
+- **Picks** live in `site/debunks.config.json` (currently `useplatformclock` /
+  `timer-resolution` / `pagefile-disable` — CC-provisional; Cowork/owner re-pick freely).
+- The whole folder still deploys as-is per the section above; the debunk pages link back to `./`.
+- **Cowork's lane (on the owner's council GO):** the landing refresh — hero re-copy (the
+  "Faster frames" tension is already flagged), a waitlist section (service choice = owner:
+  money + privacy), then re-point each article's CTA to `./#waitlist`. A CC reference draft
+  with an anti-promise hero + Trust-Ledger receipt visual + waitlist block sits in
+  `site/src/index.template.html` to mine or discard.
+- Article pages make zero third-party requests (no webfonts/analytics/CDN) — keep it that way;
+  it's the privacy posture made structural.
