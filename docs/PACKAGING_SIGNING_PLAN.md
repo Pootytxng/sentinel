@@ -96,6 +96,7 @@ then the beta ships unsigned (decided — SmartScreen "unknown publisher" is exp
 - **Beta access:** **invite-only.**
 - **Crash/log collection:** **fully local-only / manual** — no telemetry, no auto-collection; the
   Export report is the manual share mechanism. (No new code; zero-telemetry promise intact.)
+  *(Doctrine pointer 2026-06-12: this stays true for the current beta; per `docs/RECEIPTS_DOCTRINE.md` an opt-in default-OFF Receipts telemetry phase is planned later, behind its own spec + owner sign-off.)*
 
 ⇒ The private beta is **unblocked**: no cert, no hosting setup, no new code. Remaining packaging
 work is the §6 build/pre-package checks + §7 beta QA. CSP is strict in config; pre-public gate =

@@ -164,5 +164,7 @@ rules — never on unverified/partial data, never crashed.
 - **No unsigned rules**, ever, in any channel.
 - **No remote code** — only signed JSON data is fetched, never executable content.
 - **No telemetry requirement** — remote fetch is download-only; Compy still sends no usage
-  data. Fetching rules must not become a tracking channel.
+  data. Fetching rules must not become a tracking channel. *(Doctrine pointer 2026-06-12: per
+  `docs/RECEIPTS_DOCTRINE.md` an opt-in Receipts telemetry phase is planned as its OWN gated
+  channel — rules-fetch itself stays tracking-free regardless.)*
 - **No remote fetch before the manual-mutation QA gates are closed.**

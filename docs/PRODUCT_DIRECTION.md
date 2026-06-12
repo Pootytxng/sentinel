@@ -1,5 +1,9 @@
 # Compy — Product Direction & Feature Plan
 
+> **⚠ DOCTRINE POINTER (2026-06-12):** product direction now EXTENDS per `docs/RECEIPTS_DOCTRINE.md`
+> (monetization-first core — the Receipts Doctrine). The upward-growth thesis below is unchanged;
+> where any text here conflicts with the doctrine, **the doctrine wins.**
+
 **Thesis:** Compy grows **upward** into a *gaming readiness, monitoring, rollback, and
 safe-configuration control center* — not **sideways** into more Windows tweak switches. The
 recommendation catalog is one part of the value, not the product. The module refactor and the

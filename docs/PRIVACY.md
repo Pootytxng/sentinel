@@ -5,6 +5,8 @@ software currently behaves. It is **not legal advice** — the owner should revi
 (and have it reviewed) before publishing. Owner/contact identity is set (Pootytxng; GitHub
 issues); no other placeholders remain.
 
+> **Doctrine pointer (2026-06-12):** the absolutes below describe the software as it ships TODAY (still true); per `docs/RECEIPTS_DOCTRINE.md`, a future opt-in default-OFF Receipts telemetry phase is planned — this policy must be revised before that ships.
+
 ---
 
 ## The short version

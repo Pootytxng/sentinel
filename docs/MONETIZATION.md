@@ -1,5 +1,7 @@
 # Compy — Monetization (decision doc)
 
+> **Doctrine pointer (2026-06-12):** superseded by `docs/RECEIPTS_DOCTRINE.md` (Receipts Doctrine — monetization-first core, incl. a Compy Pro subscription); where this doc conflicts, the doctrine wins.
+
 **Status: DECISION NEEDED (2026-06-02).** This frames the model + processor choice so the build is a
 fast follow once you pick. **Nothing here is built yet** — picking the model is the checkpoint, because
 you can't build licensing infrastructure for a model that isn't chosen (and "free" means no licensing
