@@ -458,5 +458,23 @@
     "what": "Pushing your graphics card's core and memory clocks past stock with a tool like MSI Afterburner.",
     "why": "The gains are real but small — a stable overclock typically buys a few percent — and the cost of overshooting is weeks of 'random' crashes that look like driver bugs, game bugs, anything but the slider you moved last month. If you go in, go like a tester: one small step at a time, a stress run and a measured before/after per step, and write down what you changed so you can walk it back. Undervolting is the calmer cousin — often the same performance, cooler and quieter. Compy never overclocks anything; it can tell you whether your GPU is even the limiter first, so you know if there's anything here for you at all.",
     "related": ["undervolting", "thermal-throttling", "fan-curves"]
+  },
+  {
+    "id": "clean-install-windows",
+    "name": "Reinstalling Windows every few months for FPS",
+    "aliases": ["clean install windows", "reinstall windows", "fresh install fps", "windows reinstall ritual"],
+    "verdict": "placebo",
+    "what": "Wiping and reinstalling Windows on a schedule, on the theory that an install 'wears out' and quietly eats FPS.",
+    "why": "A genuinely rotted install — years of leftover services, startup hooks, and half-removed 'optimizers' — can measurably improve from a wipe, which is why the ritual has believers. But the reinstall isn't what helped; removing the rot was, and on a maintained PC there's nothing to remove. As a schedule, it costs you a weekend of reinstalling everything for frames that don't move. Compy's Check looks for the actual rot — leftover tweak debris, startup load — so you can see whether there's anything a wipe would even fix before you burn the weekend.",
+    "related": ["leftovers", "debloating", "startup-cleanup"]
+  },
+  {
+    "id": "exclusive-fullscreen-fps",
+    "name": "Forcing exclusive fullscreen for FPS",
+    "aliases": ["fullscreen vs borderless", "borderless lag", "borderless costs fps", "always exclusive fullscreen"],
+    "verdict": "placebo",
+    "what": "Always picking exclusive fullscreen over borderless, on the old rule that borderless costs FPS and adds lag.",
+    "why": "That rule was true a decade ago. On Windows 10 and 11, a borderless game with nothing covering it gets handed the display almost as directly as exclusive mode ever did — same frames, near-identical latency, plus instant alt-tab and overlays that keep working. Where the two modes still differ in a specific game, that's worth knowing, and it's measurable: play a session in each and compare, which is exactly the before/after Compy can time for you. Pick by measurement, not by 2014's rule.",
+    "related": ["fullscreen-modes", "fullscreen-optimizations", "overlay"]
   }
 ]
