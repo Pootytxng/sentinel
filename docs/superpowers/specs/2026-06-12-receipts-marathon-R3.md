@@ -79,7 +79,27 @@
 - **F1.** +3–5 honest debunk entries (knowledge growth, 63e8a54 precedent — NOT appliable-catalog
   growth) chosen to pair with Lane A site pages. Receipts law absolute.
 
-## §3 Per-lane verify + report
+## §3 HOSTING DECISION (Cowork deep-research, locked 2026-06-12)
+
+**Default host: Cloudflare Pages (free plan).** Verified 2026-06-12: no bandwidth cap on any
+tier and NO overage-billing mechanism (a surprise bill is structurally impossible — the
+zero-budget law's nightmare scenario removed), deploys from PRIVATE repos (our repo stays
+private until first-public-exposure law), free `<project>.pages.dev` subdomain now, 5 custom
+domains/project with auto-SSL when `compy.gg` is bought, 500 builds/mo + 20k files (site ≈130
+pages — ample). Decisive synergy: the Phase 3 telemetry endpoint can ride Cloudflare Workers'
+free tier (100k req/day) on the SAME $0 account — one platform carries Phases 2 AND 3.
+
+Rejected: **Vercel Hobby** (terms prohibit commercial use — affiliate links qualify; account
+terminable without notice) · **GitHub Pages free** (requires a PUBLIC repo; ours is private by
+law until public exposure) · **Netlify free** (2026 credit model ≈ 15 GB effective + documented
+surprise-bill history + account-wide pausing). Forms gap on Cloudflare is covered by the Lane A
+provider-agnostic embed slot (Tally-class free form, decided at publish time).
+
+**Lane A consequence:** the `SITE_URL` placeholder default shape is `https://<project>.pages.dev`
+(single-constant swap to `https://compy.gg` later). Owner account creation (free, no card) is
+deferred to publish time — nothing needed during the dark build.
+
+## §4 Per-lane verify + report
 
 Per item: one commit, pushed. Per lane: /check + /security, then a one-line report entry
 (hashes · what · one verify line). Final report: lane lines + Review Queue summary + suite
