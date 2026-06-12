@@ -29,13 +29,16 @@ type FpsLite = {
 };
 
 // compy_overlay_v2: render the re-dressed (inverted-rule) overlay. DEFAULT ON (the redesign is the
-// shipped app); "0" in Settings falls back to the classic overlay. Read here (the overlay is a
-// separate window); it reacts to the cross-window `storage` event when Settings flips it or the density.
+// shipped app). A stored "0" is SELF-HEALED to v2 (removed + default): no UI writes this flag
+// anymore (the New Look hub is gone), so a stale "0" pinned the overlay to the CLASSIC layout —
+// which ignores density, leaving the Play density picker a dead knob (owner hit it live
+// 2026-06-11; same lockout class as the shell flags, a335f13). Read here (the overlay is a
+// separate window); it reacts to the cross-window `storage` event when the density changes.
 function readOverlayV2(): boolean {
   try {
-    const v = localStorage.getItem("compy_overlay_v2");
-    if (v === "1") return true;
-    if (v === "0") return false;
+    if (localStorage.getItem("compy_overlay_v2") === "0") {
+      localStorage.removeItem("compy_overlay_v2"); // self-heal the lockout
+    }
   } catch {
     /* ignore — default ON */
   }

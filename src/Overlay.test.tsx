@@ -21,11 +21,16 @@ describe("Overlay", () => {
     expect(container.querySelector(".ovl")).toBeFalsy(); // classic not rendered
   });
 
-  it("renders the classic overlay when the flag is off", () => {
+  it("self-heals a stale '0' — renders v2 and removes the dead flag (the density-dead-knob lockout)", () => {
+    // No UI writes compy_overlay_v2 anymore (the New Look hub is gone), so a leftover "0" had
+    // become an exit-less pin to the CLASSIC overlay — which ignores density, leaving the Play
+    // density picker a dead knob (owner hit it live 2026-06-11). Same self-heal class as the
+    // shell flags (a335f13): remove the stale "0", default v2.
     localStorage.setItem("compy_overlay_v2", "0");
     const { container } = render(<Overlay />);
-    expect(container.querySelector(".ovl2")).toBeFalsy();
-    expect(container.querySelector(".ovl")).toBeTruthy();
+    expect(container.querySelector(".ovl2")).toBeTruthy();
+    expect(container.querySelector(".ovl")).toBeFalsy();
+    expect(localStorage.getItem("compy_overlay_v2")).toBeNull(); // the stale "0" is gone
   });
 
   it("minimal density renders FPS only (no metric row, no frametime line)", () => {
