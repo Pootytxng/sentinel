@@ -154,6 +154,47 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **✅ dist-site AUDIT CLEAN — DEPLOY-READY + R5 MARATHON HANDED TO CC (2026-06-12, Cowork).**
+  CC's `dist-site/` verified on the REAL disk: index.html + library.css **byte-identical to audited
+  `ebf87fc`** (CR-normalized), `library/index.html` resolves over **130** entry pages, landing renders
+  "all 130 entries" (count is COMPUTED from `KNOWLEDGE.length` via `{{ENTRY_COUNT}}`, not asserted — the
+  earlier 130-overclaim flag is RESOLVED), zero outbound across all 130+ pages, no source leak, 632KB.
+  **Deploy teed for owner's return** (dark URL, non-urgent; pair the `compy.pages.dev` upload with his
+  live-glow taste-gate eyeball). **R5 unattended marathon** spec'd at
+  `docs/superpowers/specs/2026-06-12-R5-unattended-marathon.md` (Lanes: §B visual refinement non-taste ·
+  Blackbook content growth · hardening/a11y/law-guards · doc nits; all reversible/gated; council strip +
+  Review Queue per lane; log → `AUTONOMOUS_SPRINT_2026-06-12-R5.md`) — handed to CC while owner rests.
+- **✅ R4b AUDIT CLEAN + TASTE PASS — DEPLOY BLOCKER FOUND (2026-06-12, Cowork).** Commit `ebf87fc`
+  audited vs §B0b; all six hard lines verified from commit BYTES (not CC's say-so): CSS-only (one
+  `<script>` = IO reveal + waitlist), ≤60KB (14.6KB HTML + 20.3KB CSS ≈35KB), reduced-motion fully
+  static (motion is opt-IN under `prefers-reduced-motion:no-preference` + JS guard), copy unchanged
+  (R4b's own diff `7baf678→ebf87fc` = zero visible-copy delta; Library→Blackbook is the prior
+  owner-approved `5f25d3e`), zero outbound (only local `library.css` + inline `data:` SVG grain; the
+  lone `http:` hit is the SVG `xmlns` identifier), app untouched (5 `site/` files only — the ~60
+  "modified" files in `git status` are the known stale-mount/CRLF phantom). Taste: restrained on-brand
+  luminous noir, conservative opacities, de-synced GPU-cheap motion — ships. **DEPLOY BLOCKER:** the
+  landing links `library/index.html` (the full Blackbook the copy bills as "130 entries"), which
+  `site/generate.mjs` writes as a **gitignored** artifact — NOT on the committed tree, and sandbox-mount
+  writes are unreliable. So a clean complete deploy folder must be regenerated on the REAL disk (CC lane)
+  before Cowork drives the `compy.pages.dev` direct upload. CC artifact-build prompt handed. ALSO flag:
+  confirm the real library page count == the "130" the copy claims (pre-existing; reconcile before announce).
+- **🚀 LIVE HANDOFF (2026-06-12, thread swap): R4b GLOW-UP IN FLIGHT + DEPLOY GO BANKED.**
+  State for the incoming session: (1) **R4b landing glow-up** (spec §B0b in
+  `2026-06-12-doctrine-voice-baptism-design-refresh.md`, incl. owner's silk-streak ambient
+  motif) is pasted/running in CC — on "CC done": audit vs §B0b hard lines (CSS-only, ≤60KB,
+  reduced-motion static, copy unchanged, zero outbound), then taste-check, then **DEPLOY WITHOUT
+  ASKING — the owner's GO is already given** (recorded here). (2) Deploy plan: owner's
+  **Cloudflare account is created + logged in** in his Chrome; use Claude-in-Chrome tools →
+  dash.cloudflare.com → Workers & Pages → create Pages project via **direct upload** (project
+  name `compy` → compy.pages.dev; repo stays private, no GitHub OAuth), upload the generated
+  site output (run `npm run export:library` for library pages + site/ for the landing — verify
+  what the exporter outputs vs site/ static pages and upload the coherent set). Owner is
+  non-technical: present the live URL as a clickable link. (3) **Queue after deploy:** Tally
+  waitlist swap-in (owner signup, $0) → Cowork generates Higgsfield OG art (1200×630; hero may
+  stay CSS) → Cowork drafts the Discord announcement (OWNER sends) → 14-day waitlist KPI starts →
+  telemetry spec owner-read (`2026-06-12-receipts-telemetry-spec.md`) → R4 app visual marathon
+  (§B). (4) Frozen refs `16069fa` verified this session; suites last green cargo 329 · npm 296+.
+
 - **🏛️ COUNCIL INSTITUTIONALIZED (2026-06-12, owner decree).** `docs/COUNCIL_PROTOCOL.md` is
   standing law: 6-line COUNCIL STRIP closes every marathon log + Cowork audit; full 3-stage
   council at money gates / KPI readouts / owner's "council it"; eagle-eye memo runs as a
