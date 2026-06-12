@@ -105,6 +105,13 @@ recorded. **End of marathon:** one consolidated `/check` + `/security` sweep ove
   **(a)** restrict to the common case — validate the single entry as `^<DriveLetter>:\pagefile.sys <u32> <u32>$`, store drive-letter (one validated `[A-Za-z]` char) + two u32 sizes, **refuse** exotic/multi-pagefile setups; rollback reconstructs from the validated letter + integers (one non-integer token, provably metacharacter-free). **(b)** sanction the existing EEE-resolver precedent — single-quote the path with PS `''`-escaping (already shipping for adapter names). I recommend **(a)** (tightest, matches the origin-story 30 GB case, refuses what it can't exactly reverse). bcdedit also stays deferred (boot-store writes = highest blast radius, owner-present wave). Everything is dark regardless; this only decides how the eventual pagefile restore is built.
 
 ## Running log (Fable appends — what · commit · verify · hard-line self-audit)
+- **✅ FIELD-CONFIRMED on the owner's rig (2026-06-11 evening):** Past Tweaks end-to-end live —
+  display rename visible (`2be129f`), the stale-flag lockout self-heal un-hid the v2 Check
+  (`a335f13`), and the owner's first clicks caught two REAL probe bugs, both fixed (`ca01347`:
+  WMI-on-STA broke the pagefile read on every real rig; Get-MMAgent is admin-only → honest
+  "needs admin"). Final field readout: 7 settings read clean (pagefile honestly clean — the
+  30 GB fix was already restored in the 06-06 audit) · 2 needs-admin (memcompress, bcdedit).
+  The empty state + honest-degrade laws held exactly as written.
 - R2-1 Leftovers Learn entries — memory-compression-off tweak entry (pin 46→47, curation NOT
   catalog) + "leftovers" term (empty-state philosophy) + all-9 LEFTOVER_LEARN_ID map + section
   What's-this + no-dead-links guard test · `5e8fb98` · cargo 288 · npm 254 (+1) · clippy -D
