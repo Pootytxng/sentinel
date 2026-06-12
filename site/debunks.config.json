@@ -1,4 +1,16 @@
 {
-  "_comment": "The three Library entries published on the landing page. Provisional picks (CC, 2026-06-12) — Cowork/owner can swap by id; every id must exist in src/data/tweaks.json. Re-run `node site/generate.mjs` after changing.",
-  "picks": ["useplatformclock", "timer-resolution", "pagefile-disable"]
+  "_comment": "The curated Library entries published as standalone debunk pages + landing cards. Picked for search intent (what people actually google before breaking their PC) with a deliberate verdict mix — the site celebrates real wins, not just refusals (doctrine §5). Cowork/owner swap freely by id; every id must exist in the Library. Re-run `node site/generate.mjs` after changing.",
+  "picks": [
+    "useplatformclock",
+    "timer-resolution",
+    "pagefile-disable",
+    "disable-defender",
+    "registry-fps-hacks",
+    "debloat-scripts",
+    "cpu-mitigations",
+    "fullscreen-optimizations",
+    "game-mode",
+    "disable-smt-gaming",
+    "tcp-mega-packs"
+  ]
 }

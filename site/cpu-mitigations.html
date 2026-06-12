@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Disable CPU security mitigations (Spectre/Meltdown) — real, placebo, or risky? | Compy Library</title>
+<meta name="description" content="Turns off side-channel attack protections for a small CPU uplift. The honest verdict — risky." />
+<link rel="stylesheet" href="library.css" />
+</head>
+<body>
+<header class="wrap topbar">
+  <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
+  <span class="crumb"><a href="./">← Home</a></span>
+</header>
+
+<main class="wrap article">
+<span class="chip chip-risky" title="Not worth the downside. It might do something, but it brings real tradeoffs — instability, a security hole, or things breaking — so Compy refuses it, or lets you decide with eyes open.">Risky — refused</span>
+<h1>Disable CPU security mitigations (Spectre/Meltdown)</h1><p class="aliases">Also searched as: spectre · meltdown · mitigations off · inspectre</p>
+<section><h2>What it does</h2><p>Turns off side-channel attack protections for a small CPU uplift.</p></section>
+<section><h2>The honest verdict</h2><p>For GAMING the gain is ~0–4% (the big numbers are servers); the cost is re-opening known, documented exploit classes. The FPS rounding error isn't worth it.</p></section>
+<section><h2>How Compy treats it</h2><p class="stance">It's on Compy's refuse list. Compy will never apply this tweak — and if a guide already talked you into it, reversibility is the whole point of the app.</p></section>
+
+  <div class="cta-box">
+    <p>Compy's library covers 126 graded entries like this one, judged against
+    <em>your</em> hardware — and every change it does make is reversible, with the receipt to
+    prove it.</p>
+    <a class="btn" href="./#waitlist">See Compy →</a>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="promise">Local-only by design · no telemetry · no account</span>
+    <span>© 2026 Pootytxng · Compy is in private beta</span>
+  </div>
+</footer>
+</body>
+</html>
