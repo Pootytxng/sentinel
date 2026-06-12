@@ -123,19 +123,31 @@ All recorded in `docs/superpowers/plans/2026-06-04-beta-build-order.md` + the de
 - **Doorknob law** (core-promise status) — every door shows its knob; nothing static looks clickable.
 - **"Right room" placement law** — nothing bolts on; it threads into its naturally-suited room.
 - **"All original" law** — everything we ship is ours; competitor content is reference only.
-- **Honest-measurement law** — never claim "STABLE"; always time-and-sample-qualified.
+- **Honest-measurement law → Receipts law (REFRAMED 2026-06-12)** — never fabricate / never claim
+  unmeasured; time-and-sample-qualified; **measured wins get amplified LOUDLY** (silence about real
+  wins is now also a violation). Canonical: `docs/RECEIPTS_DOCTRINE.md`.
 - **Navigation never teleports** · single-shimmer/single-glow (CI-guarded).
 
-## The endgame & money-last philosophy
+## The endgame — MONEY-NOW (Receipts Doctrine; supersedes "money-last" 2026-06-12)
 
-Nothing financial until the beta can pay for itself. Domain (compy.gg), code-signing, and the
-GitHub repo rename (`Pootytxng/sentinel` → compy) are ALL deferred to **first public/stranger
-exposure of the name** — not the trusted-friends beta. The $0 invite beta ships to ~20 friends in
-small waves; their feedback drives the next builds (this is already happening — testers + Kuya's mom
-have shaped real features). The arc: package → smoke → twenty friends → a beta that pays for itself.
+**Owner decree: Compy must generate income.** Canonical core: `docs/RECEIPTS_DOCTRINE.md` (read it;
+it wins over older direction text, including the previous version of this section). Free app =
+trust engine + funnel; money = content engine (Library→compy.gg) → opt-in Receipts telemetry →
+affiliate upgrade engine → Compy Pro → B2B licensing, in phases with gates + ONE KPI each.
+Signing cert / legal entity / repo rename now schedule themselves at the **first paid surface**
+(concrete trigger, not "someday"). The friends beta continues as the trust seed. Filter every
+spec/review through: *does this move money — or trust-at-scale that converts — without fabricating
+a claim or loosening a locked gate?* Aggressive is sanctioned; scammy is rejected on ROI grounds
+(brand damage kills the funnel) before ethics even enters the room.
 
 ## Current board (update as you go)
 
+- **💰 RECEIPTS DOCTRINE ADOPTED (2026-06-12) — the grand re-opening.** Owner blessed the full
+  monetization pivot: `docs/RECEIPTS_DOCTRINE.md` is canonical product law (CLAUDE.md + this doc
+  aligned same day; council + transformation plan in `docs/superpowers/specs/2026-06-12-*.md`).
+  Phase 0 (doc alignment) + Phase 1 (Library→web exporter for compy.gg) handed to CC. Next:
+  Phase 2 = compy.gg one-pager + waitlist (Cowork drafts copy; owner hosts; KPI = 14-day signups).
+  Owner errands queued for later phases: affiliate accounts, entity + merchant-of-record, cert.
 - **✅ v2-RESTORE LIVE UAC QA PASSED — W32PS + MPO field-proven (owner-present, 2026-06-11 night)**
   — harness `20ffe35` (§4-precedent #[ignore] tests; #[cfg(test)]-only gate-bypass seam, compiled
   out of shipped binaries; `restore_gate()` still false + test-pinned). Both loops: seed → flagged →

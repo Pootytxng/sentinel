@@ -23,6 +23,32 @@ it reads the actual PC and tailors safe settings to it, instead of generic YouTu
 "best tweaks" that break things. UX promise: plain-English "for YOUR hardware" framing,
 safe + reversible by default, rollback over raw control. No jargon, no regkey dumps.
 
+## 💰 NEW CORE — THE RECEIPTS DOCTRINE (owner decree 2026-06-12)
+
+**Compy's mission now includes generating real income for the owner.** Canonical law:
+`docs/RECEIPTS_DOCTRINE.md` — READ IT with this file; where older product-direction text conflicts,
+**the doctrine wins.** Summary:
+
+- **Identity:** from "the optimizer that promises nothing" → **"the measurement brand that proves
+  everything — and gets paid when the proof says 'buy a GPU.'"** Free app = trust engine + funnel.
+- **Money stack (build order):** (1) Library→web content engine on compy.gg · (2) opt-in **Receipts
+  telemetry** (anonymous, default-OFF) → aggregate measured-gains data → marketing that's exciting
+  AND true · (3) affiliate upgrade engine on Priorities/limiter verdicts + web reports · (4) Compy
+  Pro subscription (monitoring/history/multi-rig — built dark, gaming_mode gate pattern) · (5) B2B
+  shop/builder licensing. Phases, gates, KPIs in the doctrine doc.
+- **REFRAMED:** honest-measurement law — "never promise" was a vow of silence; now **never
+  fabricate, never claim unmeasured — and amplify measured wins LOUDLY** (share cards,
+  before/afters, aggregate stats, attack-marketing vs the snake-oil lane). "Your PC is probably
+  fine" defensive copy is RETIRED.
+- **RETIRED:** no-telemetry absolutism → opt-in Receipts telemetry. It is a NEW outbound-network
+  boundary: own spec + security review + owner sign-off before ship (stop-rule 3). Until then the
+  verified zero-outbound property holds.
+- **UNTOUCHABLE (now business-critical):** rollback-first · no fabricated claims · no kernel
+  driver/injection · frozen risky-tweak catalog · signed-remote-rules triple gate · every LOCKED
+  rule below. One Reddit thread of brand damage kills the funnel — **the gates ARE the moat.**
+- **KPI discipline:** every money phase defines ONE metric before build. The money plan runs on
+  receipts too.
+
 ## Who the owner is (collaboration style)
 
 Owner is **Kuya** — product owner / driver, thinks like a *user*, not a deep-systems
