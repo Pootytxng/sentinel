@@ -44,10 +44,27 @@ const recent: SessionSummary[] = [
   },
 ];
 
+// §A (spec 2026-06-12): the offer requires measured evidence; these fixtures cover both arms.
+const qualifies = {
+  qualifies: true,
+  reason: "your GPU peaked at 92°C across your last 3 monitored sessions",
+} as const;
+const noEvidence = {
+  qualifies: false,
+  reason:
+    "nothing measured on this rig suggests an undervolt would help right now — no sustained heat or near-limit load in your recent monitored sessions",
+} as const;
+
 describe("TuningInstrument (Lab gauge)", () => {
   it("renders the shared guide body + the measured before/after readout", () => {
     render(
-      <TuningInstrument guide={guide} vendor="amd" measurement={holding} recentSessions={recent} />,
+      <TuningInstrument
+        guide={guide}
+        vendor="amd"
+        measurement={holding}
+        recentSessions={recent}
+        evidence={qualifies}
+      />,
     );
     // The guide copy (single source).
     expect(screen.getByText(/A "normal" number\?/i)).toBeInTheDocument();
@@ -63,11 +80,65 @@ describe("TuningInstrument (Lab gauge)", () => {
 
   it("with no tune armed, shows the honest empty state (not a fake verdict)", () => {
     render(
-      <TuningInstrument guide={guide} vendor="amd" measurement={null} recentSessions={recent} />,
+      <TuningInstrument
+        guide={guide}
+        vendor="amd"
+        measurement={null}
+        recentSessions={recent}
+        evidence={qualifies}
+      />,
     );
     expect(screen.getByText(/No tune measured yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/Holding up so far/i)).not.toBeInTheDocument();
     // The always-on recent-sessions gauge still renders.
     expect(screen.getByText(/Recent sessions/i)).toBeInTheDocument();
+  });
+
+  // ── §A tailoring gate (spec 2026-06-12) ──
+
+  it("with evidence: the offer names WHY this rig qualifies (the receipt IS the recommendation)", () => {
+    render(
+      <TuningInstrument
+        guide={guide}
+        vendor="amd"
+        measurement={null}
+        recentSessions={recent}
+        evidence={qualifies}
+      />,
+    );
+    expect(screen.getByText(/Why this rig qualifies:/)).toBeInTheDocument();
+    expect(screen.getByText(/92°C across your last 3 monitored sessions/)).toBeInTheDocument();
+    expect(screen.getByText("Show me the way")).toBeInTheDocument();
+  });
+
+  it("without evidence: NO guide, NO walkthrough offer — the honest not-for-this-rig state instead", () => {
+    render(
+      <TuningInstrument
+        guide={guide}
+        vendor="amd"
+        measurement={null}
+        recentSessions={recent}
+        evidence={noEvidence}
+      />,
+    );
+    expect(screen.getByText(/Not for this rig right now:/)).toBeInTheDocument();
+    expect(screen.queryByText("Show me the way")).not.toBeInTheDocument();
+    expect(screen.queryByText(/A "normal" number\?/i)).not.toBeInTheDocument();
+    // Knowledge stays free: the state points at Learn instead of pushing.
+    expect(screen.getByText(/stays in Learn/)).toBeInTheDocument();
+  });
+
+  it("without evidence, an ALREADY-armed tune still gets its measurement (gauge never stranded)", () => {
+    render(
+      <TuningInstrument
+        guide={guide}
+        vendor="amd"
+        measurement={holding}
+        recentSessions={recent}
+        evidence={noEvidence}
+      />,
+    );
+    expect(screen.getByText("Holding up so far")).toBeInTheDocument();
+    expect(screen.getByText(/Not for this rig right now:/)).toBeInTheDocument();
   });
 });

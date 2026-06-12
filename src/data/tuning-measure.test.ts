@@ -3,8 +3,12 @@ import {
   measureTuning,
   postTuneSessions,
   gpuRunningHot,
+  gpuSustainedNearLimit,
+  tuningEvidence,
   TUNING_MIN_SECS,
+  TUNING_USAGE_LIMIT_PCT,
 } from "./tuning-measure";
+import { tuningGuideForVendor } from "./tuning-guides";
 import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types";
 
 // Honest-measurement law coverage: every verdict path, the time-qualification gate (≥3 sessions AND
@@ -253,5 +257,64 @@ describe("measureTuning — zero-session honesty (honest-measurement law)", () =
     const m = measureTuning(baseline({ crash_reported: true }), [])!;
     expect(m.verdict).toBe("too-aggressive");
     expect(m.crashReported).toBe(true);
+  });
+});
+
+// ── §A tailoring gate (spec 2026-06-12) — evidence verdicts, pure + pinned ──
+
+describe("tuningEvidence", () => {
+  const NOW = Date.parse("2026-06-08T20:00:00Z");
+  const hotSessions = [
+    sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 92, peak_gpu_usage_pct: 70 }),
+    sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 85, peak_gpu_usage_pct: 70 }),
+    sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 88, peak_gpu_usage_pct: 70 }),
+  ];
+  const nearLimitSessions = [
+    sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 65, peak_gpu_usage_pct: 99 }),
+    sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 64, peak_gpu_usage_pct: 97 }),
+    sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 66, peak_gpu_usage_pct: 96 }),
+  ];
+  const coolQuietSessions = [
+    sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 65, peak_gpu_usage_pct: 70 }),
+    sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 64, peak_gpu_usage_pct: 72 }),
+    sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 66, peak_gpu_usage_pct: 68 }),
+  ];
+
+  it("sustained heat qualifies, and the reason quotes the measured signal", () => {
+    const e = tuningEvidence(hotSessions, NOW);
+    expect(e.qualifies).toBe(true);
+    expect(e.reason).toContain("92°C");
+    expect(e.reason).toContain("last 3 monitored sessions");
+  });
+
+  it("sustained near-limit usage qualifies when temps don't", () => {
+    expect(gpuRunningHot(hotSessions.map((s) => ({ ...s, peak_gpu_temp_c: 60 })), NOW)).toBeNull();
+    const e = tuningEvidence(nearLimitSessions, NOW);
+    expect(e.qualifies).toBe(true);
+    expect(e.reason).toContain(`≥${TUNING_USAGE_LIMIT_PCT}% usage`);
+  });
+
+  it("no evidence → does NOT qualify, with an honest reason (never a generic push)", () => {
+    const e = tuningEvidence(coolQuietSessions, NOW);
+    expect(e.qualifies).toBe(false);
+    expect(e.reason).toContain("nothing measured on this rig");
+    // No sessions at all is the same honest answer.
+    expect(tuningEvidence([], NOW).qualifies).toBe(false);
+  });
+
+  it("near-limit usage needs the SUSTAINED window — one cool/old session breaks it", () => {
+    expect(gpuSustainedNearLimit(nearLimitSessions.slice(0, 2), NOW)).toBeNull();
+    const mixed = [...nearLimitSessions];
+    mixed[1] = sess({ ...mixed[1], peak_gpu_usage_pct: 80 });
+    expect(gpuSustainedNearLimit(mixed, NOW)).toBeNull();
+    const stale = nearLimitSessions.map((s) => ({ ...s, started_at: "2026-05-01T12:00:00Z" }));
+    expect(gpuSustainedNearLimit(stale, NOW)).toBeNull();
+  });
+
+  it("NVIDIA rigs get NO tuning surface at all (vendor-honesty rule #5 — pinned)", () => {
+    // v1 ships only the hardware-verified AMD guide; the evidence gate composes BEHIND this.
+    expect(tuningGuideForVendor("nvidia")).toBeNull();
+    expect(tuningGuideForVendor("intel")).toBeNull();
+    expect(tuningGuideForVendor("amd")).not.toBeNull();
   });
 });

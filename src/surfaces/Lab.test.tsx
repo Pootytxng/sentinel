@@ -44,11 +44,15 @@ describe("Lab", () => {
     render(<Lab vendor="nvidia" />);
     expect(screen.queryByRole("button", { name: /Tuning/ })).not.toBeInTheDocument();
     cleanup();
-    // AMD: the Tuning section appears and expands in place.
+    // AMD: the Tuning section appears and expands in place. With NO measured evidence (the
+    // invoke mock returns no sessions), §A shows the honest not-for-this-rig state — the guide
+    // is OFFERED only when this rig's own sessions show headroom pain (tailoring law).
     render(<Lab vendor="amd" />);
     const tuneHeader = screen.getByRole("button", { name: /Tuning/ });
     fireEvent.click(tuneHeader);
     expect(tuneHeader.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText(/A "normal" number\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not for this rig right now:/)).toBeInTheDocument();
+    expect(screen.queryByText(/A "normal" number\?/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Show me the way")).not.toBeInTheDocument();
   });
 });

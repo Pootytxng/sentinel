@@ -39,6 +39,20 @@ dev-window title suffix. Release/NSIS builds carry it too (tester bug reports ga
 Review protocol it enables: owner reviews ONLY in the dev window CC launches; stamp mismatch =
 wrong window, say so instantly.
 
+## Audit — where the undervolt walkthrough surfaces today + what gates it (CC, 2026-06-12)
+
+| Surface | Gate today | §A verdict |
+|---|---|---|
+| Check nudge (`Check.tsx` ~L249) | vendor==amd AND `gpuRunningHot` (≥80°C × 3 recent sessions, 14-day window) AND the copy names the evidence | **Already compliant — the model §A generalizes** |
+| Lab → Tuning section (`Lab.tsx` ~L140 → `TuningInstrument`) | **vendor only** — full guide + "Show me the way" walkthrough push with zero rig evidence | **THE ungated path → closed by this train** |
+| Lab welcome row (`Lab.tsx` ~L105) | vendor only; measurement-framed gloss ("did your undervolt hold up?") | Kept — describes the instrument, pushes nothing |
+| Play debrief (`TuningDebrief.tsx` L44) | vendor only; offers to ARM a baseline for a tune the USER already did in Adrenalin | Kept — measurement of a user-initiated act is not a recommendation (recorded fork) |
+| Learn entry `amd-gpu-undervolt` (`Learn.tsx` L126) | none (searchable knowledge) | Stays ungated per spec — knowledge is free |
+| Check limiter rows (`walkthroughForKey(lim.linked)`) | limiter ids never map to the tuning walkthrough | No path |
+
+NVIDIA: `tuningGuideForVendor("nvidia")` returns null (v1 ships the AMD guide only) → every
+surface above is absent on NVIDIA rigs — vendor-honesty rule #5 holds by construction (now pinned).
+
 ## Hard lines
 
 actions.rs/mutation/rollback paths untouched · no appliable-catalog growth (gates SUBTRACT pushes,

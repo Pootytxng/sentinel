@@ -11,7 +11,7 @@ import type {
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { tuningGuideForVendor } from "../data/tuning-guides";
-import { measureTuning } from "../data/tuning-measure";
+import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { TuningInstrument } from "./TuningInstrument";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
@@ -61,6 +61,10 @@ export default function Lab({
   }, [tuningGuide]);
 
   const measurement = measureTuning(armed, sessions, latestCmp);
+  // §A tailoring gate (spec 2026-06-12): the undervolt OFFER inside the instrument requires
+  // measured headroom evidence from this rig; the section itself stays (it's also the gauge for
+  // a tune the user already did). Vendor gating remains tuningGuideForVendor (rule #5).
+  const tuningEvidenceVerdict = tuningEvidence(sessions);
 
   const benchSummary = bench
     ? bench.efficacy
@@ -149,6 +153,7 @@ export default function Lab({
               vendor={vendor}
               measurement={measurement}
               recentSessions={sessions.slice(0, 5)}
+              evidence={tuningEvidenceVerdict}
             />
           </LabSection>
         )}

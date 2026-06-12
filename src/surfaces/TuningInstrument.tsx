@@ -1,6 +1,6 @@
 import type { SessionSummary } from "../types";
 import type { TuningGuide } from "../data/tuning-guides";
-import type { TuningMeasurement } from "../data/tuning-measure";
+import type { TuningMeasurement, TuningEvidence } from "../data/tuning-measure";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { prettyGameName } from "./game-name";
@@ -27,22 +27,41 @@ export function TuningInstrument({
   vendor,
   measurement,
   recentSessions,
+  evidence,
 }: {
   guide: TuningGuide;
   vendor: GpuVendor;
   measurement: TuningMeasurement | null;
   recentSessions: SessionSummary[];
+  /** §A tailoring law (spec 2026-06-12): the guide is OFFERED only with measured headroom
+   *  evidence from THIS rig; the why-line quotes the real signal. No evidence → the honest
+   *  not-for-this-rig state below — the guide itself stays free in Learn. */
+  evidence: TuningEvidence;
 }) {
   const walkthrough = walkthroughForKey(guide.id);
 
   return (
     <div className="tg-instrument">
-      <TuningGuideBody guide={guide} />
-      {walkthrough && (
-        <details className="tg-walkthrough">
-          <summary>Show me the way</summary>
-          <Walkthrough walkthrough={walkthrough} vendor={vendor} />
-        </details>
+      {evidence.qualifies ? (
+        <>
+          <p className="tg-evidence">
+            <span className="tg-evidence-mark">Why this rig qualifies:</span> measured here —{" "}
+            {evidence.reason}.
+          </p>
+          <TuningGuideBody guide={guide} />
+          {walkthrough && (
+            <details className="tg-walkthrough">
+              <summary>Show me the way</summary>
+              <Walkthrough walkthrough={walkthrough} vendor={vendor} />
+            </details>
+          )}
+        </>
+      ) : (
+        <p className="tg-not-for-rig">
+          <span className="tg-evidence-mark">Not for this rig right now:</span> {evidence.reason}.
+          Compy only suggests tuning when your own sessions show it would help — the full guide
+          stays in Learn (search “undervolt”) if you're curious.
+        </p>
       )}
 
       <div className="tg-readout">

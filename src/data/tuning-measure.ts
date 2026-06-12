@@ -55,6 +55,66 @@ export function gpuRunningHot(
   return { peakC: Math.max(...temps), sessions: temps.length };
 }
 
+// Sustained near-limit usage (spec 2026-06-12 §A): the second admissible headroom-pain signal.
+// Threshold matches the backend's GPU-limited verdict (priorities.rs GPU_LIMITED_PCT = 95).
+export const TUNING_USAGE_LIMIT_PCT = 95;
+
+/**
+ * Sustained near-limit GPU usage across the last `TUNING_HOT_MIN_SESSIONS` recent sessions (same
+ * window/recency discipline as `gpuRunningHot`). Returns the worst peak + count, or null.
+ */
+export function gpuSustainedNearLimit(
+  sessions: SessionSummary[],
+  now: number = Date.now(),
+): { peakPct: number; sessions: number } | null {
+  const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
+  const usages = sessions
+    .filter((s) => {
+      if (typeof s.peak_gpu_usage_pct !== "number") return false;
+      const started = Date.parse(s.started_at);
+      return Number.isFinite(started) && now - started <= windowMs;
+    })
+    .slice(0, TUNING_HOT_MIN_SESSIONS)
+    .map((s) => s.peak_gpu_usage_pct as number);
+  if (usages.length < TUNING_HOT_MIN_SESSIONS) return null;
+  if (usages.some((u) => u < TUNING_USAGE_LIMIT_PCT)) return null; // not sustained
+  return { peakPct: Math.max(...usages), sessions: usages.length };
+}
+
+// ── Evidence gate for tuning/OC-class OFFERS (spec 2026-06-12 §A — the tailoring law) ──────────
+// A tuning push must name WHY this rig qualifies; the receipt IS the recommendation. Knowledge
+// stays free in Learn — this gates only the recommending surfaces (Lab card, offers).
+
+export type TuningEvidence =
+  | { qualifies: true; reason: string }
+  | { qualifies: false; reason: string };
+
+/** Vendor-blind measured-headroom verdict (vendor gating stays in tuningGuideForVendor). */
+export function tuningEvidence(
+  sessions: SessionSummary[],
+  now: number = Date.now(),
+): TuningEvidence {
+  const hot = gpuRunningHot(sessions, now);
+  if (hot) {
+    return {
+      qualifies: true,
+      reason: `your GPU peaked at ${hot.peakC}°C across your last ${hot.sessions} monitored sessions`,
+    };
+  }
+  const limit = gpuSustainedNearLimit(sessions, now);
+  if (limit) {
+    return {
+      qualifies: true,
+      reason: `your GPU held ≥${TUNING_USAGE_LIMIT_PCT}% usage across your last ${limit.sessions} monitored sessions`,
+    };
+  }
+  return {
+    qualifies: false,
+    reason:
+      "nothing measured on this rig suggests an undervolt would help right now — no sustained heat or near-limit load in your recent monitored sessions",
+  };
+}
+
 export type TuningVerdict =
   | "holding" // Holding up so far
   | "too-aggressive" // step back one increment

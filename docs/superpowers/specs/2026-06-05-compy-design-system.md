@@ -31,6 +31,15 @@ is lying about what it is — the UI must be as honest about ITSELF as Compy is 
 (This replaces the earlier, too-strict "never move for vibes" rule — corrected at owner's push
 2026-06-05. Austerity is not honesty; it's just one taste.)
 
+**Tailoring law (owner-elevated 2026-06-12, spec
+`2026-06-12-tailored-tuning-gates-walkthrough-presentation.md` §A):** any tuning/overclock-class
+ADVISORY is offered only with measured evidence from THIS rig, and the offer names why it
+qualifies ("your GPU peaked at 92°C across your last 3 sessions") — **the receipt IS the
+recommendation.** No generic "free performance" pushes, ever. Absent evidence, the surface shows
+an honest "not for this rig right now" state; the knowledge itself stays free and searchable in
+Learn. Vendor variants stay behind the vendor-honesty rule (#5). Per-rig tailoring is the win
+condition and prestige line — generic advice is the competitor's product.
+
 ---
 
 ## 1. Brand mark
