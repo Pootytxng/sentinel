@@ -9,9 +9,11 @@ import { openGuidedUri } from "../surfaces/guided";
 import { bumpLocalStat } from "../data/local-stats";
 import "./Walkthrough.css";
 
-// Animated schematic walkthrough (spec 2026-06-06). A token-only abstracted window + a cursor that
-// glides click → click → done, synced to a 1·2·3 step list. Loops; hover/focus pauses. Under
-// prefers-reduced-motion it becomes a static side-by-side storyboard (same data, no loop). It NEVER
+// Animated schematic walkthrough (spec 2026-06-06; presentation reworked 2026-06-12 §B — the
+// stacked five-panel storyboard read as clutter). ONE token-only abstracted window + a stepper
+// (prev/next + jump dots, keyboard accessible): step N highlights in place, captions rail along.
+// Auto-advance runs only when motion is allowed AND the user hasn't taken the wheel; under
+// prefers-reduced-motion it is a manual stepper — never an auto-loop, never the 5-stack. It NEVER
 // dresses as real OS chrome — it's labeled a schematic.
 
 function usePrefersReducedMotion(): boolean {
@@ -32,18 +34,10 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-function Stage({
-  steps,
-  active,
-  storyboard,
-}: {
-  steps: WalkthroughStep[];
-  active: number;
-  storyboard?: boolean;
-}) {
+function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: number; cursor: boolean }) {
   const cur = steps[active] ?? steps[0];
   return (
-    <div className={`wt-stage ${storyboard ? "wt-stage-frame" : ""}`} aria-hidden="true">
+    <div className="wt-stage" aria-hidden="true">
       {/* Abstracted window — clearly NOT a screenshot: titlebar dots + muted sidebar + content rows. */}
       <div className="wt-titlebar">
         <span />
@@ -72,7 +66,7 @@ function Stage({
           <span className="wt-hotspot-label">{s.label}</span>
         </span>
       ))}
-      {!storyboard && <span className="wt-cursor" style={{ left: `${cur.x}%`, top: `${cur.y}%` }} />}
+      {cursor && <span className="wt-cursor" style={{ left: `${cur.x}%`, top: `${cur.y}%` }} />}
     </div>
   );
 }
@@ -87,6 +81,9 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
   const steps = variant.steps;
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  // The user taking the wheel (prev/next/dot) ends auto-advance for good — a stepper the user
+  // drives must never yank the step away. Reduced-motion never auto-advances at all.
+  const [manual, setManual] = useState(false);
 
   useEffect(() => {
     setActive(0);
@@ -102,10 +99,15 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
   }, []);
 
   useEffect(() => {
-    if (reduced || paused || steps.length <= 1) return;
+    if (reduced || manual || paused || steps.length <= 1) return;
     const id = window.setInterval(() => setActive((a) => (a + 1) % steps.length), 2200);
     return () => window.clearInterval(id);
-  }, [reduced, paused, steps.length]);
+  }, [reduced, manual, paused, steps.length]);
+
+  const goTo = (i: number) => {
+    setManual(true);
+    setActive(((i % steps.length) + steps.length) % steps.length);
+  };
 
   return (
     <div
@@ -135,19 +137,44 @@ export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: 
         )}
       </div>
 
-      {reduced ? (
-        <div className="wt-storyboard">
+      {/* ONE panel always (§B) — the active step highlights in place; the cursor glide only runs
+          while auto-advance does. */}
+      <Stage steps={steps} active={active} cursor={!reduced && !manual} />
+
+      <div className="wt-stepper">
+        <button
+          type="button"
+          className="wt-step-btn"
+          onClick={() => goTo(active - 1)}
+          aria-label="Previous step"
+        >
+          ‹
+        </button>
+        <div className="wt-dots" role="group" aria-label="Steps">
           {steps.map((_, i) => (
-            <Stage key={i} steps={steps} active={i} storyboard />
+            <button
+              key={i}
+              type="button"
+              className={`wt-dot ${i === active ? "wt-dot-on" : ""}`}
+              aria-label={`Step ${i + 1}`}
+              aria-current={i === active ? "step" : undefined}
+              onClick={() => goTo(i)}
+            />
           ))}
         </div>
-      ) : (
-        <Stage steps={steps} active={active} />
-      )}
+        <button
+          type="button"
+          className="wt-step-btn"
+          onClick={() => goTo(active + 1)}
+          aria-label="Next step"
+        >
+          ›
+        </button>
+      </div>
 
       <ol className="wt-steps">
         {steps.map((s, i) => (
-          <li key={i} className={`wt-step ${i === active && !reduced ? "wt-step-on" : ""}`}>
+          <li key={i} className={`wt-step ${i === active ? "wt-step-on" : ""}`}>
             <span className="wt-step-num">{i + 1}</span>
             <span className="wt-step-cap">{s.caption}</span>
           </li>

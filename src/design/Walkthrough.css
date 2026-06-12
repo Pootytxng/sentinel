@@ -234,14 +234,45 @@
   color: var(--ix-accent-ink, #06231c);
 }
 
-/* Reduced-motion: static side-by-side storyboard, no cursor, no loop. */
-.wt-storyboard {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+/* §B stepper (2026-06-12): one panel + prev/next + jump dots — keyboard accessible, fits the
+   380px floor (fixed small controls, wrapping never needed). */
+.wt-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
 }
-.wt-stage-frame {
-  aspect-ratio: 4 / 3;
+.wt-step-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  background: var(--ix-base-2, rgba(255, 255, 255, 0.04));
+  color: var(--ix-text-1, inherit);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.wt-step-btn:hover {
+  border-color: var(--ix-accent);
+}
+.wt-dots {
+  display: flex;
+  gap: 7px;
+}
+.wt-dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--ix-glass-border, var(--hairline));
+  background: transparent;
+  cursor: pointer;
+}
+.wt-dot-on {
+  background: var(--ix-accent);
+  border-color: var(--ix-accent);
 }
 @media (prefers-reduced-motion: reduce) {
   .wt-cursor {
