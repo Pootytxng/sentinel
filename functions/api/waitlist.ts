@@ -22,6 +22,8 @@ interface D1Database {
 }
 interface Env {
   DB: D1Database;
+  /** Pages secret (set via `wrangler pages secret put IP_PEPPER`) — never in the repo. */
+  IP_PEPPER?: string;
 }
 type PagesContext = {
   request: Request;
@@ -32,9 +34,10 @@ type PagesContext = {
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,189}\.[^\s@.]{2,63}$/;
 const MAX_PER_HOUR = 5; // per ip_hash — generous for humans, a wall for scripts
 
-// Not a secret: linkability salt so raw IPs never exist at rest. Rotating it only
-// resets rate-limit linkage; it protects nothing requiring secrecy.
-const IP_PEPPER = "compy-waitlist-v1:";
+// Fallback linkability salt. The REAL pepper is the IP_PEPPER Pages secret (set in the CF
+// account, never the repo) — with a secret pepper, a leaked table can't be brute-forced back
+// to raw IPv4s. This fallback only exists so a missing secret degrades to hashed-not-raw.
+const IP_PEPPER_FALLBACK = "compy-waitlist-v1:";
 
 async function sha256Hex(s: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -81,7 +84,7 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
   }
 
   const ip = request.headers.get("cf-connecting-ip") ?? "";
-  const ipHash = await sha256Hex(IP_PEPPER + ip);
+  const ipHash = await sha256Hex((env.IP_PEPPER ?? IP_PEPPER_FALLBACK) + ip);
 
   try {
     const recent = await env.DB.prepare(
