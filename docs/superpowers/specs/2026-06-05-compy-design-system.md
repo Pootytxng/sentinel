@@ -31,6 +31,15 @@ is lying about what it is — the UI must be as honest about ITSELF as Compy is 
 (This replaces the earlier, too-strict "never move for vibes" rule — corrected at owner's push
 2026-06-05. Austerity is not honesty; it's just one taste.)
 
+**The Sarah & Caleb bar (owner-elevated 2026-06-12, spec
+`2026-06-12-blackbook-rename-plain-language-law.md` §B — named for two real non-technical
+testers):** every entry, guide, verdict, tooltip, and advisory must land on first read for a smart
+non-technical reader. Every technical term is avoided, explained in everyday words at first use,
+or carries its glossary cross-link (CI-enforced by `src/data/jargon-guard.test.ts`). Jargon may
+never be defined with more jargon. Analogies welcome; condescension never (the knowledge lint
+bans "simply/obviously/basically"). **Plain ≠ vague:** numbers, qualifiers, and receipts stay —
+plain wording never weakens or inflates a claim.
+
 **Tailoring law (owner-elevated 2026-06-12, spec
 `2026-06-12-tailored-tuning-gates-walkthrough-presentation.md` §A):** any tuning/overclock-class
 ADVISORY is offered only with measured evidence from THIS rig, and the offer names why it

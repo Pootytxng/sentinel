@@ -60,7 +60,7 @@ export function TuningInstrument({
         <p className="tg-not-for-rig">
           <span className="tg-evidence-mark">Not for this rig right now:</span> {evidence.reason}.
           Compy only suggests tuning when your own sessions show it would help — the full guide
-          stays in Learn (search “undervolt”) if you're curious.
+          stays in the Blackbook (search “undervolt”) if you're curious.
         </p>
       )}
 

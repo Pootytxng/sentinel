@@ -571,9 +571,10 @@ export default function Learn({
         <div className="lx-inner">
           <div className="lx-head">
             <div>
-              <h2 className="lx-title" id="lx-modal-title">Learn</h2>
+              <h2 className="lx-title" id="lx-modal-title">Blackbook</h2>
               <p className="lx-tagline">
-                Look up any tweak, term, or scam you heard online — we only answer what we've verified.
+                What actually works — measured. Look up any tweak, term, or scam you heard online;
+                we only answer what we've verified.
               </p>
             </div>
             {/* As a rail room there's no "Close" (you leave via the rail); only the modal form has it. */}
@@ -584,7 +585,7 @@ export default function Learn({
             )}
           </div>
 
-          <div className="lx-modes" role="tablist" aria-label="Library mode">
+          <div className="lx-modes" role="tablist" aria-label="Blackbook mode">
             <button
               role="tab"
               aria-selected={mode === "browse"}

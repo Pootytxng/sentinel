@@ -13,6 +13,8 @@ export const HOME_RAIL: { id: HomeRailId; label: string; icon: string }[] = [
   // a fear frame the doctrine retired. The id stays "fix": it's the persisted nav key (location
   // history / parity guard) — renaming the id would orphan stored history for zero user value.
   { id: "fix", label: "Tune", icon: "fix" },
-  { id: "learn", label: "Learn", icon: "learn" },
+  // Label "Blackbook" (owner-approved 2026-06-12): the Library brand, doorknob descriptor lives in
+  // the room header ("what actually works — measured"). The id stays "learn" — persisted nav key.
+  { id: "learn", label: "Blackbook", icon: "learn" },
   { id: "lab", label: "Lab", icon: "lab" },
 ];

@@ -10,9 +10,9 @@ const searchBox = () => screen.getByLabelText("Search the knowledge library") as
 const title = ".lx-name"; // card titles (the same name can recur as a related chip)
 
 describe("Learn surface (reskin)", () => {
-  it("renders the Learn shell with type-filter chips", () => {
+  it("renders the Blackbook shell with type-filter chips", () => {
     open();
-    expect(screen.getByText("Learn")).toBeInTheDocument();
+    expect(screen.getByText("Blackbook")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terms" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tricks" })).toBeInTheDocument();
   });

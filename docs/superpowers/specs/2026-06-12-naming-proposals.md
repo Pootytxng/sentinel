@@ -10,7 +10,7 @@
 | **Fix** (rail room) | Tune · Tailor · Dial-in | **Tune ✅ EXECUTED `83b91af`** | "Fix" frames the PC as broken (fear frame, retired); "Tune" is aspiration + matches the tailoring prestige line. Sublabel shipped: "Measured changes for YOUR rig". |
 | **Check** (rail room) | Check · Scan · Pulse | **Check (keep)** | Plain-English verb, already doctrine-neutral; "Scan" reads AV-scanner, "Pulse" reads decorative. |
 | **Play** (rail room) | Play · Sessions · Game Day | **Play (keep)** | Owner-voice, warm, says what the room holds; alternatives are colder. |
-| **Learn** (rail room) | Learn · Library · The Library | **Learn (keep)** | Verb matches the rail's verb rhythm (Check/Play/Fix/Learn); "Library" already names the corpus inside it — two names for two things. |
+| **Learn** (rail room) | Learn · Library · The Library | **Blackbook ✅ DECIDED + EXECUTED** | Owner taste decision 2026-06-12 (overrode the keep-recommendation): rail label "Blackbook", room descriptor "what actually works — measured", site hub "The Compy Blackbook". Id stays `learn`. |
 | **Lab** (rail room) | Lab · Measure · Bench | **Lab (keep)** | Already the measurement-brand room; "Bench" collides with the Benchmark instrument inside it. |
 | **Home** (rail room) | Home · Rig · Dashboard | **Home (keep)** | Boring on purpose — the wayfinding anchor should be the one word nobody has to learn. |
 | **Trust Ledger** (feature) | Trust Ledger · Receipts · The Receipt Roll | **Receipts** | The doctrine made "receipts" THE brand vocabulary — the ledger IS the receipts; one word, owner-voice, matches "Measured, not promised". (Trust Ledger stays a fine subtitle.) |

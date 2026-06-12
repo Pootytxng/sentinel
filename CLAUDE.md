@@ -52,6 +52,11 @@ safe + reversible by default, rollback over raw control. No jargon, no regkey du
   1.0**). Organic-first: friends + the owner's Discord = the seed channel.
 - **KPI discipline:** every money phase defines ONE metric before build. The money plan runs on
   receipts too.
+- **COUNCIL OVERSIGHT (standing, 2026-06-12):** `docs/COUNCIL_PROTOCOL.md` — the five-lens
+  council (Contrarian · First-Principles · Expansionist · Outsider · Executor) reviews every
+  major train: a 6-line COUNCIL STRIP closes every marathon log + Cowork audit; the full
+  three-stage council convenes at money gates and on the owner's "council it." Advises, never
+  overrides laws/gates/owner territory; Contrarian 🔴 flags open the report.
 
 ## Who the owner is (collaboration style)
 

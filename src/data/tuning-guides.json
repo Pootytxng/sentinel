@@ -23,7 +23,7 @@
       "Play a demanding game or loop a benchmark for 20 to 30 minutes.",
       "Stable? Drop another 25 to 50 mV and retest. Crash, artifacts, or a black screen? Step back up one increment — that's your limit."
     ],
-    "range": "Many recent Radeons settle around 50 to 120 mV under stock — but this is the silicon lottery; your chip's stable point is its own. Find it by stepping, don't paste a number from a video.",
+    "range": "Many recent Radeons settle around 50 to 120 mV under stock (mV = millivolts, thousandths of a volt — you're nudging, not rewiring) — but this is the silicon lottery; your chip's stable point is its own. Find it by stepping, don't paste a number from a video.",
     "discretion": "Advisory. You're making the change in AMD's tool, at your discretion — an undervolt won't hurt the hardware, but confirming stability is on you, and you should check your card's warranty terms. Compy never touches your voltage — it just measures whether it worked.",
     "undo": "Adrenalin → Performance → Tuning → Reset.",
     "walkthrough": {

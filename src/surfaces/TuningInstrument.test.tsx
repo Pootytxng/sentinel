@@ -124,8 +124,8 @@ describe("TuningInstrument (Lab gauge)", () => {
     expect(screen.getByText(/Not for this rig right now:/)).toBeInTheDocument();
     expect(screen.queryByText("Show me the way")).not.toBeInTheDocument();
     expect(screen.queryByText(/A "normal" number\?/i)).not.toBeInTheDocument();
-    // Knowledge stays free: the state points at Learn instead of pushing.
-    expect(screen.getByText(/stays in Learn/)).toBeInTheDocument();
+    // Knowledge stays free: the state points at the Blackbook instead of pushing.
+    expect(screen.getByText(/stays in the Blackbook/)).toBeInTheDocument();
   });
 
   it("without evidence, an ALREADY-armed tune still gets its measurement (gauge never stranded)", () => {

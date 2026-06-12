@@ -154,6 +154,12 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **🏛️ COUNCIL INSTITUTIONALIZED (2026-06-12, owner decree).** `docs/COUNCIL_PROTOCOL.md` is
+  standing law: 6-line COUNCIL STRIP closes every marathon log + Cowork audit; full 3-stage
+  council at money gates / KPI readouts / owner's "council it"; eagle-eye memo runs as a
+  scheduled Cowork task EVERY OTHER DAY at 9am (owner cadence call 2026-06-12; task id
+  "weekly-council-eagle-eye" — read-only, advisory).
+  Pointer added to CLAUDE.md NEW CORE. Advises, never overrides laws/gates/owner territory.
 - **✅ OWNER TASTE DECISIONS #2 (2026-06-12): Learn → "Blackbook"** (rail label + plain doorknob
   descriptor "what actually works — measured"; site hub = "The Compy Blackbook") **+ the
   Sarah & Caleb plain-language law** (standing: jargon never defined with jargon; jargon-list CI

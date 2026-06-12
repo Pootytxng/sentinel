@@ -21,7 +21,8 @@
     "aliases": ["message signaled interrupts", "msi"],
     "verdict": "real",
     "what": "Switches a device from a shared legacy line IRQ to dedicated message-signaled interrupts.",
-    "why": "A real interrupt-latency win on a device that actually benefits (GPU / NIC / NVMe), though blanket-forcing it everywhere is negligible on modern setups — driver-dependent and reversible. Compy surfaces it as advisory, never forces it."
+    "why": "A real interrupt-latency win on a device that actually benefits (GPU / NIC / NVMe), though blanket-forcing it everywhere is negligible on modern setups — driver-dependent and reversible. Compy surfaces it as advisory, never forces it.",
+    "related": ["nvme-ssd-hdd", "interrupts"]
   },
   {
     "id": "useplatformclock",
@@ -53,7 +54,8 @@
     "aliases": ["xmp", "expo", "docp", "ram overclock profile", "memory profile"],
     "verdict": "real",
     "what": "Enables your RAM's rated speed profile in BIOS (it runs slower out of the box).",
-    "why": "The #1 low-risk BIOS win — real gains in CPU-bound games and 1% lows. If the PC fails to boot, clear CMOS and it's back; run a memory stability test after enabling."
+    "why": "The #1 low-risk BIOS win — real gains in CPU-bound games and 1% lows. If the PC fails to boot, clear CMOS and it's back; run a memory stability test after enabling.",
+    "related": ["one-percent-lows"]
   },
   {
     "id": "rebar-sam",
@@ -61,7 +63,8 @@
     "aliases": ["rebar", "resizable bar", "SAM", "smart access memory", "above 4g decoding"],
     "verdict": "real",
     "what": "Lets the CPU access the GPU's whole VRAM in one mapping instead of small chunks (BIOS + driver).",
-    "why": "Real but title-dependent — a few percent in many games, big in a handful, slightly negative in rare ones. Enable it, measure, and disable per-title only if a game regresses."
+    "why": "Real but title-dependent — a few percent in many games, big in a handful, slightly negative in rare ones. Enable it, measure, and disable per-title only if a game regresses.",
+    "related": ["vram"]
   },
   {
     "id": "fan-curves",
@@ -109,7 +112,8 @@
     "aliases": ["frame cap", "max frame rate", "limit fps", "141 cap"],
     "verdict": "real",
     "what": "Caps frames ~3 below your monitor's refresh (e.g. 141 on a 144 Hz panel).",
-    "why": "Keeps VRR engaged, avoids V-Sync backpressure, stabilizes frametimes, and lowers heat. One of the few tweaks that's real on nearly every setup."
+    "why": "Keeps VRR engaged, avoids V-Sync backpressure, stabilizes frametimes, and lowers heat. One of the few tweaks that's real on nearly every setup.",
+    "related": ["vrr", "frametime"]
   },
   {
     "id": "frame-generation",
@@ -165,7 +169,8 @@
     "aliases": ["mpo", "overlaytestmode", "multi plane overlay"],
     "verdict": "real",
     "what": "Registry value that turns off a display compositing feature.",
-    "why": "A legitimate FIX for a real flicker/stutter bug on some multi-monitor/VRR setups — but ONLY if you have the symptom. Cargo-culting it on a healthy system does nothing. Reversible."
+    "why": "A legitimate FIX for a real flicker/stutter bug on some multi-monitor/VRR setups — but ONLY if you have the symptom. Cargo-culting it on a healthy system does nothing. Reversible.",
+    "related": ["vrr"]
   },
   {
     "id": "diagtrack",
@@ -181,7 +186,8 @@
     "aliases": ["sysmain", "superfetch"],
     "verdict": "real",
     "what": "Stops the service that preloads frequently-used apps into RAM.",
-    "why": "Frees 0.5–1.5 GB on SSD/NVMe systems where preloading earns nothing. KEEP it on hard drives. Compy already gates this recommendation on your storage type."
+    "why": "Frees 0.5–1.5 GB on SSD/NVMe systems where preloading earns nothing. KEEP it on hard drives. Compy already gates this recommendation on your storage type.",
+    "related": ["nvme-ssd-hdd"]
   },
   {
     "id": "startup-cleanup",
@@ -197,7 +203,8 @@
     "aliases": ["windows search", "indexing", "searchindexer"],
     "verdict": "placebo",
     "what": "Stops the file indexer service.",
-    "why": "Near-zero on SSD/NVMe (the common case) and it breaks instant Start-menu search. Only old HDD systems see real relief — which is exactly the only case Compy suggests it."
+    "why": "Near-zero on SSD/NVMe (the common case) and it breaks instant Start-menu search. Only old HDD systems see real relief — which is exactly the only case Compy suggests it.",
+    "related": ["nvme-ssd-hdd"]
   },
   {
     "id": "visual-effects",
@@ -237,7 +244,8 @@
     "aliases": ["core parking", "unpark cpu", "parkcontrol"],
     "verdict": "placebo",
     "what": "Prevents Windows from parking idle CPU cores.",
-    "why": "Modern Windows + modern CPUs already manage this well; forcing it mostly costs heat and can slightly HURT boost clocks. Same myth family as disabling C-States."
+    "why": "Modern Windows + modern CPUs already manage this well; forcing it mostly costs heat and can slightly HURT boost clocks. Same myth family as disabling C-States.",
+    "related": ["c-states", "core-parking"]
   },
   {
     "id": "cstates-disable",
@@ -342,7 +350,7 @@
     "verdict": "placebo",
     "what": "Registry edits, magic config files, and \"pro settings\" packs sold as sharpening your aim — steadier, snappier, more accurate.",
     "why": "No registry key aims for you. Aim is muscle memory plus how fast your input reaches the game — and the input half is set by things you can actually measure: raw input on, mouse acceleration off, a high and stable polling rate, low input latency, and steady frametimes. Compy already checks those. Everything past them that's sold as an \"aim\" fix changes nothing you can test. Put the time into an aim trainer, not regedit.",
-    "related": ["input-latency", "polling-rate", "dpi-ppi", "low-latency-mode", "registry-fps-hacks"]
+    "related": ["input-latency", "polling-rate", "dpi-ppi", "low-latency-mode", "registry-fps-hacks", "frametime"]
   },
   {
     "id": "disable-smt-gaming",
@@ -351,7 +359,7 @@
     "verdict": "placebo",
     "what": "Turning off your CPU's second thread per core (Hyper-Threading on Intel, SMT on AMD) in BIOS, on the theory that fewer, 'cleaner' threads game better.",
     "why": "On any modern 6-plus-core CPU this is a step backwards or a wash — you hand the game fewer threads to spread across and leave background work fighting it for what's left. It only ever helped ancient quad-cores choking on thread count, a problem today's CPUs don't have. There's no measurable win waiting here; if you want to prove it, change the one thing and watch your 1% low, which is exactly what it won't move. Compy never touches BIOS core settings.",
-    "related": ["core-unparking", "interrupt-affinity"]
+    "related": ["core-unparking", "interrupt-affinity", "one-percent-lows"]
   },
   {
     "id": "nvidia-prefer-max-performance",
@@ -360,7 +368,7 @@
     "verdict": "real",
     "what": "An NVIDIA Control Panel setting that pins the GPU at high clocks instead of letting it drop them when it thinks it's idle.",
     "why": "Real, but narrow. In a light esports title that never fully loads the card, the GPU can down-clock mid-match and add a little latency or a micro-stutter — locking clocks high stops that. In anything that actually loads the GPU it's already boosting, so this just burns a few extra watts and degrees for nothing. Worth a try on competitive titles, pointless elsewhere — set it per-game, not globally, and measure your 1% low before and after.",
-    "related": ["power-plan", "low-latency-mode", "fan-curves"]
+    "related": ["power-plan", "low-latency-mode", "fan-curves", "one-percent-lows"]
   },
   {
     "id": "cpu-affinity-games",

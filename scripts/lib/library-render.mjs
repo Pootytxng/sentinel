@@ -212,7 +212,7 @@ function standaloneFooter(lib) {
 }
 
 export function standalonePage(title, metaDescription, main, lib) {
-  const fullTitle = title.includes("Compy Library") ? title : `${title} — Compy Library`;
+  const fullTitle = title.includes("Compy Blackbook") ? title : `${title} — Compy Blackbook`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -243,14 +243,14 @@ export function standaloneEntryPage(entry, lib) {
 
 export function standaloneIndexPage(entries, lib) {
   const main = [
-    `<header><h1>The Compy Library</h1>`,
+    `<header><h1>The Compy Blackbook</h1>`,
     `<p>${entries.length} entries — the same library that ships inside the app, none invented. Every verdict is graded, every guide carries its undo.</p></header>`,
     glossaryBlock(lib),
     indexSections(entries, lib),
   ].join("\n");
   return standalonePage(
-    "The Compy Library",
-    `All ${entries.length} Compy Library entries — tweaks graded honestly, terms in plain English, snake-oil patterns named.`,
+    "The Compy Blackbook",
+    `All ${entries.length} Compy Blackbook entries — tweaks graded honestly, terms in plain English, snake-oil patterns named.`,
     main,
     lib,
   );

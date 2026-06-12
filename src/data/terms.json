@@ -421,7 +421,7 @@
     "aliases": ["placebo", "placebo effect", "feels faster"],
     "what": "When a change feels like it helped because you expected it to, not because anything measurably improved. After you spend effort on a tweak, your brain really wants it to have worked.",
     "more": "It's the most important idea in this whole library, because most \"FPS boost\" tweaks live and die on it. The cure is measurement — a benchmark doesn't care what you were hoping for. \"Feels smoother\" is a starting hypothesis, not a result; the frametime graph settles the argument.",
-    "related": ["noise-floor", "run-to-run-variance", "benchmark", "registry-fps-hacks"]
+    "related": ["noise-floor", "run-to-run-variance", "benchmark", "registry-fps-hacks", "frametime"]
   },
   {
     "id": "clear-cmos",

@@ -14,7 +14,7 @@ export function WhatsThis({ id, onOpen }: { id: string; onOpen: (id: string) => 
         e.stopPropagation();
         onOpen(id);
       }}
-      title="What's this? — open the Library entry"
+      title="What's this? — open the Blackbook entry"
     >
       What's this?
     </button>

@@ -60,8 +60,8 @@ const debunkTemplate = readFileSync(join(here, "src", "debunk.template.html"), "
 function articlePage(entry, { cssHref, homeHref, ctaHref }) {
   const title =
     entry.type === "tweak"
-      ? `${entry.name} — real, placebo, or risky? | Compy Library`
-      : `${entry.name} | Compy Library`;
+      ? `${entry.name} — real, placebo, or risky? | Compy Blackbook`
+      : `${entry.name} | Compy Blackbook`;
   return fill(debunkTemplate, {
     TITLE: escapeHtml(title),
     META_DESCRIPTION: escapeHtml(entrySummary(entry)),
@@ -97,12 +97,12 @@ const pageTemplate = readFileSync(join(here, "src", "page.template.html"), "utf8
 writeFileSync(
   join(libDir, "index.html"),
   fill(pageTemplate, {
-    TITLE: "The Compy Library — every entry, graded honestly",
+    TITLE: "The Compy Blackbook — every entry, graded honestly",
     META_DESCRIPTION: escapeHtml(
-      `All ${entries.length} Compy Library entries — tweaks graded honestly, terms in plain English, snake-oil patterns named.`,
+      `All ${entries.length} Compy Blackbook entries — tweaks graded honestly, terms in plain English, snake-oil patterns named.`,
     ),
     MAIN: [
-      `<h1>The Compy Library</h1>`,
+      `<h1>The Compy Blackbook</h1>`,
       `<p>${entries.length} entries — the same library that ships inside the app, none invented. Every verdict is graded, every guide carries its undo.</p>`,
       glossaryBlock(lib),
       indexSections(entries, lib),
