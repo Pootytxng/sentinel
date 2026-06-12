@@ -728,6 +728,41 @@ pub(crate) fn restore_gate() -> bool {
     false
 }
 
+// Test-only: the owner-present live-UAC QA harness (history::manual_restore_qa) arms this
+// thread-local RAII bypass so the dark restore path can be exercised WITHOUT flipping the
+// production gate — restore_gate() above stays false and ships false. Mirrors
+// actions::ForceElevationError: `#[cfg(test)]` compiles all of this out of every shipped
+// binary, and Drop disarms even on panic.
+#[cfg(test)]
+thread_local! {
+    static QA_RESTORE_GATE_BYPASS: std::cell::RefCell<bool> =
+        const { std::cell::RefCell::new(false) };
+}
+
+/// RAII guard that opens the restore gate on this thread for the guard's lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct QaRestoreGateBypass;
+
+#[cfg(test)]
+impl QaRestoreGateBypass {
+    pub(crate) fn begin() -> Self {
+        QA_RESTORE_GATE_BYPASS.with(|f| *f.borrow_mut() = true);
+        QaRestoreGateBypass
+    }
+}
+
+#[cfg(test)]
+impl Drop for QaRestoreGateBypass {
+    fn drop(&mut self) {
+        QA_RESTORE_GATE_BYPASS.with(|f| *f.borrow_mut() = false);
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn qa_restore_gate_bypassed() -> bool {
+    QA_RESTORE_GATE_BYPASS.with(|f| *f.borrow())
+}
+
 /// Read-only PowerShell probe: `(Get-MMAgent).MemoryCompression` prints True/False. Get-MMAgent
 /// is an ADMIN-ONLY read (PermissionDenied, Windows error 5 — verified live on the dev rig
 /// 2026-06-11), and Compy runs non-elevated — so a failed read that produced error output is

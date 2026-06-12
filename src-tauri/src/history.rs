@@ -280,7 +280,15 @@ pub(crate) fn restore_leftover(
     detector_id: &str,
     display_title: &str,
 ) -> Result<AppliedChangeView, String> {
-    if !crate::leftovers::restore_gate() {
+    // The production gate. Test builds also consult the owner-present QA bypass seam
+    // (leftovers::QaRestoreGateBypass — thread-local RAII, mirrors actions::ForceElevationError)
+    // so the live UAC QA can drive this path; `#[cfg(test)]` compiles the seam out of every
+    // shipped binary, where this is exactly the bare restore_gate() refusal.
+    #[cfg(not(test))]
+    let gate_open = crate::leftovers::restore_gate();
+    #[cfg(test)]
+    let gate_open = crate::leftovers::restore_gate() || crate::leftovers::qa_restore_gate_bypassed();
+    if !gate_open {
         return Err("Leftovers restore is not enabled in this build.".to_string());
     }
     let _lock = HISTORY_LOCK
@@ -863,6 +871,220 @@ mod manual_elevation_qa {
     }
 }
 
+// Leftovers v2 RESTORE QA harness (owner-present, REAL UAC — never runs in the normal suite).
+// Mirrors manual_elevation_qa. Run one test at a time with a human at the Secure Desktop:
+//   cargo test --manifest-path src-tauri/Cargo.toml manual_restore_qa_w32ps -- --ignored --nocapture --test-threads=1
+//   cargo test --manifest-path src-tauri/Cargo.toml manual_restore_qa_mpo -- --ignored --nocapture --test-threads=1
+//   cargo test --manifest-path src-tauri/Cargo.toml manual_restore_qa_memcompress -- --ignored --nocapture --test-threads=1
+// These drive the DARK restore path through the #[cfg(test)] QA gate-bypass seam
+// (leftovers::QaRestoreGateBypass) — restore_gate() itself stays false; none of this exists in a
+// shipped binary. Fixture writes are the documented benign QA set ONLY (W32PS 0x26 ↔ stock 2;
+// OverlayTestMode 5 ↔ delete), each loop asserts the rig STARTS clean before writing anything,
+// and each loop ends back at Windows stock. Receipts are real %APPDATA%\Compy\history.json
+// entries, "QA · "-tagged (cleanup offered after the QA pass).
+#[cfg(test)]
+mod manual_restore_qa {
+    use super::*;
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+
+    const W32PS_SEED: &str = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 38 -Type DWord";
+    const W32PS_CLEANUP: &str = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name 'Win32PrioritySeparation' -Value 2 -Type DWord";
+    const MPO_SEED: &str = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm' -Name 'OverlayTestMode' -Value 5 -Type DWord";
+    const MPO_CLEANUP: &str = "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm' -Name 'OverlayTestMode' -ErrorAction SilentlyContinue";
+
+    fn read_w32ps() -> Option<u32> {
+        RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\PriorityControl")
+            .ok()?
+            .get_value("Win32PrioritySeparation")
+            .ok()
+    }
+
+    fn read_overlay_test_mode() -> Option<u32> {
+        RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(r"SOFTWARE\Microsoft\Windows\Dwm")
+            .ok()?
+            .get_value("OverlayTestMode")
+            .ok()
+    }
+
+    /// Live detection through the real probe + evaluator path, read via the SERIALIZED report
+    /// shape (the report's fields are module-private by design).
+    fn flagged_ids() -> Vec<String> {
+        serde_json::to_value(crate::leftovers::get_leftovers())
+            .expect("report serializes")
+            .get("findings")
+            .and_then(|f| f.as_array())
+            .map(|fs| {
+                fs.iter()
+                    .filter_map(|f| f.get("id").and_then(|i| i.as_str()).map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Receipt assertions shared by both loops: provenance, full typed contract, exact snapshot.
+    fn assert_receipt(c: &AppliedChange, kind: &str) {
+        assert_eq!(c.status, "applied");
+        assert_eq!(c.provenance.as_deref(), Some("leftover_adopted"), "provenance");
+        assert_eq!(c.elevation_used, Some(true));
+        assert!(c.applied_action.is_some() && c.rollback_action.is_some(), "full contract");
+        assert_eq!(c.snapshot.get("kind").and_then(|k| k.as_str()), Some(kind), "typed snapshot");
+    }
+
+    /// W32PS QA loop — FOUR UAC prompts, click YES on all four (each announced before it fires):
+    /// seed 0x26 → detector flags it → restore (receipt snapshot prior=38) → rollback puts 0x26
+    /// back EXACTLY → cleanup to Windows stock 2.
+    #[test]
+    #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
+    fn manual_restore_qa_w32ps_full_loop() {
+        let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        let original = read_w32ps();
+        assert!(
+            original.is_none() || original == Some(2),
+            "rig must START clean (read {original:?}) — aborting before any write"
+        );
+        let before_len = load_history().expect("ledger readable").len();
+
+        println!("\nUAC PROMPT 1/4 — SEED the rotted fixture (Win32PrioritySeparation = 0x26). Click YES.");
+        run_elevated_powershell(W32PS_SEED).expect("seed write (did the prompt get a YES?)");
+        assert_eq!(read_w32ps(), Some(0x26), "fixture seeded");
+
+        let ids = flagged_ids();
+        assert!(
+            ids.iter().any(|i| i == "win32-priority-separation"),
+            "get_leftovers flags the seeded fixture, got: {ids:?}"
+        );
+        println!("DETECTED: get_leftovers flags win32-priority-separation.");
+
+        println!("\nUAC PROMPT 2/4 — RESTORE to Windows stock (2). Click YES.");
+        let view = restore_leftover("win32-priority-separation", "QA · Past tweak restore")
+            .expect("restore runs (did the prompt get a YES?)");
+        assert_eq!(read_w32ps(), Some(2), "restored to stock 2");
+
+        let after = load_history().expect("ledger readable");
+        assert_eq!(after.len(), before_len + 1, "exactly one receipt");
+        let receipt = after.iter().find(|c| c.id == view.id).expect("receipt present");
+        assert_receipt(receipt, "priority-separation");
+        assert_eq!(
+            receipt.snapshot.get("prior_value").and_then(|v| v.as_u64()),
+            Some(38),
+            "snapshot holds the EXACT rotted value (0x26 = 38)"
+        );
+        assert!(
+            !flagged_ids().iter().any(|i| i == "win32-priority-separation"),
+            "the restored state reads clean"
+        );
+        println!("RECEIPT OK: provenance leftover_adopted · snapshot prior_value=38 · detector quiet.");
+
+        println!("\nUAC PROMPT 3/4 — ROLLBACK (the rotted 0x26 must come back EXACTLY). Click YES.");
+        rollback_change(view.id.clone()).expect("rollback runs (did the prompt get a YES?)");
+        assert_eq!(read_w32ps(), Some(0x26), "rollback restored the rotted value EXACTLY");
+        let post = load_history().expect("ledger readable");
+        assert_eq!(
+            post.iter().find(|c| c.id == view.id).expect("entry").status,
+            "rolled_back"
+        );
+
+        println!("\nUAC PROMPT 4/4 — CLEANUP to Windows stock (2). Click YES.");
+        run_elevated_powershell(W32PS_CLEANUP).expect("cleanup write (did the prompt get a YES?)");
+        assert_eq!(read_w32ps(), Some(2), "left at Windows stock 2");
+        println!(
+            "W32PS LOOP PASS: seed 0x26 → flagged → restore (receipt prior=38) → rollback 0x26 exact → stock 2. Rig started at {original:?}."
+        );
+    }
+
+    /// MPO QA loop — FOUR UAC prompts, click YES on all four: seed OverlayTestMode=5 → detector
+    /// flags it → restore DELETES the value (receipt snapshot prior=5) → rollback sets 5 back
+    /// EXACTLY → cleanup deletes (stock = value absent).
+    #[test]
+    #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
+    fn manual_restore_qa_mpo_full_loop() {
+        let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        let original = read_overlay_test_mode();
+        assert!(
+            original.is_none(),
+            "rig must START clean / value absent (read {original:?}) — aborting before any write"
+        );
+        let before_len = load_history().expect("ledger readable").len();
+
+        println!("\nUAC PROMPT 1/4 — SEED the rotted fixture (OverlayTestMode = 5). Click YES.");
+        run_elevated_powershell(MPO_SEED).expect("seed write (did the prompt get a YES?)");
+        assert_eq!(read_overlay_test_mode(), Some(5), "fixture seeded");
+
+        let ids = flagged_ids();
+        assert!(
+            ids.iter().any(|i| i == "mpo-disabled"),
+            "get_leftovers flags the seeded fixture, got: {ids:?}"
+        );
+        println!("DETECTED: get_leftovers flags mpo-disabled.");
+
+        println!("\nUAC PROMPT 2/4 — RESTORE the Windows default (delete the value). Click YES.");
+        let view = restore_leftover("mpo-disabled", "QA · Past tweak restore")
+            .expect("restore runs (did the prompt get a YES?)");
+        assert_eq!(read_overlay_test_mode(), None, "value deleted — MPO back to default");
+
+        let after = load_history().expect("ledger readable");
+        assert_eq!(after.len(), before_len + 1, "exactly one receipt");
+        let receipt = after.iter().find(|c| c.id == view.id).expect("receipt present");
+        assert_receipt(receipt, "mpo");
+        assert_eq!(
+            receipt.snapshot.get("prior_overlay_test_mode").and_then(|v| v.as_u64()),
+            Some(5),
+            "snapshot holds the EXACT rotted value (5)"
+        );
+        assert!(
+            !flagged_ids().iter().any(|i| i == "mpo-disabled"),
+            "the restored state reads clean"
+        );
+        println!("RECEIPT OK: provenance leftover_adopted · snapshot prior=5 · detector quiet.");
+
+        println!("\nUAC PROMPT 3/4 — ROLLBACK (OverlayTestMode=5 must come back EXACTLY). Click YES.");
+        rollback_change(view.id.clone()).expect("rollback runs (did the prompt get a YES?)");
+        assert_eq!(read_overlay_test_mode(), Some(5), "rollback restored the rotted value EXACTLY");
+        let post = load_history().expect("ledger readable");
+        assert_eq!(
+            post.iter().find(|c| c.id == view.id).expect("entry").status,
+            "rolled_back"
+        );
+
+        println!("\nUAC PROMPT 4/4 — CLEANUP (delete the value — Windows stock). Click YES.");
+        run_elevated_powershell(MPO_CLEANUP).expect("cleanup write (did the prompt get a YES?)");
+        assert_eq!(read_overlay_test_mode(), None, "left at Windows stock (value absent)");
+        println!(
+            "MPO LOOP PASS: seed 5 → flagged → restore-delete (receipt prior=5) → rollback 5 exact → absent."
+        );
+    }
+
+    /// Known-limit check — NO UAC prompt fires. The memory-compression resolver's prior read
+    /// (Get-MMAgent) is admin-only (ca01347) and Compy runs non-elevated, so the restore must
+    /// refuse BEFORE any elevation with the honest can't-snapshot message and write nothing.
+    /// Deliberately NOT fixed here — the elevated-prior-read design need goes to the R2 Review
+    /// Queue instead.
+    #[test]
+    #[ignore = "manual leftovers-restore QA — no prompt; verifies the non-elevated refusal honesty"]
+    fn manual_restore_qa_memcompress_refuses_non_elevated() {
+        let (state, needs_admin) = crate::leftovers::read_memory_compression_probe();
+        assert!(
+            state.is_none() && needs_admin,
+            "this check requires a NON-elevated run (probe read {state:?}, needs_admin={needs_admin}) — run it from a normal shell"
+        );
+        let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        let before = load_history().expect("ledger readable").len();
+        let err = restore_leftover("memory-compression-off", "QA · never lands")
+            .err()
+            .expect("must refuse non-elevated");
+        println!("REFUSAL MESSAGE: {err}");
+        assert!(
+            err.contains("could not be read") && err.contains("refusing"),
+            "honest refusal names the unreadable prior, never blames the user: {err}"
+        );
+        assert_eq!(load_history().expect("readable").len(), before, "no receipt on refusal");
+        println!("MEMCOMPRESS LIMIT CONFIRMED: non-elevated prior read refuses before elevation, ledgers nothing.");
+    }
+}
+
 // ─── Leftovers v2 restore — dark-path tests + the adversarial rollback audit (R2-5) ────────
 #[cfg(test)]
 mod leftover_restore_tests {
@@ -877,6 +1099,30 @@ mod leftover_restore_tests {
         assert!(err.contains("not enabled"), "honest gate message: {err}");
         let after = load_history().expect("readable").len();
         assert_eq!(before, after, "a refused restore must never write a receipt");
+    }
+
+    #[test]
+    fn qa_bypass_seam_opens_the_gate_only_while_armed_and_a_decline_writes_nothing() {
+        // The owner-present QA seam, proven deterministically: the PRODUCTION gate stays false;
+        // armed (with elevation forced to decline) the resolver runs past the gate refusal all
+        // the way to the elevation seam and a declined restore writes NO receipt; dropped, the
+        // dark gate refuses again. No real prompt, no mutation — the prior read is read-only.
+        assert!(!crate::leftovers::restore_gate(), "the production gate ships false");
+        let before = load_history().expect("real ledger readable").len();
+        {
+            let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+            let _force = ForceElevationError::begin();
+            let err = restore_leftover("win32-priority-separation", "QA seam test")
+                .err()
+                .expect("forced elevation decline");
+            assert_eq!(err, ELEVATION_DECLINED_MSG, "past the gate, refused at elevation: {err}");
+        }
+        let err = restore_leftover("win32-priority-separation", "QA seam test")
+            .err()
+            .expect("dark again once the guard drops");
+        assert!(err.contains("not enabled"), "gate refusal returns on drop: {err}");
+        let after = load_history().expect("readable").len();
+        assert_eq!(before, after, "neither the decline nor the refusal may write a receipt");
     }
 
     #[test]
