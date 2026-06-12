@@ -7,7 +7,7 @@
 
 | Current | Candidates | Recommended | Rationale (one line) |
 |---|---|---|---|
-| **Fix** (rail room) | Tune · Tailor · Dial-in | **Tune ✅ owner-approved** | "Fix" frames the PC as broken (fear frame, retired); "Tune" is aspiration + matches the tailoring prestige line. Sublabel keeps honesty: "measured changes for YOUR rig". |
+| **Fix** (rail room) | Tune · Tailor · Dial-in | **Tune ✅ EXECUTED `83b91af`** | "Fix" frames the PC as broken (fear frame, retired); "Tune" is aspiration + matches the tailoring prestige line. Sublabel shipped: "Measured changes for YOUR rig". |
 | **Check** (rail room) | Check · Scan · Pulse | **Check (keep)** | Plain-English verb, already doctrine-neutral; "Scan" reads AV-scanner, "Pulse" reads decorative. |
 | **Play** (rail room) | Play · Sessions · Game Day | **Play (keep)** | Owner-voice, warm, says what the room holds; alternatives are colder. |
 | **Learn** (rail room) | Learn · Library · The Library | **Learn (keep)** | Verb matches the rail's verb rhythm (Check/Play/Fix/Learn); "Library" already names the corpus inside it — two names for two things. |
@@ -20,7 +20,10 @@
 
 ## Already decided / out of scope here
 
-- **Fix → Tune**: approved; lands as its own train (rail label + strings + tests + Learn refs).
+- **Fix → Tune**: ✅ DECIDED + EXECUTED (`83b91af`, 2026-06-12) — rail label via the shared
+  homeRail module (parity guard updated), surface header + sublabel, full room-name sweep (only
+  verb-usage "fix"/"top fix" remains, correctly). Persisted nav id stays `fix` per the mandate
+  (visible language only; renaming the id would orphan stored location history).
 - Verdict chips (Real / Placebo / Risky — refused): locked vocabulary (verdict-glossary single
   source); not a naming candidate.
 - Site/landing copy: R4a's lane (baptism is app copy).
