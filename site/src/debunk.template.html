@@ -3,43 +3,30 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>{{NAME}} — real, placebo, or risky? | Compy Library</title>
+<title>{{TITLE}}</title>
 <meta name="description" content="{{META_DESCRIPTION}}" />
-<link rel="stylesheet" href="library.css" />
+<link rel="stylesheet" href="{{CSS_HREF}}" />
 </head>
 <body>
 <header class="wrap topbar">
-  <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
-  <span class="crumb"><a href="./">← Home</a></span>
+  <a class="wordmark" href="{{HOME_HREF}}">C<span class="pulse">o</span>mpy</a>
+  <span class="crumb"><a href="{{HOME_HREF}}">← Home</a></span>
 </header>
 
 <main class="wrap article">
-  <span class="chip chip-{{VERDICT}}">{{VERDICT_LABEL}}</span>
-  <h1>{{NAME}}</h1>
-  <p class="aliases">Also searched as: {{ALIASES}}</p>
-
-  <h2>What it does</h2>
-  <p>{{WHAT}}</p>
-
-  <h2>The honest verdict</h2>
-  <p>{{WHY}}</p>
-
-  <h2>How Compy treats it</h2>
-  <p class="stance">{{STANCE}}</p>
+{{ARTICLE}}
 
   <div class="cta-box">
-    <p>Compy's library covers {{ENTRY_COUNT}} tweaks and terms like this one, graded against
+    <p>Compy's library covers {{ENTRY_COUNT}} graded entries like this one, judged against
     <em>your</em> hardware — and every change it does make is reversible, with the receipt to
     prove it.</p>
-    <!-- Honest knob: no waitlist exists yet, so the CTA points at what does. When Cowork wires
-         the waitlist section into the landing, re-point this to ./#waitlist. -->
-    <a class="btn" href="./">See Compy →</a>
+    <a class="btn" href="{{CTA_HREF}}">See Compy →</a>
   </div>
 </main>
 
 <footer>
   <div class="wrap">
-    <span class="promise">Local-only by design · no telemetry · no account</span>
+    <span class="promise">{{FOOTER_PROMISE}}</span>
     <span>© {{YEAR}} Pootytxng · Compy is in private beta</span>
   </div>
 </footer>

@@ -68,9 +68,9 @@ describe("export-library", () => {
     for (const e of entries) {
       const html = pages.get(`${e.id}.html`);
       if (e.type === "tweak") {
-        expect(html, e.id).toContain(`class="chip verdict-${e.verdict}"`);
+        expect(html, e.id).toContain(`class="chip chip-${e.verdict}"`);
       } else {
-        expect(html, e.id).toContain(`class="chip type-${e.type}"`);
+        expect(html, e.id).toContain(`class="chip chip-${e.type}"`);
       }
     }
   });
