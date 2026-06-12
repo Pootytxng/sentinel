@@ -46,6 +46,10 @@ safe + reversible by default, rollback over raw control. No jargon, no regkey du
 - **UNTOUCHABLE (now business-critical):** rollback-first · no fabricated claims · no kernel
   driver/injection · frozen risky-tweak catalog · signed-remote-rules triple gate · every LOCKED
   rule below. One Reddit thread of brand damage kills the funnel — **the gates ARE the moat.**
+- **ZERO-BUDGET LAW (owner constraint):** every phase ships $0-first on free tiers; any spend is
+  owner-gated with named payback + KPI trigger (domain ← waitlist signal · signing ← first paid
+  surface, Azure Trusted Signing route · entity+Paddle ← Pro launch · **paid ads ← never before
+  1.0**). Organic-first: friends + the owner's Discord = the seed channel.
 - **KPI discipline:** every money phase defines ONE metric before build. The money plan runs on
   receipts too.
 

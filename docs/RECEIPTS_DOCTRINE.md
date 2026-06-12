@@ -93,7 +93,27 @@ lane by name-of-pattern (never libel a named product without receipts) · every 
 export is an ad · disclosure lines on anything affiliate · no fabricated numbers, ever, anywhere —
 one invented stat poisons the entire doctrine.
 
-## 6. Session onboarding (CC + Cowork)
+## 6. ZERO-BUDGET BOOTSTRAP LAW (owner constraint, standing — 2026-06-12)
+
+**The owner is bootstrapping on $0.** Binding on every phase, spec, and suggestion:
+
+- **Default budget is zero.** Every phase ships on free tiers first: Cloudflare Pages / GitHub
+  Pages subdomain (Phase 2 runs on a free `*.pages.dev`/`github.io` URL — the `compy.gg` domain
+  purchase is the FIRST sanctioned spend, triggered only by real waitlist signal), free-tier
+  forms/email (Tally / Buttondown / MailerLite free), Cloudflare Workers free tier (telemetry
+  endpoint), Amazon Associates ($0 to join), Ko-fi/BuyMeACoffee ($0 bridge monetization —
+  donations link goes up with Phase 2; income is loggable in the business ledger).
+- **Any spend is owner-gated** and must arrive with: the expected payback, the KPI that justifies
+  it, and the free alternative it beats. No spending on guesses — the money plan runs on receipts.
+- **Known future spends + their triggers:** `compy.gg` domain (~$50/yr) ← waitlist proves demand ·
+  code signing ← first paid surface (budget route: Azure Trusted Signing ~$10/mo, NOT a $400 EV
+  cert) · legal entity + merchant-of-record ← Compy Pro launch · **paid ads ← NOT BEFORE 1.0**, and
+  only if organic numbers prove the math.
+- **Organic-first distribution:** friends + the owner's Discord community are the named seed
+  channel — first testers, first telemetry opt-ins, first supporters, first referrals. Then
+  build-in-public posts + SEO. Referral energy is free; we spend that before we spend dollars.
+
+## 7. Session onboarding (CC + Cowork)
 
 A fresh session adopts this mindset: Compy is a business now. Reviews add one question to every
 audit: *"does this serve the money stack or the trust that feeds it?"* Sport-mode, minimal gates,
