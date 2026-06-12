@@ -125,6 +125,15 @@ export default function Settings({
       return false;
     }
   });
+  // §C build stamp (spec 2026-06-12): compile-time provenance from the backend — review hygiene.
+  const [buildStamp, setBuildStamp] = useState<string | null>(null);
+  useEffect(() => {
+    invoke<string>("get_build_stamp")
+      .then(setBuildStamp)
+      .catch(() => {
+        /* probe failed — About just shows the version without a stamp */
+      });
+  }, []);
 
   // Theme is app-wide + persistent (set at startup in main.tsx); applying here recolors live. No
   // unmount-removal — the Instrument theme is the one theme system now.
@@ -351,6 +360,7 @@ export default function Settings({
           <div className="set-about">
             <div className="set-about-name">
               Compy <span className="set-about-version">v{appVersion}</span>
+              {buildStamp && <span className="set-about-stamp"> · {buildStamp}</span>}
             </div>
             <p className="set-about-privacy">
               Fully local. No account, no telemetry, nothing leaves your PC.

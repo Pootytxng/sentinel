@@ -351,3 +351,10 @@
   border-radius: 8px;
   overflow-x: auto;
 }
+
+/* §C build stamp in About — quiet provenance, same scale as the version. */
+.set-about-stamp {
+  font-size: 12px;
+  color: var(--ix-text-3);
+  font-family: var(--ix-mono, monospace);
+}

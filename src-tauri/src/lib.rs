@@ -205,6 +205,34 @@ pub(crate) fn nagle_disabled_on_any_nic() -> bool {
 
 
 
+// ── §C build provenance stamp (spec 2026-06-12, receipts-for-builds) ───────────────────────────
+// Baked at COMPILE time by build.rs (env!) — the running binary never invokes git. Format:
+// "ab12cd3 · dev" / "ab12cd3+dirty · release". Surfaces: Settings → About + the dev window title.
+
+/// Pure formatter — split from the env!-reading wrapper so the format is testable.
+fn format_build_stamp(hash: &str, dirty: bool, debug: bool) -> String {
+    format!(
+        "{hash}{} · {}",
+        if dirty { "+dirty" } else { "" },
+        if debug { "dev" } else { "release" },
+    )
+}
+
+pub(crate) fn build_stamp() -> String {
+    format_build_stamp(
+        env!("COMPY_GIT_HASH"),
+        env!("COMPY_GIT_DIRTY") == "1",
+        cfg!(debug_assertions),
+    )
+}
+
+/// Read-only state probe: which exact build is this? (Review hygiene — stamp mismatch = wrong
+/// window; tester reports gain ground truth.)
+#[tauri::command]
+fn get_build_stamp() -> String {
+    build_stamp()
+}
+
 pub(crate) fn compy_data_dir() -> PathBuf {
     let app_data = std::env::var("APPDATA").unwrap_or_else(|_| "C:\\Temp".into());
     let dir = PathBuf::from(&app_data).join("Compy");
@@ -659,6 +687,7 @@ pub fn run() {
             export_report,
             open_export_folder,
             get_priorities,
+            get_build_stamp,
             receipts::get_receipts_gate,
             receipts::preview_receipt_payload,
             get_latency_diagnostics,
@@ -722,6 +751,15 @@ pub fn run() {
             if let Err(e) = crate::tray::init(app.handle()) {
                 eprintln!("[compy] tray init failed (continuing without tray): {e}");
             }
+            // §C build stamp (spec 2026-06-12): DEV windows title themselves with the exact build
+            // so an owner review can never run against a stale window unnoticed. Release titles
+            // stay clean (the stamp lives in Settings → About there).
+            if cfg!(debug_assertions) {
+                use tauri::Manager;
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_title(&format!("Compy · {}", build_stamp()));
+                }
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -741,6 +779,18 @@ pub fn run() {
 mod safety_tests {
     use super::*;
     use serde_json::json;
+
+    // §C build stamp: the format is the contract both surfaces (About + dev title) render.
+    #[test]
+    fn build_stamp_format_is_pinned() {
+        assert_eq!(format_build_stamp("ab12cd3", false, true), "ab12cd3 · dev");
+        assert_eq!(format_build_stamp("ab12cd3", true, false), "ab12cd3+dirty · release");
+        assert_eq!(format_build_stamp("nogit", false, false), "nogit · release");
+        // The real stamp always carries a profile and a non-empty hash.
+        let real = build_stamp();
+        assert!(real.ends_with(" · dev") || real.ends_with(" · release"));
+        assert!(!real.starts_with(" "));
+    }
 
     fn roundtrips<T>(v: &T) -> bool
     where

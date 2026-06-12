@@ -1,5 +1,16 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+
+// §C: the build stamp arrives over the existing IPC probe pattern; everything else resolves null
+// (ReceiptsConsent stays dark, toggles no-op) — same graceful paths as the no-mock days.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((cmd: string) => {
+    if (cmd === "get_build_stamp") return Promise.resolve("ab12cd3 · dev");
+    if (cmd === "get_receipts_gate") return Promise.resolve(false);
+    return Promise.resolve(null);
+  }),
+}));
+
 import Settings from "./Settings";
 
 beforeEach(() => localStorage.clear());
@@ -40,5 +51,10 @@ describe("Settings", () => {
     render(<Settings {...baseProps} onClose={onClose} />);
     fireEvent.click(screen.getByText("Done"));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("§C: About carries the compile-time build stamp (review hygiene / receipts-for-builds)", async () => {
+    render(<Settings {...baseProps} />);
+    expect(await screen.findByText(/ab12cd3 · dev/)).toBeInTheDocument();
   });
 });
