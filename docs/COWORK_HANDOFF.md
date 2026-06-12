@@ -150,17 +150,18 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
-- **✅ OWNER TASTE DECISION (2026-06-12): Fix → "Tune" APPROVED** ("i like tune more than fix").
-  Execute as a small dedicated train AFTER the baptism proposals land (homeRail shared module +
-  parity guard = safe one-point swap; sweep strings/tests/Learn references). Other B3 naming
-  proposals still await the owner's pass when `2026-06-12-naming-proposals.md` lands.
-- **🗣️ DOCTRINE BAPTISM + STAGED DESIGN REFRESH QUEUED (2026-06-12).** Spec:
-  `2026-06-12-doctrine-voice-baptism-design-refresh.md`. §A copy sweep (kill defensive voice —
-  caught live: "nothing to sell you here"; naming PROPOSALS only, Fix→"Tune" recommended, owner
-  taste-gates) → §B visual-refinement marathon R4 (Fable 5, polish Instrument, no IA reversal) →
-  §C full overhaul GATED on owner verdict after B (mockups-first). §D Higgsfield = site/marketing
-  imagery only (all-original; in-app stays CSS). Also in flight: tailored-tuning-gates +
-  walkthrough-stepper + build-stamp spec (`2026-06-12-tailored-tuning-gates-*.md`).
+- **✅ FOUR TRAINS LANDED 2026-06-12 (CC, `69c5dbd..83b91af`):** (1) tailored-tuning spec —
+  §A evidence-gated tuning offers (`efa740b`: the one ungated push closed; offers quote the
+  measured signal; NVIDIA pinned) + §B walkthrough single-panel stepper (`53f4855`) + §C
+  compile-time build stamp in About + dev title (`f0cb41d`); (2) **doctrine baptism §A DONE**
+  (`9996d49`: 8 B1 strings rebaptized w/ old→new log, voice-guard CI test bans the retired
+  phrases, B3 → `2026-06-12-naming-proposals.md` for the owner's pass); (3) **R4a publish-grade
+  landing** (`e9c4fc6`: hero "Measured, not promised.", 3 receipts value cards, creed footer,
+  mobile-first 380px, §D art slots documented, zero-outbound smoke suite — site stays DARK,
+  owner taste-gates `site/index.html`); (4) **Fix → "Tune" EXECUTED** (`83b91af`: label-only via
+  homeRail, persisted id kept, "Measured changes for YOUR rig" sublabel). Suites: cargo 329 ·
+  npm 296 · clippy/tsc clean. Still queued: §B app visual marathon (R4) → owner verdict → §C
+  gated; §D Higgsfield art (Cowork lane: hero 960×720 webp + OG 1200×630 png into site/assets/).
 - **🏃 RECEIPTS MARATHON R3 LAUNCHED (2026-06-12, owner GO — longest CC run yet).** Spec:
   `docs/superpowers/specs/2026-06-12-receipts-marathon-R3.md`. Lanes: A dark-site build-out
   (generator unification + landing + curated debunks + share-card loop) · B affiliate advisory
