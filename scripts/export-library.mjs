@@ -154,7 +154,7 @@ function entryPage(entry, lib) {
     ? `<p class="aliases">Also known as: ${escapeHtml(entry.aliases.join(" · "))}</p>`
     : "";
   const main = [
-    `<header><span class="chip ${chip.cls}"${chip.title ? ` title="${escapeHtml(chip.title)}"` : ""}>${escapeHtml(chip.label)}</span>`,
+    `<header><span class="chip ${escapeHtml(chip.cls)}"${chip.title ? ` title="${escapeHtml(chip.title)}"` : ""}>${escapeHtml(chip.label)}</span>`,
     `<h1>${escapeHtml(entry.name)}</h1>${aliases}</header>`,
     bodyFor(entry),
     `<p><a href="index.html">← All Library entries</a></p>`,
@@ -192,7 +192,7 @@ function indexPage(entries, lib) {
       const items = list
         .map((e) => {
           const chip = chipFor(e, lib);
-          return `<li><a href="${escapeHtml(e.id)}.html">${escapeHtml(e.name)}</a> <span class="chip ${chip.cls}">${escapeHtml(chip.label)}</span></li>`;
+          return `<li><a href="${escapeHtml(e.id)}.html">${escapeHtml(e.name)}</a> <span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span></li>`;
         })
         .join("\n");
       return `<section><h2>${sectionTitle[type]} (${list.length})</h2><ul class="toc">\n${items}\n</ul></section>`;
@@ -219,6 +219,7 @@ export async function exportLibrary({ lib, outDir = DEFAULT_OUT } = {}) {
   if (ids.size !== entries.length) throw new Error("duplicate entry ids in KNOWLEDGE");
   for (const e of entries) {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(e.id)) throw new Error(`unsafe entry id for a filename: '${e.id}'`);
+    if (e.id === "index") throw new Error("entry id 'index' is reserved for the index page");
   }
 
   rmSync(outDir, { recursive: true, force: true });
