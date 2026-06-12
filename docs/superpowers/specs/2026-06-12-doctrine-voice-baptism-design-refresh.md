@@ -42,7 +42,30 @@ Ko-fi slots (still placeholders), future-download placeholder, honesty-creed foo
 labor: CC = structure/CSS/copy draft; Cowork = hero/OG imagery via Higgsfield (§D) curated into
 `site/assets/`; owner = final taste gate. Site stays DARK until the publish ladder.
 
-## §B VISUAL REFINEMENT MARATHON (app polish — queued after B0, Fable 5 lane)
+## §B0b GLOW DIRECTION — R4b (owner taste decree 2026-06-12: "artistic glow", end the "bleak dark vibe")
+
+Owner verdict on the R4a cut: structurally right, emotionally flat. New art direction for the
+LANDING (site leads; the app's §B refresh later borrows what works):
+
+- **Glow, not gloom:** dark base STAYS (it's the brand + gamer-native) but becomes luminous —
+  aurora/gradient-mesh background washes (teal `--ix-accent` flowing into violet/magenta),
+  soft radial glows behind hero + cards, subtle film grain so flats aren't flat.
+- **Showpiece moves (TikTok-landing genre, tastefully):** oversized display type with an
+  animated gradient sweep on the hero line; glassmorphism cards (blur + translucency + 1px
+  luminous borders); glow-on-hover CTAs; scroll-reveal sections; floating receipt-chip motifs.
+- **Ambient motion (owner motif, 2026-06-12):** a slow, continuous, SUBTLE background ambience —
+  e.g. one or two "silk light streaks" (soft ribbon gradients) drifting diagonally on a long
+  loop (~20–40s), barely-there parallax on the aurora wash. Smoothness law: GPU-cheap transforms
+  only (translate/opacity), no layout thrash, imperceptible loop seams, fully static under
+  `prefers-reduced-motion`. Ambience whispers; it never competes with the copy.
+- **Discipline:** CSS-only (zero libraries, zero JS beyond the existing waitlist interceptor +
+  IntersectionObserver for reveals), `prefers-reduced-motion` honored (reveals/sweeps become
+  static), page budget ≤ ~60KB before images, Lighthouse-clean, 380px-first. Copy unchanged —
+  receipts voice + Sarah & Caleb bar; glow is paint, never promises.
+- Higgsfield lane unchanged: OG card 1200×630 raster (social embeds need raster); hero may stay
+  pure CSS if the mesh outshines a static image (Cowork judges after R4b lands).
+
+## §B VISUAL REFINEMENT MARATHON (app polish — queued after B0/B0b, Fable 5 lane)
 
 Polish the EXISTING Instrument system for appeal without structural reversal: typography scale +
 hierarchy, spacing rhythm, color/contrast warmth within theme law (owner taste-gates any new hex),
