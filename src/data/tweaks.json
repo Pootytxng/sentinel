@@ -378,5 +378,41 @@
     "verdict": "placebo",
     "what": "Turns off Windows' in-RAM compression of idle memory pages (Disable-MMAgent -mc).",
     "why": "Sold as cutting CPU overhead, but the overhead is tiny and the cost is real: under memory pressure cold pages go to disk instead of staying compressed in RAM — slower exactly when you're squeezed (game + browser + voice chat). Stock (on) is the right call on almost every rig; Compy's Past Tweaks check flags this when an old guide left it off."
+  },
+  {
+    "id": "game-boosters",
+    "name": "Game booster apps (Razer Cortex etc.)",
+    "aliases": ["game booster", "razer cortex", "wise game booster", "smart game booster", "booster app"],
+    "verdict": "placebo",
+    "what": "All-in-one 'booster' apps that promise FPS by closing background apps and 'optimizing' RAM or CPU when a game launches.",
+    "why": "The one real thing they do — closing background apps — is free to do yourself, and Windows already deprioritizes background work while a game has focus. The 'RAM optimization' half is the standby-purge placebo, and the booster itself stays resident, sometimes with its own overlay on top. On a healthy rig there's nothing measurable left for it to add.",
+    "related": ["ram-cleaners", "startup-cleanup", "registry-fps-hacks"]
+  },
+  {
+    "id": "ram-cleaners",
+    "name": "RAM cleaners / standby-list purgers (ISLC)",
+    "aliases": ["islc", "intelligent standby list cleaner", "ram optimizer", "memory cleaner", "free up ram"],
+    "verdict": "placebo",
+    "what": "Utilities that 'free' RAM by purging Windows' standby list or trimming process memory on a timer.",
+    "why": "Free RAM is wasted RAM: the standby list IS your file cache, and purging it throws away data Windows would have reused instantly — the next read comes from disk instead. The 2018-era standby-list stutter bug these tools were built around was fixed in Windows itself years ago. Today the falling 'in use' number just looks satisfying while cold loads get slower.",
+    "related": ["game-boosters", "memory-compression-off", "pagefile-disable"]
+  },
+  {
+    "id": "app-hw-accel-off",
+    "name": "Turning off hardware acceleration in Discord / Chrome",
+    "aliases": ["discord hardware acceleration", "chrome hardware acceleration", "browser hardware acceleration", "disable hardware acceleration"],
+    "verdict": "placebo",
+    "what": "Disabling GPU ('hardware') acceleration in background apps like Discord or your browser to 'free the GPU' for games.",
+    "why": "It moves those apps' rendering onto the CPU — the resource games are more often short on while the GPU is busy. A chat window costs the GPU next to nothing, and modern GPUs juggle apps fine. The toggle exists as a workaround for broken drivers, not a performance lever; flipping it 'for FPS' usually trades nothing gained for choppier app windows and a bit more CPU load.",
+    "related": ["game-boosters"]
+  },
+  {
+    "id": "dns-for-gaming",
+    "name": "Changing DNS for lower ping",
+    "aliases": ["gaming dns", "best dns for gaming", "dns ping", "dns latency"],
+    "verdict": "placebo",
+    "what": "Switching to a third-party 'gaming DNS' expecting lower in-game latency.",
+    "why": "DNS answers one question — which IP a name points to — and it's asked when you connect, not while you play. Once you're in a match, packets flow straight to that IP; DNS isn't in the path anymore, so it can't lower ping. A faster resolver can shave a moment off page loads and server-list lookups, which is real — but it isn't in-game latency.",
+    "related": ["tcp-mega-packs"]
   }
 ]

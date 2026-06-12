@@ -125,10 +125,12 @@ describe("knowledge dataset lint", () => {
   it("ships the expected dataset volume (sanity floor)", () => {
     // 42 frozen seed + aim-tweaks (owner 2026-06-08) + 3 sprint debunks (2026-06-10: disable-smt-gaming,
     // nvidia-prefer-max-performance, cpu-affinity-games) + memory-compression-off (2026-06-11, the
-    // Leftovers detector's explainer — R1 flagged the WhatsThis gap). These are Library EXPLAINERS
-    // (graded real/placebo/risky), NOT appliable recs — Compy applies none of them, so the ~29
-    // appliable-catalog freeze is untouched. The pin stays exact as a curation drift-guard.
-    expect(TWEAKS.length).toBe(47);
+    // Leftovers detector's explainer — R1 flagged the WhatsThis gap) + 4 R3 Lane F debunks
+    // (2026-06-12: game-boosters, ram-cleaners, app-hw-accel-off, dns-for-gaming — search-intent
+    // picks pairing with the dark-site pages). These are Library EXPLAINERS (graded real/placebo/
+    // risky), NOT appliable recs — Compy applies none of them, so the ~29 appliable-catalog freeze
+    // is untouched. The pin stays exact as a curation drift-guard.
+    expect(TWEAKS.length).toBe(51);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);
