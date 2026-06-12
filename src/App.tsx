@@ -837,17 +837,20 @@ const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
 const LAB_V2_KEY = "compy_lab_v2";
 const APP_VERSION = "0.1.0";
-// The Instrument/Halfway-Home surfaces now DEFAULT ON in dev AND release (the redesign is the
-// shipped app — owner sign-off 2026-06-06, after the Fix + Play parity gaps were closed). Each
-// classic surface stays reachable by setting its flag to "0" in Settings → New look. An explicit
-// stored "1"/"0" always wins.
+// The Instrument/Halfway-Home surfaces DEFAULT ON everywhere (the redesign is the shipped app —
+// owner sign-off 2026-06-06). A stored "0" is now SELF-HEALED to v2 (removed + default): the
+// Settings "New look" UI that wrote "0"s is gone, so a stale "0" had become an exit-less
+// soft-lock onto a classic surface — the owner hit it live 2026-06-11 (a leftover
+// compy_check_v2="0" routed every Check click to the old Game Readiness page and hid Past
+// Tweaks). M3-spec step 2, executed early. Session-scoped classic (Fix's "Classic Optimize"
+// escape hatch) still works via its runtime setter; a relaunch restores v2.
 function readDevFlag(key: string): boolean {
   try {
-    const v = localStorage.getItem(key);
-    if (v === "1") return true;
-    if (v === "0") return false;
+    if (localStorage.getItem(key) === "0") {
+      localStorage.removeItem(key); // self-heal the lockout
+    }
   } catch {
-    /* ignore — fall back to the default */
+    /* ignore — default v2 */
   }
   return true;
 }
