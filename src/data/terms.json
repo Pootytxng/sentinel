@@ -18,7 +18,7 @@
   {
     "id": "gsync-freesync",
     "name": "G-Sync / FreeSync",
-    "aliases": ["gsync", "g-sync", "freesync", "g sync", "free sync", "adaptive sync"],
+    "aliases": ["gsync", "g-sync", "freesync", "g sync", "free sync"],
     "what": "The two brand names for VRR (variable refresh rate — the monitor waiting for each frame instead of refreshing on a fixed clock). G-Sync is NVIDIA's; FreeSync is AMD's.",
     "more": "Most modern monitors support at least one, and many support both regardless of your graphics card. You turn it on in two places — the monitor's own menu and your graphics driver — and both need to agree. Outside its supported frame-rate range it switches off, which is why an FPS cap keeps it engaged.",
     "related": ["vrr", "vrr-sync-stack", "fps-cap", "vrr-sync-stack-guide"]

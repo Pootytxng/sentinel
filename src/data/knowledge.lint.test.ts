@@ -95,6 +95,26 @@ describe("knowledge dataset lint", () => {
     expect(offenders, `self-referencing related: ${offenders.join(", ")}`).toEqual([]);
   });
 
+  it("no two entries of the SAME type claim the same alias (search/autopsy shadowing)", () => {
+    // Cross-TYPE sharing is deliberate (a graded tweak and its term explainer both answer "XMP");
+    // within one type a duplicate alias makes name+alias resolution ambiguous — one entry silently
+    // shadows the other in the Guide Autopsy matcher and search ranking. Found live once:
+    // "adaptive sync" on both vrr and gsync-freesync (R5 Lane 3; the umbrella term kept it).
+    for (const [type, list] of groups) {
+      const owners = new Map<string, string>();
+      const dupes: string[] = [];
+      for (const e of list) {
+        for (const a of (e.aliases as string[]) ?? []) {
+          const key = a.toLowerCase().trim();
+          const prev = owners.get(key);
+          if (prev && prev !== String(e.id)) dupes.push(`${type} "${a}": ${prev} vs ${String(e.id)}`);
+          owners.set(key, String(e.id));
+        }
+      }
+      expect(dupes, `same-type alias collisions:\n${dupes.join("\n")}`).toEqual([]);
+    }
+  });
+
   it("has no empty strings in any field (prose, aliases, related, steps)", () => {
     const empties: string[] = [];
     for (const [type, list] of groups) {
