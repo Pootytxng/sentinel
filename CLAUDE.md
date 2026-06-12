@@ -182,6 +182,19 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🌙 R5 UNATTENDED MARATHON LANDED — 2026-06-12** (`AUTONOMOUS_SPRINT_2026-06-12-R5.md`, owner
+> resting; spec `2026-06-12-R5-unattended-marathon.md`). Four lanes, six commits, all reversible:
+> **L1** theme-correctness — last bare teal washes (Settings + onboarding arc) now follow the active
+> theme via color-mix + new `theme-literal-guard` CI (`666ac77`; the eight-surface audit found the
+> system otherwise coherent — taste calls queued, not churned) · **L2** four Blackbook debunks
+> (run-as-admin / High-priority / defrag-SSD / GPU-OC, pin 51→55, `c14063e`) · **L3** same-type
+> alias lint + the one live collision fixed (`4e339a6`) · **L4** doctrine corpus count ~120→130+
+> (`92be1ed`). Suites cargo **329** · npm **300**, clippy/tsc/vite + /check + /security clean; frozen
+> refs + dist-site + all gates untouched. **OWNER REVIEW QUEUE (ranked) in the R5 log** — top: the
+> deploy+taste-gate pair, then a 60-second skim of the four new entries. (Same day, earlier: R4b
+> landing glow-up `ebf87fc` + deploy artifact `dist-site/` built + gitignored `bc817db` — Cowork
+> audited both, deploy GO banked.)
+>
 > **🌙 R1+R2 AUTONOMOUS MARATHONS LANDED — 2026-06-11.** R1 (`AUTONOMOUS_SPRINT_2026-06-11.md`,
 > items 1–5): Leftovers detector v1+2–8 (read-only rot detection, Check section) · audit M1/M2/L1/L4
 > treated · latency guilty-device receipts. R2 (`...-R2.md`, owner napping, all reversible):
