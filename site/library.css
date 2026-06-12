@@ -1,17 +1,23 @@
-/* Compy landing — "instrument-panel editorial". Carries the app's Instrument DNA (neutral
-   charcoal, teal on CONTROLS only, mono receipts) to a static page with ZERO third-party
-   requests — no webfonts, no analytics, no CDN. The privacy posture is structural, not copy. */
+/* Compy landing — "luminous instrument noir" (R4b glow direction, spec 2026-06-12 §B0b).
+   The Instrument DNA stays (charcoal, mono receipts, teal controls) but the dark gains light
+   sources: an aurora field (teal flowing into violet/magenta), silk light streaks on long
+   loops, glassmorphism cards with 1px luminous borders, a gradient sweep on the hero line,
+   film grain. ZERO third-party requests — no webfonts, no analytics, no CDN; every glow is
+   CSS. All motion is transform/opacity-only and fully static under prefers-reduced-motion. */
 
 :root {
-  --bg: #0b0c10;
+  --bg: #0a0b10;
   --bg-raised: #101218;
   --bg-card: #12141b;
+  --glass: rgba(18, 20, 28, 0.55);
   --ink: #e8edf4;
   --ink-2: #9aa4b2;
   --ink-3: #58626f;
   --hairline: rgba(255, 255, 255, 0.09);
-  --accent: #2ee6c0; /* controls + links ONLY — never decoration */
+  --accent: #2ee6c0; /* controls + links ONLY — never copy decoration */
   --accent-ink: #06251e;
+  --violet: #8b7bff;   /* aurora palette — light, not UI: backgrounds, borders, glows */
+  --magenta: #f062c0;
   --real: #4ade80;
   --placebo: #fbbf24;
   --risky: #ff6b5e;
@@ -31,10 +37,71 @@ body {
   font-family: var(--body);
   font-size: 17px;
   line-height: 1.65;
-  /* Faint instrument grain + a top vignette — atmosphere without a single asset request. */
+  /* The aurora wash — present on every page (the debunk pages get this light touch and the
+     glass chips; the heavier streak ambience is landing-only markup). */
   background-image:
-    radial-gradient(1200px 480px at 70% -10%, rgba(46, 230, 192, 0.05), transparent 60%),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 3px);
+    radial-gradient(1100px 560px at 75% -12%, rgba(46, 230, 192, 0.10), transparent 62%),
+    radial-gradient(900px 620px at 8% 8%, rgba(139, 123, 255, 0.09), transparent 60%),
+    radial-gradient(1000px 700px at 88% 38%, rgba(240, 98, 192, 0.05), transparent 65%);
+  background-repeat: no-repeat;
+}
+
+/* Film grain — an inline SVG turbulence tile (data URI, still zero requests), blended so the
+   flats aren't flat. Sits above the washes, under nothing interactive. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+}
+
+/* ── Ambient aurora field (landing-only markup: <div class="aurora" aria-hidden>) ──
+   Two silk light streaks drifting diagonally on long alternate loops — transform-only,
+   blurred ribbons, whisper-quiet. Fixed, so the page scrolls over the light. */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+}
+.aurora i {
+  position: absolute;
+  display: block;
+  width: 130vmax;
+  height: 16vmax;
+  left: -15vmax;
+  border-radius: 50%;
+  filter: blur(52px);
+  will-change: transform;
+}
+.aurora i:first-child {
+  top: 16%;
+  rotate: -16deg;
+  background: linear-gradient(90deg, transparent 4%, rgba(46, 230, 192, 0.07) 32%,
+    rgba(139, 123, 255, 0.09) 58%, transparent 94%);
+}
+.aurora i:last-child {
+  top: 62%;
+  rotate: 14deg;
+  background: linear-gradient(90deg, transparent 6%, rgba(240, 98, 192, 0.05) 36%,
+    rgba(46, 230, 192, 0.05) 66%, transparent 95%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .aurora i:first-child { animation: silk 34s ease-in-out infinite alternate; }
+  .aurora i:last-child { animation: silk 46s ease-in-out infinite alternate-reverse; }
+  @keyframes silk {
+    from { transform: translate3d(-7vw, 3vh, 0); }
+    to { transform: translate3d(7vw, -3vh, 0); }
+  }
+  /* Barely-there parallax on the wash where scroll-driven animation exists (paint-free). */
+  @supports (animation-timeline: scroll()) {
+    .aurora { animation: aurora-drift linear both; animation-timeline: scroll(); }
+    @keyframes aurora-drift { to { transform: translate3d(0, -6vh, 0); } }
+  }
 }
 
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
@@ -49,24 +116,60 @@ body {
   font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: 0.01em;
   color: var(--ink); text-decoration: none;
 }
-.wordmark .pulse { color: var(--accent); }
+.wordmark .pulse { color: var(--accent); text-shadow: 0 0 18px rgba(46, 230, 192, 0.55); }
 .beta-chip {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-2); border: 1px solid var(--hairline); border-radius: 999px; padding: 4px 11px;
+  background: var(--glass);
 }
 
 /* ── Hero: the identity ── */
 .hero {
   display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: clamp(36px, 6vw, 56px); align-items: center; padding: clamp(48px, 10vw, 84px) 0 clamp(44px, 9vw, 72px);
+  gap: clamp(36px, 6vw, 56px); align-items: center;
+  padding: clamp(52px, 11vw, 96px) 0 clamp(48px, 9vw, 80px);
+  position: relative;
+}
+/* Soft radial bloom behind the hero copy — the first light source the eye meets. */
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -12%; top: -18%;
+  width: 70%; height: 130%;
+  background: radial-gradient(closest-side, rgba(46, 230, 192, 0.10), rgba(139, 123, 255, 0.05) 55%, transparent);
+  filter: blur(8px);
+  pointer-events: none;
 }
 .kicker {
   font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--ink-3); margin: 0 0 18px;
 }
 h1 {
-  font-family: var(--mono); font-weight: 700; letter-spacing: -0.015em;
-  font-size: clamp(34px, 5.2vw, 56px); line-height: 1.08; margin: 0 0 22px;
+  font-family: var(--mono); font-weight: 700; letter-spacing: -0.02em;
+  font-size: clamp(40px, 6.4vw, 72px); line-height: 1.04; margin: 0 0 24px;
+}
+/* Oversized display line with an animated gradient sweep — a luminous band travels through
+   near-white text. Static gradient (no sweep) under reduced motion; plain ink without clip. */
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .hero h1 {
+    background: linear-gradient(100deg,
+      var(--ink) 0%, var(--ink) 32%,
+      var(--accent) 44%, var(--violet) 52%, var(--magenta) 58%,
+      var(--ink) 70%, var(--ink) 100%);
+    background-size: 300% 100%;
+    background-position: 82% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero h1 { animation: sweep 9s linear infinite; }
+    @keyframes sweep {
+      0% { background-position: 120% 0; }
+      100% { background-position: -180% 0; }
+    }
+  }
 }
 h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: var(--risky); }
 .hero-sub { color: var(--ink-2); max-width: var(--measure); margin: 0 0 30px; font-size: 18.5px; }
@@ -75,20 +178,33 @@ h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration
 .cta-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .btn {
   font-family: var(--mono); font-size: 15px; font-weight: 700; cursor: pointer;
-  background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), #25c9d6);
+  color: var(--accent-ink); border: 0; border-radius: 9px;
   padding: 13px 22px; text-decoration: none; display: inline-block;
-  transition: transform 140ms ease, filter 140ms ease;
+  box-shadow: 0 4px 18px rgba(46, 230, 192, 0.22);
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
 }
-.btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn:hover {
+  filter: brightness(1.06); transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(46, 230, 192, 0.42), 0 0 56px rgba(139, 123, 255, 0.22);
+}
 .link-quiet { color: var(--accent); text-decoration: none; font-size: 15.5px; }
-.link-quiet:hover { text-decoration: underline; }
+.link-quiet:hover { text-decoration: underline; text-shadow: 0 0 16px rgba(46, 230, 192, 0.45); }
 
-/* The receipt — the product's soul as a visual. Dashed tear-off edges, mono, timestamps. */
+/* The receipt — the product's soul as a visual. Now glass: blur, translucency, a luminous
+   1px gradient border, and a soft aurora glow pooling beneath it. */
 .receipt {
   font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--ink-2);
-  background: var(--bg-card); border: 1px solid var(--hairline); border-radius: 4px;
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(150deg, rgba(46, 230, 192, 0.45), rgba(139, 123, 255, 0.25) 45%, rgba(255, 255, 255, 0.07)) border-box;
+  border: 1px solid transparent; border-radius: 6px;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   padding: 20px 22px 16px; position: relative; rotate: 1.2deg;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    0 0 70px rgba(46, 230, 192, 0.10),
+    0 0 140px rgba(139, 123, 255, 0.08);
 }
 .receipt::before, .receipt::after {
   content: ""; position: absolute; left: 0; right: 0; height: 0;
@@ -101,15 +217,48 @@ h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration
 }
 .receipt-row { display: flex; justify-content: space-between; gap: 14px; padding: 3px 0; }
 .receipt-row .k { color: var(--ink); }
-.receipt-ok { color: var(--real); }
+.receipt-ok { color: var(--real); text-shadow: 0 0 14px rgba(74, 222, 128, 0.45); }
 .receipt-note { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); color: var(--ink-3); font-size: 11px; }
 
-/* ── Three receipts-style value cards (R4a) — mono-headed mini-receipts, fluid to one column ── */
+/* Floating receipt-chip motifs — wordless glass pills with verdict-colored dots drifting
+   around the receipt (decorative shapes only; aria-hidden, copy untouched). */
+.hero-aside { position: relative; }
+.chip-motifs { position: absolute; inset: 0; pointer-events: none; }
+.chip-motifs i {
+  position: absolute; display: block; width: 52px; height: 20px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--hairline);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.chip-motifs i::before {
+  content: ""; position: absolute; left: 7px; top: 50%; translate: 0 -50%;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.chip-motifs .m-real { top: -8%; right: 4%; rotate: 8deg; }
+.chip-motifs .m-real::before { background: var(--real); box-shadow: 0 0 10px rgba(74, 222, 128, 0.8); }
+.chip-motifs .m-placebo { bottom: -7%; left: -3%; rotate: -10deg; width: 44px; height: 18px; }
+.chip-motifs .m-placebo::before { background: var(--placebo); box-shadow: 0 0 10px rgba(251, 191, 36, 0.7); }
+.chip-motifs .m-risky { top: 38%; right: -7%; rotate: 16deg; width: 40px; height: 16px; }
+.chip-motifs .m-risky::before { background: var(--risky); box-shadow: 0 0 10px rgba(255, 107, 94, 0.7); }
+@media (prefers-reduced-motion: no-preference) {
+  .chip-motifs .m-real { animation: bob 13s ease-in-out infinite alternate; }
+  .chip-motifs .m-placebo { animation: bob 17s ease-in-out infinite alternate-reverse; }
+  .chip-motifs .m-risky { animation: bob 21s ease-in-out infinite alternate; }
+  @keyframes bob {
+    from { transform: translate3d(0, -7px, 0); }
+    to { transform: translate3d(0, 7px, 0); }
+  }
+}
+
+/* ── Three receipts-style value cards — glass mini-receipts with luminous borders ── */
 .value-cards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 18px;
 }
 .value-card {
-  background: var(--bg-card); border: 1px solid var(--hairline); border-radius: 4px;
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(160deg, rgba(46, 230, 192, 0.30), rgba(255, 255, 255, 0.06) 45%, rgba(139, 123, 255, 0.16)) border-box;
+  border: 1px solid transparent; border-radius: 6px;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   padding: 22px 24px 20px; position: relative;
 }
 .value-card::before {
@@ -133,10 +282,21 @@ h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration
 .chip {
   font-family: var(--mono); font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em;
   text-transform: uppercase; border-radius: 999px; padding: 3px 11px; display: inline-block;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-.chip-real { color: var(--real); border: 1px solid color-mix(in srgb, var(--real) 45%, transparent); }
-.chip-placebo { color: var(--placebo); border: 1px solid color-mix(in srgb, var(--placebo) 45%, transparent); }
-.chip-risky { color: var(--risky); border: 1px solid color-mix(in srgb, var(--risky) 45%, transparent); }
+.chip-real {
+  color: var(--real); border: 1px solid color-mix(in srgb, var(--real) 45%, transparent);
+  box-shadow: 0 0 18px rgba(74, 222, 128, 0.14);
+}
+.chip-placebo {
+  color: var(--placebo); border: 1px solid color-mix(in srgb, var(--placebo) 45%, transparent);
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.12);
+}
+.chip-risky {
+  color: var(--risky); border: 1px solid color-mix(in srgb, var(--risky) 45%, transparent);
+  box-shadow: 0 0 18px rgba(255, 107, 94, 0.14);
+}
 /* Non-tweak entry types (full-library pages) — quiet, never verdict-colored. */
 .chip-term, .chip-trick, .chip-guide { color: var(--ink-2); border: 1px solid var(--hairline); }
 .verdict-cell p { margin: 12px 0 0; color: var(--ink-2); font-size: 15px; }
@@ -149,22 +309,39 @@ h2 {
 }
 .section-sub { color: var(--ink-2); margin: 0 0 36px; max-width: var(--measure); }
 
-/* ── Debunk cards ── */
+/* ── Debunk cards — glass, lit on hover ── */
 .debunks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 18px; }
 .card {
-  background: var(--bg-card); border: 1px solid var(--hairline); border-radius: 12px;
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(165deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04) 50%, rgba(139, 123, 255, 0.10)) border-box;
+  border: 1px solid transparent; border-radius: 12px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   padding: 24px 24px 20px; display: flex; flex-direction: column; gap: 12px;
   text-decoration: none; color: inherit;
-  transition: transform 160ms ease, border-color 160ms ease;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
-.card:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.2); }
+.card:hover {
+  transform: translateY(-3px);
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(165deg, rgba(46, 230, 192, 0.45), rgba(255, 255, 255, 0.08) 50%, rgba(240, 98, 192, 0.30)) border-box;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.4), 0 0 44px rgba(46, 230, 192, 0.10);
+}
 .card h3 { font-family: var(--mono); font-size: 17px; line-height: 1.35; margin: 0; color: var(--ink); }
 .card p { margin: 0; color: var(--ink-2); font-size: 14.5px; flex: 1; }
 .card .read { font-family: var(--mono); font-size: 13px; color: var(--accent); }
 
-/* ── Waitlist ── */
+/* ── Waitlist — the brightest pool of light on the page ── */
 .waitlist {
-  background: var(--bg-raised); border: 1px solid var(--hairline); border-radius: 16px;
+  background:
+    radial-gradient(640px 280px at 50% -30%, rgba(46, 230, 192, 0.13), transparent 70%),
+    radial-gradient(520px 300px at 85% 110%, rgba(139, 123, 255, 0.12), transparent 70%),
+    linear-gradient(var(--glass), var(--glass)) padding-box;
+  border: 1px solid transparent; border-radius: 16px;
+  background-clip: padding-box, padding-box, padding-box;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 90px rgba(46, 230, 192, 0.07);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   padding: 48px clamp(24px, 5vw, 56px); text-align: center;
 }
 .waitlist h2 { margin-bottom: 8px; }
@@ -172,7 +349,7 @@ h2 {
 .waitlist-form { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .waitlist-form input {
   font-family: var(--mono); font-size: 15px; color: var(--ink);
-  background: var(--bg); border: 1px solid var(--hairline); border-radius: 9px;
+  background: rgba(10, 11, 16, 0.7); border: 1px solid var(--hairline); border-radius: 9px;
   padding: 12px 16px; width: min(340px, 80vw);
 }
 .waitlist-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
@@ -197,6 +374,7 @@ h2 {
 .cta-box {
   margin-top: 56px; border: 1px dashed var(--hairline); border-radius: 12px;
   padding: 28px; text-align: center;
+  background: var(--glass);
 }
 .cta-box p { margin: 0 auto 18px; }
 
@@ -212,6 +390,7 @@ h2 {
 /* ── Future-download placeholder (honest: text, never a dead button) ── */
 .download-note {
   border: 1px dashed var(--hairline); border-radius: 12px; padding: 26px 28px;
+  background: var(--glass);
 }
 .download-note h2 { margin: 0 0 6px; font-size: 20px; }
 .download-note p { margin: 0; color: var(--ink-2); max-width: var(--measure); }
@@ -220,11 +399,12 @@ h2 {
 footer {
   border-top: 1px solid var(--hairline); padding: 36px 0 48px;
   color: var(--ink-3); font-size: 13.5px;
+  background: radial-gradient(720px 200px at 50% 120%, rgba(139, 123, 255, 0.07), transparent 70%);
 }
 footer .wrap { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 footer .promise { font-family: var(--mono); }
 
-/* ── Honesty-creed footer (R4a) ── */
+/* ── Honesty-creed footer ── */
 footer .creed { display: block; }
 .creed-line { font-family: var(--mono); font-size: 17px; color: var(--ink); margin: 0 0 12px; }
 .creed-list { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 6px; }
@@ -240,8 +420,22 @@ footer .creed { display: block; }
   @keyframes rise { to { opacity: 1; translate: 0 0; } }
 }
 
+/* ── Scroll reveals — armed ONLY when the page script adds html.rv (IntersectionObserver
+   present AND reduced-motion off); otherwise everything is simply visible. ── */
+html.rv .sr, html.rv .sr-kids > * {
+  opacity: 0; translate: 0 24px;
+  transition: opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1), translate 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+html.rv .sr.in, html.rv .sr-kids.in > * { opacity: 1; translate: 0 0; }
+html.rv .sr-kids.in > :nth-child(2) { transition-delay: 90ms; }
+html.rv .sr-kids.in > :nth-child(3) { transition-delay: 180ms; }
+html.rv .sr-kids.in > :nth-child(4) { transition-delay: 250ms; }
+html.rv .sr-kids.in > :nth-child(5) { transition-delay: 310ms; }
+html.rv .sr-kids.in > :nth-child(n + 6) { transition-delay: 360ms; }
+
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; gap: 40px; padding-top: 56px; }
+  .hero::before { width: 110%; }
   .receipt { rotate: 0deg; max-width: 460px; }
   .verdict-key, .debunks { grid-template-columns: 1fr; }
 }

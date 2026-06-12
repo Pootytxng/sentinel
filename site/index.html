@@ -1,8 +1,10 @@
 <!doctype html>
-<!-- GENERATED LANDING TEMPLATE (R4a, spec 2026-06-12-doctrine-voice-baptism §B0) —
-     `node site/generate.mjs` fills the slots and writes site/index.html. Publish-grade pass:
-     mobile-first, Instrument-adjacent, doctrine voice. Owner taste-gates before any publish;
-     the site stays DARK until the publish ladder. Swap points: src/data/site.ts
+<!-- GENERATED LANDING TEMPLATE (R4b "glow, not gloom", spec 2026-06-12-doctrine-voice-baptism
+     §B0b) — `node site/generate.mjs` fills the slots and writes site/index.html. Luminous pass
+     over the R4a structure: aurora field + silk streaks (CSS-only, reduced-motion-honored),
+     glass cards, hero gradient sweep, IntersectionObserver scroll reveals (merged into the ONE
+     page script). Copy unchanged from R4a. Owner taste-gates before any publish; the site stays
+     DARK until the publish ladder. Swap points: src/data/site.ts
      (SITE_URL / WAITLIST_EMBED / KOFI_URL) — one file, then regenerate.
 
      ART SLOTS (Cowork supplies via the §D Higgsfield lane — curated into site/assets/):
@@ -26,6 +28,7 @@
 <link rel="stylesheet" href="library.css" />
 </head>
 <body>
+<div class="aurora" aria-hidden="true"><i></i><i></i></div>
 <header class="wrap topbar">
   <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
   <span class="beta-chip">Private beta · invite only</span>
@@ -50,7 +53,8 @@
     </div>
     <!-- HERO ART SLOT (§D): when site/assets/hero.webp lands, it backs this aside —
          the CSS receipt stays in the foreground either way (it IS the product's soul). -->
-    <aside class="reveal reveal-late" aria-label="What a Compy receipt looks like">
+    <aside class="reveal reveal-late hero-aside" aria-label="What a Compy receipt looks like">
+      <div class="chip-motifs" aria-hidden="true"><i class="m-real"></i><i class="m-placebo"></i><i class="m-risky"></i></div>
       <div class="receipt">
         <div class="receipt-head"><span>Trust Ledger</span><span>receipt</span></div>
         <div class="receipt-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
@@ -64,7 +68,7 @@
 
   <!-- ── Three receipts-style value cards ── -->
   <section class="wrap" id="receipts">
-    <div class="value-cards">
+    <div class="value-cards sr-kids">
       <div class="value-card">
         <div class="value-head"><span>01</span><span>per-rig</span></div>
         <h3>Reads <em>your</em> hardware</h3>
@@ -88,7 +92,7 @@
 
   <!-- ── Verdict key (generated from the app's own glossary — can't drift) ── -->
   <div class="wrap">
-    <div class="verdict-key" id="grades">
+    <div class="verdict-key sr-kids" id="grades">
       <div class="verdict-cell">
         <span class="chip chip-real">Real</span>
         <p>It actually does something. A measurable or well-proven effect on your games — worth doing.</p>
@@ -111,7 +115,7 @@
       130 tweaks, terms, and guides, graded honestly — what actually works, measured.
       A few of the internet's favorites:
     </p>
-    <div class="debunks">
+    <div class="debunks sr-kids">
       <a class="card" href="useplatformclock.html">
         <span class="chip chip-risky">Risky — refused</span>
         <h3>Force HPET / useplatformclock</h3>
@@ -202,7 +206,7 @@
 
   <!-- ── Waitlist (placeholder slot — Zero-Budget) ── -->
   <section class="wrap" id="waitlist">
-    <div class="waitlist">
+    <div class="waitlist sr">
       <h2>Get the launch email</h2>
       <p class="section-sub">
         Compy is in a private, invite-only beta. Leave an email and you'll get exactly one
@@ -225,7 +229,7 @@
 
   <!-- ── Future download (honest placeholder — no fake button, doorknob law) ── -->
   <section class="wrap" id="download">
-    <div class="download-note">
+    <div class="download-note sr">
       <h2>Download</h2>
       <p>The public build will live right here. Until then Compy ships by invite only — the
       waitlist above is the door.</p>
@@ -249,8 +253,22 @@
   </div>
 </footer>
 <script>
-  // The ONLY script on the page: honest interception while no waitlist service is wired.
-  // Setting WAITLIST_EMBED in src/data/site.ts removes this block on regeneration.
+  // The ONLY script on the page: scroll reveals + (until a provider exists) the waitlist note.
+  (function () {
+    var rm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)");
+    if ("IntersectionObserver" in window && !(rm && rm.matches)) {
+      document.documentElement.classList.add("rv");
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+        });
+      }, { rootMargin: "0px 0px -10% 0px" });
+      document.querySelectorAll(".sr, .sr-kids").forEach(function (el) { io.observe(el); });
+    }
+  })();
+
+  // Honest interception while no waitlist service is wired. Setting WAITLIST_EMBED in
+  // src/data/site.ts removes this block on regeneration.
   document.querySelector("[data-waitlist]").addEventListener("submit", function (e) {
     e.preventDefault();
     document.querySelector("[data-waitlist-pending]").style.display = "block";

@@ -154,18 +154,40 @@ const waitlistSlot = site.WAITLIST_EMBED
       `      </p>`,
     ].join("\n");
 
-const waitlistScript = site.WAITLIST_EMBED
+// The ONE page script (test-pinned: at most one <script> block): the IntersectionObserver
+// scroll reveals (§B0b — html.rv arms them only when the API exists AND reduced-motion is off;
+// without it everything is simply visible) + the honest waitlist interception while no
+// waitlist service is wired (that part disappears when WAITLIST_EMBED is set + regenerated).
+const waitlistJs = site.WAITLIST_EMBED
   ? ""
   : [
-      `<script>`,
-      `  // The ONLY script on the page: honest interception while no waitlist service is wired.`,
-      `  // Setting WAITLIST_EMBED in src/data/site.ts removes this block on regeneration.`,
+      ``,
+      `  // Honest interception while no waitlist service is wired. Setting WAITLIST_EMBED in`,
+      `  // src/data/site.ts removes this block on regeneration.`,
       `  document.querySelector("[data-waitlist]").addEventListener("submit", function (e) {`,
       `    e.preventDefault();`,
       `    document.querySelector("[data-waitlist-pending]").style.display = "block";`,
       `  });`,
-      `</script>`,
     ].join("\n");
+
+const pageScript = [
+  `<script>`,
+  `  // The ONLY script on the page: scroll reveals + (until a provider exists) the waitlist note.`,
+  `  (function () {`,
+  `    var rm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)");`,
+  `    if ("IntersectionObserver" in window && !(rm && rm.matches)) {`,
+  `      document.documentElement.classList.add("rv");`,
+  `      var io = new IntersectionObserver(function (entries) {`,
+  `        entries.forEach(function (en) {`,
+  `          if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }`,
+  `        });`,
+  `      }, { rootMargin: "0px 0px -10% 0px" });`,
+  `      document.querySelectorAll(".sr, .sr-kids").forEach(function (el) { io.observe(el); });`,
+  `    }`,
+  `  })();`,
+  waitlistJs,
+  `</script>`,
+].join("\n");
 
 const kofiSlot = site.KOFI_URL
   ? `    <a class="link-quiet" href="${escapeHtml(site.KOFI_URL)}">Support Compy ☕</a>`
@@ -179,7 +201,7 @@ writeFileSync(
     DEBUNK_CARDS: debunkCards,
     ENTRY_COUNT: String(entries.length),
     WAITLIST_SLOT: waitlistSlot,
-    WAITLIST_SCRIPT: waitlistScript,
+    PAGE_SCRIPT: pageScript,
     KOFI_SLOT: kofiSlot,
     FOOTER_PROMISE,
     YEAR: String(year),
