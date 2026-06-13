@@ -476,5 +476,50 @@
     "what": "Always picking exclusive fullscreen over borderless, on the old rule that borderless costs FPS and adds lag.",
     "why": "That rule was true a decade ago. On Windows 10 and 11, a borderless game with nothing covering it gets handed the display almost as directly as exclusive mode ever did — same frames, near-identical latency, plus instant alt-tab and overlays that keep working. Where the two modes still differ in a specific game, that's worth knowing, and it's measurable: play a session in each and compare, which is exactly the before/after Compy can time for you. Pick by measurement, not by 2014's rule.",
     "related": ["fullscreen-modes", "fullscreen-optimizations", "overlay"]
+  },
+  {
+    "id": "monitoring-overlay-fps",
+    "name": "Running MSI Afterburner / an overlay to boost FPS",
+    "aliases": ["msi afterburner fps", "rivatuner boost", "fps overlay boost", "afterburner increases fps", "rtss fps boost"],
+    "verdict": "placebo",
+    "what": "The belief that running a monitoring tool like MSI Afterburner or RivaTuner — or its on-screen overlay — makes a game run faster.",
+    "why": "A gauge reads the engine; it does not drive the car. Afterburner and RTSS measure framerate, temps, and usage — and measuring changes nothing about how many frames your GPU draws. The on-screen overlay actually costs a sliver of performance to render each frame (usually a fraction of a percent, more if you stack heavy graphs). The real worth of these tools is information — spotting a thermal or VRAM wall you can then act on. As a frame booster, there is nothing to measure.",
+    "related": ["overlay", "game-boosters", "thermal-throttling"]
+  },
+  {
+    "id": "monitor-overclock-fps",
+    "name": "Overclocking your monitor for more FPS",
+    "aliases": ["overclock monitor fps", "monitor overclock for fps", "refresh overclock fps", "oc monitor frames"],
+    "verdict": "placebo",
+    "what": "Pushing a monitor past its rated refresh rate (say 60 to 75 Hz) expecting the game to start producing more frames.",
+    "why": "Refresh rate is the ceiling on frames you can SEE, not the number your GPU MAKES. Raising it lets a fast GPU show more of the frames it is already rendering — a real smoothness and latency win when your FPS was above the old refresh — but it adds zero frames on a GPU that was already the limit. A monitor overclock can also fail quietly: above a certain rate the panel may drop or repeat frames, so a '75 Hz' that is not showing 75 distinct frames is worse than an honest 60. Run a frame-skipping test before you trust it.",
+    "related": ["hz-vs-fps", "vrr", "vsync"]
+  },
+  {
+    "id": "close-background-apps-fps",
+    "name": "Closing every background app for more FPS",
+    "aliases": ["close background apps fps", "end task for fps", "kill background processes", "close apps before gaming", "free up ram gaming"],
+    "verdict": "placebo",
+    "what": "Manually shutting every background program — browser, Discord, wallpaper app — before a game, expecting a meaningful FPS jump.",
+    "why": "On a modern multi-core PC with RAM to spare, idle apps sit there using almost nothing, so closing them frees memory and a few percent of one core the game was not waiting on. The exception is real: an app actively WORKING — a browser tab playing video, a cloud sync hammering the disk, a stream encoder — can steal a core or saturate your RAM and VRAM. Close THAT one and you will see it. Closing everything 'just in case' mostly buys you a tidier taskbar. The honest move is to watch usage and close only what is actually busy.",
+    "related": ["game-boosters", "ram-cleaners", "high-priority-games"]
+  },
+  {
+    "id": "audio-enhancements-fps",
+    "name": "Disabling audio enhancements for FPS",
+    "aliases": ["disable audio enhancements fps", "audio enhancements off", "spatial sound fps", "turn off sound effects fps"],
+    "verdict": "placebo",
+    "what": "Switching off Windows audio enhancements or spatial sound to free up performance for higher frames.",
+    "why": "Audio processing runs on a tiny slice of CPU that has nothing to do with the GPU drawing frames — turning it off is a rounding error no frame counter will show. There IS a legitimate reason to toggle audio enhancements: they can cause crackling, echo, or delay in your SOUND, and turning them off fixes that. Do it for the audio. Do not expect frames from it.",
+    "related": ["visual-effects"]
+  },
+  {
+    "id": "render-scale",
+    "name": "Lowering render scale / resolution for FPS",
+    "aliases": ["render scale", "resolution scale", "lower resolution fps", "render resolution", "3d resolution"],
+    "verdict": "real",
+    "what": "Dropping the resolution a game RENDERS at — the output resolution, or an in-game 'render scale' / 'resolution scale' slider set below 100%.",
+    "why": "This is the most reliable FPS lever there is, and the honest counterpoint to every placebo registry tweak: frames cost pixels, so rendering fewer pixels makes more frames, every time, on every GPU. Going from 1440p to 1080p, or render scale 100% to 80%, gives a large and measurable jump whenever you are GPU-limited. The trade is sharpness. Modern upscalers (DLSS / FSR / XeSS) are the smart version — they render low and reconstruct detail so you keep most of the image — but even a plain resolution drop works. When a tweak promises free frames at no visual cost, doubt it; this one is honest about the cost and actually delivers the frames.",
+    "related": ["upscaling", "native-resolution", "hz-vs-fps"]
   }
 ]

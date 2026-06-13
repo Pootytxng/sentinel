@@ -149,11 +149,14 @@ describe("knowledge dataset lint", () => {
     // (2026-06-12: game-boosters, ram-cleaners, app-hw-accel-off, dns-for-gaming — search-intent
     // picks pairing with the dark-site pages) + 6 R5 Lane 2 debunks (2026-06-12: run-as-admin-fps,
     // high-priority-games, defrag-ssd, gpu-overclocking, clean-install-windows,
-    // exclusive-fullscreen-fps — popular-myth gaps in the coverage map).
+    // exclusive-fullscreen-fps — popular-myth gaps in the coverage map) + 5 R6 Lane B debunks
+    // (2026-06-13: monitoring-overlay-fps, monitor-overclock-fps, close-background-apps-fps,
+    // audio-enhancements-fps [placebo] + render-scale [real, the honest counterpoint lever] —
+    // more uncovered popular-myth gaps).
     // These are Library EXPLAINERS (graded real/placebo/risky), NOT appliable recs — Compy applies
     // none of them, so the ~29 appliable-catalog freeze is untouched. The pin stays exact as a
     // curation drift-guard.
-    expect(TWEAKS.length).toBe(57);
+    expect(TWEAKS.length).toBe(62);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);

@@ -446,5 +446,13 @@
     "what": "Tweaks an old guide changed on your PC before Compy existed — found by checking a short, curated list of known patterns against your current settings, on demand and read-only.",
     "more": "Compy only flags exact, documented patterns — never a heuristic scan, never \"registry junk\". Every finding shows its receipt: the value found, the Windows default, and what it actually costs, in plain English for your hardware. \"Nothing found\" is a first-class result, and a setting Compy can't read is named as unchecked rather than counted clean. If you set something on purpose, it's yours to keep — Compy can't tell who set it, and says so.",
     "related": ["pagefile-disable", "memory-compression-off", "useplatformclock", "tcp-mega-packs"]
+  },
+  {
+    "id": "bottleneck",
+    "name": "Bottleneck (CPU-bound vs GPU-bound)",
+    "aliases": ["bottleneck", "cpu bound", "gpu bound", "cpu bottleneck", "gpu bottleneck", "bottlenecking"],
+    "what": "The part of your PC running flat-out while the rest waits is the bottleneck. In games it is usually the GPU (GPU-bound) or the CPU (CPU-bound), and which one it is decides what will actually raise your FPS.",
+    "more": "Watch usage during a game. If the GPU sits near 100% and the CPU has headroom, you are GPU-bound — lowering resolution or settings, or turning on upscaling, buys frames. If the GPU is well under 100% but one CPU core is pegged, you are CPU-bound — resolution barely helps; the limit is draw calls, physics, or a 1%-low and stutter problem instead. A bottleneck is not a defect to eliminate: something is always the limit. The goal is to know WHICH limit you are hitting, change the thing that matters, and ignore the dozen tweaks aimed at the part that already had headroom.",
+    "related": ["frametime", "one-percent-lows", "thermal-throttling", "native-resolution"]
   }
 ]
