@@ -48,13 +48,13 @@ describe("site landing (R4a publish-grade contract)", () => {
     expect(download).not.toMatch(/<button|class="btn"/);
   });
 
-  it("mobile viewport + og metas present; og:image stays a commented SLOT until the art exists", () => {
+  it("mobile viewport + og metas present; og:image is LIVE (the §D art exists) and absolute", () => {
     expect(html).toContain('name="viewport"');
     expect(html).toContain('property="og:title"');
-    const ogImageActive = /^\s*<meta property="og:image"/m.test(
-      html.replace(/<!--[\s\S]*?-->/g, ""),
-    );
-    expect(ogImageActive).toBe(false);
+    // Scrapers (Discord/Twitter/Facebook) require an ABSOLUTE og:image URL.
+    const active = html.replace(/<!--[\s\S]*?-->/g, "");
+    expect(active).toMatch(/<meta property="og:image" content="https:\/\/[^"]+\/assets\/og\.png"/);
+    expect(active).toContain('name="twitter:card"');
   });
 
   it("waitlist is the REAL same-origin form (spec 2026-06-12-waitlist-wiring); Ko-fi stays a placeholder", () => {
