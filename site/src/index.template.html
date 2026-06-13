@@ -7,11 +7,10 @@
      DARK until the publish ladder. Swap points: src/data/site.ts
      (SITE_URL / WAITLIST_SLOT / KOFI_URL) — one file, then regenerate.
 
-     ART SLOTS (Cowork supplies via the §D Higgsfield lane — curated into site/assets/):
-       · hero art      → site/assets/hero.webp   (suggested 960×720, schematic/instrument style;
-                         replaces the CSS receipt visual's backdrop, alt text required)
-       · OG share card → site/assets/og.png      (1200×630) — then uncomment the og:image metas.
-     Until those exist the page ships ZERO raster assets — the receipt visual is CSS-built. -->
+     HERO VISUAL: the living Blackbook — site/assets/og-card.mp4 (self-hosted, poster
+     site/assets/og-card.png) framed in glass with a breathing glow, verdict ribbon, and proof
+     strip (see .stage in library.css). OG share card = site/assets/og.png (1200×630), wired into
+     the og:image meta below. Every asset is self-hosted (zero third-party origins). -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -52,19 +51,35 @@
         <a class="link-quiet" href="#library">Read the debunks →</a>
       </div>
     </div>
-    <!-- HERO ART SLOT (§D): when site/assets/hero.webp lands, it backs this aside —
-         the CSS receipt stays in the foreground either way (it IS the product's soul). -->
-    <aside class="reveal reveal-late hero-aside" aria-label="What a Compy receipt looks like">
-      <div class="chip-motifs" aria-hidden="true"><i class="m-real"></i><i class="m-placebo"></i><i class="m-risky"></i></div>
-      <div class="receipt">
-        <div class="receipt-head"><span>Trust Ledger</span><span>receipt</span></div>
-        <div class="receipt-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
-        <div class="receipt-row"><span>snapshot</span><span>prior state saved</span></div>
-        <div class="receipt-row"><span class="k">rolled back</span><span>21:50</span></div>
-        <div class="receipt-row"><span>restored</span><span class="receipt-ok">exact prior value ✓</span></div>
-        <div class="receipt-note">Every change Compy makes is recorded with its undo — on your PC, nowhere else.</div>
+    <!-- THE LIVING BLACKBOOK — the hero IS the product's own render (owner-approved, the
+         landing-blackbook mock wired in). Self-hosted <video> with a poster so it never blocks
+         first paint; the existing page script pauses it under prefers-reduced-motion. The verdict
+         ribbon + proof strip are decorative (aria-hidden); the value cards below carry the
+         accessible text. No raster image element, no external origin. -->
+    <div class="stage reveal reveal-late" aria-label="The Compy Blackbook — every tweak, graded honestly">
+      <div class="book-glow" aria-hidden="true"></div>
+      <div class="book-frame">
+        <video autoplay muted loop playsinline poster="assets/og-card.png" aria-hidden="true">
+          <source src="assets/og-card.mp4" type="video/mp4" />
+        </video>
+        <div class="proof" aria-hidden="true">
+          <div class="proof-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
+          <div class="proof-row"><span>+8 fps · 1% low +11</span><span class="ok">measured ✓</span></div>
+          <div class="proof-row"><span class="k">rolled back</span><span>exact prior value ✓</span></div>
+          <div class="proof-cap">Judge → measure → receipt → undo. The whole loop, on your machine.</div>
+        </div>
       </div>
-    </aside>
+      <div class="verdicts" aria-hidden="true">
+        <i class="vd real" data-label="Real"></i>
+        <i class="vd placebo" data-label="Placebo"></i>
+        <i class="vd risky" data-label="Risky — refused"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Doctrine ribbon under the hero: the whole loop in four words. -->
+  <div class="ribbon" aria-hidden="true">
+    <b>Reads your rig</b><span>→</span><b>Grades honestly</b><span>→</span><b>Measures the change</b><span>→</span><b>Keeps the receipt</b>
   </div>
 
   <!-- ── Three receipts-style value cards ── -->
