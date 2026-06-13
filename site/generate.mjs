@@ -36,6 +36,77 @@ const fill = (template, vars) =>
     return vars[key];
   });
 
+// ---------- minimal, faithful markdown → HTML (legal pages render from the .md source) ----------
+// Deliberately tiny + zero-dependency. Handles exactly what PRIVACY.md / EULA.md use: headings,
+// paragraphs, **bold**, *italic*, `code`, "- " lists (with wrapped continuation lines),
+// "> " blockquotes, and "---" rules. Inline text is HTML-escaped. Bare http(s) URLs are rendered
+// as PLAIN TEXT, never <a href> — the legal pages must add ZERO external origins (the contact URLs
+// stay readable/copyable; the only links on the page are the relative header/footer ones).
+function mdInline(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  return s;
+}
+
+function mdToHtml(md) {
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+  let para = [];
+  const flushPara = () => {
+    if (para.length) {
+      out.push(`<p>${mdInline(para.join(" "))}</p>`);
+      para = [];
+    }
+  };
+  const isBreak = (t) => t === "" || /^[-*]\s+/.test(t) || /^#{1,6}\s/.test(t) || t === "---" || /^>\s?/.test(t);
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    if (t === "") {
+      flushPara();
+      i++;
+    } else if (t === "---") {
+      flushPara();
+      out.push("<hr />");
+      i++;
+    } else if (/^#{1,6}\s/.test(t)) {
+      flushPara();
+      const h = /^(#{1,6})\s+(.*)$/.exec(t);
+      out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`);
+      i++;
+    } else if (/^[-*]\s+/.test(t)) {
+      flushPara();
+      const items = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
+        let item = lines[i].trim().replace(/^[-*]\s+/, "");
+        i++;
+        // fold wrapped continuation lines (indented, not a new block) into the item
+        while (i < lines.length && !isBreak(lines[i].trim())) {
+          item += " " + lines[i].trim();
+          i++;
+        }
+        items.push(`<li>${mdInline(item)}</li>`);
+      }
+      out.push(`<ul>${items.join("")}</ul>`);
+    } else if (/^>\s?/.test(t)) {
+      flushPara();
+      const quote = [];
+      while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+        quote.push(lines[i].trim().replace(/^>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote>${mdInline(quote.join(" "))}</blockquote>`);
+    } else {
+      para.push(t);
+      i++;
+    }
+  }
+  flushPara();
+  return out.join("\n");
+}
+
 // Still true today (and test-pinned): the shipped app makes zero outbound requests. If the
 // opt-in Receipts telemetry phase ever ships (owner-gated), this line gets revised WITH it.
 const FOOTER_PROMISE = "Local-only by design · no telemetry · no account";
@@ -114,6 +185,41 @@ writeFileSync(
   }),
 );
 console.log(`wrote site/library/ — ${entries.length} entries + index (gitignored artifact)`);
+
+// ---------- legal pages (rendered from the .md source so they never drift) ----------
+// site/privacy.html + site/eula.html — same chrome as the content pages (wordmark, aurora wash,
+// glass), legal wording rendered faithfully from docs/PRIVACY.md and docs/EULA.md. Committed
+// (they live at the site root like the curated debunk pages, not in the gitignored library/).
+const legalPages = [
+  {
+    file: "privacy.html",
+    src: "PRIVACY.md",
+    title: "Compy — Privacy Policy",
+    desc: "How Compy and the Compy website handle your data — the app is local-only; the launch waitlist stores only your email and a one-way hashed IP, with zero third-party trackers.",
+  },
+  {
+    file: "eula.html",
+    src: "EULA.md",
+    title: "Compy — End-User License Agreement",
+    desc: "The Compy End-User License Agreement & disclaimer — proprietary, all rights reserved; rollback is best-effort; the Software is provided as-is with no warranty.",
+  },
+];
+for (const lp of legalPages) {
+  const md = readFileSync(join(here, "..", "docs", lp.src), "utf8");
+  writeFileSync(
+    join(here, lp.file),
+    fill(pageTemplate, {
+      TITLE: escapeHtml(lp.title),
+      META_DESCRIPTION: escapeHtml(lp.desc),
+      MAIN: mdToHtml(md), // already-escaped HTML from the renderer
+      CSS_HREF: "library.css",
+      HOME_HREF: "./",
+      YEAR: String(year),
+      FOOTER_PROMISE,
+    }),
+  );
+  console.log(`wrote site/${lp.file}  [legal, from docs/${lp.src}]`);
+}
 
 // ---------- the landing (committed; copy DRAFT — owner taste-gates) ----------
 

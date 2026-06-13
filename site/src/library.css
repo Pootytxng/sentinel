@@ -440,6 +440,25 @@ footer .creed { display: block; }
 .creed-list li { color: var(--ink-2); font-size: 13.5px; }
 .creed-list li::before { content: "— "; color: var(--ink-3); }
 .foot-meta { color: var(--ink-3); display: flex; gap: 18px; flex-wrap: wrap; }
+/* Footer legal links (Privacy · Terms) — present on every page so the policy is always reachable. */
+.foot-legal a { color: var(--accent); text-decoration: none; }
+.foot-legal a:hover { text-decoration: underline; }
+
+/* ── Legal pages (privacy.html / eula.html — rendered from the .md, shown inside .article) ── */
+.article blockquote {
+  border-left: 3px solid var(--hairline); margin: 18px 0; padding: 2px 0 2px 18px;
+  color: var(--ink-2); background: var(--glass); border-radius: 0 8px 8px 0;
+}
+.article blockquote p { margin: 8px 0; }
+.article hr { border: 0; border-top: 1px solid var(--hairline); margin: 32px 0; }
+.article ul:not(.toc) { padding-left: 20px; margin: 12px 0; }
+.article ul:not(.toc) li { margin: 6px 0; color: var(--ink-2); }
+.article code {
+  font-family: var(--mono); font-size: 0.9em; color: var(--ink);
+  background: var(--glass); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px;
+  word-break: break-word;
+}
+.article strong { color: var(--ink); }
 
 /* ── Load reveal — one orchestrated stagger, honored off for reduced motion ── */
 @media (prefers-reduced-motion: no-preference) {

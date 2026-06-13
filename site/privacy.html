@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Privacy Policy</title>
+<meta name="description" content="How Compy and the Compy website handle your data — the app is local-only; the launch waitlist stores only your email and a one-way hashed IP, with zero third-party trackers." />
+<link rel="stylesheet" href="library.css" />
+</head>
+<body>
+<header class="wrap topbar">
+  <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
+  <span class="crumb"><a href="./">← Home</a></span>
+</header>
+
+<main class="wrap article">
+<h1>Compy — Privacy Policy</h1>
+<p><strong>Status: DRAFT v0.2 (2026-06-13).</strong> Reflects how the software AND the website behave today — v0.2 adds the website/waitlist data section (email + a hashed IP) now that the launch waitlist is live. It is <strong>not legal advice</strong> — the owner should still have it reviewed by a qualified professional before public distribution. Owner/contact identity: Pootytxng (GitHub issues).</p>
+<blockquote><strong>Doctrine pointer (2026-06-12):</strong> the absolutes below describe the software as it ships TODAY (still true); per <code>docs/RECEIPTS_DOCTRINE.md</code>, a future opt-in default-OFF Receipts telemetry phase is planned — this policy must be revised before that ships.</blockquote>
+<hr />
+<h2>The short version</h2>
+<p><strong>The Compy app runs entirely on your PC.</strong> It does not collect, transmit, sell, or share any of your data — no accounts, no telemetry, no analytics, no advertising, and no network connections to operate. <strong>The only data we ever collect is on our website:</strong> if you join the launch waitlist, we store your email (to send one launch message) and a hashed version of your IP (for spam prevention) — nothing else, and no third-party trackers. Details below.</p>
+<h2>What Compy reads</h2>
+<p>To give hardware-aware, per-rig recommendations, Compy reads information <strong>locally on your machine</strong>, including:</p>
+<ul><li>Hardware inventory (CPU, GPU, RAM, disks, displays) via standard Windows APIs and vendor libraries (AMD ADLX / NVIDIA NVML).</li><li>Current Windows configuration relevant to its recommendations (e.g. power plan, certain services, registry values it knows how to read).</li><li>Live performance sensors while you have monitoring open (GPU/CPU usage, temperatures where available, RAM, and FPS/frametime for a running game).</li></ul>
+<p>This information is <strong>displayed to you and used only on your device</strong>. It is never sent anywhere.</p>
+<h2>What Compy stores (locally)</h2>
+<ul><li><strong>Change history / &quot;Trust Ledger&quot;:</strong> a local audit log of changes you chose to apply, so they can be rolled back. Stored at <code>%APPDATA%\Compy\history.json</code>. It records what was changed, the prior value (so it can be restored), and a timestamp. It stays on your device.</li><li><strong>FPS monitoring working files:</strong> temporary data under <code>%LOCALAPPDATA%\Compy\</code> (<code>fps.json</code>, <code>fps.alive</code>) used to pass live capture data between Compy and its local capture helper. Local only.</li><li><strong>A first-run flag</strong> in the app's local storage so it doesn't replay the intro every launch.</li></ul>
+<p>You can delete any of these files; Compy will recreate what it needs.</p>
+<h2>What Compy does NOT do</h2>
+<ul><li>No telemetry, usage analytics, crash reporting, or &quot;phone home.&quot;</li><li>No account, login, or cloud sync.</li><li>No advertising or tracking identifiers.</li><li>No selling or sharing of data with third parties.</li><li>No background data collection.</li></ul>
+<h2>Network use</h2>
+<p>Compy makes <strong>no network requests</strong> to function. The only outbound action is that some advisory recommendations may <strong>open a link in your default web browser</strong> (for example, a GPU driver download page). Once a link opens, your browser — not Compy — handles it, under your browser's own privacy terms.</p>
+<blockquote><strong>About &quot;telemetry&quot; recommendations:</strong> Some of Compy's optional recommendations help you <em>disable</em> Windows or NVIDIA telemetry services. That is a privacy feature that reduces what <em>other</em> software collects about you. It is unrelated to Compy's own data practices — Compy itself collects nothing.</blockquote>
+<h2>The Compy website &amp; waitlist (separate from the app)</h2>
+<p>Everything above describes the <strong>app</strong>. The Compy <strong>website</strong> (the Pages site / future compy.gg) is separate, and one part of it collects data — <strong>only if you choose to give it:</strong></p>
+<ul><li><strong>Waitlist email.</strong> If you submit your email to the launch waitlist, we store that email address for one purpose: to send you a single message when the public beta opens. We do <strong>not</strong> sell it, share it with third parties, add you to other lists, or use it to track you.</li><li><strong>Hashed IP (spam prevention).</strong> When you submit the form, your IP address is converted to a one-way cryptographic hash (SHA-256 with a secret value) <strong>before</strong> it is stored — the raw IP address is never written to our records. The hash lets us limit spam without keeping your actual IP.</li><li><strong>Where it's stored.</strong> In a database (Cloudflare D1) on the site's hosting backend. The website itself loads <strong>no third-party trackers, analytics, advertising scripts, or social pixels</strong> — the page is built to make zero third-party requests.</li><li><strong>Retention &amp; deletion.</strong> We keep your email until the launch message is sent (or until you ask us to remove it), then delete it. To have your email removed at any time, contact us (below).</li></ul>
+<p>This website data collection does <strong>not</strong> change anything about the app: the installed Compy app still makes no network connections and sends nothing off your PC.</p>
+<h2>Future: signed rule updates (currently disabled)</h2>
+<p>Compy contains the groundwork for downloading <strong>cryptographically signed</strong> recommendation rule files in the future. This capability is <strong>disabled</strong> in the current build and performs no network activity. If it is ever enabled, it would only <strong>download</strong> signed rule files to keep recommendations current — it would <strong>never upload</strong> information about you or your PC. Any such change will be reflected in an updated version of this policy before it ships.</p>
+<h2>Administrator access</h2>
+<p>Some actions (and the FPS capture helper) require Windows Administrator permission and will prompt you (UAC). Compy uses these rights only to read state and to apply/undo the specific change you requested. It installs no kernel driver and injects nothing into your games.</p>
+<h2>Children's privacy</h2>
+<p>Compy is a PC utility, not directed at children, and collects no personal information from anyone.</p>
+<h2>Changes to this policy</h2>
+<p>If Compy's data behavior ever changes, this policy will be updated and dated, and shipped with the corresponding version.</p>
+<h2>Contact &amp; governing law</h2>
+<p><strong>Pootytxng</strong> (Compy). Privacy questions, concerns, or a request to delete your waitlist email: open an issue on the project's GitHub issues page — https://github.com/Pootytxng/compy/issues — or reply directly to the launch email you receive from the waitlist. Project: https://github.com/Pootytxng/compy</p>
+<p>This policy, and any dispute relating to it, is governed by the laws of the <strong>United States</strong> and the owner's state of residence (see the EULA's governing-law clause for the specific venue).</p>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="promise">Local-only by design · no telemetry · no account</span>
+    <span class="foot-legal"><a href="./privacy.html">Privacy</a> · <a href="./eula.html">Terms</a></span>
+    <span>© 2026 Pootytxng · Compy is in private beta</span>
+  </div>
+</footer>
+</body>
+</html>

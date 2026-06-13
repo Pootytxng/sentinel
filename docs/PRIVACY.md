@@ -1,9 +1,9 @@
 # Compy — Privacy Policy
 
-**Status: DRAFT v0.1 (2026-05-31).** This is a starting-point draft that reflects how the
-software currently behaves. It is **not legal advice** — the owner should review/adapt it
-(and have it reviewed) before publishing. Owner/contact identity is set (Pootytxng; GitHub
-issues); no other placeholders remain.
+**Status: DRAFT v0.2 (2026-06-13).** Reflects how the software AND the website behave today — v0.2
+adds the website/waitlist data section (email + a hashed IP) now that the launch waitlist is live.
+It is **not legal advice** — the owner should still have it reviewed by a qualified professional
+before public distribution. Owner/contact identity: Pootytxng (GitHub issues).
 
 > **Doctrine pointer (2026-06-12):** the absolutes below describe the software as it ships TODAY (still true); per `docs/RECEIPTS_DOCTRINE.md`, a future opt-in default-OFF Receipts telemetry phase is planned — this policy must be revised before that ships.
 
@@ -11,9 +11,11 @@ issues); no other placeholders remain.
 
 ## The short version
 
-**Compy runs entirely on your PC. It does not collect, transmit, sell, or share any of
-your data. There are no accounts, no telemetry, no analytics, and no advertising. Compy
-makes no network connections to operate.**
+**The Compy app runs entirely on your PC.** It does not collect, transmit, sell, or share any of
+your data — no accounts, no telemetry, no analytics, no advertising, and no network connections to
+operate. **The only data we ever collect is on our website:** if you join the launch waitlist, we
+store your email (to send one launch message) and a hashed version of your IP (for spam prevention)
+— nothing else, and no third-party trackers. Details below.
 
 ## What Compy reads
 
@@ -62,6 +64,26 @@ browser's own privacy terms.
 > *other* software collects about you. It is unrelated to Compy's own data practices —
 > Compy itself collects nothing.
 
+## The Compy website & waitlist (separate from the app)
+
+Everything above describes the **app**. The Compy **website** (the Pages site / future compy.gg) is
+separate, and one part of it collects data — **only if you choose to give it:**
+
+- **Waitlist email.** If you submit your email to the launch waitlist, we store that email address
+  for one purpose: to send you a single message when the public beta opens. We do **not** sell it,
+  share it with third parties, add you to other lists, or use it to track you.
+- **Hashed IP (spam prevention).** When you submit the form, your IP address is converted to a
+  one-way cryptographic hash (SHA-256 with a secret value) **before** it is stored — the raw IP
+  address is never written to our records. The hash lets us limit spam without keeping your actual IP.
+- **Where it's stored.** In a database (Cloudflare D1) on the site's hosting backend. The website
+  itself loads **no third-party trackers, analytics, advertising scripts, or social pixels** — the
+  page is built to make zero third-party requests.
+- **Retention & deletion.** We keep your email until the launch message is sent (or until you ask us
+  to remove it), then delete it. To have your email removed at any time, contact us (below).
+
+This website data collection does **not** change anything about the app: the installed Compy app
+still makes no network connections and sends nothing off your PC.
+
 ## Future: signed rule updates (currently disabled)
 
 Compy contains the groundwork for downloading **cryptographically signed** recommendation
@@ -86,8 +108,12 @@ anyone.
 If Compy's data behavior ever changes, this policy will be updated and dated, and shipped
 with the corresponding version.
 
-## Contact
+## Contact & governing law
 
-**Pootytxng** (Compy). Privacy questions or concerns: please open an issue on the
-project's GitHub issues page — https://github.com/Pootytxng/compy/issues
+**Pootytxng** (Compy). Privacy questions, concerns, or a request to delete your waitlist email:
+open an issue on the project's GitHub issues page — https://github.com/Pootytxng/compy/issues — or
+reply directly to the launch email you receive from the waitlist.
 Project: https://github.com/Pootytxng/compy
+
+This policy, and any dispute relating to it, is governed by the laws of the **United States** and the
+owner's state of residence (see the EULA's governing-law clause for the specific venue).

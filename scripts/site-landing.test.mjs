@@ -68,4 +68,48 @@ describe("site landing (R4a publish-grade contract)", () => {
     expect(html).toContain("The app itself sends nothing off your PC");
     expect(html).toContain("KO-FI PLACEHOLDER SLOT");
   });
+
+  it("links the published legal pages: footer Privacy · Terms + the waitlist note → privacy (point of collection)", () => {
+    expect(html).toMatch(/<a href="privacy\.html">/);
+    expect(html).toMatch(/<a href="eula\.html">/);
+    // The privacy disclosure stays one click away right where the email is collected.
+    const note = /class="waitlist-note">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
+    expect(note).toMatch(/href="privacy\.html"/);
+  });
+});
+
+describe("legal pages (rendered from the .md source — privacy.html / eula.html)", () => {
+  const privacy = readFileSync(join(root, "site", "privacy.html"), "utf8");
+  const eula = readFileSync(join(root, "site", "eula.html"), "utf8");
+
+  it("render the policy + terms content with the right titles", () => {
+    expect(privacy).toContain("<title>Compy — Privacy Policy</title>");
+    expect(privacy).toContain("Privacy Policy");
+    expect(eula).toContain("<title>Compy — End-User License Agreement</title>");
+    expect(eula).toContain("End-User License Agreement");
+    // The EULA [STATE] placeholder is the owner's to fill — it must render verbatim, never invented.
+    expect(eula).toContain("[STATE");
+  });
+
+  it("add ZERO external origins: self-hosted CSS only, no external href/src, no trackers/CDNs", () => {
+    for (const page of [privacy, eula]) {
+      expect(page).not.toMatch(/src="https?:\/\//);
+      expect(page).not.toMatch(/href="https?:\/\//); // contact URLs render as plain text, never <a href>
+      // No third-party RESOURCES: legal pages are fully static (no <script>), no @import, no
+      // web-font/tracker domains. (The policy PROSE legitimately discusses "analytics"/"tracking" —
+      // describing what Compy does NOT do — so we match resource markers, not bare words.)
+      expect(page).not.toMatch(/<script\b/);
+      expect(page).not.toMatch(/@import|fonts\.googleapis|fonts\.gstatic|googletagmanager|google-analytics|plausible\.io|hotjar|challenges\.cloudflare/i);
+      expect(page).not.toMatch(/<img\b/);
+      // The only stylesheet is our self-hosted library.css.
+      expect(page).toMatch(/<link rel="stylesheet" href="library\.css"/);
+    }
+  });
+
+  it("reach the rest of the site (footer legal links + home)", () => {
+    for (const page of [privacy, eula]) {
+      expect(page).toMatch(/href="\.\/privacy\.html"/);
+      expect(page).toMatch(/href="\.\/eula\.html"/);
+    }
+  });
 });

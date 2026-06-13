@@ -9,3 +9,9 @@
 /index.html
   Cache-Control: no-store
   Cloudflare-CDN-Cache-Control: no-store
+/privacy.html
+  Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+/eula.html
+  Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store

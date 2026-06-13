@@ -1,10 +1,10 @@
 # Compy — End-User License Agreement & Disclaimer
 
-**Status: DRAFT v0.2 (2026-06-02).** Starting-point draft reflecting how the software works
-today (v0.2 adds §4's advisory / advanced-manual-tweaks clause covering the Advanced Black Book).
-**Not legal advice.** The owner should review/adapt this (and have it reviewed by a
-qualified professional) before distribution. Owner/contact identity is set (Pootytxng; GitHub
-issues); still open before public distribution: final license model and governing-law/jurisdiction.
+**Status: DRAFT v0.3 (2026-06-13).** Reflects how the software works today, with the owner's
+license + jurisdiction decisions applied (v0.3: §2 set to **strict all-rights-reserved** proprietary;
+§12 governing law = **United States**). **Not legal advice** — the owner should still have this
+reviewed by a qualified professional before public distribution, and must fill the **[STATE]** venue
+blank in §12 with the owner's state of residence. Owner/contact identity: Pootytxng (GitHub issues).
 
 ---
 
@@ -21,11 +21,13 @@ applies reversible from a local history that does not depend on the internet.
 
 ## 2. License
 
-Subject to these terms, you are granted a personal, non-exclusive, non-transferable license to
-install and use the Software on PCs you own or control. You may not resell, sublicense, or
-distribute the Software except as permitted by the owner. *(Private beta. The final license
-model — e.g. free for personal use, and whether a separate open-source license governs the
-source code — is to be confirmed by the owner before public distribution.)*
+The Software is proprietary. **All rights reserved.** Subject to these terms, you are granted a
+limited, personal, non-exclusive, non-transferable, **revocable** license to install and use the
+Software on PCs you own or control, for your own personal use. You may **not** copy (except for a
+single backup), resell, rent, lease, sublicense, distribute, publish, modify, translate, adapt,
+reverse-engineer, decompile, disassemble, or create derivative works from the Software, except where
+such a restriction is expressly prohibited by applicable law. No rights are granted except those
+expressly stated here; the owner retains all ownership of and rights in the Software.
 
 ## 3. Beta software
 
@@ -92,7 +94,10 @@ jurisdictions do not allow certain exclusions; some rights may not apply to you.
 
 ## 10. Privacy
 
-The Software runs locally and collects no personal data. See `PRIVACY.md`.
+The Software itself runs locally and collects no personal data. Separately, the Compy **website**
+(including the launch-waitlist form) collects your email address — and a one-way hash of your IP
+address for spam prevention — only if you choose to submit it. Full detail, including retention and
+how to request deletion, is in `PRIVACY.md`.
 
 ## 11. Changes to these terms
 
@@ -101,7 +106,10 @@ your use of that build.
 
 ## 12. Governing law / contact
 
-Governing law / jurisdiction: *to be confirmed by the owner before public distribution.*
+Governing law / jurisdiction: these terms are governed by the laws of the **United States** and the
+State of **[STATE — owner to insert state of residence]**, without regard to conflict-of-laws rules.
+You agree that the state and federal courts located in that state shall have exclusive jurisdiction
+over any dispute arising from these terms or your use of the Software.
 Contact: **Pootytxng** (Compy) — via the project's GitHub issues page:
 https://github.com/Pootytxng/compy/issues
 Project: https://github.com/Pootytxng/compy

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — End-User License Agreement</title>
+<meta name="description" content="The Compy End-User License Agreement &amp; disclaimer — proprietary, all rights reserved; rollback is best-effort; the Software is provided as-is with no warranty." />
+<link rel="stylesheet" href="library.css" />
+</head>
+<body>
+<header class="wrap topbar">
+  <a class="wordmark" href="./">C<span class="pulse">o</span>mpy</a>
+  <span class="crumb"><a href="./">← Home</a></span>
+</header>
+
+<main class="wrap article">
+<h1>Compy — End-User License Agreement &amp; Disclaimer</h1>
+<p><strong>Status: DRAFT v0.3 (2026-06-13).</strong> Reflects how the software works today, with the owner's license + jurisdiction decisions applied (v0.3: §2 set to <strong>strict all-rights-reserved</strong> proprietary; §12 governing law = <strong>United States</strong>). <strong>Not legal advice</strong> — the owner should still have this reviewed by a qualified professional before public distribution, and must fill the <strong>[STATE]</strong> venue blank in §12 with the owner's state of residence. Owner/contact identity: Pootytxng (GitHub issues).</p>
+<hr />
+<p>By installing or using <strong>Compy</strong> (&quot;the Software&quot;), you (&quot;you&quot;) agree to the terms below. If you do not agree, do not install or use the Software.</p>
+<h2>1. What Compy is</h2>
+<p>Compy is a Windows optimization and <strong>configuration-safety</strong> tool for everyday users. It reads your PC's hardware and settings, recommends changes in plain language, and — when you choose to apply one — records the prior state first so the change can be rolled back. Compy is designed around a <strong>rollback-first</strong> principle: it tries hard to make every change it applies reversible from a local history that does not depend on the internet.</p>
+<h2>2. License</h2>
+<p>The Software is proprietary. <strong>All rights reserved.</strong> Subject to these terms, you are granted a limited, personal, non-exclusive, non-transferable, <strong>revocable</strong> license to install and use the Software on PCs you own or control, for your own personal use. You may <strong>not</strong> copy (except for a single backup), resell, rent, lease, sublicense, distribute, publish, modify, translate, adapt, reverse-engineer, decompile, disassemble, or create derivative works from the Software, except where such a restriction is expressly prohibited by applicable law. No rights are granted except those expressly stated here; the owner retains all ownership of and rights in the Software.</p>
+<h2>3. Beta software</h2>
+<p>The Software is <strong>pre-release / beta</strong>. It may contain defects, behave unexpectedly, or change significantly between versions. Do not rely on it as your only safeguard for important systems.</p>
+<h2>4. System changes, risk, and rollback</h2>
+<ul><li>The Software can modify Windows settings (e.g. services, power plans, registry values, network adapter properties) <strong>only when you explicitly choose to apply a recommendation.</strong></li><li>Before applying a change, the Software records the prior state and offers a rollback.</li><li><strong>Rollback is provided on a best-effort basis and is not guaranteed in every environment.</strong> External changes (Windows updates, other tools, hardware/driver changes, deleted power plans, manual edits) can alter or remove the state a rollback depends on. Where Compy cannot safely restore the exact prior state, it is designed to <strong>stop and tell you</strong> rather than guess.</li><li><strong>You are responsible for your system.</strong> Maintain your own backups / restore points. You apply changes at your own risk.</li><li><strong>Advisory &amp; educational content (including the &quot;Advanced Black Book&quot;).</strong> Compy may present <em>advisory, educational</em> information about deeper or riskier system, driver, or firmware (BIOS/UEFI) tweaks that it <strong>does not perform for you.</strong> Any such tweak you choose to make is carried out <strong>manually, by you, outside the Software</strong> — Compy does not apply it, monitor it, or roll it back, and these changes fall <strong>entirely outside</strong> the rollback protections described above. Advanced tweaks can carry real risks (instability, boot failure, data loss, reduced security, or third-party / anti-cheat consequences), and reported benefits are often small or hardware-specific. <strong>You undertake any such change entirely at your own risk; the owner and contributors accept no responsibility for the outcome of changes you make manually based on this material.</strong></li></ul>
+<h2>5. Administrator access; what Compy does NOT do</h2>
+<p>Some operations and the performance-capture helper require Windows Administrator permission and will prompt you (UAC). The Software does <strong>not</strong> install a kernel driver and does <strong>not</strong> inject code into games or other applications.</p>
+<h2>6. Games and anti-cheat</h2>
+<p>The Software is designed to be compatible with anti-cheat systems (no kernel driver, no game injection; performance capture uses standard Windows event tracing and an on-screen overlay that does not hook your game). <strong>However, you are solely responsible for complying with the terms of service and anti-cheat rules of any game or platform you use.</strong> The owner is not responsible for actions taken against your accounts by third parties.</p>
+<h2>7. Third-party names</h2>
+<p>Windows is a trademark of Microsoft. AMD, NVIDIA, Intel, and other product names are trademarks of their respective owners. Compy is an independent project and is <strong>not affiliated with, endorsed by, or sponsored by</strong> Microsoft, AMD, NVIDIA, Intel, or any game publisher.</p>
+<h2>8. No warranty</h2>
+<p>THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. THE OWNER DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE, UNINTERRUPTED, OR THAT ANY CHANGE OR ROLLBACK WILL ACHIEVE A PARTICULAR RESULT.</p>
+<h2>9. Limitation of liability</h2>
+<p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OWNER AND CONTRIBUTORS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF DATA, PERFORMANCE, PROFITS, OR SYSTEM AVAILABILITY, ARISING FROM OR RELATED TO YOUR USE OF (OR INABILITY TO USE) THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. [Some jurisdictions do not allow certain exclusions; some rights may not apply to you.]</p>
+<h2>10. Privacy</h2>
+<p>The Software itself runs locally and collects no personal data. Separately, the Compy <strong>website</strong> (including the launch-waitlist form) collects your email address — and a one-way hash of your IP address for spam prevention — only if you choose to submit it. Full detail, including retention and how to request deletion, is in <code>PRIVACY.md</code>.</p>
+<h2>11. Changes to these terms</h2>
+<p>These terms may be updated for future versions; the version shipped with a given build governs your use of that build.</p>
+<h2>12. Governing law / contact</h2>
+<p>Governing law / jurisdiction: these terms are governed by the laws of the <strong>United States</strong> and the State of <strong>[STATE — owner to insert state of residence]</strong>, without regard to conflict-of-laws rules. You agree that the state and federal courts located in that state shall have exclusive jurisdiction over any dispute arising from these terms or your use of the Software. Contact: <strong>Pootytxng</strong> (Compy) — via the project's GitHub issues page: https://github.com/Pootytxng/compy/issues Project: https://github.com/Pootytxng/compy</p>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="promise">Local-only by design · no telemetry · no account</span>
+    <span class="foot-legal"><a href="./privacy.html">Privacy</a> · <a href="./eula.html">Terms</a></span>
+    <span>© 2026 Pootytxng · Compy is in private beta</span>
+  </div>
+</footer>
+</body>
+</html>
