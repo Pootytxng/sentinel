@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 mod actions;
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
+mod blackbox; // Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader (Event Log + last-vitals overlay). Zero causal claims, zero mutation.
 mod benchmark; // Measured-efficacy engine — WIRED (Benchmark tab: run/baseline/efficacy). Absolute-score normalization still PLACEHOLDER (delta is the honest signal).
 mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclusive) — WIRED: powers the trial verdict + scoreboard awards.
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
@@ -661,6 +662,7 @@ pub fn run() {
             get_hardware_info,
             get_recommendations,
             get_diagnostics,
+            blackbox::get_crash_blackbox,
             get_leftovers,
             get_nic_driver_info,
             get_gpu_sensors,

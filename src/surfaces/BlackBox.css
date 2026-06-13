@@ -1,0 +1,190 @@
+/* Black Box v1 — crash/freeze evidence reader (Lab instrument). Read-only forensics UI:
+   plain-English headline up top, neutral evidence tag, the "last vitals" strip, and the raw
+   receipt behind an expander. Uses the instrument theme tokens only (no new hexes). */
+
+.bb {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bb-intro {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: 14px;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.bb-intro em {
+  font-style: normal;
+  color: var(--ix-text-1);
+}
+
+.bb-scan {
+  align-self: flex-start;
+  font-family: var(--ix-mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ix-accent-ink);
+  background: var(--ix-accent);
+  border: 0;
+  border-radius: var(--ix-radius);
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.bb-scan:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bb-error {
+  margin: 0;
+  color: var(--ix-danger);
+  font-size: 13.5px;
+}
+
+.bb-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bb-empty {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: 14px;
+  border: 1px dashed var(--ix-border);
+  border-radius: var(--ix-radius);
+  padding: 16px 18px;
+  background: var(--ix-surface-2);
+}
+
+.bb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bb-item {
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  background: var(--ix-surface-2);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.bb-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bb-tag {
+  font-family: var(--ix-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ix-text-3);
+  border: 1px solid var(--ix-border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.bb-headline {
+  color: var(--ix-text-1);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.bb-vitals {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+  border-left: 2px solid var(--ix-accent);
+  padding: 2px 0 2px 12px;
+}
+.bb-vitals-none {
+  border-left-color: var(--ix-border);
+}
+.bb-vitals-label {
+  font-family: var(--ix-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text);
+  white-space: nowrap;
+}
+.bb-vitals-text {
+  color: var(--ix-text-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.bb-vitals-none .bb-vitals-text {
+  color: var(--ix-text-3);
+}
+
+.bb-receipt-toggle {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--ix-mono);
+  font-size: 12.5px;
+  color: var(--ix-accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bb-receipt {
+  margin: 2px 0 0;
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--ix-line);
+  padding-top: 10px;
+  font-family: var(--ix-mono);
+  font-size: 12.5px;
+}
+.bb-receipt-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.bb-receipt-row dt {
+  color: var(--ix-text-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+}
+.bb-receipt-row dd {
+  margin: 0;
+  color: var(--ix-text-2);
+  word-break: break-word;
+}
+.bb-raw {
+  color: var(--ix-text-3) !important;
+  line-height: 1.5;
+}
+
+.bb-skipped {
+  margin: 0;
+  color: var(--ix-text-3);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .bb-receipt-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

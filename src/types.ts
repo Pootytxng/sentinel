@@ -242,3 +242,36 @@ export type MemoryPressure = {
   advisory: string | null;
   top_consumers: MemConsumer[];
 };
+
+// Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader (mirrors blackbox.rs serde).
+// Reports recorded evidence only; zero causal claims. `vitals` is null when no Compy session
+// overlapped the crash (honest absence, never invented).
+export type CrashVitals = {
+  session_started_at: string;
+  game: string | null;
+  peak_gpu_temp_c: number | null;
+  peak_gpu_usage_pct: number | null;
+  avg_frametime_ms: number;
+  low1_fps_est: number;
+  summary: string;
+};
+export type CrashReceipt = {
+  source: string;
+  event_ids: number[];
+  faulting_app: string | null;
+  faulting_module: string | null;
+  code: string | null;
+  detail: string;
+};
+export type CrashIncident = {
+  headline: string;
+  tag: string;
+  when: string;
+  when_display: string;
+  vitals: CrashVitals | null;
+  receipt: CrashReceipt;
+};
+export type BlackBoxReport = {
+  incidents: CrashIncident[];
+  skipped_sources: string[];
+};

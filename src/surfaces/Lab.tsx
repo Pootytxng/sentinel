@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
+import { BlackBox } from "./BlackBox";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { TuningInstrument } from "./TuningInstrument";
@@ -96,7 +97,7 @@ export default function Lab({
 
         {/* Welcome band — a static signpost for newcomers (bathroom law): what each instrument
             answers, in plain words. Deliberately KNOBLESS (doorknob law): no cmp-door, no click
-            handler — the four cards below stay the only doors in the room. */}
+            handler — the instrument cards below stay the only doors in the room. */}
         <div className="lab-welcome">
           <span className="lab-welcome-row">
             <span className="lab-welcome-term">Benchmark</span>
@@ -118,6 +119,10 @@ export default function Lab({
               <span className="lab-welcome-gloss">the raw facts Compy read about this rig.</span>
             </span>
           )}
+          <span className="lab-welcome-row">
+            <span className="lab-welcome-term">Black Box</span>
+            <span className="lab-welcome-gloss">what crashed or froze — read Windows' own record, in plain English.</span>
+          </span>
         </div>
 
         <LabSection
@@ -169,6 +174,17 @@ export default function Lab({
             {diagnostics}
           </LabSection>
         )}
+
+        {/* Black Box (Paramedic Mode) — READ-ONLY crash/freeze evidence reader. On-demand scan of
+            the record Windows already keeps + Compy's own last-vitals overlay. Zero causal claims. */}
+        <LabSection
+          icon="blackbox"
+          name="Black Box"
+          oneLiner="Read the crash and freeze evidence Windows recorded — plain English, with your last vitals."
+          summary="Crash & freeze record"
+        >
+          <BlackBox />
+        </LabSection>
       </div>
     </section>
   );
@@ -197,6 +213,14 @@ const ICONS: Record<string, ReactNode> = {
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M7 9l3 3-3 3" />
       <line x1="13" y1="15" x2="17" y2="15" />
+    </>
+  ),
+  // Flight-recorder: a sturdy box with a recorded pulse line inside — "records what happened,
+  // read it after." Matches the Black Box metaphor (evidence, not magic).
+  blackbox: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M6 12h2l1.5-3 2 6 1.5-3H18" />
     </>
   ),
 };
