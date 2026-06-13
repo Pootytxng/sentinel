@@ -110,3 +110,9 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
 
   return ok();
 };
+
+// This is a POST-only endpoint (the form POSTs here). A bare GET — a curious visitor or a
+// scanner — should get an honest 405, not fall through to the static index. No body, no data,
+// no D1: a static method-guard so /api/waitlist never masquerades as a page.
+export const onRequestGet = (): Response =>
+  new Response("Method Not Allowed", { status: 405, headers: { Allow: "POST" } });
