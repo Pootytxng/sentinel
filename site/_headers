@@ -15,3 +15,10 @@
 /eula.html
   Cache-Control: no-store
   Cloudflare-CDN-Cache-Control: no-store
+# Cloudflare Pages serves these at the pretty URL (/privacy.html 308s → /privacy), so cover that too.
+/privacy
+  Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+/eula
+  Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
