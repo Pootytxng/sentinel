@@ -1,0 +1,11 @@
+# Cloudflare Pages headers (https://developers.cloudflare.com/pages/configuration/headers/).
+# The dark site redeploys often, and a cached homepage has repeatedly served a stale build at
+# some Cloudflare PoPs (bare URL stale, cache-busted URL fresh — the edge-cache signature).
+# Force the landing HTML to never be stored by the edge or the browser, so every visit gets the
+# live deployment. Assets (video/css/images) keep the Pages default and stay cacheable.
+/
+  Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+/index.html
+  Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
