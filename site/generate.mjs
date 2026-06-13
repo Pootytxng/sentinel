@@ -44,7 +44,13 @@ const fill = (template, vars) =>
 // stay readable/copyable; the only links on the page are the relative header/footer ones).
 function mdInline(text) {
   let s = escapeHtml(text);
-  s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  s = s.replace(/`([^`]+)`/g, (_, c) => {
+    // Cross-link a sibling legal doc to its web page (keeps the ".md" wording verbatim — the legal
+    // text is unchanged — but resolves to the published page for web readers; same-origin, relative).
+    if (c === "PRIVACY.md") return `<a href="privacy.html"><code>PRIVACY.md</code></a>`;
+    if (c === "EULA.md") return `<a href="eula.html"><code>EULA.md</code></a>`;
+    return `<code>${c}</code>`;
+  });
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
   return s;

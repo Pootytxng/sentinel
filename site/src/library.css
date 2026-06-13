@@ -30,6 +30,17 @@
 
 html { scroll-behavior: smooth; }
 
+/* Keyboard-focus visibility on every interactive element across the site (a11y: the legal pages,
+   content pages, and landing all rely on it). Mirrors the app's "no focus-invisible interactive"
+   floor. :focus-visible only shows for keyboard users, never on mouse click. */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 body {
   margin: 0;
   background: var(--bg);

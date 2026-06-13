@@ -91,7 +91,8 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ix-text-3);
+  /* text-2 (not the more muted text-3) so this informational category label clears WCAG AA. */
+  color: var(--ix-text-2);
   border: 1px solid var(--ix-border);
   border-radius: 999px;
   padding: 2px 9px;

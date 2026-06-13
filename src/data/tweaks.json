@@ -484,7 +484,7 @@
     "verdict": "placebo",
     "what": "The belief that running a monitoring tool like MSI Afterburner or RivaTuner — or its on-screen overlay — makes a game run faster.",
     "why": "A gauge reads the engine; it does not drive the car. Afterburner and RTSS measure framerate, temps, and usage — and measuring changes nothing about how many frames your GPU draws. The on-screen overlay actually costs a sliver of performance to render each frame (usually a fraction of a percent, more if you stack heavy graphs). The real worth of these tools is information — spotting a thermal or VRAM wall you can then act on. As a frame booster, there is nothing to measure.",
-    "related": ["overlay", "game-boosters", "thermal-throttling"]
+    "related": ["overlay", "game-boosters", "thermal-throttling", "vram"]
   },
   {
     "id": "monitor-overclock-fps",
@@ -502,7 +502,7 @@
     "verdict": "placebo",
     "what": "Manually shutting every background program — browser, Discord, wallpaper app — before a game, expecting a meaningful FPS jump.",
     "why": "On a modern multi-core PC with RAM to spare, idle apps sit there using almost nothing, so closing them frees memory and a few percent of one core the game was not waiting on. The exception is real: an app actively WORKING — a browser tab playing video, a cloud sync hammering the disk, a stream encoder — can steal a core or saturate your RAM and VRAM. Close THAT one and you will see it. Closing everything 'just in case' mostly buys you a tidier taskbar. The honest move is to watch usage and close only what is actually busy.",
-    "related": ["game-boosters", "ram-cleaners", "high-priority-games"]
+    "related": ["game-boosters", "ram-cleaners", "high-priority-games", "vram"]
   },
   {
     "id": "audio-enhancements-fps",
