@@ -17,10 +17,12 @@ site/library/
 # Dark-site deploy artifact (landing + curated debunks + full library, publish-shaped) —
 # assembled on demand from committed sources + the generator; never committed.
 dist-site/
-# Marketing renders of the OG card (living-still mp4/gif + the full-size source) — built on
-# demand from the owner's asset ($0 CSS+ffmpeg pipeline in C:\Users\Kuya\tools\og-capture);
-# owner picks usage. Only the 1200x630 og.png ships (committed + deployed for og:image).
-site/assets/og-card.*
+# Marketing/hero renders of the OG card (the living-still hero mp4 + its compressed .webp
+# poster, plus any full-size source) — built on demand from the owner's asset ($0 CSS+ffmpeg
+# pipeline in C:\Users\Kuya\tools\og-capture); owner picks usage. Only the 1200x630 og.png
+# ships in git (committed + deployed for og:image); the hero assets ride into dist-site/ at
+# deploy-assembly time. The glob also catches og-card-poster.webp (no dot after "og-card").
+site/assets/og-card*
 *.local
 # Local-only operational files (e.g. BETA_TESTER_TRACKER.local.md) — real tester data never enters git.
 *.local.md
