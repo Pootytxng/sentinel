@@ -743,4 +743,77 @@ mod blackbox_tests {
         }
         assert!(inc["vitals"].is_null(), "no session → vitals serializes as null (honest absence)");
     }
+
+    // ── R6 Lane D — edge guards beyond the spec minimum ──
+
+    #[test]
+    fn whea_ids_just_outside_17_19_are_rejected() {
+        // The over-fetch never pulls 16/20, but the classifier must still bound the WHEA range.
+        assert_eq!(classify_incident("Microsoft-Windows-WHEA-Logger", 16), None);
+        assert_eq!(classify_incident("Microsoft-Windows-WHEA-Logger", 20), None);
+    }
+
+    #[test]
+    fn provider_matching_is_case_insensitive() {
+        // Get-WinEvent casing shouldn't matter — the classifier lowercases before comparing.
+        assert_eq!(
+            classify_incident("MICROSOFT-WINDOWS-KERNEL-POWER", 41),
+            Some(IncidentKind::UnexpectedShutdown)
+        );
+        assert_eq!(classify_incident("application error", 1000), Some(IncidentKind::AppCrash));
+    }
+
+    #[test]
+    fn dedup_collapses_identical_incidents_to_one() {
+        // A source that logged the same event twice (same family, second, headline) shows once.
+        let make = || ev("Display", 4101, "2026-06-12T21:42:00-07:00",
+            "Display driver amdkmdag stopped responding and has successfully recovered.", serde_json::Value::Null);
+        let out = assemble_incidents(vec![make(), make()], &[]);
+        assert_eq!(out.len(), 1, "identical events collapse to a single incident");
+    }
+
+    #[test]
+    fn correlate_window_boundaries_are_inclusive_and_bounded() {
+        let sessions = vec![session("2026-06-12T21:00:00Z", 600, "g.exe")]; // [21:00:00, 21:10:00]
+        let at = |s: &str| DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc);
+        // exactly at start → matches; exactly at end+grace (21:10:00 + 90s = 21:11:30) → matches.
+        assert!(correlate_vitals(at("2026-06-12T21:00:00Z"), &sessions).is_some(), "start is inclusive");
+        assert!(correlate_vitals(at("2026-06-12T21:11:30Z"), &sessions).is_some(), "end+grace inclusive");
+        // one second before the start → no fabricated correlation.
+        assert!(correlate_vitals(at("2026-06-12T20:59:59Z"), &sessions).is_none(), "before start → none");
+        // one second past end+grace → none.
+        assert!(correlate_vitals(at("2026-06-12T21:11:31Z"), &sessions).is_none(), "past grace → none");
+    }
+
+    #[test]
+    fn format_when_is_human_readable() {
+        let dt = DateTime::parse_from_rfc3339("2026-06-12T21:42:00-07:00").unwrap();
+        let s = format_when(dt);
+        assert!(s.contains("Jun"), "names the month: {s}");
+        assert!(s.contains("PM"), "12-hour clock with meridiem: {s}");
+        assert!(s.contains("9:42"), "local time preserved (offset not converted to UTC): {s}");
+    }
+
+    #[test]
+    fn short_detail_collapses_whitespace_and_truncates() {
+        let long = "word ".repeat(120); // 600 chars, whitespace-heavy
+        let out = short_detail(&long);
+        assert!(out.chars().count() <= 240, "capped at 240 chars: {}", out.chars().count());
+        assert!(out.ends_with('…'), "truncation marked with an ellipsis");
+        assert_eq!(short_detail("a\n\n  b\t c"), "a b c", "collapses runs of whitespace");
+    }
+
+    #[test]
+    fn fmt_hex_code_passes_through_existing_0x_either_case() {
+        assert_eq!(fmt_hex_code("0XDEADBEEF"), "0XDEADBEEF");
+        assert_eq!(fmt_hex_code(" 80000003 "), "0x80000003", "trims then prefixes bare hex");
+    }
+
+    #[test]
+    fn app_error_1000_from_a_non_appcrash_provider_is_rejected() {
+        // Provider guard: id 1000 is reused widely; only "Application Error" is an app crash.
+        let events = vec![ev("Microsoft-Windows-Some-Service", 1000, "2026-06-12T21:42:00Z", "noise",
+            serde_json::json!(["x"]))];
+        assert!(assemble_incidents(events, &[]).is_empty());
+    }
 }

@@ -4,7 +4,7 @@
 // §B0 sections, zero outbound requests, zero raster assets until the §D art lands, doorknob
 // honesty on the download placeholder.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -110,6 +110,42 @@ describe("legal pages (rendered from the .md source — privacy.html / eula.html
     for (const page of [privacy, eula]) {
       expect(page).toMatch(/href="\.\/privacy\.html"/);
       expect(page).toMatch(/href="\.\/eula\.html"/);
+    }
+  });
+
+  it("EULA §10's PRIVACY.md reference is a same-origin link to the published policy", () => {
+    // Lane C: the legal WORDING is unchanged (".md" text intact); only its link-ness is added.
+    expect(eula).toMatch(/<a href="privacy\.html"><code>PRIVACY\.md<\/code><\/a>/);
+    expect(eula).not.toMatch(/href="https?:\/\//); // still zero external origin
+  });
+});
+
+// R6 Lane D guard: lock in this session's wins so they can't silently regress. Every COMMITTED
+// top-level site page must (1) link Privacy + Terms in its footer, and (2) add zero external
+// resource origins (per CC's plain-text-external-URLs decision). The gitignored library/ pages
+// render from the same page/debunk templates these pages exercise, so the templates are guarded.
+describe("site-wide guard — footer legal links + zero external origins on every committed page", () => {
+  const pages = readdirSync(join(root, "site"))
+    .filter((f) => f.endsWith(".html"))
+    .map((f) => [f, readFileSync(join(root, "site", f), "utf8")]);
+
+  it("finds the committed page set", () => {
+    expect(pages.length, "landing + curated debunks + legal").toBeGreaterThanOrEqual(10);
+  });
+
+  it("every page links Privacy + Terms in its footer", () => {
+    for (const [name, html] of pages) {
+      expect(html, `${name}: missing Privacy link`).toMatch(/href="(\.\/)?privacy\.html"/);
+      expect(html, `${name}: missing Terms link`).toMatch(/href="(\.\/)?eula\.html"/);
+    }
+  });
+
+  it("every page adds zero external resource origins (no external href/src, no remote <script>)", () => {
+    for (const [name, html] of pages) {
+      expect(html, `${name}: external href`).not.toMatch(/href="https?:\/\//);
+      expect(html, `${name}: external src`).not.toMatch(/src="https?:\/\//);
+      // The landing's one inline <script> is allowed; a <script src=…> (remote) is never.
+      expect(html, `${name}: remote <script>`).not.toMatch(/<script\b[^>]*\bsrc=/);
     }
   });
 });
