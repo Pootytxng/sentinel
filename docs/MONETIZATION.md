@@ -63,6 +63,20 @@ repo (`ed25519-compact` + the signed-manifest verify pattern in `remote_rules.rs
   existing flag-gating). Free tier needs no key.
 - **Buildable solo once decided:** the **verify** module + tests + the licensing UI (all model-agnostic).
   The **issuance** side needs the chosen processor. None of this mutates Windows → no mutation-QA gate.
+- **✅ VERIFY CORE BUILT (2026-06-14, autonomous council-overseen marathon — `src-tauri/src/license.rs`).**
+  The model-agnostic offline verify is in: token = `hex(payload).hex(ed25519_sig)`; `verify_license`
+  checks the signature BEFORE trusting the payload, handles expiry (absent = perpetual = one-time;
+  present = subscription — so the one-time-vs-sub decision needs no code change), and degrades every
+  malformed/invalid/expired/placeholder case to a clean **free** status (never a panic, never a lockout).
+  Two read-only IPC (`get_license_status`, `set_license_key` → app-local `license.key`, no system change).
+  **DARK + triple-gated OFF:** the embedded public key is the all-zeros placeholder, `licensing_armed()`
+  is false, and verify explicitly rejects the zero key → **a shipped build validates NOTHING; Compy is
+  free for everyone until the owner arms it.** The **private signing key never enters the repo** (only the
+  placeholder public key, mirroring `remote_rules.rs`). 8 unit tests + `/security` + `/check` both clean.
+  **STILL OWNER TERRITORY (NOT encoded, your call):** the model (one-time vs sub), price, processor, and
+  the free-vs-Pro feature split. **To ARM later:** generate a real Ed25519 keypair (private key OFFLINE,
+  never in repo), replace the placeholder public key, wire the chosen processor's issuance endpoint to
+  sign keys, build the in-app license UI + gate the Pro-only features — then it goes live.
 
 ## 6. Non-negotiables (whatever model wins)
 - **Never paywall safety** (rollback, core recs) — that's the brand.

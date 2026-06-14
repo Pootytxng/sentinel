@@ -20,6 +20,7 @@ mod hardware;
 mod history;
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
 mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
+mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zeros placeholder pubkey → always free; private key never in repo). No outbound, no Windows mutation.
 mod monitoring;
 mod priorities;
 mod readiness;
@@ -663,6 +664,8 @@ pub fn run() {
             get_recommendations,
             get_diagnostics,
             blackbox::get_crash_blackbox,
+            license::get_license_status,
+            license::set_license_key,
             get_leftovers,
             get_nic_driver_info,
             get_gpu_sensors,
