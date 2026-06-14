@@ -169,11 +169,14 @@ describe("knowledge dataset lint", () => {
     // council-overseen finish-and-harden marathon: lower-graphics-settings [real — the most reliable
     // lever after resolution], integrated-graphics-disable-fps / motherboard-fps / bios-update-fps /
     // ssd-fps [placebo], cpu-overclock-fps [risky — often counterproductive vs PBO/undervolt] —
-    // build/hardware/settings FPS-myth gaps; distinct from the uefi-bios / nvme-ssd-hdd TERMS).
+    // build/hardware/settings FPS-myth gaps; distinct from the uefi-bios / nvme-ssd-hdd TERMS) + 3 R11
+    // marathon round-2 debunks (2026-06-14: laptop-plugged-in-fps [real — one of the biggest free swings
+    // on a laptop], windows-11-vs-10-fps / gaming-mouse-dpi-fps [placebo] — laptop/OS/peripheral
+    // FPS-myth gaps).
     // These are Library EXPLAINERS (graded real/placebo/risky), NOT appliable recs — Compy applies
     // none of them, so the ~29 appliable-catalog freeze is untouched. The pin stays exact as a
     // curation drift-guard.
-    expect(TWEAKS.length).toBe(81);
+    expect(TWEAKS.length).toBe(84);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);

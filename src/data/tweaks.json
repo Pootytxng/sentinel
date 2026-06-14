@@ -692,5 +692,32 @@
     "what": "Moving a game from a hard drive to an SSD (or to a faster NVMe SSD) expecting a higher frame rate.",
     "why": "Once a game is loaded and running, the frames come from your GPU and CPU — the drive is barely in the loop, so your average FPS looks the same on a hard drive, a SATA SSD, or a fast NVMe drive. What an SSD genuinely transforms is everything AROUND the frame rate: far shorter load times, and much less of the hitching and texture pop-in you get when a fast-moving game streams data off a slow hard drive — so an SSD can smooth your 1% lows and stutters even when the average number does not move. Use an SSD (it is one of the best feel upgrades there is); just file it under load times and smoothness, not raw FPS. Jumping from a good SATA SSD to a faster NVMe one does almost nothing for games today.",
     "related": ["nvme-ssd-hdd", "traversal-stutter", "one-percent-lows"]
+  },
+  {
+    "id": "laptop-plugged-in-fps",
+    "name": "Plugging in your laptop for more FPS",
+    "aliases": ["laptop battery fps", "laptop plugged in gaming", "gaming on battery fps", "laptop power fps", "unplugged laptop slow games"],
+    "verdict": "real",
+    "what": "Gaming with the charger plugged in instead of on battery — and making sure Windows is not in a battery-saver power mode.",
+    "why": "On a laptop this is one of the biggest free FPS swings there is, and it is completely real. Running on battery, the laptop deliberately throttles the CPU and GPU hard to save power and heat — you can lose a third or more of your frames versus plugged in. Plug in the charger, set Windows to its 'Best performance' power mode, and in the laptop maker's app (like Armoury Crate or Lenovo Vantage) pick the performance or turbo profile. The frames come back instantly, and you can switch it all back the moment you unplug. If your laptop still feels slow while plugged in, that is a separate thing — usually heat (clean the vents, raise the back for airflow) or the game running on the integrated GPU instead of the dedicated one.",
+    "related": ["power-plan", "thermal-throttling", "integrated-graphics-disable-fps"]
+  },
+  {
+    "id": "windows-11-vs-10-fps",
+    "name": "Switching between Windows 11 and 10 for FPS",
+    "aliases": ["windows 11 vs 10 fps", "windows 10 better gaming", "windows 11 slower games", "downgrade windows 10 fps", "win11 gaming performance"],
+    "verdict": "placebo",
+    "what": "Switching from Windows 11 to 10 (or back) expecting a meaningful frame-rate change.",
+    "why": "For frame rate the two are close to a wash today — early Windows 11 had a few gaming regressions, but those were patched, and any difference now is small enough to vanish in normal run-to-run variation. There ARE real reasons to prefer one: Windows 11 schedules work better on newer hybrid CPUs (the performance/efficiency-core chips) and adds Auto HDR and DirectStorage, while some people just prefer 10's layout — and Windows 10 is heading out of support, which matters more for security than for frames. So choose your version for features, hardware, and support, not for FPS. Reinstalling your whole OS to chase frames is a lot of work for a difference you will not reliably measure.",
+    "related": ["clean-install-windows", "core-count-gaming", "debloating"]
+  },
+  {
+    "id": "gaming-mouse-dpi-fps",
+    "name": "Raising your mouse DPI for more FPS",
+    "aliases": ["mouse dpi fps", "high dpi mouse fps", "increase mouse dpi frames", "gaming mouse dpi performance", "dpi for fps"],
+    "verdict": "placebo",
+    "what": "Cranking up your mouse's DPI (sensitivity) expecting a higher or smoother frame rate.",
+    "why": "DPI sets how far the aim moves per inch of mouse travel — it is a sensitivity setting, and it has nothing to do with how many frames your GPU draws. A 400-DPI mouse and a 26,000-DPI mouse give you the exact same FPS. What DPI affects is your AIM: too high and it is twitchy, too low and you run out of mousepad. Pick a DPI (most pros sit in the 400–1600 range) plus an in-game sensitivity that lets you do a comfortable 180 with about a forearm's sweep, and leave it. The thing on a mouse that CAN actually touch performance — a very high polling rate — is a different setting, and one that tends to cost a sliver of FPS rather than add it.",
+    "related": ["mouse-acceleration-fps", "polling-rate", "input-latency"]
   }
 ]
