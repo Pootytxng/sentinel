@@ -89,6 +89,21 @@ describe("Black Box v2.1 — measured-absence resolution", () => {
     }
   });
 
+  it("makes NO causal 'solved' claim for ANY incident kind (none-since or recurred)", () => {
+    // Sweep every kind through both branches — the measured-absence line must stay factual, never "fixed".
+    const banned = /\b(fixed|solved|worked|cured|because|caused|resolved|guaranteed|proven|definitely)\b/i;
+    const tags = ["GPU timeout", "App crash", "App hang", "Unexpected shutdown / hard freeze", "Blue screen", "Hardware-logged error"];
+    for (const tag of tags) {
+      const target = inc(tag, "2026-06-07T11:00:00Z");
+      const again = inc(tag, "2026-06-10T09:30:00Z");
+      for (const ctx of [[target], [target, again]]) {
+        const r = resolutionFor(target, ctx, yes(sixDaysBefore), NOW);
+        expect(r, `${tag} should resolve`).not.toBeNull();
+        expect(r!.text, `causal claim for ${tag}: ${r!.text}`).not.toMatch(banned);
+      }
+    }
+  });
+
   it("singular day reads 'day', plural reads 'days'", () => {
     const target = inc("Blue screen", "2026-06-11T11:00:00Z");
     // NOW = 06-13T12:00Z. Mark 16h before → floor(0.67) = 0 days → too soon → null.

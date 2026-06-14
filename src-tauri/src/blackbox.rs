@@ -2016,10 +2016,10 @@ mod blackbox_tests {
         assert!(assess(&thin, std::slice::from_ref(&thin)).is_none(), "thin evidence → refuse to guess, not a verdict");
     }
 
-    #[test]
-    fn no_assessment_ever_contains_a_percentage_or_an_irreversible_step() {
-        // Sweep one firing incident per rule; assert the LAW invariants hold across all of them.
-        let cases = vec![
+    /// One firing incident-context per rule (overheating · driver · app · power · beyond-us · WHEA) —
+    /// the shared battery the honesty-law sweeps run over, so a new rule can't dodge the guards.
+    fn firing_cases() -> Vec<Vec<Incident>> {
+        vec![
             vec![mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, Some(90))], // overheating
             vec![
                 mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None),
@@ -2029,11 +2029,75 @@ mod blackbox_tests {
             vec![mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None)], // power
             vec![mk(IncidentKind::BlueScreen, "2026-06-12T21:00:00Z", None, Some("0x1e"), None, None)], // beyond-us
             vec![mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None)], // whea
-        ];
-        for ctx in &cases {
+        ]
+    }
+
+    #[test]
+    fn no_assessment_ever_contains_a_percentage_or_an_irreversible_step() {
+        // Sweep one firing incident per rule; assert the LAW invariants hold across all of them.
+        for ctx in &firing_cases() {
             let a = assess(&ctx[0], ctx).expect("each case fires");
             assert!(!has_percent(&a), "no percentage: {:?}", a.consistent_with);
             assert!(a.next_step.reversible, "every next step is reversible: {:?}", a.next_step.headline);
+        }
+    }
+
+    #[test]
+    fn no_rule_asserts_a_cause() {
+        // The never-assert-a-cause law, swept over every rule's FULL output (consistent_with + evidence
+        // + next_step). "Consistent with…" is the only frame; assertive-causal vocabulary is banned.
+        let banned = [
+            "the cause is",
+            "caused by",
+            "is because",
+            "definitely",
+            "guaranteed",
+            "for certain",
+            "for sure",
+            "proven",
+            "100%",
+            "without doubt",
+            "we are sure",
+            "is the reason",
+        ];
+        for ctx in &firing_cases() {
+            let a = assess(&ctx[0], ctx).expect("fires");
+            let blob = serde_json::to_string(&a).unwrap().to_lowercase();
+            for b in banned {
+                assert!(!blob.contains(b), "rule '{}' leaked a causal claim: '{b}'", a.consistent_with);
+            }
+        }
+    }
+
+    #[test]
+    fn next_step_headlines_never_command_an_irreversible_action() {
+        // The reversible-only law's teeth: the HEADLINE is the imperative "do this" line, so it must
+        // never command an irreversible/risky action (those may appear only as "research" framing in the
+        // detail). Every emitted step also stays reversible.
+        let irreversible = [
+            "repaste", "re-paste", "flash", "rma", "replace your power supply",
+            "replace the power supply", "buy a new", "overclock", "delete", "format",
+        ];
+        for ctx in &firing_cases() {
+            let a = assess(&ctx[0], ctx).expect("fires");
+            let h = a.next_step.headline.to_lowercase();
+            for w in irreversible {
+                assert!(!h.contains(w), "next-step headline commands an irreversible action '{w}': {}", a.next_step.headline);
+            }
+            assert!(a.next_step.reversible, "every next step stays reversible");
+        }
+    }
+
+    #[test]
+    fn strength_always_serializes_as_one_of_the_three_words() {
+        // Strength is a WORD, never a number — pin the only three legal serialized values.
+        for ctx in &firing_cases() {
+            let a = assess(&ctx[0], ctx).expect("fires");
+            let s = serde_json::to_value(a.strength).unwrap();
+            assert!(
+                matches!(s.as_str(), Some("strong") | Some("partial") | Some("weak")),
+                "strength must be one of the three words, got {s:?}"
+            );
         }
     }
 
