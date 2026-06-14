@@ -22,6 +22,7 @@ import {
 import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import ReceiptsConsent from "./ReceiptsConsent";
+import { LicensePanel } from "./LicensePanel";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -355,6 +356,8 @@ export default function Settings({
         <ReceiptsConsent />
 
         {/* ── About ── */}
+        <LicensePanel />
+
         <section className="set-section">
           <h2 className="set-section-title">About</h2>
           <div className="set-about">

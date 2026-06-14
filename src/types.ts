@@ -292,3 +292,12 @@ export type BlackBoxReport = {
   incidents: CrashIncident[];
   skipped_sources: string[];
 };
+
+// Compy Pro — offline license status (mirrors src-tauri/src/license.rs LicenseStatus). DARK: while
+// licensing is disarmed the backend always returns tier "free" / reason "licensing not active".
+export type LicenseStatus = {
+  tier: string; // "free" | "pro"
+  valid: boolean;
+  reason: string; // "no license" | "active" | "license expired …" | "licensing not active" | …
+  expires_at: string | null;
+};
