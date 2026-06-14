@@ -1,26 +1,34 @@
 //! Black Box v1 (Paramedic Mode): a READ-ONLY crash/freeze evidence reader.
 //!
 //! Spec: docs/superpowers/specs/2026-06-13-black-box-v1.md. Black Box reads the crash/freeze
-//! evidence Windows ALREADY records (Event Log), overlays Compy's own pre-crash "last vitals"
-//! from `sessions.rs`, and presents each incident in plain English.
+//! evidence Windows ALREADY records and presents each incident in plain English, overlaying Compy's
+//! own pre-crash "last vitals" from `sessions.rs`. Three read-only OS sources, merged + deduped so
+//! one crash is never double-listed:
+//!   1. **Windows Event Log** (`Get-WinEvent`, System + Application) — Kernel-Power 41, BugCheck 1001,
+//!      WHEA 17/18/19, Display 4101 (TDR), App Error 1000, App Hang 1002, EventLog 6008 (dirty shutdown).
+//!   2. **WER** (`%ProgramData%\Microsoft\Windows\WER\Report*\Report.wer`) — faulting-module detail for
+//!      app crashes Windows kept a report for even after the Event Log rotated them out.
+//!   3. **Reliability** (`Win32_ReliabilityRecords`) — the friendly critical-event timeline; catches the
+//!      6008 "previous shutdown was unexpected" signal the raw Event Log query alone can miss.
 //!
 //! **v1 makes ZERO causal claims and prescribes ZERO fixes** — it reports recorded evidence only.
 //! A TDR event *says* "the display driver stopped responding" → reporting that is translation, not
 //! diagnosis. Probable-cause + fixes are v2 (evidence-gated, separate spec).
 //!
 //! HARD LINES held here: read-only (no mutation, `actions.rs` untouched, no rollback contract) ·
-//! no kernel driver / no game injection (every source is a user-mode OS log read; never touches a
+//! no kernel driver / no game injection (every source is a user-mode OS log/file read; never touches a
 //! running game) · zero outbound network · no fabricated/unmeasured claims (if Windows recorded
 //! nothing, say so; if Compy wasn't monitoring, say "no vitals" — never invent either) · honest
-//! about elevation (a source we can't read non-elevated is reported as *skipped*, never errored or
-//! faked) · plain language (raw IDs live behind the receipt) · on-demand only (no background watcher).
+//! about elevation (a source we can't read non-elevated is reported as *skipped (needs admin)*, never
+//! errored or faked) · plain language (raw IDs live behind the receipt) · on-demand only (no watcher).
 //!
-//! Shape: a **pure core** (`classify_incident` / `correlate_vitals` / phrasing) with unit tests,
-//! plus a **thin Windows collector** (one read-only `Get-WinEvent` call + a `\Minidump`
-//! access probe) isolated at the edge — mirrors `sessions.rs`/`diagnostics.rs`.
+//! Shape: a **pure core** (`classify_*` / `parse_*` / `correlate_vitals` / merge over already-fetched
+//! strings + serialized session data) with unit tests, plus **thin collectors** (the `Get-WinEvent`
+//! call, the `Report.wer` file reads, the `Win32_ReliabilityRecords` query) isolated at the edge.
 
 use chrono::{DateTime, FixedOffset, Utc};
 use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::sessions::SessionSummary;
 
@@ -30,15 +38,20 @@ const MAX_INCIDENTS: usize = 25;
 /// recorded end before we stop calling it "during that session". Conservative — never invents a
 /// session, only widens the match window slightly.
 const VITALS_GRACE_SECS: i64 = 90;
+/// How close two records must be in time to be treated as the SAME crash seen by two sources. The
+/// Event Log, WER, and Reliability all stamp the actual crash instant, so their copies of one crash
+/// land within a few seconds; 60s absorbs clock/rounding differences without hiding distinct
+/// incidents (a real crash-loop's repeats ≥60s apart stay separate). Errs toward not double-listing.
+const CROSS_SOURCE_WINDOW_SECS: i64 = 60;
 
 // ─── Typed incident families (the only ones v1 recognizes) ─────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum IncidentKind {
     GpuTimeout,         // Display 4101 — driver stopped responding + recovered (TDR)
-    AppCrash,           // Application Error 1000
-    AppHang,            // Application Hang 1002
-    UnexpectedShutdown, // Kernel-Power 41 — hard lock / power loss / freeze (no crash report)
+    AppCrash,           // Application Error 1000 / WER APPCRASH·BEX·MoAppCrash
+    AppHang,            // Application Hang 1002 / WER AppHang*
+    UnexpectedShutdown, // Kernel-Power 41 / EventLog 6008 — hard lock / power loss / freeze
     BlueScreen,         // BugCheck 1001 — BSOD
     HardwareError,      // WHEA-Logger 17/18/19 — machine-check (thermal/power/RAM/PCIe)
 }
@@ -60,11 +73,13 @@ impl IncidentKind {
 /// Pure classifier: map an over-fetched event's (provider, id) to a known incident family, or
 /// `None` for an event we pulled by ID but don't recognize (e.g. an id 1000 from a non-crash
 /// provider). Provider matching is substring-tolerant — `Get-WinEvent` reports the full provider
-/// name (e.g. "Microsoft-Windows-Kernel-Power").
+/// name (e.g. "Microsoft-Windows-Kernel-Power"). Reliability records are event-log-shaped
+/// (`SourceName` + `EventIdentifier`) so they flow through this same classifier.
 pub(crate) fn classify_incident(provider: &str, event_id: u32) -> Option<IncidentKind> {
     let p = provider.to_ascii_lowercase();
     match event_id {
         41 if p.contains("kernel-power") => Some(IncidentKind::UnexpectedShutdown),
+        6008 if p.contains("eventlog") => Some(IncidentKind::UnexpectedShutdown),
         1001 if p.contains("bugcheck") || p.contains("systemerrorreporting") => {
             Some(IncidentKind::BlueScreen)
         }
@@ -72,6 +87,21 @@ pub(crate) fn classify_incident(provider: &str, event_id: u32) -> Option<Inciden
         4101 if p.contains("display") => Some(IncidentKind::GpuTimeout),
         1000 if p.contains("application error") => Some(IncidentKind::AppCrash),
         1002 if p.contains("application hang") => Some(IncidentKind::AppHang),
+        _ => None,
+    }
+}
+
+/// Pure classifier for a WER `Report.wer` `EventType`. Only the families that correspond to v1's
+/// Event-Log families are recognized; anything else (kernel live-events, .NET runtime probes we
+/// don't translate, store-update failures) returns `None` and is dropped — never guessed at.
+pub(crate) fn classify_wer(event_type: &str) -> Option<IncidentKind> {
+    let t = event_type.trim().to_ascii_lowercase();
+    if t.starts_with("apphang") {
+        return Some(IncidentKind::AppHang);
+    }
+    match t.as_str() {
+        // APPCRASH and its buffer-overflow / modern-app / .NET variants are all "an app crashed".
+        "appcrash" | "bex" | "bex64" | "mobex" | "moappcrash" | "clr20r3" => Some(IncidentKind::AppCrash),
         _ => None,
     }
 }
@@ -95,7 +125,7 @@ pub(crate) struct LastVitals {
 /// Raw evidence — lives behind the "show the receipt" expander only.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct Receipt {
-    pub(crate) source: String, // e.g. "System log · Display 4101"
+    pub(crate) source: String, // e.g. "System log · Display 4101" (joined when corroborated)
     pub(crate) event_ids: Vec<u32>,
     pub(crate) faulting_app: Option<String>,
     pub(crate) faulting_module: Option<String>,
@@ -132,50 +162,248 @@ struct IncidentFields {
     driver: Option<String>, // GPU driver name for a TDR (4101)
 }
 
-/// Pure: turn the over-fetched raw events + the read-only session history into the plain-English
-/// incident list. Unknown events are dropped; an unparseable timestamp drops THAT event (never a
-/// fabricated time); newest-first; near-duplicates collapsed; capped at `MAX_INCIDENTS`.
-fn assemble_incidents(events: Vec<RawEvent>, sessions: &[SessionSummary]) -> Vec<Incident> {
-    let mut dated: Vec<(DateTime<Utc>, Incident)> = Vec::new();
-    for ev in events {
-        let Some(kind) = classify_incident(&ev.provider, ev.id) else {
-            continue;
-        };
-        let Some(when) = parse_ts(&ev.time) else {
-            continue; // no fabricated timestamps
-        };
-        let when_utc = when.with_timezone(&Utc);
-        let fields = extract_fields(kind, &ev);
-        let vitals = correlate_vitals(when_utc, sessions);
-        let game = vitals.as_ref().and_then(|v| v.game.clone());
-        let when_display = format_when(when);
-        dated.push((
-            when_utc,
+/// A normalized incident from ONE source, before cross-source merge. Every source (Event Log, WER,
+/// Reliability) produces these, then `merge_protos` collapses the copies of a single crash into one.
+struct ProtoIncident {
+    kind: IncidentKind,
+    when: DateTime<FixedOffset>, // original local offset preserved for display
+    fields: IncidentFields,
+    sources: Vec<String>, // receipt source labels — accumulates as sources corroborate
+    detail: String,       // short raw message snippet
+    event_ids: Vec<u32>,
+}
+
+/// Pure: turn the over-fetched events + WER reports + reliability records + the read-only session
+/// history into the plain-English incident list. Each source → `ProtoIncident`s, then they're sorted
+/// newest-first, **merged/deduped across sources** (one crash, not three rows), correlated with
+/// sessions, and capped. Unknown events are dropped; an unparseable timestamp drops THAT record
+/// (never a fabricated time).
+fn assemble_incidents(
+    events: Vec<RawEvent>,
+    wer: Vec<WerReport>,
+    reliability: Vec<ReliabilityRecord>,
+    sessions: &[SessionSummary],
+) -> Vec<Incident> {
+    let mut protos: Vec<ProtoIncident> = Vec::new();
+    protos.extend(events.iter().filter_map(event_to_proto));
+    protos.extend(wer.iter().filter_map(wer_to_proto));
+    protos.extend(reliability.iter().filter_map(reliability_to_proto));
+
+    let merged = merge_protos(protos); // sorted newest-first + cross-source deduped
+
+    let mut incidents: Vec<Incident> = merged
+        .into_iter()
+        .map(|p| {
+            let when_utc = p.when.with_timezone(&Utc);
+            let when_display = format_when(p.when);
+            let vitals = correlate_vitals(when_utc, sessions);
+            let game = vitals.as_ref().and_then(|v| v.game.clone());
             Incident {
-                headline: build_headline(kind, &fields, &when_display, game.as_deref()),
-                tag: kind.tag().to_string(),
-                when: when.to_rfc3339(),
+                headline: build_headline(p.kind, &p.fields, &when_display, game.as_deref()),
+                tag: p.kind.tag().to_string(),
+                when: p.when.to_rfc3339(),
                 when_display,
                 vitals,
-                receipt: build_receipt(kind, &ev, &fields),
-            },
-        ));
-    }
-    // Newest first by the true instant — NOT the RFC3339 string (offsets can differ across a DST
-    // change, where text order would diverge from chronological order).
-    dated.sort_by_key(|(t, _)| std::cmp::Reverse(*t));
-    let mut incidents: Vec<Incident> = dated.into_iter().map(|(_, i)| i).collect();
-    dedup_incidents(&mut incidents);
+                receipt: build_receipt(&p),
+            }
+        })
+        .collect();
     incidents.truncate(MAX_INCIDENTS);
     incidents
 }
 
-/// Collapse exact repeats (same tag + same second + same headline). v1 does NOT merge across
-/// families (a BSOD can log both BugCheck 1001 and Kernel-Power 41 — both are true and shown;
-/// smart cross-event correlation is v2).
-fn dedup_incidents(incidents: &mut Vec<Incident>) {
-    let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
-    incidents.retain(|i| seen.insert((i.tag.clone(), format!("{}|{}", i.when, i.headline))));
+/// Greedy newest-first cross-source merge: each proto either folds into an already-accepted incident
+/// it matches (`same_incident`) or starts a new one. This is the "don't double-list one crash"
+/// guarantee — the Event Log's 1000, WER's APPCRASH, and Reliability's 1000 for one crash collapse to
+/// a single row carrying all three sources. It also subsumes the old exact-duplicate collapse.
+fn merge_protos(mut protos: Vec<ProtoIncident>) -> Vec<ProtoIncident> {
+    // Newest first by the true instant — NOT the RFC3339 string (offsets can differ across a DST
+    // change, where text order would diverge from chronological order).
+    protos.sort_by_key(|p| std::cmp::Reverse(p.when.with_timezone(&Utc)));
+    let mut merged: Vec<ProtoIncident> = Vec::new();
+    for p in protos {
+        if let Some(acc) = merged.iter_mut().find(|a| same_incident(a, &p)) {
+            merge_into(acc, p);
+        } else {
+            merged.push(p);
+        }
+    }
+    merged
+}
+
+/// Are these two records the same crash seen by (possibly) different sources? Same family, within
+/// the cross-source window, and — for app crashes/hangs — the same app when both name one. A record
+/// that names no app (e.g. a reliability row we couldn't parse) acts as a wildcard within the window,
+/// so it folds in rather than double-listing. System families (shutdown/BSOD/WHEA/TDR) match on
+/// family + window alone (a Kernel-Power 41 and an EventLog 6008 from the same dirty shutdown collapse).
+fn same_incident(a: &ProtoIncident, b: &ProtoIncident) -> bool {
+    if a.kind != b.kind {
+        return false;
+    }
+    let dt = (a.when.with_timezone(&Utc) - b.when.with_timezone(&Utc))
+        .num_seconds()
+        .abs();
+    if dt > CROSS_SOURCE_WINDOW_SECS {
+        return false;
+    }
+    match a.kind {
+        IncidentKind::AppCrash | IncidentKind::AppHang => {
+            match (norm_app(&a.fields.faulting_app), norm_app(&b.fields.faulting_app)) {
+                (Some(x), Some(y)) => x == y, // both name an app → must be the same app
+                _ => true,                    // one side unknown → the time window is enough
+            }
+        }
+        _ => true, // system families: same family within the window is the same incident
+    }
+}
+
+/// Normalize an app name for comparison: strip `.exe`, lowercase. So "Game.exe" == "game.exe".
+fn norm_app(a: &Option<String>) -> Option<String> {
+    a.as_deref().map(|s| pretty_proc(s).to_ascii_lowercase())
+}
+
+/// Fold `other` into `acc`: keep `acc`'s (newest) time, fill any field `acc` is missing from the
+/// corroborating source, union the event IDs + source labels, keep the richer raw detail.
+fn merge_into(acc: &mut ProtoIncident, other: ProtoIncident) {
+    if acc.fields.faulting_app.is_none() {
+        acc.fields.faulting_app = other.fields.faulting_app;
+    }
+    if acc.fields.faulting_module.is_none() {
+        acc.fields.faulting_module = other.fields.faulting_module;
+    }
+    if acc.fields.code.is_none() {
+        acc.fields.code = other.fields.code;
+    }
+    if acc.fields.driver.is_none() {
+        acc.fields.driver = other.fields.driver;
+    }
+    for id in other.event_ids {
+        if !acc.event_ids.contains(&id) {
+            acc.event_ids.push(id);
+        }
+    }
+    for s in other.sources {
+        if !acc.sources.contains(&s) {
+            acc.sources.push(s);
+        }
+    }
+    if other.detail.chars().count() > acc.detail.chars().count() {
+        acc.detail = other.detail;
+    }
+}
+
+// ─── Per-source → ProtoIncident converters (pure) ──────────────────────────
+
+/// Event Log row → proto. Reused for the over-fetched System+Application events.
+fn event_to_proto(ev: &RawEvent) -> Option<ProtoIncident> {
+    let kind = classify_incident(&ev.provider, ev.id)?;
+    let when = parse_ts(&ev.time)?; // no fabricated timestamps
+    Some(ProtoIncident {
+        kind,
+        when,
+        fields: extract_fields(kind, ev),
+        sources: vec![format!("{} · {} {}", source_channel(kind), ev.provider, ev.id)],
+        detail: short_detail(&ev.message),
+        event_ids: vec![ev.id],
+    })
+}
+
+/// WER `Report.wer` → proto. Carries the faulting app/module/exception for crashes Windows kept a
+/// report for; merges with an Event Log 1000 for the same crash (and surfaces alone when the Event
+/// Log already rotated that crash out — "catches what the Event Log alone misses").
+fn wer_to_proto(w: &WerReport) -> Option<ProtoIncident> {
+    let kind = classify_wer(&w.event_type)?;
+    let when = parse_ts(&w.when)?;
+    Some(ProtoIncident {
+        kind,
+        when,
+        fields: IncidentFields {
+            faulting_app: w.app.clone(),
+            faulting_module: w.module.clone(),
+            code: w.code.clone(),
+            driver: None,
+        },
+        sources: vec![format!("Windows Error Reporting · {}", w.event_type)],
+        detail: w.detail.clone(),
+        event_ids: Vec::new(), // WER has no event id
+    })
+}
+
+/// Reliability record → proto. Event-log-shaped, so the same classifier applies; the friendly
+/// message also yields the app/module/code when present (the merge fills the rest from Event Log/WER).
+fn reliability_to_proto(r: &ReliabilityRecord) -> Option<ProtoIncident> {
+    let kind = classify_incident(&r.source_name, r.id)?;
+    let when = parse_ts(&r.time)?;
+    let mut fields = IncidentFields::default();
+    match kind {
+        IncidentKind::AppCrash => {
+            fields.faulting_app = reliability_app(r);
+            fields.faulting_module =
+                scan_field(&r.message, "faulting module name: ", &[',', '\r', '\n']);
+            fields.code = scan_field(&r.message, "exception code: ", &[' ', ',', '\r', '\n'])
+                .map(|c| fmt_hex_code(&c));
+        }
+        IncidentKind::AppHang => fields.faulting_app = reliability_app(r),
+        IncidentKind::BlueScreen => {
+            fields.code = scan_field(&r.message, "bugcheck was: ", &[' ', ',', '\r', '\n']);
+        }
+        _ => {}
+    }
+    Some(ProtoIncident {
+        kind,
+        when,
+        fields,
+        sources: vec![format!("Reliability history · {} {}", r.source_name, r.id)],
+        detail: short_detail(&r.message),
+        event_ids: vec![r.id],
+    })
+}
+
+/// Best app name for a reliability record: `ProductName` is the bare exe ("claude.exe") for app
+/// crashes/hangs and "Windows" for system events — use it for app families, else parse the message.
+fn reliability_app(r: &ReliabilityRecord) -> Option<String> {
+    let p = r.product.trim();
+    if !p.is_empty() && !p.eq_ignore_ascii_case("Windows") {
+        return Some(p.to_string());
+    }
+    parse_app_from_message(&r.message)
+}
+
+/// Pull an app name out of a reliability message: "Faulting application name: X," (App Error 1000)
+/// or "The program X version …" (App Hang 1002). None when neither pattern matches.
+fn parse_app_from_message(msg: &str) -> Option<String> {
+    let lower = msg.to_ascii_lowercase();
+    if let Some(i) = lower.find("application name: ") {
+        let rest = &msg[i + "application name: ".len()..];
+        let end = rest.find(',').unwrap_or(rest.len());
+        let name = rest[..end].trim();
+        if !name.is_empty() {
+            return Some(name.to_string());
+        }
+    }
+    if let Some(i) = lower.find("the program ") {
+        let rest = &msg[i + "the program ".len()..];
+        let end = rest
+            .to_ascii_lowercase()
+            .find(" version")
+            .unwrap_or(rest.len());
+        let name = rest[..end].trim();
+        if !name.is_empty() {
+            return Some(name.to_string());
+        }
+    }
+    None
+}
+
+/// Pull `value` out of a `key: value` fragment of a message; stops at the first terminator (or end).
+/// Case-insensitive key match. `None` if absent/empty. Used for reliability module/exception/bugcheck.
+fn scan_field(msg: &str, key_lower: &str, terminators: &[char]) -> Option<String> {
+    let lower = msg.to_ascii_lowercase();
+    let i = lower.find(key_lower)?;
+    let rest = &msg[i + key_lower.len()..];
+    let end = rest.find(terminators).unwrap_or(rest.len());
+    let v = rest[..end].trim();
+    (!v.is_empty()).then(|| v.to_string())
 }
 
 /// Pure: does any recorded session window contain this crash moment? Returns that session's
@@ -306,15 +534,15 @@ fn extract_fields(kind: IncidentKind, ev: &RawEvent) -> IncidentFields {
     }
 }
 
-fn build_receipt(kind: IncidentKind, ev: &RawEvent, fields: &IncidentFields) -> Receipt {
+fn build_receipt(p: &ProtoIncident) -> Receipt {
     Receipt {
-        source: format!("{} · {} {}", source_channel(kind), ev.provider, ev.id),
-        event_ids: vec![ev.id],
-        faulting_app: fields.faulting_app.clone(),
+        source: p.sources.join(" + "),
+        event_ids: p.event_ids.clone(),
+        faulting_app: p.fields.faulting_app.clone(),
         // For a TDR the "module" the user cares about is the GPU driver.
-        faulting_module: fields.faulting_module.clone().or_else(|| fields.driver.clone()),
-        code: fields.code.clone(),
-        detail: short_detail(&ev.message),
+        faulting_module: p.fields.faulting_module.clone().or_else(|| p.fields.driver.clone()),
+        code: p.fields.code.clone(),
+        detail: p.detail.clone(),
     }
 }
 
@@ -391,7 +619,15 @@ fn short_detail(message: &str) -> String {
     }
 }
 
-// ─── Thin Windows collector (the edge — dumb OS reads; logic lives in the pure core above) ──
+/// FILETIME (100ns ticks since 1601-01-01 UTC, as WER's `EventTime` carries) → UTC instant.
+fn filetime_to_utc(ft: u64) -> Option<DateTime<Utc>> {
+    const EPOCH_DIFF_SECS: i64 = 11_644_473_600; // 1601-01-01 → 1970-01-01
+    let secs = (ft / 10_000_000) as i64 - EPOCH_DIFF_SECS;
+    let nanos = ((ft % 10_000_000) * 100) as u32;
+    DateTime::<Utc>::from_timestamp(secs, nanos)
+}
+
+// ─── Thin collectors (the edge — dumb OS reads; logic lives in the pure core above) ──
 
 /// One raw Event-Log row as fetched by the read-only `Get-WinEvent`. `props` is the event's
 /// language-independent `EventData` (preferred over the localized `Message` for field extraction).
@@ -428,6 +664,33 @@ fn value_to_string(v: &serde_json::Value) -> String {
     }
 }
 
+/// A WER report, parsed from a `Report.wer` file. `when` is RFC3339 (UTC from `EventTime`; the
+/// collector re-stamps it to the local offset for display).
+#[derive(Default, Debug, Clone, PartialEq)]
+struct WerReport {
+    event_type: String,
+    when: String,
+    app: Option<String>,
+    module: Option<String>,
+    code: Option<String>,
+    detail: String,
+}
+
+/// One `Win32_ReliabilityRecords` row, as projected by the read-only CIM query.
+#[derive(serde::Deserialize, Default, Debug)]
+struct ReliabilityRecord {
+    #[serde(default, rename = "source")]
+    source_name: String,
+    #[serde(default)]
+    id: u32,
+    #[serde(default)]
+    time: String,
+    #[serde(default)]
+    message: String,
+    #[serde(default)]
+    product: String,
+}
+
 /// Read the crash/instability events Windows recorded (System + Application channels). Read-only,
 /// non-elevated, no window. Returns the parsed rows and an optional "skipped" note if the reader
 /// could not run at all (a clean machine returns an empty list, NOT a skip).
@@ -437,7 +700,7 @@ fn collect_event_log() -> (Vec<RawEvent>, Option<String>) {
     // language-independent faulting app/module/code. Errors are swallowed (SilentlyContinue) so a
     // "no events found" on a clean machine yields empty output, not a failure.
     let script = "$ErrorActionPreference='SilentlyContinue';\
-@(Get-WinEvent -FilterHashtable @{LogName='System','Application'; Id=41,1001,17,18,19,4101,1000,1002} -MaxEvents 80 |\
+@(Get-WinEvent -FilterHashtable @{LogName='System','Application'; Id=41,1001,17,18,19,4101,1000,1002,6008} -MaxEvents 80 |\
  Select-Object @{n='time';e={$_.TimeCreated.ToString('o')}}, @{n='id';e={[int]$_.Id}}, @{n='provider';e={[string]$_.ProviderName}}, @{n='message';e={[string]$_.Message}}, @{n='props';e={@($_.Properties | ForEach-Object {[string]$_.Value})}}) |\
  ConvertTo-Json -Depth 4 -Compress";
     let Ok(out) = crate::actions::quiet_command("powershell.exe")
@@ -472,6 +735,194 @@ fn parse_events_json(s: &str) -> Vec<RawEvent> {
         .collect()
 }
 
+/// Read the WER `Report.wer` files (`ReportArchive` + `ReportQueue`). Read-only file reads, no
+/// network. App-crash/hang reports are readable non-elevated; `Kernel_*` reports are admin-only, so a
+/// PermissionDenied is reported as a *skipped* source (the elevation-honesty hard line), never errored.
+fn collect_wer() -> (Vec<WerReport>, Option<String>) {
+    let mut reports = Vec::new();
+    let mut needs_admin = false;
+    let pd = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".into());
+    let mut budget = 400usize; // bound the folder walk on a pathological WER dir
+    for sub in ["ReportArchive", "ReportQueue"] {
+        let base = std::path::Path::new(&pd)
+            .join("Microsoft")
+            .join("Windows")
+            .join("WER")
+            .join(sub);
+        let Ok(entries) = std::fs::read_dir(&base) else {
+            continue; // folder missing → nothing to read here (not a skip)
+        };
+        for entry in entries.flatten() {
+            if budget == 0 {
+                break;
+            }
+            budget -= 1;
+            let report = entry.path().join("Report.wer");
+            match std::fs::read(&report) {
+                Ok(bytes) => {
+                    if let Some(mut w) = parse_wer(&decode_wer_bytes(&bytes)) {
+                        // EventTime is UTC; re-stamp to the local offset so the display reads local.
+                        if let Ok(dt) = DateTime::parse_from_rfc3339(&w.when) {
+                            w.when = dt.with_timezone(&chrono::Local).to_rfc3339();
+                        }
+                        reports.push(w);
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => needs_admin = true,
+                Err(_) => {} // missing/other → skip this one silently
+            }
+        }
+    }
+    let skip =
+        needs_admin.then(|| "Windows Error Reporting (some kernel reports need administrator)".to_string());
+    (reports, skip)
+}
+
+/// Decode `Report.wer` bytes: Windows writes them UTF-16 LE (BOM `FF FE`); tolerate UTF-8 (with/out
+/// BOM) too. Lossy — a malformed byte becomes U+FFFD, never a panic.
+fn decode_wer_bytes(bytes: &[u8]) -> String {
+    if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+        let u16s: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&u16s)
+    } else if bytes.len() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
+        String::from_utf8_lossy(&bytes[3..]).into_owned()
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
+/// Pure: parse a `Report.wer` body (key=value INI, plus `Sig[i].Name`/`Sig[i].Value` pairs) into the
+/// fields v1 surfaces. `None` only when there's no `EventType`. App name prefers the real exe
+/// (`OriginalFilename`/`NsAppName`) over a packaged app's `praid:` alias so it dedups with Event Log.
+fn parse_wer(text: &str) -> Option<WerReport> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut sig_names: HashMap<usize, String> = HashMap::new();
+    let mut sig_values: HashMap<usize, String> = HashMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
+        let (k, v) = (k.trim(), v.trim());
+        if let Some(idx) = sig_index(k, ".Name") {
+            sig_names.insert(idx, v.to_string());
+        } else if let Some(idx) = sig_index(k, ".Value") {
+            sig_values.insert(idx, v.to_string());
+        } else {
+            map.insert(k.to_string(), v.to_string());
+        }
+    }
+    let event_type = map.get("EventType").cloned()?;
+    let sig = |name: &str| -> Option<String> {
+        sig_names
+            .iter()
+            .find(|(_, n)| n.eq_ignore_ascii_case(name))
+            .and_then(|(i, _)| sig_values.get(i).cloned())
+            .filter(|s| !s.trim().is_empty())
+    };
+    let app = wer_pick(map.get("OriginalFilename"))
+        .or_else(|| wer_pick(map.get("NsAppName")))
+        .or_else(|| sig("Application Name").and_then(|s| wer_pick(Some(&s))));
+    let module = sig("Fault Module Name");
+    let code = sig("Exception Code").map(|c| fmt_hex_code(&c));
+    let when = map
+        .get("EventTime")
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .and_then(filetime_to_utc)
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_default();
+    let detail = wer_detail(&event_type, app.as_deref(), module.as_deref(), code.as_deref());
+    Some(WerReport {
+        event_type,
+        when,
+        app,
+        module,
+        code,
+        detail,
+    })
+}
+
+/// Parse the index out of a `Sig[<n>]<suffix>` key (e.g. `Sig[3].Name` → 3). Ignores `DynamicSig[…]`.
+fn sig_index(key: &str, suffix: &str) -> Option<usize> {
+    let inner = key.strip_prefix("Sig[")?;
+    let close = inner.find(']')?;
+    let idx: usize = inner[..close].parse().ok()?;
+    if inner[close + 1..].eq_ignore_ascii_case(suffix) {
+        Some(idx)
+    } else {
+        None
+    }
+}
+
+/// Keep a WER value only if it's a real name — drop empty + packaged-app `praid:` aliases.
+fn wer_pick(v: Option<&String>) -> Option<String> {
+    let s = v?.trim();
+    if s.is_empty() || s.to_ascii_lowercase().starts_with("praid:") {
+        None
+    } else {
+        Some(s.to_string())
+    }
+}
+
+/// Plain-English raw detail for a WER-sourced incident (shown only when WER is the sole source).
+fn wer_detail(event_type: &str, app: Option<&str>, module: Option<&str>, code: Option<&str>) -> String {
+    let mut s = format!("Windows Error Reporting recorded a {event_type} report");
+    if let Some(a) = app {
+        s.push_str(&format!(" for {a}"));
+    }
+    if let Some(m) = module {
+        s.push_str(&format!("; fault module {m}"));
+    }
+    if let Some(c) = code {
+        s.push_str(&format!("; exception {c}"));
+    }
+    s.push('.');
+    s
+}
+
+/// Read the friendly Reliability timeline (`Win32_ReliabilityRecords`, read-only CIM). Filtered to
+/// the crash-relevant event IDs; the rest (installs, updates) are dropped at the source. A run
+/// failure → a "couldn't read" skip; an empty result on a clean machine → no skip.
+fn collect_reliability() -> (Vec<ReliabilityRecord>, Option<String>) {
+    let script = "$ErrorActionPreference='SilentlyContinue';\
+@(Get-CimInstance -ClassName Win32_ReliabilityRecords -ErrorAction SilentlyContinue |\
+ Where-Object { @(41,1001,17,18,19,4101,1000,1002,6008) -contains [int]$_.EventIdentifier } |\
+ Sort-Object TimeGenerated -Descending | Select-Object -First 120 |\
+ ForEach-Object { [pscustomobject]@{ source=[string]$_.SourceName; id=[int]$_.EventIdentifier; time=$_.TimeGenerated.ToString('o'); message=[string]$_.Message; product=[string]$_.ProductName } }) |\
+ ConvertTo-Json -Depth 3 -Compress";
+    let Ok(out) = crate::actions::quiet_command("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output()
+    else {
+        return (Vec::new(), Some("Reliability history (couldn't run the reader)".into()));
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() {
+        return (Vec::new(), None);
+    }
+    (parse_reliability_json(trimmed), None)
+}
+
+/// Tolerant parse of the reliability JSON (array / single-object / garbage → drop-or-empty, no panic).
+fn parse_reliability_json(s: &str) -> Vec<ReliabilityRecord> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(s) else {
+        return Vec::new();
+    };
+    let items = match value {
+        serde_json::Value::Array(a) => a,
+        serde_json::Value::Object(_) => vec![value],
+        _ => return Vec::new(),
+    };
+    items
+        .into_iter()
+        .filter_map(|i| serde_json::from_value::<ReliabilityRecord>(i).ok())
+        .collect()
+}
+
 /// Crash dump files in `%SystemRoot%\Minidump` are admin-only. v1 reads the BSOD bugcheck code
 /// from the (non-elevated) BugCheck 1001 event instead; here we only report the dump folder as a
 /// *skipped* source when it exists but we can't read it — honest about the gap, never faked.
@@ -492,21 +943,21 @@ fn minidump_skip_note() -> Option<String> {
 #[tauri::command]
 pub(crate) fn get_crash_blackbox() -> BlackBoxReport {
     let (events, ev_skip) = collect_event_log();
-    let mut skipped_sources = Vec::new();
-    if let Some(note) = ev_skip {
-        skipped_sources.push(note);
-    }
+    let (wer, wer_skip) = collect_wer();
+    let (reliability, rel_skip) = collect_reliability();
+    let mut skipped_sources: Vec<String> =
+        [ev_skip, wer_skip, rel_skip].into_iter().flatten().collect();
     if let Some(note) = minidump_skip_note() {
         skipped_sources.push(note);
     }
     let sessions = crate::sessions::get_session_summaries();
     BlackBoxReport {
-        incidents: assemble_incidents(events, &sessions),
+        incidents: assemble_incidents(events, wer, reliability, &sessions),
         skipped_sources,
     }
 }
 
-// ─── Pure-core tests (the collector is a thin edge; logic + invariants are pinned here) ─────────
+// ─── Pure-core tests (the collectors are a thin edge; logic + invariants are pinned here) ────────
 #[cfg(test)]
 mod blackbox_tests {
     use super::*;
@@ -542,10 +993,37 @@ mod blackbox_tests {
         }
     }
 
+    /// Test convenience: assemble from Event Log rows only (the most common case in the suite).
+    fn from_events(events: Vec<RawEvent>, sessions: &[SessionSummary]) -> Vec<Incident> {
+        assemble_incidents(events, Vec::new(), Vec::new(), sessions)
+    }
+
+    fn wer(event_type: &str, when: &str, app: Option<&str>, module: Option<&str>, code: Option<&str>) -> WerReport {
+        WerReport {
+            event_type: event_type.into(),
+            when: when.into(),
+            app: app.map(Into::into),
+            module: module.map(Into::into),
+            code: code.map(Into::into),
+            detail: wer_detail(event_type, app, module, code),
+        }
+    }
+
+    fn rel(source: &str, id: u32, time: &str, message: &str, product: &str) -> ReliabilityRecord {
+        ReliabilityRecord {
+            source_name: source.into(),
+            id,
+            time: time.into(),
+            message: message.into(),
+            product: product.into(),
+        }
+    }
+
     #[test]
     fn classifies_every_event_family_correctly() {
         use IncidentKind::*;
         assert_eq!(classify_incident("Microsoft-Windows-Kernel-Power", 41), Some(UnexpectedShutdown));
+        assert_eq!(classify_incident("EventLog", 6008), Some(UnexpectedShutdown));
         assert_eq!(classify_incident("Microsoft-Windows-WER-SystemErrorReporting", 1001), Some(BlueScreen));
         assert_eq!(classify_incident("BugCheck", 1001), Some(BlueScreen));
         assert_eq!(classify_incident("Microsoft-Windows-WHEA-Logger", 17), Some(HardwareError));
@@ -563,6 +1041,24 @@ mod blackbox_tests {
         assert_eq!(classify_incident("Microsoft-Windows-Kernel-General", 41), None);
         assert_eq!(classify_incident("Application Error", 9999), None);
         assert_eq!(classify_incident("Display", 1000), None);
+        assert_eq!(classify_incident("Some-Other-Source", 6008), None, "6008 only counts from EventLog");
+    }
+
+    #[test]
+    fn classify_wer_maps_crash_families_and_drops_the_rest() {
+        use IncidentKind::*;
+        assert_eq!(classify_wer("APPCRASH"), Some(AppCrash));
+        assert_eq!(classify_wer("BEX64"), Some(AppCrash));
+        assert_eq!(classify_wer("MoBEX"), Some(AppCrash));
+        assert_eq!(classify_wer("MoAppCrash"), Some(AppCrash));
+        assert_eq!(classify_wer("CLR20r3"), Some(AppCrash));
+        assert_eq!(classify_wer("AppHang"), Some(AppHang));
+        assert_eq!(classify_wer("AppHangB1"), Some(AppHang));
+        assert_eq!(classify_wer("AppHangXProcB1"), Some(AppHang));
+        // unknown / non-crash event types are dropped, never guessed at
+        assert_eq!(classify_wer("WindowsUpdateFailure3"), None);
+        assert_eq!(classify_wer("PnPDeviceProblem"), None);
+        assert_eq!(classify_wer(""), None);
     }
 
     #[test]
@@ -608,7 +1104,8 @@ mod blackbox_tests {
 
     #[test]
     fn empty_event_input_yields_empty_list_no_fabrication() {
-        assert!(assemble_incidents(Vec::new(), &[]).is_empty());
+        assert!(from_events(Vec::new(), &[]).is_empty());
+        assert!(assemble_incidents(Vec::new(), Vec::new(), Vec::new(), &[]).is_empty());
     }
 
     #[test]
@@ -619,7 +1116,7 @@ mod blackbox_tests {
             ev("Totally-Unknown", 1000, "2026-06-12T23:00:00-07:00", "noise", serde_json::Value::Null),
             ev("Display", 4101, "2026-06-12T22:00:00-07:00", "Display driver amdkmdag stopped responding and has successfully recovered.", serde_json::Value::Null),
         ];
-        let out = assemble_incidents(events, &[]);
+        let out = from_events(events, &[]);
         assert_eq!(out.len(), 2, "the unknown-provider event is dropped");
         assert_eq!(out[0].tag, "GPU timeout", "22:00 is newer than 20:00 → first");
         assert_eq!(out[1].tag, "App crash");
@@ -630,7 +1127,7 @@ mod blackbox_tests {
     #[test]
     fn unparseable_timestamp_drops_the_event_without_panicking() {
         let events = vec![ev("Display", 4101, "not-a-timestamp", "Display driver x stopped", serde_json::Value::Null)];
-        assert!(assemble_incidents(events, &[]).is_empty(), "bad ts → dropped, no fabricated time, no panic");
+        assert!(from_events(events, &[]).is_empty(), "bad ts → dropped, no fabricated time, no panic");
     }
 
     #[test]
@@ -640,7 +1137,7 @@ mod blackbox_tests {
             "Faulting application name: Helldivers2.exe, faulting module ntdll.dll",
             serde_json::json!(["Helldivers2.exe", "1.0", "ts", "ntdll.dll", "1.0", "ts", "c0000005"]),
         )];
-        let out = assemble_incidents(events, &[]);
+        let out = from_events(events, &[]);
         assert_eq!(out.len(), 1);
         assert!(out[0].headline.starts_with("Helldivers2 stopped working"));
         assert!(out[0].headline.contains("Jun 12"));
@@ -654,7 +1151,7 @@ mod blackbox_tests {
         let sessions = vec![session("2026-06-12T21:00:00-07:00", 3600, "Helldivers2.exe")];
         let events = vec![ev("Display", 4101, "2026-06-12T21:42:00-07:00",
             "Display driver amdkmdag stopped responding and has successfully recovered.", serde_json::Value::Null)];
-        let out = assemble_incidents(events, &sessions);
+        let out = from_events(events, &sessions);
         assert_eq!(out.len(), 1);
         assert!(out[0].headline.contains("while Helldivers2 was running"), "got: {}", out[0].headline);
         assert!(out[0].vitals.is_some());
@@ -666,7 +1163,7 @@ mod blackbox_tests {
         let sessions = vec![session("2026-06-12T21:00:00-07:00", 3600, "game.exe")];
         let events = vec![ev("Application Error", 1000, "2026-06-12T21:42:00-07:00", "crash",
             serde_json::json!(["game.exe", "1.0", "ts", "unity.dll", "1.0", "ts", "c0000005"]))];
-        let out = assemble_incidents(events, &sessions);
+        let out = from_events(events, &sessions);
         assert!(!out[0].headline.contains("while game was running"), "no redundant clause: {}", out[0].headline);
         assert!(out[0].vitals.is_some(), "vitals still attached even though the clause is suppressed");
     }
@@ -677,7 +1174,7 @@ mod blackbox_tests {
             .map(|i| ev("Application Hang", 1002, &format!("2026-06-12T{:02}:00:00Z", i % 24), "hang",
                 serde_json::json!([format!("app{i}.exe")])))
             .collect();
-        assert!(assemble_incidents(events, &[]).len() <= MAX_INCIDENTS);
+        assert!(from_events(events, &[]).len() <= MAX_INCIDENTS);
     }
 
     #[test]
@@ -733,7 +1230,7 @@ mod blackbox_tests {
     #[test]
     fn serde_shape_is_stable_for_the_ts_contract() {
         let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:00-07:00", "rebooted without cleanly shutting down", serde_json::Value::Null)];
-        let report = BlackBoxReport { incidents: assemble_incidents(events, &[]), skipped_sources: vec!["x".into()] };
+        let report = BlackBoxReport { incidents: from_events(events, &[]), skipped_sources: vec!["x".into()] };
         let v = serde_json::to_value(&report).expect("serializes");
         assert!(v.get("incidents").and_then(|i| i.as_array()).is_some());
         assert!(v.get("skipped_sources").and_then(|s| s.as_array()).is_some());
@@ -768,7 +1265,7 @@ mod blackbox_tests {
         // A source that logged the same event twice (same family, second, headline) shows once.
         let make = || ev("Display", 4101, "2026-06-12T21:42:00-07:00",
             "Display driver amdkmdag stopped responding and has successfully recovered.", serde_json::Value::Null);
-        let out = assemble_incidents(vec![make(), make()], &[]);
+        let out = from_events(vec![make(), make()], &[]);
         assert_eq!(out.len(), 1, "identical events collapse to a single incident");
     }
 
@@ -814,6 +1311,214 @@ mod blackbox_tests {
         // Provider guard: id 1000 is reused widely; only "Application Error" is an app crash.
         let events = vec![ev("Microsoft-Windows-Some-Service", 1000, "2026-06-12T21:42:00Z", "noise",
             serde_json::json!(["x"]))];
-        assert!(assemble_incidents(events, &[]).is_empty());
+        assert!(from_events(events, &[]).is_empty());
+    }
+
+    // ── R7 — WER + Reliability sources, FILETIME, decode, cross-source merge/dedup ──
+
+    #[test]
+    fn filetime_to_utc_matches_a_known_instant() {
+        // 134247866352920618 (Discord WER EventTime) ≈ 2026-06-01 11:23:55 UTC (4:23 local PDT).
+        let dt = filetime_to_utc(134_247_866_352_920_618).expect("valid filetime");
+        assert_eq!(dt.format("%Y-%m-%d %H:%M").to_string(), "2026-06-01 11:23");
+        // The Unix epoch itself: 11644473600s × 10^7 ticks.
+        let unix0 = filetime_to_utc(11_644_473_600 * 10_000_000).expect("epoch");
+        assert_eq!(unix0.timestamp(), 0);
+    }
+
+    #[test]
+    fn decode_wer_bytes_handles_utf16le_bom_and_utf8() {
+        // UTF-16 LE with BOM (how Windows writes Report.wer).
+        let mut u16 = vec![0xFFu8, 0xFE];
+        for ch in "EventType=APPCRASH".encode_utf16() {
+            u16.extend_from_slice(&ch.to_le_bytes());
+        }
+        assert_eq!(decode_wer_bytes(&u16), "EventType=APPCRASH");
+        // Plain UTF-8 (no BOM) passes through.
+        assert_eq!(decode_wer_bytes(b"EventType=AppHang"), "EventType=AppHang");
+    }
+
+    const SAMPLE_WER: &str = "Version=1\r\nEventType=APPCRASH\r\nEventTime=134251464743238408\r\nNsAppName=FallGuys_client_game.exe\r\nSig[0].Name=Application Name\r\nSig[0].Value=FallGuys_client_game.exe\r\nSig[3].Name=Fault Module Name\r\nSig[3].Value=EOSSDK-Win64-Shipping.dll\r\nSig[6].Name=Exception Code\r\nSig[6].Value=c0000005\r\nDynamicSig[1].Name=OS Version\r\n";
+
+    #[test]
+    fn parse_wer_pulls_type_app_module_code_and_filetime() {
+        let w = parse_wer(SAMPLE_WER).expect("parses");
+        assert_eq!(w.event_type, "APPCRASH");
+        assert_eq!(w.app.as_deref(), Some("FallGuys_client_game.exe"), "NsAppName preferred");
+        assert_eq!(w.module.as_deref(), Some("EOSSDK-Win64-Shipping.dll"), "Sig lookup is by name, not index");
+        assert_eq!(w.code.as_deref(), Some("0xc0000005"), "bare hex normalized");
+        // EventTime FILETIME → 2026-06-05 (the FallGuys sample).
+        assert!(w.when.starts_with("2026-06-05"), "filetime parsed: {}", w.when);
+    }
+
+    #[test]
+    fn parse_wer_skips_praid_alias_for_packaged_apps() {
+        let text = "EventType=MoAppCrash\r\nNsAppName=praid:App\r\nSig[1].Name=Application Name\r\nSig[1].Value=praid:App\r\n";
+        let w = parse_wer(text).expect("parses");
+        assert_eq!(w.event_type, "MoAppCrash");
+        assert!(w.app.is_none(), "praid: alias is not a usable app name");
+    }
+
+    #[test]
+    fn parse_wer_requires_event_type() {
+        assert!(parse_wer("Version=1\r\nNsAppName=foo.exe\r\n").is_none());
+    }
+
+    #[test]
+    fn wer_only_app_crash_surfaces_as_an_incident() {
+        // A crash the Event Log already rotated out but WER still has — "catches what Event Log misses".
+        let reports = vec![wer("APPCRASH", "2026-06-05T08:21:15-07:00", Some("FallGuys_client_game.exe"), Some("EOSSDK.dll"), Some("0xc0000005"))];
+        let out = assemble_incidents(Vec::new(), reports, Vec::new(), &[]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].tag, "App crash");
+        assert!(out[0].headline.starts_with("FallGuys_client_game stopped working"));
+        assert_eq!(out[0].receipt.faulting_module.as_deref(), Some("EOSSDK.dll"));
+        assert!(out[0].receipt.source.contains("Windows Error Reporting"));
+    }
+
+    #[test]
+    fn event_log_and_wer_for_the_same_crash_collapse_to_one_with_both_sources() {
+        let events = vec![ev("Application Error", 1000, "2026-06-12T21:42:00-07:00", "crash",
+            serde_json::json!(["game.exe", "1.0", "ts", "ntdll.dll", "1.0", "ts", "c0000005"]))];
+        // WER for the same crash, 4s later (cross-source skew), same app.
+        let reports = vec![wer("APPCRASH", "2026-06-12T21:42:04-07:00", Some("game.exe"), Some("ntdll.dll"), Some("0xc0000005"))];
+        let out = assemble_incidents(events, reports, Vec::new(), &[]);
+        assert_eq!(out.len(), 1, "one crash, not two rows");
+        assert!(out[0].receipt.source.contains("Application Error 1000"), "Event Log source kept");
+        assert!(out[0].receipt.source.contains("Windows Error Reporting"), "WER corroboration recorded");
+    }
+
+    #[test]
+    fn different_apps_within_the_window_are_not_merged() {
+        let events = vec![ev("Application Error", 1000, "2026-06-12T21:42:00-07:00", "a",
+            serde_json::json!(["alpha.exe", "1.0", "ts", "x.dll", "1.0", "ts", "c0000005"]))];
+        let reports = vec![wer("APPCRASH", "2026-06-12T21:42:10-07:00", Some("beta.exe"), Some("y.dll"), Some("0xc0000005"))];
+        let out = assemble_incidents(events, reports, Vec::new(), &[]);
+        assert_eq!(out.len(), 2, "alpha and beta are distinct crashes");
+    }
+
+    #[test]
+    fn different_families_within_the_window_are_not_merged() {
+        // A BSOD can log both BugCheck 1001 and Kernel-Power 41 — both are true and shown (v1 rule).
+        let events = vec![
+            ev("Microsoft-Windows-WER-SystemErrorReporting", 1001, "2026-06-12T21:42:00Z", "bugcheck 0x133", serde_json::json!(["0x133"])),
+            ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-12T21:42:05Z", "reboot", serde_json::Value::Null),
+        ];
+        let out = from_events(events, &[]);
+        assert_eq!(out.len(), 2, "BSOD and unexpected-shutdown are different families");
+    }
+
+    #[test]
+    fn reliability_app_crash_uses_product_name_and_merges_with_event_log() {
+        let events = vec![ev("Application Error", 1000, "2026-06-12T21:42:00-07:00", "crash",
+            serde_json::json!(["tbs_browser.exe", "1.0", "ts", "qbcore.dll", "1.0", "ts", "80000003"]))];
+        let records = vec![rel("Application Error", 1000, "2026-06-12T21:42:00-07:00",
+            "Faulting application name: tbs_browser.exe, version: 0.0.0.0\nFaulting module name: qbcore.dll, version: 1.0\nException code: 0x80000003", "tbs_browser.exe")];
+        let out = assemble_incidents(events, Vec::new(), records, &[]);
+        assert_eq!(out.len(), 1, "reliability copy of the Event Log crash dedups");
+        assert!(out[0].receipt.source.contains("Reliability history"));
+    }
+
+    #[test]
+    fn reliability_6008_surfaces_an_unexpected_shutdown_the_event_log_lacked() {
+        // No Event Log row for this dirty shutdown; Reliability's 6008 catches it (friendly timeline).
+        let records = vec![rel("EventLog", 6008, "2026-06-13T04:14:53-07:00",
+            "The previous system shutdown at 4:14:53 AM on 6/13/2026 was unexpected.", "Windows")];
+        let out = assemble_incidents(Vec::new(), Vec::new(), records, &[]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].tag, "Unexpected shutdown / hard freeze");
+        assert!(out[0].headline.starts_with("Your PC shut down unexpectedly"));
+    }
+
+    #[test]
+    fn kernel_power_41_and_reliability_6008_from_one_shutdown_collapse() {
+        // Both fire at boot for the same dirty shutdown → one incident carrying both sources.
+        let events = vec![ev("Microsoft-Windows-Kernel-Power", 41, "2026-06-13T04:15:30-07:00", "reboot", serde_json::Value::Null)];
+        let records = vec![rel("EventLog", 6008, "2026-06-13T04:15:32-07:00",
+            "The previous system shutdown was unexpected.", "Windows")];
+        let out = assemble_incidents(events, Vec::new(), records, &[]);
+        assert_eq!(out.len(), 1, "41 + 6008 are the same shutdown");
+        assert!(out[0].receipt.event_ids.contains(&41));
+        assert!(out[0].receipt.event_ids.contains(&6008));
+    }
+
+    #[test]
+    fn reliability_app_hang_parses_the_program_name_from_the_message() {
+        let record = rel("Application Hang", 1002, "2026-06-12T10:00:00-07:00",
+            "The program claude.exe version 1.0 stopped interacting with Windows and was closed.", "");
+        let p = reliability_to_proto(&record).expect("classifies");
+        assert_eq!(p.fields.faulting_app.as_deref(), Some("claude.exe"));
+    }
+
+    #[test]
+    fn parse_app_from_message_handles_both_reliability_shapes() {
+        assert_eq!(
+            parse_app_from_message("Faulting application name: foo.exe, version: 1.0").as_deref(),
+            Some("foo.exe")
+        );
+        assert_eq!(
+            parse_app_from_message("The program bar.exe version 2.0 stopped interacting").as_deref(),
+            Some("bar.exe")
+        );
+        assert_eq!(parse_app_from_message("unrelated message"), None);
+    }
+
+    #[test]
+    fn scan_field_extracts_values_case_insensitively() {
+        let msg = "Faulting module name: qbcore.dll, version: 1.0\nException code: 0x80000003\n";
+        assert_eq!(scan_field(msg, "faulting module name: ", &[',', '\r', '\n']).as_deref(), Some("qbcore.dll"));
+        assert_eq!(scan_field(msg, "exception code: ", &[' ', ',', '\r', '\n']).as_deref(), Some("0x80000003"));
+        assert!(scan_field(msg, "not present: ", &['\n']).is_none());
+    }
+
+    #[test]
+    fn parse_reliability_json_tolerates_shapes() {
+        assert!(parse_reliability_json("garbage{{").is_empty());
+        assert!(parse_reliability_json("null").is_empty());
+        let one = parse_reliability_json(r#"{"source":"Application Error","id":1000,"time":"2026-06-12T21:42:00Z","message":"m","product":"g.exe"}"#);
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].source_name, "Application Error");
+        assert_eq!(one[0].id, 1000);
+    }
+
+    // Live read-only QA harness (real rig, non-elevated): runs the three collectors + the merge
+    // against this machine's actual OS data. `#[ignore]` so it stays out of the normal suite (it
+    // depends on the host); run with `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored
+    // blackbox_live_collectors_read_clean --nocapture`.
+    #[test]
+    #[ignore = "live OS read — run manually on a Windows rig"]
+    fn blackbox_live_collectors_read_clean() {
+        let (events, ev_skip) = collect_event_log();
+        let (wer, wer_skip) = collect_wer();
+        let (reliability, rel_skip) = collect_reliability();
+        let incidents = assemble_incidents(events, wer, reliability, &[]);
+        eprintln!(
+            "live: {} incidents | skips: ev={:?} wer={:?} rel={:?} minidump={:?}",
+            incidents.len(),
+            ev_skip,
+            wer_skip,
+            rel_skip,
+            minidump_skip_note()
+        );
+        for i in incidents.iter().take(12) {
+            eprintln!("  [{}] {}  ::  {}", i.tag, i.headline, i.receipt.source);
+        }
+        // Invariants that must hold on ANY rig: never a fabricated timestamp/headline, receipt
+        // always names at least one source, and the cap is respected.
+        assert!(incidents.len() <= MAX_INCIDENTS);
+        for i in &incidents {
+            assert!(!i.headline.is_empty());
+            assert!(!i.receipt.source.is_empty(), "every incident names its source");
+            assert!(DateTime::parse_from_rfc3339(&i.when).is_ok(), "when is real RFC3339");
+        }
+    }
+
+    #[test]
+    fn sig_index_parses_only_plain_sig_keys() {
+        assert_eq!(sig_index("Sig[3].Name", ".Name"), Some(3));
+        assert_eq!(sig_index("Sig[0].Value", ".Value"), Some(0));
+        assert_eq!(sig_index("Sig[3].Name", ".Value"), None, "suffix must match");
+        assert_eq!(sig_index("DynamicSig[1].Name", ".Name"), None, "DynamicSig ignored");
+        assert_eq!(sig_index("EventType", ".Name"), None);
     }
 }

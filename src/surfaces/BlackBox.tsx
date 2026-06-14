@@ -38,10 +38,17 @@ export function BlackBox() {
       {report && !scanning && (
         <div className="bb-results">
           {report.incidents.length === 0 ? (
-            <p className="bb-empty">
-              No crashes or freezes recorded. Either nothing went wrong, or whatever happened left no
-              trace Windows recorded.
-            </p>
+            report.skipped_sources.length > 0 ? (
+              <p className="bb-empty">
+                No crashes or freezes in what Compy could read. Some records below need administrator
+                — run Compy as admin to check those too.
+              </p>
+            ) : (
+              <p className="bb-empty">
+                No crashes or freezes recorded. Either nothing went wrong, or whatever happened left no
+                trace Windows recorded.
+              </p>
+            )
           ) : (
             <ul className="bb-list">
               {report.incidents.map((inc, i) => (
@@ -52,8 +59,8 @@ export function BlackBox() {
 
           {report.skipped_sources.length > 0 && (
             <p className="bb-skipped">
-              Couldn't read: {report.skipped_sources.join("; ")}. Run Compy as administrator to
-              include {report.skipped_sources.length > 1 ? "these" : "this"}.
+              Skipped — needs administrator: {report.skipped_sources.join("; ")}. Run Compy as admin
+              to include {report.skipped_sources.length > 1 ? "these" : "this"}.
             </p>
           )}
         </div>
