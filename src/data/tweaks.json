@@ -638,5 +638,59 @@
     "what": "Believing your graphics card needs a newer PCIe slot version (4.0 or 5.0) to hit higher frame rates.",
     "why": "A modern graphics card running in a full-width (x16) PCIe 3.0 slot loses almost nothing versus 4.0 — usually low single digits, often inside the margin of error. Games do not shovel enough data across that link for the version to matter at x16. Where it CAN bite is narrow cases: a card wired for only four lanes (some budget GPUs), or a slot dropped to x8/x4 because an M.2 drive or a second card is sharing the lanes — there a newer PCIe gen recovers real frames. So check how many lanes your card actually gets before worrying about the version. For the typical 'GPU in the top x16 slot' setup, PCIe gen is not your frame-rate lever.",
     "related": ["resizable-bar", "rebar-sam", "bottleneck"]
+  },
+  {
+    "id": "lower-graphics-settings",
+    "name": "Turning down the heaviest graphics settings",
+    "aliases": ["lower graphics settings fps", "lower settings for fps", "reduce graphics fps", "turn down shadows fps", "drop settings fps"],
+    "verdict": "real",
+    "what": "Dropping the GPU-heavy in-game settings — ray tracing, shadows, reflections, volumetric fog, view distance — to gain frames.",
+    "why": "After resolution, this is the most reliable FPS lever there is, and it is honest about the trade: these settings cost real GPU work, so turning the few heaviest ones down buys real, measurable frames. The trick is they are not equal — ray tracing, shadow quality, and volumetric/cloud effects are usually the expensive ones, while textures (if you have the video memory for them) and anisotropic filtering are nearly free and worth keeping. Drop the top two or three offenders from Ultra to High/Medium and you often keep most of the look for a big chunk of the frames. Use the game's built-in benchmark to see which setting moves YOUR number, instead of nuking everything to Low and playing an ugly game for frames you did not need.",
+    "related": ["render-scale", "upscaling-quality", "native-resolution", "bottleneck"]
+  },
+  {
+    "id": "integrated-graphics-disable-fps",
+    "name": "Disabling integrated graphics for more FPS",
+    "aliases": ["disable integrated graphics fps", "disable igpu fps", "turn off integrated gpu", "igpu disable gaming", "disable onboard graphics"],
+    "verdict": "placebo",
+    "what": "Disabling the CPU's built-in (integrated) graphics in Device Manager or the BIOS, expecting your dedicated card to run faster.",
+    "why": "Your dedicated graphics card is already doing all the rendering — the integrated GPU sits idle while you game and costs you no frames to leave on. Turning it off does nothing for FPS, and it can actually cost you: the integrated GPU powers some video-encoding (handy for recording without touching the game), drives extra display outputs, and is a lifesaver for troubleshooting if the dedicated card ever fails. Leave it enabled. If a game is somehow rendering on the integrated GPU by mistake, the fix is to set that GAME to use the dedicated card (Windows Graphics settings), not to disable half your hardware.",
+    "related": ["instant-replay-fps", "drivers", "bottleneck"]
+  },
+  {
+    "id": "motherboard-fps",
+    "name": "Buying a pricier motherboard for more FPS",
+    "aliases": ["motherboard fps", "better motherboard gaming", "expensive motherboard fps", "mobo for fps", "gaming motherboard frames"],
+    "verdict": "placebo",
+    "what": "Spending more on a higher-end motherboard expecting the games to run at a higher frame rate.",
+    "why": "A motherboard does not render frames — it connects the parts that do. Two boards with the same CPU, RAM, and GPU produce the same FPS. What a better board actually buys is around the edges: stronger power delivery for a heavy overclock, more/faster M.2 and USB, better Wi-Fi or networking, and support for higher memory speeds — and THAT last one is the only part that touches frames, by letting your RAM run its rated profile. So buy the board for the features and the memory support you need, not for frames. The cheap board with the same RAM speed games exactly as fast.",
+    "related": ["dual-channel-ram", "xmp", "pcie-gen-fps"]
+  },
+  {
+    "id": "bios-update-fps",
+    "name": "Updating your BIOS for more FPS",
+    "aliases": ["bios update fps", "update bios gaming", "bios for more frames", "flash bios fps", "agesa fps"],
+    "verdict": "placebo",
+    "what": "Flashing a motherboard BIOS update expecting a direct jump in frame rate.",
+    "why": "A BIOS update almost never changes raw FPS on its own — it is firmware for the board, not a performance switch. What it CAN do is real but indirect: on AMD especially, a newer BIOS (AGESA) can unlock better, more stable memory support, so a RAM kit that would not run its rated speed before now can — and faster, stable memory genuinely helps frames. It also fixes stability bugs and adds support for newer CPUs. So update your BIOS for stability, memory compatibility, or a CPU upgrade — good reasons — but treat any frame gain as a side effect of better memory, not the update itself. And flash carefully: a botched BIOS update is one of the few ways to actually brick a board.",
+    "related": ["xmp", "dual-channel-ram", "uefi-bios"]
+  },
+  {
+    "id": "cpu-overclock-fps",
+    "name": "Manually overclocking your CPU for more FPS",
+    "aliases": ["cpu overclock fps", "overclock cpu gaming", "all core overclock fps", "manual cpu oc", "cpu oc for frames"],
+    "verdict": "risky",
+    "what": "Pushing your CPU past stock with a manual all-core overclock to gain frames in games.",
+    "why": "Modern CPUs already boost themselves hard, and games mostly lean on one or two fast cores — so a manual all-core overclock often LOWERS the single-core boost a game wants while raising heat and the chance of random crashes, for little or no gaming gain. That is why this is graded risky: real downside, thin upside. The smart, calmer path on a modern chip is the opposite — undervolting or a curve optimizer (PBO on AMD) to hold higher boost clocks cooler, which Compy points you to as a measured, reversible tune. If you do chase a manual overclock anyway, go like a tester: one small step, a stress run, a measured before and after — and keep stock settings written down so you can walk it back.",
+    "related": ["pbo", "pbo-curve-optimizer", "undervolting", "gpu-overclocking"]
+  },
+  {
+    "id": "ssd-fps",
+    "name": "Putting a game on an SSD for more FPS",
+    "aliases": ["ssd fps", "ssd more frames", "nvme fps", "ssd vs hdd fps", "fast ssd gaming frames"],
+    "verdict": "placebo",
+    "what": "Moving a game from a hard drive to an SSD (or to a faster NVMe SSD) expecting a higher frame rate.",
+    "why": "Once a game is loaded and running, the frames come from your GPU and CPU — the drive is barely in the loop, so your average FPS looks the same on a hard drive, a SATA SSD, or a fast NVMe drive. What an SSD genuinely transforms is everything AROUND the frame rate: far shorter load times, and much less of the hitching and texture pop-in you get when a fast-moving game streams data off a slow hard drive — so an SSD can smooth your 1% lows and stutters even when the average number does not move. Use an SSD (it is one of the best feel upgrades there is); just file it under load times and smoothness, not raw FPS. Jumping from a good SATA SSD to a faster NVMe one does almost nothing for games today.",
+    "related": ["nvme-ssd-hdd", "traversal-stutter", "one-percent-lows"]
   }
 ]
