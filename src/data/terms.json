@@ -510,5 +510,29 @@
     "what": "Modern GPUs and CPUs do not run at one fixed speed — they constantly raise and lower their clock speed (boost) based on how much temperature and power headroom they have right now.",
     "more": "The 'base clock' on a spec sheet is the guaranteed floor; the 'boost clock' is roughly the best case. In practice the chip sits somewhere in between, second by second — climbing when it is cool and has power budget to spare, easing off when it gets hot or hits its power limit. This is why a card runs faster in a cold room than a hot one, and why good airflow quietly buys real performance. It is also why most 'lock your clocks to maximum' tweaks miss the point: the chip is already boosting as high as it safely can, and forcing a fixed high clock usually just adds heat or instability for nothing. The honest levers are the ones that give the chip more room to boost on its own — better cooling, a sensible fan curve, or an undervolt that runs cooler at the same clock.",
     "related": ["thermal-throttling", "power-limit-tdp", "nvidia-prefer-max-performance", "undervolting"]
+  },
+  {
+    "id": "directstorage",
+    "name": "DirectStorage",
+    "aliases": ["directstorage", "direct storage", "fast game loading", "nvme game loading"],
+    "what": "DirectStorage is a Windows feature that lets a game load data straight from a fast NVMe drive to the graphics card, skipping slow old steps — for shorter loads and less in-game hitching.",
+    "more": "Traditionally a game's data took a long detour — off the drive, decompressed on the CPU, then handed to the GPU — which is part of why open-world games hitch when they stream in new areas. DirectStorage shortens that path and can hand decompression to the GPU, so a game built for it loads faster and streams more smoothly off an NVMe SSD. Two honest caveats: the GAME has to support it (most do not yet), and it speeds up loading and streaming, not your average frame rate. You do not switch it on yourself — it is built into supported games — so the only thing on your side is keeping the game on a reasonably fast SSD.",
+    "related": ["nvme-ssd-hdd", "ssd-fps", "traversal-stutter"]
+  },
+  {
+    "id": "auto-hdr",
+    "name": "Auto HDR",
+    "aliases": ["auto hdr", "autohdr", "windows auto hdr", "hdr for old games"],
+    "what": "Auto HDR is a Windows 11 feature that adds HDR-style brightness and color to games that were only built for a standard (SDR) display — without the game itself supporting HDR.",
+    "more": "If you have an HDR monitor, Auto HDR can make older or SDR-only games look richer — brighter highlights, more range — by expanding their colors on the fly. It is a visual feature, not a performance one: the frame-rate cost is tiny on a modern GPU, and it changes how the game LOOKS, not how fast it runs. Results vary by game — sometimes it is a lovely upgrade, sometimes it tints things oddly — so treat it as a per-game toggle to try, not a must-on. It needs Windows 11, an HDR-capable display with HDR turned on, and it does nothing for a game that already does its own HDR.",
+    "related": ["disable-hdr-fps", "vrr"]
+  },
+  {
+    "id": "displayport-vs-hdmi",
+    "name": "DisplayPort vs HDMI (for gaming)",
+    "aliases": ["displayport vs hdmi", "dp vs hdmi gaming", "best cable for 144hz", "hdmi or displayport"],
+    "what": "Which cable you use sets the ceiling on the refresh rate and resolution your monitor can run — pick an old version (or a cheap cable) and a 144Hz monitor can be stuck at 60Hz.",
+    "more": "Both can be excellent; what matters is the VERSION and the bandwidth it carries. For high-refresh PC gaming, DisplayPort (1.4 or 2.1) is the safe default — it generally carries more bandwidth and handles high refresh rates and variable refresh (VRR) cleanly. HDMI 2.1 is also great (it is what modern consoles and TVs use for 4K120), while older HDMI 2.0 or a cheap cable can quietly cap you at 4K60 or 1080p120. If your monitor will not offer its top refresh rate, the cable and port are among the first things to check — use the best port your GPU and monitor share, with a cable rated for it. The cable does not change your FPS; it changes how much of it the screen is allowed to show.",
+    "related": ["set-refresh-rate", "hz-vs-fps", "vrr"]
   }
 ]
