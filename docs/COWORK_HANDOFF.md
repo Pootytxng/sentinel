@@ -154,6 +154,147 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **✅ R10 LANDED + R11 AUTONOMOUS COUNCIL-OVERSEEN SPRINT LANDED (2026-06-13/14).** Site at **159
+  entries**, deployed + live (`compy-bd6.pages.dev`, latest deploy `3eff58e0`, apex no-store/fresh, zero
+  third-party). **R10** (`0d76675` content 147→153 · `a4894ac` Black Box copy-clarity polish — "bugcheck"→
+  "stop code", WHEA/XMP/EXPO/DDU glossed, NO behavior change, all guards green · deploy `3cb5fea2`).
+  **R11 autonomous sprint** (owner: "consult the council + initiate persistent self-sufficient mode, back
+  in an hour"; log: `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-14.md` with the full guardrail block +
+  council strips): `36fb224` content 153→157 (set-refresh-rate [real] + bigger-psu-fps / registry-cleaners
+  [risky] / monitor-response-time-fps [placebo]) · `d123c91` round-2 157→159 (ram-capacity-fps / pcie-gen-fps
+  [placebo]) · `dcce3d4` Black Box **honesty-guard test hardening** (test-only: machine-bans causal
+  vocabulary + irreversible-action headlines + non-word strengths across every rule; cargo 386→389, npm
+  →318). **Mode guardrails held:** council/automated-suite proxied only the owner's REVERSIBLE quality
+  review; everything owner-gated (gate flip, installer, send, spend, security-setting, taste, physical QA)
+  was LOGGED, never done. **Gate `blackbox_v2_gate()` UNTOUCHED + default-OFF · NO installer cut · frozen
+  refs untouched.** 🔴 **OWNER hour-back item:** the **Black Box gate-flip decision packet** (in the R11
+  log) — preview the v2 copy (`COMPY_BLACKBOX_V2_PREVIEW=1 npm run tauri dev` → Lab → Black Box), then
+  flip/soften; the honesty is now fully test-pinned, the only un-automatable check is you reading the live
+  copy once. ORQ also: verbatim-tag since-line phrasing · `instant-replay-fps`/`registry-cleaners` grades ·
+  the standing lever = **you sending the waitlist link** (build is ahead of the funnel). Earlier detail —
+- **🩺 BLACK BOX FEATURE-COMPLETE THROUGH v2.1 + AUDITED; v3 GATED; R10 momentum lane queued (2026-06-13).**
+  v2.1 (`da20fb4`, frontend-only) audited CLEAN: `blackbox-resolution.ts` reports measured ABSENCE ("No
+  {kind} recorded in N days since"), NEVER "fixed/solved/worked" — machine-enforced by a banned-word test
+  CC widened (`fixed|solved|worked|cured|because|caused|resolved|guaranteed`); recurrences reported plainly;
+  ≥1-day gate stops fabricated reassurance; did-this-help is localStorage-only, zero outbound; flag-OFF =
+  v1. **MILESTONE:** Black Box now reads evidence → triages (consistent-with, never a verdict) → suggests
+  reversible steps → proves results by measured absence, zero fabricated claims. **CEILING:** v3 (fleet
+  crash-brain + affiliate) is GATED — new outbound/telemetry boundary, needs owner sign-off + `/security`.
+  **Owner forks:** preview+flip v2 (`COMPY_BLACKBOX_V2_PREVIEW=1 npm run tauri dev`) → installer cut to
+  testers · greenlight v3 (council the telemetry first) · new mountain (latency module candidate) · send
+  the link. **R10 queued** (safe momentum): content growth + Black Box copy-clarity polish + site deploy —
+  `docs/cowork-cc-relay/2026-06-13-R10-content-polish.cc.md`. Earlier v2 detail —
+- **(v2)** v2 LANDED + COWORK-AUDITED (`4e87a3e`). v2 audit CLEAN
+  against the triage-not-verdict law, verified in code: rule copy is all "consistent with…" (never asserts
+  a cause; the power rule openly says "Windows didn't get to record why"), `Strength` is words not %,
+  `NextStep.reversible` hard-wired true (irreversible fixes = `research_only` only), `assess()` returns
+  None when no rule clears its bar (refuses to guess), and **`blackbox_v2_gate()` is COMPILED OUT OF
+  RELEASE** (hard-false except `#[cfg(test)]` + a debug-only `COMPY_BLACKBOX_V2_PREVIEW=1` env) — a shipped
+  binary can't emit an assessment. No installer cut, actions.rs/mutation/outbound untouched, frozen ref
+  intact, flag-OFF = byte-identical v1. **Owner preview:** `COMPY_BLACKBOX_V2_PREVIEW=1 npm run tauri dev`
+  → Lab → Black Box (read the copy before ever flipping the gate). **R9 = v2.1 queued** (measured "none
+  since" proof + local did-this-help tally; honesty trap = report measured ABSENCE, never "the fix
+  worked"): `docs/cowork-cc-relay/2026-06-13-R9-black-box-v2.1.cc.md`. Still flag-OFF, app-only, no
+  installer cut, zero outbound. Council-approved train; the original R8 council/decision detail —
+- **(R8 origin)** Full 3-stage council REFRAMED causal crash diagnosis: **triage + safe-next-step engine, NOT a
+  verdict engine.** Full 3-stage council REFRAMED causal crash diagnosis: **triage + safe-next-step engine, NOT a
+  verdict engine** — never asserts a cause, says "evidence is CONSISTENT WITH X → reversible step to
+  confirm is Y," strength in WORDS (Strong/Partial/Weak) not percentages, **refuses to guess** on thin
+  evidence, irreversible fixes (BIOS/RMA/repaste) only as "research," never "do this." 3–4 starter rules
+  (overheating / graphics-driver / power-hard-lock / app-specific) + a "Did this help?" honesty loop.
+  Spec: `docs/superpowers/specs/2026-06-13-black-box-v2.md`; work order:
+  `docs/cowork-cc-relay/2026-06-13-R8-black-box-v2.cc.md`. **Built behind a default-OFF
+  `blackbox_v2_gate()`, app-only, advisory TEXT only (no mutation/outbound/affiliate), NO installer cut** —
+  reaches no tester until owner flips the flag + reviews the causal copy + cuts an installer. Affiliate +
+  fleet brain = v3 (gated, only after rules field-proven). Return: `2026-06-13-R8-black-box-v2.REPORT.md`.
+
+- **✅ R6 + R7 MARATHONS LANDED + COWORK-AUDITED + SITE LIVE @ 147 (2026-06-13).** R7 done:
+  `fe1f026` Black Box WER+Reliability read sources (read-only, 45 tests, ZERO causal claims — merge only
+  de-dups evidence) · `fa7624e` Lab `<h3>` a11y · `24af024` 5 entries 142→**147** + footer AA contrast
+  (3.2→5.3:1). Deploy `0a2933ab` LIVE-verified by Cowork: apex fresh (no-store) serving **147**, Privacy
+  footer+waitlist link, blackbook hero intact, zero third-party. cargo **374** / npm **308**; frozen refs
+  + locked gates + appliable catalog untouched. **Cowork called STOP on reflexive R8** — build is ahead of
+  the funnel; next levers are owner-only (send the waitlist link · Black Box v2 go/no-go). Earlier R6 audit
+  below. R6 all 4 lanes clean
+  (`c22aecb` Black Box v1 · `25b013f` 6 content entries 136→142 · `590d347` polish/a11y · `a0b8221`
+  guards); cargo **356** / npm **308**. Cowork audited from disk + git: Black Box genuinely read-only
+  (`blackbox.rs` no network/mutation/driver, `actions.rs` untouched), frozen appliable catalog untouched
+  (the tweaks.json + disable-defender.html flags were FALSE alarms — Library explainers + a regen
+  count-line, verified), frozen refs intact. **CC correctly HELD the R6 site deploy** (outward-facing) for
+  owner review — good gate instinct. **Owner then said "decide what's best and continue" → Cowork
+  RELEASED the deploy** (dark site, reversible, owner-greenlit-pattern) and queued **R7**:
+  `docs/cowork-cc-relay/2026-06-13-R7-marathon.cc.md` — L1 Black Box v1 completeness (WER+Reliability read
+  sources, still ZERO causal claims; app-only, no installer cut) · L2 the two logged a11y fixes · L3 4–6
+  more honest entries · **L4 deploy R6+R7 site live + verify**. Explicitly NOT queued: **Black Box v2**
+  (causal claims — gated on owner sign-off; honesty risk lives there). Return:
+  `2026-06-13-R7-marathon.REPORT.md`. **Director's standing note: build is now AHEAD of the funnel — the
+  real next lever is the owner SENDING the waitlist link, not feature #20.**
+
+- **⚖️ LEGAL SURFACE COMPLETED (content) + RELAY-HANDED FOR SITE WIRING (2026-06-13, Cowork; owner
+  decisions captured).** Owner: "get all the legal shit done." Owner calls taken via AskUserQuestion:
+  **license = strict all-rights-reserved**, **governing law = United States** (specific state = the one
+  `[STATE]` blank left for the owner). Cowork completed the CONTENT (docs/copy lane): `docs/EULA.md`→v0.3
+  (§2 strict all-rights-reserved; §10 reconciled to disclose the website/waitlist email+hashed-IP; §12 US
+  law + `[STATE]` venue placeholder), `docs/PRIVACY.md`→v0.2 (NEW "website & waitlist" section: email for
+  one launch msg + SHA-256-hashed IP for spam, Cloudflare D1, zero third-party, retention/deletion; short
+  version + contact reconciled), `LICENSE`→finalized proprietary (placeholder clause removed). **Gap that
+  drove this: the live waitlist collects PII but the site linked NO policy.** SITE WIRING handed to CC via
+  relay: `docs/cowork-cc-relay/2026-06-13-legal-pages.cc.md` (render PRIVACY/EULA as linked site pages +
+  footer + link Privacy from the waitlist note + deploy; zero-third-party hard line). **🔴 OWNER TO-DOs
+  (not blocking the beta, blocking PUBLIC launch):** fill the `[STATE]` venue blank · reconcile the
+  copyright-holder name (LICENSE says "Kuya", EULA/Privacy say "Pootytxng" — pick the real legal name) ·
+  get a professional legal review before public app distribution. Not legal advice — Cowork wired existing
+  owner-authored drafts + the owner's two decisions.
+
+- **🛟 BLACK BOX v1 SPEC'D + COUNCILED + RELAY-READY (2026-06-13, Cowork; owner away, council = sign-off).**
+  Owner wants Paramedic Mode to diagnose crashes/freezes — "pinpoint exact cause + fix." Full 3-stage
+  council REFRAMED "foolproof/exact" (it collides with the never-claim-unmeasured law) → **honest
+  evidence reader, not divination.** Decisions (owner delegated naming; may veto on return): name
+  **"Black Box"** (flight-recorder — records, never editorializes; dodges the scam-repair-app optics),
+  pre-crash telemetry overlay = **"last vitals,"** placement = a **`LabSection` card in Lab, NO new tab**
+  (honors owner's "don't pollute with a tab"). v1 = read-only / no kernel driver / anti-cheat-safe /
+  zero outbound / **zero causal claims** — reads Event Log (Kernel-Power 41, WHEA, Display 4101/TDR,
+  App Error 1000…), WER, minidump headers, + overlays `sessions.rs` pre-crash vitals; honest about
+  gaps + elevation. Spec: `docs/superpowers/specs/2026-06-13-black-box-v1.md`. UI mock built (Cowork
+  outputs). **Phasing:** v1 now · v2 probable-cause+confidence+fix (evidence-gated) · v3 fleet "crash
+  brain" (NEW outbound → telemetry security gate, owner sign-off). **CC HANDOFF = file relay** (see
+  below). Owner-parked: naming veto · always-on watcher posture · v3 telemetry greenlight.
+- **🔁 COWORK→CC FILE RELAY ESTABLISHED (2026-06-13).** Since Cowork has no channel to CC's session and
+  the IDE blocks typing, handoffs now go through disk: Cowork writes a self-contained work order to
+  `docs/cowork-cc-relay/<date>-<feature>.cc.md`; owner's ONLY manual step is a one-line kickoff pointing
+  CC at it; CC executes autonomously and writes its report to a `…REPORT.md` sibling, which Cowork reads
+  + audits against git (no chat copy-paste either direction). First work order live:
+  `docs/cowork-cc-relay/2026-06-13-black-box-v1.cc.md` (return file:
+  `2026-06-13-black-box-v1.REPORT.md`). Cowork stays DIRECTOR-only — never writes app code (owner
+  directive 2026-06-13); CC owns all build/compile/test/git.
+
+- **🚀 SITE SEND-READY — WAITLIST VERIFIED LIVE + BLACKBOOK HERO + ASSETS SLIMMED (2026-06-12, Cowork,
+  Chrome-verified end-to-end).** The whole landing train is closed and the link is owner-shareable:
+  **https://compy-bd6.pages.dev**.
+  - **Living-Blackbook hero LIVE** (`3016a73`) — the `og-card.mp4` is now the centerpiece (glass frame +
+    breathing glow + verdict ribbon w/ desktop hover labels + proof strip "judge→measure→receipt→undo");
+    the old CSS receipt + `.chip-motifs` retired. Audited from git: 5 site files, zero third-party,
+    waitlist/`functions/` untouched, OG metas unchanged, reduced-motion gated. Mock deleted.
+  - **Hero assets slimmed ~8.7 MB → ~123 KB** (`07482ed`) — Cowork fetched the DEPLOYED bytes: `og-card.mp4`
+    **1.5 MB → 107 KB** (854×480 H.264 + faststart), poster **1.8 MB PNG → 15.7 KB WebP**
+    (`og-card-poster.webp`), the unreferenced **5.3 MB `og-card.gif` deleted**. `og.png` (1200×630 social
+    card) untouched. Hero renders correct; the heavy-video screenshot freeze is gone. Hero renders are
+    intentionally gitignored ($0 ffmpeg pipeline); only `og.png` is tracked.
+  - **Waitlist Function LIVE + PROVEN** (`93dfd3c` GET→405; wiring `28765db`/`58232a2`). Cowork drove the
+    owner's Chrome on the LIVE site: submitted a test email → page returned **"You're on the list"**;
+    `GET /api/waitlist` → empty/405 (no more SPA fallback); deployed `/api/` is bound. The earlier
+    "emails silently drop" bug is DEAD. (No autoresponder by design — it just stores the address for the
+    one launch email.)
+  - **Stale-apex gremlin permanently cured** (`b6d5c3a`) — a `_headers` rule forces the landing HTML to
+    `no-store`, so first-time visitors always get the current build (the "looks like the old page" reports
+    were browser/edge cache of the HTML; this kills the class, better than a one-time purge).
+  - **Owner has the share kit** (link + ready-to-send doctrine-voice copy). **DARK no more for testers —
+    seeding is OPEN; the send itself stays the owner's** (friends + his Discord, per zero-budget seed plan).
+  - **🔴 ONE tiny hygiene item PENDING:** delete the two Cowork test rows from D1
+    (`cowork-test@compy.gg`, `audit@compy.gg`) so the real list starts empty — one-liner handed to CC.
+  - **KPI clock (waitlist signups, COUNT in D1) starts on first real signup.** Next Cowork: confirm the
+    test rows are cleared, then watch the count; offer the live-artifact tracker once signups arrive.
+
 - **🌐 SITE IS LIVE — DEPLOYED 2026-06-12 22:26 (CC, wrangler direct upload, owner OAuth'd).**
   **https://compy-bd6.pages.dev** — bare `compy.pages.dev` was TAKEN on Cloudflare, project landed as
   `compy-bd6` (stops mattering when `compy.gg` attaches). 147 files from `dist-site/`; verified live:
@@ -163,6 +304,62 @@ Never tee up a spend without the free alternative it beats.
   no announce; the send is the owner's.** Cowork next: live re-audit + the owner's live-glow
   taste-gate; freshen 130→136 entries (regen+redeploy) only AFTER the owner skims R5's six new
   Blackbook entries (R5 log Review Queue #2).
+- **▶ RESUME POINT (fresh session — incl. a new Fable 5 Cowork session — read this FIRST).** You are
+  the Cowork lane on Compy: strategy, specs, docs, and REVIEW. You do NOT build (CC does) — you audit
+  CC's commits directly via git (never relay blindly), write paste-ready CC prompts, keep reports terse,
+  self-apply the 5-lens council, and end every response with the next move. The dark site is LIVE at
+  https://compy-bd6.pages.dev (136-entry Blackbook, council copy, og:image, living-Blackbook video hero).
+  **✅ THE WAITLIST OPEN ITEM IS CLOSED (2026-06-12) — site is SEND-READY.** The Function is live + proven
+  (Chrome-verified: test submit → "You're on the list"; `GET /api/waitlist` → 405, no SPA fallback), the
+  blackbook hero shipped (`3016a73`), the hero assets are slimmed to ~123 KB (`07482ed`), and a `_headers`
+  no-store rule (`b6d5c3a`) cures the stale-apex cache for good. See the top "🚀 SITE SEND-READY" board
+  entry for the full verified rundown. **Only loose thread:** clear two Cowork D1 test rows
+  (`cowork-test@compy.gg`, `audit@compy.gg`) before the list fills — one-liner already handed to CC.
+  Everything below = full current state + history.
+- **🔎 SITE-PASS AUDIT (2026-06-12, Cowork) — publish-grade EXCEPT the waitlist swallows emails.**
+  Live (cache-bust-verified — the bare-URL "old copy" was stale fetch cache): council copy
+  (kicker/Blackbook teaser/waitlist) · corpus **136** · the 6 R5 entries present + spot-checked clean
+  (gpu-overclocking honest/plain/all-original) · og:image wired + card viewed (text correct, on-brand) ·
+  living-still og-card.mp4 (1.6MB)/.gif (5.6MB) generated (not deployed, marketing) · frozen ref intact ·
+  zero third-party outbound. **🔴 BUG: the waitlist Function was NOT in the deploy artifact** —
+  functions/api/waitlist.ts is correct (onRequestPost · honeypot · SHA-256+IP_PEPPER hash · D1 INSERT
+  ON CONFLICT DO NOTHING), but dist-site/ shipped with NO functions/ dir → GET/POST /api/waitlist falls
+  through to static index.html → zero D1 writes, emails silently lost. KPI mechanism dead; NOT
+  tester-ready until a curl-POST proves a D1 row. Fix prompt handed (carry functions/ in dist-site +
+  D1 binding DB + IP_PEPPER secret + curl-POST/GET/d1-count proof).
+- **🏛️ COUNCIL MANDATE EXPANDED (2026-06-12, owner decree):** the council may **overrule pre-existing
+  PROCESS gates** (zero-outbound, default-off, deploy-timing, etc.) where the mission needs it and the
+  move is reversible. Cowork still holds the MOAT lines (no fabricated/unmeasured claims · no anti-cheat
+  injection/kernel driver · secrets out of repo · no security/system-setting flips · nothing
+  irreversible to other machines without a heads-up) — those protect the owner/funnel, not constrain
+  them. Recorded in COUNCIL_PROTOCOL spirit; supersedes the strict "advises-never-rules on gates" line
+  for process gates.
+- **✅ WAITLIST WIRING SPEC'D — CF-NATIVE (2026-06-12, Cowork; owner GO).** Spec:
+  `docs/superpowers/specs/2026-06-12-waitlist-wiring.md`. Decision: same-origin Pages Function + D1
+  (NOT a third-party embed) — $0, zero THIRD-PARTY outbound preserved (POST to our own backend, no
+  tracker), owns the data, foundation telemetry/Pro reuse. Honeypot+rate-limit (no Turnstile → no
+  third-party script). Honest copy: email IS stored by us for the one launch email (scoped away from the
+  app's "sends nothing"). `/security` review required (new network+PII boundary). KPI clock starts on
+  go-live (COUNT in D1). Send-at-launch deferred. CC build prompt handed; owner step = confirm one live
+  test signup. **OG card = Blackbook-themed (owner greenlit), Higgsfield lane, before announce.**
+- **✅ LANDING COUNCILED + COPY BAPTIZED (2026-06-12, Cowork, owner "council it").** Full 3-stage
+  council on the live landing → 3 in-bounds copy edits to `site/src/index.template.html`: kicker
+  de-drifted ("rollback-first safety layer" → "Know which PC tweaks actually help your rig" — retires
+  the retired identity) · Blackbook sub now teases the snake-oil grading · waitlist sub de-conflicts
+  "invite-only" vs "waitlist" (= your spot in line for public launch). CC regen+verify+redeploy teed
+  (bumps corpus 130→~136 — R5's 6 new entries ride along; lint+council-passed, reversible; Cowork vets
+  them LIVE post-deploy). DEFERRED (council, owner-gated): **wire the waitlist** (it's the KPI
+  mechanism but the form collects nothing today; $0 Tally/Formspree, but a NEW outbound boundary →
+  needs spec + owner GO + zero-outbound-test update) · OG image (Higgsfield §D) · name/screenshots/
+  Blackbook-co-hero (taste / CC-structural).
+- **✅ DARK SITE LIVE + COWORK-VERIFIED at https://compy-bd6.pages.dev (2026-06-12).** Owner ran the
+  wrangler deploy; Cowork re-audited the LIVE url (not relayed): root 200 serving our R4b glow landing,
+  `/library` resolves over all **130** entries (51 tweaks + 57 terms + 14 tricks + 8 guides = 130),
+  honest placeholders intact, all links internal (zero-outbound holds in prod). **⚠️ `compy.pages.dev`
+  is NOT ours — it's a stranger's app ("amantes30"); our URL is `compy-bd6.pages.dev` (bare name taken,
+  moot once compy.gg attaches). Never announce/link the bare name.** DARK — no announce (owner's send).
+  Pre-announce queue: owner live-glow taste-gate · OG image (Higgsfield §D, 1200×630 — no `og:image` set
+  yet) · freshen 130→134 (regen+redeploy) AFTER owner skims R5's 6 new entries.
 - **✅ dist-site AUDIT CLEAN — DEPLOY-READY + R5 MARATHON HANDED TO CC (2026-06-12, Cowork).**
   CC's `dist-site/` verified on the REAL disk: index.html + library.css **byte-identical to audited
   `ebf87fc`** (CR-normalized), `library/index.html` resolves over **130** entry pages, landing renders

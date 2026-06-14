@@ -119,6 +119,17 @@ Rebuilt `dist-site/` from the regenerated `site/` + `functions/`; `wrangler page
 footer link ×2 · blackbook hero intact (`og-card.mp4` + `book-frame`) · library "All 157 Compy" · all 4
 new pages 200 · **zero third-party (live grep empty)**. Dark — no announce; the send stays the owner's.
 
+### Continuation (persistent mode) — round-2 content + board sync
+- **Round-2 content** `d123c91` (157 → **159**): `ram-capacity-fps` [placebo — capacity past 'enough' is a
+  placebo; speed/dual-channel are the real levers] + `pcie-gen-fps` [placebo — ~nothing lost at x16].
+  Confident, distinct, common; pin 73→75; lint/jargon/collision green. **Redeployed → `3eff58e0`** (live
+  159, zero third-party).
+- **Board sync** (`docs/COWORK_HANDOFF.md`): brought the stale Current-board (R6-era) current with R10 +
+  this sprint so the relay/owner act on accurate state, not stale state. Doc only, reversible.
+- **Why I stopped extending content here:** the high-confidence FPS-myth well is now thin — the next
+  candidates (e.g. ssd-fps, disable-vsync framing) are borderline, and the Contrarian's line is "don't
+  force a shaky call to keep moving." Capped on quality, per the council.
+
 ---
 
 ## 🔴 OWNER DECISION PACKET — Black Box gate flip (the main pending item)
@@ -167,7 +178,8 @@ anything reads even slightly like a verdict, flag the string and I'll soften it 
 ## Suite totals + gates (end of sprint)
 - cargo **389** (+3 honesty guards) · clippy `-D warnings` clean · npm **318** (+1 resolution sweep; was
   317) · tsc + vite clean · knowledge + jargon + alias-collision lint green.
-- **Deploy `f8f853d4`** · `compy-bd6.pages.dev` live, apex fresh (no-store, 157).
+- Content **159** entries (R11: +6 across two rounds) · **Deploy `3eff58e0`** (supersedes `f8f853d4`) ·
+  `compy-bd6.pages.dev` live, apex fresh (no-store, 159), zero third-party.
 - **`blackbox_v2_gate()` UNTOUCHED + still DEFAULT-OFF** · advisory text only · no behavior change.
 - **NO installer cut** (NSIS untouched) · **frozen refs `16069fa` / `beta/private-beta-001` UNTOUCHED.**
 - Diff scope: content (`tweaks.json` + lint), regenerated `site/*.html`, `blackbox.rs` **test region only**,
