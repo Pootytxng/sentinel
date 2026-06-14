@@ -521,5 +521,32 @@
     "what": "Dropping the resolution a game RENDERS at — the output resolution, or an in-game 'render scale' / 'resolution scale' slider set below 100%.",
     "why": "This is the most reliable FPS lever there is, and the honest counterpoint to every placebo registry tweak: frames cost pixels, so rendering fewer pixels makes more frames, every time, on every GPU. Going from 1440p to 1080p, or render scale 100% to 80%, gives a large and measurable jump whenever you are GPU-limited. The trade is sharpness. Modern upscalers (DLSS / FSR / XeSS) are the smart version — they render low and reconstruct detail so you keep most of the image — but even a plain resolution drop works. When a tweak promises free frames at no visual cost, doubt it; this one is honest about the cost and actually delivers the frames.",
     "related": ["upscaling", "native-resolution", "hz-vs-fps"]
+  },
+  {
+    "id": "disable-hdr-fps",
+    "name": "Turning off HDR for more FPS",
+    "aliases": ["disable hdr fps", "hdr off performance", "turn off hdr fps", "hdr lowers fps", "hdr performance hit"],
+    "verdict": "placebo",
+    "what": "Switching HDR off in Windows or in-game to claw back frames.",
+    "why": "HDR widens the range of brightness and color the display shows — it is mostly more information per pixel, not more pixels, so on a modern GPU the extra work is a sliver, often too small for any frame counter to show. It does use a little more video memory (VRAM), and a game with badly tuned HDR can look washed-out or dim — and THAT is the honest reason to toggle it: image quality, not performance. If your frame number does not move, it did not help. Turn HDR off because you prefer how the standard (SDR) image looks, or because a game's HDR is mis-calibrated — not for frames.",
+    "related": ["vram", "render-scale", "native-resolution"]
+  },
+  {
+    "id": "mouse-acceleration-fps",
+    "name": "Disabling mouse acceleration for FPS",
+    "aliases": ["mouse acceleration fps", "disable mouse accel", "turn off mouse acceleration", "enhance pointer precision fps", "mouse accel off fps"],
+    "verdict": "placebo",
+    "what": "Turning off mouse acceleration — Windows 'Enhance pointer precision', or an in-game acceleration setting — to gain frames.",
+    "why": "Mouse acceleration changes how far your crosshair travels based on how FAST you move the mouse — it shapes how aiming feels and touches nothing the GPU does to draw a frame, so no frame counter will move. There is a strong reason to turn it off anyway: with acceleration on, the same hand motion lands a different distance depending on speed, so your muscle memory never settles; off gives you a consistent 1-to-1 feel. That is an aim-consistency win, not an FPS win. Do it for control, and don't expect frames.",
+    "related": ["aim-tweaks", "polling-rate", "input-latency"]
+  },
+  {
+    "id": "dual-channel-ram",
+    "name": "Running RAM in dual-channel (two sticks)",
+    "aliases": ["dual channel ram", "single vs dual channel", "two ram sticks fps", "dual channel memory", "single channel fps"],
+    "verdict": "real",
+    "what": "Using two matched memory sticks so RAM runs in dual-channel, instead of a single stick running in single-channel.",
+    "why": "This is a real, measurable FPS lever — the kind a registry tweak only pretends to be. Two channels roughly double how fast the CPU can move data in and out of memory, and games lean on that bandwidth, especially when the CPU is the limit and dramatically on laptops and APUs that borrow system memory for graphics. A single stick can cost double-digit percentages of average FPS and hurt your 1% lows even more, so the frames stutter. Match a second stick to your first (same capacity and speed), seat them in the slots your motherboard manual marks for dual-channel, and switch on the rated speed profile (XMP/EXPO). The cost is one stick of RAM; the gain shows up on the frame counter.",
+    "related": ["xmp", "one-percent-lows", "bottleneck"]
   }
 ]

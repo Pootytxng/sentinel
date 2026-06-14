@@ -152,11 +152,13 @@ describe("knowledge dataset lint", () => {
     // exclusive-fullscreen-fps — popular-myth gaps in the coverage map) + 5 R6 Lane B debunks
     // (2026-06-13: monitoring-overlay-fps, monitor-overclock-fps, close-background-apps-fps,
     // audio-enhancements-fps [placebo] + render-scale [real, the honest counterpoint lever] —
-    // more uncovered popular-myth gaps).
+    // more uncovered popular-myth gaps) + 3 R7 Lane 3 debunks (2026-06-13: disable-hdr-fps [placebo],
+    // mouse-acceleration-fps [placebo], dual-channel-ram [real, the honest hardware lever] — still-
+    // missing FPS-myth gaps, paired with 2 new term explainers frame-pacing + pre-rendered-frames).
     // These are Library EXPLAINERS (graded real/placebo/risky), NOT appliable recs — Compy applies
     // none of them, so the ~29 appliable-catalog freeze is untouched. The pin stays exact as a
     // curation drift-guard.
-    expect(TWEAKS.length).toBe(62);
+    expect(TWEAKS.length).toBe(65);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);

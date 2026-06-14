@@ -34,7 +34,7 @@
   {
     "id": "frametime",
     "name": "Frametime",
-    "aliases": ["frametime", "frame time", "frame pacing"],
+    "aliases": ["frametime", "frame time"],
     "what": "How long each individual frame took to draw, measured in milliseconds. FPS is the yearly average; frametime is the heartbeat monitor.",
     "more": "Smoothness is about consistency, not just the average — a steady line of 7 ms frames feels great, while a line that keeps spiking to 30 ms feels like stutter even at the same average FPS. A single tall spike is one visible hitch. This is the graph serious testers actually watch.",
     "related": ["one-percent-lows", "hz-vs-fps", "benchmark", "traversal-stutter"]
@@ -454,5 +454,21 @@
     "what": "The part of your PC running flat-out while the rest waits is the bottleneck. In games it is usually the GPU (GPU-bound) or the CPU (CPU-bound), and which one it is decides what will actually raise your FPS.",
     "more": "Watch usage during a game. If the GPU sits near 100% and the CPU has headroom, you are GPU-bound — lowering resolution or settings, or turning on upscaling, buys frames. If the GPU is well under 100% but one CPU core is pegged, you are CPU-bound — resolution barely helps; the limit is draw calls, physics, or a 1%-low and stutter problem instead. A bottleneck is not a defect to eliminate: something is always the limit. The goal is to know WHICH limit you are hitting, change the thing that matters, and ignore the dozen tweaks aimed at the part that already had headroom.",
     "related": ["frametime", "one-percent-lows", "thermal-throttling", "native-resolution"]
+  },
+  {
+    "id": "frame-pacing",
+    "name": "Frame pacing",
+    "aliases": ["frame pacing", "frame time consistency", "frame pacing issues", "uneven frames", "microstutter"],
+    "what": "Frame pacing is how EVEN the gaps between frames are — not how many you get. Smooth gameplay needs frames delivered on a steady rhythm, not just a high average.",
+    "more": "Two PCs can both read 60 FPS and feel completely different. One spaces its frames evenly — a fresh frame about every 16 milliseconds — and looks fluid. The other averages 60 but bunches some frames and gaps others, so motion hitches even though the headline number looks fine. That unevenness is bad frame pacing (you will also hear it called microstutter), and it is exactly what a frametime graph and your 1% lows reveal when the average hides it. It is why chasing a bigger average can feel worse, and why a frame cap — or a variable-refresh display (VRR) that lets the screen wait for each frame — often feels smoother than a higher but choppier FPS. Judge smoothness by the rhythm, not the headline number.",
+    "related": ["frametime", "one-percent-lows", "vrr", "traversal-stutter", "fps-cap"]
+  },
+  {
+    "id": "pre-rendered-frames",
+    "name": "Pre-rendered frames (the render queue)",
+    "aliases": ["pre-rendered frames", "render queue", "flip queue", "max prerendered frames", "render ahead"],
+    "what": "The pre-rendered frame queue is the short stack of frames your CPU prepares in advance for the GPU to display. A deeper queue smooths delivery but adds delay; a shallower one cuts delay.",
+    "more": "To keep the GPU fed, the CPU works a frame or two ahead and parks the results in a small queue. Hold more frames in that queue and output stays steady if the CPU briefly stumbles — but every frame waiting in line is a frame of extra delay between your mouse and the screen. Hold fewer and the picture answers your hand sooner, at the cost of a little steadiness. This one trade is what NVIDIA Reflex, 'Low Latency Mode', and AMD Anti-Lag actually adjust — they shrink that queue so input feels tighter. It is also why a runaway, uncapped frame rate can pile up lag: capping frames just under your refresh keeps the queue short. More frames waiting is not more responsiveness — often the opposite.",
+    "related": ["nvidia-reflex", "low-latency-mode", "anti-lag-plus", "input-latency", "fps-cap"]
   }
 ]

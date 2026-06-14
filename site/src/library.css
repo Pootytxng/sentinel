@@ -13,6 +13,7 @@
   --ink: #e8edf4;
   --ink-2: #9aa4b2;
   --ink-3: #58626f;
+  --ink-foot: #7b8694; /* footer copyright — clears WCAG AA (5.3:1 on --bg); --ink-3 was 3.2:1 */
   --hairline: rgba(255, 255, 255, 0.09);
   --accent: #2ee6c0; /* controls + links ONLY — never copy decoration */
   --accent-ink: #06251e;
@@ -450,7 +451,7 @@ footer .creed { display: block; }
 .creed-list { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 6px; }
 .creed-list li { color: var(--ink-2); font-size: 13.5px; }
 .creed-list li::before { content: "— "; color: var(--ink-3); }
-.foot-meta { color: var(--ink-3); display: flex; gap: 18px; flex-wrap: wrap; }
+.foot-meta { color: var(--ink-foot); display: flex; gap: 18px; flex-wrap: wrap; }
 /* Footer legal links (Privacy · Terms) — present on every page so the policy is always reachable. */
 .foot-legal a { color: var(--accent); text-decoration: none; }
 .foot-legal a:hover { text-decoration: underline; }
