@@ -158,11 +158,15 @@ describe("knowledge dataset lint", () => {
     // + 4 R10 Lane 1 debunks (2026-06-13: disable-nagle [placebo], fast-startup-fps [placebo],
     // wifi-vs-ethernet-fps [placebo], instant-replay-fps [real, the honest small-cost lever] —
     // network/boot/capture FPS-myth gaps, paired with 2 new term explainers screen-tearing +
-    // core-count-gaming).
+    // core-count-gaming) + 4 R11 debunks (2026-06-14, autonomous council-overseen sprint:
+    // set-refresh-rate [real, the biggest free smoothness fix], bigger-psu-fps [placebo],
+    // registry-cleaners [risky — zero gain, real chance of breakage], monitor-response-time-fps
+    // [placebo] — display/power/registry FPS-myth gaps; vram-overflow dropped as the vram term
+    // already covers it).
     // These are Library EXPLAINERS (graded real/placebo/risky), NOT appliable recs — Compy applies
     // none of them, so the ~29 appliable-catalog freeze is untouched. The pin stays exact as a
     // curation drift-guard.
-    expect(TWEAKS.length).toBe(69);
+    expect(TWEAKS.length).toBe(73);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);

@@ -584,5 +584,41 @@
     "what": "Switching off always-on background capture — NVIDIA Instant Replay / Shadowplay, AMD's equivalent, or Game Bar's background recording — to free up performance.",
     "why": "This one is real, but small and honest. Background recording constantly encodes your gameplay using the GPU's built-in video encoder, and that work is not free — it is typically a low single-digit percentage of your frames on a modern card, more on an older or already-maxed-out GPU, or at a high capture resolution and bitrate. So if you are GPU-limited and not using the clips, turning it off gives back a small, measurable slice of FPS. If you love grabbing highlights, the cost is usually worth it — keep it on. Measure your own before and after rather than assuming; that is the only honest way to know your number.",
     "related": ["game-dvr-off", "overlay", "bottleneck"]
+  },
+  {
+    "id": "set-refresh-rate",
+    "name": "Setting Windows to your monitor's full refresh rate",
+    "aliases": ["set refresh rate", "144hz showing 60fps", "monitor stuck at 60hz", "windows refresh rate", "enable 144hz"],
+    "verdict": "real",
+    "what": "Making sure Windows is actually driving your monitor at its rated refresh rate (say 144Hz or 165Hz), not silently running it at 60Hz.",
+    "why": "This is the most common 'my expensive monitor feels like 60fps' fix there is, and it is genuinely real. Windows often defaults a high-refresh monitor to 60Hz — especially after a new cable, a driver update, or adding a second display — so the panel can only SHOW 60 frames a second no matter how many your GPU draws. Set it in Settings → System → Display → Advanced display, and choose your monitor's top refresh rate. The change is instant, free, and fully reversible. If your monitor was stuck at 60Hz, this is the single biggest smoothness upgrade you can make without spending a cent — your GPU was already making the frames; the screen just was not showing them.",
+    "related": ["hz-vs-fps", "vrr", "vsync", "monitor-overclock-fps"]
+  },
+  {
+    "id": "bigger-psu-fps",
+    "name": "Buying a bigger power supply for more FPS",
+    "aliases": ["bigger psu fps", "more watts fps", "power supply fps", "psu wattage performance", "higher wattage gaming"],
+    "verdict": "placebo",
+    "what": "Upgrading to a higher-wattage power supply expecting more frames.",
+    "why": "A power supply's job is to deliver enough clean, stable power — not to make your GPU faster. Once it comfortably covers what your parts draw, adding more watts changes nothing your frame counter will see. There IS a real failure mode at the other end: a power supply that is too small, failing, or low-quality can cause crashes, shutdowns, or the GPU pulling back under load — but the fix there is an ADEQUATE, good-quality unit, not just a bigger number. Size it to your hardware with a little headroom and move on; wattage past that is money the frame counter will not thank you for.",
+    "related": ["gpu-overclocking", "thermal-throttling"]
+  },
+  {
+    "id": "registry-cleaners",
+    "name": "Running a registry cleaner for FPS",
+    "aliases": ["registry cleaner", "clean registry fps", "ccleaner registry", "registry optimizer", "fix registry gaming"],
+    "verdict": "risky",
+    "what": "Using a 'registry cleaner' / 'registry optimizer' tool that promises faster games by deleting old registry entries.",
+    "why": "The Windows registry is a settings database, not a performance bottleneck — a few thousand stale entries cost you nothing measurable, and no game reads them while it is drawing frames. So the upside is zero. The downside is real: these tools delete entries by guesswork, and a wrong delete can break an app, a driver, or Windows itself — sometimes days later, once you have forgotten you ran it. That is why this is graded risky, not just placebo: no frames to gain, and a genuine chance of a mess to clean up. If something specific is broken, fix THAT; do not let a tool sweep the whole registry hoping for speed.",
+    "related": ["registry", "ram-cleaners", "debloating"]
+  },
+  {
+    "id": "monitor-response-time-fps",
+    "name": "Chasing a lower monitor response time for FPS",
+    "aliases": ["monitor response time fps", "1ms monitor fps", "gtg response time", "fast response time gaming", "response time vs fps"],
+    "verdict": "placebo",
+    "what": "Buying or tuning for a lower monitor response time (the '1ms' number) expecting a higher frame rate.",
+    "why": "Response time measures how fast a single pixel changes color — it affects motion clarity and ghosting (the smear behind fast-moving objects), not how many frames your GPU produces. A '1ms' panel and a '4ms' panel at the same refresh rate give you the exact same FPS. It is a real spec worth caring about for crispness in fast games, but it is not a frame-rate lever — and the marketing '1ms' figures are often measured generously anyway. Want more frames? Look at refresh rate, resolution, and settings, not the response-time sticker.",
+    "related": ["hz-vs-fps", "screen-tearing", "native-resolution"]
   }
 ]
