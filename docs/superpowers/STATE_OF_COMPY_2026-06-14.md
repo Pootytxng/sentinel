@@ -235,4 +235,41 @@ Executor: real UI + 3 tests + 3 terms + deploy, all committed/pushed.
 Chairman: GO — money-stack foundation + content both advanced; the owner-shaped pieces are queued, not
 guessed. Continuing solo until genuinely dry.
 
+### Lane G — content engine: more educational terms — ✅ `ca35a3e` (171→174) · deploy `605e8203`
+`directstorage` (fast NVMe→GPU loading), `auto-hdr` (Win11 HDR for SDR games), `displayport-vs-hdmi`
+(cable version sets the refresh ceiling). Confident, in-scope, high-search. lint green; live 174; zero
+third-party.
+
+---
+
+## EXTENDED MARATHON TALLY (the earlier "MARATHON CLOSE" below was superseded by the owner's
+## "continue with all solo work and refer to the council for anything needed of me")
+
+**This session, end to end (all reversible, verified, pushed):**
+- State-of-Compy overview + 3-stage council.
+- **Content engine 159 → 174** (15 entries: 9 FPS-myth debunks at the confident ceiling + 6 educational
+  terms; 2 [real] trust-builders, 1 [risky]). 5 site deploys, latest **`605e8203`** (live 174, zero
+  third-party).
+- **Black Box v2/v2.1 UI honesty pinned on screen** (`BlackBox.test.tsx`).
+- **Compy Pro license foundation** — `license.rs` offline Ed25519 VERIFY (DARK, triple-gated OFF, private
+  key never in repo, `/security`+`/check` clean) + the dark `LicensePanel` surface in Settings.
+- Suite: **cargo 397 · npm 326** · clippy/tsc/vite/lint clean.
+
+**Gates / floor — all held throughout:** every locked gate UNTOUCHED + default-OFF (incl. the new
+`licensing_armed()`=false) · NO installer cut · no send/spend/security-setting/irreversible-outward ·
+frozen refs `16069fa`/`beta/private-beta-001` UNTOUCHED · appliable catalog frozen · zero third-party.
+
+**Queued to the owner via the council (the decision-shaped pieces I CANNOT do solo):**
+1. **Monetization model + free/Pro split** — the one decision that unblocks the rest of licensing (then I
+   build the issuance wiring + gate the Pro features). Until then the foundation stays dark.
+2. **Arm licensing** — generate a real Ed25519 keypair (private key OFFLINE), replace the placeholder
+   public key. (Owner-only — the key never touches the repo.)
+3. **Black Box gate flip** · **Gaming Mode QA→flip** (your UAC rig) · **signing** (Azure route + first-
+   paid-surface timing) · **legal finalize** · **NVIDIA-rig sensor verify** · **SEND the waitlist link**
+   (the standing #1 lever — the build is ahead of the funnel).
+
+**Honest status of the solo lane:** content terms still have some confident room; tests have no genuine
+pure-logic gap (the thin modules are I/O, verified by live QA); new features are done/gated/premature. The
+high-value remaining work is owner-shaped and queued above. Continuing solo on content depth until dry.
+
 <!-- lanes appended below -->
