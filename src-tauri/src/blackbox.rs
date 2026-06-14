@@ -141,6 +141,15 @@ pub(crate) struct Incident {
     pub(crate) when_display: String, // "Jun 12, 9:42 PM" (local offset preserved)
     pub(crate) vitals: Option<LastVitals>,
     pub(crate) receipt: Receipt,
+    /// v2 (Black Box v2, behind `blackbox_v2_gate()`): the triage/safe-next-step layer. `None` when the
+    /// gate is OFF (shipped behavior) OR when no rule cleared its evidence bar (refuse-to-guess). Omitted
+    /// from the wire when absent, so a flag-OFF incident serializes byte-for-byte like v1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) assessment: Option<Assessment>,
+    /// Internal only (never serialized — the TS-facing discriminator is `tag`): the typed kind, kept so
+    /// the pure `assess` pass can reason over the incident without re-parsing the tag string.
+    #[serde(skip)]
+    pub(crate) kind: IncidentKind,
 }
 
 /// What the scan returns. A thin wrapper over `Vec<Incident>` so we can honestly surface
@@ -205,11 +214,344 @@ fn assemble_incidents(
                 when_display,
                 vitals,
                 receipt: build_receipt(&p),
+                assessment: None,
+                kind: p.kind,
             }
         })
         .collect();
     incidents.truncate(MAX_INCIDENTS);
+    // Black Box v2: triage layer. ONLY when the gate is ON (default OFF ⇒ this is skipped entirely and
+    // every `assessment` stays `None` — exact v1 behavior). `assess` is pure + gate-independent.
+    if blackbox_v2_gate() {
+        apply_assessments(&mut incidents);
+    }
     incidents
+}
+
+/// Populate each incident's `assessment` from the pure rule engine. Two-phase (compute all, then
+/// assign) so each `assess` call can read the full incident list as `recent_context` (recurrence)
+/// while the assignment borrows mutably.
+fn apply_assessments(incidents: &mut [Incident]) {
+    let assessments: Vec<Option<Assessment>> =
+        incidents.iter().map(|inc| assess(inc, incidents)).collect();
+    for (inc, a) in incidents.iter_mut().zip(assessments) {
+        inc.assessment = a;
+    }
+}
+
+// ═══ Black Box v2 — triage + safe next step (behind blackbox_v2_gate(), DEFAULT OFF) ═══════════════
+//
+// LAW (spec 2026-06-13-black-box-v2 §"the law that makes v2 safe", test-enforced): v2 is a TRIAGE +
+// SAFE-NEXT-STEP engine, NOT a verdict engine. It NEVER asserts a cause — it says the evidence is
+// "consistent with X (here's what we saw) → the reversible step to confirm is Y." Strength is in WORDS
+// (Strong/Partial/Weak), NEVER a percentage. Every next step is reversible/safe; irreversible things
+// (BIOS/RMA/repaste/PSU/voltage) appear only as "what to research," never "do this" — and Compy performs
+// NONE of them (advisory text only: no new mutation, no new OS call, zero outbound). When no rule clears
+// its bar, `assess` returns None → evidence-only v1 + "not enough recorded" (refuse to guess). All pure.
+
+/// GPU temperature (°C) in the pre-incident vitals at/above which we'll call a crash
+/// overheating-consistent. Conservative — a measured reading, never a guess.
+const OVERHEAT_C: u32 = 85;
+
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Strength {
+    Strong,
+    Partial,
+    Weak,
+}
+
+/// The ONE reversible/safe next step an assessment suggests. `reversible` is an INVARIANT — always true
+/// (a test asserts it for every emitted step). `research_only` marks a step that is "what to look into,"
+/// not "do this" — used where the real-world fix would be irreversible (PSU swap, repaste, BIOS).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct NextStep {
+    pub(crate) headline: String,
+    pub(crate) detail: String,
+    pub(crate) reversible: bool,
+    pub(crate) research_only: bool,
+}
+
+impl NextStep {
+    /// A reversible do-it-safely step (the common case). `reversible` is hard-wired true.
+    fn safe(headline: &str, detail: &str) -> Self {
+        NextStep { headline: headline.into(), detail: detail.into(), reversible: true, research_only: false }
+    }
+    /// A "here's what to research" step — for situations whose real fix is irreversible/risky and must
+    /// NOT be instructed. Still reversible (researching changes nothing).
+    fn research(headline: &str, detail: &str) -> Self {
+        NextStep { headline: headline.into(), detail: detail.into(), reversible: true, research_only: true }
+    }
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct Assessment {
+    /// Always "consistent with…" / "points toward…" phrasing — NEVER "the cause is…".
+    pub(crate) consistent_with: String,
+    pub(crate) strength: Strength,
+    /// The exact evidence rows this fired on, so the reader sees WHY (no percentages, ever).
+    pub(crate) evidence: Vec<String>,
+    pub(crate) next_step: NextStep,
+    /// True = "beyond what Compy can safely advise — here's the raw evidence to take to a human/forum."
+    pub(crate) beyond_us: bool,
+}
+
+/// DEFAULT-OFF gate for all of Black Box v2 (mirrors `gaming_mode_gate` / `receipts_gate`). Shipped
+/// (release) builds are HARD-FALSE — the triage/causal layer reaches no one until the owner flips this
+/// deliberately after reading the copy. A DEBUG-only env opt-in (`COMPY_BLACKBOX_V2_PREVIEW=1`) lets the
+/// owner preview the UI via `npm run tauri dev`; it is compiled OUT of release (`not(debug_assertions)`),
+/// so a shipped binary cannot be talked into emitting an assessment.
+pub(crate) fn blackbox_v2_gate() -> bool {
+    #[cfg(test)]
+    {
+        if V2_GATE_TEST_FORCE.with(|f| *f.borrow()) {
+            return true;
+        }
+    }
+    #[cfg(all(debug_assertions, not(test)))]
+    {
+        if std::env::var("COMPY_BLACKBOX_V2_PREVIEW").as_deref() == Ok("1") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Pure triage. Tries each starter rule in priority order (strongest measured signal first); the first
+/// that clears its evidence bar wins. No rule fires ⇒ `None` (refuse to guess → evidence-only v1).
+/// `recent_context` is the full incident list (includes `incident` itself) — used for recurrence.
+pub(crate) fn assess(incident: &Incident, recent_context: &[Incident]) -> Option<Assessment> {
+    rule_overheating(incident, recent_context)
+        .or_else(|| rule_graphics_driver(incident, recent_context))
+        .or_else(|| rule_app_specific(incident, recent_context))
+        .or_else(|| rule_power_hardlock(incident, recent_context))
+        .or_else(|| rule_beyond_us(incident))
+}
+
+fn peak_temp(inc: &Incident) -> Option<u32> {
+    inc.vitals.as_ref().and_then(|v| v.peak_gpu_temp_c)
+}
+fn is_high_temp(inc: &Incident) -> bool {
+    peak_temp(inc).is_some_and(|t| t >= OVERHEAT_C)
+}
+fn count_kind(ctx: &[Incident], kind: IncidentKind) -> usize {
+    ctx.iter().filter(|i| i.kind == kind).count()
+}
+/// Is there a BSOD/blue-screen incident within ±`mins` of this one?
+fn bluescreen_near(inc: &Incident, ctx: &[Incident], mins: i64) -> bool {
+    incident_within(inc, ctx, mins, |k| k == IncidentKind::BlueScreen)
+}
+/// Is there a SYSTEM-level incident (GPU/shutdown/BSOD/WHEA) within ±`mins` of this one?
+fn system_event_near(inc: &Incident, ctx: &[Incident], mins: i64) -> bool {
+    incident_within(inc, ctx, mins, |k| {
+        matches!(
+            k,
+            IncidentKind::GpuTimeout
+                | IncidentKind::UnexpectedShutdown
+                | IncidentKind::BlueScreen
+                | IncidentKind::HardwareError
+        )
+    })
+}
+fn incident_within(inc: &Incident, ctx: &[Incident], mins: i64, kind_pred: impl Fn(IncidentKind) -> bool) -> bool {
+    let Some(t0) = parse_ts(&inc.when).map(|t| t.with_timezone(&Utc)) else {
+        return false;
+    };
+    ctx.iter().any(|o| {
+        kind_pred(o.kind)
+            && parse_ts(&o.when)
+                .map(|t| t.with_timezone(&Utc))
+                .is_some_and(|t| (t - t0).num_minutes().abs() <= mins)
+    })
+}
+
+/// Rule 1 — overheating-consistent. A MEASURED high GPU temp (≥85 °C) in the pre-crash vitals on a GPU
+/// timeout or an unexpected shutdown → Strong. A WHEA hardware machine-check → Strong if repeated (or
+/// corroborated by a high temp), else Partial. Honest about WHEA's breadth (heat OR power OR memory).
+fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+    let high = is_high_temp(inc);
+    if high && matches!(inc.kind, IncidentKind::GpuTimeout | IncidentKind::UnexpectedShutdown) {
+        let t = peak_temp(inc).unwrap_or(0);
+        return Some(Assessment {
+            consistent_with: "overheating around the time of the crash".into(),
+            strength: Strength::Strong,
+            evidence: vec![
+                format!("Compy recorded the GPU at {t}°C in the session running at the time"),
+                format!("the recorded signal was: {}", inc.tag.to_lowercase()),
+            ],
+            next_step: NextStep::safe(
+                "Check your temperatures under load",
+                "Run the game (or a stress test) with a temperature overlay and watch the GPU. If it \
+                 climbs back toward this range, improving case airflow or clearing dust is the safe place \
+                 to start. Re-pasting or undervolting are bigger jobs to research first, not do blind.",
+            ),
+            beyond_us: false,
+        });
+    }
+    if inc.kind == IncidentKind::HardwareError {
+        let repeats = count_kind(ctx, IncidentKind::HardwareError) >= 2;
+        let strength = if repeats || high { Strength::Strong } else { Strength::Partial };
+        let mut evidence = vec![
+            format!(
+                "Windows logged a machine-check (WHEA) hardware error {}",
+                if repeats { "more than once" } else { "once" }
+            ),
+            "these come from the hardware itself, not a game or a driver".into(),
+        ];
+        if let Some(t) = peak_temp(inc) {
+            evidence.push(format!("the GPU was at {t}°C in the session at the time"));
+        }
+        return Some(Assessment {
+            consistent_with: "a hardware-level error Windows logged — commonly heat, but also power or memory".into(),
+            strength,
+            evidence,
+            next_step: NextStep::safe(
+                "Check temperatures under load, and that your memory is seated on its rated profile",
+                "Watch GPU and CPU temps during a game; reseat the RAM sticks and confirm the rated \
+                 (XMP/EXPO) profile is the one enabled — both reversible. If it persists, a failing power \
+                 supply is worth researching (don't change one blind).",
+            ),
+            beyond_us: false,
+        });
+    }
+    None
+}
+
+/// Rule 2 — graphics-driver-consistent. The SAME GPU driver module timing out (TDR) across ≥2 crashes,
+/// temps NOT high (rule 1 owns the hot case). → Strong it's the driver. Reversible: clean-reinstall.
+fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+    if inc.kind != IncidentKind::GpuTimeout || is_high_temp(inc) {
+        return None;
+    }
+    let module = inc.receipt.faulting_module.as_deref()?;
+    let same_module = ctx
+        .iter()
+        .filter(|i| i.kind == IncidentKind::GpuTimeout && i.receipt.faulting_module.as_deref() == Some(module))
+        .count();
+    if same_module < 2 {
+        return None;
+    }
+    Some(Assessment {
+        consistent_with: format!("your graphics driver ({module}) repeatedly timing out"),
+        strength: Strength::Strong,
+        evidence: vec![
+            format!("the same driver module ({module}) stopped responding across {same_module} separate crashes"),
+            "the GPU temperature was not in the overheating range in those sessions".into(),
+        ],
+        next_step: NextStep::safe(
+            "Do a clean reinstall of your graphics driver",
+            "Download the latest driver for your card and install it with the 'clean install' / 'factory \
+             reset' option (or remove the old one first with DDU in Safe Mode). Fully reversible — you can \
+             roll back to the previous driver from Device Manager if the new one is worse.",
+        ),
+        beyond_us: false,
+    })
+}
+
+/// Rule 3 — app-specific (not your PC). A lone app crash/hang with NO system-level event within ±10 min.
+/// → Strong it's app-side. Reversible: verify game files / update.
+fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+    if !matches!(inc.kind, IncidentKind::AppCrash | IncidentKind::AppHang) {
+        return None;
+    }
+    if system_event_near(inc, ctx, 10) {
+        return None; // a system event nearby → not safely "just the app"
+    }
+    let app = inc.receipt.faulting_app.as_deref().map(pretty_proc);
+    let subject = app.clone().unwrap_or_else(|| "that app".to_string());
+    let lead = match &app {
+        Some(a) => format!("{a} closed on its own, with no system-level error logged around it"),
+        None => "the app closed on its own, with no system-level error logged around it".to_string(),
+    };
+    Some(Assessment {
+        consistent_with: format!("a problem inside {subject} itself, not your PC"),
+        strength: Strength::Strong,
+        evidence: vec![lead, "your graphics, power, and hardware logs were quiet at that moment".into()],
+        next_step: NextStep::safe(
+            "Verify the game's files, then update it",
+            "In the launcher (Steam: right-click → Properties → Installed Files → Verify integrity of game \
+             files), let it re-download anything broken, and make sure the game and its anti-cheat are \
+             current. Nothing here touches the rest of your PC.",
+        ),
+        beyond_us: false,
+    })
+}
+
+/// Rule 4 — power / hard-lock-consistent. An unexpected shutdown (Kernel-Power 41 / EventLog 6008) with
+/// NO blue screen around it and temps NOT high. Inherently ambiguous → Partial, and honest about it.
+fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+    if inc.kind != IncidentKind::UnexpectedShutdown || is_high_temp(inc) {
+        return None;
+    }
+    // A BSOD nearby means Windows DID record a crash — a different story; this rule is the "no dump,
+    // no blue screen" hard-lock only.
+    if bluescreen_near(inc, ctx, 10) {
+        return None;
+    }
+    Some(Assessment {
+        consistent_with: "an abrupt power loss or hard lock — Windows didn't get to record why".into(),
+        strength: Strength::Partial,
+        evidence: vec![
+            "the PC restarted without a clean shutdown, and left no blue-screen or crash dump".into(),
+            "this pattern is genuinely ambiguous — it can be power delivery, a deep hardware hang, or a one-off".into(),
+        ],
+        next_step: NextStep::research(
+            "Rule out the easy, reversible things first",
+            "Reseat the power cables at both ends, try a different wall outlet or surge protector, and note \
+             whether it only happens under heavy load. If it keeps happening under load, a marginal power \
+             supply is worth researching — don't assume it, and don't open the PSU.",
+        ),
+        beyond_us: false,
+    })
+}
+
+/// Escape hatch — a blue screen Compy won't guess at. A BSOD that didn't resolve to overheating is a
+/// bugcheck with many possible causes; surface the code + send the reader to a human, never a forced rule.
+fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
+    if inc.kind != IncidentKind::BlueScreen {
+        return None;
+    }
+    let code = inc.receipt.code.as_deref().unwrap_or("unknown");
+    Some(Assessment {
+        consistent_with: "a system-level crash whose bugcheck code has several possible causes".into(),
+        strength: Strength::Weak,
+        evidence: vec![
+            format!("Windows recorded a blue-screen bugcheck ({code})"),
+            "a bugcheck alone doesn't point to one cause — guessing here would be dishonest".into(),
+        ],
+        next_step: NextStep::research(
+            "Look up the bugcheck code, and bring the evidence to a human",
+            &format!(
+                "Search the bugcheck code ({code}) on Microsoft's docs, and share this incident's receipt \
+                 (the code, any faulting module, and the time) on a reputable hardware forum. That's the \
+                 honest next move — this is beyond what Compy can safely narrow down for you."
+            ),
+        ),
+        beyond_us: true,
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test-only force-ON for `blackbox_v2_gate()` — mirrors `leftovers::QaRestoreGateBypass`. Lets the
+    /// gated assess pass be exercised WITHOUT flipping the shipped gate (which stays hard-false and
+    /// test-pinned). `#[cfg(test)]` compiles it out of every shipped binary; Drop disarms even on panic.
+    static V2_GATE_TEST_FORCE: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
+}
+#[cfg(test)]
+struct V2GateForceOn;
+#[cfg(test)]
+impl V2GateForceOn {
+    fn begin() -> Self {
+        V2_GATE_TEST_FORCE.with(|f| *f.borrow_mut() = true);
+        V2GateForceOn
+    }
+}
+#[cfg(test)]
+impl Drop for V2GateForceOn {
+    fn drop(&mut self) {
+        V2_GATE_TEST_FORCE.with(|f| *f.borrow_mut() = false);
+    }
 }
 
 /// Greedy newest-first cross-source merge: each proto either folds into an already-accepted incident
@@ -1520,5 +1862,213 @@ mod blackbox_tests {
         assert_eq!(sig_index("Sig[3].Name", ".Value"), None, "suffix must match");
         assert_eq!(sig_index("DynamicSig[1].Name", ".Name"), None, "DynamicSig ignored");
         assert_eq!(sig_index("EventType", ".Name"), None);
+    }
+
+    // ── R8 — Black Box v2 triage engine (assess + rules + gate). The LAW is test-enforced here:
+    //    never a percentage, every next step reversible, refuse-to-guess on thin evidence, flag-OFF
+    //    emits nothing. ──
+
+    /// Build a test incident carrying exactly the fields the rules read.
+    fn mk(
+        kind: IncidentKind,
+        when: &str,
+        module: Option<&str>,
+        code: Option<&str>,
+        app: Option<&str>,
+        temp: Option<u32>,
+    ) -> Incident {
+        Incident {
+            headline: "h".into(),
+            tag: kind.tag().to_string(),
+            when: when.into(),
+            when_display: "d".into(),
+            vitals: temp.map(|t| LastVitals {
+                session_started_at: when.into(),
+                game: app.map(pretty_proc),
+                peak_gpu_temp_c: Some(t),
+                peak_gpu_usage_pct: None,
+                avg_frametime_ms: 0.0,
+                low1_fps_est: 0.0,
+                summary: "s".into(),
+            }),
+            receipt: Receipt {
+                source: "src".into(),
+                event_ids: Vec::new(),
+                faulting_app: app.map(Into::into),
+                faulting_module: module.map(Into::into),
+                code: code.map(Into::into),
+                detail: "d".into(),
+            },
+            assessment: None,
+            kind,
+        }
+    }
+
+    fn has_percent(a: &Assessment) -> bool {
+        serde_json::to_string(a).unwrap().contains('%')
+    }
+
+    #[test]
+    fn gate_is_default_false() {
+        // No force, env path compiled out under test → the shipped behavior is OFF.
+        assert!(!blackbox_v2_gate(), "v2 gate must default OFF");
+    }
+
+    #[test]
+    fn overheating_strong_on_measured_high_gpu_temp() {
+        let inc = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, Some(88));
+        let a = assess(&inc, std::slice::from_ref(&inc)).expect("fires");
+        assert_eq!(a.strength, Strength::Strong);
+        assert!(a.consistent_with.contains("overheating"));
+        assert!(a.evidence.iter().any(|e| e.contains("88°C")));
+        assert!(a.next_step.reversible);
+        assert!(!a.next_step.research_only, "checking temps is a do-it step, not research-only");
+        assert!(!has_percent(&a), "no percentage anywhere");
+    }
+
+    #[test]
+    fn whea_is_partial_once_and_strong_when_repeated() {
+        let one = mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None);
+        let a = assess(&one, std::slice::from_ref(&one)).expect("fires");
+        assert_eq!(a.strength, Strength::Partial, "a lone WHEA is honest about ambiguity");
+        assert!(a.consistent_with.contains("hardware-level"));
+        // two WHEA in context → Strong
+        let two = vec![
+            mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None),
+            mk(IncidentKind::HardwareError, "2026-06-11T10:00:00Z", None, None, None, None),
+        ];
+        let a2 = assess(&two[0], &two).expect("fires");
+        assert_eq!(a2.strength, Strength::Strong);
+        assert!(a2.next_step.reversible && !has_percent(&a2));
+    }
+
+    #[test]
+    fn graphics_driver_needs_two_same_module_tdrs_and_cool_temps() {
+        let cool = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None);
+        // one TDR → not enough → no driver claim (could be a one-off)
+        assert!(rule_graphics_driver(&cool, std::slice::from_ref(&cool)).is_none(), "one TDR is not a pattern");
+        // two same-module TDRs, cool → Strong driver
+        let two = vec![
+            mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None),
+            mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, None),
+        ];
+        let a = assess(&two[0], &two).expect("fires");
+        assert_eq!(a.strength, Strength::Strong);
+        assert!(a.consistent_with.contains("nvlddmkm"));
+        assert!(a.next_step.headline.to_lowercase().contains("reinstall") && a.next_step.reversible);
+        assert!(!has_percent(&a));
+        // …but a HOT recurring TDR is overheating, not "driver" (rule 1 owns the hot case)
+        let hot = vec![
+            mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, Some(90)),
+            mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, Some(90)),
+        ];
+        assert!(assess(&hot[0], &hot).unwrap().consistent_with.contains("overheating"));
+    }
+
+    #[test]
+    fn app_specific_only_when_no_system_event_is_near() {
+        let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", Some("unity.dll"), Some("0xc0000005"), Some("game.exe"), None);
+        let a = assess(&lone, std::slice::from_ref(&lone)).expect("fires");
+        assert_eq!(a.strength, Strength::Strong);
+        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("not your PC"));
+        assert!(a.next_step.reversible && !has_percent(&a));
+        // a GPU timeout 3 minutes away → NOT safely app-side → no app assessment
+        let near = vec![
+            mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", Some("unity.dll"), None, Some("game.exe"), None),
+            mk(IncidentKind::GpuTimeout, "2026-06-12T21:03:00Z", Some("amdkmdag"), None, None, None),
+        ];
+        assert!(rule_app_specific(&near[0], &near).is_none(), "a nearby system event blocks the app-side call");
+    }
+
+    #[test]
+    fn power_hardlock_is_partial_and_not_when_a_bsod_is_near() {
+        let lock = mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None);
+        let a = assess(&lock, std::slice::from_ref(&lock)).expect("fires");
+        assert_eq!(a.strength, Strength::Partial, "hard-lock is inherently ambiguous");
+        assert!(a.next_step.reversible, "even the cable-reseat step is reversible");
+        assert!(a.evidence.iter().any(|e| e.contains("ambiguous")));
+        assert!(!has_percent(&a));
+        // a BSOD nearby → Windows DID record a crash → this rule must not fire
+        let with_bsod = vec![
+            mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None),
+            mk(IncidentKind::BlueScreen, "2026-06-12T21:00:05Z", None, Some("0x133"), None, None),
+        ];
+        assert!(rule_power_hardlock(&with_bsod[0], &with_bsod).is_none());
+    }
+
+    #[test]
+    fn bsod_falls_through_to_beyond_us_with_the_code() {
+        let bsod = mk(IncidentKind::BlueScreen, "2026-06-12T21:00:00Z", None, Some("0x00000133"), None, None);
+        let a = assess(&bsod, std::slice::from_ref(&bsod)).expect("fires");
+        assert!(a.beyond_us, "ambiguous bugcheck → beyond-us, never a forced cause");
+        assert_eq!(a.strength, Strength::Weak);
+        assert!(a.evidence.iter().any(|e| e.contains("0x00000133")));
+        assert!(a.next_step.research_only && a.next_step.reversible, "look-it-up is research-only + reversible");
+        assert!(!has_percent(&a));
+    }
+
+    #[test]
+    fn refuses_to_guess_on_thin_evidence() {
+        // A lone GPU timeout with no temp data and no recurrence → no rule clears its bar → None.
+        let thin = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, None);
+        assert!(assess(&thin, std::slice::from_ref(&thin)).is_none(), "thin evidence → refuse to guess, not a verdict");
+    }
+
+    #[test]
+    fn no_assessment_ever_contains_a_percentage_or_an_irreversible_step() {
+        // Sweep one firing incident per rule; assert the LAW invariants hold across all of them.
+        let cases = vec![
+            vec![mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, Some(90))], // overheating
+            vec![
+                mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None),
+                mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, None),
+            ], // driver
+            vec![mk(IncidentKind::AppHang, "2026-06-12T21:00:00Z", None, None, Some("game.exe"), None)], // app
+            vec![mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None)], // power
+            vec![mk(IncidentKind::BlueScreen, "2026-06-12T21:00:00Z", None, Some("0x1e"), None, None)], // beyond-us
+            vec![mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None)], // whea
+        ];
+        for ctx in &cases {
+            let a = assess(&ctx[0], ctx).expect("each case fires");
+            assert!(!has_percent(&a), "no percentage: {:?}", a.consistent_with);
+            assert!(a.next_step.reversible, "every next step is reversible: {:?}", a.next_step.headline);
+        }
+    }
+
+    #[test]
+    fn flag_off_emits_no_assessments() {
+        // Default gate (no force, env compiled out under test) ⇒ exact v1 behavior, no assessments.
+        assert!(!blackbox_v2_gate());
+        let events = vec![ev(
+            "Application Error", 1000, "2026-06-12T21:42:00-07:00", "crash",
+            serde_json::json!(["game.exe", "1.0", "ts", "unity.dll", "1.0", "ts", "c0000005"]),
+        )];
+        let out = from_events(events, &[]);
+        assert_eq!(out.len(), 1);
+        assert!(out.iter().all(|i| i.assessment.is_none()), "flag OFF → no assessment populated");
+    }
+
+    #[test]
+    fn flag_on_populates_assessments_through_assembly() {
+        let _g = V2GateForceOn::begin(); // test-only; the shipped gate is untouched + still false
+        assert!(blackbox_v2_gate(), "force seam opens the gate for this thread");
+        let events = vec![ev(
+            "Application Error", 1000, "2026-06-12T21:42:00-07:00", "crash",
+            serde_json::json!(["game.exe", "1.0", "ts", "unity.dll", "1.0", "ts", "c0000005"]),
+        )];
+        let out = from_events(events, &[]);
+        assert_eq!(out.len(), 1);
+        let a = out[0].assessment.as_ref().expect("a lone app crash assesses as app-specific");
+        assert!(a.consistent_with.contains("not your PC"));
+        assert!(a.next_step.reversible && !has_percent(a));
+    }
+
+    #[test]
+    fn assessment_is_omitted_from_the_wire_when_absent() {
+        // Flag OFF: the serialized incident must carry NO `assessment` key (byte-compatible with v1).
+        let inc = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, None);
+        let v = serde_json::to_value(&inc).unwrap();
+        assert!(v.get("assessment").is_none(), "absent assessment is omitted, not null");
+        assert!(v.get("kind").is_none(), "internal kind never serializes (TS uses `tag`)");
     }
 }

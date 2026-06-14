@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { BlackBoxReport, CrashIncident } from "../types";
+import type { BlackBoxReport, CrashIncident, CrashAssessment } from "../types";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader, rendered as a Lab
@@ -92,6 +92,10 @@ function IncidentRow({ inc }: { inc: CrashIncident }) {
         </div>
       )}
 
+      {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
+          strength WORD (never a percentage) + the evidence + ONE reversible next step. */}
+      {inc.assessment && <AssessmentBlock a={inc.assessment} incidentKey={inc.when} />}
+
       <button
         className="bb-receipt-toggle"
         onClick={() => setShowReceipt((s) => !s)}
@@ -133,5 +137,86 @@ function IncidentRow({ inc }: { inc: CrashIncident }) {
         </dl>
       )}
     </li>
+  );
+}
+
+const STRENGTH_LABEL: Record<CrashAssessment["strength"], string> = {
+  // Strength is a WORD, never a percentage (the v2 law). These are the only strength surfaces.
+  strong: "Strong signal",
+  partial: "Partial signal",
+  weak: "Weak signal",
+};
+
+// Black Box v2 triage block. "Consistent with…" framing only — never "the cause is…". Shows the exact
+// evidence it fired on and ONE reversible next step (research-only steps are clearly marked, never "do
+// this" for anything irreversible). Rendered only when the backend gate populated `assessment`.
+function AssessmentBlock({ a, incidentKey }: { a: CrashAssessment; incidentKey: string }) {
+  const research = a.next_step.research_only;
+  return (
+    <div className={`bb-assess bb-assess-${a.strength}`}>
+      <div className="bb-assess-head">
+        <span className="bb-assess-label">What this points to</span>
+        <span className={`bb-strength bb-strength-${a.strength}`}>{STRENGTH_LABEL[a.strength]}</span>
+      </div>
+      <p className="bb-assess-line">
+        {a.beyond_us ? "This one is " : "The evidence is consistent with "}
+        <strong>{a.consistent_with}</strong>
+        {a.beyond_us ? " — beyond what Compy can safely narrow down." : "."}
+      </p>
+      <ul className="bb-assess-evidence">
+        {a.evidence.map((e, i) => (
+          <li key={i}>{e}</li>
+        ))}
+      </ul>
+      <div className={`bb-nextstep${research ? " bb-nextstep-research" : ""}`}>
+        <span className="bb-nextstep-tag">{research ? "Worth researching" : "Safe next step"}</span>
+        <p className="bb-nextstep-headline">{a.next_step.headline}</p>
+        <p className="bb-nextstep-detail">{a.next_step.detail}</p>
+      </div>
+      <HelpfulControl incidentKey={incidentKey} consistentWith={a.consistent_with} />
+    </div>
+  );
+}
+
+// "Did this help?" — the honesty feedback loop. Stored locally only (no network); a thumbs-down on a
+// rule is how a wrong rule surfaces later. v2.1 aggregates this; v2.0 just records it per incident.
+function HelpfulControl({ incidentKey, consistentWith }: { incidentKey: string; consistentWith: string }) {
+  const voteKey = `compy_bb_helpful_${incidentKey}`;
+  const [vote, setVote] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(voteKey);
+    } catch {
+      return null;
+    }
+  });
+  const cast = (v: "yes" | "no") => {
+    setVote(v);
+    try {
+      localStorage.setItem(voteKey, v);
+      // Append to a capped local feedback log so wrong rules can surface (local-only, no send).
+      const log = JSON.parse(localStorage.getItem("compy_bb_feedback") || "[]");
+      log.push({ when: incidentKey, consistent_with: consistentWith, vote: v, at: new Date().toISOString() });
+      localStorage.setItem("compy_bb_feedback", JSON.stringify(log.slice(-100)));
+    } catch {
+      /* localStorage unavailable — the vote just isn't remembered, no harm */
+    }
+  };
+  if (vote) {
+    return (
+      <p className="bb-helpful bb-helpful-done">
+        Thanks — noted{vote === "no" ? "; we'd rather stay quiet than guess wrong." : "."}
+      </p>
+    );
+  }
+  return (
+    <div className="bb-helpful">
+      <span className="bb-helpful-q">Did this point you the right way?</span>
+      <button className="bb-helpful-btn" onClick={() => cast("yes")}>
+        Yes
+      </button>
+      <button className="bb-helpful-btn" onClick={() => cast("no")}>
+        No
+      </button>
+    </div>
   );
 }

@@ -263,6 +263,22 @@ export type CrashReceipt = {
   code: string | null;
   detail: string;
 };
+// Black Box v2 (behind the backend's default-OFF blackbox_v2_gate()): the triage layer. Strength is a
+// WORD, never a percentage. `assessment` is absent on every incident when the gate is OFF (v1 behavior).
+export type AssessmentStrength = "strong" | "partial" | "weak";
+export type CrashNextStep = {
+  headline: string;
+  detail: string;
+  reversible: boolean; // always true by construction
+  research_only: boolean; // "what to research", not "do this"
+};
+export type CrashAssessment = {
+  consistent_with: string; // "consistent with…" — never "the cause is…"
+  strength: AssessmentStrength;
+  evidence: string[];
+  next_step: CrashNextStep;
+  beyond_us: boolean;
+};
 export type CrashIncident = {
   headline: string;
   tag: string;
@@ -270,6 +286,7 @@ export type CrashIncident = {
   when_display: string;
   vitals: CrashVitals | null;
   receipt: CrashReceipt;
+  assessment?: CrashAssessment | null;
 };
 export type BlackBoxReport = {
   incidents: CrashIncident[];

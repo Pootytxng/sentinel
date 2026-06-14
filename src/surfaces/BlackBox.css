@@ -183,6 +183,137 @@
   line-height: 1.5;
 }
 
+/* ── Black Box v2 — triage block (only rendered when the backend gate populated `assessment`). ──
+   "Consistent with…" framing, a strength WORD (never a percentage), the evidence, and ONE reversible
+   next step. Strength is shown by EMPHASIS, not a traffic-light palette (we have no success/warn token,
+   and "Strong" here means strong SIGNAL, not "good"). Instrument tokens only — no new hexes. */
+.bb-assess {
+  border: 1px solid var(--ix-border);
+  border-left: 2px solid var(--ix-accent);
+  border-radius: var(--ix-radius);
+  background: var(--ix-accent-wash);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.bb-assess-weak {
+  border-left-color: var(--ix-border);
+}
+.bb-assess-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bb-assess-label {
+  font-family: var(--ix-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text);
+}
+.bb-strength {
+  font-family: var(--ix-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border: 1px solid var(--ix-border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.bb-strength-strong {
+  color: var(--ix-accent-text);
+  border-color: var(--ix-accent);
+}
+.bb-strength-partial {
+  color: var(--ix-text-2);
+}
+.bb-strength-weak {
+  color: var(--ix-text-3);
+  border-style: dashed;
+}
+.bb-assess-line {
+  margin: 0;
+  color: var(--ix-text-1);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.bb-assess-line strong {
+  font-weight: 600;
+}
+.bb-assess-evidence {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--ix-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.bb-nextstep {
+  border: 1px solid var(--ix-border);
+  border-radius: var(--ix-radius);
+  background: var(--ix-surface-2);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bb-nextstep-research {
+  border-style: dashed;
+}
+.bb-nextstep-tag {
+  font-family: var(--ix-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text);
+}
+.bb-nextstep-research .bb-nextstep-tag {
+  color: var(--ix-text-3);
+}
+.bb-nextstep-headline {
+  margin: 0;
+  color: var(--ix-text-1);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.bb-nextstep-detail {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.bb-helpful {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bb-helpful-q {
+  color: var(--ix-text-3);
+  font-size: 12px;
+}
+.bb-helpful-btn {
+  font-family: var(--ix-mono);
+  font-size: 12px;
+  color: var(--ix-accent-text);
+  background: none;
+  border: 1px solid var(--ix-border);
+  border-radius: 999px;
+  padding: 2px 12px;
+  cursor: pointer;
+}
+.bb-helpful-done {
+  margin: 0;
+  color: var(--ix-text-3);
+  font-size: 12px;
+}
+
 @media (max-width: 560px) {
   .bb-receipt-row {
     grid-template-columns: 1fr;
