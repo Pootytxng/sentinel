@@ -620,5 +620,23 @@
     "what": "Buying or tuning for a lower monitor response time (the '1ms' number) expecting a higher frame rate.",
     "why": "Response time measures how fast a single pixel changes color — it affects motion clarity and ghosting (the smear behind fast-moving objects), not how many frames your GPU produces. A '1ms' panel and a '4ms' panel at the same refresh rate give you the exact same FPS. It is a real spec worth caring about for crispness in fast games, but it is not a frame-rate lever — and the marketing '1ms' figures are often measured generously anyway. Want more frames? Look at refresh rate, resolution, and settings, not the response-time sticker.",
     "related": ["hz-vs-fps", "screen-tearing", "native-resolution"]
+  },
+  {
+    "id": "ram-capacity-fps",
+    "name": "Buying more RAM for more FPS",
+    "aliases": ["more ram fps", "ram capacity fps", "32gb vs 64gb gaming", "16gb vs 32gb fps", "add ram for fps"],
+    "verdict": "placebo",
+    "what": "Adding more system memory — 16→32GB, or 32→64GB — expecting the frame rate to climb.",
+    "why": "Games need ENOUGH memory, not endless memory. Once you comfortably cover what the game and Windows use, extra capacity just sits there — a 64GB kit draws the same frames as a 32GB one in today's games. The real failure mode is the opposite: if you are actually short (8GB on a modern game, or 16GB with a browser full of tabs and a game that wants more), the system spills onto the slow drive and you get stutter and ugly 1% lows — and THEN adding RAM genuinely helps. So check whether you are actually running out before you buy. For most people on 16–32GB the frames are already all there; capacity past 'enough' is a placebo. Memory SPEED and running in dual-channel are the levers that do move frames — that is a different thing.",
+    "related": ["dual-channel-ram", "vram", "one-percent-lows", "bottleneck"]
+  },
+  {
+    "id": "pcie-gen-fps",
+    "name": "Needing PCIe 4.0/5.0 for more FPS",
+    "aliases": ["pcie gen fps", "pcie 4.0 gaming", "pcie 3.0 vs 4.0 fps", "pci express version fps", "need pcie 4"],
+    "verdict": "placebo",
+    "what": "Believing your graphics card needs a newer PCIe slot version (4.0 or 5.0) to hit higher frame rates.",
+    "why": "A modern graphics card running in a full-width (x16) PCIe 3.0 slot loses almost nothing versus 4.0 — usually low single digits, often inside the margin of error. Games do not shovel enough data across that link for the version to matter at x16. Where it CAN bite is narrow cases: a card wired for only four lanes (some budget GPUs), or a slot dropped to x8/x4 because an M.2 drive or a second card is sharing the lanes — there a newer PCIe gen recovers real frames. So check how many lanes your card actually gets before worrying about the version. For the typical 'GPU in the top x16 slot' setup, PCIe gen is not your frame-rate lever.",
+    "related": ["resizable-bar", "rebar-sam", "bottleneck"]
   }
 ]

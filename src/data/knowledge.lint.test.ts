@@ -162,11 +162,14 @@ describe("knowledge dataset lint", () => {
     // set-refresh-rate [real, the biggest free smoothness fix], bigger-psu-fps [placebo],
     // registry-cleaners [risky — zero gain, real chance of breakage], monitor-response-time-fps
     // [placebo] — display/power/registry FPS-myth gaps; vram-overflow dropped as the vram term
-    // already covers it).
+    // already covers it) + 2 R11 round-2 debunks (2026-06-14, same sprint: ram-capacity-fps [placebo —
+    // capacity past 'enough' is a placebo; speed/dual-channel are the real levers], pcie-gen-fps
+    // [placebo — PCIe gen barely matters at x16] — hardware-spec FPS-myth gaps, distinct from
+    // dual-channel-ram which is about channels not capacity).
     // These are Library EXPLAINERS (graded real/placebo/risky), NOT appliable recs — Compy applies
     // none of them, so the ~29 appliable-catalog freeze is untouched. The pin stays exact as a
     // curation drift-guard.
-    expect(TWEAKS.length).toBe(73);
+    expect(TWEAKS.length).toBe(75);
     expect(TERMS.length).toBeGreaterThanOrEqual(50);
     expect(TRICKS.length).toBeGreaterThanOrEqual(12);
     expect(GUIDES.length).toBeGreaterThanOrEqual(6);
