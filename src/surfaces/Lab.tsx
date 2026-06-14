@@ -241,28 +241,33 @@ function LabSection({
   const [open, setOpen] = useState(false);
   return (
     <div className={`lab-card ${open ? "lab-card-open" : ""}`}>
-      <button className="lab-card-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <svg
-          className="lab-card-icon"
-          viewBox="0 0 24 24"
-          width="22"
-          height="22"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          {ICONS[icon]}
-        </svg>
-        <span className="lab-card-text">
-          <span className="lab-card-name">{name}</span>
-          <span className="lab-card-oneliner">{oneLiner}</span>
-        </span>
-        <span className="lab-card-summary">{summary}</span>
-        <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
-      </button>
+      {/* WAI-ARIA accordion: the toggle button is wrapped in a native heading so screen-reader
+          users get the instrument list as a navigable h3 structure (under Lab's h2). `font: inherit`
+          + `margin: 0` on .lab-card-heading keep the visual byte-identical to a bare button. */}
+      <h3 className="lab-card-heading">
+        <button className="lab-card-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <svg
+            className="lab-card-icon"
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {ICONS[icon]}
+          </svg>
+          <span className="lab-card-text">
+            <span className="lab-card-name">{name}</span>
+            <span className="lab-card-oneliner">{oneLiner}</span>
+          </span>
+          <span className="lab-card-summary">{summary}</span>
+          <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
+        </button>
+      </h3>
       {open && <div className="lab-card-body">{children}</div>}
     </div>
   );

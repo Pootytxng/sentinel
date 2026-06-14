@@ -70,6 +70,13 @@
   border-radius: var(--ix-radius);
   overflow: hidden;
 }
+/* Accordion heading wrapper (a11y): a native <h3> around the toggle button gives screen readers the
+   instrument list as headings. `font: inherit` + no margin make it visually invisible — the button
+   below renders exactly as a bare button would. */
+.lab-card-heading {
+  margin: 0;
+  font: inherit;
+}
 .lab-card-head {
   display: flex;
   align-items: center;
