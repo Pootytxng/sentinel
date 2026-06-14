@@ -207,4 +207,32 @@ Executor: real module + 8 tests + both audits clean + committed/pushed — tangi
 Chairman: GO — the money stack now has a verified, dark foundation; arming it stays the owner's deliberate,
 gated step. This is the substantive answer to "is the app done?" — no, and here's proof of what's left to build.
 
+### Lane E — Compy Pro license SURFACE (dark) — ✅ `129108e` (frontend-only)
+Completed the license foundation's surface per the owner's "continue all solo work": `LicensePanel` in
+Settings → "License" + the `LicenseStatus` TS type (the /check-noted missing contract). DARK-aware — in
+the disarmed state it shows ONLY the honest free message + NO entry form (no dead-end); when the owner
+arms licensing, a "Have a license key?" entry appears → `set_license_key` → friendly status. Never
+paywalls safety. 3 component tests. npm 323→326. **Owner-via-council:** the free-vs-Pro split + model/
+price/processor remain your call — this surface gates no features, only reports a tier.
+
+### Lane F — content engine: educational terms — ✅ `7d3ca64` (168→171) · deploy `8fce28ce`
+The FPS-myth DEBUNK well is at its confident ceiling, but the educational-TERMS well has real
+search-intent room: `anti-aliasing` (AA types + cost), `power-limit-tdp` (wattage ceiling vs heat),
+`gpu-boost-clock` (dynamic clocks; why "lock max clocks" misses). Confident, in-scope, distinct.
+lint/jargon green; regen 171; zero third-party (live-verified).
+
+COUNCIL STRIP — Lanes E+F, 2026-06-14
+Contrarian: building Pro UI risks pre-deciding monetization — held: the surface gates NOTHING, ships dark
+(no entry form until armed), and the split/model stay owner-queued; the terms are educational, not padding
+(real queries: "what is anti-aliasing / TDP").
+First-Principles: "continue all solo work" = finish the buildable parts (license surface, content) and
+queue the decision-shaped parts (the split) — exactly what happened.
+Expansionist: the license foundation (backend + dark UI) is the money stack's keystone, ready the instant
+the owner picks a model; the terms widen the content engine's search surface.
+Outsider: a "License" panel that says "everything safety-critical is free, always" reads as the honest
+broker, not an upsell funnel.
+Executor: real UI + 3 tests + 3 terms + deploy, all committed/pushed.
+Chairman: GO — money-stack foundation + content both advanced; the owner-shaped pieces are queued, not
+guessed. Continuing solo until genuinely dry.
+
 <!-- lanes appended below -->
