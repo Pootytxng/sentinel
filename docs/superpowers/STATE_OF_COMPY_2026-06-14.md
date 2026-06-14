@@ -183,4 +183,28 @@ and/or preview+flip the Black Box gate. Everything I can do reversibly is done a
 Chairman: marathon COMPLETE at its honest boundary. The build is finished-and-hardened; all remaining
 leverage is owner territory. Standing by — no further reversible value without you.
 
+### Lane D — Compy Pro license-verify FOUNDATION (the money-stack's first real code) — ✅ `19af35b`
+Triggered by the owner's "so there's no work to be done, the app is done?!" — the honest answer was *no*,
+and the highest-leverage *buildable-solo* item was sitting in MONETIZATION.md §5: the offline Ed25519
+license verify. Built `src-tauri/src/license.rs` — pure `verify_license` (verify-before-trust,
+model-agnostic expiry so the one-time-vs-subscription decision needs no code change, every bad case →
+clean free), `LicenseStatus`, app-local key storage, 2 read-only IPC, 8 tests. DARK + triple-gated OFF
+(placeholder pubkey + `licensing_armed()` false + explicit zero-key reject → a shipped build validates
+NOTHING). Private signing key never in the repo. **`/security` + `/check` both CLEAN.** cargo 389→397.
+Owner territory (NOT encoded): model/price/processor/split.
+
+COUNCIL STRIP — Lane D (Pro license foundation), 2026-06-14
+Contrarian 🔴: building monetization code could read as "deciding to charge" — it does NOT: the model,
+price, processor, and free/Pro split are untouched owner territory, and the whole thing ships DARK
+(validates nothing) until the owner arms it; the private key is provably absent from shipped builds.
+First-Principles: the owner asked "is there nothing to build?" — the honest answer is the money stack's
+foundation was unbuilt; this is the one piece buildable without their pricing decision (per their own doc).
+Expansionist: this is the keystone of money-stack phase 4 (Pro) — built honestly now (offline, no account,
+preserves the privacy brand), it unblocks the revenue path the moment the owner picks a model.
+Outsider: an offline, account-less, no-phone-home license check is itself a trust differentiator — it
+proves "we charge without spying," which fits the brand a snake-oil rival can't copy.
+Executor: real module + 8 tests + both audits clean + committed/pushed — tangible, not a doc.
+Chairman: GO — the money stack now has a verified, dark foundation; arming it stays the owner's deliberate,
+gated step. This is the substantive answer to "is the app done?" — no, and here's proof of what's left to build.
+
 <!-- lanes appended below -->
