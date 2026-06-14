@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { BlackBoxReport, CrashIncident, CrashAssessment } from "../types";
+import { resolutionFor, type HelpMark } from "../data/blackbox-resolution";
 import "./BlackBox.css";
 
 // Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader, rendered as a Lab
@@ -52,7 +53,7 @@ export function BlackBox() {
           ) : (
             <ul className="bb-list">
               {report.incidents.map((inc, i) => (
-                <IncidentRow key={`${inc.when}-${i}`} inc={inc} />
+                <IncidentRow key={`${inc.when}-${i}`} inc={inc} allIncidents={report.incidents} />
               ))}
             </ul>
           )}
@@ -69,7 +70,7 @@ export function BlackBox() {
   );
 }
 
-function IncidentRow({ inc }: { inc: CrashIncident }) {
+function IncidentRow({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
   const [showReceipt, setShowReceipt] = useState(false);
   const r = inc.receipt;
   return (
@@ -93,8 +94,9 @@ function IncidentRow({ inc }: { inc: CrashIncident }) {
       )}
 
       {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
-          strength WORD (never a percentage) + the evidence + ONE reversible next step. */}
-      {inc.assessment && <AssessmentBlock a={inc.assessment} incidentKey={inc.when} />}
+          strength WORD (never a percentage) + the evidence + ONE reversible next step. v2.1 adds the
+          measured-absence line under a step the user marked helpful. */}
+      {inc.assessment && <AssessmentBlock inc={inc} allIncidents={allIncidents} />}
 
       <button
         className="bb-receipt-toggle"
@@ -150,7 +152,8 @@ const STRENGTH_LABEL: Record<CrashAssessment["strength"], string> = {
 // Black Box v2 triage block. "Consistent with…" framing only — never "the cause is…". Shows the exact
 // evidence it fired on and ONE reversible next step (research-only steps are clearly marked, never "do
 // this" for anything irreversible). Rendered only when the backend gate populated `assessment`.
-function AssessmentBlock({ a, incidentKey }: { a: CrashAssessment; incidentKey: string }) {
+function AssessmentBlock({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
+  const a = inc.assessment as CrashAssessment; // only rendered when present
   const research = a.next_step.research_only;
   return (
     <div className={`bb-assess bb-assess-${a.strength}`}>
@@ -173,39 +176,70 @@ function AssessmentBlock({ a, incidentKey }: { a: CrashAssessment; incidentKey: 
         <p className="bb-nextstep-headline">{a.next_step.headline}</p>
         <p className="bb-nextstep-detail">{a.next_step.detail}</p>
       </div>
-      <HelpfulControl incidentKey={incidentKey} consistentWith={a.consistent_with} />
+      <ResolutionFeedback inc={inc} allIncidents={allIncidents} />
     </div>
   );
 }
 
-// "Did this help?" — the honesty feedback loop. Stored locally only (no network); a thumbs-down on a
-// rule is how a wrong rule surfaces later. v2.1 aggregates this; v2.0 just records it per incident.
-function HelpfulControl({ incidentKey, consistentWith }: { incidentKey: string; consistentWith: string }) {
-  const voteKey = `compy_bb_helpful_${incidentKey}`;
-  const [vote, setVote] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(voteKey);
-    } catch {
-      return null;
+const FEEDBACK_LOG_KEY = "compy_bb_feedback";
+
+// Read the locally-stored "Did this help?" mark for an incident. Prefers the timestamped feedback log
+// (so v2.1 can anchor a "since"); falls back to the v2.0 plain per-key vote (no timestamp → no "since",
+// but the vote is still remembered). Local only — never reads the network.
+function readHelpMark(incidentKey: string, voteKey: string): HelpMark | null {
+  try {
+    const raw = localStorage.getItem(FEEDBACK_LOG_KEY);
+    const log: unknown = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(log)) {
+      for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e && e.when === incidentKey && typeof e.at === "string") {
+          return { vote: String(e.vote), at: e.at };
+        }
+      }
     }
-  });
+    const v = localStorage.getItem(voteKey);
+    if (v) return { vote: v, at: "" }; // old untimed mark — remembered, but can't anchor a "since"
+  } catch {
+    /* localStorage unavailable */
+  }
+  return null;
+}
+
+// v2.0 "Did this help?" control + v2.1 measured-payoff. ALL LOCAL, zero outbound. On a step the user
+// marked "yes", v2.1 reports a measured ABSENCE from the log ("No {kind} recorded in N days since") or an
+// honest recurrence — it NEVER claims the fix worked (that's an unproven causal claim; resolutionFor
+// guarantees the copy stays factual). A thumbs-down is how a wrong rule surfaces later (local feedback log).
+function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
+  const incidentKey = inc.when;
+  const voteKey = `compy_bb_helpful_${incidentKey}`;
+  const [mark, setMark] = useState<HelpMark | null>(() => readHelpMark(incidentKey, voteKey));
   const cast = (v: "yes" | "no") => {
-    setVote(v);
+    const at = new Date().toISOString();
+    setMark({ vote: v, at });
     try {
       localStorage.setItem(voteKey, v);
-      // Append to a capped local feedback log so wrong rules can surface (local-only, no send).
-      const log = JSON.parse(localStorage.getItem("compy_bb_feedback") || "[]");
-      log.push({ when: incidentKey, consistent_with: consistentWith, vote: v, at: new Date().toISOString() });
-      localStorage.setItem("compy_bb_feedback", JSON.stringify(log.slice(-100)));
+      // Append to a capped LOCAL feedback log (no send — fleet aggregation is v3, gated).
+      const log = JSON.parse(localStorage.getItem(FEEDBACK_LOG_KEY) || "[]");
+      log.push({ when: incidentKey, consistent_with: inc.assessment?.consistent_with ?? "", vote: v, at });
+      localStorage.setItem(FEEDBACK_LOG_KEY, JSON.stringify(log.slice(-100)));
     } catch {
       /* localStorage unavailable — the vote just isn't remembered, no harm */
     }
   };
-  if (vote) {
+
+  if (mark?.vote === "yes") {
+    const res = resolutionFor(inc, allIncidents, mark);
     return (
-      <p className="bb-helpful bb-helpful-done">
-        Thanks — noted{vote === "no" ? "; we'd rather stay quiet than guess wrong." : "."}
-      </p>
+      <div className="bb-resolved">
+        <span className="bb-resolved-mark">✓ You marked this pointed you the right way</span>
+        {res && <span className={`bb-resolved-since bb-resolved-${res.status}`}>{res.text}</span>}
+      </div>
+    );
+  }
+  if (mark?.vote === "no") {
+    return (
+      <p className="bb-helpful bb-helpful-done">Thanks — noted; we'd rather stay quiet than guess wrong.</p>
     );
   }
   return (

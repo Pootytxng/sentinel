@@ -314,6 +314,28 @@
   font-size: 12px;
 }
 
+/* v2.1 measured payoff — on a step the user marked helpful: a quiet acknowledgement + a FACTUAL line
+   about the log since (measured absence OR honest recurrence). Never a "fixed/solved" claim. */
+.bb-resolved {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bb-resolved-mark {
+  font-size: 12px;
+  color: var(--ix-text-3);
+}
+.bb-resolved-since {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.bb-resolved-none-since {
+  color: var(--ix-accent-text); /* a calm measured-absence note — not a victory claim */
+}
+.bb-resolved-recurred {
+  color: var(--ix-text-2); /* a recurrence is reported just as plainly — neutral, never hidden */
+}
+
 @media (max-width: 560px) {
   .bb-receipt-row {
     grid-template-columns: 1fr;
