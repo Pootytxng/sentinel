@@ -77,6 +77,25 @@ repo (`ed25519-compact` + the signed-manifest verify pattern in `remote_rules.rs
   the free-vs-Pro feature split. **To ARM later:** generate a real Ed25519 keypair (private key OFFLINE,
   never in repo), replace the placeholder public key, wire the chosen processor's issuance endpoint to
   sign keys, build the in-app license UI + gate the Pro-only features — then it goes live.
+- **✅ DARK UI BUILT (2026-06-14) — `src/surfaces/LicensePanel.tsx`** (Settings → "License"). Shows the
+  honest free state while disarmed (no entry form / no dead-end); the key entry appears only once armed.
+  3 component tests. Never paywalls safety.
+- **✅ OWNER-SIDE MINTING TOOL BUILT (2026-06-14) — `scripts/license-tool.mjs`.** The **$0 manual-issuance
+  path: you can sell a Pro license by hand the day you decide to charge — mint a key, send it (Ko-fi /
+  DM) — before any payment processor exists.** Runs offline. A Rust fixture test pins that its tokens
+  verify against `license.rs` (cross-tool compat can't drift). `secrets/`, `*.key`, `compy-license.key`
+  are gitignored so a key can't be committed by accident.
+  - **ARM + ISSUE recipe (when you choose to charge):**
+    1. `node scripts/license-tool.mjs keygen ./secrets` → prints the PUBLIC key (hex + a ready-to-paste
+       Rust `[u8; 32]` line) and writes the PRIVATE key to `./secrets/compy-license.key`. **Keep that file
+       OFFLINE — never commit it.**
+    2. Paste the public key into `license.rs` `LICENSE_SIGNING_PUBKEY_BYTES`, rebuild → licensing is armed
+       (the Settings entry form appears; `licensing_armed()` becomes true).
+    3. Per sale: `node scripts/license-tool.mjs mint ./secrets/compy-license.key buyer@email pro
+       [expires-RFC3339]` → the token to send the buyer; they paste it in Settings → License.
+  - **STILL OWNER TERRITORY (your calls):** the model (one-time vs subscription = mint with/without
+    `expires`), the price, whether to automate issuance via a processor later (a Lemon Squeezy / Paddle
+    webhook can sign the same token), and the free-vs-Pro feature split.
 
 ## 6. Non-negotiables (whatever model wins)
 - **Never paywall safety** (rollback, core recs) — that's the brand.

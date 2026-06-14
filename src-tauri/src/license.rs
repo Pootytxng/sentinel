@@ -337,4 +337,19 @@ mod license_tests {
         assert_eq!(hex_decode("zz"), None, "non-hex");
         assert_eq!(hex_decode(""), Some(vec![]));
     }
+
+    #[test]
+    fn a_token_minted_by_the_node_owner_tool_verifies_cross_tool() {
+        // Fixture from `scripts/license-tool.mjs` (keygen + mint) — pins that the Node owner-side minting
+        // tool produces tokens THIS Rust verify accepts (format compatibility can't silently drift). The
+        // throwaway private key was discarded; only the PUBLIC key + the signed perpetual token live here,
+        // and both are safe to commit (verify-only artifacts).
+        let pubkey_hex = "ea98a081bf9309c31405cc5ee4803904a81a4db62e5675a729a61d1eb1f239c3";
+        let token = "7b22656d61696c5f68617368223a2262343530383131323362316262303463623133383131386264383266353035646233326434383933306238386432613663376464663738366533396238666136222c2274696572223a2270726f222c226973737565645f6174223a22323032362d30362d31345431383a32323a32372e3938395a227d.1b2d0daaee179d1b26e5a6281a4d6adfc15be0e98359a0340cd1f7d0d4cf88472503514833341bd96d77aa466e521df9b8d106109baf3e81695a0467067dba0e";
+        let pk: [u8; 32] = hex_decode(pubkey_hex).unwrap().try_into().unwrap();
+        let s = verify_license(token, &pk, now());
+        assert!(s.valid && s.tier == "pro", "node-minted token must verify cross-tool: {s:?}");
+        // And it must NOT verify against a different (placeholder) key — the signature binds the key.
+        assert!(!verify_license(token, &LICENSE_SIGNING_PUBKEY_BYTES, now()).valid);
+    }
 }

@@ -47,3 +47,9 @@ site/assets/og-card*
 # to testers. Built on demand from committed sources; never committed.
 beta-kit/
 business/
+
+# Compy Pro signing keys — the private license-signing key NEVER enters the repo (license-tool.mjs keygen
+# writes it here / there). Defense-in-depth so it can't be committed by accident.
+secrets/
+*.key
+compy-license.key
