@@ -486,5 +486,29 @@
     "what": "How many CPU cores a game can actually use — and why a chip with more cores does not automatically give you more FPS.",
     "more": "Most games are built to lean hard on a handful of cores — often four to eight — and cannot spread their work much wider than that. Past that point, the extra cores mostly sit idle while you game, so a 16-core CPU will not beat an 8-core of the same generation at the same settings. What moves your frames is how FAST each core runs, how much cache it has, and your memory speed — not the raw core count. More cores genuinely help OTHER work (recording or streaming while you play, video editing, compiling), so they are not wasted; they are just not an FPS lever on their own. If a game is CPU-limited, a faster CPU helps — a higher core count by itself usually does not.",
     "related": ["bottleneck", "dual-channel-ram", "disable-smt-gaming", "cpu-affinity-games"]
+  },
+  {
+    "id": "anti-aliasing",
+    "name": "Anti-aliasing (AA)",
+    "aliases": ["anti-aliasing", "antialiasing", "aa settings", "taa", "msaa", "dlaa", "fxaa", "jagged edges"],
+    "what": "Anti-aliasing smooths the jagged 'staircase' edges on objects in a game. Different methods trade sharpness, smoothness, and frame cost differently.",
+    "more": "Edges look jagged because the screen is a grid of square pixels trying to draw a smooth diagonal, and anti-aliasing blends those steps away. The common types are worth knowing: TAA (temporal) is cheap and very smooth but can look a little soft or smeary in motion; FXAA is the cheapest but blurriest; MSAA is sharp but expensive and rare in modern games; and DLAA (NVIDIA) uses the same AI as DLSS to anti-alias at full resolution for the best quality at a real frame cost. There is no single 'best' — on a high-resolution screen you need less of it at all, because the pixels are already tiny — and the cost ranges from nearly free (FXAA) to noticeable (MSAA / DLAA). If a game looks soft, try a sharper method or a touch of sharpening; if it looks jagged, step the AA up.",
+    "related": ["upscaling", "native-resolution", "render-scale"]
+  },
+  {
+    "id": "power-limit-tdp",
+    "name": "Power limit (TDP)",
+    "aliases": ["power limit", "tdp", "thermal design power", "wattage limit", "power target"],
+    "what": "A power limit (often called TDP) is the wattage budget a CPU or GPU is allowed to draw. Hit the ceiling and the chip pulls its clocks back to stay inside it — even when it is running cool.",
+    "more": "Modern chips boost their clocks as high as the power and temperature budgets allow, then back off when they reach either ceiling. The power limit is the wattage one: a GPU rated for, say, 250 watts lowers its clocks once it is pulling that much, which caps sustained performance regardless of temperature. It is why two cards with the same chip but different power limits perform differently, and why a laptop on a low-power profile feels slow even when it is cold. Raising the limit (where a vendor tool allows it) can let the chip hold higher clocks — at the cost of more heat, noise, and power draw — while LOWERING it trades a little performance for a much cooler, quieter machine. It is a different ceiling from heat: a chip can be power-limited while running cool, or thermal-throttling while well under its power budget.",
+    "related": ["thermal-throttling", "undervolting", "fan-curves"]
+  },
+  {
+    "id": "gpu-boost-clock",
+    "name": "Boost clock (dynamic clocks)",
+    "aliases": ["boost clock", "gpu boost", "dynamic clocks", "base vs boost clock", "clock speed gaming"],
+    "what": "Modern GPUs and CPUs do not run at one fixed speed — they constantly raise and lower their clock speed (boost) based on how much temperature and power headroom they have right now.",
+    "more": "The 'base clock' on a spec sheet is the guaranteed floor; the 'boost clock' is roughly the best case. In practice the chip sits somewhere in between, second by second — climbing when it is cool and has power budget to spare, easing off when it gets hot or hits its power limit. This is why a card runs faster in a cold room than a hot one, and why good airflow quietly buys real performance. It is also why most 'lock your clocks to maximum' tweaks miss the point: the chip is already boosting as high as it safely can, and forcing a fixed high clock usually just adds heat or instability for nothing. The honest levers are the ones that give the chip more room to boost on its own — better cooling, a sensible fan curve, or an undervolt that runs cooler at the same clock.",
+    "related": ["thermal-throttling", "power-limit-tdp", "nvidia-prefer-max-performance", "undervolting"]
   }
 ]
