@@ -272,4 +272,26 @@ frozen refs `16069fa`/`beta/private-beta-001` UNTOUCHED · appliable catalog fro
 pure-logic gap (the thin modules are I/O, verified by live QA); new features are done/gated/premature. The
 high-value remaining work is owner-shaped and queued above. Continuing solo on content depth until dry.
 
+### Lane H — Compy Pro OWNER-SIDE minting tool — ✅ `39ba40b` (the $0 manual-issuance path)
+`scripts/license-tool.mjs` (Node, offline): `keygen` (Ed25519 keypair → prints the public key to arm +
+writes the private key to an OFFLINE, gitignored file) + `mint` (signs a per-buyer token: email SHA-256,
+tier, optional expiry → model-agnostic). A Rust fixture test in `license.rs` verifies a Node-minted token
+(cross-tool format compat pinned). `secrets/`/`*.key`/`compy-license.key` gitignored. **The licensing
+path's solo-buildable parts are now COMPLETE end-to-end: verify (backend) → dark UI → minting.** cargo
+397→398, clippy clean. The script embeds NO secret; the private key never enters the repo.
+
+COUNCIL STRIP — Lane H (minting tool), 2026-06-14
+Contrarian 🔴: a minting tool touches the crown-jewel (signing) — held: the script holds NO key (keygen
+WRITES one to an offline, gitignored file; mint READS it), a fixture test proves Node↔Rust compat so it
+can't silently drift, and licensing is still DARK (verify rejects the placeholder) until the owner arms it.
+First-Principles: "continue all solo work" → the owner-side issuance was the last solo-buildable licensing
+piece; built it (the model/price/split stay owner-queued).
+Expansionist: this unlocks $0 manual sales day one (Ko-fi + mint) — revenue without waiting on a processor,
+exactly the zero-budget law; a processor webhook can later sign the SAME token format.
+Outsider: an offline, no-account, hand-mintable license is itself a trust signal ("they charge without
+spying"), and a tester can verify it end-to-end without phoning home.
+Executor: real tool + cross-tool proof + key-protection gitignore + the arming recipe documented.
+Chairman: GO — the Pro licensing path is solo-complete (verify + UI + minting); arming + the model/split
+are the owner's deliberate, gated steps. This is the boundary of solo-buildable money-stack code.
+
 <!-- lanes appended below -->
