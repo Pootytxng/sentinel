@@ -470,5 +470,21 @@
     "what": "The pre-rendered frame queue is the short stack of frames your CPU prepares in advance for the GPU to display. A deeper queue smooths delivery but adds delay; a shallower one cuts delay.",
     "more": "To keep the GPU fed, the CPU works a frame or two ahead and parks the results in a small queue. Hold more frames in that queue and output stays steady if the CPU briefly stumbles — but every frame waiting in line is a frame of extra delay between your mouse and the screen. Hold fewer and the picture answers your hand sooner, at the cost of a little steadiness. This one trade is what NVIDIA Reflex, 'Low Latency Mode', and AMD Anti-Lag actually adjust — they shrink that queue so input feels tighter. It is also why a runaway, uncapped frame rate can pile up lag: capping frames just under your refresh keeps the queue short. More frames waiting is not more responsiveness — often the opposite.",
     "related": ["nvidia-reflex", "low-latency-mode", "anti-lag-plus", "input-latency", "fps-cap"]
+  },
+  {
+    "id": "screen-tearing",
+    "name": "Screen tearing",
+    "aliases": ["screen tearing", "tearing", "torn frame", "screen tear"],
+    "what": "Screen tearing is when the top and bottom of your screen show pieces of two different frames at once, leaving a visible horizontal 'tear' line across moving images.",
+    "more": "It happens when your GPU sends a new frame to the monitor partway through the monitor's refresh — the display ends up drawing part of the old frame and part of the new one. It is most obvious when your frame rate does not line up with the monitor's refresh rate. There are three honest fixes, each with a trade: VSync locks the GPU to the refresh (no tearing, but it can add input delay and cap your frames); a variable-refresh display (VRR — G-Sync / FreeSync) lets the screen wait for each frame, which removes tearing without the VSync delay; or capping your frame rate a hair below the refresh keeps things mostly in step. Tearing is a sync problem, not a performance problem — more FPS on its own will not fix it.",
+    "related": ["vsync", "vrr", "gsync-freesync", "fps-cap", "hz-vs-fps"]
+  },
+  {
+    "id": "core-count-gaming",
+    "name": "CPU core count (for gaming)",
+    "aliases": ["cpu cores gaming", "how many cores for gaming", "core count fps", "more cores fps", "cpu cores fps"],
+    "what": "How many CPU cores a game can actually use — and why a chip with more cores does not automatically give you more FPS.",
+    "more": "Most games are built to lean hard on a handful of cores — often four to eight — and cannot spread their work much wider than that. Past that point, the extra cores mostly sit idle while you game, so a 16-core CPU will not beat an 8-core of the same generation at the same settings. What moves your frames is how FAST each core runs, how much cache it has, and your memory speed — not the raw core count. More cores genuinely help OTHER work (recording or streaming while you play, video editing, compiling), so they are not wasted; they are just not an FPS lever on their own. If a game is CPU-limited, a faster CPU helps — a higher core count by itself usually does not.",
+    "related": ["bottleneck", "dual-channel-ram", "disable-smt-gaming", "cpu-affinity-games"]
   }
 ]

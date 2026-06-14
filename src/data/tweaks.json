@@ -548,5 +548,41 @@
     "what": "Using two matched memory sticks so RAM runs in dual-channel, instead of a single stick running in single-channel.",
     "why": "This is a real, measurable FPS lever — the kind a registry tweak only pretends to be. Two channels roughly double how fast the CPU can move data in and out of memory, and games lean on that bandwidth, especially when the CPU is the limit and dramatically on laptops and APUs that borrow system memory for graphics. A single stick can cost double-digit percentages of average FPS and hurt your 1% lows even more, so the frames stutter. Match a second stick to your first (same capacity and speed), seat them in the slots your motherboard manual marks for dual-channel, and switch on the rated speed profile (XMP/EXPO). The cost is one stick of RAM; the gain shows up on the frame counter.",
     "related": ["xmp", "one-percent-lows", "bottleneck"]
+  },
+  {
+    "id": "disable-nagle",
+    "name": "Disabling Nagle's algorithm for lower lag",
+    "aliases": ["disable nagle", "nagle algorithm", "tcp no delay", "nagle gaming", "nagle latency"],
+    "verdict": "placebo",
+    "what": "Registry edits (TcpAckFrequency / TCPNoDelay) that switch off Nagle's algorithm — the thing that batches tiny network packets — to 'reduce lag.'",
+    "why": "Nagle's algorithm groups small packets together to be efficient, which in theory could add a few milliseconds before your input goes out. But it has nothing to do with FPS — your GPU draws frames locally — and for online lag the tweak almost never matters: most competitive games run on UDP, which Nagle does not touch at all, and the ones on TCP usually turn Nagle off themselves per-connection. So the registry edit is overridden or irrelevant for the games people apply it to. If one specific older TCP game documents it, fine; otherwise it is a tweak that sounds technical and changes nothing you will feel.",
+    "related": ["dns-for-gaming", "tcp-mega-packs", "input-latency"]
+  },
+  {
+    "id": "fast-startup-fps",
+    "name": "Disabling Fast Startup for FPS",
+    "aliases": ["fast startup", "disable fast startup fps", "hiberboot", "fast boot fps", "turn off fast startup"],
+    "verdict": "placebo",
+    "what": "Turning off Windows 'Fast Startup' (hybrid shutdown) expecting smoother or faster games.",
+    "why": "Fast Startup makes your PC boot quicker by saving part of Windows to disk on shutdown instead of fully closing it. That is a boot-time feature — it does nothing to how many frames a game draws once you are in it. There IS an honest reason some people disable it: because it does not fully reset the system, a flaky driver or device state can carry across reboots, so turning it off (or doing a full 'Restart' instead of 'Shut down') is a real troubleshooting step. Do it to get a truly clean boot, not for frames.",
+    "related": ["clean-install-windows", "restore-point", "drivers"]
+  },
+  {
+    "id": "wifi-vs-ethernet-fps",
+    "name": "Switching to Ethernet for more FPS",
+    "aliases": ["wifi vs ethernet fps", "ethernet for gaming fps", "wired connection fps", "wifi lowers fps", "lan cable fps"],
+    "verdict": "placebo",
+    "what": "Plugging in an Ethernet cable instead of Wi-Fi expecting a higher frame rate.",
+    "why": "Your network carries your inputs to the game server and back — that is ping and latency, not frames. The frames themselves are drawn by your GPU on your own PC, with the network nowhere in that loop, so your FPS counter will not move. Here is the honest part: for ONLINE games, wired Ethernet genuinely is better — lower, steadier ping and far fewer lag spikes than Wi-Fi — which makes the game FEEL more responsive even at the same FPS. Use Ethernet for the connection quality; just do not expect the frame counter to climb.",
+    "related": ["input-latency", "dns-for-gaming"]
+  },
+  {
+    "id": "instant-replay-fps",
+    "name": "Turning off background recording (Instant Replay) for FPS",
+    "aliases": ["instant replay fps", "shadowplay fps", "background recording fps", "disable game capture fps", "nvidia replay fps"],
+    "verdict": "real",
+    "what": "Switching off always-on background capture — NVIDIA Instant Replay / Shadowplay, AMD's equivalent, or Game Bar's background recording — to free up performance.",
+    "why": "This one is real, but small and honest. Background recording constantly encodes your gameplay using the GPU's built-in video encoder, and that work is not free — it is typically a low single-digit percentage of your frames on a modern card, more on an older or already-maxed-out GPU, or at a high capture resolution and bitrate. So if you are GPU-limited and not using the clips, turning it off gives back a small, measurable slice of FPS. If you love grabbing highlights, the cost is usually worth it — keep it on. Measure your own before and after rather than assuming; that is the only honest way to know your number.",
+    "related": ["game-dvr-off", "overlay", "bottleneck"]
   }
 ]
