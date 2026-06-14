@@ -377,7 +377,7 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
             strength: Strength::Strong,
             evidence: vec![
                 format!("Compy recorded the GPU at {t}°C in the session running at the time"),
-                format!("the recorded signal was: {}", inc.tag.to_lowercase()),
+                format!("what Windows logged: {}", inc.tag.to_lowercase()),
             ],
             next_step: NextStep::safe(
                 "Check your temperatures under load",
@@ -393,10 +393,10 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         let strength = if repeats || high { Strength::Strong } else { Strength::Partial };
         let mut evidence = vec![
             format!(
-                "Windows logged a machine-check (WHEA) hardware error {}",
+                "Windows logged a hardware-level fault {} (it calls these 'WHEA' errors)",
                 if repeats { "more than once" } else { "once" }
             ),
-            "these come from the hardware itself, not a game or a driver".into(),
+            "these come straight from the hardware — not from a game or a driver setting".into(),
         ];
         if let Some(t) = peak_temp(inc) {
             evidence.push(format!("the GPU was at {t}°C in the session at the time"));
@@ -407,9 +407,10 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
             evidence,
             next_step: NextStep::safe(
                 "Check temperatures under load, and that your memory is seated on its rated profile",
-                "Watch GPU and CPU temps during a game; reseat the RAM sticks and confirm the rated \
-                 (XMP/EXPO) profile is the one enabled — both reversible. If it persists, a failing power \
-                 supply is worth researching (don't change one blind).",
+                "Watch GPU and CPU temps during a game; reseat the memory sticks and make sure the \
+                 memory's rated speed profile (called XMP or EXPO in your BIOS) is switched on — both are \
+                 reversible. If it keeps happening, a failing power supply is worth researching (don't \
+                 change one blind).",
             ),
             beyond_us: false,
         });
@@ -441,8 +442,9 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
         next_step: NextStep::safe(
             "Do a clean reinstall of your graphics driver",
             "Download the latest driver for your card and install it with the 'clean install' / 'factory \
-             reset' option (or remove the old one first with DDU in Safe Mode). Fully reversible — you can \
-             roll back to the previous driver from Device Manager if the new one is worse.",
+             reset' option (or remove the old one first with DDU — a free driver-cleanup tool — in Safe \
+             Mode). Fully reversible — you can roll back to the previous driver from Device Manager if the \
+             new one is worse.",
         ),
         beyond_us: false,
     })
@@ -498,8 +500,8 @@ fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         next_step: NextStep::research(
             "Rule out the easy, reversible things first",
             "Reseat the power cables at both ends, try a different wall outlet or surge protector, and note \
-             whether it only happens under heavy load. If it keeps happening under load, a marginal power \
-             supply is worth researching — don't assume it, and don't open the PSU.",
+             whether it only happens under heavy load. If it keeps happening under load, a weak or failing \
+             power supply is worth researching — don't assume it, and don't open the power supply.",
         ),
         beyond_us: false,
     })
@@ -513,16 +515,16 @@ fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
     }
     let code = inc.receipt.code.as_deref().unwrap_or("unknown");
     Some(Assessment {
-        consistent_with: "a system-level crash whose bugcheck code has several possible causes".into(),
+        consistent_with: "a blue-screen crash whose stop code can point to several different things".into(),
         strength: Strength::Weak,
         evidence: vec![
-            format!("Windows recorded a blue-screen bugcheck ({code})"),
-            "a bugcheck alone doesn't point to one cause — guessing here would be dishonest".into(),
+            format!("Windows recorded a blue screen with stop code {code}"),
+            "a stop code on its own doesn't point to one cause — guessing here would be dishonest".into(),
         ],
         next_step: NextStep::research(
-            "Look up the bugcheck code, and bring the evidence to a human",
+            "Look up the stop code, and take the evidence to a human",
             &format!(
-                "Search the bugcheck code ({code}) on Microsoft's docs, and share this incident's receipt \
+                "Search that stop code ({code}) on Microsoft's docs, and share this incident's receipt \
                  (the code, any faulting module, and the time) on a reputable hardware forum. That's the \
                  honest next move — this is beyond what Compy can safely narrow down for you."
             ),
