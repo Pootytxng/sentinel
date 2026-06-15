@@ -8,7 +8,7 @@ import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { BackButton, ForwardButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
-import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
+import { readCloseToTray, persistDisplayRefreshHz, readLivingInstrument } from "./design/theme";
 import { HardwareGrid } from "./surfaces/HardwareGrid";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
@@ -882,6 +882,16 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
+  // Living Instrument "simplified rail" (2026-06-15): when the preview skin is on, the shell rail
+  // shows the everyday rooms and tucks Lab under an "Advanced" group (owner direction: fewer, plainer
+  // tabs). `living` mirrors the flag live (Settings toggle broadcasts compy:living-changed); default
+  // OFF → the classic six-room rail. Reversible: the flag governs only which rail layout renders.
+  const [living, setLiving] = useState<boolean>(readLivingInstrument);
+  useEffect(() => {
+    const on = () => setLiving(readLivingInstrument());
+    window.addEventListener("compy:living-changed", on);
+    return () => window.removeEventListener("compy:living-changed", on);
+  }, []);
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
@@ -1533,7 +1543,7 @@ function App() {
                 Command Center rail (parity-guarded). The legacy SECTION_META rail is retired; the
                 posture hero is Home-only (CommandHero removed). */}
             <nav className="rail" role="tablist" aria-label="Sections">
-              {HOME_RAIL.map((item) => (
+              {(living ? HOME_RAIL.filter((r) => r.id !== "lab") : HOME_RAIL).map((item) => (
                 <button
                   key={item.id}
                   role="tab"
@@ -1546,6 +1556,22 @@ function App() {
                   <span className="rail-label">{item.label}</span>
                 </button>
               ))}
+              {/* Living Instrument (owner: fewer, plainer tabs): Lab — the power-user room (benchmarks,
+                  latency, diagnostics) — leaves the everyday rail and lives under a compact "Advanced"
+                  cell. Routing is unchanged (it still navigates to the Lab surface); only the rail's
+                  prominence changes, so the everyday set is shorter and the labels stop truncating. */}
+              {living && (
+                <button
+                  role="tab"
+                  aria-selected={activeHomeId === "lab"}
+                  className={`rail-item rail-advanced ${activeHomeId === "lab" ? "rail-item-on" : ""}`}
+                  onClick={() => navHome("lab")}
+                  title="Advanced — Lab: benchmarks, latency, diagnostics"
+                >
+                  <NavGlyph name="lab" />
+                  <span className="rail-label">Advanced</span>
+                </button>
+              )}
               {gamingEnabled && (
                 <button
                   role="tab"

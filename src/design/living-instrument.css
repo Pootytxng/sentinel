@@ -147,6 +147,54 @@
   );
 }
 
+/* ── Simplified rail (owner direction: "fewer, plainer tabs") ─────────────────── */
+/* Everyday rooms stay; Lab moves to a compact, quieter "Advanced" cell (App.tsx
+   filters it out of the primary set when living is on). Labels never truncate, and
+   the active room is brighter so you always know where you are. */
+:root[data-living="on"] .rail-item-on {
+  color: var(--accent-bright);
+}
+:root[data-living="on"] .rail-item-on .ico {
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+/* "Advanced" reads as secondary — quieter than the everyday rooms. */
+:root[data-living="on"] .rail-advanced {
+  color: var(--faint);
+}
+:root[data-living="on"] .rail-advanced.rail-item-on {
+  color: var(--accent-bright);
+}
+/* Horizontal-strip layout (medium window): keep Advanced + the gear compact so the
+   everyday rooms get the width, and never ellipsis-truncate a room label. */
+@media (min-width: 721px) and (max-width: 1080px) {
+  :root[data-living="on"] .rail-advanced,
+  :root[data-living="on"] .rail-gear {
+    flex: 0 0 auto;
+  }
+  :root[data-living="on"] .rail-label {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/* Home's CommandCenter rail is a SECOND rail (matched-rails design) — give it the
+   identical simplified treatment so Home and the rest of the app stay consistent. */
+:root[data-living="on"] .cc-rail-item-on {
+  color: var(--accent-bright);
+}
+:root[data-living="on"] .cc-rail-advanced {
+  color: var(--faint);
+}
+@media (min-width: 721px) and (max-width: 1080px) {
+  :root[data-living="on"] .cc-rail-advanced {
+    flex: 0 0 auto;
+  }
+  :root[data-living="on"] .cc-rail-item span {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
 /* ── A11Y: kill every Living-Instrument animation under reduced motion. The glow +
    depth (not motion) remain; only movement is removed. Belt-and-suspenders with the
    global reset in tokens.css. ─────────────────────────────────────────────────── */

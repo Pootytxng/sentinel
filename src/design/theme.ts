@@ -196,6 +196,12 @@ export function applyLivingInstrument(on: boolean): void {
   } catch {
     /* ignore persistence failure — still applies this session */
   }
+  // Let the app shell (rail layout) react live to the toggle — same pattern as stepaside-changed.
+  try {
+    window.dispatchEvent(new Event("compy:living-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
 }
 
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =

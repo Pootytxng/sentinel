@@ -12,6 +12,7 @@ import {
   applyInstrumentTheme,
   readAmbiance,
   type Ambiance,
+  readLivingInstrument,
 } from "../design/theme";
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
@@ -339,6 +340,14 @@ export default function CommandCenter(props: Props) {
   // current theme/ambiance (applied app-wide via data-itheme at startup + re-asserted here on mount).
   const [itheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [ambiance] = useState<Ambiance>(readAmbiance);
+  // Living Instrument "simplified rail" (owner: fewer, plainer tabs) — mirrors the flag live; when on,
+  // Lab leaves the everyday rail for a compact "Advanced" cell (same change as the app-shell rail).
+  const [living, setLiving] = useState<boolean>(readLivingInstrument);
+  useEffect(() => {
+    const on = () => setLiving(readLivingInstrument());
+    window.addEventListener("compy:living-changed", on);
+    return () => window.removeEventListener("compy:living-changed", on);
+  }, []);
   useEffect(() => {
     applyInstrumentTheme(itheme);
   }, [itheme]);
@@ -359,7 +368,7 @@ export default function CommandCenter(props: Props) {
     learn: () => onNavigate("Learn"), // Learn is a rail room now (one-rail §1b)
     lab: () => onNavigate("Lab"),
   };
-  const NAV = HOME_RAIL.map((it) => ({
+  const NAV = HOME_RAIL.filter((it) => !(living && it.id === "lab")).map((it) => ({
     ...it,
     onClick: NAV_ONCLICK[it.id],
     active: it.id === "home",
@@ -391,6 +400,20 @@ export default function CommandCenter(props: Props) {
                 <span>{n.label}</span>
               </button>
             ))}
+            {/* Living Instrument (owner: fewer, plainer tabs): Lab → a compact, quieter "Advanced"
+                cell so the everyday rooms read cleanly. Same routing target (the Lab surface). */}
+            {living && (
+              <button
+                role="tab"
+                aria-selected={false}
+                className="cc-rail-item cc-rail-advanced"
+                onClick={() => onNavigate("Lab")}
+                title="Advanced — Lab: benchmarks, latency, diagnostics"
+              >
+                <NavGlyph name="lab" />
+                <span>Advanced</span>
+              </button>
+            )}
           </div>
           {onOpenSettings && (
             <button className="cc-rail-item" onClick={onOpenSettings} title="Settings">
