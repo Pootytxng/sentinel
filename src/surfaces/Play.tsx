@@ -10,6 +10,7 @@ import {
   persistOverlayBackdrop,
 } from "../design/theme";
 import { SessionDebrief } from "./SessionDebrief";
+import { SessionTrends } from "./SessionTrends";
 import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
 import "./Play.css";
@@ -281,7 +282,8 @@ export default function Play({
           </p>
         ) : (
           <ul className="play-list">
-            {sessions.map((s, i) => {
+            {/* Free view: the most recent 20. The full retained history + trends is the Pro panel below. */}
+            {sessions.slice(0, 20).map((s, i) => {
               const key = `${s.started_at}-${i}`;
               const open = openKey === key;
               const unviewed = i === 0 && latest != null && latest.started_at !== sessionsSeenAt;
@@ -329,6 +331,9 @@ export default function Play({
             })}
           </ul>
         )}
+        {/* Compy Pro: long-term history & trends over the full retained set (ProGate — inert/free while
+            licensing is disarmed, gated when armed + not Pro). Self-hides until there are ≥2 sessions. */}
+        <SessionTrends sessions={sessions} />
       </div>
     </section>
   );
