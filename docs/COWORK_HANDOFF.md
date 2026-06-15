@@ -154,6 +154,14 @@ Never tee up a spend without the free alternative it beats.
 
 ## Current board (update as you go)
 
+- **🟢 BLACK BOX v2 GATE FLIPPED ON (owner-authorized 2026-06-14, `f43e047`).** `blackbox_v2_gate()` now
+  ships ON in release/dev — v2 triage + v2.1 measured-payoff are LIVE (read-only; cfg-split keeps the
+  test default OFF so all guard tests stay green). cargo 398 · /security clean · every honesty guard
+  enforced. **NO installer cut — reaches testers only on the owner's next rebuild.** All OTHER gates
+  (gaming_mode/receipts/remote_fetch/restore/licensing) remain default-OFF; frozen refs untouched. Also
+  this session: the **Compy Pro licensing path is solo-complete** (verify `19af35b` + dark UI `129108e`
+  + owner-side $0 minting tool `39ba40b`; arming + model/price/split stay owner-queued in
+  `docs/MONETIZATION.md` + `STATE_OF_COMPY_2026-06-14.md`). Content engine at **174**.
 - **✅ R10 LANDED + R11 AUTONOMOUS COUNCIL-OVERSEEN SPRINT LANDED (2026-06-13/14).** Site at **159
   entries**, deployed + live (`compy-bd6.pages.dev`, latest deploy `3eff58e0`, apex no-store/fresh, zero
   third-party). **R10** (`0d76675` content 147→153 · `a4894ac` Black Box copy-clarity polish — "bugcheck"→

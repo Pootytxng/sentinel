@@ -294,4 +294,27 @@ Executor: real tool + cross-tool proof + key-protection gitignore + the arming r
 Chairman: GO — the Pro licensing path is solo-complete (verify + UI + minting); arming + the model/split
 are the owner's deliberate, gated steps. This is the boundary of solo-buildable money-stack code.
 
+### Lane I — Black Box v2 gate FLIPPED ON (owner-authorized) — ✅ `f43e047`
+The owner authorized it (2026-06-14): `blackbox_v2_gate()` now ships ON in release/dev — Black Box v2
+triage + v2.1 measured-payoff are LIVE. Read-only advisory text only; minimal cfg-split (release/dev →
+true, test → off-unless-forced) so the default-off + force-on tests stay green (a bare `false→true` would
+have flipped the gate in test builds too and broken them). The two `#[cfg]` blocks left as-is. cargo 398
+green · clippy clean · /security clean (zero new primitives, capabilities/CSP/actions untouched, every
+honesty guard still enforced). **NO installer cut — reaches testers only when the owner rebuilds.** Other
+gates (gaming_mode/receipts/remote_fetch/restore/licensing) still OFF; frozen refs untouched.
+
+COUNCIL STRIP — Lane I (v2 gate flip), 2026-06-14
+Contrarian 🔴: flipping a causal-advice layer ON is the honesty-risk moment — but it's the OWNER's call
+(made), what ships is the consistent-with triage with the never-assert-a-cause / no-percentage / reversible
+guards all test-pinned green, and no installer is cut so nothing reaches a tester unreviewed.
+First-Principles: this was always owner territory; the owner decided, CC executed the one-line intent
+safely (tests kept green via cfg-split, not by weakening them).
+Expansionist: v2 live in the owner's daily build closes the loop — the triage + measured-payoff are now
+real, ready to prove value before any installer/send.
+Outsider: a shipped "consistent with / here's the reversible step" beats the category's "FIXED!" — and
+it's enforced, not promised.
+Executor: flipped, verified, dev build launched for the owner's live eyeball.
+Chairman: GO — v2 is on in the dev build; the owner eyeballs it, then decides the installer cut (to reach
+testers) on their timeline.
+
 <!-- lanes appended below -->
