@@ -171,6 +171,11 @@
   :root[data-living="on"] .rail-gear {
     flex: 0 0 auto;
   }
+  /* Size each room cell to its label so it never shrinks into truncation OR overlap;
+     flex still distributes the leftover space evenly. */
+  :root[data-living="on"] .rail-item {
+    min-width: max-content;
+  }
   :root[data-living="on"] .rail-label {
     overflow: visible;
     text-overflow: clip;
@@ -188,6 +193,9 @@
 @media (min-width: 721px) and (max-width: 1080px) {
   :root[data-living="on"] .cc-rail-advanced {
     flex: 0 0 auto;
+  }
+  :root[data-living="on"] .cc-rail-item {
+    min-width: max-content;
   }
   :root[data-living="on"] .cc-rail-item span {
     overflow: visible;
