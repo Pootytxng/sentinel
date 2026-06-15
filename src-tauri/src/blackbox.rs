@@ -296,11 +296,12 @@ pub(crate) struct Assessment {
     pub(crate) beyond_us: bool,
 }
 
-/// DEFAULT-OFF gate for all of Black Box v2 (mirrors `gaming_mode_gate` / `receipts_gate`). Shipped
-/// (release) builds are HARD-FALSE — the triage/causal layer reaches no one until the owner flips this
-/// deliberately after reading the copy. A DEBUG-only env opt-in (`COMPY_BLACKBOX_V2_PREVIEW=1`) lets the
-/// owner preview the UI via `npm run tauri dev`; it is compiled OUT of release (`not(debug_assertions)`),
-/// so a shipped binary cannot be talked into emitting an assessment.
+/// Gate for all of Black Box v2 (mirrors `gaming_mode_gate` / `receipts_gate`). **Owner-authorized
+/// 2026-06-14: v2 (triage + v2.1 measured payoff) now SHIPS ON in release/dev builds.** It remains
+/// READ-ONLY advisory text — no mutation, no outbound, no new OS call; only the gate's return value
+/// changed. In TEST builds the gate stays OFF unless a test forces it on (`V2_GATE_TEST_FORCE`), so the
+/// default-off and force-on tests stay deterministic regardless of the shipped default. The DEBUG
+/// preview-env opt-in is kept (now redundant/harmless since the default is true).
 pub(crate) fn blackbox_v2_gate() -> bool {
     #[cfg(test)]
     {
@@ -314,7 +315,16 @@ pub(crate) fn blackbox_v2_gate() -> bool {
             return true;
         }
     }
-    false
+    // Owner-authorized flip (2026-06-14): ships ON in release/dev. Tests fall through to OFF (above) so
+    // the default-off / force-on tests stay green and deterministic.
+    #[cfg(test)]
+    {
+        false
+    }
+    #[cfg(not(test))]
+    {
+        true
+    }
 }
 
 /// Pure triage. Tries each starter rule in priority order (strongest measured signal first); the first
