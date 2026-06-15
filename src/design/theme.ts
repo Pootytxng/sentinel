@@ -172,6 +172,32 @@ export function persistOverlayDensity(d: OverlayDensity): void {
   }
 }
 
+// Living Instrument (preview, 2026-06-15) — the "feel refresh" skin: material depth, live-data glow,
+// and an entrance-motion layer, all scoped under [data-living="on"] in living-instrument.css. DEFAULT
+// OFF — purely cosmetic and reversible (drop the attribute + the stylesheet and the app is identical).
+// The CSS disables every animation under prefers-reduced-motion, so this flag governs the LOOK only,
+// never logic, data, or what Compy measures.
+const LIVING_KEY = "compy_living_instrument";
+
+export function readLivingInstrument(): boolean {
+  try {
+    return localStorage.getItem(LIVING_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyLivingInstrument(on: boolean): void {
+  if (on) document.documentElement.dataset.living = "on";
+  else delete document.documentElement.dataset.living;
+  try {
+    localStorage.setItem(LIVING_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore persistence failure — still applies this session */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.

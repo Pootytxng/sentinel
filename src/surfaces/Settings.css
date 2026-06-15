@@ -225,6 +225,10 @@
 .set-row:first-of-type {
   border-top: 0;
 }
+/* A set-row nested inside the Appearance controls column (the Living Instrument toggle). */
+.set-row-inset {
+  margin-top: 16px;
+}
 .set-row-title {
   font-size: 14px;
   color: var(--ix-text-1);

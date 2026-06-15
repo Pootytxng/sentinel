@@ -36,6 +36,7 @@ import { useConfirm } from "./design/ConfirmDialog";
 import "./design/instrument.css"; // Instrument token layer — after App.css so the accent re-point wins
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
+import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default OFF
 
 type DiskInfo = {
   mount_point: string;

@@ -1,0 +1,151 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   LIVING INSTRUMENT — the "feel refresh" skin (prototype, 2026-06-15).
+   Direction (owner-picked): keep the instrument identity, make it feel PREMIUM,
+   not utilitarian. Five moves —
+     (1) material depth   (2) accent glow on LIVE data   (3) an entrance-motion
+     layer   (4) more breathing room + sharper type   (5) Home gets extra love.
+
+   FULLY REVERSIBLE + DEFAULT OFF. Every rule is scoped under :root[data-living="on"]
+   — the attribute is set by src/design/theme.ts + main.tsx behind the
+   `compy_living_instrument` flag (default OFF). Drop this file + the attribute and
+   the app is byte-identical to before. Cosmetic only: touches no logic, data, IPC,
+   capability, or anything Compy measures. Loaded after the classics (App.tsx) so it
+   layers on top — same pattern as arc-instrument.css.
+
+   HONESTY / A11Y: the glow lights only instrument SURFACES (a lit dial, a live
+   status dot) — it never invents or amplifies a number. Every animation is disabled
+   under prefers-reduced-motion (block at the end + the global reset in tokens.css),
+   so motion-sensitive users get the depth + glow with zero movement.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Registered as an animatable number so the gauge arc can sweep from 0 → its real
+   value on load (move 3). Harmless globally — only animated under [data-living]. */
+@property --p {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+:root[data-living="on"] {
+  /* Depth ladder — richer + softer than the flat base shadows (move 1). */
+  --liv-elev-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 20px -12px rgba(0, 0, 0, 0.6);
+  --liv-elev-2: 0 2px 5px rgba(0, 0, 0, 0.5), 0 22px 48px -18px rgba(0, 0, 0, 0.72);
+  --liv-top: inset 0 1px 0 rgba(255, 255, 255, 0.1); /* hairline top highlight */
+  --liv-glow: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* ── Move 1: material depth on the shared Card primitive (lifts every room) ───── */
+:root[data-living="on"] .ds-card {
+  /* Glassy surface: a hair translucent so the canvas/aurora frosts behind it. 88%
+     opacity keeps text contrast safe; the top sheen reads as polished glass. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 42%),
+    color-mix(in srgb, var(--panel) 88%, transparent);
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow: var(--liv-top), var(--liv-elev-1);
+  backdrop-filter: blur(6px) saturate(1.2);
+  padding: 18px 19px; /* move 4: more breathing room */
+}
+:root[data-living="on"] .ds-card.is-interactive:hover {
+  box-shadow: var(--liv-top), var(--liv-elev-2);
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+}
+:root[data-living="on"] .ds-panel {
+  box-shadow: var(--liv-top);
+  border-color: color-mix(in srgb, var(--border-strong) 50%, transparent);
+}
+
+/* ── Move 2: accent glow on LIVE instrument surfaces (never on plain numbers) ─── */
+:root[data-living="on"] .ds-dial {
+  filter: drop-shadow(0 0 7px var(--liv-glow));
+}
+:root[data-living="on"] .ds-dialval {
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+:root[data-living="on"] .ds-spark polyline {
+  filter: drop-shadow(0 0 5px var(--accent-glow));
+}
+/* The live status DOT lights in its own status color (ready/attention/danger/teal). */
+:root[data-living="on"] .ds-pill .ds-dot {
+  box-shadow: 0 0 7px var(--colorVar, var(--muted));
+}
+
+/* ── Move 3: entrance-motion layer (the app "comes alive") ────────────────────── */
+@keyframes liv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes liv-dial-sweep {
+  from {
+    --p: 0;
+  }
+}
+:root[data-living="on"] .ds-card {
+  animation: liv-rise 460ms var(--ease) both;
+}
+/* A gentle stagger where cards are siblings (grids/lists) — a soft cascade in. */
+:root[data-living="on"] .ds-card:nth-child(2) {
+  animation-delay: 45ms;
+}
+:root[data-living="on"] .ds-card:nth-child(3) {
+  animation-delay: 90ms;
+}
+:root[data-living="on"] .ds-card:nth-child(4) {
+  animation-delay: 135ms;
+}
+:root[data-living="on"] .ds-card:nth-child(5) {
+  animation-delay: 180ms;
+}
+:root[data-living="on"] .ds-card:nth-child(n + 6) {
+  animation-delay: 220ms;
+}
+/* The dial sweeps from 0 up to its real reading on mount, then holds the truth. */
+:root[data-living="on"] .ds-dial {
+  animation: liv-dial-sweep 1000ms var(--ease) both;
+}
+
+/* ── Move 4: density + sharper type hierarchy ─────────────────────────────────── */
+:root[data-living="on"] .ds-section-head {
+  margin-bottom: 14px;
+}
+:root[data-living="on"] .ds-section-head h3 {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+:root[data-living="on"] .ds-gauge {
+  gap: 10px;
+  padding: 16px 8px;
+}
+
+/* ── Move 5: Home gets extra love — the aurora reads a touch more present ──────── */
+:root[data-living="on"] .ix-aurora-a {
+  background: radial-gradient(
+    40% 40% at 34% 30%,
+    color-mix(in srgb, var(--ix-streak-1, #2ee6c0) 12%, transparent),
+    transparent 70%
+  );
+}
+:root[data-living="on"] .ix-aurora-b {
+  background: radial-gradient(
+    42% 42% at 70% 66%,
+    color-mix(in srgb, var(--ix-streak-2, #7c9cff) 12%, transparent),
+    transparent 70%
+  );
+}
+
+/* ── A11Y: kill every Living-Instrument animation under reduced motion. The glow +
+   depth (not motion) remain; only movement is removed. Belt-and-suspenders with the
+   global reset in tokens.css. ─────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-living="on"] .ds-card,
+  :root[data-living="on"] .ds-dial {
+    animation: none !important;
+  }
+}

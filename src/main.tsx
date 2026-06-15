@@ -34,6 +34,17 @@ try {
   document.documentElement.dataset.itheme = "halfway";
 }
 
+// Living Instrument preview skin (2026-06-15) — a cosmetic depth/glow/motion layer, DEFAULT OFF.
+// Applied before first paint so there's no flash-of-unstyled when it's on. Reversible: drop
+// living-instrument.css + this block and the app falls back to the current look untouched.
+try {
+  if (localStorage.getItem("compy_living_instrument") === "1") {
+    document.documentElement.dataset.living = "on";
+  }
+} catch {
+  /* ignore — default OFF */
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     {isOverlay ? (

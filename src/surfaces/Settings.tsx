@@ -8,6 +8,8 @@ import {
   applyInstrumentTheme,
   readAmbiance,
   persistAmbiance,
+  readLivingInstrument,
+  applyLivingInstrument,
   readStepAsideGame,
   persistStepAsideGame,
   readCloseToTray,
@@ -115,6 +117,7 @@ export default function Settings({
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
+  const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -157,6 +160,12 @@ export default function Settings({
   const changeAmbiance = (a: Ambiance) => {
     setAmbiance(a);
     persistAmbiance(a);
+  };
+  // Living Instrument preview — toggles the depth/glow/motion skin live (applies the [data-living]
+  // attribute app-wide). Cosmetic + reversible; default OFF until the look is locked.
+  const changeLiving = (v: boolean) => {
+    setLiving(v);
+    applyLivingInstrument(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -236,6 +245,17 @@ export default function Settings({
                     {a.label}
                   </button>
                 ))}
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Living Instrument (preview)</div>
+                  <div className="set-row-sub">
+                    Depth, a soft glow on live readings, and a little motion. Purely cosmetic — nothing
+                    it touches changes what Compy measures.
+                  </div>
+                </div>
+                <Toggle on={living} onChange={changeLiving} ariaLabel="Living Instrument preview" />
               </div>
             </div>
             <LivePreview ambiance={ambiance} />
