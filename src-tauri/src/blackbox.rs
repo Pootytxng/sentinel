@@ -476,7 +476,7 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         None => "the app closed on its own, with no system-level error logged around it".to_string(),
     };
     Some(Assessment {
-        consistent_with: format!("a problem inside {subject} itself, not your PC"),
+        consistent_with: format!("a problem inside {subject} itself, rather than your PC"),
         strength: Strength::Strong,
         evidence: vec![lead, "your graphics, power, and hardware logs were quiet at that moment".into()],
         next_step: NextStep::safe(
@@ -1982,7 +1982,7 @@ mod blackbox_tests {
         let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", Some("unity.dll"), Some("0xc0000005"), Some("game.exe"), None);
         let a = assess(&lone, std::slice::from_ref(&lone)).expect("fires");
         assert_eq!(a.strength, Strength::Strong);
-        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("not your PC"));
+        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("rather than your PC"));
         assert!(a.next_step.reversible && !has_percent(&a));
         // a GPU timeout 3 minutes away → NOT safely app-side → no app assessment
         let near = vec![
@@ -2135,7 +2135,7 @@ mod blackbox_tests {
         let out = from_events(events, &[]);
         assert_eq!(out.len(), 1);
         let a = out[0].assessment.as_ref().expect("a lone app crash assesses as app-specific");
-        assert!(a.consistent_with.contains("not your PC"));
+        assert!(a.consistent_with.contains("rather than your PC"));
         assert!(a.next_step.reversible && !has_percent(a));
     }
 
