@@ -1,0 +1,28 @@
+/* Compy Pro gate — a calm "this is a Pro extra" note (only shown when armed + free). Token-only. */
+.progate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px dashed var(--ix-border);
+  border-radius: var(--ix-radius, 8px);
+  background: var(--ix-surface-2, rgba(255, 255, 255, 0.03));
+  padding: 12px 14px;
+}
+.progate-badge {
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ix-accent-ink);
+  background: var(--ix-accent);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.progate-text {
+  margin: 0;
+  color: var(--ix-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
