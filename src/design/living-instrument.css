@@ -1,9 +1,10 @@
 /* ════════════════════════════════════════════════════════════════════════════
    LIVING INSTRUMENT — the "feel refresh" skin (prototype, 2026-06-15).
-   Direction (owner-picked): keep the instrument identity, make it feel PREMIUM,
-   not utilitarian. Five moves —
+   Direction (owner-picked + dialed BOLDER 2026-06-15): keep the instrument
+   identity, make it feel PREMIUM and CONFIDENT, not utilitarian or mellow.
+   Five moves —
      (1) material depth   (2) accent glow on LIVE data   (3) an entrance-motion
-     layer   (4) more breathing room + sharper type   (5) Home gets extra love.
+     layer   (4) more breathing room + sharper, bolder type   (5) Home extra love.
 
    FULLY REVERSIBLE + DEFAULT OFF. Every rule is scoped under :root[data-living="on"]
    — the attribute is set by src/design/theme.ts + main.tsx behind the
@@ -27,48 +28,50 @@
 }
 
 :root[data-living="on"] {
-  /* Depth ladder — richer + softer than the flat base shadows (move 1). */
-  --liv-elev-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 20px -12px rgba(0, 0, 0, 0.6);
-  --liv-elev-2: 0 2px 5px rgba(0, 0, 0, 0.5), 0 22px 48px -18px rgba(0, 0, 0, 0.72);
-  --liv-top: inset 0 1px 0 rgba(255, 255, 255, 0.1); /* hairline top highlight */
-  --liv-glow: color-mix(in srgb, var(--accent) 55%, transparent);
+  /* Depth ladder — deeper + softer than the flat base shadows (move 1, bolder). */
+  --liv-elev-1: 0 1px 2px rgba(0, 0, 0, 0.55), 0 10px 28px -12px rgba(0, 0, 0, 0.7);
+  --liv-elev-2: 0 3px 8px rgba(0, 0, 0, 0.55), 0 28px 60px -18px rgba(0, 0, 0, 0.8);
+  --liv-top: inset 0 1px 0 rgba(255, 255, 255, 0.14); /* brighter hairline top highlight */
+  --liv-glow: color-mix(in srgb, var(--accent) 78%, transparent);
+  --liv-edge: color-mix(in srgb, var(--accent) 22%, var(--border-strong)); /* accent-tinted card edge */
 }
 
 /* ── Move 1: material depth on the shared Card primitive (lifts every room) ───── */
 :root[data-living="on"] .ds-card {
-  /* Glassy surface: a hair translucent so the canvas/aurora frosts behind it. 88%
+  /* Glassy surface: a hair translucent so the canvas/aurora frosts behind it. ~86%
      opacity keeps text contrast safe; the top sheen reads as polished glass. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 42%),
-    color-mix(in srgb, var(--panel) 88%, transparent);
-  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 46%),
+    color-mix(in srgb, var(--panel) 86%, transparent);
+  border-color: var(--liv-edge);
   border-radius: var(--r-lg);
   box-shadow: var(--liv-top), var(--liv-elev-1);
-  backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(7px) saturate(1.3);
   padding: 18px 19px; /* move 4: more breathing room */
 }
 :root[data-living="on"] .ds-card.is-interactive:hover {
   box-shadow: var(--liv-top), var(--liv-elev-2);
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
 }
 :root[data-living="on"] .ds-panel {
   box-shadow: var(--liv-top);
-  border-color: color-mix(in srgb, var(--border-strong) 50%, transparent);
+  border-color: color-mix(in srgb, var(--border-strong) 60%, transparent);
 }
 
 /* ── Move 2: accent glow on LIVE instrument surfaces (never on plain numbers) ─── */
 :root[data-living="on"] .ds-dial {
-  filter: drop-shadow(0 0 7px var(--liv-glow));
+  /* Double drop-shadow = a brighter, more confident halo (bolder). */
+  filter: drop-shadow(0 0 12px var(--liv-glow)) drop-shadow(0 0 3px var(--liv-glow));
 }
 :root[data-living="on"] .ds-dialval {
-  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 28%, transparent);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 42%, transparent);
 }
 :root[data-living="on"] .ds-spark polyline {
-  filter: drop-shadow(0 0 5px var(--accent-glow));
+  filter: drop-shadow(0 0 7px var(--accent-glow));
 }
 /* The live status DOT lights in its own status color (ready/attention/danger/teal). */
 :root[data-living="on"] .ds-pill .ds-dot {
-  box-shadow: 0 0 7px var(--colorVar, var(--muted));
+  box-shadow: 0 0 9px var(--colorVar, var(--muted)), 0 0 3px var(--colorVar, var(--muted));
 }
 
 /* ── Move 3: entrance-motion layer (the app "comes alive") ────────────────────── */
@@ -111,31 +114,35 @@
   animation: liv-dial-sweep 1000ms var(--ease) both;
 }
 
-/* ── Move 4: density + sharper type hierarchy ─────────────────────────────────── */
+/* ── Move 4: density + sharper, BOLDER type hierarchy ─────────────────────────── */
 :root[data-living="on"] .ds-section-head {
   margin-bottom: 14px;
 }
 :root[data-living="on"] .ds-section-head h3 {
   font-size: 15px;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 :root[data-living="on"] .ds-gauge {
   gap: 10px;
   padding: 16px 8px;
 }
+:root[data-living="on"] .ds-gauge .ds-dialval {
+  font-weight: 700;
+}
 
-/* ── Move 5: Home gets extra love — the aurora reads a touch more present ──────── */
+/* ── Move 5: Home gets extra love — the aurora reads more present (bolder) ─────── */
 :root[data-living="on"] .ix-aurora-a {
   background: radial-gradient(
     40% 40% at 34% 30%,
-    color-mix(in srgb, var(--ix-streak-1, #2ee6c0) 12%, transparent),
+    color-mix(in srgb, var(--ix-streak-1, #2ee6c0) 15%, transparent),
     transparent 70%
   );
 }
 :root[data-living="on"] .ix-aurora-b {
   background: radial-gradient(
     42% 42% at 70% 66%,
-    color-mix(in srgb, var(--ix-streak-2, #7c9cff) 12%, transparent),
+    color-mix(in srgb, var(--ix-streak-2, #7c9cff) 15%, transparent),
     transparent 70%
   );
 }
