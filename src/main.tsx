@@ -46,6 +46,17 @@ try {
   document.documentElement.dataset.living = "on"; // default ON even if localStorage is unavailable
 }
 
+// Dashboard-energy skin (2026-06-15) — when on, carries the premium telemetry-dashboard look across the
+// WHOLE app (shared cards/panels get the dark-premium treatment + accent hover-glow), not just Home.
+// Default OFF behind compy_dash_v2; applied before first paint. Reversible: drop the attribute + skin.
+try {
+  if (localStorage.getItem("compy_dash_v2") === "1") {
+    document.documentElement.dataset.dashV2 = "on";
+  }
+} catch {
+  /* ignore — default OFF */
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     {isOverlay ? (

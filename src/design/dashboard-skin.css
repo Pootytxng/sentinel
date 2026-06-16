@@ -1,0 +1,68 @@
+/* Dashboard-energy skin (owner: "keep up this energy in the other tabs", 2026-06-15).
+   When compy_dash_v2 is on, the premium telemetry-dashboard look carries app-wide: the shared cards +
+   the main surface cards get the dark-premium treatment (subtle top sheen, hairline border) and the d2
+   signature ACCENT HOVER-GLOW. Scoped under [data-dash-v2="on"]; default OFF; reversible (drop the
+   attribute + this file). Tokens-only so it follows the active theme. Loaded after the classics. */
+
+:root[data-dash-v2="on"] {
+  --d2-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 38%),
+    color-mix(in srgb, var(--ix-base, #0b0c10) 68%, #16181d);
+  --d2-card-border: color-mix(in srgb, #ffffff 9%, transparent);
+  --d2-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 34px -22px rgba(0, 0, 0, 0.8);
+  --d2-hover-glow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px color-mix(in srgb, var(--ix-accent, #2ee6c0) 24%, transparent),
+    0 18px 40px -24px rgba(0, 0, 0, 0.85);
+}
+
+/* Card surfaces across the app — shared primitives + the main bespoke surface cards. */
+:root[data-dash-v2="on"] .ds-card,
+:root[data-dash-v2="on"] .ds-panel,
+:root[data-dash-v2="on"] .cc-panel,
+:root[data-dash-v2="on"] .cc-hero,
+:root[data-dash-v2="on"] .fix-row,
+:root[data-dash-v2="on"] .fix-group,
+:root[data-dash-v2="on"] .session-card,
+:root[data-dash-v2="on"] .check-limiter,
+:root[data-dash-v2="on"] .check-advisory,
+:root[data-dash-v2="on"] .lab-card,
+:root[data-dash-v2="on"] .bb-card {
+  background: var(--d2-card-bg);
+  border: 1px solid var(--d2-card-border);
+  border-radius: 14px;
+  box-shadow: var(--d2-card-shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* The d2 signature: an accent hover-glow on interactive/card surfaces. */
+:root[data-dash-v2="on"] .ds-card:hover,
+:root[data-dash-v2="on"] .cc-panel:hover,
+:root[data-dash-v2="on"] .fix-row:hover,
+:root[data-dash-v2="on"] .fix-group:hover,
+:root[data-dash-v2="on"] .session-card:hover,
+:root[data-dash-v2="on"] .lab-card:hover,
+:root[data-dash-v2="on"] .bb-card:hover {
+  border-color: color-mix(in srgb, var(--ix-accent, #2ee6c0) 34%, transparent);
+  box-shadow: var(--d2-hover-glow);
+}
+
+/* Telemetry numbers read as instrument readouts — monospace + tabular so they don't jitter. */
+:root[data-dash-v2="on"] .ds-dialval,
+:root[data-dash-v2="on"] .live-strip-value,
+:root[data-dash-v2="on"] .cc-rig-gpu {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section labels pick up the crisp dashboard cadence. */
+:root[data-dash-v2="on"] .ds-section-head h3,
+:root[data-dash-v2="on"] .fix-section-label,
+:root[data-dash-v2="on"] .cc-panel-eyebrow {
+  letter-spacing: 0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-dash-v2="on"] .ds-card,
+  :root[data-dash-v2="on"] .fix-row,
+  :root[data-dash-v2="on"] .fix-group {
+    transition: none;
+  }
+}

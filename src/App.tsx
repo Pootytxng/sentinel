@@ -37,6 +37,7 @@ import "./design/instrument.css"; // Instrument token layer — after App.css so
 import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
 import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default OFF
+import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default OFF
 
 type DiskInfo = {
   mount_point: string;
