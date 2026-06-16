@@ -13,7 +13,7 @@
     "aliases": ["game mode"],
     "verdict": "real",
     "what": "Prioritizes the foreground game for CPU/GPU scheduling and holds back background interruptions.",
-    "why": "Modest, low-risk benefit on most rigs; larger on busy/background-heavy systems. Compy can toggle it for you."
+    "why": "Modest, low-risk benefit on most rigs; larger on busy/background-heavy systems. Compy can toggle it for you. One catch: game-recording software (AMD ReLive, NVIDIA ShadowPlay / Instant Replay) often resets Game Mode to off at every login, so it can refuse to stay on after a restart — that's the recording app, not the toggle."
   },
   {
     "id": "msi-mode",

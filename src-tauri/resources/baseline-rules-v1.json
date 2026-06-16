@@ -11,7 +11,7 @@
       "description": "Game Mode tells Windows to prioritize the foreground game, deprioritize background updates, and pause Windows Update reboots while you're playing.",
       "impact": "Fewer background-process stutters",
       "provenance": "measured-signal",
-      "downside": null,
+      "downside": "On some PCs it won't survive a restart: game-recording software (AMD ReLive, NVIDIA ShadowPlay / Instant Replay) resets Game Mode to off at every login. If it keeps reverting after a reboot, that's the cause — re-applying here won't make it stick; the fix is in that software's settings.",
       "applies_to_template": "{os_name} {os_version}",
       "conditions": [],
       "apply_kind": "game-mode",
