@@ -19,6 +19,12 @@
   --ix-border: var(--ix-glass-border);
   --ix-line: var(--ix-glass-border);
   --ix-surface-2: rgba(255, 255, 255, 0.03);
+  /* More undefined-but-referenced legacy names (BlackBox): --ix-mono drove font-family on the
+     telemetry readouts (was silently falling back to the inherited UI font, i.e. NOT monospace),
+     and --ix-accent-wash was an assessment-card background (silently transparent). Alias to the
+     real tokens. */
+  --ix-mono: var(--font-mono);
+  --ix-accent-wash: var(--accent-soft);
   --ix-radius: 14px;
   --ix-text-1: #f2f3f7;
   --ix-text-2: #b8bcc8;
