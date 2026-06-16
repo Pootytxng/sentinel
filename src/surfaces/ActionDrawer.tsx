@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { friendlyLabel } from "../data/friendly-labels";
 import { recMutation } from "../data/rec-mutations";
 import "./ActionDrawer.css";
@@ -57,7 +58,9 @@ export function ActionDrawer({
   const prov = rec.provenance ? PROVENANCE[rec.provenance] : null;
   const what = rec.impact || rec.description || "";
 
-  return (
+  // Portal to <body> so the fixed backdrop/sheet escapes any transformed/animated ancestor (the Living
+  // Instrument entrance transforms create a containing block that otherwise traps position:fixed).
+  return createPortal(
     <div className="ad-backdrop" onClick={onClose}>
       <div
         className="ad-panel"
@@ -138,6 +141,7 @@ export function ActionDrawer({
           )}
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
