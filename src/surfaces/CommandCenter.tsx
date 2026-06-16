@@ -13,7 +13,9 @@ import {
   readAmbiance,
   type Ambiance,
   readLivingInstrument,
+  readCommitted,
 } from "../design/theme";
+import { CompyHero } from "./CompyHero";
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
@@ -348,6 +350,13 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:living-changed", on);
     return () => window.removeEventListener("compy:living-changed", on);
   }, []);
+  // Committed brand hero (experimental swing, default OFF) — mirrors the flag live for review.
+  const [committed, setCommitted] = useState<boolean>(readCommitted);
+  useEffect(() => {
+    const on = () => setCommitted(readCommitted());
+    window.addEventListener("compy:committed-changed", on);
+    return () => window.removeEventListener("compy:committed-changed", on);
+  }, []);
   useEffect(() => {
     applyInstrumentTheme(itheme);
   }, [itheme]);
@@ -429,6 +438,8 @@ export default function CommandCenter(props: Props) {
 
         {/* Main area */}
         <div className="cc-main">
+          {/* Committed brand hero (experimental swing) — the "Welcome to Compy" moment. Flag-gated. */}
+          {committed && <CompyHero />}
           <header className="cc-header">
             <BackButton onBack={onBack} canGoBack={canGoBack} />
             <ForwardButton onForward={onForward} canGoForward={canGoForward} />

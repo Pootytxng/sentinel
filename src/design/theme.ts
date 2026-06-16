@@ -206,6 +206,35 @@ export function applyLivingInstrument(on: boolean): void {
   }
 }
 
+// Committed brand hero (owner "take a full swing" 2026-06-15) — the bold "Welcome to Compy" moment:
+// a beating pulse-C over a teal signal field. DEFAULT OFF (experimental swing, not shipped) behind
+// `compy_committed`; toggled live for review. Reversible: drop the flag + CompyHero and nothing changes.
+const COMMITTED_KEY = "compy_committed";
+
+export function readCommitted(): boolean {
+  try {
+    return localStorage.getItem(COMMITTED_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyCommitted(on: boolean): void {
+  if (on) document.documentElement.dataset.committed = "on";
+  else delete document.documentElement.dataset.committed;
+  try {
+    localStorage.setItem(COMMITTED_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:committed-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.
