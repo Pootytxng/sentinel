@@ -201,7 +201,6 @@
 /* #1 limiter spotlight (teal-edged) */
 .fc-spotlight {
   border: 1px solid var(--ready, #46d98a);
-  border-left-width: 3px;
   border-radius: var(--r-md, 10px);
   background: rgba(70, 217, 138, 0.06);
   padding: 16px 18px;

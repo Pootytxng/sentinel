@@ -131,8 +131,7 @@
   margin: 12px 0 4px;
   padding: 11px 14px;
   border-radius: 10px;
-  border: 1px solid var(--ix-glass-border, var(--hairline));
-  border-left: 3px solid var(--ix-accent, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--ix-accent, var(--accent)) 30%, var(--ix-glass-border, var(--hairline)));
   background: var(--ix-glass-fill, rgba(255, 255, 255, 0.04));
 }
 .bench-dep-msg {

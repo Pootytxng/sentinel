@@ -194,25 +194,25 @@
 }
 .lx-card {
   border: 1px solid var(--ix-glass-border);
-  border-left: 3px solid var(--ix-text-3);
   border-radius: var(--ix-radius);
   background: var(--ix-glass-fill);
   padding: 15px 17px;
   scroll-margin: 16px;
 }
-/* Edge color by kind / verdict (kernel semantics: accent = real/safe, neutral = placebo/term,
-   danger = risky/trick). */
+/* Verdict color tints the FULL border now (side-stripe anti-pattern retired — kernel §0 /
+   dash_v2 precedent). Kernel semantics: accent = real/safe, neutral = placebo/term,
+   danger = risky/trick. The verdict chip also carries the meaning (color is never the only signal). */
 .lx-card-real,
 .lx-card-guide {
-  border-left-color: var(--ix-accent);
+  border-color: color-mix(in srgb, var(--ix-accent) 32%, var(--ix-glass-border));
 }
 .lx-card-risky,
 .lx-card-trick {
-  border-left-color: var(--ix-danger);
+  border-color: color-mix(in srgb, var(--ix-danger) 32%, var(--ix-glass-border));
 }
 .lx-card-placebo,
 .lx-card-term {
-  border-left-color: var(--ix-text-3);
+  border-color: var(--ix-glass-border);
 }
 /* §5 — the head is the collapsed row's toggle (a doorknob); the body shows on expand. */
 .lx-card-head {

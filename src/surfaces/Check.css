@@ -98,15 +98,15 @@
   justify-content: space-between;
   gap: 18px;
   background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
+  border: 1px solid color-mix(in srgb, var(--ix-amber) 30%, var(--ix-glass-border));
   border-top-color: var(--ix-glass-top);
-  border-left: 3px solid var(--ix-amber);
   border-radius: var(--ix-radius);
   padding: 14px 17px;
   backdrop-filter: blur(6px);
 }
 .check-row-info {
-  border-left-color: var(--ix-text-3);
+  border-color: var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
 }
 .check-row-main {
   min-width: 0;
@@ -148,15 +148,16 @@
   background: var(--ix-glass-fill);
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
-  border-left: 3px solid var(--ix-text-3);
   border-radius: var(--ix-radius);
   padding: 13px 16px;
 }
 .check-driver-pass {
-  border-left-color: var(--ix-accent);
+  border-color: color-mix(in srgb, var(--ix-accent) 30%, var(--ix-glass-border));
+  border-top-color: var(--ix-glass-top);
 }
 .check-driver-advisory {
-  border-left-color: var(--ix-amber);
+  border-color: color-mix(in srgb, var(--ix-amber) 30%, var(--ix-glass-border));
+  border-top-color: var(--ix-glass-top);
 }
 .check-driver-nic {
   margin-top: 9px;
@@ -281,8 +282,7 @@
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border: 1px solid var(--ix-line);
-  border-left: 3px solid var(--ix-amber, #d2a44c);
+  border: 1px solid color-mix(in srgb, var(--ix-amber, #d2a44c) 30%, var(--ix-glass-border));
   border-radius: var(--ix-radius);
   background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
 }

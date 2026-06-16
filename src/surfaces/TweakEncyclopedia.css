@@ -58,19 +58,18 @@
 }
 .tweak-entry {
   border: 1px solid var(--border);
-  border-left-width: 3px;
   border-radius: var(--r-md, 10px);
   background: var(--panel-2);
   padding: 12px 14px;
 }
 .tweak-real {
-  border-left-color: var(--ready, #46d98a);
+  border-color: color-mix(in srgb, var(--ready, #46d98a) 34%, var(--border));
 }
 .tweak-placebo {
-  border-left-color: var(--muted);
+  border-color: var(--border);
 }
 .tweak-risky {
-  border-left-color: var(--attention, #f5c451);
+  border-color: color-mix(in srgb, var(--attention, #f5c451) 34%, var(--border));
 }
 .tweak-entry-head {
   display: flex;
@@ -154,15 +153,15 @@
   color: var(--fg);
 }
 
-/* Per-type left-edge tint (tweaks keep their verdict color from .tweak-real/-placebo/-risky). */
+/* Per-type border tint (tweaks keep their verdict color from .tweak-real/-placebo/-risky). */
 .kl-term {
-  border-left-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
 }
 .kl-trick {
-  border-left-color: var(--danger, #f3716f);
+  border-color: color-mix(in srgb, var(--danger, #f3716f) 36%, var(--border));
 }
 .kl-guide {
-  border-left-color: var(--ready, #46d98a);
+  border-color: color-mix(in srgb, var(--ready, #46d98a) 34%, var(--border));
 }
 
 .kl-typepill {

@@ -1,7 +1,6 @@
 /* Shared tuning-verdict card — tokens only. Color carries the meaning; never a bare green "stable". */
 .tg-verdict {
   border: 1px solid var(--ix-line);
-  border-left-width: 3px;
   border-radius: 8px;
   padding: 10px 12px;
   background: var(--ix-surface-2, rgba(255, 255, 255, 0.02));
@@ -35,14 +34,14 @@
 }
 
 .tg-v-holding {
-  border-left-color: var(--ix-accent);
+  border-color: color-mix(in srgb, var(--ix-accent) 32%, var(--ix-line));
 }
 .tg-v-bad {
-  border-left-color: var(--ix-danger, #e5534b);
+  border-color: color-mix(in srgb, var(--ix-danger, #e5534b) 36%, var(--ix-line));
 }
 .tg-v-early {
-  border-left-color: var(--ix-amber, #d2a44c);
+  border-color: color-mix(in srgb, var(--ix-amber, #d2a44c) 32%, var(--ix-line));
 }
 .tg-v-neutral {
-  border-left-color: var(--ix-text-3);
+  border-color: var(--ix-line);
 }
