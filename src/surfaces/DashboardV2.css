@@ -1,0 +1,164 @@
+/* DashboardV2 — premium telemetry dashboard (owner: evolve toward ui-spec.md). The spec's "Vercel
+   analytics + enthusiast tool" treatment, on Compy's identity (teal, not emerald/blue) + lean stack
+   (custom SVG charts). Monospace telemetry uses tabular-nums so rapidly-updating values never shift
+   layout (the spec's hard requirement). Flag-gated via the parent (compy_dash_v2). */
+
+.d2-root {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.d2-grid {
+  display: grid;
+  gap: 14px;
+}
+.d2-grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.d2-grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+
+.d2-card {
+  position: relative;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 38%),
+    color-mix(in srgb, var(--ix-base, #0b0c10) 70%, #16181d);
+  border: 1px solid color-mix(in srgb, #ffffff 8%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 34px -22px rgba(0, 0, 0, 0.8);
+  padding: 16px 17px;
+  overflow: hidden;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.d2-card:hover {
+  border-color: color-mix(in srgb, var(--ix-accent, #2ee6c0) 34%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px color-mix(in srgb, var(--ix-accent, #2ee6c0) 22%, transparent),
+    0 18px 40px -24px rgba(0, 0, 0, 0.85);
+}
+
+.d2-eyebrow {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, #828896);
+}
+
+/* ── Live telemetry cards ──────────────────────────────────────────────────── */
+.d2-live {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 0;
+}
+.d2-live-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.d2-live-sub {
+  font-size: 11px;
+  color: var(--ix-text-2, #b8bcc8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+.d2-live-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 2px;
+}
+.d2-num {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ix-text-1, #f2f3f7);
+  font-variant-numeric: tabular-nums;
+}
+.d2-unit {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  color: var(--ix-text-3, #828896);
+}
+.d2-live-meta {
+  margin-left: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--ix-text-2, #b8bcc8);
+  font-variant-numeric: tabular-nums;
+}
+.d2-chart {
+  display: block;
+  width: calc(100% + 34px);
+  height: 40px;
+  margin: 8px -17px -1px; /* bleed to the card edges */
+}
+
+/* ── Metric cards ──────────────────────────────────────────────────────────── */
+.d2-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.d2-metric-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--ix-text-1, #f2f3f7);
+}
+.d2-mono {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.d2-text {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+.d2-metric-sub {
+  font-size: 11.5px;
+  color: var(--ix-text-3, #828896);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.d2-tone-ready .d2-metric-value {
+  color: var(--ready, #46d98a);
+}
+.d2-tone-accent .d2-metric-value {
+  color: var(--ix-accent, #2ee6c0);
+}
+.d2-tone-warn .d2-metric-value {
+  color: var(--attention, #f5b740);
+}
+
+.d2-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, #7defcf);
+  margin-bottom: -4px;
+}
+
+.d2-empty {
+  color: var(--ix-text-2, #b8bcc8);
+  font-size: 13px;
+  text-align: center;
+  padding: 22px 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d2-card {
+    transition: none;
+  }
+}

@@ -235,6 +235,35 @@ export function applyCommitted(on: boolean): void {
   }
 }
 
+// Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
+// prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
+// DEFAULT OFF behind `compy_dash_v2`; toggled for review. Evolves the existing app — nothing scrapped.
+const DASH_V2_KEY = "compy_dash_v2";
+
+export function readDashV2(): boolean {
+  try {
+    return localStorage.getItem(DASH_V2_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyDashV2(on: boolean): void {
+  if (on) document.documentElement.dataset.dashV2 = "on";
+  else delete document.documentElement.dataset.dashV2;
+  try {
+    localStorage.setItem(DASH_V2_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:dashv2-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.

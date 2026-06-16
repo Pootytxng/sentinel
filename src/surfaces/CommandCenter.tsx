@@ -14,8 +14,10 @@ import {
   type Ambiance,
   readLivingInstrument,
   readCommitted,
+  readDashV2,
 } from "../design/theme";
 import { CompyHero } from "./CompyHero";
+import { DashboardV2 } from "./DashboardV2";
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
@@ -357,6 +359,13 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:committed-changed", on);
     return () => window.removeEventListener("compy:committed-changed", on);
   }, []);
+  // Dashboard v2 (experimental, default OFF) — the premium telemetry-dashboard prototype on Home.
+  const [dashV2, setDashV2] = useState<boolean>(readDashV2);
+  useEffect(() => {
+    const on = () => setDashV2(readDashV2());
+    window.addEventListener("compy:dashv2-changed", on);
+    return () => window.removeEventListener("compy:dashv2-changed", on);
+  }, []);
   useEffect(() => {
     applyInstrumentTheme(itheme);
   }, [itheme]);
@@ -462,37 +471,45 @@ export default function CommandCenter(props: Props) {
             </button>
           </header>
 
-          {/* Posture hero */}
-          <section className={`cc-panel cc-hero cc-hero-${posture.tone}`}>
-            <SignalRingGauge readiness={readiness} progress={progress} />
-            <div className="cc-hero-text">
-              <div className="cc-panel-eyebrow">System posture</div>
-              <h2 className="cc-hero-headline">{posture.headline}</h2>
-              <p className="cc-hero-sentence">{posture.sentence}</p>
-              {posture.reassurance && <p className="cc-hero-reassure">{posture.reassurance}</p>}
-            </div>
-          </section>
+          {dashV2 ? (
+            /* Dashboard v2 prototype (evolve-toward-ui-spec) — replaces the daily Home body with the
+               premium telemetry dashboard. Flag-gated; the classic Home is one toggle away. */
+            <DashboardV2 hw={hw} sessions={sessions} />
+          ) : (
+            <>
+              {/* Posture hero */}
+              <section className={`cc-panel cc-hero cc-hero-${posture.tone}`}>
+                <SignalRingGauge readiness={readiness} progress={progress} />
+                <div className="cc-hero-text">
+                  <div className="cc-panel-eyebrow">System posture</div>
+                  <h2 className="cc-hero-headline">{posture.headline}</h2>
+                  <p className="cc-hero-sentence">{posture.sentence}</p>
+                  {posture.reassurance && <p className="cc-hero-reassure">{posture.reassurance}</p>}
+                </div>
+              </section>
 
-          <LimiterCard
-            priorities={priorities}
-            limiter={limiter}
-            limiterRec={limiterRec}
-            appliable={limiterAppliable}
-            activeChange={limiterActiveChange}
-            busy={busyLimiter}
-            onToggle={onToggleLimiter}
-            onSeeInFix={onSeeInFix}
-          />
+              <LimiterCard
+                priorities={priorities}
+                limiter={limiter}
+                limiterRec={limiterRec}
+                appliable={limiterAppliable}
+                activeChange={limiterActiveChange}
+                busy={busyLimiter}
+                onToggle={onToggleLimiter}
+                onSeeInFix={onSeeInFix}
+              />
 
-          <LiveStrip sessions={sessions} progress={progress} />
+              <LiveStrip sessions={sessions} progress={progress} />
 
-          {/* "Your hardware" — the detailed card grid (incl. the elastic §6 Network card), shared with
-              the classic Overview via HardwareGrid so the two Homes can't drift. Restores the owner-
-              approved grid to the default Home, below Last Session. Same `hw`, zero new IPC; the global
-              `.grid` reflows responsively (flex-wrap, min-width:0) down to the 380px floor. */}
-          <section className="cc-hardware">
-            <HardwareGrid hw={hw} />
-          </section>
+              {/* "Your hardware" — the detailed card grid (incl. the elastic §6 Network card), shared with
+                  the classic Overview via HardwareGrid so the two Homes can't drift. Restores the owner-
+                  approved grid to the default Home, below Last Session. Same `hw`, zero new IPC; the global
+                  `.grid` reflows responsively (flex-wrap, min-width:0) down to the 380px floor. */}
+              <section className="cc-hardware">
+                <HardwareGrid hw={hw} />
+              </section>
+            </>
+          )}
           {/* Appearance controls (theme + ambiance) live in Settings → Appearance now (smalls §4) —
               the canvas stays clean; the rail's Settings gear is the way there. */}
         </div>
