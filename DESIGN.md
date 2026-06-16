@@ -1,0 +1,111 @@
+# Design
+
+Visual system for Compy — the "Instrument" cockpit. Dark, precise, calm. This captures the
+real tokens in `src/App.css` + `src/design/*`; treat the code as source of truth and keep
+this in sync. Reskin work is **additive + reversible**: tokens layer on, attributes toggle
+skins, dropping a layer returns the app to the prior look byte-for-byte.
+
+## Theme
+
+A **dark instrument cockpit** — graphite/near-black canvas, color reserved for controls and
+live status, motion used as punctuation. Two stacked theming systems:
+
+- **Legacy palette (`[data-theme]`):** Graphite (default) · Carbon Ember · Frost · Aurora
+  Noir. Each overrides *only* color tokens; structure/motion/glow are shared.
+- **Instrument layer (`[data-itheme]` on `<html>`, the current system):** **Halfway**
+  (default — neutral charcoal, teal-on-controls) · **Midnight** (cooler, blue partner more
+  present) · **Hearth** "Warm Ember" (warm base, amber accent — LOCKED owner palette). Sets
+  the `--ix-*` tokens and re-points `--accent*` at the active theme.
+- **Cosmetic skins (reversible flags, default ON):** `data-living="on"`
+  (living-instrument.css — material depth, glow on *live* surfaces only, entrance motion) and
+  `data-dash-v2="on"` (dashboard-skin.css — premium telemetry-card treatment + accent
+  hover-glow + tabular metric numerals). `data-committed` (bold Welcome hero) is default OFF.
+
+## Color
+
+OKLCH-adjacent hand-tuned hex. **Restrained strategy:** neutral surfaces, a single accent
+for controls/active/key-numbers only — never decoration. Status has its own semantic ramp.
+
+### Core palette (App.css `:root`, Graphite default)
+- Canvas: `--bg #07080b`, `--bg-2 #0a0c11`
+- Surfaces: `--panel #12151d` (1) · `--panel-2 #181c26` (2, insets/sparklines) · `--panel-3 #1f242f` (3, hover/elevated)
+- Lines: `--border #242b39` · `--border-strong #313b4e` · `--hairline rgba(255,255,255,.06)`
+- Ink: `--fg #eef1f7` · `--fg-2 #c4ccda` · `--muted #8b95a8` · `--faint #5d6679`
+- Status: `--ready #46d98a` · `--attention #f5b740` · `--danger #f3716f`
+
+### Accent
+- Legacy default accent is blue `#6aa9ff`; the Instrument layer re-points `--accent` to the
+  **brand teal `#2ee6c0`** (Halfway/Midnight) or amber `#f0b878` (Hearth).
+- `--ix-accent` teal = controls, active states, key numbers ONLY. `--ix-accent-2 #7c9cff`
+  (cool blue) is the gradient partner so teal never reads monochrome. `--ix-accent-text
+  #7defcf` for teal label text; `--ix-accent-ink #06231c` dark ink for labels ON bright
+  accent fills (never white — contrast-guarded).
+- Status soft-fill / line tokens in `tokens.css` (`--status-*-soft` at 12% alpha, `-line` at
+  ~32%) — never gray text on a colored fill.
+
+## Typography
+
+- **One UI family:** `--font-ui` = Segoe UI Variable Display/Text → system-ui stack.
+  Native, premium, offline-safe (no remote fonts). Mono: `--font-mono` = Cascadia / JetBrains
+  / Consolas for telemetry readouts.
+- Base size 14px; product register uses a **fixed rem-ish scale**, not fluid headings.
+- Telemetry numbers render **tabular-nums** so live values don't jitter (dash_v2).
+- `text-wrap: balance` on headings; status/labels are sentence case.
+
+## Geometry & Spacing
+
+- Radii: `--r-sm 7px` · `--r 10px` · `--r-lg 14px` · `--r-pill 999px`. Instrument cards use
+  `--ix-radius 14px`.
+- Page frame is **elastic**: `.app` pads `clamp(14px,2.4vw,26px) clamp(16px,3vw,36px)`,
+  fills to `max-width:1600px` then centers (`margin-inline:auto`). Command Center Home runs
+  full-bleed with its own shell.
+- Layout law: flex for 1D, grid for 2D; responsive is **structural** (rail collapses:
+  vertical column >1080px → horizontal strip 720–1080 → fixed bottom room-bar <720), not
+  fluid type.
+
+## Material & Elevation
+
+- Base: `--edge` (inset top highlight), `--shadow-1/-2/-pop`.
+- Living layer adds a deeper ladder (`--liv-elev-1/-2`, brighter `--liv-top` hairline,
+  `--liv-glow`, accent-tinted `--liv-edge`) and glassy cards (translucent panel +
+  `backdrop-filter: blur(7px) saturate(1.3)`) — glass is **purposeful here, not default
+  decoration**. dash_v2 adds `--d2-card-*` (top sheen + hairline) and the signature accent
+  **hover-glow**.
+
+## Motion
+
+- `--ease cubic-bezier(0.4,0.12,0.18,1)` (ease-out, no bounce/elastic). `--dur 160ms`,
+  `--dur-slow 300ms`, `--dur-tap 90ms`. Hover lift `-2px`, press `translateY(1px)`.
+- Motion **conveys state**: dial sweeps 0→real value on mount then holds the truth; glow
+  lights only *live* instrument surfaces, never plain numbers; gentle card stagger on grids.
+- **Reduced motion:** global reset in `tokens.css` kills animation/transition durations;
+  living/dash_v2 effects degrade to static depth+glow. Never gate content visibility on a
+  transition.
+
+## Components
+
+Shared primitives in `src/design/`: `Card` (`.ds-card`, `.ds-panel`), `Gauge`/dial
+(`.ds-dial`, `.ds-dialval`), `Stat`, `StatusPill` (`.ds-pill` + status `.ds-dot`),
+`Sparkline` (`.ds-spark`), `Icon`/`NavGlyph`, `Wordmark`, `ConfirmDialog` (themed, replaces
+native confirm), `BackButton`, `Walkthrough`, `Term`/`WhatsThis` (inline Learn links),
+`TrustSwitch`/`TrustCue`, `EmptyState`, `AmbientBackdrop`.
+
+- Every interactive element carries default/hover/focus/active/disabled states; loading uses
+  skeletons over content, not center spinners.
+- **Side-stripe borders are banned** (already retired in dash_v2 — `.fix-active-card` uses a
+  full border + subtle tint, not a 3px left stripe).
+- Affordance honesty ("doorknob law", `doorknob-guard.test.ts`): if it looks interactive it
+  is, and vice-versa.
+
+## Navigation / IA
+
+One rail, app-wide, from `src/design/homeRail.ts` (parity-guarded): **Home · Check · Play ·
+Fix · Learn · Lab** + Settings gear + Export action. Never teleports — the rail is the only
+location change; detail expands in place. Surfaces live in `src/surfaces/`.
+
+## Guards (keep these green)
+
+`theme-contrast.test.ts` (WCAG incl. ink-on-accent) · `theme-literal-guard.test.ts` (no bare
+theme hexes; use tokens/color-mix) · `doorknob-guard.test.ts` · `homeRail.test.ts` (rail
+parity) · `sweep-guard.test.ts` (one shimmer). Polish must keep all green and must not
+hard-code colors that should be tokens.
