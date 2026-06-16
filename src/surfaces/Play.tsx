@@ -11,6 +11,7 @@ import {
 } from "../design/theme";
 import { SessionDebrief } from "./SessionDebrief";
 import { SessionTrends } from "./SessionTrends";
+import { LiveCharts } from "./LiveCharts";
 import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
 import "./Play.css";
@@ -172,6 +173,9 @@ export default function Play({
         <h2 className="play-title">Monitor</h2>
         <p className="play-sub">Live while you play, and the debriefs after.</p>
       </header>
+
+      {/* Live telemetry charts (dashboard energy) — rolling CPU/GPU/memory from real sensors. dash_v2. */}
+      {typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on" && <LiveCharts />}
 
       <div className="play-cards">
         {/* Live monitor card */}

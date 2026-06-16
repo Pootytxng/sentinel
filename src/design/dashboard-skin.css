@@ -59,6 +59,20 @@
   letter-spacing: 0.01em;
 }
 
+/* Refine: active-change cards drop the 3px side-stripe (a flagged anti-pattern) for a clean full card
+   with a subtle "active" green tint + the d2 hover-glow. */
+:root[data-dash-v2="on"] .fix-active-card {
+  background: var(--d2-card-bg);
+  border: 1px solid color-mix(in srgb, var(--ready, #46d98a) 26%, transparent);
+  border-radius: 14px;
+  box-shadow: var(--d2-card-shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+:root[data-dash-v2="on"] .fix-active-card:hover {
+  border-color: color-mix(in srgb, var(--ready, #46d98a) 42%, transparent);
+  box-shadow: var(--d2-hover-glow);
+}
+
 /* "Details >" — opens the Action Drawer for a tweak (only rendered when dash_v2 is on). */
 .fix-details {
   margin-left: auto;
