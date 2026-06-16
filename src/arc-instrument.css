@@ -235,8 +235,7 @@
 }
 .arc-v2 .fc-spotlight {
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--ix-glass-border);
-  border-left: 3px solid var(--ix-amber);
+  border: 1px solid color-mix(in srgb, var(--ix-amber) 30%, var(--ix-glass-border));
   border-radius: var(--ix-radius);
 }
 .arc-v2 .fc-spotlight-tag {
@@ -382,19 +381,19 @@
 }
 /* Null verdict = frost/neutral (never red — the instrument working). */
 .cmp-no-change.arc-v2 {
-  border-left: 3px solid var(--ix-text-3);
+  border-color: color-mix(in srgb, var(--ix-text-3) 40%, var(--ix-glass-border));
 }
 .arc-v2 .cmp-win {
   color: var(--ix-accent-text);
 }
 .cmp-improved.arc-v2 {
-  border-left: 3px solid var(--ix-accent);
+  border-color: color-mix(in srgb, var(--ix-accent) 36%, var(--ix-glass-border));
 }
 .arc-v2 .cmp-bad {
   color: var(--ix-danger);
 }
 .cmp-regressed.arc-v2 {
-  border-left: 3px solid var(--ix-danger);
+  border-color: color-mix(in srgb, var(--ix-danger) 38%, var(--ix-glass-border));
 }
 .arc-v2 .cmp-receipt-label {
   color: var(--ix-text-2);

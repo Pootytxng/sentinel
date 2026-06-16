@@ -359,9 +359,8 @@
   justify-content: space-between;
   gap: 16px;
   background: var(--ix-glass-fill);
-  border: 1px solid var(--ix-glass-border);
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 30%, var(--ix-glass-border));
   border-top-color: var(--ix-glass-top);
-  border-left: 3px solid var(--ix-accent);
   border-radius: var(--ix-radius);
   padding: 13px 16px;
   backdrop-filter: blur(6px);

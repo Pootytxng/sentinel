@@ -575,16 +575,15 @@ html, body, #root {
 
 .rec {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: 10px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.rec-moderate { border-left-color: #f5c451; }
-.rec-advanced { border-left-color: var(--danger); }
+.rec-moderate { border-color: color-mix(in srgb, #f5c451 32%, var(--border)); }
+.rec-advanced { border-color: color-mix(in srgb, var(--danger) 34%, var(--border)); }
 
 .rec-head {
   display: flex;
@@ -676,7 +675,7 @@ html, body, #root {
    OFF: card is dim/muted so the contrast is obvious at a glance.
    INFO: neutral treatment, advisory pill carries the meaning. */
 .rec-on {
-  border-left-color: #4ade80;
+  border-color: color-mix(in srgb, #4ade80 32%, var(--border));
   background: linear-gradient(to right, rgba(74, 222, 128, 0.05), var(--panel) 30%);
 }
 .rec-on .rec-title { color: var(--fg); }
@@ -688,7 +687,7 @@ html, body, #root {
 .rec-off:hover { opacity: 1; }
 
 .rec-info {
-  border-left-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
 
 /* Three-row status strip: Recommended / Current / Applied by Compy.
@@ -877,7 +876,7 @@ html, body, #root {
 
 .change-stale {
   opacity: 0.7;
-  border-left: 2px solid #f5c451;
+  border-color: color-mix(in srgb, #f5c451 32%, var(--border));
 }
 
 .change-note {
@@ -1479,19 +1478,19 @@ html, body, #root {
   padding: 10px 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
-  border-left: 3px solid var(--muted);
+  border: 1px solid var(--border);
 }
 .readiness-row-ready {
-  border-left-color: #4ade80;
+  border-color: color-mix(in srgb, #4ade80 32%, var(--border));
 }
 .readiness-row-attention {
-  border-left-color: #fbbf24;
+  border-color: color-mix(in srgb, #fbbf24 32%, var(--border));
 }
 .readiness-row-unknown {
-  border-left-color: var(--muted);
+  border-color: var(--border);
 }
 .readiness-row-advisory {
-  border-left-color: #60a5fa;
+  border-color: color-mix(in srgb, #60a5fa 32%, var(--border));
 }
 .readiness-action {
   margin-top: 10px;
@@ -2455,7 +2454,7 @@ body::before {
 }
 
 /* ── Guided (advisory) cards — "lead to water + hold the straw" ──────────── */
-.rec-guided { border-left-color: var(--accent); }
+.rec-guided { border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
 .rec-guided-pill {
   margin-left: auto;
   font-size: 10px;
@@ -2629,7 +2628,6 @@ body::before {
 /* ── RAM-pressure warning banner (Monitoring tab) ───────────────────────── */
 .mem-banner {
   border: 1px solid var(--attention, #f5c451);
-  border-left-width: 3px;
   background: rgba(245, 196, 81, 0.08);
   border-radius: 10px;
   padding: 12px 14px;
@@ -2698,7 +2696,6 @@ body::before {
   gap: 14px;
   flex-wrap: wrap;
   border: 1px solid var(--attention, #f5c451);
-  border-left-width: 3px;
   background: rgba(245, 196, 81, 0.1);
   color: var(--fg);
   border-radius: 10px;
@@ -2772,7 +2769,6 @@ body::before {
 .debrief-tile-note { color: var(--faint); }
 .debrief-insight {
   border: 1px solid var(--attention, #f5c451);
-  border-left-width: 3px;
   background: rgba(245, 196, 81, 0.07);
   border-radius: var(--r-md, 10px);
   padding: 12px 14px;
@@ -2838,17 +2834,16 @@ body::before {
 /* ── Moments 4/4b — comparison verdict card ──────────────────────────────── */
 .cmp {
   border: 1px solid var(--border-strong, var(--border));
-  border-left-width: 3px;
   border-radius: var(--r-md, 10px);
   background: var(--panel-2);
   padding: 14px 16px;
   margin-bottom: 14px;
 }
-.cmp-no-change { border-left-color: var(--muted); } /* neutral — never red */
-.cmp-improved { border-left-color: var(--ready, #46d98a); }
-.cmp-regressed { border-left-color: var(--danger, #f3716f); }
+.cmp-no-change { border-color: var(--border-strong, var(--border)); } /* neutral — never red */
+.cmp-improved { border-color: color-mix(in srgb, var(--ready, #46d98a) 36%, var(--border-strong, var(--border))); }
+.cmp-regressed { border-color: color-mix(in srgb, var(--danger, #f3716f) 38%, var(--border-strong, var(--border))); }
 .cmp-confounded,
-.cmp-expired { border-left-color: var(--muted); } /* honest non-answer — neutral, no credit */
+.cmp-expired { border-color: var(--border-strong, var(--border)); } /* honest non-answer — neutral, no credit */
 .cmp-head {
   display: flex;
   align-items: baseline;
@@ -2921,7 +2916,6 @@ body::before {
 }
 .cmp-means {
   border: 1px solid var(--ready, #46d98a);
-  border-left-width: 3px;
   background: rgba(70, 217, 138, 0.06);
   border-radius: 8px;
   padding: 10px 12px;
@@ -3003,7 +2997,6 @@ body::before {
 /* Drift Watch — a quiet card for readiness checks that regressed since they were last good. */
 .drift-watch {
   border: 1px solid var(--status-attention-line, rgba(245, 183, 64, 0.32));
-  border-left-width: 3px;
   background: var(--status-attention-soft, rgba(245, 183, 64, 0.1));
   border-radius: var(--r-md, 10px);
   padding: 12px 14px;
