@@ -14,7 +14,6 @@ import {
   type Ambiance,
   readLivingInstrument,
   readCommitted,
-  readDashV2,
 } from "../design/theme";
 import { CompyHero } from "./CompyHero";
 import { DashboardV2 } from "./DashboardV2";
@@ -359,10 +358,14 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:committed-changed", on);
     return () => window.removeEventListener("compy:committed-changed", on);
   }, []);
-  // Dashboard v2 (experimental, default OFF) — the premium telemetry-dashboard prototype on Home.
-  const [dashV2, setDashV2] = useState<boolean>(readDashV2);
+  // Dashboard v2 — the premium telemetry-dashboard Home (default ON, owner-approved). Read from the DOM
+  // attribute (set by main.tsx before paint / applyDashV2 on toggle) so the test env — where main.tsx
+  // never runs — keeps the classic Home its tests assert. The live toggle re-reads on the event.
+  const [dashV2, setDashV2] = useState<boolean>(
+    () => typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on",
+  );
   useEffect(() => {
-    const on = () => setDashV2(readDashV2());
+    const on = () => setDashV2(document.documentElement.dataset.dashV2 === "on");
     window.addEventListener("compy:dashv2-changed", on);
     return () => window.removeEventListener("compy:dashv2-changed", on);
   }, []);

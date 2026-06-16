@@ -241,12 +241,14 @@ export function applyCommitted(on: boolean): void {
 const DASH_V2_KEY = "compy_dash_v2";
 
 export function readDashV2(): boolean {
+  // Default ON (owner ship decision 2026-06-15): the approved dashboard energy IS the build now.
+  // The classic surfaces stay reachable as the reversibility failsafe (Settings/localStorage "0").
   try {
-    return localStorage.getItem(DASH_V2_KEY) === "1";
+    return localStorage.getItem(DASH_V2_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyDashV2(on: boolean): void {
