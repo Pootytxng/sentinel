@@ -11,6 +11,14 @@
   --ix-glass-fill: rgba(20, 22, 28, 0.72); /* neutral charcoal glass, no tint */
   --ix-glass-border: rgba(255, 255, 255, 0.08);
   --ix-glass-top: rgba(255, 255, 255, 0.12);
+  /* Aliases for legacy token names used across surfaces (BlackBox, ProGate, Settings, Tuning*,
+     Check nudge). These were referenced WITHOUT a fallback but never defined, so every
+     `border: 1px solid var(--ix-border|--ix-line)` was invalid and silently dropped — those
+     cards rendered borderless. Aliasing to the real glass tokens restores the intended hairline
+     AND makes them theme-follow. Reversible: drop these lines and the borders disappear again. */
+  --ix-border: var(--ix-glass-border);
+  --ix-line: var(--ix-glass-border);
+  --ix-surface-2: rgba(255, 255, 255, 0.03);
   --ix-radius: 14px;
   --ix-text-1: #f2f3f7;
   --ix-text-2: #b8bcc8;
