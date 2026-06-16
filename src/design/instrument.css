@@ -25,6 +25,7 @@
      real tokens. */
   --ix-mono: var(--font-mono);
   --ix-accent-wash: var(--accent-soft);
+  --ix-bg-1: var(--ix-base); /* Settings receipts-preview recessed block (was silently transparent) */
   --ix-radius: 14px;
   --ix-text-1: #f2f3f7;
   --ix-text-2: #b8bcc8;
