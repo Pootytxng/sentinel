@@ -213,6 +213,9 @@ export default function Check({
     (n) => n.driver_age_days != null && n.driver_age_days > 90,
   );
 
+  const livingPreview =
+    typeof document !== "undefined" && document.documentElement.dataset.living === "on";
+
   return (
     <section className="check-root">
       <header className="check-head">
@@ -221,7 +224,11 @@ export default function Check({
           <p className="check-sub">
             {running
               ? "Scanning your rig…"
-              : `${checks.length} checks · ${elapsed?.toFixed(1) ?? "—"}s · ${limiters.length} worth fixing`}
+              : livingPreview
+                ? limiters.length === 0
+                  ? "Everything looks good — nothing needs fixing right now."
+                  : `${limiters.length} ${limiters.length === 1 ? "thing" : "things"} worth a look.`
+                : `${checks.length} checks · ${elapsed?.toFixed(1) ?? "—"}s · ${limiters.length} worth fixing`}
           </p>
         </div>
         <button className="check-rerun" disabled={running} onClick={() => rerun()}>

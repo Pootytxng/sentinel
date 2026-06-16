@@ -30,6 +30,14 @@ function RecTitle({ id, title }: { id: string; title: string }) {
   );
 }
 
+// A rec's technical blurb. Under the preview, a rec with a friendly headline HIDES this line — the
+// plain headline already says it, and the full detail stays under "What's this?" (clarify: "if the
+// heading explains it, the intro is redundant"). Unmapped recs keep their reason line.
+function RecReason({ id, text }: { id: string; text: string }) {
+  if (livingOn() && friendlyLabel(id)) return null;
+  return <p className="fix-row-reason">{text}</p>;
+}
+
 // Second live Instrument surface (spec 2026-06-05-fix-surface). Reskins the recommendations list:
 // worth-fixing trust-switches → already-applied (collapsed, named priors) → the refuse-pile (what
 // Compy won't touch, with a Library link) → guided/advisory recs (no switch). Reuses the EXISTING
@@ -165,7 +173,7 @@ function FixRow({
           <EvidenceChip p={rec.provenance} />
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
         </div>
-        <p className="fix-row-reason">{rec.impact || rec.description}</p>
+        <RecReason id={rec.id} text={rec.impact || rec.description} />
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
         {!applied && (
@@ -236,7 +244,7 @@ function GuidedRow({
           <EvidenceChip p={rec.provenance} />
           <span className="fix-guided-tag">Guided</span>
         </div>
-        <p className="fix-row-reason">{rec.impact || rec.description}</p>
+        <RecReason id={rec.id} text={rec.impact || rec.description} />
         <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
           Not for me
         </button>
@@ -637,7 +645,7 @@ export default function Fix({
                   <div className="fix-row-head">
                     <RecTitle id={r.id} title={r.title} />
                   </div>
-                  <p className="fix-row-reason">{r.impact || r.description}</p>
+                  <RecReason id={r.id} text={r.impact || r.description} />
                 </div>
                 <button className="fix-restore" onClick={() => restore(r.id)}>
                   Restore
