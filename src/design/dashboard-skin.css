@@ -59,6 +59,25 @@
   letter-spacing: 0.01em;
 }
 
+/* "Details >" — opens the Action Drawer for a tweak (only rendered when dash_v2 is on). */
+.fix-details {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--ix-accent-text, #7defcf);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 7px;
+  white-space: nowrap;
+  transition: background 140ms ease;
+}
+.fix-details:hover {
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 13%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root[data-dash-v2="on"] .ds-card,
   :root[data-dash-v2="on"] .fix-row,

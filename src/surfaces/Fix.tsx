@@ -8,12 +8,18 @@ import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
+import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
 import "./Fix.css";
 
 // Whether the Living Instrument preview is on (DOM-read; the surface re-renders fresh on navigation,
 // so a toggle in Settings is reflected when you return here). Drives the plain-language rec titles.
 function livingOn(): boolean {
   return typeof document !== "undefined" && document.documentElement.dataset.living === "on";
+}
+// Dashboard-energy preview — gates the Action Drawer ("Details ›" → the pop-up that shows exactly what
+// a tweak touches). DOM-read; the surface re-renders fresh on navigation.
+function dashOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on";
 }
 
 // A rec's title. Under the Living Instrument preview, jargon recs lead with a plain-language headline
@@ -156,6 +162,7 @@ function FixRow({
   onToggle,
   onWhatsThis,
   onDismiss,
+  onOpenDrawer,
 }: {
   rec: Rec;
   applied: boolean;
@@ -164,6 +171,7 @@ function FixRow({
   onToggle: () => void;
   onWhatsThis: (id: string) => void;
   onDismiss: (id: string) => void;
+  onOpenDrawer?: () => void;
 }) {
   return (
     <li className="fix-row">
@@ -172,6 +180,11 @@ function FixRow({
           <RecTitle id={rec.id} title={rec.title} />
           <EvidenceChip p={rec.provenance} />
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
+          {onOpenDrawer && (
+            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes">
+              Details ›
+            </button>
+          )}
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
@@ -340,11 +353,13 @@ function ActiveChangeCard({
   busy,
   onRollback,
   onWhatsThis,
+  onOpenDrawer,
 }: {
   change: AppliedChange;
   busy: boolean;
   onRollback: () => void;
   onWhatsThis: (id: string) => void;
+  onOpenDrawer?: () => void;
 }) {
   return (
     <li className="fix-active-card">
@@ -352,6 +367,11 @@ function ActiveChangeCard({
         <div className="fix-row-head">
           <RecTitle id={change.rec_id} title={change.rec_title} />
           <WhatsThis id={change.rec_id} onOpen={onWhatsThis} />
+          {onOpenDrawer && (
+            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes">
+              Details ›
+            </button>
+          )}
         </div>
         <p className="fix-row-reason">
           Active since {humanizeWhen(change.applied_at)}
@@ -466,6 +486,11 @@ export default function Fix({
   const rowBusy = (rec: Rec) =>
     busyId !== null && (busyId === rec.id || busyId === activeChangeFor(rec.id)?.id);
   const living = livingOn();
+  const dashV2 = dashOn();
+  // Action Drawer state: the rec/change to present + how its primary action resolves (apply vs roll back).
+  const [drawer, setDrawer] = useState<
+    null | { rec: DrawerRec; applied: boolean; restoresLabel?: string | null; primary: () => void }
+  >(null);
 
   return (
     <section className="fix-root">
@@ -529,6 +554,16 @@ export default function Fix({
               onToggle={() => onToggleRec(rec.id)}
               onWhatsThis={onOpenLibrary}
               onDismiss={dismiss}
+              onOpenDrawer={
+                dashV2
+                  ? () =>
+                      setDrawer({
+                        rec: { id: rec.id, title: rec.title, description: rec.description, impact: rec.impact, provenance: rec.provenance },
+                        applied: false,
+                        primary: () => onToggleRec(rec.id),
+                      })
+                  : undefined
+              }
             />
           ))}
         </ul>
@@ -587,6 +622,17 @@ export default function Fix({
                 busy={busyId !== null && busyId === c.id}
                 onRollback={() => onRollback(c)}
                 onWhatsThis={onOpenLibrary}
+                onOpenDrawer={
+                  dashV2
+                    ? () =>
+                        setDrawer({
+                          rec: { id: c.rec_id, title: c.rec_title },
+                          applied: true,
+                          restoresLabel: c.restores_label,
+                          primary: () => onRollback(c),
+                        })
+                    : undefined
+                }
               />
             ))}
           </ul>
@@ -716,6 +762,24 @@ export default function Fix({
             ))}
           </ul>
         </CollapsibleSection>
+      )}
+
+      {drawer && (
+        <ActionDrawer
+          rec={drawer.rec}
+          applied={drawer.applied}
+          busy={busyId !== null}
+          restoresLabel={drawer.restoresLabel}
+          onApply={() => {
+            drawer.primary();
+            setDrawer(null);
+          }}
+          onRollback={() => {
+            drawer.primary();
+            setDrawer(null);
+          }}
+          onClose={() => setDrawer(null)}
+        />
       )}
     </section>
   );

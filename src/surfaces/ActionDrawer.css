@@ -1,0 +1,216 @@
+/* Action Drawer — the right-sliding Sheet (owner: pop-up tied to the function). Dims + blurs the app
+   behind it; the panel slides in from the right. Premium dashboard energy (dark surface, accent on the
+   action). Reduced-motion: instant, no slide. */
+
+.ad-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(4, 6, 9, 0.55);
+  backdrop-filter: blur(3px);
+  animation: ad-fade 180ms ease both;
+}
+
+.ad-panel {
+  width: clamp(340px, 38vw, 460px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
+    color-mix(in srgb, var(--ix-base, #0b0c10) 60%, #15171c);
+  border-left: 1px solid color-mix(in srgb, var(--ix-accent, #2ee6c0) 18%, #ffffff14);
+  box-shadow: -28px 0 60px -24px rgba(0, 0, 0, 0.85);
+  outline: none;
+  animation: ad-slide 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ad-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid color-mix(in srgb, #ffffff 7%, transparent);
+}
+.ad-headline {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ix-text-1, #f2f3f7);
+  line-height: 1.2;
+}
+.ad-tech {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ix-text-3, #828896);
+}
+.ad-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ix-text-3, #828896);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.ad-close:hover {
+  background: color-mix(in srgb, #ffffff 7%, transparent);
+  color: var(--ix-text-1, #f2f3f7);
+}
+
+.ad-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.ad-block {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ad-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, #7defcf);
+}
+.ad-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2, #b8bcc8);
+}
+.ad-mono-soft {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--ix-text-1, #f2f3f7);
+}
+.ad-muted {
+  color: var(--ix-text-3, #828896);
+}
+.ad-revert {
+  padding: 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ix-accent, #2ee6c0) 20%, transparent);
+}
+
+.ad-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.ad-flag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--ix-text-2, #b8bcc8);
+  background: color-mix(in srgb, #ffffff 6%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 9%, transparent);
+}
+.ad-flag-warn {
+  color: var(--attention, #f5b740);
+  border-color: color-mix(in srgb, var(--attention, #f5b740) 32%, transparent);
+}
+
+.ad-chip {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.ad-tone-ready {
+  color: var(--ready, #46d98a);
+  background: color-mix(in srgb, var(--ready, #46d98a) 14%, transparent);
+}
+.ad-tone-accent {
+  color: var(--ix-accent, #2ee6c0);
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 14%, transparent);
+}
+.ad-tone-muted {
+  color: var(--ix-text-3, #828896);
+  background: color-mix(in srgb, #ffffff 7%, transparent);
+}
+
+.ad-foot {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid color-mix(in srgb, #ffffff 7%, transparent);
+}
+.ad-secondary {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #ffffff 10%, transparent);
+  background: transparent;
+  color: var(--ix-text-2, #b8bcc8);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ad-secondary:hover {
+  border-color: color-mix(in srgb, #ffffff 18%, transparent);
+  color: var(--ix-text-1, #f2f3f7);
+}
+.ad-action {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 140ms ease, box-shadow 140ms ease;
+}
+.ad-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ad-apply {
+  background: var(--ix-accent, #2ee6c0);
+  color: var(--ix-accent-ink, #06231c);
+}
+.ad-apply:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ix-accent, #2ee6c0) 50%, transparent), 0 8px 22px -10px var(--ix-accent, #2ee6c0);
+}
+.ad-rollback {
+  background: color-mix(in srgb, var(--attention, #f5b740) 18%, transparent);
+  color: var(--attention, #f5b740);
+  border-color: color-mix(in srgb, var(--attention, #f5b740) 40%, transparent);
+}
+.ad-rollback:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--attention, #f5b740) 26%, transparent);
+}
+
+@keyframes ad-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ad-slide {
+  from {
+    transform: translateX(28px);
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ad-backdrop,
+  .ad-panel {
+    animation: none;
+  }
+}
