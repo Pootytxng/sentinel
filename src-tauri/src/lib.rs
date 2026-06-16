@@ -14,6 +14,7 @@ mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) �
 mod diagnostics;
 mod export;
 mod fps;
+mod game_mode_persist; // Game Mode persistence keeper — option 1(b) mechanism C, DARK behind keep_game_mode_gate().
 mod gaming_orchestrator;
 mod gaming_session;
 mod hardware;
@@ -724,6 +725,7 @@ pub fn run() {
             get_gaming_session_state,
             recover_gaming_session,
             tray::set_close_to_tray,
+            game_mode_persist::set_keep_game_mode,
         ])
         .on_window_event(|window, event| {
             // Close behavior (Train #3 §1 — clean exit), now with the opt-in tray branch.
@@ -756,6 +758,9 @@ pub fn run() {
             if let Err(e) = crate::tray::init(app.handle()) {
                 eprintln!("[compy] tray init failed (continuing without tray): {e}");
             }
+            // Game Mode persistence keeper (option 1(b) mechanism C). No-op while DARK —
+            // keep_game_mode_gate() ships false, so this never spawns a thread.
+            crate::game_mode_persist::start_keeper();
             // §C build stamp (spec 2026-06-12): DEV windows title themselves with the exact build
             // so an owner review can never run against a stale window unnoticed. Release titles
             // stay clean (the stamp lives in Settings → About there).

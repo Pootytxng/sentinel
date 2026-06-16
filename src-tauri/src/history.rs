@@ -569,6 +569,21 @@ pub(crate) fn get_applied_changes() -> Vec<AppliedChangeView> {
     load_history().unwrap_or_default().into_iter().map(into_view).collect()
 }
 
+/// Whether the LATEST Trust-Ledger entry for `rec_id` is an active apply (status "applied", not
+/// rolled back). Keeps the Game Mode keeper rollback-bound: it only re-asserts a state the user
+/// actually applied via Compy (so the snapshot/undo exists in local history), never one the
+/// (untrusted) webview merely asked for. A corrupt/empty/absent ledger reads false — fail-safe:
+/// no re-assert without a resolvable rollback.
+pub(crate) fn rec_is_active(rec_id: &str) -> bool {
+    load_history()
+        .unwrap_or_default()
+        .iter()
+        .rev()
+        .find(|c| c.rec_id == rec_id)
+        .map(|c| c.status == "applied")
+        .unwrap_or(false)
+}
+
 /// Total Trust-Ledger entry count (append-only, so monotonic). Used as a confound watermark by the
 /// cross-session comparison engine: if the ledger advanced between arming and the next session,
 /// another change landed and the delta can't be honestly attributed.
