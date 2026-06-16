@@ -7,7 +7,28 @@ import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
+import { friendlyLabel } from "../data/friendly-labels";
 import "./Fix.css";
+
+// Whether the Living Instrument preview is on (DOM-read; the surface re-renders fresh on navigation,
+// so a toggle in Settings is reflected when you return here). Drives the plain-language rec titles.
+function livingOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.living === "on";
+}
+
+// A rec's title. Under the Living Instrument preview, jargon recs lead with a plain-language headline
+// + a quiet technical tag (owner direction 2026-06-15: friendly-first, real name kept visible). The
+// original catalog title + measured detail always stay reachable via "What's this?" and exports.
+function RecTitle({ id, title }: { id: string; title: string }) {
+  const f = livingOn() ? friendlyLabel(id) : null;
+  if (!f) return <span className="fix-row-title">{title}</span>;
+  return (
+    <span className="fix-row-title fix-row-title-friendly">
+      <span className="fix-row-headline">{f.headline}</span>
+      {f.tech && <span className="fix-row-tech">{f.tech}</span>}
+    </span>
+  );
+}
 
 // Second live Instrument surface (spec 2026-06-05-fix-surface). Reskins the recommendations list:
 // worth-fixing trust-switches → already-applied (collapsed, named priors) → the refuse-pile (what
@@ -140,7 +161,7 @@ function FixRow({
     <li className="fix-row">
       <div className="fix-row-main">
         <div className="fix-row-head">
-          <span className="fix-row-title">{rec.title}</span>
+          <RecTitle id={rec.id} title={rec.title} />
           <EvidenceChip p={rec.provenance} />
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
         </div>
@@ -211,7 +232,7 @@ function GuidedRow({
     <li className="fix-row fix-row-advisory">
       <div className="fix-row-main">
         <div className="fix-row-head">
-          <span className="fix-row-title">{rec.title}</span>
+          <RecTitle id={rec.id} title={rec.title} />
           <EvidenceChip p={rec.provenance} />
           <span className="fix-guided-tag">Guided</span>
         </div>
@@ -321,7 +342,7 @@ function ActiveChangeCard({
     <li className="fix-active-card">
       <div className="fix-row-main">
         <div className="fix-row-head">
-          <span className="fix-row-title">{change.rec_title}</span>
+          <RecTitle id={change.rec_id} title={change.rec_title} />
           <WhatsThis id={change.rec_id} onOpen={onWhatsThis} />
         </div>
         <p className="fix-row-reason">
@@ -436,17 +457,27 @@ export default function Fix({
 
   const rowBusy = (rec: Rec) =>
     busyId !== null && (busyId === rec.id || busyId === activeChangeFor(rec.id)?.id);
+  const living = livingOn();
 
   return (
     <section className="fix-root">
       <header className="fix-header">
         <div>
           <h2 className="fix-title">Tune</h2>
-          <p className="fix-subtitle">
-            {worthFixing.length} worth a look · {active.length} active ·{" "}
-            {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Measured
-            changes for YOUR rig — every one is one click to undo.
-          </p>
+          {living ? (
+            <p className="fix-subtitle">
+              {worthFixing.length === 0
+                ? "Your rig's already dialed in."
+                : `${worthFixing.length} ${worthFixing.length === 1 ? "thing" : "things"} worth a look.`}{" "}
+              Measured for your rig — every change is one tap to undo.
+            </p>
+          ) : (
+            <p className="fix-subtitle">
+              {worthFixing.length} worth a look · {active.length} active ·{" "}
+              {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Measured
+              changes for YOUR rig — every one is one click to undo.
+            </p>
+          )}
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
               it belongs where approval actually happens. */}
           <p className="fix-consent">Compy never changes anything without your explicit approval.</p>
@@ -581,7 +612,7 @@ export default function Fix({
             {notForThisRig.map((r) => (
               <li key={r.id} className="fix-refuse-row">
                 <div className="fix-row-head">
-                  <span className="fix-row-title">{r.title}</span>
+                  <RecTitle id={r.id} title={r.title} />
                 </div>
                 <p className="fix-row-reason">
                   {r.ineligible_reason ?? "Not applicable to this rig's hardware."}
@@ -604,7 +635,7 @@ export default function Fix({
               <li key={r.id} className="fix-row">
                 <div className="fix-row-main">
                   <div className="fix-row-head">
-                    <span className="fix-row-title">{r.title}</span>
+                    <RecTitle id={r.id} title={r.title} />
                   </div>
                   <p className="fix-row-reason">{r.impact || r.description}</p>
                 </div>

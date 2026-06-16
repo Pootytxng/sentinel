@@ -203,6 +203,24 @@
   }
 }
 
+/* ── Friendly rec titles (Tune) — plain headline over a quiet technical tag ────── */
+/* Owner direction: friendly-first, real name kept visible-but-muted. The headline reads big; the
+   technical name sits quietly beneath so power users still see it without tapping "What's this?". */
+:root[data-living="on"] .fix-row-title-friendly {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+:root[data-living="on"] .fix-row-headline {
+  font-weight: 700;
+}
+:root[data-living="on"] .fix-row-tech {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  letter-spacing: 0.02em;
+}
+
 /* ── A11Y: kill every Living-Instrument animation under reduced motion. The glow +
    depth (not motion) remain; only movement is removed. Belt-and-suspenders with the
    global reset in tokens.css. ─────────────────────────────────────────────────── */
