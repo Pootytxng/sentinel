@@ -8,7 +8,10 @@ export type HomeRailId = "home" | "check" | "play" | "fix" | "learn" | "lab";
 export const HOME_RAIL: { id: HomeRailId; label: string; icon: string }[] = [
   { id: "home", label: "Home", icon: "gauge" },
   { id: "check", label: "Check", icon: "check" },
-  { id: "play", label: "Play", icon: "play" },
+  // Label "Monitor" + a pulse glyph (owner rename 2026-06-15): the room is live monitoring + session
+  // debriefs, so "Play" undersold it. The id stays "play" — it's the persisted nav key (location
+  // history / parity guard); renaming the id would orphan stored history for zero user value.
+  { id: "play", label: "Monitor", icon: "monitor" },
   // Label "Tune" (owner-approved 2026-06-12, naming-proposals B3): "Fix" framed the PC as broken —
   // a fear frame the doctrine retired. The id stays "fix": it's the persisted nav key (location
   // history / parity guard) — renaming the id would orphan stored history for zero user value.

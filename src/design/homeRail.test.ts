@@ -9,8 +9,9 @@ import { HOME_RAIL } from "./homeRail";
 describe("home rail parity", () => {
   it("is the blessed six-home set, in order", () => {
     expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
-    // "Tune" + "Blackbook" labels = owner-approved renames (2026-06-12); persisted ids unchanged.
-    expect(HOME_RAIL.map((r) => r.label)).toEqual(["Home", "Check", "Play", "Tune", "Blackbook", "Lab"]);
+    // "Monitor" (2026-06-15) + "Tune" + "Blackbook" labels = owner-approved renames; persisted ids
+    // unchanged (the id "play" stays the nav key behind the "Monitor" label).
+    expect(HOME_RAIL.map((r) => r.label)).toEqual(["Home", "Check", "Monitor", "Tune", "Blackbook", "Lab"]);
   });
 
   it("BOTH the CommandCenter rail and the app-shell rail render from HOME_RAIL (no second map)", () => {

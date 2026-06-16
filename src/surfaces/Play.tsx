@@ -169,7 +169,7 @@ export default function Play({
   return (
     <section className="play-root">
       <header className="play-head">
-        <h2 className="play-title">Play</h2>
+        <h2 className="play-title">Monitor</h2>
         <p className="play-sub">Live while you play, and the debriefs after.</p>
       </header>
 

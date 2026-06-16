@@ -180,12 +180,14 @@ export function persistOverlayDensity(d: OverlayDensity): void {
 const LIVING_KEY = "compy_living_instrument";
 
 export function readLivingInstrument(): boolean {
+  // Default ON (owner ship decision 2026-06-15): the Living Instrument look is now the shipped default.
+  // The classic look is still reachable — Settings writes "0" (same pattern as the compy_*_v2 flags).
   try {
-    return localStorage.getItem(LIVING_KEY) === "1";
+    return localStorage.getItem(LIVING_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyLivingInstrument(on: boolean): void {

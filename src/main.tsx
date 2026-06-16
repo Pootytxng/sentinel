@@ -34,15 +34,16 @@ try {
   document.documentElement.dataset.itheme = "halfway";
 }
 
-// Living Instrument preview skin (2026-06-15) — a cosmetic depth/glow/motion layer, DEFAULT OFF.
-// Applied before first paint so there's no flash-of-unstyled when it's on. Reversible: drop
-// living-instrument.css + this block and the app falls back to the current look untouched.
+// Living Instrument skin (2026-06-15) — the shipped default look (cosmetic depth/glow/motion +
+// simplified rail + plain-language). Applied before first paint so there's no flash-of-unstyled.
+// Default ON; the classic look is reachable via Settings (which writes "0"). Reversible: drop
+// living-instrument.css + this block and the app falls back to the prior look untouched.
 try {
-  if (localStorage.getItem("compy_living_instrument") === "1") {
+  if (localStorage.getItem("compy_living_instrument") !== "0") {
     document.documentElement.dataset.living = "on";
   }
 } catch {
-  /* ignore — default OFF */
+  document.documentElement.dataset.living = "on"; // default ON even if localStorage is unavailable
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
