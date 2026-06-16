@@ -447,8 +447,27 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   gained `#[serde(default)] prior_allow` (pre-fix typed ledger entries still deserialize → rollback-
 >   first integrity intact). Read-after-write regression test (real HKCU, self-restoring) + pre-fix-
 >   snapshot deserialize test. Rollback contract unchanged; non-elevated HKCU only; old ledger dupes
->   left (honest history) — detection just stops generating new ones. **Live-proven on the AMD dev rig;
->   owner reboot-persist confirmation still nice-to-have but the mechanism is verified + doc-backed.**
+>   left (honest history) — detection just stops generating new ones. The write was live-proven on the AMD
+>   dev rig (read-AFTER-WRITE only); reboot persistence was ASSUMED from the reconcile theory, never reboot-tested.
+> - **⚠️ (A) DISPROVEN — 2026-06-16 (owner reboot test).** The pair-write fix does NOT make Game Mode survive
+>   reboot. Evidence: last Compy apply 2026-06-14 (pair-write, never rolled back) → after the 2026-06-16 reboot
+>   BOTH `AutoGameModeEnabled` + `AllowAutoGameMode` = 0; the owner re-applied 4× post-fix (06-08/11/12/14) = the
+>   loop never stopped. ROOT CAUSE is machine-level, not Compy: **even the official Windows Settings toggle reverts
+>   after reboot on this rig** — **AMD Adrenalin / Radeon Software (ReLive, the `StartDVR`→`RSServCmd.exe` logon
+>   task) resets Windows Game Mode on every login** (known AMD↔Windows Game Bar/DVR conflict; `AllowGameDVR=0`
+>   policy present). Compy CANNOT fix this by writing the registry — any write loses to the per-login reset; do
+>   NOT re-attempt a write-harder "fix." Honest fix (pending owner GO): detect the revert and TELL the user
+>   (likely recording-software conflict) instead of the silent re-apply loop. Diagnosis: this session, 2026-06-16
+>   (systematic-debugging; registry + ledger ground-truth + reboot experiment).
+> - **✅ (A) PERSISTENCE SOLVED via login-delayed re-assert — 2026-06-16 (reboot-VERIFIED).** Refines the
+>   line above: a single *apply-time* write can't win (AMD overwrites it ~46s post-login), but a *login-delayed
+>   re-assert* DOES. Live timing proof on the owner rig: AMD `StartCN`/`StartDVR` run +10s → GameBar reset to 0
+>   at +46s → re-assert wins at **+103s** (Game Mode ON, observed across a real reboot — the test the original
+>   fix never had). Implementation is a LOCAL, non-elevated helper on the owner's machine only:
+>   `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\CompyKeepGameModeOn.vbs` (hidden; re-asserts both
+>   GameBar DWORDs once/min for the first 6 min post-login; rollback = delete the one file). **NOT in the
+>   product.** Shipping this as a Compy feature is GATED — a per-login autorun on OTHER machines = stop-rule 3
+>   (owner sign-off + its own QA). Still queued: the "(a) detect-and-tell" honest-UX fix in-app.
 > - **(B) Opt-in system tray** (`1ede299`) — §1-COMPATIBLE BY DESIGN. Default OFF (close = full §1 clean
 >   exit). Settings → Behavior toggle makes close HIDE to a VISIBLE pulse-C tray icon (icon visibility
 >   tracks the flag — no stray icon when off); right-click Show/Quit (Quit = full §1 teardown);
