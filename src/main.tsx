@@ -19,19 +19,20 @@ if (isOverlay) {
   document.documentElement.classList.add("overlay-mode");
 }
 
-// Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Halfway.
+// Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Midnight.
 // (The classic [data-theme] appearance system was retired 2026-06-06; data-itheme is the one theme.)
 // Local-only, cosmetic; reversible (drop instrument.css + this block to fall back to the old accent).
 try {
   const it = localStorage.getItem("compy_theme");
-  const theme = it === "midnight" || it === "hearth" ? it : "halfway";
+  const valid = ["midnight", "violet", "crimson", "emerald", "hearth"];
+  const theme = it && valid.includes(it) ? it : "midnight";
   document.documentElement.dataset.itheme = theme;
   // Hearth keeper (shadow realm): Hearth lit in December → ambient drifts a hair warmer. No UI ever.
   if (theme === "hearth" && new Date().getMonth() === 11) {
     document.documentElement.dataset.hearthSeason = "december";
   }
 } catch {
-  document.documentElement.dataset.itheme = "halfway";
+  document.documentElement.dataset.itheme = "midnight";
 }
 
 // Living Instrument skin (2026-06-15) — the shipped default look (cosmetic depth/glow/motion +

@@ -69,7 +69,7 @@ function contrast(fg: RGB, bg: RGB): number {
 }
 
 const root = decls(":root");
-const THEMES = ["halfway", "midnight", "hearth"];
+const THEMES = ["midnight", "violet", "crimson", "emerald", "hearth"];
 
 describe("theme contrast (legibility guard)", () => {
   it(":root defaults parsed (guards the inherited tokens)", () => {

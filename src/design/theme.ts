@@ -2,12 +2,14 @@
 // cosmetic. The theme drives the app accent + the backdrop streak colors via `[data-itheme]` on
 // <html> (see instrument.css). Reversible: nothing here touches logic or the backend.
 
-export type InstrumentTheme = "halfway" | "midnight" | "hearth";
+export type InstrumentTheme = "midnight" | "violet" | "crimson" | "emerald" | "hearth";
 export type Ambiance = "off" | "calm" | "full";
 
 export const INSTRUMENT_THEMES: { id: InstrumentTheme; label: string }[] = [
-  { id: "halfway", label: "Halfway" },
   { id: "midnight", label: "Midnight" },
+  { id: "violet", label: "Violet" },
+  { id: "crimson", label: "Crimson" },
+  { id: "emerald", label: "Emerald" },
   { id: "hearth", label: "Hearth" },
 ];
 
@@ -21,7 +23,7 @@ const THEME_KEY = "compy_theme";
 const AMBIANCE_KEY = "compy_ambiance";
 
 const isTheme = (v: unknown): v is InstrumentTheme =>
-  v === "halfway" || v === "midnight" || v === "hearth";
+  v === "midnight" || v === "violet" || v === "crimson" || v === "emerald" || v === "hearth";
 const isAmbiance = (v: unknown): v is Ambiance => v === "off" || v === "calm" || v === "full";
 
 export function readInstrumentTheme(): InstrumentTheme {
@@ -31,7 +33,7 @@ export function readInstrumentTheme(): InstrumentTheme {
   } catch {
     /* ignore — fall back to default */
   }
-  return "halfway";
+  return "midnight";
 }
 
 // Hearth keeper (shadow realm, pure-craftsmanship tier): with the Hearth theme lit in December, the

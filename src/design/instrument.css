@@ -43,23 +43,64 @@
   --ix-base: #0b0c10; /* neutral charcoal canvas */
 }
 
-/* HALFWAY (default) — neutral charcoal, teal-on-controls. */
-:root[data-itheme="halfway"] {
-  --ix-accent: #2ee6c0;
-  --ix-accent-text: #7defcf;
-  --ix-accent-2: #7c9cff;
-  --ix-streak-1: #2ee6c0;
-  --ix-streak-2: #7c9cff;
-  --ix-streak-3: #5eead4;
-  --ix-base: #0b0c10;
-  --ix-text-1: #f2f3f7;
+/* VIOLET — neon purple on a violet-tinted charcoal (pink partner so it never reads monochrome). */
+:root[data-itheme="violet"] {
+  --ix-accent: #b366ff;
+  --ix-accent-text: #d9b8ff;
+  --ix-accent-ink: #1a0a2e; /* dark ink for labels ON the bright violet fill — guarded */
+  --ix-accent-2: #ff77c8;
+  --ix-streak-1: #b366ff;
+  --ix-streak-2: #ff77c8;
+  --ix-streak-3: #9d7bff;
+  --ix-base: #0c0a14;
+  --ix-text-1: #f3f1f8;
 
-  --accent: #2ee6c0;
-  --accent-bright: #7defcf;
-  --accent-hover: #7defcf;
-  --accent-soft: rgba(46, 230, 192, 0.12);
-  --accent-line: rgba(46, 230, 192, 0.3);
-  --accent-glow: rgba(46, 230, 192, 0.36);
+  --accent: #b366ff;
+  --accent-bright: #c98cff;
+  --accent-hover: #c98cff;
+  --accent-soft: rgba(179, 102, 255, 0.13);
+  --accent-line: rgba(179, 102, 255, 0.3);
+  --accent-glow: rgba(179, 102, 255, 0.4);
+}
+
+/* CRIMSON — vivid red on a red-tinted charcoal (coral partner). */
+:root[data-itheme="crimson"] {
+  --ix-accent: #fb3b53;
+  --ix-accent-text: #ffadb8;
+  --ix-accent-ink: #2a0610; /* dark ink for labels ON the red fill — guarded */
+  --ix-accent-2: #ff6b81;
+  --ix-streak-1: #fb3b53;
+  --ix-streak-2: #ff6b81;
+  --ix-streak-3: #e23b6d;
+  --ix-base: #120a0c;
+  --ix-text-1: #f8f1f2;
+
+  --accent: #fb3b53;
+  --accent-bright: #ff6478;
+  --accent-hover: #ff6478;
+  --accent-soft: rgba(251, 59, 83, 0.13);
+  --accent-line: rgba(251, 59, 83, 0.32);
+  --accent-glow: rgba(251, 59, 83, 0.42);
+}
+
+/* EMERALD — neon green on a green-tinted charcoal (lime partner; distinct from Midnight's teal). */
+:root[data-itheme="emerald"] {
+  --ix-accent: #27e08a;
+  --ix-accent-text: #8af0b5;
+  --ix-accent-ink: #042012; /* dark ink for labels ON the green fill — guarded */
+  --ix-accent-2: #a8e85a;
+  --ix-streak-1: #27e08a;
+  --ix-streak-2: #a8e85a;
+  --ix-streak-3: #34e6a0;
+  --ix-base: #080f0b;
+  --ix-text-1: #eef7f1;
+
+  --accent: #27e08a;
+  --accent-bright: #5cebaa;
+  --accent-hover: #5cebaa;
+  --accent-soft: rgba(39, 224, 138, 0.12);
+  --accent-line: rgba(39, 224, 138, 0.3);
+  --accent-glow: rgba(39, 224, 138, 0.38);
 }
 
 /* MIDNIGHT — same neutral discipline, blue-leaning (cooler base, the blue partner more present). */

@@ -34,8 +34,10 @@ import "./Settings.css";
 // Theme identity swatches — a theme PICKER must show each theme's real colors, so these literal
 // kernel values are the justified exception to "tokens-only" (same pattern as the classic picker).
 const THEME_CARDS: { id: InstrumentTheme; label: string; swatch: [string, string, string] }[] = [
-  { id: "halfway", label: "Halfway", swatch: ["#0b0c10", "#2ee6c0", "#7c9cff"] },
   { id: "midnight", label: "Midnight", swatch: ["#090b12", "#2ee6c0", "#7c9cff"] },
+  { id: "violet", label: "Violet", swatch: ["#0c0a14", "#b366ff", "#ff77c8"] },
+  { id: "crimson", label: "Crimson", swatch: ["#120a0c", "#fb3b53", "#ff6b81"] },
+  { id: "emerald", label: "Emerald", swatch: ["#080f0b", "#27e08a", "#a8e85a"] },
   { id: "hearth", label: "Hearth", swatch: ["#15100a", "#f0b878", "#b65f54"] },
 ];
 

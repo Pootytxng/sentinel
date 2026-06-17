@@ -12,20 +12,20 @@ afterEach(() => {
 });
 
 describe("instrument theme", () => {
-  it("defaults to halfway when unset", () => {
-    expect(readInstrumentTheme()).toBe("halfway");
-  });
-
-  it("applies + persists a theme and sets data-itheme on <html>", () => {
-    applyInstrumentTheme("midnight");
-    expect(localStorage.getItem("compy_theme")).toBe("midnight");
-    expect(document.documentElement.dataset.itheme).toBe("midnight");
+  it("defaults to midnight when unset", () => {
     expect(readInstrumentTheme()).toBe("midnight");
   });
 
-  it("falls back to halfway on a junk stored value", () => {
-    localStorage.setItem("compy_theme", "synthwave");
-    expect(readInstrumentTheme()).toBe("halfway");
+  it("applies + persists a theme and sets data-itheme on <html>", () => {
+    applyInstrumentTheme("violet");
+    expect(localStorage.getItem("compy_theme")).toBe("violet");
+    expect(document.documentElement.dataset.itheme).toBe("violet");
+    expect(readInstrumentTheme()).toBe("violet");
+  });
+
+  it("falls back to midnight on a junk stored value", () => {
+    localStorage.setItem("compy_theme", "ludicrous");
+    expect(readInstrumentTheme()).toBe("midnight");
   });
 });
 
