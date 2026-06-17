@@ -12,10 +12,12 @@ live status, motion used as punctuation. Two stacked theming systems:
 
 - **Legacy palette (`[data-theme]`):** Graphite (default) · Carbon Ember · Frost · Aurora
   Noir. Each overrides *only* color tokens; structure/motion/glow are shared.
-- **Instrument layer (`[data-itheme]` on `<html>`, the current system):** **Halfway**
-  (default — neutral charcoal, teal-on-controls) · **Midnight** (cooler, blue partner more
-  present) · **Hearth** "Warm Ember" (warm base, amber accent — LOCKED owner palette). Sets
-  the `--ix-*` tokens and re-points `--accent*` at the active theme.
+- **Instrument layer (`[data-itheme]` on `<html>`, the current system):** **Midnight**
+  (default — teal/blue brand) · **Violet** (neon purple) · **Crimson** (red) · **Emerald**
+  (neon green) · **Hearth** "Warm Ember" (warm amber — LOCKED owner palette). Each tints a
+  charcoal base toward its hue, sets a vivid accent + a complementary ambient-streak partner,
+  and a dark hue-matched `--ix-accent-ink`. Sets the `--ix-*` tokens and re-points `--accent*`
+  at the active theme. (Halfway was retired 2026-06-16 — read too close to Midnight.)
 - **Cosmetic skins (reversible flags, default ON):** `data-living="on"`
   (living-instrument.css — material depth, glow on *live* surfaces only, entrance motion) and
   `data-dash-v2="on"` (dashboard-skin.css — premium telemetry-card treatment + accent
@@ -34,12 +36,18 @@ for controls/active/key-numbers only — never decoration. Status has its own se
 - Status: `--ready #46d98a` · `--attention #f5b740` · `--danger #f3716f`
 
 ### Accent
-- Legacy default accent is blue `#6aa9ff`; the Instrument layer re-points `--accent` to the
-  **brand teal `#2ee6c0`** (Halfway/Midnight) or amber `#f0b878` (Hearth).
-- `--ix-accent` teal = controls, active states, key numbers ONLY. `--ix-accent-2 #7c9cff`
-  (cool blue) is the gradient partner so teal never reads monochrome. `--ix-accent-text
-  #7defcf` for teal label text; `--ix-accent-ink #06231c` dark ink for labels ON bright
-  accent fills (never white — contrast-guarded).
+- Legacy default accent is blue `#6aa9ff`; the Instrument layer re-points `--accent` per theme:
+  teal `#2ee6c0` (Midnight), violet `#b366ff`, crimson `#fb3b53`, emerald `#27e08a`, amber
+  `#f0b878` (Hearth).
+- `--ix-accent` = controls, active states, key numbers ONLY (never decoration). Each theme pairs
+  it with `--ix-accent-2` (a complementary partner so the accent never reads monochrome), an
+  `--ix-accent-text` light shade for label text, and `--ix-accent-ink` — a DARK hue-matched ink
+  for labels ON bright accent fills (never white; contrast-guarded ≥4.5:1).
+- **Legacy `--ix-*` alias block** (instrument.css `:root`): `--ix-border`/`--ix-line` →
+  `--ix-glass-border`, `--ix-surface-2`, `--ix-mono` → `--font-mono`, `--ix-accent-wash` →
+  `--accent-soft`, `--ix-bg-1` → `--ix-base`. These names were referenced without fallbacks but
+  never defined (borders/fonts/backgrounds silently dropped); the aliases restore them, and the
+  border-hygiene guard now fails the build if a fallback-less `var(--ix-…)` is undefined.
 - Status soft-fill / line tokens in `tokens.css` (`--status-*-soft` at 12% alpha, `-line` at
   ~32%) — never gray text on a colored fill.
 
@@ -92,8 +100,9 @@ native confirm), `BackButton`, `Walkthrough`, `Term`/`WhatsThis` (inline Learn l
 
 - Every interactive element carries default/hover/focus/active/disabled states; loading uses
   skeletons over content, not center spinners.
-- **Side-stripe borders are banned** (already retired in dash_v2 — `.fix-active-card` uses a
-  full border + subtle tint, not a 3px left stripe).
+- **Side-stripe borders are banned** and now retired app-wide (2026-06-16 sweep) — status color
+  tints the FULL border via `color-mix` (or a background tint for inline callouts), never a
+  `border-left: 3px` stripe. Enforced by `border-hygiene-guard.test.ts`.
 - Affordance honesty ("doorknob law", `doorknob-guard.test.ts`): if it looks interactive it
   is, and vice-versa.
 
@@ -105,7 +114,8 @@ location change; detail expands in place. Surfaces live in `src/surfaces/`.
 
 ## Guards (keep these green)
 
-`theme-contrast.test.ts` (WCAG incl. ink-on-accent) · `theme-literal-guard.test.ts` (no bare
-theme hexes; use tokens/color-mix) · `doorknob-guard.test.ts` · `homeRail.test.ts` (rail
-parity) · `sweep-guard.test.ts` (one shimmer). Polish must keep all green and must not
-hard-code colors that should be tokens.
+`theme-contrast.test.ts` (WCAG incl. ink-on-accent, all 5 themes) · `theme-literal-guard.test.ts`
+(no bare theme hexes; use tokens/color-mix) · `border-hygiene-guard.test.ts` (no undefined
+fallback-less `--ix-*` tokens; no side-stripe idioms) · `doorknob-guard.test.ts` ·
+`homeRail.test.ts` (rail parity) · `sweep-guard.test.ts` (one shimmer). Polish must keep all
+green and must not hard-code colors that should be tokens.
