@@ -17,6 +17,18 @@
   min-height: calc(100vh - var(--wc-h));
 }
 
+/* Shell rail (every non-Home tab): it had no bounded height, so it stretched with content via flex
+   and its bottom-pinned Settings gear (margin-top:auto) could fall below the fold — the titlebar's
+   34px made it disappear. Give it the SAME viewport-bounded treatment the Home rail (.cc-rail)
+   already uses: clear the fixed titlebar, cap height to the visible area, scroll internally if ever
+   needed. Keeps the gear reachable on every tab. */
+:root[data-custom-chrome] .rail {
+  top: calc(14px + var(--wc-h));
+  align-self: start;
+  height: calc(100vh - 28px - var(--wc-h));
+  overflow-y: auto;
+}
+
 .wc-bar {
   position: fixed;
   top: 0;
