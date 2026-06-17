@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import Overlay from "./Overlay";
 import { ConfirmProvider } from "./design/ConfirmDialog";
+import { WindowChrome } from "./design/WindowChrome";
 
 // The overlay runs in a separate window labeled "overlay". Detect by the
 // window label (robust — avoids URL hash/encoding issues across dev & prod).
@@ -17,6 +18,10 @@ try {
 }
 if (isOverlay) {
   document.documentElement.classList.add("overlay-mode");
+} else {
+  // Main window draws its own chrome (decorations:false) — mark <html> so the layout reserves the
+  // titlebar height. See design/WindowChrome.{tsx,css}.
+  document.documentElement.dataset.customChrome = "1";
 }
 
 // Instrument theme (accent + backdrop streak colors) — applied before first paint. Default Midnight.
@@ -64,6 +69,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <Overlay />
     ) : (
       <ConfirmProvider>
+        <WindowChrome />
         <App />
       </ConfirmProvider>
     )}

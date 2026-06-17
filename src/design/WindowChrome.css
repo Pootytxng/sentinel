@@ -1,0 +1,140 @@
+/* Custom window chrome — slim themed titlebar + resize handles for the decorations:false main window.
+   Activated by data-custom-chrome on <html> (set in main.tsx for the main window only). Token-driven
+   so it follows the active Instrument theme. Reversible: drop this + decorations:false and the OS
+   frame returns. See WindowChrome.tsx for the why. */
+
+:root {
+  --wc-h: 34px;
+}
+
+/* Make room for the fixed titlebar without creating a 34px scroll gap: push the body down by the bar
+   height and shrink the full-height shells by the same amount so total height stays exactly 100vh. */
+:root[data-custom-chrome] body {
+  padding-top: var(--wc-h);
+}
+:root[data-custom-chrome] .app,
+:root[data-custom-chrome] .cc-root {
+  min-height: calc(100vh - var(--wc-h));
+}
+
+.wc-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--wc-h);
+  z-index: 9000; /* window chrome sits above app content + modals so it's always reachable */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ix-base, #0b0c10);
+  border-bottom: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.08));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.wc-title {
+  padding-left: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ix-text-2, #b8bcc8);
+  pointer-events: none; /* clicks fall through to the drag region (the bar) */
+}
+
+.wc-controls {
+  display: flex;
+  height: 100%;
+}
+.wc-btn {
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-2, #b8bcc8);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.wc-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+.wc-btn:hover {
+  background: color-mix(in srgb, var(--ix-text-1, #ffffff) 10%, transparent);
+  color: var(--ix-text-1, #ffffff);
+}
+.wc-btn:focus-visible {
+  outline: 2px solid var(--ix-accent, #2ee6c0);
+  outline-offset: -3px;
+}
+.wc-close:hover {
+  background: #e81123; /* universal close-red convention, not a theme color */
+  color: #ffffff;
+}
+
+/* Explicit resize handles (undecorated windows can lose native edge-resize on Windows). Thin so they
+   never eat real estate; the top edge sits above the titlebar so the very edge resizes, the rest drags. */
+.wc-resize {
+  position: fixed;
+  z-index: 9001;
+}
+.wc-resize-n {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+.wc-resize-s {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: ns-resize;
+}
+.wc-resize-e {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+.wc-resize-w {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+.wc-resize-nw {
+  top: 0;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  cursor: nwse-resize;
+}
+.wc-resize-se {
+  bottom: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  cursor: nwse-resize;
+}
+.wc-resize-sw {
+  bottom: 0;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  cursor: nesw-resize;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-btn {
+    transition: none;
+  }
+}
