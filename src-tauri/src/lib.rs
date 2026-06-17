@@ -644,6 +644,66 @@ fn set_startup_entry_enabled(name: String, enabled: bool) -> Result<(), String> 
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+// ─── Frameless-window maximize fix (Windows) ─────────────────────────────────
+// The main window runs decorations:false (custom titlebar). Undecorated Windows windows
+// maximize over the ENTIRE monitor — covering the taskbar (measured: maximized rect = full
+// monitor, not the work area). We subclass the window proc and answer WM_GETMINMAXINFO with
+// the monitor WORK AREA, so native maximize stops at the taskbar. Real maximize state is
+// preserved (Win+Up / snap / restore still behave). Read-only message handling on our OWN
+// window — no injection into other processes, no hook, no elevation.
+#[cfg(windows)]
+mod win_maximize_fix {
+    use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
+    use windows::Win32::UI::WindowsAndMessaging::{MINMAXINFO, WM_GETMINMAXINFO};
+
+    unsafe extern "system" fn subclass_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+        _uid: usize,
+        _data: usize,
+    ) -> LRESULT {
+        if msg == WM_GETMINMAXINFO {
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            let mut mi = MONITORINFO {
+                cbSize: core::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            if GetMonitorInfoW(monitor, &mut mi).as_bool() {
+                let work: RECT = mi.rcWork;
+                let mon: RECT = mi.rcMonitor;
+                let mmi = &mut *(lparam.0 as *mut MINMAXINFO);
+                mmi.ptMaxPosition.x = work.left - mon.left;
+                mmi.ptMaxPosition.y = work.top - mon.top;
+                mmi.ptMaxSize.x = work.right - work.left;
+                mmi.ptMaxSize.y = work.bottom - work.top;
+                mmi.ptMaxTrackSize.x = work.right - work.left;
+                mmi.ptMaxTrackSize.y = work.bottom - work.top;
+            }
+            return LRESULT(0);
+        }
+        DefSubclassProc(hwnd, msg, wparam, lparam)
+    }
+
+    /// Subclass the main window (by raw HWND address) so maximize respects the work area.
+    /// Installed once at startup; the HWND outlives the app, so we never remove the subclass.
+    pub fn install(hwnd_addr: isize) {
+        unsafe {
+            let _ = SetWindowSubclass(
+                HWND(hwnd_addr as *mut core::ffi::c_void),
+                Some(subclass_proc),
+                1,
+                0,
+            );
+        }
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         // Single-instance MUST be the first plugin. A second launch focuses the
@@ -768,6 +828,17 @@ pub fn run() {
                 use tauri::Manager;
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.set_title(&format!("Compy · {}", build_stamp()));
+                }
+            }
+            // Frameless-window maximize fix — constrain the decorations:false window's maximize to
+            // the monitor work area so it never covers the taskbar (see win_maximize_fix above).
+            #[cfg(windows)]
+            {
+                use tauri::Manager;
+                if let Some(w) = app.get_webview_window("main") {
+                    if let Ok(h) = w.hwnd() {
+                        win_maximize_fix::install(h.0 as isize);
+                    }
                 }
             }
             Ok(())

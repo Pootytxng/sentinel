@@ -58,7 +58,15 @@ windows = { version = "0.59", features = [
   "Win32_Graphics_Direct3D_Fxc",
   # Gdi feature is required to use DXGI_OUTPUT_DESC1 (which carries HMONITOR
   # in its body, defined in the Gdi module). Used by HDR capability probe.
+  # Also provides MonitorFromWindow / GetMonitorInfoW / MONITORINFO for the
+  # frameless-window maximize fix (constrain maximize to the monitor work area).
   "Win32_Graphics_Gdi",
+  # Window subclassing (SetWindowSubclass/DefSubclassProc) + MINMAXINFO/WM_GETMINMAXINFO
+  # so the decorations:false main window's native maximize stops at the monitor work area
+  # instead of covering the taskbar. Read-only window-message handling — no injection, no
+  # hook into other processes, no elevation.
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Shell",
   # QueryPerformanceFrequency, for converting ETW present-event QPC
   # timestamps into milliseconds in the FPS/frametime capture engine.
   "Win32_System_Performance",
