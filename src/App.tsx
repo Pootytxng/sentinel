@@ -927,6 +927,13 @@ function App() {
   const [playV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
   const [labV2] = useState<boolean>(() => readDevFlag(LAB_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
+  // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
+  // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
+  useEffect(() => {
+    const on = () => setShowSettings(true);
+    window.addEventListener("compy:open-settings", on);
+    return () => window.removeEventListener("compy:open-settings", on);
+  }, []);
   const [showOnboarding, setShowOnboarding] = useState(
     () => localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
@@ -1585,14 +1592,9 @@ function App() {
                   <span className="rail-label">Gaming</span>
                 </button>
               )}
-              <button
-                className="rail-item rail-gear"
-                onClick={() => setShowSettings(true)}
-                title="Settings"
-              >
-                <NavGlyph name="gear" />
-                <span className="rail-label">Settings</span>
-              </button>
+              {/* Settings moved to the always-visible custom titlebar (reachable on every tab + every
+                  responsive layout); the rail gear is retired. Its margin-left:auto was also stretching
+                  the "Advanced" cell in the top-strip layout. */}
             </nav>
 
             <div className="content">
