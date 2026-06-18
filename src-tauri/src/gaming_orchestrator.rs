@@ -322,4 +322,47 @@ mod gaming_mode_qa {
         assert!(load_session().is_some(), "the contract must be RETAINED after a failed restore");
         let _ = clear_session();
     }
+
+    #[test]
+    #[ignore = "writes a session fixture; dev-rig QA only"]
+    fn qa6_uac_cancel_during_restore_fails_loudly_and_retains() {
+        use crate::actions::{ForceElevationError, RollbackAction, Snapshot};
+        use crate::gaming_session::{save_session, SessionChange, SessionFile, SESSION_SCHEMA_VERSION};
+        require_clean();
+
+        // A contract with an ELEVATED change (USB selective suspend restores via an elevated powercfg).
+        // ForceElevationError refuses the elevation BEFORE any mutation, so nothing changes on the rig —
+        // this proves only the RestoreFailed / retained / never-false-success path on a cancelled restore.
+        let mut file = SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: "qa6".into(),
+            status: SessionStatus::Active,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            app_version: "qa".into(),
+            changes: vec![SessionChange {
+                label: "USB selective suspend (AC)".into(),
+                rollback_action: RollbackAction::RestorePowerPlanSettingFromSnapshot,
+                snapshot: Snapshot::PowerPlanSetting {
+                    plan_guid: "db9dd473-74ff-4582-ba26-39eaf4cdac4a".into(),
+                    subgroup_guid: "2a737441-1930-4402-8d77-b2bebba308a3".into(),
+                    setting_guid: "48e6b7a6-50f5-4782-a5d4-53bb8f07e226".into(),
+                    prior_ac_value: 1,
+                    prior_dc_value: 1,
+                },
+                elevated_restore: true,
+            }],
+            started_monitoring: false,
+        };
+        save_session(&file).expect("save fixture");
+
+        let res = {
+            let _force = ForceElevationError::begin();
+            restore(&mut file)
+        };
+        eprintln!("[QA6] restore result: {:?}", res);
+        assert!(res.is_err(), "a cancelled elevation during restore must FAIL — never a false success");
+        assert_eq!(file.status, SessionStatus::RestoreFailed, "status must be RestoreFailed");
+        assert!(load_session().is_some(), "the contract must be RETAINED for a later retry");
+        let _ = clear_session();
+    }
 }
