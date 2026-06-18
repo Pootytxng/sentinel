@@ -182,6 +182,42 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🎨🎮 PREMIUM-INSTRUMENT REDESIGN + GAMING-MODE §7 QA + WORKFLOW DISCIPLINE — 2026-06-15→18
+> (`main` @ `b616ad7`).** Big run on top of the one-rail app, all reversible, all verified
+> (cargo **403** · npm **362** · clippy/tsc/vite + /check + /security all clean). Classic surfaces
+> stay reachable via the `compy_*` flags = the failsafe.
+> - **Look & feel:** living-instrument + dashboard-v2 skins ship DEFAULT-ON (material depth, live-data
+>   glow, premium telemetry cards, **Action Drawer**, Monitor charts — memory
+>   [[premium-redesign-flags-and-direction]], 2026-06-15). Theme set is now **Midnight · Violet
+>   (DEFAULT) · Crimson · Emerald · Hearth** (Halfway retired); each tints a charcoal base + vivid
+>   accent + dark hue-matched `--ix-accent-ink` (5-theme contrast guard green). Side-stripe anti-pattern
+>   retired app-wide + undefined `--ix-*` tokens aliased (restored silently-dropped borders), both
+>   locked by `border-hygiene-guard.test.ts`. A11y: real keyboard-focus indicators + ActionDrawer
+>   focus-trap. DESIGN.md refreshed.
+> - **🪟 Frameless main window** (`decorations:false`) with a custom Instrument titlebar — **Settings
+>   gear lives in the titlebar now, reachable on every tab** (the rail gear is retired). **Work-area-aware
+>   maximize** (`WM_GETMINMAXINFO` subclass → never covers the taskbar) + **Win11 rounded corners** (DWM):
+>   see `win_maximize_fix` in `lib.rs`. New `core:window` caps scoped main-only in
+>   `capabilities/window-controls.json` (window self-control only; CSP/opener untouched).
+> - **💚 Hardware-tailored metric grading (the "tailored to your hardware" motto, literal):**
+>   `src/data/metric-grade.ts` grades FPS + frametime against THIS rig's monitor refresh, 1%-low by
+>   consistency, GPU temp + RAM by ramp → green/amber/red unique per rig; raw CPU/GPU **utilization
+>   stays NEUTRAL** (high is good while gaming). Live on Home dashboard, Monitor, overlay + session
+>   debrief; 10 unit tests.
+> - **🎮 GAMING MODE (F1) §7 QA — restore contract PROVEN live; STILL GATED.** The `#[cfg(test)]` +
+>   `#[ignore]`d `gaming_orchestrator::gaming_mode_qa` harness drives the orchestrator directly (does NOT
+>   flip the gate) + reads real ground truth; **6 scenarios pass on the AMD dev rig**: exact-restore ·
+>   crash/orphan recovery · no-partial-on-UAC-cancel-at-start · RestoreFailed-on-cancel-during-restore ·
+>   fail-loud-missing-plan · targets-stored-GUID-on-external-change. **`gaming_mode_gate()` STILL `false`.**
+>   To flip: the **physical PC-reboot test + owner sign-off** (owner-driven; recovery mechanism proven by
+>   the crash test). Pattern captured as the `qa-harness` skill. Honest **AMD Game Mode heads-up** added in
+>   Fix (Radeon resets it on login — tell, don't silently re-offer). NOTE: "Game Mode that survives reboot"
+>   = the owner-machine login keeper (`CompyKeepGameModeOn.vbs`), NOT this F1 feature — two different things.
+> - **Workflow (memories, apply forward):** [[decompose-owner-lists-atomic-todos]] ·
+>   [[dont-stop-at-qa-pitstops]] · [[rigor-workflow-for-non-taste-tasks]] (Cowork three-lane =
+>   I am CC/build+git; prevents collision) · the dev-build-refresh law is scripted
+>   (`scripts/dev-relaunch.ps1`). **Frozen beta refs (`16069fa`) untouched; remote-fetch/updater off.**
+
 > **🌐 THE DARK SITE IS LIVE — 2026-06-12 (CC deploy, owner OAuth'd): https://compy-bd6.pages.dev**
 > (bare `compy.pages.dev` was taken; moot once `compy.gg` attaches). wrangler direct upload of
 > `dist-site/` (147 files), NO GitHub connection; live-verified root + Blackbook index + deep pages
