@@ -12,8 +12,8 @@ afterEach(() => {
 });
 
 describe("instrument theme", () => {
-  it("defaults to midnight when unset", () => {
-    expect(readInstrumentTheme()).toBe("midnight");
+  it("defaults to violet when unset", () => {
+    expect(readInstrumentTheme()).toBe("violet");
   });
 
   it("applies + persists a theme and sets data-itheme on <html>", () => {
@@ -23,9 +23,9 @@ describe("instrument theme", () => {
     expect(readInstrumentTheme()).toBe("violet");
   });
 
-  it("falls back to midnight on a junk stored value", () => {
+  it("falls back to violet on a junk stored value", () => {
     localStorage.setItem("compy_theme", "ludicrous");
-    expect(readInstrumentTheme()).toBe("midnight");
+    expect(readInstrumentTheme()).toBe("violet");
   });
 });
 

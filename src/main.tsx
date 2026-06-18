@@ -30,14 +30,14 @@ if (isOverlay) {
 try {
   const it = localStorage.getItem("compy_theme");
   const valid = ["midnight", "violet", "crimson", "emerald", "hearth"];
-  const theme = it && valid.includes(it) ? it : "midnight";
+  const theme = it && valid.includes(it) ? it : "violet";
   document.documentElement.dataset.itheme = theme;
   // Hearth keeper (shadow realm): Hearth lit in December → ambient drifts a hair warmer. No UI ever.
   if (theme === "hearth" && new Date().getMonth() === 11) {
     document.documentElement.dataset.hearthSeason = "december";
   }
 } catch {
-  document.documentElement.dataset.itheme = "midnight";
+  document.documentElement.dataset.itheme = "violet";
 }
 
 // Living Instrument skin (2026-06-15) — the shipped default look (cosmetic depth/glow/motion +

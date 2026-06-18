@@ -33,7 +33,7 @@ export function readInstrumentTheme(): InstrumentTheme {
   } catch {
     /* ignore — fall back to default */
   }
-  return "midnight";
+  return "violet";
 }
 
 // Hearth keeper (shadow realm, pure-craftsmanship tier): with the Hearth theme lit in December, the
