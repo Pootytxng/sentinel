@@ -131,12 +131,15 @@ html.overlay-mode #root {
 .ovl2.ovl2-nobg {
   background: transparent;
   border-color: transparent;
+  /* "Background off" should read as genuinely see-through. Drop the soft 4px black glow — it formed
+     a faint dark cloud behind the text cluster that reads as a background — and keep only the crisp
+     1px outline, which carries legibility RTSS-style. (If a faint UNIFORM tint still shows even in
+     empty corners, that's the WebView2 transparent-window artifact, not this CSS.) */
   text-shadow:
     -1px -1px 0 #000,
     1px -1px 0 #000,
     -1px 1px 0 #000,
-    1px 1px 0 #000,
-    0 0 4px rgba(0, 0, 0, 0.95);
+    1px 1px 0 #000;
 }
 .ovl2.ovl2-nobg .ovl2-ft {
   filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000);
