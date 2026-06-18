@@ -160,3 +160,104 @@ pub(crate) fn stop() -> Result<(), String> {
     let mut file = load_session().ok_or("no active Gaming Mode session")?;
     restore(&mut file)
 }
+
+// ─── §7 mutation-QA harness (dev-rig only) ───────────────────────────────────
+// Drives the orchestrator DIRECTLY (bypasses the command-layer `gaming_mode_gate`; never flips it).
+// Every test is `#[ignore]`d because it MUTATES the live system (power plan / Game Mode / Game Bar)
+// and restores it — so it runs only on a real UAC-on dev rig, never in CI. Ground truth is read from
+// the actual registry / powercfg and asserted, with evidence printed. Each test runs start→restore
+// BEFORE asserting, so a failed assertion never leaves the rig mutated. Run (owner-present), serial:
+//   cargo test --manifest-path src-tauri/Cargo.toml gaming_mode_qa -- --ignored --nocapture --test-threads=1
+// Covers the non-reboot §7 matrix; PC-reboot-while-active + the final gate flip stay owner-driven.
+#[cfg(test)]
+mod gaming_mode_qa {
+    use super::*;
+    use crate::gaming_session::{clear_session, load_session, SessionStatus};
+
+    /// (active power-plan GUID, Game Mode on?, Game Bar/DVR off?) — the live ground truth.
+    fn snapshot() -> (Option<String>, bool, bool) {
+        (
+            crate::actions::current_power_plan_guid(),
+            crate::game_mode_enabled(),
+            crate::game_bar_disabled(),
+        )
+    }
+
+    /// Refuse to run if a prior session is on disk — clean state is required so we never restore to
+    /// a contaminated baseline. (If this fires, recover the orphan first.)
+    fn require_clean() {
+        assert!(
+            load_session().is_none(),
+            "a Gaming Mode session file already exists — recover/clear it before QA"
+        );
+    }
+
+    #[test]
+    #[ignore = "mutates the live system; dev-rig QA only"]
+    fn qa1_normal_cycle_restores_exact_prior_state() {
+        require_clean();
+        let before = snapshot();
+        eprintln!(
+            "[QA1] before   : plan={:?} game_mode_on={} game_bar_off={}",
+            before.0, before.1, before.2
+        );
+
+        let started = start(StartOptions::default());
+        let applied = snapshot();
+        eprintln!(
+            "[QA1] applied  : plan={:?} game_mode_on={} game_bar_off={} (changes={})",
+            applied.0,
+            applied.1,
+            applied.2,
+            started.as_ref().map(|f| f.changes.len()).unwrap_or(0)
+        );
+
+        // ALWAYS restore before asserting, so a failed assert can't leave the rig mutated.
+        let stop_res = stop();
+        let after = snapshot();
+        eprintln!(
+            "[QA1] restored : plan={:?} game_mode_on={} game_bar_off={}",
+            after.0, after.1, after.2
+        );
+
+        started.expect("start() should succeed on a UAC-free core bundle");
+        // The core bundle's job: Game Mode ON + Game Bar/DVR OFF while active.
+        assert!(applied.1, "Game Mode should be ON after start");
+        assert!(applied.2, "Game Bar/DVR should be OFF after start");
+        stop_res.expect("stop()/restore should succeed");
+        // Exact prior state restored, contract cleared.
+        assert!(load_session().is_none(), "session file must be cleared after a confirmed restore");
+        assert_eq!(after.0, before.0, "power plan not restored to the EXACT prior GUID");
+        assert_eq!(after.1, before.1, "Game Mode not restored to its prior value");
+        assert_eq!(after.2, before.2, "Game Bar/DVR not restored to its prior value");
+
+        let _ = clear_session(); // belt-and-suspenders
+    }
+
+    #[test]
+    #[ignore = "mutates the live system; dev-rig QA only"]
+    fn qa2_crash_then_orphan_recovery_restores() {
+        require_clean();
+        let before = snapshot();
+        eprintln!("[QA2] before   : plan={:?} game_mode_on={} game_bar_off={}", before.0, before.1, before.2);
+
+        // Simulate a CRASH: start, then DON'T call stop() — the session file is left Active on disk,
+        // exactly as a killed process would leave it.
+        start(StartOptions::default()).expect("start() should succeed");
+        assert!(
+            matches!(detect_orphan().map(|f| f.status), Some(SessionStatus::Active)),
+            "an Active session left on disk must be detected as an orphan to recover"
+        );
+
+        // Startup recovery (user-confirmed) restores from the on-disk contract.
+        let recovered = recover(true);
+        let after = snapshot();
+        eprintln!("[QA2] recovered: plan={:?} game_mode_on={} game_bar_off={}", after.0, after.1, after.2);
+
+        recovered.expect("recover(true) should restore from the orphaned contract");
+        assert!(load_session().is_none(), "contract must be cleared after recovery");
+        assert_eq!(after, before, "crash-recovery must restore the EXACT prior state");
+
+        let _ = clear_session();
+    }
+}
