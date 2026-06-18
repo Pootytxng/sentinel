@@ -8,6 +8,10 @@
 # GOTCHA this exists to prevent: killing compy.exe alone leaves the Vite child still holding port
 # 1420, so the next `tauri dev` dies with "Port 1420 is already in use." Always free the port too.
 #
+# GOTCHA #2 (cosmetic): the NEXT run of this script force-kills the prior build's compy.exe, which
+# makes that prior `tauri dev`'s cargo print "process didn't exit successfully ... (exit code:
+# 0xffffffff)". That's the kill, NOT a startup crash — the build started by THIS run is what's live.
+#
 # Usage:
 #   powershell -File scripts/dev-relaunch.ps1              # clean + relaunch (run in background)
 #   powershell -File scripts/dev-relaunch.ps1 -CleanOnly   # just stop everything, don't relaunch
