@@ -21,6 +21,18 @@ function fmtGB(b: number | null | undefined): string {
   return (b / 1024 ** 3).toFixed(1);
 }
 
+// Compact a GPU name for the glance card without losing the model. The old `split(" ").slice(-2)`
+// dropped the series prefix ("AMD Radeon RX 9070 XT" → "9070 XT", losing "RX"); strip the vendor +
+// marketing words instead and keep the actual model ("RX 9070 XT", "RTX 4070", "Arc A770").
+function shortGpu(name: string): string {
+  if (!name) return "—";
+  const model = name
+    .replace(/\b(AMD|NVIDIA|Intel|Radeon|GeForce|Graphics|Series)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return model || name;
+}
+
 // Lean gradient area chart (custom SVG — no recharts). Smooth-ish polyline + a gradient fill fading into
 // the card. Honest: it draws exactly the values handed to it (a rolling window of live sensor reads).
 function AreaChart({ values, max, id }: { values: number[]; max: number; id: string }) {
@@ -148,7 +160,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       <div className="d2-grid d2-grid-4">
         <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
         <Metric label="Cores" value={String(hw.cpu_cores_logical ?? "—")} unit="threads" sub={cpuName} />
-        <Metric label="GPU" value={(gpuName.split(" ").slice(-2).join(" ")) || "—"} mono={false} sub={gpu?.vendor || ""} />
+        <Metric label="GPU" value={shortGpu(gpuName)} mono={false} sub={gpu?.vendor || ""} />
         <Metric label="OS" value={hw.windows_version?.product_name?.replace(/^Windows /, "Win ") || hw.os_name || "—"} mono={false} sub={hw.os_version || ""} />
       </div>
     </div>

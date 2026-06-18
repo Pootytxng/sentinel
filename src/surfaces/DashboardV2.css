@@ -30,7 +30,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 34px -22px rgba(0, 0, 0, 0.8);
   padding: 16px 17px;
   overflow: hidden;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 .d2-card:hover {
   border-color: color-mix(in srgb, var(--ix-accent, #2ee6c0) 34%, transparent);
