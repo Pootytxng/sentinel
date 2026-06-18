@@ -7,6 +7,7 @@ import {
   readOverlayBackdrop,
   readDisplayRefreshHz,
 } from "./design/theme";
+import { gradeFps, gradeLow1, gradeGpuTempC, gradeColor } from "./data/metric-grade";
 import "./Overlay.css";
 
 // Minimal shapes — the overlay only reads a few fields from the same sensor
@@ -130,17 +131,23 @@ export default function Overlay() {
   // glass/ambient; accent only on the unit + the frametime line. Three densities. ──
   if (v2) {
     const fpsNum = sample ? Math.round(sample.fps) : null;
+    // Hardware-tailored grade colors (same per-rig system as the app) — FPS/1%-low against this
+    // display's refresh, GPU temp on the thermal ramp. Utilization stays neutral (good when busy).
+    const rig = { refreshHz };
+    const fpsColor = gradeColor(gradeFps(sample?.fps ?? null, rig));
+    const low1Color = gradeColor(gradeLow1(sample?.low1_fps ?? null, sample?.fps ?? null));
+    const tempColor = gradeColor(gradeGpuTempC(gpu?.temperature_c ?? null));
     return (
       <div className={`ovl2 ovl2-${density}${backdrop === "off" ? " ovl2-nobg" : ""}`}>
         <div className="ovl2-fps">
-          <span className="ovl2-fps-num">{fpsNum ?? "—"}</span>
+          <span className="ovl2-fps-num" style={fpsColor ? { color: fpsColor } : undefined}>{fpsNum ?? "—"}</span>
           <span className="ovl2-unit">fps</span>
         </div>
         {density !== "minimal" && (
           <div className="ovl2-row">
-            <span>1% low {sample ? Math.round(sample.low1_fps) : "—"}</span>
+            <span>1% low <span style={low1Color ? { color: low1Color } : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</span></span>
             <span className="ovl2-dot">·</span>
-            <span>{gpu?.temperature_c ?? "—"}°C</span>
+            <span><span style={tempColor ? { color: tempColor } : undefined}>{gpu?.temperature_c ?? "—"}</span>°C</span>
             {/* §2: Full density adds CPU USAGE (never CPU temp — no kernel driver); data already fetched. */}
             {density === "full" && (
               <>
