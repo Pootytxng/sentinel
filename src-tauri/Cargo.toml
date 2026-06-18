@@ -67,6 +67,9 @@ windows = { version = "0.59", features = [
   # hook into other processes, no elevation.
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Shell",
+  # DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE) to round the frameless window's corners on
+  # Win11 so it reads as a polished app window, not a hard rectangle. No-op on Win10. Cosmetic.
+  "Win32_Graphics_Dwm",
   # QueryPerformanceFrequency, for converting ETW present-event QPC
   # timestamps into milliseconds in the FPS/frametime capture engine.
   "Win32_System_Performance",

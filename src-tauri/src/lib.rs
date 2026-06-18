@@ -690,15 +690,21 @@ mod win_maximize_fix {
         DefSubclassProc(hwnd, msg, wparam, lparam)
     }
 
-    /// Subclass the main window (by raw HWND address) so maximize respects the work area.
-    /// Installed once at startup; the HWND outlives the app, so we never remove the subclass.
+    /// Subclass the main window (by raw HWND address) so maximize respects the work area, and round
+    /// its corners on Win11 (the frameless window otherwise reads as a hard rectangle). Installed once
+    /// at startup; the HWND outlives the app, so we never remove the subclass.
     pub fn install(hwnd_addr: isize) {
+        use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE};
         unsafe {
-            let _ = SetWindowSubclass(
-                HWND(hwnd_addr as *mut core::ffi::c_void),
-                Some(subclass_proc),
-                1,
-                0,
+            let hwnd = HWND(hwnd_addr as *mut core::ffi::c_void);
+            let _ = SetWindowSubclass(hwnd, Some(subclass_proc), 1, 0);
+            // DWMWCP_ROUND = 2 — round corners. No-op on Win10; DWM squares maximized windows anyway.
+            let pref: i32 = 2;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &pref as *const i32 as *const core::ffi::c_void,
+                core::mem::size_of::<i32>() as u32,
             );
         }
     }
