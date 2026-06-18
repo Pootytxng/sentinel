@@ -50,7 +50,6 @@ type Props = {
   // Navigation into the classic (not-yet-reskinned) surfaces + the preview toggle.
   onNavigate: (tab: "Readiness" | "Monitoring" | "Optimize" | "Check" | "Play" | "Lab" | "Learn") => void;
   onRunCheck: () => void;
-  onOpenSettings?: () => void;
   onBack: () => void;
   canGoBack: boolean;
   onForward: () => void;
@@ -326,7 +325,6 @@ export default function CommandCenter(props: Props) {
     onSeeInFix,
     onNavigate,
     onRunCheck,
-    onOpenSettings,
     onBack,
     canGoBack,
     onForward,
@@ -436,12 +434,8 @@ export default function CommandCenter(props: Props) {
               </button>
             )}
           </div>
-          {onOpenSettings && (
-            <button className="cc-rail-item" onClick={onOpenSettings} title="Settings">
-              <NavGlyph name="gear" />
-              <span>Settings</span>
-            </button>
-          )}
+          {/* Settings now lives in the always-visible titlebar (app-wide) — the Home rail gear was
+              redundant, so it's retired here too. One consistent Settings location. */}
           <div className={`cc-rig cc-rig-${posture.tone}`} title={gpu}>
             <span className="cc-rig-dot" aria-hidden="true" />
             <span className="cc-rig-gpu">{gpu}</span>

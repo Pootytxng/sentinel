@@ -1539,7 +1539,6 @@ function App() {
             else setActiveTab(tab);
           }}
           onRunCheck={() => setShowFirstCheck(true)}
-          onOpenSettings={() => setShowSettings(true)}
           onBack={goBack}
           canGoBack={canGoBack}
           onForward={goForward}
