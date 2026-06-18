@@ -365,4 +365,55 @@ mod gaming_mode_qa {
         assert!(load_session().is_some(), "the contract must be RETAINED for a later retry");
         let _ = clear_session();
     }
+
+    #[test]
+    #[ignore = "mutates the active power plan; dev-rig QA only"]
+    fn qa8_external_plan_change_restore_targets_stored_guid() {
+        use crate::actions::{RollbackAction, Snapshot};
+        use crate::gaming_session::{save_session, SessionChange, SessionFile, SESSION_SCHEMA_VERSION};
+        require_clean();
+
+        let before = crate::actions::current_power_plan_guid().expect("need an active power plan");
+        // Universal Windows plans (present on every install); externally switch to one that differs.
+        const BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+        const HIGHPERF: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        let external = if before.eq_ignore_ascii_case(BALANCED) { HIGHPERF } else { BALANCED };
+
+        // Compy's stored contract: the prior plan was `before` (the real current active).
+        let mut file = SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: "qa8".into(),
+            status: SessionStatus::Active,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            app_version: "qa".into(),
+            changes: vec![SessionChange {
+                label: "Power plan".into(),
+                rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
+                snapshot: Snapshot::PowerPlan { prior_guid: before.clone() },
+                elevated_restore: false,
+            }],
+            started_monitoring: false,
+        };
+        save_session(&file).expect("save fixture");
+
+        // Someone changes the active plan OUTSIDE Compy, mid-session (non-elevated setactive).
+        let _ = std::process::Command::new("powercfg").args(["/setactive", external]).output();
+        let mid = crate::actions::current_power_plan_guid();
+
+        // Restore must target the STORED prior GUID, not the externally-changed current.
+        let res = restore(&mut file);
+        let after = crate::actions::current_power_plan_guid();
+        eprintln!("[QA8] before={} external={} mid={:?} restore={:?} after={:?}", before, external, mid, res, after);
+
+        // Cleanup FIRST (owner away): guarantee the rig is back on its original plan regardless of asserts.
+        let _ = std::process::Command::new("powercfg").args(["/setactive", &before]).output();
+        let _ = clear_session();
+
+        res.expect("restore should succeed (the stored plan exists)");
+        assert_eq!(
+            after.as_deref().map(str::to_ascii_lowercase),
+            Some(before.to_ascii_lowercase()),
+            "restore must target the STORED prior GUID, not the external change"
+        );
+    }
 }
