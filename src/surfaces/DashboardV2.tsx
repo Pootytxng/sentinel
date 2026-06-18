@@ -11,6 +11,7 @@ import {
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
+import { shortGpu } from "./hardware-format";
 import "./DashboardV2.css";
 
 // DashboardV2 — the premium telemetry-dashboard prototype (owner: evolve toward ui-spec.md, 2026-06-15).
@@ -28,18 +29,6 @@ const N = 48; // rolling-buffer length (~48s at 1 Hz)
 function fmtGB(b: number | null | undefined): string {
   if (!b || b <= 0) return "—";
   return (b / 1024 ** 3).toFixed(1);
-}
-
-// Compact a GPU name for the glance card without losing the model. The old `split(" ").slice(-2)`
-// dropped the series prefix ("AMD Radeon RX 9070 XT" → "9070 XT", losing "RX"); strip the vendor +
-// marketing words instead and keep the actual model ("RX 9070 XT", "RTX 4070", "Arc A770").
-function shortGpu(name: string): string {
-  if (!name) return "—";
-  const model = name
-    .replace(/\b(AMD|NVIDIA|Intel|Radeon|GeForce|Graphics|Series)\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return model || name;
 }
 
 // Lean gradient area chart (custom SVG — no recharts). Smooth-ish polyline + a gradient fill fading into
