@@ -260,4 +260,66 @@ mod gaming_mode_qa {
 
         let _ = clear_session();
     }
+
+    #[test]
+    #[ignore = "mutates the live system; dev-rig QA only"]
+    fn qa5_uac_cancel_during_start_leaves_no_partial_state() {
+        require_clean();
+        let before = snapshot();
+        eprintln!("[QA5] before: plan={:?} game_mode_on={} game_bar_off={}", before.0, before.1, before.2);
+
+        // Force elevation to FAIL (simulates the user cancelling the UAC prompt) while requesting the
+        // elevated advanced tier. The UAC-free core applies first; the elevated USB step is refused,
+        // so start() must undo the partial core and surface an error — never a partial Active state.
+        let res = {
+            let _force = crate::actions::ForceElevationError::begin();
+            start(StartOptions { advanced_usb: true, advanced_pcie: false })
+        };
+        let after = snapshot();
+        eprintln!("[QA5] after : plan={:?} game_mode_on={} game_bar_off={} err={}", after.0, after.1, after.2, res.is_err());
+
+        assert!(res.is_err(), "a cancelled elevation during start must surface as an error");
+        assert!(load_session().is_none(), "no contract should remain after a cancelled start (partial undone + cleared)");
+        assert_eq!(after, before, "a cancelled start must leave NO partial mutation — exact prior state");
+        let _ = clear_session();
+    }
+
+    #[test]
+    #[ignore = "writes a session fixture; dev-rig QA only"]
+    fn qa7_missing_power_plan_at_restore_fails_loudly() {
+        use crate::actions::{RollbackAction, Snapshot};
+        use crate::gaming_session::{save_session, SessionChange, SessionFile, SESSION_SCHEMA_VERSION};
+        require_clean();
+
+        // A contract whose stored prior plan no longer exists (a valid-shaped GUID that isn't real).
+        // restore_power_plan_unelevated checks existence BEFORE switching, so nothing is mutated — it
+        // must fail loudly and RETAIN the contract, never report a false success.
+        let bogus = "00000000-0000-0000-0000-000000000000";
+        let mut file = SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: "qa7".into(),
+            status: SessionStatus::Active,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            app_version: "qa".into(),
+            changes: vec![SessionChange {
+                label: "Power plan (missing prior)".into(),
+                rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
+                snapshot: Snapshot::PowerPlan { prior_guid: bogus.into() },
+                elevated_restore: false,
+            }],
+            started_monitoring: false,
+        };
+        save_session(&file).expect("save fixture");
+
+        let res = restore(&mut file);
+        eprintln!("[QA7] restore result: {:?}", res);
+        assert!(res.is_err(), "restore must FAIL LOUDLY when the prior plan is gone — never a false success");
+        assert!(
+            res.as_ref().unwrap_err().contains("no longer exists"),
+            "the error should clearly name the missing plan"
+        );
+        assert_eq!(file.status, SessionStatus::RestoreFailed, "status must be RestoreFailed");
+        assert!(load_session().is_some(), "the contract must be RETAINED after a failed restore");
+        let _ = clear_session();
+    }
 }
