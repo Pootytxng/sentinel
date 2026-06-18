@@ -389,6 +389,19 @@
 }
 
 /* "Not for me" — a quiet, low-prominence decline (eligibility train); never competes with Apply. */
+/* AMD Game Mode heads-up — honest note that Radeon software may reset Game Mode on login. Subtle
+   amber FULL-border box (never a side-stripe); informational, not an alarm. */
+.fix-amd-note {
+  margin: 7px 0 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ix-text-2, #b8bcc8);
+  background: color-mix(in srgb, var(--ix-amber, #fbbf3c) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 22%, transparent);
+  border-radius: 8px;
+}
+
 .fix-dismiss {
   align-self: flex-start;
   margin-top: 8px;

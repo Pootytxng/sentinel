@@ -163,6 +163,7 @@ function FixRow({
   onWhatsThis,
   onDismiss,
   onOpenDrawer,
+  vendor,
 }: {
   rec: Rec;
   applied: boolean;
@@ -172,6 +173,7 @@ function FixRow({
   onWhatsThis: (id: string) => void;
   onDismiss: (id: string) => void;
   onOpenDrawer?: () => void;
+  vendor?: GpuVendor;
 }) {
   return (
     <li className="fix-row">
@@ -187,6 +189,15 @@ function FixRow({
           )}
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
+        {/* Honest heads-up: Windows Game Mode is reset on login by Radeon software on many AMD rigs,
+            so it may not stick across reboots — tell the user instead of silently re-offering it. */}
+        {rec.id === "game-mode" && vendor === "amd" && (
+          <p className="fix-amd-note">
+            Heads up: on AMD systems, Radeon Adrenalin tends to switch Windows Game Mode back off after
+            you log in (a known Windows/AMD Game Bar conflict). Compy can turn it on, but it may not
+            stay on across reboots — that's the system resetting it, not a Compy bug.
+          </p>
+        )}
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
         {!applied && (
@@ -548,6 +559,7 @@ export default function Fix({
             <FixRow
               key={rec.id}
               rec={rec}
+              vendor={vendor}
               applied={false}
               activeChange={undefined}
               busy={rowBusy(rec)}
