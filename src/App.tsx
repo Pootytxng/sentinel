@@ -645,6 +645,14 @@ export function ReportModal({
   const [fbConfusing, setFbConfusing] = useState("");
   const [fbNext, setFbNext] = useState("");
   const [fbState, setFbState] = useState<"idle" | "busy" | "added" | "failed">("idle");
+  // Esc closes the report modal (parity with the other dialogs; mouse users get the backdrop).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const feedbackBlock = () => {
     const parts: string[] = [];
     if (fbWhat.trim()) parts.push(`**In one sentence:** ${fbWhat.trim()}`);

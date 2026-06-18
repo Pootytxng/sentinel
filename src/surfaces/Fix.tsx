@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
@@ -465,6 +465,16 @@ export default function Fix({
   const safeBatch = worthFixing.filter((r) => r.severity === "safe");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [batching, setBatching] = useState(false);
+  // Esc closes the consent sheet (parity with the other modals) — but never mid-apply, mirroring
+  // the backdrop's own guard so a keypress can't dismiss the sheet while a batch is running.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !batching) setSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheetOpen, batching]);
   const [batchSummary, setBatchSummary] = useState<{
     applied: number;
     skipped: { title: string; reason: string }[];
@@ -591,8 +601,16 @@ export default function Fix({
             if (!batching) setSheetOpen(false);
           }}
         >
-          <div className="fix-applyall-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="fix-applyall-h">Apply these {safeBatch.length} changes to your rig?</h3>
+          <div
+            className="fix-applyall-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fix-applyall-h"
+          >
+            <h3 id="fix-applyall-h" className="fix-applyall-h">
+              Apply these {safeBatch.length} changes to your rig?
+            </h3>
             <p className="fix-applyall-note">
               Each is reversible — Compy snapshots the prior state and writes a separate undo for every
               one. These tidy up how your rig is set up for you — not a performance boost.

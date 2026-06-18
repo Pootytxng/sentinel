@@ -293,6 +293,15 @@ export default function Library({
     setFocused(id);
   };
 
+  // Esc closes the library (parity with the other modals; mouse users get the backdrop click).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div className="tweak-backdrop" onClick={onClose}>
       <div
