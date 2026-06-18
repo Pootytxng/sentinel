@@ -131,15 +131,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.d2-tone-ready .d2-metric-value {
-  color: var(--ready, #46d98a);
-}
-.d2-tone-accent .d2-metric-value {
-  color: var(--ix-accent, #2ee6c0);
-}
-.d2-tone-warn .d2-metric-value {
-  color: var(--attention, #f5b740);
-}
+/* Metric value colors are now applied inline from the hardware-tailored grade (metric-grade.ts) —
+   the old static .d2-tone-* classes are retired. */
 
 .d2-section-label {
   font-size: 11px;

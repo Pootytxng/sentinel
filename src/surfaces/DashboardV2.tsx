@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { HardwareInfo } from "../App";
 import type { SessionSummary } from "../types";
+import {
+  gradeFps,
+  gradeLow1,
+  gradeFrametimeMs,
+  gradeGpuTempC,
+  gradeRamPct,
+  gradeColor,
+  type Grade,
+} from "../data/metric-grade";
 import "./DashboardV2.css";
 
 // DashboardV2 — the premium telemetry-dashboard prototype (owner: evolve toward ui-spec.md, 2026-06-15).
@@ -108,6 +117,9 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   const ramUsed = cpu ? cpu.ram_used_bytes : null;
   const ramTotal = cpu ? cpu.ram_total_bytes : hw.ram_total_bytes;
   const ramPct = ramUsed && ramTotal ? Math.round((ramUsed / ramTotal) * 100) : null;
+  // Hardware-tailored grading context: FPS/frametime are judged against THIS rig's refresh rate.
+  const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
+  const gpuTempColor = gradeColor(gradeGpuTempC(gpu?.temperature_c ?? null));
 
   return (
     <div className="d2-root">
@@ -134,7 +146,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
           <div className="d2-live-value">
             <span className="d2-num">{gpu?.utilization_gpu_pct != null ? gpu.utilization_gpu_pct.toFixed(0) : "—"}</span>
             <span className="d2-unit">%</span>
-            <span className="d2-live-meta">{gpu?.temperature_c != null ? `${gpu.temperature_c.toFixed(0)}°C` : ""}</span>
+            <span className="d2-live-meta" style={gpuTempColor ? { color: gpuTempColor } : undefined}>{gpu?.temperature_c != null ? `${gpu.temperature_c.toFixed(0)}°C` : ""}</span>
           </div>
           <AreaChart values={gpuHist.current} max={100} id="gpu" />
         </section>
@@ -146,10 +158,10 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       </div>
       {last ? (
         <div className="d2-grid d2-grid-4">
-          <Metric label="Avg FPS" value={last.avg_fps.toFixed(0)} tone="ready" />
-          <Metric label="1% low" value={last.low1_fps_est.toFixed(0)} tone="accent" />
-          <Metric label="Frametime" value={last.avg_frametime_ms.toFixed(1)} unit="ms" />
-          <Metric label="Peak GPU" value={last.peak_gpu_temp_c == null ? "—" : last.peak_gpu_temp_c.toFixed(0)} unit="°C" tone="warn" />
+          <Metric label="Avg FPS" value={last.avg_fps.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
+          <Metric label="1% low" value={last.low1_fps_est.toFixed(0)} grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
+          <Metric label="Frametime" value={last.avg_frametime_ms.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
+          <Metric label="Peak GPU" value={last.peak_gpu_temp_c == null ? "—" : last.peak_gpu_temp_c.toFixed(0)} unit="°C" grade={gradeGpuTempC(last.peak_gpu_temp_c)} />
         </div>
       ) : (
         <div className="d2-card d2-empty">Play a game with monitoring on — your FPS, 1% low and frametime land here.</div>
@@ -158,7 +170,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       {/* Hardware — dense, monospace spec cards. */}
       <div className="d2-section-label">This rig</div>
       <div className="d2-grid d2-grid-4">
-        <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
+        <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} grade={gradeRamPct(ramPct)} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
         <Metric label="Cores" value={String(hw.cpu_cores_logical ?? "—")} unit="threads" sub={cpuName} />
         <Metric label="GPU" value={shortGpu(gpuName)} mono={false} sub={gpu?.vendor || ""} />
         <Metric label="OS" value={hw.windows_version?.product_name?.replace(/^Windows /, "Win ") || hw.os_name || "—"} mono={false} sub={hw.os_version || ""} />
@@ -172,20 +184,25 @@ function Metric({
   value,
   unit,
   sub,
-  tone,
+  grade,
   mono = true,
 }: {
   label: string;
   value: string;
   unit?: string;
   sub?: string;
-  tone?: "ready" | "warn" | "accent";
+  grade?: Grade;
   mono?: boolean;
 }) {
+  // Hardware-tailored color: green/amber/red per the rig's ranges; neutral metrics inherit the ink.
+  const color = grade ? gradeColor(grade) : "";
   return (
-    <section className={`d2-card d2-metric ${tone ? `d2-tone-${tone}` : ""}`}>
+    <section className="d2-card d2-metric">
       <span className="d2-eyebrow">{label}</span>
-      <span className={`d2-metric-value ${mono ? "d2-mono" : "d2-text"}`}>
+      <span
+        className={`d2-metric-value ${mono ? "d2-mono" : "d2-text"}`}
+        style={color ? { color } : undefined}
+      >
         {value}
         {unit && <span className="d2-unit">{unit}</span>}
       </span>
