@@ -167,9 +167,10 @@
 /* Horizontal-strip layout (medium window): keep Advanced + the gear compact so the
    everyday rooms get the width, and never ellipsis-truncate a room label. */
 @media (min-width: 721px) and (max-width: 1080px) {
-  :root[data-living="on"] .rail-advanced,
-  :root[data-living="on"] .rail-gear {
-    flex: 0 0 auto;
+  /* Advanced is an equal-flex peer of the room cells (not a compact special case) so it's sized to
+     match the others in the strip — owner-flagged elongation fix. (The rail gear moved to the titlebar.) */
+  :root[data-living="on"] .rail-advanced {
+    flex: 1 1 0;
   }
   /* Size each room cell to its label so it never shrinks into truncation OR overlap;
      flex still distributes the leftover space evenly. */
@@ -191,8 +192,9 @@
   color: var(--faint);
 }
 @media (min-width: 721px) and (max-width: 1080px) {
+  /* Match the shell rail: Advanced is an equal-flex peer, sized like the other room cells. */
   :root[data-living="on"] .cc-rail-advanced {
-    flex: 0 0 auto;
+    flex: 1 1 0;
   }
   :root[data-living="on"] .cc-rail-item {
     min-width: max-content;
