@@ -437,6 +437,7 @@
 }
 .lx-paste:focus {
   border-color: var(--ix-accent);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgba(46, 230, 192, 0.14));
 }
 .lx-autopsy-actions {
   display: flex;

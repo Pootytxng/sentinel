@@ -14,10 +14,17 @@
   text-underline-offset: 2px;
   text-decoration-color: var(--accent, #6aa6ff);
 }
-.kl-term:hover,
+.kl-term:hover {
+  color: var(--fg);
+}
+/* Keyboard focus needs a clear indicator — color alone is a WCAG fail, and the old rule removed the
+   outline on :focus-visible. Give it a real ring + a solid underline (hover stays subtle for mouse). */
 .kl-term:focus-visible {
   color: var(--fg);
-  outline: none;
+  outline: 2px solid var(--accent, #6aa6ff);
+  outline-offset: 2px;
+  border-radius: 2px;
+  text-decoration-style: solid;
 }
 .kl-tip {
   position: absolute;
