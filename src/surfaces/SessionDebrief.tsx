@@ -11,6 +11,8 @@ import { Term } from "../design/Term";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningDebrief } from "./TuningDebrief";
 import { type GpuVendor } from "./walkthroughs";
+import { gradeFps, gradeLow1, gradeGpuTempC, gradeColor, type Grade } from "../data/metric-grade";
+import { readDisplayRefreshHz } from "../design/theme";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
 // (halfway-home §1, owner-greenlit). Locked copy unchanged. Styles are global (App.css / arc).
@@ -286,12 +288,18 @@ export function SessionDebrief({
       <p className="debrief-sub">{v.sub}</p>
 
       <div className="debrief-tiles">
-        <DebriefTile label={<Term id="hz-vs-fps">Avg FPS</Term>} value={s.avg_fps.toFixed(0)} />
+        <DebriefTile
+          label={<Term id="hz-vs-fps">Avg FPS</Term>}
+          value={s.avg_fps.toFixed(0)}
+          grade={gradeFps(s.avg_fps, { refreshHz: readDisplayRefreshHz() })}
+        />
         <DebriefTile
           label={<Term id="one-percent-lows">1% low</Term>}
           value={s.low1_fps_est.toFixed(0)}
           note="estimate"
+          grade={gradeLow1(s.low1_fps_est, s.avg_fps)}
         />
+        {/* Peak GPU is utilization — left neutral on purpose (high is good while gaming). */}
         <DebriefTile
           label="Peak GPU"
           value={s.peak_gpu_usage_pct == null ? "—" : `${s.peak_gpu_usage_pct}%`}
@@ -299,6 +307,7 @@ export function SessionDebrief({
         <DebriefTile
           label="Peak temp"
           value={s.peak_gpu_temp_c == null ? "—" : `${s.peak_gpu_temp_c}°C`}
+          grade={gradeGpuTempC(s.peak_gpu_temp_c)}
         />
       </div>
 
@@ -395,10 +404,22 @@ export function SessionDebrief({
   );
 }
 
-function DebriefTile({ label, value, note }: { label: ReactNode; value: string; note?: string }) {
+function DebriefTile({
+  label,
+  value,
+  note,
+  grade,
+}: {
+  label: ReactNode;
+  value: string;
+  note?: string;
+  grade?: Grade;
+}) {
+  // Hardware-tailored grade color (green/amber/red); neutral metrics inherit the ink.
+  const color = grade ? gradeColor(grade) : "";
   return (
     <div className="debrief-tile">
-      <div className="debrief-tile-value">{value}</div>
+      <div className="debrief-tile-value" style={color ? { color } : undefined}>{value}</div>
       <div className="debrief-tile-label">
         {label}
         {note && <span className="debrief-tile-note"> · {note}</span>}
