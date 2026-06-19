@@ -1777,15 +1777,15 @@ body {
 /* ── Header → wordmark + live indicator + hairline divider ──────────────── */
 .header {
   position: relative;
-  padding-bottom: 18px;
+  padding-bottom: 11px;
   border-bottom: 1px solid var(--hairline);
 }
 .header h1 {
-  font-size: 30px;
-  letter-spacing: -0.03em;
+  font-size: 19px;
+  letter-spacing: -0.02em;
   display: inline-flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   color: #fff; /* fallback if background-clip:text is unsupported */
   background: linear-gradient(180deg, #ffffff, #b8c4d8);
   -webkit-background-clip: text;

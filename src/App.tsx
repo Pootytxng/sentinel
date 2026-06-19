@@ -1463,8 +1463,9 @@ function App() {
         <BackButton onBack={goBack} canGoBack={canGoBack} />
         <ForwardButton onForward={goForward} canGoForward={canGoForward} />
         <div>
-          <h1><Wordmark size={24} /></h1>
-          <p className="tag">Hardware-aware PC optimization</p>
+          {/* ui-sweep: slimmed the repeated room branding (the titlebar already carries the
+              wordmark); the full wordmark + tagline stays on Home where it sets the tone. */}
+          <h1><Wordmark size={17} /></h1>
         </div>
         <div className="header-right">
           {/* Export is the one header action (one-rail §1b). The rules-source chip moved to
