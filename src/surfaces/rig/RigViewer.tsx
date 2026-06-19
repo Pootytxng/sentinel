@@ -51,8 +51,9 @@ export function RigViewer({ hw }: { hw: HardwareInfo }) {
       </div>
 
       <p className="rig-honesty">
-        Tailored to your rig — every part and spec here is read live from your PC. A cooler, PSU and
-        case fans aren't software-detectable, so Compy shows them faint rather than guess.
+        Tailored to your rig — parts and specs read live from your PC. Fans spin at their real RPM
+        when HWiNFO or LibreHardwareMonitor is running; without one they stay faint placeholders. A
+        PSU and the cooler model have no software identity, so they remain ghosts rather than guesses.
       </p>
     </div>
   );

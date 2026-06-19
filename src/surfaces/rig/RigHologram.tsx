@@ -3,10 +3,11 @@ import { Canvas } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import { invoke } from "@tauri-apps/api/core";
 import type { HardwareInfo } from "../../App";
-import { buildRigParts } from "./rig-parts";
+import { buildRigParts, type Vec3 } from "./rig-parts";
 import { useRigColors, partColor } from "./use-rig-colors";
 import { RigCase } from "./RigCase";
 import { RigPart } from "./RigPart";
+import { RigFan, type FanInfo } from "./RigFan";
 
 // The 3D hologram canvas — the user's REAL rig, theme-aware, doctrine-safe:
 //  • parts + specs come from buildRigParts(hw) (real hardware; honest ghosts), never fabricated.
@@ -38,6 +39,9 @@ export function RigHologram({
   const parts = useMemo(() => buildRigParts(hw), [hw]);
   const [reduced, setReduced] = useState(false);
   const [gameActive, setGameActive] = useState(false);
+  const [fanSensors, setFanSensors] = useState<{ label: string; rpm: number; source: string }[] | null>(
+    null,
+  );
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -74,6 +78,60 @@ export function RigHologram({
     });
   }, [parts, colors]);
 
+  // Live fans — polled only while no game is capturing (the hologram is paused then anyway).
+  useEffect(() => {
+    if (gameActive) return;
+    let cancelled = false;
+    const poll = () => {
+      invoke<{ label: string; rpm: number; source: string }[]>("get_fan_sensors")
+        .then((f) => !cancelled && setFanSensors(f))
+        .catch(() => {});
+    };
+    poll();
+    const id = window.setInterval(poll, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [gameActive]);
+
+  const fans: FanInfo[] = useMemo(() => {
+    if (fanSensors && fanSensors.length > 0) {
+      return fanSensors.map((s, i) => ({ id: `fan-${i}`, label: s.label, rpm: s.rpm, detected: true }));
+    }
+    // Nothing publishing → honest static ghosts (the "run a monitor" nudge lives in RigViewer).
+    return [
+      { id: "fan-ghost-cpu", label: "CPU fan", rpm: null, detected: false },
+      { id: "fan-ghost-front", label: "Front intake", rpm: null, detected: false },
+      { id: "fan-ghost-rear", label: "Rear exhaust", rpm: null, detected: false },
+    ];
+  }, [fanSensors]);
+
+  const fanPlacements = useMemo(() => {
+    const casePos: Vec3[] = [
+      [-1.36, 0.85, 0.85],
+      [-1.36, -0.15, 0.85],
+      [-1.36, -1.05, 0.85],
+      [1.36, 0.55, 0.85],
+      [0, 2.0, 0.45],
+    ];
+    const caseExp: Vec3[] = [
+      [3.4, 1.1, 0.9],
+      [3.4, 0.1, 0.9],
+      [3.4, -0.9, 0.9],
+      [-3.4, 0.55, 0.9],
+      [0, 3.6, 0.7],
+    ];
+    let ci = 0;
+    return fans.map((f) => {
+      if (/cpu/i.test(f.label)) {
+        return { fan: f, assembled: [0.05, 1.15, 0.08] as Vec3, exploded: [0.3, 3.3, 0.7] as Vec3 };
+      }
+      const idx = ci++;
+      return { fan: f, assembled: casePos[idx % casePos.length], exploded: caseExp[idx % caseExp.length] };
+    });
+  }, [fans]);
+
   const frameloop: "always" | "demand" = gameActive || reduced ? "demand" : "always";
   const orbiting = autoRotate && !gameActive && !reduced;
 
@@ -105,6 +163,21 @@ export function RigHologram({
             reduced={reduced}
             onSelect={onSelect}
             onHover={onHover}
+          />
+        ))}
+        {fanPlacements.map((fp) => (
+          <RigFan
+            key={fp.fan.id}
+            fan={fp.fan}
+            color={fp.fan.detected ? colors.palette[2] : colors.ghost}
+            assembled={fp.assembled}
+            exploded={fp.exploded}
+            isExploded={exploded}
+            reduced={reduced}
+            hoveredId={hoveredId}
+            selectedId={selectedId}
+            onHover={onHover}
+            onSelect={onSelect}
           />
         ))}
       </group>

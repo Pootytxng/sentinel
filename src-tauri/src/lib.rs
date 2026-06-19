@@ -487,6 +487,13 @@ fn get_cpu_temp() -> Option<cpu_temp::CpuTemp> {
     cpu_temp::read_cpu_temp()
 }
 
+// Live fan RPMs via the SAME driver-free monitor interop (HWiNFO/LHM/OHM). [] when no monitor is
+// publishing — the rig hologram then shows fans as honest "not detected" ghosts. Read-only.
+#[tauri::command]
+fn get_fan_sensors() -> Vec<cpu_temp::FanSensor> {
+    cpu_temp::read_fans()
+}
+
 // Live calibration trial: measure the rig's run-to-run noise on the running game (read-only;
 // no tweak, no mutation). Validates the whole capture -> window -> verdict pipeline.
 #[tauri::command]
@@ -780,6 +787,7 @@ pub fn run() {
             start_benchmark,
             cancel_benchmark,
             get_cpu_temp,
+            get_fan_sensors,
             start_calibration,
             cancel_trial,
             start_tweak_trial,

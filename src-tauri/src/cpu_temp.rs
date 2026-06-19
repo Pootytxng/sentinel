@@ -24,6 +24,18 @@ pub(crate) struct CpuTemp {
     pub label: String,
 }
 
+/// A fan reading from a user-installed monitor — same driver-free interop as CpuTemp. RPM > 0 means
+/// the fan is spinning (on/working); we never fabricate one.
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct FanSensor {
+    /// Label as the monitor reports it, e.g. "CPU Fan", "Fan #2", "GPU Fan".
+    pub label: String,
+    /// Live speed in RPM.
+    pub rpm: u32,
+    /// The monitor the reading came from — always shown, so it's attributable.
+    pub source: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct OhmSensor {
@@ -90,6 +102,120 @@ fn read_ohm(ns: &str) -> Option<CpuTemp> {
         source: ns.to_string(),
         label: pick.name.clone(),
     })
+}
+
+// ── Fan readout (same driver-free interop; no kernel driver) ──────────────────
+/// Read every fan a user-installed monitor is publishing (HWiNFO shared memory, then LHM/OHM WMI).
+/// Returns [] when nothing is publishing — the honest "bring your own monitor" default.
+pub(crate) fn read_fans() -> Vec<FanSensor> {
+    crate::hardware::on_wmi_thread(read_fans_inner)
+}
+
+fn read_fans_inner() -> Vec<FanSensor> {
+    let hw = read_fans_hwinfo();
+    if !hw.is_empty() {
+        return hw;
+    }
+    for ns in ["LibreHardwareMonitor", "OpenHardwareMonitor"] {
+        let f = read_fans_ohm(ns);
+        if !f.is_empty() {
+            return f;
+        }
+    }
+    Vec::new()
+}
+
+fn read_fans_ohm(ns: &str) -> Vec<FanSensor> {
+    let Ok(com) = wmi::COMLibrary::new() else {
+        return Vec::new();
+    };
+    let Ok(conn) = wmi::WMIConnection::with_namespace_path(&format!("root\\{ns}"), com) else {
+        return Vec::new();
+    };
+    let sensors: Vec<OhmSensor> = conn
+        .raw_query("SELECT Name, Value, Identifier FROM Sensor WHERE SensorType = 'Fan'")
+        .unwrap_or_default();
+    sensors
+        .iter()
+        .filter(|s| s.value.is_finite() && s.value >= 0.0 && s.value < 20000.0)
+        .map(|s| FanSensor {
+            label: s.name.clone(),
+            rpm: s.value.round() as u32,
+            source: ns.to_string(),
+        })
+        .collect()
+}
+
+const HWI_SENSOR_TYPE_FAN: u32 = 3;
+
+fn read_fans_hwinfo() -> Vec<FanSensor> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Memory::{
+        MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_READ,
+    };
+    for name in ["Global\\HWiNFO_SENS_SM2", "HWiNFO_SENS_SM2"] {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            let Ok(handle) = OpenFileMappingW(FILE_MAP_READ.0, false, PCWSTR(wide.as_ptr())) else {
+                continue;
+            };
+            let view = MapViewOfFile(handle, FILE_MAP_READ, 0, 0, 0);
+            let fans = if view.Value.is_null() {
+                Vec::new()
+            } else {
+                let f = parse_hwinfo_fans(view.Value as *const u8);
+                let _ = UnmapViewOfFile(view);
+                f
+            };
+            let _ = CloseHandle(handle);
+            if !fans.is_empty() {
+                return fans;
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Parse fan readings (reading_type == Fan) from the mapped HWiNFO block. Same validated, fail-soft
+/// layout handling as parse_hwinfo.
+unsafe fn parse_hwinfo_fans(base: *const u8) -> Vec<FanSensor> {
+    let sig4 = std::slice::from_raw_parts(base, 4);
+    let sig_u32 = u32::from_le_bytes([sig4[0], sig4[1], sig4[2], sig4[3]]);
+    if sig4 != b"SiWH" && sig4 != b"HWiS" && sig_u32 != 0x5369_5748 {
+        return Vec::new();
+    }
+    let h: HwiHeader = std::ptr::read_unaligned(base as *const HwiHeader);
+    let off = h.offset_reading as usize;
+    let size_elem = h.size_reading_elem as usize;
+    let num = h.num_reading as usize;
+    if size_elem < std::mem::size_of::<HwiReading>()
+        || off < std::mem::size_of::<HwiHeader>()
+        || num == 0
+        || num > 100_000
+    {
+        return Vec::new();
+    }
+    let mut fans = Vec::new();
+    for i in 0..num {
+        let e: HwiReading =
+            std::ptr::read_unaligned(base.add(off + i * size_elem) as *const HwiReading);
+        if e.reading_type != HWI_SENSOR_TYPE_FAN {
+            continue;
+        }
+        let label_bytes = e.label_orig;
+        let label = cstr(&label_bytes);
+        let v = e.value;
+        if !v.is_finite() || v < 0.0 || v >= 20000.0 {
+            continue;
+        }
+        fans.push(FanSensor {
+            label,
+            rpm: v.round() as u32,
+            source: "HWiNFO".into(),
+        });
+    }
+    fans
 }
 
 // ── HWiNFO shared-memory reader ──────────────────────────────────────────────
@@ -293,5 +419,21 @@ mod hwinfo_tests {
     fn none_when_no_cpu_temp_present() {
         let buf = block(&[(1, "GPU Temperature", 70.0), (1, "Motherboard", 35.0)]);
         assert!(unsafe { parse_hwinfo(buf.as_ptr()) }.is_none());
+    }
+
+    #[test]
+    fn parses_fans_excludes_temps_keeps_stopped() {
+        let buf = block(&[
+            (1, "CPU (Tctl/Tdie)", 55.0), // temperature — must NOT appear as a fan
+            (3, "CPU Fan", 1200.0),
+            (3, "Fan #2", 900.0),
+            (3, "Fan #3", 0.0), // a stopped fan is still reported honestly (0 RPM)
+        ]);
+        let fans = unsafe { parse_hwinfo_fans(buf.as_ptr()) };
+        assert_eq!(fans.len(), 3);
+        assert_eq!(fans[0].label, "CPU Fan");
+        assert_eq!(fans[0].rpm, 1200);
+        assert_eq!(fans[0].source, "HWiNFO");
+        assert!(fans.iter().all(|f| !f.label.contains("Tctl")));
     }
 }
