@@ -88,10 +88,10 @@ export default function Lab({
       <div className="lab-dotgrid" aria-hidden="true" />
       <div className="lab-inner">
         <header className="lab-head">
-          <h2 className="lab-title">Lab</h2>
+          <h2 className="lab-title">Advanced</h2>
           <p className="lab-sub">
-            Your rig's instrument panel. Everything here only measures — nothing in Lab changes
-            your PC. Start with Benchmark.
+            Your rig's instrument panel. Everything here only measures — nothing in Advanced
+            changes your PC. Start with Benchmark.
           </p>
         </header>
 

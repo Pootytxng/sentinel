@@ -14,7 +14,7 @@ describe("Lab", () => {
     // Role-scoped: "Benchmark"/"Latency" also appear in the static welcome band.
     expect(screen.getByRole("button", { name: /Benchmark/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Latency/ })).toBeInTheDocument();
-    expect(screen.getByText(/nothing in Lab changes\s+your PC/)).toBeInTheDocument();
+    expect(screen.getByText(/nothing in Advanced\s+changes your PC/)).toBeInTheDocument();
   });
 
   it("welcome band is static (doorknob law) and gates the Tuning term to AMD", () => {
