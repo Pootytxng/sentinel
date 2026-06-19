@@ -12,6 +12,7 @@ import {
   type Grade,
 } from "../data/metric-grade";
 import { shortGpu } from "./hardware-format";
+import { AnimatedNumber } from "../design/AnimatedNumber";
 import "./DashboardV2.css";
 
 // DashboardV2 — the premium telemetry-dashboard prototype (owner: evolve toward ui-spec.md, 2026-06-15).
@@ -120,7 +121,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
             <span className="d2-live-sub">{cpuName}</span>
           </div>
           <div className="d2-live-value">
-            <span className="d2-num">{cpu ? cpu.usage_overall_pct.toFixed(0) : "—"}</span>
+            <span className="d2-num">{cpu ? <AnimatedNumber value={cpu.usage_overall_pct} /> : "—"}</span>
             <span className="d2-unit">%</span>
             <span className="d2-live-meta">{cpu ? `${(cpu.frequency_mhz / 1000).toFixed(2)} GHz` : ""}</span>
           </div>
@@ -133,7 +134,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
             <span className="d2-live-sub">{gpuName}</span>
           </div>
           <div className="d2-live-value">
-            <span className="d2-num">{gpu?.utilization_gpu_pct != null ? gpu.utilization_gpu_pct.toFixed(0) : "—"}</span>
+            <span className="d2-num">{gpu?.utilization_gpu_pct != null ? <AnimatedNumber value={gpu.utilization_gpu_pct} /> : "—"}</span>
             <span className="d2-unit">%</span>
             <span className="d2-live-meta" style={gpuTempColor ? { color: gpuTempColor } : undefined}>{gpu?.temperature_c != null ? `${gpu.temperature_c.toFixed(0)}°C` : ""}</span>
           </div>
