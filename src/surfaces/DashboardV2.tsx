@@ -148,10 +148,10 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       </div>
       {last ? (
         <div className="d2-grid d2-grid-4">
-          <Metric label="Avg FPS" value={last.avg_fps.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
-          <Metric label="1% low" value={last.low1_fps_est.toFixed(0)} grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
-          <Metric label="Frametime" value={last.avg_frametime_ms.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
-          <Metric label="Peak GPU" value={last.peak_gpu_temp_c == null ? "—" : last.peak_gpu_temp_c.toFixed(0)} unit="°C" grade={gradeGpuTempC(last.peak_gpu_temp_c)} />
+          <Metric label="Avg FPS" animate={last.avg_fps} fmt={(v) => v.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
+          <Metric label="1% low" animate={last.low1_fps_est} fmt={(v) => v.toFixed(0)} grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
+          <Metric label="Frametime" animate={last.avg_frametime_ms} fmt={(v) => v.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
+          <Metric label="Peak GPU" animate={last.peak_gpu_temp_c ?? undefined} value="—" fmt={(v) => v.toFixed(0)} unit="°C" grade={gradeGpuTempC(last.peak_gpu_temp_c)} />
         </div>
       ) : (
         <div className="d2-card d2-empty">Play a game with monitoring on — your FPS, 1% low and frametime land here.</div>
@@ -161,7 +161,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       <div className="d2-section-label">This rig</div>
       <div className="d2-grid d2-grid-4">
         <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} grade={gradeRamPct(ramPct)} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
-        <Metric label="Cores" value={String(hw.cpu_cores_logical ?? "—")} unit="threads" sub={cpuName} />
+        <Metric label="Cores" animate={hw.cpu_cores_logical ?? undefined} value="—" fmt={(v) => String(Math.round(v))} unit="threads" sub={cpuName} />
         <Metric label="GPU" value={shortGpu(gpuName)} mono={false} sub={gpu?.vendor || ""} />
         <Metric label="OS" value={hw.windows_version?.product_name?.replace(/^Windows /, "Win ") || hw.os_name || "—"} mono={false} sub={hw.os_version || ""} />
       </div>
@@ -176,13 +176,19 @@ function Metric({
   sub,
   grade,
   mono = true,
+  animate,
+  fmt,
 }: {
   label: string;
-  value: string;
+  value?: string;
   unit?: string;
   sub?: string;
   grade?: Grade;
   mono?: boolean;
+  // When provided, the value counts up / glides to this number (reduced-motion-honored). `value` is
+  // the fallback rendered when `animate` is absent (e.g. an unmeasured "—").
+  animate?: number;
+  fmt?: (n: number) => string;
 }) {
   // Hardware-tailored color: green/amber/red per the rig's ranges; neutral metrics inherit the ink.
   const color = grade ? gradeColor(grade) : "";
@@ -193,7 +199,7 @@ function Metric({
         className={`d2-metric-value ${mono ? "d2-mono" : "d2-text"}`}
         style={color ? { color } : undefined}
       >
-        {value}
+        {animate != null ? <AnimatedNumber value={animate} format={fmt} /> : value}
         {unit && <span className="d2-unit">{unit}</span>}
       </span>
       {sub && <span className="d2-metric-sub">{sub}</span>}
