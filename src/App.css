@@ -2155,8 +2155,10 @@ body::before {
   text-align: left;
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.rail-item .ico { flex-shrink: 0; opacity: 0.9; transition: transform var(--dur) var(--ease); }
+.rail-item .ico { flex-shrink: 0; opacity: 0.9; transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease), filter var(--dur) var(--ease); }
 .rail-item:hover { color: var(--fg); background: var(--accent-soft); }
+/* Interactive lift — the glyph rises + brightens on hover so the rail feels responsive/alive. */
+.rail-item:hover .ico { transform: translateY(-1px) scale(1.06); opacity: 1; filter: drop-shadow(0 0 5px var(--accent-glow)); }
 .rail-item-on {
   color: var(--accent-bright);
   background: linear-gradient(90deg, var(--accent-soft), transparent 92%);
