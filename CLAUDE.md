@@ -204,13 +204,15 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   consistency, GPU temp + RAM by ramp → green/amber/red unique per rig; raw CPU/GPU **utilization
 >   stays NEUTRAL** (high is good while gaming). Live on Home dashboard, Monitor, overlay + session
 >   debrief; 10 unit tests.
-> - **🎮 GAMING MODE (F1) §7 QA — restore contract PROVEN live; STILL GATED.** The `#[cfg(test)]` +
+> - **🎮 GAMING MODE (F1) §7 QA — restore contract PROVEN live; GATE FLIPPED ON 2026-06-18 for the reboot QA.** The `#[cfg(test)]` +
 >   `#[ignore]`d `gaming_orchestrator::gaming_mode_qa` harness drives the orchestrator directly (does NOT
 >   flip the gate) + reads real ground truth; **6 scenarios pass on the AMD dev rig**: exact-restore ·
 >   crash/orphan recovery · no-partial-on-UAC-cancel-at-start · RestoreFailed-on-cancel-during-restore ·
->   fail-loud-missing-plan · targets-stored-GUID-on-external-change. **`gaming_mode_gate()` STILL `false`.**
->   To flip: the **physical PC-reboot test + owner sign-off** (owner-driven; recovery mechanism proven by
->   the crash test). Pattern captured as the `qa-harness` skill. Honest **AMD Game Mode heads-up** added in
+>   fail-loud-missing-plan · targets-stored-GUID-on-external-change. **`gaming_mode_gate()` FLIPPED ON
+>   2026-06-18 with explicit owner sign-off** for the live reboot QA (a fresh installer carries the Gaming
+>   tab). PENDING the owner's physical reboot-while-active test (start session → reboot → relaunch → confirm
+>   exact restore) → then keep-on or revert. **Fully reversible** (`gaming_mode_gate` `true`→`false`).
+>   Pattern captured as the `qa-harness` skill. Honest **AMD Game Mode heads-up** added in
 >   Fix (Radeon resets it on login — tell, don't silently re-offer). NOTE: "Game Mode that survives reboot"
 >   = the owner-machine login keeper (`CompyKeepGameModeOn.vbs`), NOT this F1 feature — two different things.
 > - **Workflow (memories, apply forward):** [[decompose-owner-lists-atomic-todos]] ·

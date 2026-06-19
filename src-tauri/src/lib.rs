@@ -322,15 +322,15 @@ mod migration_tests {
 }
 
 // ─── Gaming Mode (F1) — GATED ────────────────────────────────────────────
-// Mutation feature; ships DARK until its own mutation QA passes on a UAC-on
-// machine + explicit owner sign-off. While this is false the commands refuse
-// and the frontend hides the entire surface (existing behavior unchanged).
-// DO NOT flip without sign-off. Spec: docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md §7.
-// Implemented as a fn (not a const) so the guarded orchestrator calls stay
-// reachable / warning-free until the flag flips. Flip `gaming_mode_gate` to
-// `true` ONLY after the mutation QA passes + owner sign-off.
+// Mutation feature. FLIPPED ON 2026-06-18 with explicit owner sign-off, for the live reboot QA
+// (the §7 restore-contract harness passed 6/6 on the dev rig first: exact-restore, crash/orphan
+// recovery, no-partial-on-cancel-at-start, RestoreFailed-on-cancel-during-restore, fail-loud-missing-
+// plan, restore-targets-stored-GUID-on-external-change). While true the 5 commands work and the
+// frontend shows the Gaming surface. FULLY REVERSIBLE: set back to `false` to re-hide everything.
+// Implemented as a fn (not a const) so the guarded orchestrator calls stay reachable / warning-free
+// either way. Spec: docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md §7.
 fn gaming_mode_gate() -> bool {
-    false
+    true
 }
 
 #[tauri::command]
