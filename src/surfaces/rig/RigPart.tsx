@@ -4,6 +4,7 @@ import { Html } from "@react-three/drei";
 import type { Group } from "three";
 import { RigPartGeometry } from "./RigPartGeometry";
 import type { RigPart as Part } from "./rig-parts";
+import { useTooltipFlip } from "./use-tooltip-flip";
 
 // One interactive rig part: eases between assembled/exploded, scales up on hover/select, and shows a
 // Compy-tokened spec card with the part's REAL specs. Tooltip styling uses the instrument tokens so
@@ -35,6 +36,7 @@ export function RigPart({
   const groupRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const active = hovered || hoveredId === part.id || selectedId === part.id;
+  const below = useTooltipFlip(groupRef, active);
 
   useFrame((state, delta) => {
     const g = groupRef.current;
@@ -85,7 +87,7 @@ export function RigPart({
           <div
             style={{
               width: 224,
-              transform: "translateY(-145%)",
+              transform: below ? "translateY(55%)" : "translateY(-145%)",
               borderRadius: 10,
               border: `1px solid ${color}`,
               background: "var(--ix-glass-fill, rgba(12,14,20,0.92))",

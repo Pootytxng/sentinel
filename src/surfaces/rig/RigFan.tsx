@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Edges, Html } from "@react-three/drei";
 import type { Group } from "three";
 import type { Vec3 } from "./rig-parts";
+import { useTooltipFlip } from "./use-tooltip-flip";
 
 // A case/CPU fan in the hologram. Detected fans (real RPM from a monitor) SPIN — visibly conveying
 // "on and working" — at a rate derived from their actual RPM (capped so it reads as motion, not an
@@ -51,6 +52,7 @@ export function RigFan({
   const bladesRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const active = hovered || hoveredId === fan.id || selectedId === fan.id;
+  const below = useTooltipFlip(groupRef, active);
 
   useFrame((_, delta) => {
     const g = groupRef.current;
@@ -142,7 +144,7 @@ export function RigFan({
           <div
             style={{
               width: 190,
-              transform: "translateY(-150%)",
+              transform: below ? "translateY(55%)" : "translateY(-150%)",
               borderRadius: 10,
               border: `1px solid ${color}`,
               background: "var(--ix-glass-fill, rgba(12,14,20,0.92))",

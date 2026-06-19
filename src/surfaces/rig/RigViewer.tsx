@@ -9,6 +9,7 @@ import "./RigViewer.css";
 // constant, never from data; the user installs the monitor themselves (informed — no bundling, no
 // driver shipped by Compy).
 const HWINFO_URL = "https://www.hwinfo.com/download/";
+const LHM_URL = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases";
 
 // Lazy-load the three.js scene so the ~600KB 3D bundle only loads when the hologram is shown.
 const RigHologram = lazy(() =>
@@ -98,22 +99,43 @@ export function RigViewer({ hw }: { hw: HardwareInfo }) {
           <div className="rig-nudge-title">Light up your fans &amp; temperatures</div>
           <p className="rig-nudge-body">
             Your fans show as ghosts because Compy stays <strong>driver-free</strong> (anti-cheat-safe)
-            — it reads live RPM and temps from a free monitor you run, instead of installing a driver of
-            its own. Install <strong>HWiNFO</strong> and turn on its “Shared Memory Support,” and Compy
-            picks it up automatically. (These monitors use a low-level driver to reach the sensors, so
-            it’s your call — HWiNFO is the gamer-trusted one.)
+            — it reads live RPM and temps from a free monitor you run, instead of shipping a driver of
+            its own. Install either (Compy reads both automatically):
           </p>
-          <button
-            type="button"
-            className="btn-small btn-small-on rig-nudge-cta"
-            onClick={() => {
-              openUrl(HWINFO_URL).catch(() => {
-                /* opener blocked — the written steps still stand */
-              });
-            }}
-          >
-            Get HWiNFO — official site
-          </button>
+          <div className="rig-nudge-opt">
+            <button
+              type="button"
+              className="btn-small btn-small-on rig-nudge-cta"
+              onClick={() => {
+                openUrl(LHM_URL).catch(() => {
+                  /* opener blocked — the link text still stands */
+                });
+              }}
+            >
+              LibreHardwareMonitor
+            </button>
+            <span className="rig-nudge-opt-note">
+              Open-source · runs persistently, no time limit, no setup. Heads-up: its low-level driver
+              can trip strict anti-cheat (Valorant/Vanguard) — close it before those games.
+            </span>
+          </div>
+          <div className="rig-nudge-opt">
+            <button
+              type="button"
+              className="btn-small rig-nudge-cta"
+              onClick={() => {
+                openUrl(HWINFO_URL).catch(() => {
+                  /* opener blocked — the link text still stands */
+                });
+              }}
+            >
+              HWiNFO
+            </button>
+            <span className="rig-nudge-opt-note">
+              Gamer-trusted · turn on “Shared Memory Support” (the free version resets it about every
+              12 hours).
+            </span>
+          </div>
         </div>
       )}
 
