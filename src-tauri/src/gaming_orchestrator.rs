@@ -9,6 +9,7 @@
 //! contract on disk for startup recovery.
 
 use serde::Deserialize;
+use std::sync::Mutex;
 
 use crate::actions::{
     self, apply_game_bar_disable, apply_game_mode, apply_pcie_aspm_off, apply_power_plan_switch_core,
@@ -19,6 +20,42 @@ use crate::gaming_session::{
     clear_session, load_session, needs_recovery, next_on_stop, resolve_restore_order, save_session,
     SessionChange, SessionFile, SessionStatus, SESSION_SCHEMA_VERSION,
 };
+
+/// In-memory marker of the session id THIS process started. Lets us tell an
+/// in-run remount (tab switch → resume the live session) apart from an on-disk
+/// `Active` session left behind by a prior run that died — reboot or crash
+/// (→ offer recovery, never silently resume as "on"). A fresh process starts at
+/// `None`, so any `Active` session found on disk is correctly an orphan to recover.
+static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
+
+fn set_live_session(id: &str) {
+    if let Ok(mut g) = LIVE_SESSION.lock() {
+        *g = Some(id.to_string());
+    }
+}
+
+fn clear_live_session() {
+    if let Ok(mut g) = LIVE_SESSION.lock() {
+        *g = None;
+    }
+}
+
+/// Pure: a disk session is "live this run" only when its id matches the id THIS
+/// process recorded at start. Either side absent → not live (→ recover).
+fn same_session(disk: Option<&str>, live: Option<&str>) -> bool {
+    matches!((disk, live), (Some(d), Some(l)) if d == l)
+}
+
+/// Whether the current on-disk session was started by THIS process run (vs a
+/// prior run that died). Drives the resume-vs-recover decision in the UI: a live
+/// session resumes; an orphan from a dead run is offered for recovery instead.
+pub(crate) fn session_is_live_this_run() -> bool {
+    let live = LIVE_SESSION.lock().ok().and_then(|g| g.clone());
+    same_session(
+        load_session().map(|f| f.session_id).as_deref(),
+        live.as_deref(),
+    )
+}
 
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +95,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         started_monitoring: false,
     };
     save_session(&file)?; // lock exists before any mutation
+    set_live_session(&file.session_id); // mark this run as the live owner
 
     // Apply one item; on error, undo whatever landed and bail. Defined as a
     // closure-like macro so each step shares the same partial-undo path.
@@ -115,6 +153,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
 /// failure). On any failure -> RestoreFailed, contract retained, returns Err
 /// (NEVER reports success). Clears the file only after every restore confirms.
 pub(crate) fn restore(file: &mut SessionFile) -> Result<(), String> {
+    clear_live_session(); // this session is ending/recovering — no longer resumable
     file.status = next_on_stop(file.status); // -> Ending
     save_session(file)?;
     let mut first_err: Option<String> = None;
@@ -159,6 +198,26 @@ pub(crate) fn recover(confirm: bool) -> Result<(), String> {
 pub(crate) fn stop() -> Result<(), String> {
     let mut file = load_session().ok_or("no active Gaming Mode session")?;
     restore(&mut file)
+}
+
+#[cfg(test)]
+mod live_session_tests {
+    use super::same_session;
+
+    // The resume-vs-recover decision: a disk session is "live this run" ONLY when
+    // its id matches the id THIS process recorded at start.
+    #[test]
+    fn live_only_when_this_run_owns_the_disk_session() {
+        // Same id, same run: a tab-switch remount → resume.
+        assert!(same_session(Some("gm-1"), Some("gm-1")));
+        // Fresh process (reboot/crash): no in-memory owner → orphan, offer recovery.
+        assert!(!same_session(Some("gm-1"), None));
+        // Stale id mismatch (shouldn't happen, but never resume someone else's).
+        assert!(!same_session(Some("gm-1"), Some("gm-2")));
+        // No disk session at all.
+        assert!(!same_session(None, Some("gm-1")));
+        assert!(!same_session(None, None));
+    }
 }
 
 // ─── §7 mutation-QA harness (dev-rig only) ───────────────────────────────────

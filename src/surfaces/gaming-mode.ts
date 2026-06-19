@@ -55,7 +55,7 @@ export function summarizeChanges(changes: SessionChange[]): ChangeSummary {
 export function statusLabel(status: GamingSessionStatus): string {
   switch (status) {
     case "active":
-      return "Gaming Mode is active";
+      return "still applied — not yet restored";
     case "ending":
       return "Restoring your settings…";
     case "restore-pending":

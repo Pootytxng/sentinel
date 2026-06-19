@@ -7,6 +7,7 @@ import {
   type GamingSessionFile,
   type StartOptions,
 } from "./gaming-mode";
+import { routeSession } from "../data/gaming-session-route";
 import "./GamingMode.css";
 
 const CONSENT_KEY = "compy_gaming_consent_v1";
@@ -31,23 +32,25 @@ export function GamingMode() {
   const [advPcie, setAdvPcie] = useState(false);
 
   // On mount: an on-disk session that wasn't cleanly cleared = interrupted →
-  // prompt to recover. Never auto-restores.
+  // prompt to recover. Never auto-restores. Only THIS run's own active session
+  // (a tab-switch remount) resumes; an active session left by a prior run that
+  // died (reboot/crash) routes to recovery, never silently shown as "on" —
+  // that "looks fine" appearance is exactly the trap that left tweaks applied.
   useEffect(() => {
     let cancelled = false;
-    invoke<GamingSessionFile | null>("get_gaming_session_state")
-      .then((s) => {
-        if (cancelled || !s) return;
-        // An "active" session found on (re)mount is the LIVE session — resume it
-        // so the toggle reflects reality and Stop restores (e.g. after a tab
-        // switch). Only non-active statuses (ending / restore-pending /
-        // restore-failed) are a genuinely interrupted restore -> prompt.
-        if (s.status === "active") {
-          setSession(s);
-        } else {
-          setRecovery(s);
-        }
-      })
-      .catch(() => {});
+    (async () => {
+      const s = await invoke<GamingSessionFile | null>("get_gaming_session_state").catch(
+        () => null,
+      );
+      if (cancelled || !s) return;
+      const live =
+        s.status === "active"
+          ? await invoke<boolean>("gaming_session_is_live").catch(() => false)
+          : false;
+      if (cancelled) return;
+      if (routeSession(s.status, live) === "resume") setSession(s);
+      else setRecovery(s);
+    })();
     return () => {
       cancelled = true;
     };

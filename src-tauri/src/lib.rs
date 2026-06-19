@@ -373,6 +373,18 @@ fn recover_gaming_session(confirm: bool) -> Result<(), String> {
     gaming_orchestrator::recover(confirm)
 }
 
+/// True only when an on-disk `active` session was started by THIS app run (an
+/// in-run tab switch → resume). A session left by a prior run that died —
+/// reboot/crash — returns false so the UI offers recovery instead of silently
+/// resuming it as "Gaming Mode on."
+#[tauri::command]
+fn gaming_session_is_live() -> bool {
+    if !gaming_mode_gate() {
+        return false;
+    }
+    gaming_orchestrator::session_is_live_this_run()
+}
+
 
 // State-detection helpers consumed by check_state_kind / check_change_active.
 
@@ -790,6 +802,7 @@ pub fn run() {
             stop_gaming_session,
             get_gaming_session_state,
             recover_gaming_session,
+            gaming_session_is_live,
             tray::set_close_to_tray,
             game_mode_persist::set_keep_game_mode,
         ])
