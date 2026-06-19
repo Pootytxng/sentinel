@@ -93,12 +93,18 @@ function RoomNode({
   useFrame((state, delta) => {
     const g = ref.current;
     if (!g) return;
-    const target = active ? 1.35 : 1;
+    const target = active ? 1.4 : 1;
     const k = reduced ? 1 : Math.min(1, delta * 6);
     const s = g.scale.x + (target - g.scale.x) * k;
     g.scale.setScalar(s);
+    // The focused room rises up out of the ring so it clears the bottom HUD panel and reads as
+    // "this is the room" — others stay on the ring.
+    const lift = active ? 1.5 : 0;
     const bob = active && !reduced ? Math.sin(state.clock.elapsedTime * 1.2) * 0.07 : 0;
-    g.position.set(pos[0], pos[1] + bob, pos[2]);
+    const ky = reduced ? 1 : Math.min(1, delta * 4);
+    g.position.x = pos[0];
+    g.position.z = pos[2];
+    g.position.y += (pos[1] + lift + bob - g.position.y) * ky;
   });
   const emissive = active ? 1.7 : dim ? 0.35 : 0.8;
   const opacity = active ? 0.5 : dim ? 0.12 : 0.26;
