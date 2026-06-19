@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./DashboardV2.css";
 import "./LiveCharts.css";
 import { gradeGpuTempC, gradeRamPct, gradeColor } from "../data/metric-grade";
+import { AnimatedNumber } from "../design/AnimatedNumber";
 
 // LiveCharts — a rolling live-telemetry panel for the Monitor tab (owner: bring the Home dashboard's
 // live charts here too, 2026-06-15). Three d2-style cards (CPU · GPU · memory), each a big monospace
@@ -79,17 +80,17 @@ export function LiveCharts() {
     <div className="lc-grid">
       <section className="d2-card d2-live">
         <div className="d2-live-head"><span className="d2-eyebrow">CPU</span><span className="d2-live-sub">{cpu ? `${(cpu.frequency_mhz / 1000).toFixed(2)} GHz` : ""}</span></div>
-        <div className="d2-live-value"><span className="d2-num">{cpu ? cpu.usage_overall_pct.toFixed(0) : "—"}</span><span className="d2-unit">%</span></div>
+        <div className="d2-live-value"><span className="d2-num">{cpu ? <AnimatedNumber value={cpu.usage_overall_pct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={cpuH.current} id="cpu" />
       </section>
       <section className="d2-card d2-live">
         <div className="d2-live-head"><span className="d2-eyebrow">GPU</span><span className="d2-live-sub" style={gpuTempColor ? { color: gpuTempColor } : undefined}>{gpu?.temperature_c != null ? `${gpu.temperature_c.toFixed(0)}°C` : ""}</span></div>
-        <div className="d2-live-value"><span className="d2-num">{gpu?.utilization_gpu_pct != null ? gpu.utilization_gpu_pct.toFixed(0) : "—"}</span><span className="d2-unit">%</span></div>
+        <div className="d2-live-value"><span className="d2-num">{gpu?.utilization_gpu_pct != null ? <AnimatedNumber value={gpu.utilization_gpu_pct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={gpuH.current} id="gpu" />
       </section>
       <section className="d2-card d2-live">
         <div className="d2-live-head"><span className="d2-eyebrow">Memory</span><span className="d2-live-sub">{cpu ? `${(cpu.ram_used_bytes / 1024 ** 3).toFixed(1)} / ${(cpu.ram_total_bytes / 1024 ** 3).toFixed(0)} GB` : ""}</span></div>
-        <div className="d2-live-value"><span className="d2-num" style={ramColor ? { color: ramColor } : undefined}>{ramPct ?? "—"}</span><span className="d2-unit">%</span></div>
+        <div className="d2-live-value"><span className="d2-num" style={ramColor ? { color: ramColor } : undefined}>{ramPct != null ? <AnimatedNumber value={ramPct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={ramH.current} id="ram" />
       </section>
     </div>
