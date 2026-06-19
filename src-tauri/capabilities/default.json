@@ -12,7 +12,8 @@
       "allow": [
         { "url": "ms-settings:display-advanced" },
         { "url": "ms-settings:display-advancedgraphics" },
-        { "url": "ms-settings:storagesense" }
+        { "url": "ms-settings:storagesense" },
+        { "url": "https://www.hwinfo.com/download/" }
       ]
     }
   ]

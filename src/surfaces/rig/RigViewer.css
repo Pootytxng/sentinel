@@ -122,3 +122,29 @@
 .rig-manual-remove:hover {
   color: var(--ix-danger, var(--danger, #f3716f));
 }
+
+/* "Light up live sensors" nudge — shown only when no monitor is publishing fan/temp data. */
+.rig-nudge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 13px 15px;
+  border-radius: var(--r, 10px);
+  border: 1px solid color-mix(in srgb, var(--ix-accent, var(--accent)) 40%, transparent);
+  background: color-mix(in srgb, var(--ix-accent, var(--accent)) 7%, transparent);
+}
+.rig-nudge-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+.rig-nudge-body {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2, var(--fg-2, #c4ccda));
+}
+.rig-nudge-cta {
+  align-self: flex-start;
+}
