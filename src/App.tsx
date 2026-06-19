@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
+import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
 import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term, GlossText, type GlossRule } from "./design/Term";
@@ -942,13 +943,26 @@ function App() {
     window.addEventListener("compy:open-settings", on);
     return () => window.removeEventListener("compy:open-settings", on);
   }, []);
-  const [showOnboarding, setShowOnboarding] = useState(
-    () => localStorage.getItem(ONBOARDED_KEY) !== "1",
+  // The combined "Setup & Tour" (HoloLens) is the new first-run experience AND the always-present
+  // Home launcher. The legacy Onboarding + FirstCheck auto-modals are SUPERSEDED for fresh installs
+  // (kept in the tree as a failsafe; FirstCheck stays reachable via the explicit "Re-run check").
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showFirstCheck, setShowFirstCheck] = useState(false);
+  // Auto-open the tour ONLY on a truly fresh install (never toured AND never onboarded) — never
+  // re-nag a returning user; they reach it from the Home launcher card or Settings.
+  const [showSetupTour, setShowSetupTour] = useState(
+    () =>
+      localStorage.getItem(SETUP_TOUR_KEY) !== "1" && localStorage.getItem(ONBOARDED_KEY) !== "1",
   );
-  // Moment 2 — first-check landing, shown once after onboarding (or via "Re-run check").
-  const [showFirstCheck, setShowFirstCheck] = useState(
-    () => localStorage.getItem(FIRST_CHECK_KEY) !== "1",
-  );
+  // Open the tour on demand from the Home launcher card (mirrors the open-settings event pattern).
+  useEffect(() => {
+    const on = () => {
+      setShowSettings(false);
+      setShowSetupTour(true);
+    };
+    window.addEventListener("compy:start-tour", on);
+    return () => window.removeEventListener("compy:start-tour", on);
+  }, []);
   // Gaming Mode (F1) is gated — the backend returns false until its mutation QA
   // + owner sign-off, so the tab never appears by default (the surface is dark).
   const [gamingEnabled, setGamingEnabled] = useState(false);
@@ -1400,29 +1414,37 @@ function App() {
   // tab falls back to the classic shell, which is where the not-yet-reskinned surfaces still live.
   const ccActive = homeV2 && activeTab === "Overview" && hw !== null && !settingsActive;
 
+  // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
+  const rigLines = hw
+    ? [
+        { label: "GPU", value: hw.gpus[0]?.name ?? "No GPU detected" },
+        { label: "CPU", value: hw.cpu_arch?.family_label || hw.cpu_brand },
+        { label: "RAM", value: fmtGB(hw.ram_total_bytes) },
+        { label: "OS", value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
+      ]
+    : [];
+
   return (
     <LibraryContext.Provider value={libraryApi}>
     <KonamiWhisper />
     <main className={ccActive || settingsActive ? "app app-cc" : "app"}>
-      {showOnboarding && (
-        <Onboarding
-          onDone={() => setShowOnboarding(false)}
-          arcV2={arcV2}
-          rig={
-            hw
-              ? [
-                  { label: "GPU", value: hw.gpus[0]?.name ?? "No GPU detected" },
-                  { label: "CPU", value: hw.cpu_arch?.family_label || hw.cpu_brand },
-                  { label: "RAM", value: fmtGB(hw.ram_total_bytes) },
-                  {
-                    label: "OS",
-                    value:
-                      hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`,
-                  },
-                ]
-              : []
-          }
+      {showSetupTour && (
+        <SetupTour
+          rig={rigLines}
+          onDone={() => {
+            // Mark the legacy flags satisfied too, so the old auto-modals can never fire later.
+            try {
+              localStorage.setItem(ONBOARDED_KEY, "1");
+              localStorage.setItem(FIRST_CHECK_KEY, "1");
+            } catch {
+              /* non-fatal */
+            }
+            setShowSetupTour(false);
+          }}
         />
+      )}
+      {showOnboarding && (
+        <Onboarding onDone={() => setShowOnboarding(false)} arcV2={arcV2} rig={rigLines} />
       )}
       {!showOnboarding && showFirstCheck && (
         <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2={arcV2} />
@@ -1512,10 +1534,9 @@ function App() {
           onForward={goForward}
           canGoForward={canGoForward}
           onRerunSetup={() => {
-            // Re-homed from the footer: replay the intro, then flow into the first check.
+            // Re-homed: replay the full HoloLens Setup & Tour (guided setup + the room tour).
             setShowSettings(false);
-            setShowOnboarding(true);
-            setShowFirstCheck(true);
+            setShowSetupTour(true);
           }}
           onRerunCheck={() => {
             setShowSettings(false);

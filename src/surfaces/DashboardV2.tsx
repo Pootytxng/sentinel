@@ -14,6 +14,7 @@ import {
 import { shortGpu } from "./hardware-format";
 import { AnimatedNumber } from "../design/AnimatedNumber";
 import { RigViewer } from "./rig/RigViewer";
+import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import "./HardwareSection.css";
 import "./DashboardV2.css";
 
@@ -116,6 +117,9 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
 
   return (
     <div className="d2-root">
+      {/* Front door — always-present guided Setup & Tour launcher (opens the HoloLens flow). */}
+      <SetupLauncherCard />
+
       {/* Live telemetry — CPU + GPU, big monospace value over a gradient area chart of real reads. */}
       <div className="d2-grid d2-grid-2">
         <section className="d2-card d2-live">

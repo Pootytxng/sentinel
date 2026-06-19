@@ -1,0 +1,337 @@
+/* "Compy Setup & Tour" — full-screen HoloLens flow. 3D framework fills the stage; a glass HUD panel
+   docks at the bottom. All colour from --ix-* tokens (theme-correct across Midnight/Violet/…). */
+
+.st-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  color: var(--ix-text-1, #eef1f7);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--ix-accent) 12%, transparent), transparent 60%),
+    var(--ix-base, #0a0c11);
+  animation: st-fade 360ms ease both;
+  outline: none;
+}
+@keyframes st-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Holographic veil — scanlines + faint grid over the whole stage. */
+.st-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--ix-accent) 7%, transparent) 0px,
+      color-mix(in srgb, var(--ix-accent) 7%, transparent) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(color-mix(in srgb, var(--ix-accent) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ix-accent) 4%, transparent) 1px, transparent 1px);
+  background-size: 100% 3px, 56px 56px, 56px 56px;
+  opacity: 0.5;
+  mask-image: radial-gradient(120% 100% at 50% 40%, #000 35%, transparent 85%);
+}
+
+.st-stage {
+  position: absolute;
+  inset: 0 0 0 0;
+  z-index: 0;
+}
+.st-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+
+/* Top HUD bar */
+.st-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 22px;
+}
+.st-brand {
+  display: inline-flex;
+}
+.st-leg {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, #8b95a8);
+}
+.st-skip {
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-3, #8b95a8);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--r-sm, 7px);
+}
+.st-skip:hover {
+  color: var(--ix-text-1, #eef1f7);
+}
+
+/* Bottom glass panel */
+.st-panel {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(16px, 5vh, 48px);
+  transform: translateX(-50%);
+  z-index: 2;
+  width: clamp(320px, 64vw, 720px);
+  max-width: calc(100vw - 32px);
+  padding: 20px 24px 18px;
+  border-radius: var(--ix-radius, 16px);
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 30%, var(--ix-glass-border, rgba(255, 255, 255, 0.1)));
+  background: var(--ix-glass-fill, rgba(12, 14, 20, 0.86));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 50px -16px color-mix(in srgb, var(--ix-accent) 70%, transparent);
+  animation: st-panel-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes st-panel-in {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.st-step {
+  min-height: 168px;
+}
+.st-tag {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+.st-title {
+  margin: 6px 0 8px;
+  font-size: clamp(18px, 2.4vw, 24px);
+  font-weight: 700;
+  line-height: 1.18;
+}
+.st-body {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2, #c4ccda);
+}
+.st-room-body {
+  font-size: 14.5px;
+}
+.st-kicker {
+  color: var(--ix-text-1, #eef1f7);
+}
+
+/* Step 1 — rig detect */
+.st-detect {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+}
+.st-detect-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+}
+.st-detect-check {
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+.st-detect-label {
+  color: var(--ix-text-3, #8b95a8);
+}
+.st-detect-value {
+  margin-left: auto;
+  font-weight: 600;
+}
+.st-shimmer {
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ix-text-3) 10%, transparent),
+    color-mix(in srgb, var(--ix-text-3) 22%, transparent),
+    color-mix(in srgb, var(--ix-text-3) 10%, transparent)
+  );
+  background-size: 200% 100%;
+  animation: st-shim 1.3s linear infinite;
+}
+@keyframes st-shim {
+  to { background-position: -200% 0; }
+}
+
+/* Step 2 — seatbelt demo */
+.st-demo {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: var(--r, 10px);
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+  background: color-mix(in srgb, var(--ix-accent) 5%, transparent);
+}
+.st-demo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.st-demo-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.st-demo-sub {
+  font-size: 12px;
+  color: var(--ix-text-3, #8b95a8);
+}
+.st-demo-ledger {
+  margin-top: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+
+/* Step 3 — rules */
+.st-rules {
+  display: grid;
+  gap: 7px;
+  margin-top: 6px;
+}
+.st-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+.st-rule-icon {
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  flex: 0 0 auto;
+}
+
+/* Step 4 — first check */
+.st-scanning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--ix-text-2, #c4ccda);
+}
+.st-scan-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ix-accent, #2ee6c0);
+  box-shadow: 0 0 12px var(--ix-accent, #2ee6c0);
+  animation: st-pulse 1.1s ease-in-out infinite;
+}
+@keyframes st-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.st-spotlight {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: var(--r, 10px);
+  border: 1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 45%, transparent);
+  background: color-mix(in srgb, var(--ix-amber, #fbbf3c) 8%, transparent);
+}
+.st-spotlight-tag {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ix-amber, #fbbf3c);
+}
+.st-spotlight-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-top: 2px;
+}
+.st-spotlight-reason {
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2, #c4ccda);
+}
+.st-spotlight-foot {
+  display: flex;
+  align-items: center;
+}
+.st-chip-muted {
+  font-size: 12px;
+  color: var(--ix-text-3, #8b95a8);
+}
+
+/* Progress ticks */
+.st-progress {
+  display: flex;
+  gap: 5px;
+  margin: 16px 0 14px;
+}
+.st-tick {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ix-text-3) 30%, transparent);
+  transition: background 240ms ease, box-shadow 240ms ease;
+}
+.st-tick-done {
+  background: color-mix(in srgb, var(--ix-accent) 65%, transparent);
+}
+.st-tick-on {
+  background: var(--ix-accent, #2ee6c0);
+  box-shadow: 0 0 8px var(--ix-accent, #2ee6c0);
+}
+
+/* Actions */
+.st-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.st-count {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--ix-text-3, #8b95a8);
+}
+
+/* Narrow windows — widen the panel toward full width */
+@media (max-width: 720px) {
+  .st-panel {
+    width: calc(100vw - 24px);
+    bottom: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-backdrop,
+  .st-panel { animation: none; }
+  .st-shimmer,
+  .st-scan-pulse { animation: none; }
+}
