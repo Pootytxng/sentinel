@@ -3,7 +3,8 @@ import { Canvas } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import { invoke } from "@tauri-apps/api/core";
 import type { HardwareInfo } from "../../App";
-import { buildRigParts, type Vec3 } from "./rig-parts";
+import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-parts";
+import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
 import { useRigColors, partColor } from "./use-rig-colors";
 import { RigCase } from "./RigCase";
 import { RigPart } from "./RigPart";
@@ -24,6 +25,7 @@ interface Props {
   hoveredId: string | null;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
+  manualParts: ManualPart[];
 }
 
 export function RigHologram({
@@ -34,6 +36,7 @@ export function RigHologram({
   hoveredId,
   onSelect,
   onHover,
+  manualParts,
 }: Props) {
   const colors = useRigColors();
   const parts = useMemo(() => buildRigParts(hw), [hw]);
@@ -68,15 +71,45 @@ export function RigHologram({
     };
   }, []);
 
+  // Once the user manually adds a kind (cooler/psu), suppress the matching honest ghost.
+  const manualKinds = useMemo(() => new Set(manualParts.map((m) => m.kind)), [manualParts]);
+  const shownParts = useMemo(
+    () => parts.filter((p) => p.detected || !manualKinds.has(p.id as ManualKind)),
+    [parts, manualKinds],
+  );
+
   // Theme colour per part: detected parts cycle the palette; ghosts take the faint ink.
   const partColors = useMemo(() => {
     let detectedIndex = 0;
-    return parts.map((p) => {
+    return shownParts.map((p) => {
       const c = partColor(colors, p.detected, detectedIndex);
       if (p.detected) detectedIndex += 1;
       return c;
     });
-  }, [parts, colors]);
+  }, [shownParts, colors]);
+
+  // User-added parts → RigPart shape, labelled "User-added" (never presented as detected).
+  const manualRigParts: RigPartData[] = useMemo(() => {
+    let otherIndex = 0;
+    return manualParts.map((m) => {
+      const place = manualPlacement(m.kind, m.kind === "other" ? otherIndex++ : 0);
+      return {
+        id: m.id,
+        name: m.name || "User part",
+        category: "User-added",
+        kind: manualGeom(m.kind),
+        detected: true,
+        assembled: place.assembled,
+        exploded: place.exploded,
+        rotation: place.rotation,
+        tagline: m.note || "Added by you",
+        specs: [
+          { label: "Source", value: "You added this" },
+          ...(m.note ? [{ label: "Note", value: m.note }] : []),
+        ],
+      };
+    });
+  }, [manualParts]);
 
   // Live fans — polled only while no game is capturing (the hologram is paused then anyway).
   useEffect(() => {
@@ -151,12 +184,26 @@ export function RigHologram({
 
       <group position={[0, 0.2, 0]}>
         <RigCase exploded={exploded} color={colors.accent} reduced={reduced} />
-        {parts.map((p, i) => (
+        {shownParts.map((p, i) => (
           <RigPart
             key={p.id}
             part={p}
             index={i}
             color={partColors[i]}
+            exploded={exploded}
+            selectedId={selectedId}
+            hoveredId={hoveredId}
+            reduced={reduced}
+            onSelect={onSelect}
+            onHover={onHover}
+          />
+        ))}
+        {manualRigParts.map((p, i) => (
+          <RigPart
+            key={p.id}
+            part={p}
+            index={i}
+            color={colors.palette[1]}
             exploded={exploded}
             selectedId={selectedId}
             hoveredId={hoveredId}
