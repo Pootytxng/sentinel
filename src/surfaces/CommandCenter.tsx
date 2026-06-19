@@ -20,7 +20,7 @@ import { DashboardV2 } from "./DashboardV2";
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
-import { HardwareGrid } from "./HardwareGrid";
+import { HardwareSection } from "./HardwareSection";
 import "./CommandCenter.css";
 
 // ─── Structural prop subsets ────────────────────────────────────────────────
@@ -503,7 +503,7 @@ export default function CommandCenter(props: Props) {
                   approved grid to the default Home, below Last Session. Same `hw`, zero new IPC; the global
                   `.grid` reflows responsively (flex-wrap, min-width:0) down to the 380px floor. */}
               <section className="cc-hardware">
-                <HardwareGrid hw={hw} />
+                <HardwareSection hw={hw} />
               </section>
             </>
           )}

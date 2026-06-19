@@ -9,7 +9,7 @@ import { Wordmark } from "./design/Wordmark";
 import { BackButton, ForwardButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
 import { readCloseToTray, persistDisplayRefreshHz, readLivingInstrument } from "./design/theme";
-import { HardwareGrid } from "./surfaces/HardwareGrid";
+import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -1738,7 +1738,7 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
   // CommandCenter Home) so the two surfaces can never drift apart again.
   return (
     <section className="tab-pane">
-      <HardwareGrid hw={hw} />
+      <HardwareSection hw={hw} />
     </section>
   );
 }

@@ -13,6 +13,8 @@ import {
 } from "../data/metric-grade";
 import { shortGpu } from "./hardware-format";
 import { AnimatedNumber } from "../design/AnimatedNumber";
+import { RigViewer } from "./rig/RigViewer";
+import "./HardwareSection.css";
 import "./DashboardV2.css";
 
 // DashboardV2 — the premium telemetry-dashboard prototype (owner: evolve toward ui-spec.md, 2026-06-15).
@@ -68,6 +70,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   const cpuHist = useRef<number[]>([]);
   const gpuHist = useRef<number[]>([]);
   const [, tick] = useState(0);
+  const [rig3d, setRig3d] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,14 +160,40 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
         <div className="d2-card d2-empty">Play a game with monitoring on — your FPS, 1% low and frametime land here.</div>
       )}
 
-      {/* Hardware — dense, monospace spec cards. */}
-      <div className="d2-section-label">This rig</div>
-      <div className="d2-grid d2-grid-4">
-        <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} grade={gradeRamPct(ramPct)} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
-        <Metric label="Cores" animate={hw.cpu_cores_logical ?? undefined} value="—" fmt={(v) => String(Math.round(v))} unit="threads" sub={cpuName} />
-        <Metric label="GPU" value={shortGpu(gpuName)} mono={false} sub={gpu?.vendor || ""} />
-        <Metric label="OS" value={hw.windows_version?.product_name?.replace(/^Windows /, "Win ") || hw.os_name || "—"} mono={false} sub={hw.os_version || ""} />
+      {/* Hardware — dense spec cards, or the 3D rig hologram (lazy-loaded; real parts only). */}
+      <div className="d2-rig-head">
+        <div className="d2-section-label">This rig</div>
+        <div className="hw-view-toggle" role="tablist" aria-label="Rig view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!rig3d}
+            className={`hw-view-btn ${!rig3d ? "hw-view-on" : ""}`}
+            onClick={() => setRig3d(false)}
+          >
+            Cards
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={rig3d}
+            className={`hw-view-btn ${rig3d ? "hw-view-on" : ""}`}
+            onClick={() => setRig3d(true)}
+          >
+            3D
+          </button>
+        </div>
       </div>
+      {rig3d ? (
+        <RigViewer hw={hw} />
+      ) : (
+        <div className="d2-grid d2-grid-4">
+          <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} grade={gradeRamPct(ramPct)} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
+          <Metric label="Cores" animate={hw.cpu_cores_logical ?? undefined} value="—" fmt={(v) => String(Math.round(v))} unit="threads" sub={cpuName} />
+          <Metric label="GPU" value={shortGpu(gpuName)} mono={false} sub={gpu?.vendor || ""} />
+          <Metric label="OS" value={hw.windows_version?.product_name?.replace(/^Windows /, "Win ") || hw.os_name || "—"} mono={false} sub={hw.os_version || ""} />
+        </div>
+      )}
     </div>
   );
 }

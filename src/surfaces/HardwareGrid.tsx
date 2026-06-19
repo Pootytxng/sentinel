@@ -48,9 +48,7 @@ function Detail({ k, v }: { k: string; v: string | number }) {
 
 export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
   return (
-    <>
-      <h2 className="section-title">Your hardware</h2>
-      <div className="grid">
+    <div className="grid">
         <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand}>
           {hw.cpu_arch?.architecture && hw.cpu_arch.architecture !== "Unknown" && (
             <Detail
@@ -202,6 +200,5 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           );
         })()}
       </div>
-    </>
   );
 }

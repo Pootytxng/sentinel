@@ -1,0 +1,48 @@
+.rig-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rig-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rig-hint {
+  font-size: 12px;
+  color: var(--ix-text-3, var(--muted, #8b95a8));
+}
+
+.rig-canvas {
+  position: relative;
+  height: clamp(360px, 46vh, 560px);
+  border-radius: var(--ix-radius, 14px);
+  border: 1px solid var(--ix-glass-border, var(--border, #242b39));
+  overflow: hidden;
+  /* Themed plinth behind the 3D (the canvas is alpha:true, so this shows through the void). */
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--ix-accent) 9%, transparent), transparent 62%),
+    var(--ix-base, #0a0c11);
+}
+
+.rig-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+
+.rig-honesty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ix-text-3, var(--muted, #8b95a8));
+}
