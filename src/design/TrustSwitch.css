@@ -71,7 +71,7 @@
   box-shadow: 0 0 6px var(--ix-accent);
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .ts-thumb {
     transition: none;
   }

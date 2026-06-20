@@ -13,41 +13,24 @@ describe("easeOutCubic", () => {
 });
 
 describe("AnimatedNumber — accessibility", () => {
-  const orig = window.matchMedia;
+  // Reduced behavior is driven by the app Motion pref now (overrides the OS by default), so force the
+  // "reduced" pref rather than mocking matchMedia.
   afterEach(() => {
-    window.matchMedia = orig;
+    try {
+      localStorage.removeItem("compy_motion");
+    } catch {
+      /* ignore */
+    }
   });
 
-  it("renders the final value immediately under prefers-reduced-motion (no animation)", () => {
-    window.matchMedia = ((q: string) => ({
-      matches: true,
-      media: q,
-      onchange: null,
-      addEventListener() {},
-      removeEventListener() {},
-      addListener() {},
-      removeListener() {},
-      dispatchEvent() {
-        return false;
-      },
-    })) as unknown as typeof window.matchMedia;
+  it("renders the final value immediately when Motion is set to Reduced (no animation)", () => {
+    localStorage.setItem("compy_motion", "reduced");
     render(<AnimatedNumber value={246} />);
     expect(screen.getByText("246")).toBeInTheDocument();
   });
 
-  it("honors a custom formatter under reduced motion", () => {
-    window.matchMedia = ((q: string) => ({
-      matches: true,
-      media: q,
-      onchange: null,
-      addEventListener() {},
-      removeEventListener() {},
-      addListener() {},
-      removeListener() {},
-      dispatchEvent() {
-        return false;
-      },
-    })) as unknown as typeof window.matchMedia;
+  it("honors a custom formatter when Motion is set to Reduced", () => {
+    localStorage.setItem("compy_motion", "reduced");
     render(<AnimatedNumber value={4.13} format={(v) => v.toFixed(1)} />);
     expect(screen.getByText("4.1")).toBeInTheDocument();
   });

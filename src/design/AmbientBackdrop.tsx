@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { type Ambiance, readStepAsideGame } from "./theme";
+import { useReducedMotion } from "./use-motion";
 import "./AmbientBackdrop.css";
 
 // Whisper aurora (halfway-home §2: walls neutral, motion as punctuation). The old hyperspeed streaks
@@ -13,7 +14,7 @@ import "./AmbientBackdrop.css";
 // when the document is hidden (a11y/efficiency, unconditional).
 
 export function AmbientBackdrop({ ambiance }: { ambiance: Ambiance; themeKey?: string }) {
-  const [reduced, setReduced] = useState(false);
+  const reduced = useReducedMotion();
   const [hidden, setHidden] = useState(false);
   const [gameActive, setGameActive] = useState(false);
   const [freezeOnGame, setFreezeOnGame] = useState<boolean>(readStepAsideGame);
@@ -22,14 +23,6 @@ export function AmbientBackdrop({ ambiance }: { ambiance: Ambiance; themeKey?: s
     const on = () => setFreezeOnGame(readStepAsideGame());
     window.addEventListener("compy:stepaside-changed", on);
     return () => window.removeEventListener("compy:stepaside-changed", on);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const on = () => setReduced(mq.matches);
-    on();
-    mq.addEventListener?.("change", on);
-    return () => mq.removeEventListener?.("change", on);
   }, []);
 
   useEffect(() => {

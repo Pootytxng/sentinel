@@ -76,7 +76,7 @@
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to { opacity: 1; transform: none; }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .cmp-confirm-backdrop,
   .cmp-confirm-modal {
     animation: none;

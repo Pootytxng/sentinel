@@ -176,7 +176,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .ch-hero,
   .ch-mark {
     animation: none;

@@ -94,7 +94,7 @@
   outline: 2px solid var(--ix-accent, #2ee6c0);
   outline-offset: -2px;
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .wc-action {
     transition: none;
   }
@@ -191,7 +191,7 @@
   cursor: nesw-resize;
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .wc-btn {
     transition: none;
   }

@@ -451,7 +451,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .fc-radar-sweep-on {
     animation: none;
   }

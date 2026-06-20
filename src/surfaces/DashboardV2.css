@@ -69,7 +69,7 @@
       0 0 18px -1px color-mix(in srgb, var(--ix-accent, #2ee6c0) 22%, transparent);
   }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .d2-live {
     animation: none;
   }
@@ -170,7 +170,7 @@
   padding: 22px 18px;
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .d2-card {
     transition: none;
   }

@@ -105,7 +105,7 @@
     opacity: 0;
   }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .fc-sweep-beam,
   .fc-verdict-streak {
     display: none;

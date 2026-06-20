@@ -86,6 +86,6 @@
   color: var(--ix-accent-text, var(--accent, #2ee6c0));
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .stl-ring { animation: none; opacity: 0.5; transform: scale(0.9); }
 }

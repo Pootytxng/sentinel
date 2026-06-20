@@ -441,7 +441,7 @@
 }
 
 /* Reduced motion → static end-state, no shimmer/pulse/thumb easing (spec §5). */
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .cc-skel,
   .cc-ring-shimmer,
   .cc-ring-breathing .cc-ring-svg {
@@ -569,7 +569,7 @@
     align-self: flex-start;
   }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .cc-rail-item {
     transition: none; /* §7: instant active state */
   }

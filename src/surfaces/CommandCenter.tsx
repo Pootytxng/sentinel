@@ -6,6 +6,7 @@ import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { NavGlyph } from "../design/NavGlyph";
 import { HOME_RAIL, type HomeRailId } from "../design/homeRail";
+import { useReducedMotion } from "../design/use-motion";
 import {
   type InstrumentTheme,
   readInstrumentTheme,
@@ -65,29 +66,7 @@ function greeting(d = new Date()): string {
   return "Good evening";
 }
 
-// prefers-reduced-motion → static end-state everywhere (spec §5).
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState<boolean>(() => {
-    try {
-      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    let mq: MediaQueryList;
-    try {
-      mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    } catch {
-      return;
-    }
-    const on = () => setReduced(mq.matches);
-    on();
-    mq.addEventListener?.("change", on);
-    return () => mq.removeEventListener?.("change", on);
-  }, []);
-  return reduced;
-}
+// Motion respects the app-wide preference (Settings → Motion), which overrides the OS by default.
 
 // 0→1 ease-out on mount; drives the ring fill + count-ups. Static (1) immediately when reduced.
 function useMountProgress(durationMs: number, reduced: boolean): number {

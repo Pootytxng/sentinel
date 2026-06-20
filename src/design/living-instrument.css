@@ -226,9 +226,7 @@
 /* ── A11Y: kill every Living-Instrument animation under reduced motion. The glow +
    depth (not motion) remain; only movement is removed. Belt-and-suspenders with the
    global reset in tokens.css. ─────────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  :root[data-living="on"] .ds-card,
-  :root[data-living="on"] .ds-dial {
-    animation: none !important;
-  }
+:root[data-motion="reduced"][data-living="on"] .ds-card,
+:root[data-motion="reduced"][data-living="on"] .ds-dial {
+  animation: none !important;
 }

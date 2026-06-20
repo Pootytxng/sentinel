@@ -582,7 +582,7 @@
   text-decoration: underline;
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .lx-flash {
     animation: none;
   }
@@ -666,7 +666,7 @@
 .lx-cat .lx-list {
   margin-top: 11px;
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .lx-starthere-chip,
   .lx-cat-head {
     transition: none;

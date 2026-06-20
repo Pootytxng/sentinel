@@ -32,7 +32,7 @@
     stroke-dashoffset: 0;
   }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .cmp-wordmark-pulse {
     animation: none;
   }

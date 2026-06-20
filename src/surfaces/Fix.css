@@ -493,7 +493,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .fix-chev {
     transition: none;
   }
@@ -642,7 +642,7 @@
   opacity: 0.5;
   cursor: default;
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .fix-applyall,
   .fix-applyall-cancel,
   .fix-applyall-go {

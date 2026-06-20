@@ -333,7 +333,7 @@
     height: 120px;
   }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .set-toggle-thumb {
     transition: none;
   }

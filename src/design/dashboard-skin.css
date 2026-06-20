@@ -92,10 +92,8 @@
   background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 13%, transparent);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :root[data-dash-v2="on"] .ds-card,
-  :root[data-dash-v2="on"] .fix-row,
-  :root[data-dash-v2="on"] .fix-group {
-    transition: none;
-  }
+:root[data-motion="reduced"][data-dash-v2="on"] .ds-card,
+:root[data-motion="reduced"][data-dash-v2="on"] .fix-row,
+:root[data-motion="reduced"][data-dash-v2="on"] .fix-group {
+  transition: none;
 }

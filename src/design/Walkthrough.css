@@ -274,7 +274,7 @@
   background: var(--ix-accent);
   border-color: var(--ix-accent);
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .wt-cursor {
     transition: none;
   }

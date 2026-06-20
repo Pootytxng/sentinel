@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { resolveReduced } from "./use-motion";
 
 // Ease-out cubic — fast start, gentle settle. Pure (unit-tested).
 export function easeOutCubic(t: number): number {
@@ -25,9 +26,8 @@ export function AnimatedNumber({
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const reduce =
-      typeof window !== "undefined" &&
-      !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Respects the app-wide Motion preference (overrides the OS by default).
+    const reduce = resolveReduced();
     const from = displayRef.current;
     const to = value;
     if (reduce || from === to || typeof requestAnimationFrame === "undefined") {

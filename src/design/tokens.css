@@ -23,7 +23,7 @@
   --press: translateY(1px);
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;

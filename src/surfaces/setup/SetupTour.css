@@ -444,7 +444,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .st-backdrop { animation: none; }
   .st-shimmer,
   .st-scan-pulse { animation: none; }

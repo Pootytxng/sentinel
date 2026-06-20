@@ -208,7 +208,7 @@
     opacity: 0.4;
   }
 }
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion="reduced"] {
   .ad-backdrop,
   .ad-panel {
     animation: none;
