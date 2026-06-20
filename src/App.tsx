@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
-import TweakEncyclopedia from "./surfaces/TweakEncyclopedia";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term, GlossText, type GlossRule } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
@@ -851,7 +850,6 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
 // flag off restores the classic surface untouched.
 const HOME_V2_KEY = "compy_home_v2";
 const FIX_V2_KEY = "compy_fix_v2";
-const LEARN_V2_KEY = "compy_learn_v2";
 const ARC_V2_KEY = "compy_arc_v2";
 const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
@@ -930,7 +928,6 @@ function App() {
   // lockout fix made Settings always open (no classic settings surface ever existed).
   const [homeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
   const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
-  const [learnV2] = useState<boolean>(() => readDevFlag(LEARN_V2_KEY));
   const [arcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
   const [checkV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
   const [playV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
@@ -1449,25 +1446,16 @@ function App() {
       {!showOnboarding && showFirstCheck && (
         <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2={arcV2} />
       )}
-      {showEncyclopedia &&
-        (learnV2 ? (
-          <Learn
-            focusId={libraryFocusId}
-            vendor={detectedVendor}
-            onClose={() => {
-              setShowEncyclopedia(false);
-              setLibraryFocusId(null);
-            }}
-          />
-        ) : (
-          <TweakEncyclopedia
-            focusId={libraryFocusId}
-            onClose={() => {
-              setShowEncyclopedia(false);
-              setLibraryFocusId(null);
-            }}
-          />
-        ))}
+      {showEncyclopedia && (
+        <Learn
+          focusId={libraryFocusId}
+          vendor={detectedVendor}
+          onClose={() => {
+            setShowEncyclopedia(false);
+            setLibraryFocusId(null);
+          }}
+        />
+      )}
       {report && (
         <ReportModal
           report={report}
