@@ -226,8 +226,8 @@ export default function Check({
               ? "Scanning your rig…"
               : livingPreview
                 ? limiters.length === 0
-                  ? "Everything looks good — nothing needs fixing right now."
-                  : `${limiters.length} ${limiters.length === 1 ? "thing" : "things"} worth a look.`
+                  ? "Measured clean — every check came back right on this rig."
+                  : `${limiters.length} ${limiters.length === 1 ? "thing" : "things"} worth a look — the rest came back clean.`
                 : `${checks.length} checks · ${elapsed?.toFixed(1) ?? "—"}s · ${limiters.length} worth fixing`}
           </p>
         </div>
