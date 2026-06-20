@@ -20,6 +20,20 @@
   display: flex;
   gap: 10px;
   margin-top: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.gaming-recovery-choices {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ix-text-2, var(--fg-2, #c4ccda));
+}
+.gaming-recovery-choices li::marker {
+  color: var(--ix-accent, var(--accent, #2ee6c0));
 }
 
 .gaming-honesty {

@@ -113,6 +113,25 @@ export function GamingMode() {
     }
   };
 
+  // Resume = roll the interrupted session back to the clean prior state FIRST (so the new session
+  // snapshots normal settings, not the half-applied ones), then start a fresh session. Reuses the
+  // same audited recover + start commands — no new mutation path, restore contract unchanged.
+  const onResume = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await invoke("recover_gaming_session", { confirm: true });
+      setRecovery(null);
+      const opts: StartOptions = { advancedUsb: advUsb, advancedPcie: advPcie };
+      const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
+      setSession(file);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const summary = session ? summarizeChanges(session.changes) : null;
 
   return (
@@ -132,20 +151,28 @@ export function GamingMode() {
       {/* Interrupted-recovery prompt — highest priority */}
       {recovery && (
         <Card className="gaming-recovery">
-          <div className="gaming-card-head">Gaming Mode was interrupted</div>
+          <div className="gaming-card-head">Gaming Mode didn't close cleanly</div>
           <p>
-            A previous session didn't end cleanly ({statusLabel(recovery.status)}). Restore
-            your previous settings now?
+            The last session ({statusLabel(recovery.status)}) didn't get a clean shutdown — usually
+            because Compy was closed or the PC restarted while it was on. Pick one:
           </p>
+          <ul className="gaming-recovery-choices">
+            <li>
+              <strong>Resume Gaming Mode</strong> — roll back, then re-apply it fresh so you're gaming
+              again.
+            </li>
+            <li>
+              <strong>Return to normal</strong> — roll those settings back and leave Gaming Mode off.
+            </li>
+          </ul>
           <div className="gaming-actions">
-            <button
-              className="btn-small btn-small-on"
-              disabled={busy}
-              onClick={() => onRecover(true)}
-            >
-              Restore my settings
+            <button className="btn-small btn-small-on" disabled={busy} onClick={onResume}>
+              {busy ? "Working…" : "Resume Gaming Mode"}
             </button>
-            <button className="btn-small" disabled={busy} onClick={() => onRecover(false)}>
+            <button className="btn-small" disabled={busy} onClick={() => onRecover(true)}>
+              Return to normal
+            </button>
+            <button className="link-btn" disabled={busy} onClick={() => onRecover(false)}>
               Not now
             </button>
           </div>
