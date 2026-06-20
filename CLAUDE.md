@@ -182,6 +182,40 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🛰️🎮 RIG HOLOGRAM + ONBOARDING REBUILD + MOTION OVERRIDE + GAMING-IN-TUNE + OVERNIGHT SWEEP —
+> 2026-06-19→20 (`origin/main` @ `cb7b668`).** Large multi-day run, all reversible, all verified
+> (TS vitest **473** · Rust cargo **448** · clippy/tsc clean · /check + /security clean per train).
+> Frozen beta refs (`16069fa`/`beta/private-beta-001`) UNTOUCHED; remote-fetch/updater stay off.
+> - **🛰️ 3D Rig Hologram** (`src/surfaces/rig/`) — the user's REAL hardware in a theme-aware three.js
+>   hologram (`buildRigParts` from detected HardwareInfo; honest "ghost" placeholders for PSU/cooler;
+>   live fans spin at real RPM via the driver-free HWiNFO/LibreHardwareMonitor interop —
+>   `get_fan_sensors`/`cpu_temp.rs`; manual-add for undetectable parts; "light up sensors" nudge with
+>   official LHM/HWiNFO links, no bundling). **It's the DEFAULT view on Home now** (DashboardV2 "This
+>   rig"; persisted `compy_home_rig_3d`; Cards one tap away; lazy-loaded + step-aside during games).
+> - **🧭 Onboarding "Setup & Tour" REBUILT** (`src/surfaces/setup/`) — a re-runnable, contained-console
+>   HoloLens flow launched from a Home card: Leg 1 guided setup, Leg 2 a camera fly-through of the REAL
+>   components (each: role · metric it DRIVES · the real Compy tweaks · the TAB that manages them) +
+>   a six-tab recap. (The owner rejected the early abstract-diamond + scattered-rig versions; this is
+>   the contained split-stage version.) `compy_setup_tour_v1`.
+> - **🎬 MOTION ON BY DEFAULT, OVERRIDES OS reduce-motion** (owner decision) — `src/design/use-motion.ts`
+>   (`useReducedMotion`/`resolveReduced` + `<html data-motion>`; Settings → Motion: Full[default]/System/
+>   Reduced). Gate animations on the hook/attr, NEVER raw matchMedia / `@media(prefers-reduced-motion)`.
+>   See [[motion-on-by-default-override-os]].
+> - **🎮 Gaming Mode** — its own tab RETIRED; now a featured section inside **Tune** (`gaming_mode_gate()`
+>   is `true` on main = visible/usable). Recovery UX clearer + a **Resume** option (recover-then-restart).
+>   **Game Mode honesty fix:** Tune detects when Windows Game Mode reverted externally (AMD Adrenalin /
+>   recording software resets it at login) and TELLS the user instead of silently re-offering the apply.
+> - **🌙 Overnight sweep (2026-06-20):** +117 unit tests (5 TS pure-logic modules + hardware.rs parsers +
+>   dismissed), clippy `manual_range_contains` fix, a11y fixes (onboarding/gaming-modal/Settings/Fix),
+>   honesty audit **Grade A**, Check header clarity. Spec `docs/superpowers/specs/2026-06-20-retire-
+>   classic-surfaces.md` (DRAFT, owner review — NOT executed). Log: `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-20.md`.
+> - **Installer:** owner-clarity rebuild from `cb7b668` on the owner's Desktop —
+>   `Compy_0.1.0_x64-setup.exe` SHA-256 `C5B6ED77F2EDDF6015E6729D7DE4BC4FE254C67F3286A07D142F9534772DB4A1`
+>   (3,169,847 B); installed + running. SUPERSEDES earlier kits for owner-clarity (beta-kit/ untouched).
+> - **Next tracks (queued, owner-gated):** classic-surface retirement train (spec ready; wants the dev
+>   build + per-phase live eyeball) · Gaming Mode → 1.0 (reboot-persistence QA + sign-off; needs a real
+>   reboot) · more UX polish (circle back).
+
 > **🎨🎮 PREMIUM-INSTRUMENT REDESIGN + GAMING-MODE §7 QA + WORKFLOW DISCIPLINE — 2026-06-15→18
 > (`main` @ `b616ad7`).** Big run on top of the one-rail app, all reversible, all verified
 > (cargo **403** · npm **362** · clippy/tsc/vite + /check + /security all clean). Classic surfaces
