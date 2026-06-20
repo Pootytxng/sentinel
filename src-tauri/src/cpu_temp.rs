@@ -137,7 +137,7 @@ fn read_fans_ohm(ns: &str) -> Vec<FanSensor> {
         .unwrap_or_default();
     sensors
         .iter()
-        .filter(|s| s.value.is_finite() && s.value >= 0.0 && s.value < 20000.0)
+        .filter(|s| s.value.is_finite() && (0.0..20000.0).contains(&s.value))
         .map(|s| FanSensor {
             label: s.name.clone(),
             rpm: s.value.round() as u32,
@@ -206,7 +206,7 @@ unsafe fn parse_hwinfo_fans(base: *const u8) -> Vec<FanSensor> {
         let label_bytes = e.label_orig;
         let label = cstr(&label_bytes);
         let v = e.value;
-        if !v.is_finite() || v < 0.0 || v >= 20000.0 {
+        if !v.is_finite() || !(0.0..20000.0).contains(&v) {
             continue;
         }
         fans.push(FanSensor {
