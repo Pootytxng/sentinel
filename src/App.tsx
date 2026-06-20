@@ -1428,8 +1428,9 @@ function App() {
     <LibraryContext.Provider value={libraryApi}>
     <KonamiWhisper />
     <main className={ccActive || settingsActive ? "app app-cc" : "app"}>
-      {showSetupTour && (
+      {showSetupTour && hw && (
         <SetupTour
+          hw={hw}
           rig={rigLines}
           onDone={() => {
             // Mark the legacy flags satisfied too, so the old auto-modals can never fire later.

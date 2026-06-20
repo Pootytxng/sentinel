@@ -1,13 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
+import type { HardwareInfo } from "../../App";
 import type { PriorityItem } from "../../types";
 import type { RigLine } from "../../Onboarding";
 import { Wordmark } from "../../design/Wordmark";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
 import { useScan, type ScanRecLite } from "../use-scan";
-import { buildSetupSteps } from "./setup-steps";
+import { buildRigParts } from "../rig/rig-parts";
+import { buildSetupSteps, type SetupStep } from "./setup-steps";
 import "./SetupTour.css";
 
 // The combined "Compy Setup & Tour" — a re-runnable, full-screen HoloLens journey. The 3D framework
@@ -18,17 +20,17 @@ import "./SetupTour.css";
 
 export const SETUP_TOUR_KEY = "compy_setup_tour_v1";
 
-// Lazy so the ~600KB three.js framework scene only loads when the tour opens.
-const FrameworkScene = lazy(() =>
-  import("./FrameworkScene").then((m) => ({ default: m.FrameworkScene })),
+// Lazy so the three.js hardware scene only loads when the tour opens.
+const HardwareTourScene = lazy(() =>
+  import("./HardwareTourScene").then((m) => ({ default: m.HardwareTourScene })),
 );
 
 function prefersReduced(): boolean {
   return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function SetupTour({ rig, onDone }: { rig: RigLine[]; onDone: () => void }) {
-  const steps = useMemo(() => buildSetupSteps(), []);
+export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[]; onDone: () => void }) {
+  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw)), [hw]);
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useMemo(prefersReduced, []);
@@ -86,18 +88,18 @@ export function SetupTour({ rig, onDone }: { rig: RigLine[]; onDone: () => void 
     return () => window.removeEventListener("keydown", onKey);
   }, [finish, next, back]);
 
-  const activeRoom = step.kind === "room" ? (step.room ?? null) : null;
+  const focusId = step.kind === "lesson" ? (step.focusId ?? null) : null;
   const isLast = i === steps.length - 1;
-  const legLabel = step.leg === "setup" ? "Guided setup" : "Tour";
+  const legLabel = step.leg === "setup" ? "Guided setup" : "Hardware tour";
 
   return (
     <div className="st-backdrop" ref={rootRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Compy setup and tour">
       <div className="st-veil" aria-hidden="true" />
 
-      {/* 3D framework centerpiece */}
+      {/* 3D hardware centerpiece — the user's real rig; the camera flies to the focused component. */}
       <div className="st-stage">
         <Suspense fallback={<div className="st-loading">Initializing hologram…</div>}>
-          <FrameworkScene activeRoom={activeRoom} reduced={reduced} paused={false} />
+          <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
         </Suspense>
       </div>
 
@@ -118,7 +120,7 @@ export function SetupTour({ rig, onDone }: { rig: RigLine[]; onDone: () => void 
           {step.kind === "seatbelt" && <StepSeatbelt />}
           {step.kind === "rules" && <StepRules />}
           {step.kind === "check" && <StepCheck />}
-          {step.kind === "room" && <StepRoom title={step.title} body={step.body} />}
+          {step.kind === "lesson" && <StepLesson step={step} />}
         </div>
 
         <div className="st-progress" aria-hidden="true">
@@ -322,14 +324,28 @@ function StepCheck() {
   );
 }
 
-// ── Leg 2 step ───────────────────────────────────────────────────────────────
+// ── Leg 2 step — a hardware lesson (role · affected metric · the real tweaks that touch it) ─────────
 
-function StepRoom({ title, body }: { title: string; body: string }) {
+function StepLesson({ step }: { step: SetupStep }) {
+  const l = step.lesson;
+  if (!l) return null;
   return (
     <>
-      <div className="st-tag">THE TOUR</div>
-      <h2 className="st-title">{title}</h2>
-      <p className="st-body st-room-body">{body}</p>
+      <div className="st-tag">{l.eyebrow}</div>
+      <h2 className="st-title">{step.title}</h2>
+      <p className="st-body">{l.role}</p>
+      <div className="st-affects">
+        <span className="st-affects-key">Drives</span> {l.affects}
+      </div>
+      <div className="st-tweaks">
+        <div className="st-tweaks-head">Settings Compy tunes here</div>
+        <ul className="st-tweaks-list">
+          {l.tweaks.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      </div>
+      {l.note && <p className="st-note">{l.note}</p>}
     </>
   );
 }

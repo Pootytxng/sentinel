@@ -1,37 +1,76 @@
 import { describe, it, expect } from "vitest";
-import { buildSetupSteps, ROOM_PURPOSE } from "./setup-steps";
-import { HOME_RAIL } from "../../design/homeRail";
+import { buildSetupSteps, buildHardwareSteps, HARDWARE_LESSONS } from "./setup-steps";
+import type { RigPart, RigPartKind } from "../rig/rig-parts";
+
+// Minimal stand-in parts (only the fields the step builder reads).
+function part(id: string, kind: RigPartKind, name: string): RigPart {
+  return {
+    id,
+    name,
+    category: kind,
+    kind,
+    detected: kind !== "psu" && kind !== "cooler",
+    assembled: [0, 0, 0],
+    exploded: [0, 0, 0],
+    tagline: "",
+    specs: [],
+  };
+}
+
+const PARTS: RigPart[] = [
+  part("board", "board", "Mainboard"),
+  part("cpu", "cpu", "Ryzen 7 9850X3D"),
+  part("ram-0", "ram", "Memory · Slot 1"),
+  part("gpu-0", "gpu", "Radeon RX 9070 XT"),
+  part("disk-0", "storage", "Samsung 990 Pro"),
+  part("psu", "psu", "Power Supply"),
+];
 
 describe("buildSetupSteps", () => {
-  const steps = buildSetupSteps();
+  const steps = buildSetupSteps(PARTS);
 
-  it("has the four setup steps first, in order", () => {
-    const setup = steps.filter((s) => s.leg === "setup");
-    expect(setup.map((s) => s.kind)).toEqual(["rig", "seatbelt", "rules", "check"]);
-    // they lead the flow
-    expect(steps.slice(0, 4)).toEqual(setup);
+  it("leads with the four setup steps in order", () => {
+    expect(steps.slice(0, 4).map((s) => s.kind)).toEqual(["rig", "seatbelt", "rules", "check"]);
+    expect(steps.slice(0, 4).every((s) => s.leg === "setup")).toBe(true);
   });
 
-  it("covers every room exactly once, in rail order, after the setup leg", () => {
+  it("then tours hardware in the owner's order: power → storage → graphics → processor → memory", () => {
     const tour = steps.filter((s) => s.leg === "tour");
-    expect(tour.map((s) => s.room)).toEqual(HOME_RAIL.map((r) => r.id));
-    expect(new Set(tour.map((s) => s.room)).size).toBe(HOME_RAIL.length);
+    expect(tour.map((s) => s.lesson?.kind)).toEqual(["psu", "storage", "gpu", "cpu", "ram"]);
+    expect(tour.every((s) => s.kind === "lesson")).toBe(true);
   });
 
-  it("uses the live rail labels as tour titles (rename-safe)", () => {
-    const tour = steps.filter((s) => s.leg === "tour");
-    for (const s of tour) {
-      const rail = HOME_RAIL.find((r) => r.id === s.room);
-      expect(s.title).toBe(rail?.label);
+  it("focuses each lesson on the REAL part of its kind, titled with the real name", () => {
+    const gpu = steps.find((s) => s.lesson?.kind === "gpu");
+    expect(gpu?.focusId).toBe("gpu-0");
+    expect(gpu?.title).toBe("Radeon RX 9070 XT");
+    const psu = steps.find((s) => s.lesson?.kind === "psu");
+    expect(psu?.focusId).toBe("psu");
+  });
+
+  it("gives every step a unique id", () => {
+    expect(new Set(steps.map((s) => s.id)).size).toBe(steps.length);
+  });
+});
+
+describe("buildHardwareSteps", () => {
+  it("skips lessons whose component kind is absent from the rig", () => {
+    const noGpu = PARTS.filter((p) => p.kind !== "gpu");
+    const tour = buildHardwareSteps(noGpu);
+    expect(tour.some((s) => s.lesson?.kind === "gpu")).toBe(false);
+  });
+
+  it("every lesson carries a role, an affected metric and at least one real tweak", () => {
+    for (const l of HARDWARE_LESSONS) {
+      expect(l.role.trim().length).toBeGreaterThan(0);
+      expect(l.affects.trim().length).toBeGreaterThan(0);
+      expect(l.tweaks.length).toBeGreaterThan(0);
+      expect(l.tweaks.every((t) => t.trim().length > 0)).toBe(true);
     }
   });
 
-  it("gives every step a unique id and non-empty body", () => {
-    expect(new Set(steps.map((s) => s.id)).size).toBe(steps.length);
-    expect(steps.every((s) => s.body.trim().length > 0)).toBe(true);
-  });
-
-  it("ROOM_PURPOSE has exactly one entry per room — no missing, no orphans", () => {
-    expect(Object.keys(ROOM_PURPOSE).sort()).toEqual(HOME_RAIL.map((r) => r.id).sort());
+  it("the power lesson carries the PSU honesty caveat", () => {
+    const psu = HARDWARE_LESSONS.find((l) => l.kind === "psu");
+    expect(psu?.note).toMatch(/can't read your PSU/i);
   });
 });

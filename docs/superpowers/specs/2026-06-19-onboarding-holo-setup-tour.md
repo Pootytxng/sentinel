@@ -26,10 +26,12 @@ New surface dir `src/surfaces/setup/`:
   (`AmbientBackdrop` + instrument glass + a scanline veil), progress rail, **Back / Skip / Next**,
   Esc-to-close, focus-trap, **reduced-motion honored**.
 - `setup-steps.ts` — pure step model (the ordered legs + per-room tour copy), unit-tested.
-- `FrameworkScene.tsx` (+ helpers under `setup/framework/`) — the 3D holographic **"Compy framework"**:
-  the six rooms as glowing nodes/structure around a central pulse-C core; per tour step the camera
-  focuses the active room and its node lights up. Lazy-loaded (like `RigViewer`); `frameloop="demand"`
-  under reduced-motion / step-aside; theme-aware via `useRigColors`.
+- `HardwareTourScene.tsx` — the 3D centerpiece. **Owner redesign (2026-06-19):** the abstract
+  "framework of rooms" (diamonds) was replaced with the user's **REAL rig** — it reuses the rig
+  hologram's `buildRigParts` + `RigPartGeometry` + `useRigColors`, shown exploded, with the **camera
+  flying to whichever component the current lesson is about** (the focused part lights up + rotates;
+  the rest stay faint). Same hardware the user sees in the Rig view → never abstract. Lazy-loaded;
+  `frameloop="demand"` under reduced-motion / step-aside. (The old `FrameworkScene.tsx` is deleted.)
 - `SetupLauncherCard.tsx` — the prominent HoloLens Home card ("Set up & tour Compy").
 - `SetupTour.css` — flow + launcher styling, all `--ix-*` tokens (theme-correct, no bare hexes).
 
@@ -42,15 +44,24 @@ Reuse the existing first-experience content, presented as tour steps:
    `apply_recommendation` path behind `useConfirm()` (same as `FirstCheck.tsx` today). No new
    mutation primitive; the already-QA'd apply path.
 
-### Leg 2 — Tab tour (the new part)
-For each room (Home/Check/Monitor/Tune/Blackbook/Lab) a tour step: the 3D framework focuses that
-room's node + a glass card states its plain-English purpose:
-- **Home** — your dashboard: live CPU/GPU, last session, what's holding you back at a glance.
-- **Check** — scan whether your PC's ready for a game and apply the safe fixes it finds.
-- **Monitor** — watch real FPS / 1% lows / temps live and get a debrief after each session.
-- **Tune** — apply and undo safe, per-rig tweaks; every change is logged and reversible.
-- **Blackbook** — what actually works, measured — and the myths that don't. Paste a guide, get it graded.
-- **Lab** — go deeper: benchmarks, latency, diagnostics.
+### Leg 2 — Hardware tour (owner redesign 2026-06-19)
+A fly-through of the user's **real components**, in the owner's order
+(**power → storage → graphics → processor → memory**). For each, the camera focuses that component
+and a glass card teaches three things: **what it does**, the **metric it drives**, and the **real
+Compy tweaks that touch it** (every tweak named is an actual catalog rec; advisories are labelled as
+such). This educates the user on what each part does AND ties every setting to the hardware
+responsible for it — the per-rig brand promise, deepened.
+
+- **Power delivery** (PSU ghost) — power plan · Fast Startup · USB/PCIe power-saving → sustained
+  clocks. Honesty note: the PSU isn't software-readable, so it stays a ghost; the power *settings* are
+  what's real.
+- **Storage** — SysMain · reserved-storage/free-space · SSD-upgrade advisory → load times / hitches.
+- **Graphics** — HAGS · vendor telemetry off (NVIDIA Container / AMD UXP) · prefer-discrete · driver
+  freshness → FPS + frame consistency.
+- **Processor** — boost-friendly power plan · startup-app review → 1% lows / frametime smoothness.
+- **Memory** — headroom watch + heavy-app flags · capacity advisory → stutter / alt-tab hitches.
+
+Lessons are skipped for any component kind absent from the rig (pure `buildHardwareSteps`, tested).
 
 ### Finish
 "You're set." → close → land on **Home**.
