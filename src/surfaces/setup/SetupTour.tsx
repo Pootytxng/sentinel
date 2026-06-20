@@ -5,6 +5,8 @@ import type { HardwareInfo } from "../../App";
 import type { PriorityItem } from "../../types";
 import type { RigLine } from "../../Onboarding";
 import { Wordmark } from "../../design/Wordmark";
+import { NavGlyph } from "../../design/NavGlyph";
+import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
 import { useScan, type ScanRecLite } from "../use-scan";
@@ -12,13 +14,18 @@ import { buildRigParts } from "../rig/rig-parts";
 import { buildSetupSteps, type SetupStep } from "./setup-steps";
 import "./SetupTour.css";
 
-// The combined "Compy Setup & Tour" — a re-runnable, full-screen HoloLens journey. The 3D framework
-// is the persistent centerpiece; the glass HUD shows the current step. Leg 1 (setup) reuses the
-// existing first-experience content (rig / seatbelt / house rules / live first-check). Leg 2 (tour)
-// flies the framework through each room. Read-only except the first-check's one-click apply, which
-// reuses the audited apply_recommendation path behind a confirm. Honors reduced-motion.
+// The combined "Compy Setup & Tour" — a re-runnable, contained HoloLens console. A centered card with
+// a bordered 3D STAGE (the user's real hardware) beside a calm content panel; chrome anchored top
+// (wordmark · leg · skip) and bottom (progress · back/next). Leg 1 reuses the first-experience
+// content; Leg 2 tours each component (role · metric · the real tweaks · the tab that manages them)
+// and ends with a six-tab recap. Read-only except the first-check's audited one-click apply. Honors
+// reduced-motion.
 
 export const SETUP_TOUR_KEY = "compy_setup_tour_v1";
+
+const TAB_ICON: Record<HomeRailId, string> = Object.fromEntries(
+  HOME_RAIL.map((r) => [r.id, r.icon]),
+) as Record<HomeRailId, string>;
 
 // Lazy so the three.js hardware scene only loads when the tour opens.
 const HardwareTourScene = lazy(() =>
@@ -56,7 +63,6 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   }, [steps.length, finish]);
   const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
 
-  // Keyboard: Esc closes, arrows navigate, Tab is trapped inside the overlay.
   useEffect(() => {
     const root = rootRef.current;
     root?.focus();
@@ -93,58 +99,65 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   const legLabel = step.leg === "setup" ? "Guided setup" : "Hardware tour";
 
   return (
-    <div className="st-backdrop" ref={rootRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Compy setup and tour">
-      <div className="st-veil" aria-hidden="true" />
-
-      {/* 3D hardware centerpiece — the user's real rig; the camera flies to the focused component. */}
-      <div className="st-stage">
-        <Suspense fallback={<div className="st-loading">Initializing hologram…</div>}>
-          <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
-        </Suspense>
-      </div>
-
-      {/* HUD */}
-      <header className="st-head">
-        <span className="st-brand">
-          <Wordmark size={20} />
-        </span>
-        <span className="st-leg">{legLabel}</span>
-        <button className="st-skip" onClick={finish}>
-          Skip
-        </button>
-      </header>
-
-      <div className="st-panel">
-        <div className="st-step">
-          {step.kind === "rig" && <StepRig rig={rig} />}
-          {step.kind === "seatbelt" && <StepSeatbelt />}
-          {step.kind === "rules" && <StepRules />}
-          {step.kind === "check" && <StepCheck />}
-          {step.kind === "lesson" && <StepLesson step={step} />}
-        </div>
-
-        <div className="st-progress" aria-hidden="true">
-          {steps.map((s, idx) => (
-            <span
-              key={s.id}
-              className={`st-tick ${idx === i ? "st-tick-on" : ""} ${idx < i ? "st-tick-done" : ""} ${
-                s.leg === "tour" ? "st-tick-tour" : ""
-              }`}
-            />
-          ))}
-        </div>
-
-        <div className="st-actions">
-          <button className="btn-small" onClick={back} disabled={i === 0}>
-            Back
-          </button>
-          <span className="st-count">
-            {i + 1} / {steps.length}
+    <div
+      className="st-backdrop"
+      ref={rootRef}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Compy setup and tour"
+    >
+      <div className="st-console">
+        <header className="st-head">
+          <span className="st-brand">
+            <Wordmark size={19} />
           </span>
-          <button className="btn" onClick={next}>
-            {isLast ? "Finish" : "Next"}
+          <span className="st-leg">{legLabel}</span>
+          <button className="st-skip" onClick={finish}>
+            Skip ✕
           </button>
+        </header>
+
+        <div className="st-body">
+          {/* Contained 3D stage — the user's real hardware (camera centred, generous margin). */}
+          <div className="st-stage">
+            <Suspense fallback={<div className="st-loading">Initializing hologram…</div>}>
+              <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
+            </Suspense>
+          </div>
+
+          {/* Calm content panel — never overlaps the stage. */}
+          <div className="st-panel">
+            {step.kind === "rig" && <StepRig rig={rig} />}
+            {step.kind === "seatbelt" && <StepSeatbelt />}
+            {step.kind === "rules" && <StepRules />}
+            {step.kind === "check" && <StepCheck />}
+            {step.kind === "lesson" && <StepLesson step={step} />}
+            {step.kind === "tabmap" && <StepTabMap step={step} />}
+          </div>
         </div>
+
+        <footer className="st-footer">
+          <div className="st-progress" aria-hidden="true">
+            {steps.map((s, idx) => (
+              <span
+                key={s.id}
+                className={`st-tick ${idx === i ? "st-tick-on" : ""} ${idx < i ? "st-tick-done" : ""}`}
+              />
+            ))}
+          </div>
+          <div className="st-nav">
+            <button className="btn-small" onClick={back} disabled={i === 0}>
+              Back
+            </button>
+            <span className="st-count">
+              {i + 1} / {steps.length}
+            </span>
+            <button className="btn" onClick={next}>
+              {isLast ? "Finish" : "Next"}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   );
@@ -168,7 +181,7 @@ function StepRig({ rig }: { rig: RigLine[] }) {
               </div>
             ))}
       </div>
-      <p className="st-body">
+      <p className="st-body-text">
         Every suggestion you'll see was picked for <strong>this exact hardware</strong> — nothing
         generic, nothing it can't undo.
       </p>
@@ -201,9 +214,9 @@ function StepSeatbelt() {
           </div>
         )}
       </div>
-      <p className="st-body">
-        Try it — the switch above is live (and changes nothing here). Every real change lands in the{" "}
-        <strong>Trust Ledger</strong> with its before-state. Undoable today, undoable in six months.
+      <p className="st-body-text">
+        Try it — the switch is live (and changes nothing here). Every real change lands in the{" "}
+        <strong>Tune</strong> tab's ledger with its before-state. Undoable today, undoable in six months.
       </p>
     </>
   );
@@ -227,7 +240,7 @@ function StepRules() {
           </div>
         ))}
       </div>
-      <p className="st-body st-kicker">
+      <p className="st-body-text st-kicker">
         The sketchy tweaks aren't missing. <strong>They're refused.</strong>
       </p>
     </>
@@ -280,7 +293,7 @@ function StepCheck() {
           <span className="st-scan-pulse" />
           <span>Running real checks{elapsed ? ` · ${elapsed.toFixed(1)}s` : "…"}</span>
         </div>
-        <p className="st-body">No guessing — Compy measures this machine, then tells you the truth.</p>
+        <p className="st-body-text">No guessing — Compy measures this machine, then tells you the truth.</p>
       </>
     );
   }
@@ -313,18 +326,16 @@ function StepCheck() {
           </div>
         </div>
       ) : (
-        <p className="st-body">
+        <p className="st-body-text">
           {checks.length} checks came back right — measured on this rig, not assumed.
         </p>
       )}
-      <p className="st-body">
-        Reversible, every one. The rest of the tour shows you around — tap Next.
-      </p>
+      <p className="st-body-text">Reversible, every one. Next, a quick tour of your rig — tap Next.</p>
     </>
   );
 }
 
-// ── Leg 2 step — a hardware lesson (role · affected metric · the real tweaks that touch it) ─────────
+// ── Leg 2 — hardware lesson (role · metric · real tweaks · the tab that manages them) ──────────────
 
 function StepLesson({ step }: { step: SetupStep }) {
   const l = step.lesson;
@@ -333,7 +344,7 @@ function StepLesson({ step }: { step: SetupStep }) {
     <>
       <div className="st-tag">{l.eyebrow}</div>
       <h2 className="st-title">{step.title}</h2>
-      <p className="st-body">{l.role}</p>
+      <p className="st-body-text">{l.role}</p>
       <div className="st-affects">
         <span className="st-affects-key">Drives</span> {l.affects}
       </div>
@@ -345,7 +356,39 @@ function StepLesson({ step }: { step: SetupStep }) {
           ))}
         </ul>
       </div>
+      <div className="st-tabchip">
+        <span className="st-tabchip-ico">
+          <NavGlyph name={TAB_ICON[l.tab.id]} />
+        </span>
+        <span>{l.tab.tie}</span>
+      </div>
       {l.note && <p className="st-note">{l.note}</p>}
+    </>
+  );
+}
+
+// ── Leg 2 finale — the six-tab recap ───────────────────────────────────────────────────────────────
+
+function StepTabMap({ step }: { step: SetupStep }) {
+  const tabs = step.tabs ?? [];
+  return (
+    <>
+      <div className="st-tag">THE TOUR</div>
+      <h2 className="st-title">{step.title}</h2>
+      <p className="st-body-text">{step.body}</p>
+      <div className="st-tabgrid">
+        {tabs.map((t) => (
+          <div key={t.id} className={`st-tabcard ${t.id === "learn" ? "st-tabcard-hi" : ""}`}>
+            <span className="st-tabcard-ico">
+              <NavGlyph name={t.icon} />
+            </span>
+            <div className="st-tabcard-text">
+              <div className="st-tabcard-name">{t.label}</div>
+              <div className="st-tabcard-blurb">{t.blurb}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </>
   );
 }

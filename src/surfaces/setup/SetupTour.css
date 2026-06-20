@@ -1,17 +1,20 @@
-/* "Compy Setup & Tour" — full-screen HoloLens flow. 3D framework fills the stage; a glass HUD panel
-   docks at the bottom. All colour from --ix-* tokens (theme-correct across Midnight/Violet/…). */
+/* "Compy Setup & Tour" — a CONTAINED, centered console (not a full-bleed void). A bordered 3D stage
+   beside a calm content panel, with anchored header + footer. All colour from --ix-* tokens. */
 
 .st-backdrop {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 4vh, 56px);
+  overflow: auto;
   color: var(--ix-text-1, #eef1f7);
   font-family: var(--font-sans, system-ui, sans-serif);
   background:
-    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--ix-accent) 12%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--ix-accent) 9%, transparent), transparent 60%),
     var(--ix-base, #0a0c11);
-  animation: st-fade 360ms ease both;
+  animation: st-fade 320ms ease both;
   outline: none;
 }
 @keyframes st-fade {
@@ -19,31 +22,69 @@
   to { opacity: 1; }
 }
 
-/* Holographic veil — scanlines + faint grid over the whole stage. */
-.st-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      color-mix(in srgb, var(--ix-accent) 7%, transparent) 0px,
-      color-mix(in srgb, var(--ix-accent) 7%, transparent) 1px,
-      transparent 1px,
-      transparent 3px
-    ),
-    linear-gradient(color-mix(in srgb, var(--ix-accent) 4%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--ix-accent) 4%, transparent) 1px, transparent 1px);
-  background-size: 100% 3px, 56px 56px, 56px 56px;
-  opacity: 0.5;
-  mask-image: radial-gradient(120% 100% at 50% 40%, #000 35%, transparent 85%);
+/* Centered console — one deliberate object, never touches the window edges. */
+.st-console {
+  width: 100%;
+  max-width: 1180px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
+/* Header strip */
+.st-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.09));
+}
+.st-brand {
+  display: inline-flex;
+}
+.st-leg {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, #8b95a8);
+}
+.st-skip {
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-3, #8b95a8);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--r-sm, 7px);
+}
+.st-skip:hover {
+  color: var(--ix-text-1, #eef1f7);
+}
+
+/* Body — split: bordered 3D stage + calm content panel (never overlap). */
+.st-body {
+  display: flex;
+  gap: 18px;
+  align-items: stretch;
+  min-height: clamp(360px, 52vh, 560px);
+}
+
+/* The contained stage (mirrors the Rig view's .rig-canvas recipe). */
 .st-stage {
-  position: absolute;
-  inset: 0 0 0 0;
-  z-index: 0;
+  position: relative;
+  flex: 1.45 1 0;
+  min-width: 0;
+  border-radius: var(--ix-radius, 16px);
+  border: 1px solid var(--ix-glass-border, var(--border, #242b39));
+  overflow: hidden;
+  background:
+    radial-gradient(120% 95% at 50% 0%, color-mix(in srgb, var(--ix-accent) 10%, transparent), transparent 62%),
+    var(--ix-base, #0a0c11);
 }
 .st-loading {
   position: absolute;
@@ -57,69 +98,60 @@
   color: var(--ix-accent-text, var(--accent, #2ee6c0));
 }
 
-/* Top HUD bar */
-.st-head {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 3;
+/* Calm content panel */
+.st-panel {
+  flex: 1 1 0;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: clamp(18px, 2.2vw, 26px);
+  overflow-y: auto;
+  border-radius: var(--ix-radius, 16px);
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.09));
+  background: var(--ix-glass-fill, rgba(18, 21, 28, 0.7));
+}
+
+/* Footer cluster */
+.st-footer {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 22px;
+  gap: 16px;
 }
-.st-brand {
-  display: inline-flex;
-}
-.st-leg {
+.st-progress {
   flex: 1;
-  text-align: center;
+  display: flex;
+  gap: 5px;
+}
+.st-tick {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ix-text-3) 30%, transparent);
+  transition: background 240ms ease, box-shadow 240ms ease;
+}
+.st-tick-done {
+  background: color-mix(in srgb, var(--ix-accent) 60%, transparent);
+}
+.st-tick-on {
+  background: var(--ix-accent, #2ee6c0);
+  box-shadow: 0 0 8px var(--ix-accent, #2ee6c0);
+}
+.st-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.st-count {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: var(--ix-text-3, #8b95a8);
-}
-.st-skip {
-  border: 0;
-  background: transparent;
-  color: var(--ix-text-3, #8b95a8);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: var(--r-sm, 7px);
-}
-.st-skip:hover {
-  color: var(--ix-text-1, #eef1f7);
+  min-width: 44px;
+  text-align: center;
 }
 
-/* Bottom glass panel */
-.st-panel {
-  position: absolute;
-  left: 50%;
-  bottom: clamp(16px, 5vh, 48px);
-  transform: translateX(-50%);
-  z-index: 2;
-  width: clamp(320px, 64vw, 720px);
-  max-width: calc(100vw - 32px);
-  padding: 20px 24px 18px;
-  border-radius: var(--ix-radius, 16px);
-  border: 1px solid color-mix(in srgb, var(--ix-accent) 30%, var(--ix-glass-border, rgba(255, 255, 255, 0.1)));
-  background: var(--ix-glass-fill, rgba(12, 14, 20, 0.86));
-  backdrop-filter: blur(14px);
-  box-shadow: 0 0 50px -16px color-mix(in srgb, var(--ix-accent) 70%, transparent);
-  animation: st-panel-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-@keyframes st-panel-in {
-  from { opacity: 0; transform: translate(-50%, 14px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-
-.st-step {
-  min-height: 168px;
-}
+/* ── Step content (lives in the panel) ── */
 .st-tag {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 10.5px;
@@ -129,11 +161,11 @@
 }
 .st-title {
   margin: 6px 0 8px;
-  font-size: clamp(18px, 2.4vw, 24px);
+  font-size: clamp(19px, 1.7vw, 25px);
   font-weight: 700;
-  line-height: 1.18;
+  line-height: 1.16;
 }
-.st-body {
+.st-body-text {
   margin: 8px 0 0;
   font-size: 13.5px;
   line-height: 1.55;
@@ -143,63 +175,11 @@
   color: var(--ix-text-1, #eef1f7);
 }
 
-/* Leg 2 — hardware lesson card */
-.st-affects {
-  margin-top: 9px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ix-text-2, #c4ccda);
-}
-.st-affects-key {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ix-accent-text, var(--accent, #2ee6c0));
-  margin-right: 6px;
-}
-.st-tweaks {
-  margin-top: 11px;
-  padding: 11px 13px;
-  border-radius: var(--r, 10px);
-  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
-  background: color-mix(in srgb, var(--ix-accent) 5%, transparent);
-}
-.st-tweaks-head {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ix-text-3, #8b95a8);
-  margin-bottom: 6px;
-}
-.st-tweaks-list {
-  margin: 0;
-  padding-left: 16px;
-  display: grid;
-  gap: 4px;
-}
-.st-tweaks-list li {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--ix-text-2, #c4ccda);
-}
-.st-tweaks-list li::marker {
-  color: var(--ix-accent, #2ee6c0);
-}
-.st-note {
-  margin: 9px 0 0;
-  font-size: 11.5px;
-  line-height: 1.5;
-  font-style: italic;
-  color: var(--ix-text-3, #8b95a8);
-}
-
-/* Step 1 — rig detect */
+/* Rig detect */
 .st-detect {
   display: grid;
-  gap: 5px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
 }
 .st-detect-row {
   display: flex;
@@ -217,6 +197,7 @@
 .st-detect-value {
   margin-left: auto;
   font-weight: 600;
+  text-align: right;
 }
 .st-shimmer {
   height: 16px;
@@ -234,9 +215,9 @@
   to { background-position: -200% 0; }
 }
 
-/* Step 2 — seatbelt demo */
+/* Seatbelt demo */
 .st-demo {
-  margin-top: 6px;
+  margin-top: 8px;
   padding: 12px 14px;
   border-radius: var(--r, 10px);
   border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
@@ -263,11 +244,11 @@
   color: var(--ix-accent-text, var(--accent, #2ee6c0));
 }
 
-/* Step 3 — rules */
+/* Rules */
 .st-rules {
   display: grid;
-  gap: 7px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 8px;
 }
 .st-rule {
   display: flex;
@@ -280,7 +261,7 @@
   flex: 0 0 auto;
 }
 
-/* Step 4 — first check */
+/* First check */
 .st-scanning {
   display: flex;
   align-items: center;
@@ -303,7 +284,7 @@
   50% { opacity: 1; transform: scale(1.1); }
 }
 .st-spotlight {
-  margin-top: 8px;
+  margin-top: 10px;
   padding: 12px 14px;
   border-radius: var(--r, 10px);
   border: 1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 45%, transparent);
@@ -335,52 +316,126 @@
   color: var(--ix-text-3, #8b95a8);
 }
 
-/* Progress ticks */
-.st-progress {
-  display: flex;
-  gap: 5px;
-  margin: 16px 0 14px;
+/* Lesson — affected metric + tweaks + tab chip */
+.st-affects {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ix-text-2, #c4ccda);
 }
-.st-tick {
-  flex: 1;
-  height: 3px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--ix-text-3) 30%, transparent);
-  transition: background 240ms ease, box-shadow 240ms ease;
+.st-affects-key {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  margin-right: 6px;
 }
-.st-tick-done {
-  background: color-mix(in srgb, var(--ix-accent) 65%, transparent);
+.st-tweaks {
+  margin-top: 11px;
+  padding: 11px 13px;
+  border-radius: var(--r, 10px);
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+  background: color-mix(in srgb, var(--ix-accent) 4%, transparent);
 }
-.st-tick-on {
-  background: var(--ix-accent, #2ee6c0);
-  box-shadow: 0 0 8px var(--ix-accent, #2ee6c0);
+.st-tweaks-head {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, #8b95a8);
+  margin-bottom: 6px;
 }
-
-/* Actions */
-.st-actions {
+.st-tweaks-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+.st-tweaks-list li {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ix-text-2, #c4ccda);
+}
+.st-tweaks-list li::marker {
+  color: var(--ix-accent, #2ee6c0);
+}
+.st-tabchip {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
+  margin-top: 11px;
+  padding: 9px 12px;
+  border-radius: var(--r, 10px);
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--ix-accent) 8%, transparent);
+  font-size: 12.5px;
+  color: var(--ix-text-1, #eef1f7);
 }
-.st-count {
-  flex: 1;
-  text-align: center;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+.st-tabchip-ico {
+  display: inline-flex;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  flex: 0 0 auto;
+}
+.st-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-style: italic;
   color: var(--ix-text-3, #8b95a8);
 }
 
-/* Narrow windows — widen the panel toward full width */
-@media (max-width: 720px) {
-  .st-panel {
-    width: calc(100vw - 24px);
-    bottom: 12px;
+/* Tab recap grid */
+.st-tabgrid {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.st-tabcard {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: var(--r, 10px);
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--ix-text-1) 3%, transparent);
+}
+.st-tabcard-hi {
+  border-color: color-mix(in srgb, var(--ix-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--ix-accent) 8%, transparent);
+}
+.st-tabcard-ico {
+  display: inline-flex;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  flex: 0 0 auto;
+}
+.st-tabcard-text {
+  min-width: 0;
+}
+.st-tabcard-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+.st-tabcard-blurb {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ix-text-3, #8b95a8);
+}
+
+/* Narrow windows — stack the stage over the panel (still contained, never full-bleed). */
+@media (max-width: 900px) {
+  .st-body {
+    flex-direction: column;
+    min-height: 0;
+  }
+  .st-stage {
+    flex: none;
+    min-height: clamp(280px, 38vh, 380px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .st-backdrop,
-  .st-panel { animation: none; }
+  .st-backdrop { animation: none; }
   .st-shimmer,
   .st-scan-pulse { animation: none; }
 }

@@ -16,14 +16,16 @@ import { useRigColors, partColor, type RigColors } from "../rig/use-rig-colors";
 
 // Per-kind scale that normalizes each part to ~2.2 units on screen (a tiny CPU and a big PSU read at a
 // similar size, so framing is consistent step to step).
+// Normalizes each part to ~1.7 units so even the widest (GPU, board) clears the contained stage with
+// a generous margin on every side (no clipping, consistent step-to-step framing).
 const SHOWCASE_SCALE: Record<RigPartKind, number> = {
-  board: 0.62,
-  cpu: 2.6,
-  ram: 1.9,
-  gpu: 0.9,
-  storage: 1.75,
-  psu: 0.82,
-  cooler: 1.15,
+  board: 0.5,
+  cpu: 2.0,
+  ram: 1.5,
+  gpu: 0.7,
+  storage: 1.35,
+  psu: 0.64,
+  cooler: 0.9,
 };
 
 // One isolated component: normalized scale, gentle turntable, a soft scale-in on mount (keyed per
@@ -42,10 +44,8 @@ function Showcase({ part, color, reduced }: { part: RigPart; color: string; redu
     g.rotation.y = reduced ? 0.5 : g.rotation.y + delta * 0.45;
   });
   return (
-    <group position={[0, 0.9, 0]}>
-      <group ref={ref} scale={base}>
-        <RigPartGeometry kind={part.kind} color={color} active detected={part.detected} />
-      </group>
+    <group ref={ref} scale={base}>
+      <RigPartGeometry kind={part.kind} color={color} active detected={part.detected} />
     </group>
   );
 }
@@ -76,25 +76,26 @@ function AssembledRig({ parts, colors, reduced }: { parts: RigPart[]; colors: Ri
 // A quiet pedestal under the subject — a glowing ring + faint disc. No busy infinite grid.
 function Pedestal({ color }: { color: string }) {
   return (
-    <group position={[0, -1.55, 0]}>
+    <group position={[0, -1.05, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[2.05, 2.2, 96]} />
-        <meshBasicMaterial color={color} transparent opacity={0.32} depthWrite={false} />
+        <ringGeometry args={[1.45, 1.58, 96]} />
+        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
-        <circleGeometry args={[2.05, 72]} />
+        <circleGeometry args={[1.45, 72]} />
         <meshBasicMaterial color={color} transparent opacity={0.045} depthWrite={false} />
       </mesh>
     </group>
   );
 }
 
-// Camera aims BELOW the subject so it rides up into the clear upper third — clear of the HUD card,
-// which covers the centre-bottom (otherwise wide/flat parts like the GPU hide behind it).
-const SHOWCASE_CAM = new THREE.Vector3(0, 0.9, 5.6);
-const SHOWCASE_LOOK = new THREE.Vector3(0, -0.6, 0);
-const OVERVIEW_CAM = new THREE.Vector3(0, 0.8, 7.8);
-const OVERVIEW_LOOK = new THREE.Vector3(0, -0.25, 0);
+// Subject sits at the origin (the content panel no longer overlaps the stage). Camera is pulled back
+// with a longer lens so the part fills ~60% of the stage with even margin on all sides; overview
+// pulls back further to frame the whole assembled rig.
+const SHOWCASE_CAM = new THREE.Vector3(0, 0.5, 7.3);
+const SHOWCASE_LOOK = new THREE.Vector3(0, 0, 0);
+const OVERVIEW_CAM = new THREE.Vector3(0, 0.7, 9.4);
+const OVERVIEW_LOOK = new THREE.Vector3(0, 0.1, 0);
 
 function TourCamera({ showcase, reduced }: { showcase: boolean; reduced: boolean }) {
   const look = useRef(new THREE.Vector3().copy(OVERVIEW_LOOK));
@@ -132,7 +133,7 @@ export function HardwareTourScene({
       frameloop={paused ? "demand" : "always"}
       dpr={[1, 2]}
       gl={{ alpha: true, antialias: true }}
-      camera={{ position: [OVERVIEW_CAM.x, OVERVIEW_CAM.y, OVERVIEW_CAM.z], fov: 42 }}
+      camera={{ position: [OVERVIEW_CAM.x, OVERVIEW_CAM.y, OVERVIEW_CAM.z], fov: 36 }}
     >
       <fogExp2 attach="fog" args={["#070b12", 0.06]} />
       <ambientLight intensity={0.65} />
@@ -146,7 +147,7 @@ export function HardwareTourScene({
         <AssembledRig parts={parts} colors={colors} reduced={reduced} />
       )}
 
-      <Pedestal color={colors.accent} />
+      {focus && <Pedestal color={colors.accent} />}
       <TourCamera showcase={!!focus} reduced={reduced} />
     </Canvas>
   );
