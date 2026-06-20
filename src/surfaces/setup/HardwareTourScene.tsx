@@ -59,12 +59,14 @@ function AssembledRig({ parts, colors, reduced }: { parts: RigPart[]; colors: Ri
   });
   let detectedIndex = 0;
   return (
-    <group ref={ref} position={[0, 0.35, 0]} rotation={[-0.05, 0.5, 0]}>
+    <group ref={ref} position={[0, 0.35, 0]} rotation={[-0.04, 0.42, 0]}>
       <RigCase exploded={false} color={colors.accent} reduced={reduced} />
       {parts.map((p) => {
         const c = partColor(colors, p.detected, p.detected ? detectedIndex++ : 0);
+        // Assembled = axis-aligned (NO per-part tilt — that rotation is only for the exploded view).
+        // Keeping it zeroed makes the parts nest cleanly like a real build instead of scrambling.
         return (
-          <group key={p.id} position={p.assembled} rotation={p.rotation ?? [0, 0, 0]}>
+          <group key={p.id} position={p.assembled} rotation={[0, 0, 0]}>
             <RigPartGeometry kind={p.kind} color={c} active={false} detected={p.detected} />
           </group>
         );
