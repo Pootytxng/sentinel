@@ -6,6 +6,7 @@ import type { HardwareInfo } from "../../App";
 import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-parts";
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
 import { useRigColors, partColor } from "./use-rig-colors";
+import { useReducedMotion } from "../../design/use-motion";
 import { RigCase } from "./RigCase";
 import { RigPart } from "./RigPart";
 import { RigFan, type FanInfo } from "./RigFan";
@@ -40,19 +41,11 @@ export function RigHologram({
 }: Props) {
   const colors = useRigColors();
   const parts = useMemo(() => buildRigParts(hw), [hw]);
-  const [reduced, setReduced] = useState(false);
+  const reduced = useReducedMotion();
   const [gameActive, setGameActive] = useState(false);
   const [fanSensors, setFanSensors] = useState<{ label: string; rpm: number; source: string }[] | null>(
     null,
   );
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const on = () => setReduced(mq.matches);
-    on();
-    mq.addEventListener?.("change", on);
-    return () => mq.removeEventListener?.("change", on);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

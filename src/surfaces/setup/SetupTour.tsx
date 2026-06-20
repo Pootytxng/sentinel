@@ -9,6 +9,7 @@ import { NavGlyph } from "../../design/NavGlyph";
 import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
+import { useReducedMotion } from "../../design/use-motion";
 import { useScan, type ScanRecLite } from "../use-scan";
 import { buildRigParts } from "../rig/rig-parts";
 import { buildSetupSteps, type SetupStep } from "./setup-steps";
@@ -32,15 +33,11 @@ const HardwareTourScene = lazy(() =>
   import("./HardwareTourScene").then((m) => ({ default: m.HardwareTourScene })),
 );
 
-function prefersReduced(): boolean {
-  return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[]; onDone: () => void }) {
   const steps = useMemo(() => buildSetupSteps(buildRigParts(hw)), [hw]);
   const [i, setI] = useState(0);
   const step = steps[i];
-  const reduced = useMemo(prefersReduced, []);
+  const reduced = useReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
 
   const finish = useCallback(() => {

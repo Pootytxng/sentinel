@@ -5,6 +5,7 @@ import App from "./App";
 import Overlay from "./Overlay";
 import { ConfirmProvider } from "./design/ConfirmDialog";
 import { WindowChrome } from "./design/WindowChrome";
+import { applyMotionAttribute } from "./design/use-motion";
 
 // The overlay runs in a separate window labeled "overlay". Detect by the
 // window label (robust — avoids URL hash/encoding issues across dev & prod).
@@ -62,6 +63,11 @@ try {
 } catch {
   document.documentElement.dataset.dashV2 = "on"; // default ON even if localStorage is unavailable
 }
+
+// Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and
+// overrides the OS "reduce motion" setting (opt-out in Settings → Motion). Resolved onto
+// <html data-motion="full|reduced"> before first paint so CSS + JS read one source of truth.
+applyMotionAttribute();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

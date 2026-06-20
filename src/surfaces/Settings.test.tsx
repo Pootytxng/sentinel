@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 
 // §C: the build stamp arrives over the existing IPC probe pattern; everything else resolves null
 // (ReceiptsConsent stays dark, toggles no-op) — same graceful paths as the no-mock days.
@@ -38,12 +38,17 @@ describe("Settings", () => {
     expect(screen.getByText("v0.1.0")).toBeInTheDocument();
   });
 
-  it("step-aside defaults ON; reduced-motion is status-only (never a toggle)", () => {
+  it("step-aside defaults ON; Motion is a Full/System/Reduced control (default Full, overrides OS)", () => {
     render(<Settings {...baseProps} />);
     const stepAside = screen.getByRole("switch", { name: "Step aside when I play" });
     expect(stepAside.getAttribute("aria-checked")).toBe("true");
-    expect(screen.queryByRole("switch", { name: /reduced motion/i })).toBeNull();
-    expect(screen.getByText(/Follows your Windows setting/)).toBeInTheDocument();
+    const motion = screen.getByRole("group", { name: "Motion" });
+    expect(motion).toBeInTheDocument();
+    const full = within(motion).getByRole("button", { name: "Full" });
+    expect(full.getAttribute("aria-pressed")).toBe("true");
+    expect(within(motion).getByRole("button", { name: "Follow system" })).toBeInTheDocument();
+    expect(within(motion).getByRole("button", { name: "Reduced" })).toBeInTheDocument();
+    expect(screen.getByText(/living motion is on by default/i)).toBeInTheDocument();
   });
 
   it("Done calls onClose", () => {

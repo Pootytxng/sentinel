@@ -23,6 +23,7 @@ import {
 } from "../design/theme";
 import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
+import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-motion";
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import "./Settings.css";
@@ -124,13 +125,7 @@ export default function Settings({
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
-  const [reduced, setReduced] = useState<boolean>(() => {
-    try {
-      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    } catch {
-      return false;
-    }
-  });
+  const [motion, setMotion] = useState<MotionPref>(readMotionPref);
   // §C build stamp (spec 2026-06-12): compile-time provenance from the backend — review hygiene.
   const [buildStamp, setBuildStamp] = useState<string | null>(null);
   useEffect(() => {
@@ -147,17 +142,10 @@ export default function Settings({
     applyInstrumentTheme(itheme);
   }, [itheme]);
 
-  useEffect(() => {
-    let mq: MediaQueryList;
-    try {
-      mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    } catch {
-      return;
-    }
-    const on = () => setReduced(mq.matches);
-    mq.addEventListener?.("change", on);
-    return () => mq.removeEventListener?.("change", on);
-  }, []);
+  const changeMotion = (p: MotionPref) => {
+    setMotion(p);
+    setMotionPref(p); // persists, updates <html data-motion>, and notifies live listeners
+  };
 
   const changeAmbiance = (a: Ambiance) => {
     setAmbiance(a);
@@ -293,13 +281,30 @@ export default function Settings({
           </div>
           <div className="set-row">
             <div className="set-row-text">
-              <div className="set-row-title">Respect reduced motion</div>
+              <div className="set-row-title">Motion</div>
               <div className="set-row-sub">
-                Follows your Windows setting — currently {reduced ? "on" : "off"}. Compy never
-                overrides your accessibility choice.
+                Compy's living motion is on by default, even if Windows requests reduced motion. Choose
+                Follow system to defer to Windows, or Reduced to keep everything calm.
               </div>
             </div>
-            <span className="set-status">{reduced ? "On" : "Off"}</span>
+            <div className="set-seg" role="group" aria-label="Motion">
+              {(
+                [
+                  ["full", "Full"],
+                  ["system", "Follow system"],
+                  ["reduced", "Reduced"],
+                ] as [MotionPref, string][]
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  className={`set-seg-btn ${motion === id ? "set-seg-on" : ""}`}
+                  aria-pressed={motion === id}
+                  onClick={() => changeMotion(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="set-row">
             <div className="set-row-text">
