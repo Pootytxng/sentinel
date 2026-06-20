@@ -1,26 +1,27 @@
 # Gaming Mode (F1) — Owner QA Checklist
 
-**Purpose:** the hands-on, owner-run gate test for F1 Gaming Mode. Gaming Mode is **built + merged to
-`main` but DARK** behind `gaming_mode_gate()` (returns `false` → tab hidden, commands refuse). It **does
-not ship** until this checklist passes on a real UAC-on machine **and you sign off** → only then is the
-gate flipped to `true`. Source design: `docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md` §7 ·
-broad contract `docs/GAMING_MODE_PLAN.md` §8. **Why you, not Claude:** these cases require crashing the
-app, rebooting mid-session, and cancelling UAC prompts on your hardware — I can't do that for you.
+**Purpose:** the hands-on, owner-run confirmation that F1 Gaming Mode's restore contract holds on
+real hardware. **Status (2026-06-18 → current):** `gaming_mode_gate()` is **`true` on `main`** — the
+"Gaming" surface ships and the 5 commands work. It was flipped on after the `#[cfg(test)] #[ignore]`d
+§7 restore-contract harness passed **6/6 on the dev rig** (exact-restore · crash/orphan recovery ·
+no-partial-on-cancel-at-start · RestoreFailed-on-cancel-during-restore · fail-loud-missing-plan ·
+restore-targets-stored-GUID-on-external-change). **What this checklist is now:** the *live, in-the-field*
+proof that the harness can't give — the cases that need **crashing the app, rebooting mid-session, and
+cancelling real UAC prompts on your hardware.** Case **#4 (full reboot)** is the headline one. Source:
+`docs/superpowers/specs/2026-06-02-gaming-mode-f1-design.md` §7 · contract `docs/GAMING_MODE_PLAN.md` §8.
+
+**Fully reversible:** if any case fails, set `gaming_mode_gate()` → `false` to re-hide the whole feature
+while I fix the bug on a branch — nothing else has to change.
 
 ---
 
-## How to run it (test build with the gate temporarily ON)
+## How to run it
 
-Two options:
-- **A. I build it for you (recommended):** say the word and I'll temporarily set `gaming_mode_gate()` →
-  `true` on a throwaway branch, produce a build, and hand you the exe to test. The gate stays `false`
-  on `main` until you sign off; I never flip the shipping gate myself.
-- **B. You build locally:** in `src-tauri/src/lib.rs`, change `fn gaming_mode_gate() -> bool { false }`
-  to `true`, run `npm run tauri dev` (or `npm run tauri build -- --no-bundle`), test, then **revert the
-  edit** (don't commit it). A "Gaming" tab appears when the gate is on.
+Just use the **installed build** (the gate is on — a **"Gaming"** entry is live in the app). No special
+build needed. Test on a real **UAC-on** machine (this rig qualifies — `EnableLUA=1`).
 
-**Before each test:** create a Windows **Restore Point** (belt-and-suspenders). Have a game ready (or
-just exercise start/stop without a game — the power-plan/registry changes apply regardless).
+**Before each test:** create a Windows **Restore Point** (belt-and-suspenders). Have a game ready — or
+just exercise start/stop without one (the power-plan/registry changes apply regardless).
 
 ---
 
@@ -33,10 +34,11 @@ just exercise start/stop without a game — the power-plan/registry changes appl
       guarantee) and requires confirmation; subsequent starts are one-click.
 - [ ] **3. App crash while Active.** Start Gaming Mode, then **kill `compy.exe`** (Task Manager) mid-
       session. Relaunch → the toggle should show **Gaming Mode "on"** (live session resumed); click Stop
-      → prior state restored. *(Per the /check fix, an active session resumes rather than false-prompting.)*
-- [ ] **4. Full reboot while Active.** Start Gaming Mode → **reboot the PC** without stopping. After
-      reboot, launch Compy → it detects the unfinished session (`gaming-session.json`) and **prompts
-      to restore**; confirm → exact prior state restored.
+      → prior state restored. *(An active session resumes rather than false-prompting.)*
+- [ ] **4. Full reboot while Active. ← the headline case.** Start Gaming Mode → **reboot the PC** without
+      stopping. After reboot, launch Compy → it detects the unfinished session (`gaming-session.json`)
+      and **prompts to restore**; confirm → **exact prior state restored.** *(This is the one the
+      automated harness cannot prove — it's the whole reason this checklist exists.)*
 - [ ] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
 - [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles
       (these prompt UAC), start, and **cancel the UAC prompt.** → no partial state left; whatever core
@@ -51,15 +53,13 @@ just exercise start/stop without a game — the power-plan/registry changes appl
       Mode is active. Stop → restore still targets the **stored** prior GUID; honest about state.
 - [ ] **10. Advanced tier is opt-in + UAC-only.** Confirm the core bundle (power plan + Game Mode +
       Game Bar) applies with **no UAC**; only USB-SS / PCIe-ASPM prompt.
-- [ ] **11. Gate-off sanity.** With `gaming_mode_gate()` = `false` (shipping default), the "Gaming" tab
-      does **not** appear and the commands refuse — existing app behavior unchanged.
 
 ---
 
 ## Sign-off
 
-When all boxes pass: **tell me "Gaming Mode QA signed off"** → I flip `gaming_mode_gate()` → `true`,
-verify build, and it ships in the next build. If any case fails, paste what happened and I fix on a
-branch + you re-test the affected case.
+When all boxes pass: **tell me "Gaming Mode QA signed off"** → I record it here + in `CLAUDE.md` and F1
+is field-proven for 1.0. If any case fails, paste what happened — I fix on a branch (and re-hide the
+feature via the gate if the bug is user-facing) and you re-test the affected case.
 
-**This is the only thing between F1 Gaming Mode and live.**
+**Case #4 is the one milestone between F1 Gaming Mode and "1.0-confident."**
