@@ -38,3 +38,48 @@ owner sleeps — everything accumulates here for a ranked review queue on return
 
 ## Log
 - Setup: branch + this log created (`aee0f64` base).
+- **[1] Coverage sweep DONE** (`3c1b928`) — 5 parallel sub-agent crews, tests-only, disjoint files.
+  Full vitest **389 → 467 (+78)**; tsc clean; doctrine guards pass on the new test files. Files:
+  use-motion (24), manual-parts (23), use-rig-colors (6), guided (13, SECURITY allowlist), rec-mutations (12).
+
+## Review queue (for the owner, ranked)
+1. **guided.ts allowlist tests (HIGH-STAKES, security)** — the new `guided.test.ts` pins the
+   `openGuidedUri` allowlist (only the 3 fixed `ms-settings:` deep links open; off-allowlist/scheme/
+   whitespace-mutated all rejected; allowlist derived from `GUIDED_STEPS`, no drift). No bypass found.
+   Nod that this is now canon.
+2. **Finding — `recMutation` prototype lookup** (NOT fixed): `REC_MUTATIONS[id] ?? null` over a plain
+   object returns a prototype member for ids like `"toString"`. Harmless today (no rec id collides);
+   hardenable via `Object.hasOwn`/null-proto map. Owner call whether to harden.
+3. **Doc nit — use-rig-colors** comment says "faint ink" but the returned field is `ghost`.
+4. **Classic-surface retirement SPEC** (`3876d65`, `docs/superpowers/specs/2026-06-20-retire-classic-surfaces.md`)
+   — DRAFT for review; one decision inside (keep the Fix preview escape hatch?). Recommend landing as a
+   small reviewed train with an `App.test.tsx` integration net first. NOT executed (too big for unattended).
+
+## Log (cont.)
+- **[2] Guard/lint sweep** — full vitest guards pass; tsc clean.
+- **[3] Rust correctness** (`c80adaf`) — clippy now CLEAN (fixed `manual_range_contains` on the fan-RPM
+  bounds, byte-identical semantics); cargo test green (~419) + build zero-warning.
+- **[4] Honesty audit** — sub-agent swept the user-facing surfaces/copy: **Grade A, no findings.** NVIDIA
+  stays "not hardware-verified", no fabricated promises, drift surfaced honestly, retired copy stays retired.
+- **[5] A11y audit + fixes** (`b3f3912`) — focus/label/Esc/aria on the session's new surfaces (SetupTour,
+  GamingMode consent modal, Fix details, Settings theme). Invisible; tsc clean; vitest 467.
+- **[7] Retirement SPEC** written (`3876d65`).
+- **[8] Coverage batch 2 — Rust pure parsers** (`7e1777f`) — +33 tests on hardware.rs parsers
+  (parse_cpu_arch / intel_arch_for_gen / intel_family_label / parse_smbios_strings /
+  parse_smbios_memory_devices). cargo **415 → 448**; build + clippy clean.
+
+## Review-queue additions (batch 2)
+5. **hardware.rs parser tests (review)** — pin the CPU-arch/SMBIOS heuristics. Findings (real behavior,
+   NOT changed): AMD arch keys off the first model digit only (ignores U/H mobile suffix); Intel 3-digit
+   Ultra maps a leading `2` → 15th/Arrow Lake; classic Xeon `E5-2xxx` → None; `parse_smbios_strings`
+   drops an unterminated trailing string. Owner call whether any heuristic should change.
+
+## NIGHT SUMMARY (handoff)
+Branch `auto/overnight-2026-06-20` — **NOT pushed to `main`** (your call on return). All reversible.
+- **+111 tests** (TS 389→467, Rust 415→448). tsc clean · full vitest 467 · cargo 448 · clippy clean.
+- Commits: `4f7693f` plan · `3c1b928` TS coverage(+78) · `c80adaf` clippy fix · `3876d65` retirement
+  spec · `b3f3912` a11y fixes · `7e1777f` Rust coverage(+33).
+- Honesty audit: **Grade A, no findings.** Frozen beta refs / gates / remote-fetch / updater untouched.
+- **To land it:** review the queue above, then (from a worktree on this branch)
+  `git push origin auto/overnight-2026-06-20:main` is a clean FF over `aee0f64` — OR cherry-pick. Then
+  one installer rebuild for the installed app. The classic-surface retirement stays a separate reviewed train.
