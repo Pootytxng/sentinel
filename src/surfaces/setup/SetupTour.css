@@ -105,7 +105,9 @@
   min-width: 300px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  /* Vertically centre the step's content against the full-height stage beside it. `safe` falls back
+     to flex-start when a content-heavy step would overflow, so the top never clips out of reach. */
+  justify-content: safe center;
   gap: 2px;
   padding: clamp(18px, 2.2vw, 26px);
   overflow-y: auto;

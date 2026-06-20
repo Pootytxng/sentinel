@@ -37,7 +37,9 @@ for (const p of pages) {
   const c = connect(p.webSocketDebuggerUrl);
   await c.ready;
   await c.send("Runtime.enable");
-  const { result } = await c.send("Runtime.evaluate", { expression: "window.innerWidth*window.innerHeight", returnByValue: true });
+  // Pick the MAIN window deterministically by button count (rail + content buttons); the hidden
+  // overlay window shares the same entry HTML/size, so area ties were nondeterministic.
+  const { result } = await c.send("Runtime.evaluate", { expression: "document.querySelectorAll('button').length", returnByValue: true });
   const area = result.value || 0;
   if (!best || area > best.area) { if (best) best.ws.close(); best = { ...c, area }; }
   else c.ws.close();

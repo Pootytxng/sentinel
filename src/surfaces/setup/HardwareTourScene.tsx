@@ -103,10 +103,11 @@ function Pedestal({ color }: { color: string }) {
   );
 }
 
-// Subject sits at the origin (the content panel no longer overlaps the stage). Camera is pulled back
-// with a longer lens so the part fills ~60% of the stage with even margin on all sides; overview
-// pulls back further to frame the whole assembled rig.
-const SHOWCASE_CAM = new THREE.Vector3(0, 0.5, 7.3);
+// Subject sits at the origin (the content panel no longer overlaps the stage). Camera distance sets
+// how much of the stage the part fills: at z≈5.6 / fov 36° the visible height is ~3.6 units, so a
+// part normalized to ~1.7 units reads at ~half the stage height — substantial and centred, with a
+// clear margin on every side (no clipping). Overview pulls back to frame the whole assembled rig.
+const SHOWCASE_CAM = new THREE.Vector3(0, 0.4, 5.6);
 const SHOWCASE_LOOK = new THREE.Vector3(0, 0, 0);
 const OVERVIEW_CAM = new THREE.Vector3(0, 0.7, 9.4);
 const OVERVIEW_LOOK = new THREE.Vector3(0, 0.1, 0);

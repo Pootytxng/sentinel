@@ -43,14 +43,15 @@ if (!pages.length) {
   process.exit(2);
 }
 
-// Measure each page's viewport area; the main window is the largest (overlay is tiny).
+// Pick the MAIN window by button count (rail + content buttons); the hidden overlay window shares
+// the same entry HTML/size, so area ties were nondeterministic between nav and shot.
 let best = null;
 for (const p of pages) {
   const c = connect(p.webSocketDebuggerUrl);
   await c.ready;
   await c.send("Runtime.enable");
   const { result } = await c.send("Runtime.evaluate", {
-    expression: "window.innerWidth*window.innerHeight",
+    expression: "document.querySelectorAll('button').length",
     returnByValue: true,
   });
   const area = result.value || 0;
