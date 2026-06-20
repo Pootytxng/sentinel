@@ -48,8 +48,8 @@ type Props = {
   busyLimiter: boolean;
   onToggleLimiter: () => void;
   onSeeInFix: () => void;
-  // Navigation into the classic (not-yet-reskinned) surfaces + the preview toggle.
-  onNavigate: (tab: "Readiness" | "Monitoring" | "Optimize" | "Check" | "Play" | "Lab" | "Learn") => void;
+  // Navigation into the consolidated rail rooms.
+  onNavigate: (tab: "Optimize" | "Check" | "Play" | "Lab" | "Learn") => void;
   onRunCheck: () => void;
   onBack: () => void;
   canGoBack: boolean;

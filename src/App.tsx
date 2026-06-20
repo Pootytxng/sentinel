@@ -185,7 +185,7 @@ const APPLIABLE_REC_IDS = new Set<string>([
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Learn" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History";
+type Tab = "Overview" | "Check" | "Optimize" | "Play" | "Learn" | "Lab" | "Diagnostics" | "History";
 
 type CpuSensorSnapshot = {
   usage_overall_pct: number;
@@ -463,31 +463,7 @@ type Priorities = {
 // recorded decision, not a silent loss — see the surface-default governance section in
 // docs/superpowers/plans/2026-06-04-beta-build-order.md.)
 
-// New Instrument surfaces ride behind per-surface localStorage flags. Default ON in dev so the owner
-// sees them first; OFF in a release build until the reskin lands fully. Additive + reversible — a
-// flag off restores the classic surface untouched.
-const HOME_V2_KEY = "compy_home_v2";
-const ARC_V2_KEY = "compy_arc_v2";
-const CHECK_V2_KEY = "compy_check_v2";
-const PLAY_V2_KEY = "compy_play_v2";
-const LAB_V2_KEY = "compy_lab_v2";
 const APP_VERSION = "0.1.0";
-// The Instrument/Halfway-Home surfaces DEFAULT ON everywhere (the redesign is the shipped app —
-// owner sign-off 2026-06-06). A stored "0" is now SELF-HEALED to v2 (removed + default): the
-// Settings "New look" UI that wrote "0"s is gone, so a stale "0" had become an exit-less
-// soft-lock onto a classic surface — the owner hit it live 2026-06-11 (a leftover
-// compy_check_v2="0" routed every Check click to the old Game Readiness page and hid Past
-// Tweaks). M3-spec step 2, executed early.
-function readDevFlag(key: string): boolean {
-  try {
-    if (localStorage.getItem(key) === "0") {
-      localStorage.removeItem(key); // self-heal the lockout
-    }
-  } catch {
-    /* ignore — default v2 */
-  }
-  return true;
-}
 
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
@@ -529,16 +505,6 @@ function App() {
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
-  // Instrument-surface preview flags — see readDevFlag.
-  // v2-look flags: read ONCE from localStorage at startup (the hidden dev A/B path — set the key in
-  // devtools + reload to drop a surface to its classic version). No runtime setters / no UI anymore:
-  // the user-facing "New look" hub was removed now that parity is closed. `settingsV2` is gone — the
-  // lockout fix made Settings always open (no classic settings surface ever existed).
-  const [homeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
-  const [arcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
-  const [checkV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
-  const [playV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
-  const [labV2] = useState<boolean>(() => readDevFlag(LAB_V2_KEY));
   const [showSettings, setShowSettings] = useState(false);
   // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
   // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
@@ -803,36 +769,19 @@ function App() {
   // so the rail stays short and never needs a horizontal scroll.
   const visibleTabs: Tab[] = useMemo(() => {
     const list: Tab[] = ["Overview"];
-    // Check (compy_check_v2) consolidates Readiness + Priorities into one section; classics show when off.
-    if (checkV2) {
-      if (readiness || priorities) list.push("Check");
-    } else {
-      if (readiness) list.push("Readiness");
-      if (priorities) list.push("Priorities");
-    }
+    // Check consolidates Readiness + Priorities into one section.
+    if (readiness || priorities) list.push("Check");
     if ((recs?.length ?? 0) > 0 || startup.length > 0 || gamingEnabled) list.push("Optimize");
     // Learn is a rail room now (one-rail §1b) and is ALWAYS available — the knowledge library is
     // static/offline. Must be in visibleTabs or the reset effect would bounce it back to Overview.
     list.push("Learn");
-    // Play (compy_play_v2) consolidates Monitoring + Sessions IN PLACE; Lab (compy_lab_v2) consolidates
-    // Benchmark + Latency IN PLACE. When a flag is on the absorbed classics cease to be destinations
-    // (halfway-home §1 — navigation never teleports; the old hidden-but-navigable hack is retired).
-    if (playV2) {
-      if (hw || sessions.length > 0) list.push("Play");
-    } else {
-      if (hw) list.push("Monitoring");
-      if (sessions.length > 0) list.push("Sessions");
-    }
-    if (labV2) {
-      if (hw) list.push("Lab");
-    } else {
-      if (hw) list.push("Latency");
-      if (hw) list.push("Benchmark");
-    }
+    // Play consolidates Monitoring + Sessions IN PLACE; Lab consolidates Benchmark + Latency IN PLACE.
+    if (hw || sessions.length > 0) list.push("Play");
+    if (hw) list.push("Lab");
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2, playV2, labV2]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -853,43 +802,31 @@ function App() {
       : "Rules: Built-in";
 
   // Six-home rail (one-rail §1b) — the shell rail + the CommandCenter rail both render from HOME_RAIL.
-  // navHome maps a home id to its tab (flag-aware: a classic falls back when its v2 flag is off);
-  // HOME_FOR_TAB maps the active tab back to its home so the right rail item highlights.
+  // navHome maps a home id to its tab; HOME_FOR_TAB maps the active tab back to its home so the
+  // right rail item highlights.
   const navHome = (id: HomeRailId) => {
     setActiveTab(
       id === "home"
         ? "Overview"
         : id === "check"
-          ? checkV2
-            ? "Check"
-            : "Readiness"
+          ? "Check"
           : id === "play"
-            ? playV2
-              ? "Play"
-              : "Monitoring"
+            ? "Play"
             : id === "fix"
               ? "Optimize"
               : id === "learn"
                 ? "Learn"
-                : labV2
-                  ? "Lab"
-                  : "Benchmark",
+                : "Lab",
     );
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
     Check: "check",
-    Readiness: "check",
-    Priorities: "check",
     Play: "play",
-    Monitoring: "play",
-    Sessions: "play",
     Optimize: "fix",
     History: "fix",
     Learn: "learn",
     Lab: "lab",
-    Latency: "lab",
-    Benchmark: "lab",
     Diagnostics: "lab",
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
@@ -1005,9 +942,9 @@ function App() {
   // settings flag was itself toggleable inside Settings → disabling it was a permanent self-lockout
   // (dead gear, no way back in). The gear must always open Settings regardless of the stored flag.
   const settingsActive = showSettings && hw !== null;
-  // Only swap in the new home once hardware has resolved (avoids a blank first paint); any other
-  // tab falls back to the classic shell, which is where the not-yet-reskinned surfaces still live.
-  const ccActive = homeV2 && activeTab === "Overview" && hw !== null && !settingsActive;
+  // The Command Center is the Home surface once hardware has resolved (avoids a blank first paint);
+  // any other tab renders the shell.
+  const ccActive = activeTab === "Overview" && hw !== null && !settingsActive;
 
   // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
   const rigLines = hw
@@ -1040,10 +977,10 @@ function App() {
         />
       )}
       {showOnboarding && (
-        <Onboarding onDone={() => setShowOnboarding(false)} arcV2={arcV2} rig={rigLines} />
+        <Onboarding onDone={() => setShowOnboarding(false)} arcV2 rig={rigLines} />
       )}
       {!showOnboarding && showFirstCheck && (
-        <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2={arcV2} />
+        <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2 />
       )}
       {showEncyclopedia && (
         <Learn
@@ -1147,14 +1084,7 @@ function App() {
           }
           onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
           onSeeInFix={() => setActiveTab("Optimize")}
-          onNavigate={(tab) => {
-            // Check consolidates Readiness+Priorities behind compy_check_v2; route to the classic
-            // Readiness tab when the flag is off.
-            if (tab === "Check") setActiveTab(checkV2 ? "Check" : "Readiness");
-            else if (tab === "Play") setActiveTab(playV2 ? "Play" : "Monitoring");
-            else if (tab === "Lab") setActiveTab(labV2 ? "Lab" : "Benchmark");
-            else setActiveTab(tab);
-          }}
+          onNavigate={(tab) => setActiveTab(tab)}
           onRunCheck={() => setShowFirstCheck(true)}
           onBack={goBack}
           canGoBack={canGoBack}
