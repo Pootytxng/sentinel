@@ -186,7 +186,7 @@ function FixRow({
           <EvidenceChip p={rec.provenance} />
           <WhatsThis id={rec.id} onOpen={onWhatsThis} />
           {onOpenDrawer && (
-            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes">
+            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes" aria-label="See exactly what this changes">
               Details ›
             </button>
           )}
@@ -392,7 +392,7 @@ function ActiveChangeCard({
           <RecTitle id={change.rec_id} title={change.rec_title} />
           <WhatsThis id={change.rec_id} onOpen={onWhatsThis} />
           {onOpenDrawer && (
-            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes">
+            <button className="fix-details" onClick={onOpenDrawer} title="See exactly what this changes" aria-label="See exactly what this changes">
               Details ›
             </button>
           )}

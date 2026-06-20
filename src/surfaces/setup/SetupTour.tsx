@@ -39,6 +39,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   const step = steps[i];
   const reduced = useReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
 
   const finish = useCallback(() => {
     try {
@@ -62,7 +63,9 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
 
   useEffect(() => {
     const root = rootRef.current;
-    root?.focus();
+    // Initial focus lands on a real control (the primary Next button), not the non-interactive
+    // backdrop — so screen-reader/keyboard users start on something operable. Falls back to root.
+    (nextRef.current ?? root)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -110,14 +113,15 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
             <Wordmark size={19} />
           </span>
           <span className="st-leg">{legLabel}</span>
-          <button className="st-skip" onClick={finish}>
+          <button className="st-skip" onClick={finish} aria-label="Skip setup and tour">
             Skip ✕
           </button>
         </header>
 
         <div className="st-body">
-          {/* Contained 3D stage — the user's real hardware (camera centred, generous margin). */}
-          <div className="st-stage">
+          {/* Contained 3D stage — the user's real hardware (camera centred, generous margin).
+              Decorative: the text panel carries the meaning, so hide the canvas from the a11y tree. */}
+          <div className="st-stage" aria-hidden="true">
             <Suspense fallback={<div className="st-loading">Initializing hologram…</div>}>
               <HardwareTourScene hw={hw} focusId={focusId} reduced={reduced} paused={false} />
             </Suspense>
@@ -147,10 +151,15 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
             <button className="btn-small" onClick={back} disabled={i === 0}>
               Back
             </button>
-            <span className="st-count">
+            <span
+              className="st-count"
+              role="status"
+              aria-live="polite"
+              aria-label={`Step ${i + 1} of ${steps.length}`}
+            >
               {i + 1} / {steps.length}
             </span>
-            <button className="btn" onClick={next}>
+            <button className="btn" ref={nextRef} onClick={next}>
               {isLast ? "Finish" : "Next"}
             </button>
           </div>

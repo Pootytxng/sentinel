@@ -56,6 +56,19 @@ export function GamingMode() {
     };
   }, []);
 
+  // Esc closes the first-use consent modal (a11y parity with the app's other modals).
+  useEffect(() => {
+    if (!needConsent) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setNeedConsent(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [needConsent]);
+
   const active = session?.status === "active";
 
   const doStart = async () => {
@@ -249,11 +262,15 @@ export function GamingMode() {
         )}
       </Card>
 
-      {error && <div className="gaming-error">⚠ {error}</div>}
+      {error && (
+        <div className="gaming-error">
+          <span aria-hidden="true">⚠</span> {error}
+        </div>
+      )}
 
       {/* First-use consent modal */}
       {needConsent && (
-        <div className="gaming-modal-backdrop" role="dialog" aria-modal="true">
+        <div className="gaming-modal-backdrop" role="dialog" aria-modal="true" aria-label="Turn on Gaming Mode?">
           <div className="gaming-modal">
             <h3>Turn on Gaming Mode?</h3>
             <p>For this session, Compy will change:</p>
@@ -271,7 +288,7 @@ export function GamingMode() {
               permanent.
             </p>
             <div className="gaming-actions">
-              <button className="btn-small btn-small-on" onClick={confirmConsent}>
+              <button className="btn-small btn-small-on" onClick={confirmConsent} autoFocus>
                 Enable Gaming Mode
               </button>
               <button className="btn-small" onClick={() => setNeedConsent(false)}>

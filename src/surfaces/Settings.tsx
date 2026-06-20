@@ -201,8 +201,8 @@ export default function Settings({
           <h2 className="set-section-title">Appearance</h2>
           <div className="set-appearance">
             <div className="set-appearance-controls">
-              <div className="set-field-label">Theme</div>
-              <div className="set-themes">
+              <div className="set-field-label" id="set-theme-label">Theme</div>
+              <div className="set-themes" role="group" aria-labelledby="set-theme-label">
                 {THEME_CARDS.map((t) => (
                   <button
                     key={t.id}
