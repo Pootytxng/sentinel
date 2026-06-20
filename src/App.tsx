@@ -4,7 +4,7 @@ import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
 import { LibraryContext } from "./surfaces/library-context";
-import { Term, GlossText, type GlossRule } from "./design/Term";
+import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { BackButton, ForwardButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
@@ -13,8 +13,6 @@ import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
-import { LatencyTab } from "./surfaces/Latency";
-import { BenchmarkTab } from "./surfaces/Benchmark";
 import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
@@ -25,8 +23,6 @@ import type { BatchApplyReport } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
-import { SessionDebrief } from "./surfaces/SessionDebrief";
-import { openGuidedUri } from "./surfaces/guided";
 import Settings from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
@@ -186,46 +182,10 @@ const APPLIABLE_REC_IDS = new Set<string>([
   "eee-disable",
 ]);
 
-// Coarse "how long ago" for the Drift Watch "noticed …" line.
-function fmtAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (!then) return "recently";
-  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
-  if (mins < 60) return mins <= 1 ? "just now" : `${mins} min ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  return days === 1 ? "yesterday" : `${days} days ago`;
-}
-
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
 type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Learn" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History";
-
-// Inline stroke icons (no icon font/library → offline, zero-outbound).
-const ICONS: Record<string, React.ReactNode> = {
-  grid: (<><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="8" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /></>),
-  shield: (<><path d="M12 3l7 2.5v5.5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V5.5L12 3z" /><path d="M9 12l2 2 4-4" /></>),
-  target: (<><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.4" /></>),
-  sliders: (<><line x1="4" y1="8" x2="20" y2="8" /><line x1="4" y1="16" x2="20" y2="16" /><circle cx="9" cy="8" r="2.3" /><circle cx="15" cy="16" r="2.3" /></>),
-  pulse: (<path d="M3 12h4l2-6 4 12 2-6h6" />),
-  chart: (<><line x1="4" y1="20" x2="20" y2="20" /><rect x="5.5" y="11" width="3" height="7" /><rect x="10.5" y="7" width="3" height="11" /><rect x="15.5" y="13" width="3" height="5" /></>),
-  terminal: (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3" /><line x1="13" y1="15" x2="16.5" y2="15" /></>),
-  ledger: (<><rect x="5" y="3" width="14" height="18" rx="2" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></>),
-  engine: (<><rect x="3" y="10" width="11" height="8" rx="1.5" /><path d="M14 12h3l3 3v3h-6" /><line x1="6" y1="10" x2="6" y2="7" /><line x1="10" y1="10" x2="10" y2="7" /><line x1="5" y1="7" x2="11" y2="7" /><line x1="14" y1="6" x2="20" y2="6" /></>),
-  external: (<><path d="M14 4h6v6" /><path d="M20 4l-8 8" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>),
-  chevron: (<path d="M6 9l6 6 6-6" />),
-};
-
-function Icon({ name }: { name: string }) {
-  return (
-    <svg className="ico" viewBox="0 0 24 24" width="18" height="18" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {ICONS[name]}
-    </svg>
-  );
-}
 
 type CpuSensorSnapshot = {
   usage_overall_pct: number;
@@ -295,15 +255,6 @@ type DiagnosticSection = {
 // GameReadiness shape from readiness.rs (status strings are kebab-case).
 type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 
-// Exactly the three readiness rows the owner approved for tooltips (VRR, driver age, power plan).
-// Bounded allowlist, first occurrence per string, so the auto-glossary stays tasteful — no further
-// reach this pass (owner decision B, 2026-06-05).
-const READINESS_GLOSS: GlossRule[] = [
-  { id: "vrr", match: ["variable refresh rate", "vrr"] },
-  { id: "drivers", match: ["driver age", "graphics driver", "gpu driver", "driver"] },
-  { id: "power-plans", match: ["power plan", "ultimate performance", "high performance"] },
-];
-
 type ReadinessCheck = {
   id: string;
   label: string;
@@ -327,161 +278,6 @@ type GameReadiness = {
 
 // Drift Watch — a check that was good and has since regressed (outside Compy).
 type Drift = { id: string; label: string; detail: string; noticed_at: string };
-
-function ReadinessTab({
-  readiness,
-  onChanged,
-}: {
-  readiness: GameReadiness | null;
-  onChanged: () => void;
-}) {
-  const [showDismissed, setShowDismissed] = useState(false);
-  if (!readiness) {
-    return (
-      <section className="tab-pane">
-        <p className="muted">Run a scan to see game readiness.</p>
-      </section>
-    );
-  }
-  const statusLabel: Record<ReadinessStatus, string> = {
-    ready: "Ready",
-    attention: "Attention",
-    unknown: "Unknown",
-    advisory: "Advisory",
-  };
-  const dismissedSet = new Set(readiness.dismissed_ids);
-  const active = readiness.checks.filter((c) => !dismissedSet.has(c.id));
-  const dismissed = readiness.checks.filter((c) => dismissedSet.has(c.id));
-  // Only alert/info findings are dismissable — a clean Ready row has nothing to silence.
-  const dismissable = (s: ReadinessStatus) => s === "attention" || s === "advisory";
-  const dismiss = async (id: string) => {
-    try {
-      await invoke("dismiss_readiness_check", { id });
-      onChanged();
-    } catch {
-      /* surfaced on next scan */
-    }
-  };
-  const restore = async (id: string) => {
-    try {
-      await invoke("restore_readiness_check", { id });
-      onChanged();
-    } catch {
-      /* surfaced on next scan */
-    }
-  };
-  const row = (c: ReadinessCheck, isDismissed: boolean) => (
-    <li
-      key={c.id}
-      className={`readiness-row readiness-row-${c.status}${isDismissed ? " readiness-row-dismissed" : ""}`}
-    >
-      <div className="readiness-row-head">
-        <span className={`readiness-badge readiness-${c.status}`}>{statusLabel[c.status]}</span>
-        <span className="readiness-label">
-          <GlossText text={c.label} rules={READINESS_GLOSS} />
-        </span>
-        {c.value && <span className="readiness-value">{c.value}</span>}
-      </div>
-      <p className="readiness-detail">
-        <GlossText text={c.detail} rules={READINESS_GLOSS} />
-      </p>
-      <div className="readiness-row-actions">
-        {c.action_uri && (
-          <button
-            className="readiness-action"
-            onClick={() => openGuidedUri(c.action_uri!)}
-            title={`Opens ${c.action_label ?? "settings"}`}
-          >
-            <Icon name="external" />
-            {c.action_label ?? "Open"}
-          </button>
-        )}
-        {isDismissed ? (
-          <button className="readiness-dismiss" onClick={() => restore(c.id)}>
-            Restore
-          </button>
-        ) : (
-          dismissable(c.status) && (
-            <button
-              className="readiness-dismiss"
-              onClick={() => dismiss(c.id)}
-              title="Silence this — you've judged it; it moves to Dismissed and stops counting"
-            >
-              Dismiss
-            </button>
-          )
-        )}
-      </div>
-    </li>
-  );
-  return (
-    <section className="tab-pane readiness-pane">
-      <div className="readiness-head">
-        <h2>Game Readiness</h2>
-        <div className="readiness-summary">
-          <span className="readiness-pill readiness-ready">
-            {readiness.ready_count} Ready
-          </span>
-          <span className="readiness-pill readiness-attention">
-            {readiness.attention_count} Attention
-          </span>
-          <span className="readiness-pill readiness-unknown">
-            {readiness.unknown_count} Unknown
-          </span>
-          {readiness.advisory_count > 0 && (
-            <span className="readiness-pill readiness-advisory">
-              {readiness.advisory_count} Advisory
-            </span>
-          )}
-        </div>
-      </div>
-      <p className="readiness-blurb">{readiness.advisory}</p>
-      {readiness.drifts.length > 0 && (
-        <div className="drift-watch">
-          <div className="drift-watch-head">Changed since you last had it set</div>
-          {readiness.drifts.map((d) => {
-            const check = readiness.checks.find((c) => c.id === d.id);
-            return (
-              <div key={d.id} className="drift-row">
-                <div className="drift-row-top">
-                  <span className="drift-label">{d.label}</span>
-                  <span className="drift-when">changed outside Compy · noticed {fmtAgo(d.noticed_at)}</span>
-                </div>
-                <p className="drift-detail">{d.detail}</p>
-                {check?.action_uri ? (
-                  <button
-                    className="readiness-action"
-                    onClick={() => openGuidedUri(check.action_uri!)}
-                    title={`Opens ${check.action_label ?? "settings"}`}
-                  >
-                    <Icon name="external" />
-                    {check.action_label ?? "Open settings to restore"}
-                  </button>
-                ) : (
-                  <p className="drift-note">Re-apply it in Optimize to restore — Compy logs it to the Trust Ledger.</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <ul className="readiness-list">{active.map((c) => row(c, false))}</ul>
-      {dismissed.length > 0 && (
-        <div className="readiness-dismissed">
-          <button
-            className="readiness-dismissed-head"
-            onClick={() => setShowDismissed((s) => !s)}
-          >
-            {showDismissed ? "▾" : "▸"} Dismissed ({dismissed.length}) — silenced by you
-          </button>
-          {showDismissed && (
-            <ul className="readiness-list">{dismissed.map((c) => row(c, true))}</ul>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
 
 // Session summaries (F3): read-only post-session metrics. Mirrors the Rust
 // SessionSummary shape. Metrics are live estimates, not benchmark-grade proof.
@@ -507,117 +303,6 @@ type SessionSummary = {
   } | null;
   stutter_insight?: string | null;
 };
-
-function SessionMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="session-metric">
-      <span className="session-metric-label">{label}</span>
-      <span className="session-metric-value">{value}</span>
-    </div>
-  );
-}
-
-function SessionsTab({
-  sessions,
-  priorities,
-  recs,
-  apply,
-  busyId,
-  onExport,
-  changes,
-  rollback,
-  arcV2,
-}: {
-  sessions: SessionSummary[];
-  priorities: Priorities | null;
-  recs: Recommendation[];
-  apply: (rec: Recommendation) => Promise<void>;
-  busyId: string | null;
-  onExport: () => void;
-  changes: AppliedChange[];
-  rollback: (c: AppliedChange) => Promise<void>;
-  arcV2: boolean;
-}) {
-  if (sessions.length === 0) {
-    return (
-      <section className="tab-pane">
-        <p className="muted">
-          No game sessions recorded yet. Enable FPS monitoring while playing a
-          borderless/windowed game; when you stop, a summary appears here.
-        </p>
-      </section>
-    );
-  }
-  const fmtDuration = (s: number) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-  };
-  const fmtGiB = (b: number | null) =>
-    b == null ? "—" : `${(b / 1024 ** 3).toFixed(1)} GB`;
-  return (
-    <section className="tab-pane sessions-pane">
-      <div className="readiness-head">
-        <h2>Session Summaries</h2>
-      </div>
-      <p className="readiness-blurb">
-        Live estimates sampled about once per second while monitoring was active
-        — not benchmark-grade proof.
-      </p>
-      <SessionDebrief
-        s={sessions[0]}
-        priorities={priorities}
-        recs={recs}
-        apply={apply}
-        busyId={busyId}
-        onExport={onExport}
-        changes={changes}
-        rollback={rollback}
-        arcV2={arcV2}
-      />
-      {sessions.length > 1 && <h3 className="priorities-group">Earlier sessions</h3>}
-      <ul className="sessions-list">
-        {sessions.slice(1).map((s, i) => (
-          <li key={`${s.started_at}-${i}`} className="session-card">
-            <div className="session-card-head">
-              <span className="session-game">
-                {prettyGameName(s.process_name) || "Unknown game"}
-              </span>
-              <span className="session-meta">
-                {fmtDuration(s.duration_secs)} ·{" "}
-                {new Date(s.started_at).toLocaleString()}
-              </span>
-            </div>
-            <div className="session-metrics">
-              <SessionMetric label="Avg FPS" value={s.avg_fps.toFixed(1)} />
-              <SessionMetric
-                label="Avg frametime"
-                value={`${s.avg_frametime_ms.toFixed(1)} ms`}
-              />
-              <SessionMetric label="1% low (est)" value={s.low1_fps_est.toFixed(1)} />
-              <SessionMetric
-                label="Peak GPU temp"
-                value={s.peak_gpu_temp_c == null ? "—" : `${s.peak_gpu_temp_c}°C`}
-              />
-              <SessionMetric
-                label="Peak GPU usage"
-                value={
-                  s.peak_gpu_usage_pct == null ? "—" : `${s.peak_gpu_usage_pct}%`
-                }
-              />
-              <SessionMetric label="Peak RAM" value={fmtGiB(s.peak_ram_used_bytes)} />
-              <SessionMetric
-                label="Compy changes active"
-                value={String(s.compy_changes_active)}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 // Export Snapshot (F5): read-only local report. Mirrors the Rust ExportResult.
 type ExportResult = { path: string; json_path: string; markdown: string; discord: string };
@@ -773,68 +458,6 @@ type Priorities = {
   upgrade_path: import("./types").UpgradePath | null;
 };
 
-function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
-  if (!priorities) {
-    return (
-      <section className="tab-pane">
-        <p className="muted">Run a scan to see priorities.</p>
-      </section>
-    );
-  }
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  // `badge` lets a bucket override the per-item status chip — the "Not worth touching" group is
-  // INFO by definition, so its rows read "Info" rather than the raw (often "Unknown") status.
-  const row = (i: PriorityItem, badge?: { cls: string; label: string }) => (
-    <li key={i.id} className={`readiness-row readiness-row-${badge?.cls ?? i.status}`}>
-      <div className="readiness-row-head">
-        <span className={`readiness-badge readiness-${badge?.cls ?? i.status}`}>
-          {badge?.label ?? cap(i.status)}
-        </span>
-        <span className="readiness-label">{i.title}</span>
-        <span className="priority-confidence">{cap(i.confidence)} confidence</span>
-      </div>
-      <p className="readiness-detail">{i.reason}</p>
-    </li>
-  );
-  return (
-    <section className="tab-pane">
-      <div className="readiness-head">
-        <h2>Priorities — what matters most</h2>
-      </div>
-      <p className="readiness-blurb">
-        Advisory, ranked by transparent rules — not a score. Based on your hardware,
-        readiness, recommendations, and most recent session.
-      </p>
-      {priorities.session_hint && (
-        <p className="priority-session-hint">{priorities.session_hint}</p>
-      )}
-
-      <h3 className="priorities-group">Your biggest likely limiters</h3>
-      {priorities.limiters.length === 0 ? (
-        <p className="muted">Nothing major flagged — nice.</p>
-      ) : (
-        <ul className="readiness-list">{priorities.limiters.map((i) => row(i))}</ul>
-      )}
-
-      <h3 className="priorities-group">Already fine</h3>
-      {priorities.already_fine.length === 0 ? (
-        <p className="muted">—</p>
-      ) : (
-        <ul className="readiness-list">{priorities.already_fine.map((i) => row(i))}</ul>
-      )}
-
-      <h3 className="priorities-group">Not worth touching</h3>
-      {priorities.not_worth_touching.length === 0 ? (
-        <p className="muted">—</p>
-      ) : (
-        <ul className="readiness-list">
-          {priorities.not_worth_touching.map((i) => row(i, { cls: "info", label: "Info" }))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 // (The classic appearance ThemePicker was retired 2026-06-06 — superseded by the Instrument theme
 // system: Halfway/Midnight/Hearth via data-itheme, set app-wide at startup and managed in Settings. A
 // recorded decision, not a silent loss — see the surface-default governance section in
@@ -955,9 +578,10 @@ function App() {
   useEffect(() => {
     invoke("set_close_to_tray", { enabled: readCloseToTray() }).catch(() => {});
   }, []);
-  // While the Sessions tab is open, mark the latest debrief as seen — clears the "new" badge.
+  // While the Play room is open, mark the latest debrief as seen — clears the "new" badge.
+  // (Play absorbed the classic Sessions tab; this used to key off activeTab === "Sessions".)
   useEffect(() => {
-    if (activeTab === "Sessions" && sessions[0]) {
+    if (activeTab === "Play" && sessions[0]) {
       setSessionsSeenAt(sessions[0].started_at);
       try {
         localStorage.setItem("compy_sessions_seen_v1", sessions[0].started_at);
@@ -1044,15 +668,6 @@ function App() {
       setPriorities(prioritiesData);
     } catch (e) {
       setError(String(e));
-    }
-  };
-
-  // Re-fetch just readiness (after a dismiss/restore) without a full rescan.
-  const reloadReadiness = async () => {
-    try {
-      setReadiness(await invoke<GameReadiness>("get_game_readiness"));
-    } catch {
-      /* keep the prior readiness on a transient failure */
     }
   };
 
@@ -1603,10 +1218,6 @@ function App() {
                   gpus={hw?.gpus ?? []}
                 />
               )}
-              {activeTab === "Readiness" && (
-                <ReadinessTab readiness={readiness} onChanged={reloadReadiness} />
-              )}
-              {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
               {activeTab === "Optimize" && (
                 <>
                   {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
@@ -1651,22 +1262,6 @@ function App() {
                   vendor={detectedVendor}
                 />
               )}
-              {activeTab === "Monitoring" && (
-                <MonitoringTab active={activeTab === "Monitoring"} />
-              )}
-              {activeTab === "Sessions" && (
-                <SessionsTab
-                  sessions={sessions}
-                  priorities={priorities}
-                  recs={recs ?? []}
-                  apply={apply}
-                  busyId={busyId}
-                  onExport={onExport}
-                  changes={changes}
-                  rollback={rollback}
-                  arcV2={arcV2}
-                />
-              )}
               {activeTab === "Learn" && (
                 <Learn
                   asPanel
@@ -1681,8 +1276,6 @@ function App() {
                   vendor={detectedVendor}
                 />
               )}
-              {activeTab === "Latency" && <LatencyTab />}
-              {activeTab === "Benchmark" && <BenchmarkTab />}
               {activeTab === "Diagnostics" && (
                 <DiagnosticsTab sections={diagnostics} />
               )}
