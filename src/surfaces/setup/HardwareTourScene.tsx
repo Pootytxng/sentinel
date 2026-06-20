@@ -34,14 +34,26 @@ function Showcase({ part, color, reduced }: { part: RigPart; color: string; redu
   const ref = useRef<Group>(null);
   const prog = useRef(0);
   const base = SHOWCASE_SCALE[part.kind] ?? 1;
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const g = ref.current;
     if (!g) return;
     if (prog.current < 1) prog.current = Math.min(1, prog.current + delta * 2.4);
     const ease = 1 - Math.pow(1 - prog.current, 3);
-    g.scale.setScalar(base * (0.72 + 0.28 * ease));
-    g.rotation.x = -0.12;
-    g.rotation.y = reduced ? 0.5 : g.rotation.y + delta * 0.45;
+    const entrance = base * (0.72 + 0.28 * ease);
+    if (reduced) {
+      g.scale.setScalar(entrance);
+      g.rotation.set(-0.12, 0.5, 0);
+      g.position.y = 0;
+      return;
+    }
+    // "Alive & breathing": a slow turntable + an organic nod/sway, a gentle float, and a subtle scale
+    // breath layered on — so the part reads as living, not a still render.
+    const t = state.clock.elapsedTime;
+    g.rotation.y += delta * 0.28;
+    g.rotation.x = -0.12 + Math.sin(t * 0.7) * 0.07;
+    g.rotation.z = Math.sin(t * 0.45) * 0.05;
+    g.position.y = Math.sin(t * 0.9) * 0.05;
+    g.scale.setScalar(entrance * (1 + Math.sin(t * 1.1) * 0.018));
   });
   return (
     <group ref={ref} scale={base}>
