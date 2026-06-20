@@ -4,10 +4,11 @@ import { HardwareGrid } from "./HardwareGrid";
 import { RigViewer } from "./rig/RigViewer";
 import "./HardwareSection.css";
 
-// "Your hardware" — the shared section both Homes render, now with a Cards <-> 3D toggle. Cards is the
-// default (light, no three.js); the 3D rig hologram lazy-loads only when the user picks "3D".
+// "Your hardware" — the shared section both Homes render, with a Cards <-> 3D toggle. The 3D rig
+// hologram is the default (the "tailored to your hardware" centerpiece; lazy-loaded, step-aside-safe);
+// Cards stays one tap away for a lighter, no-three.js view.
 export function HardwareSection({ hw }: { hw: HardwareInfo }) {
-  const [view, setView] = useState<"cards" | "3d">("cards");
+  const [view, setView] = useState<"cards" | "3d">("3d");
   return (
     <section className="hw-section">
       <div className="hw-section-head">

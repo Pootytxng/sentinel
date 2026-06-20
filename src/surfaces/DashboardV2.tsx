@@ -71,7 +71,23 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   const cpuHist = useRef<number[]>([]);
   const gpuHist = useRef<number[]>([]);
   const [, tick] = useState(0);
-  const [rig3d, setRig3d] = useState(false);
+  // Home rig view: 3D hologram is the DEFAULT (the "tailored to your hardware" centerpiece); the
+  // choice persists so a cards-preferring user isn't re-toggling a heavy WebGL view every visit.
+  const [rig3d, setRig3d] = useState(() => {
+    try {
+      return localStorage.getItem("compy_home_rig_3d") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const chooseRig3d = (v: boolean) => {
+    setRig3d(v);
+    try {
+      localStorage.setItem("compy_home_rig_3d", v ? "1" : "0");
+    } catch {
+      /* localStorage unavailable — session-only choice */
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +189,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
             role="tab"
             aria-selected={!rig3d}
             className={`hw-view-btn ${!rig3d ? "hw-view-on" : ""}`}
-            onClick={() => setRig3d(false)}
+            onClick={() => chooseRig3d(false)}
           >
             Cards
           </button>
@@ -182,7 +198,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
             role="tab"
             aria-selected={rig3d}
             className={`hw-view-btn ${rig3d ? "hw-view-on" : ""}`}
-            onClick={() => setRig3d(true)}
+            onClick={() => chooseRig3d(true)}
           >
             3D
           </button>
