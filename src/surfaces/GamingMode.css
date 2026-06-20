@@ -36,6 +36,23 @@
   color: var(--ix-accent, var(--accent, #2ee6c0));
 }
 
+/* Featured framing when Gaming Mode rides at the top of the Tune tab (its own tab retired) — a faint
+   accent-topped panel so it reads as a glorified section, not just another row. */
+.tune-gaming-feature {
+  margin-bottom: 20px;
+  padding: 2px 14px 6px;
+  border-radius: var(--ix-radius, 16px);
+  border: 1px solid color-mix(in srgb, var(--ix-accent, var(--accent, #2ee6c0)) 22%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ix-accent, var(--accent, #2ee6c0)) 9%, transparent),
+    transparent 55%
+  );
+}
+.tune-gaming-feature .gaming-pane {
+  padding-top: 6px;
+}
+
 .gaming-honesty {
   margin-top: 12px;
   font-size: 13px;

@@ -207,7 +207,7 @@ type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Learn" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History" | "Gaming";
+type Tab = "Overview" | "Check" | "Readiness" | "Priorities" | "Optimize" | "Play" | "Monitoring" | "Sessions" | "Learn" | "Lab" | "Latency" | "Benchmark" | "Diagnostics" | "History";
 
 // Inline stroke icons (no icon font/library → offline, zero-outbound).
 const ICONS: Record<string, React.ReactNode> = {
@@ -1214,7 +1214,7 @@ function App() {
       if (readiness) list.push("Readiness");
       if (priorities) list.push("Priorities");
     }
-    if ((recs?.length ?? 0) > 0 || startup.length > 0) list.push("Optimize");
+    if ((recs?.length ?? 0) > 0 || startup.length > 0 || gamingEnabled) list.push("Optimize");
     // Learn is a rail room now (one-rail §1b) and is ALWAYS available — the knowledge library is
     // static/offline. Must be in visibleTabs or the reset effect would bounce it back to Overview.
     list.push("Learn");
@@ -1235,7 +1235,6 @@ function App() {
     }
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
-    if (gamingEnabled) list.push("Gaming");
     return list;
   }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, checkV2, playV2, labV2]);
 
@@ -1301,7 +1300,7 @@ function App() {
   // Persistent room name for the narrow (icon-only-rail) layout — the wayfinding-law amendment so you
   // always know where you are even when the rail shows only icons (elastic-window §1).
   const activeRoomName =
-    HOME_RAIL.find((r) => r.id === activeHomeId)?.label ?? (activeTab === "Gaming" ? "Gaming" : "Compy");
+    HOME_RAIL.find((r) => r.id === activeHomeId)?.label ?? "Compy";
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
   const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
 
@@ -1516,7 +1515,7 @@ function App() {
             <button
               className="btn-small"
               onClick={() => {
-                setActiveTab("Gaming");
+                setActiveTab("Optimize");
                 setGamingRecovery(null);
               }}
             >
@@ -1610,18 +1609,8 @@ function App() {
                   <span className="rail-label">Advanced</span>
                 </button>
               )}
-              {gamingEnabled && (
-                <button
-                  role="tab"
-                  aria-selected={activeTab === "Gaming"}
-                  className={`rail-item ${activeTab === "Gaming" ? "rail-item-on" : ""}`}
-                  onClick={() => setActiveTab("Gaming")}
-                  title="Gaming"
-                >
-                  <Icon name="engine" />
-                  <span className="rail-label">Gaming</span>
-                </button>
-              )}
+              {/* Gaming Mode is no longer its own rail room — it lives as a featured section inside
+                  Tune (Optimize). See the Optimize render below. */}
               {/* Settings moved to the always-visible custom titlebar (reachable on every tab + every
                   responsive layout); the rail gear is retired. Its margin-left:auto was also stretching
                   the "Advanced" cell in the top-strip layout. */}
@@ -1646,8 +1635,16 @@ function App() {
                 <ReadinessTab readiness={readiness} onChanged={reloadReadiness} />
               )}
               {activeTab === "Priorities" && <PrioritiesTab priorities={priorities} />}
-              {activeTab === "Optimize" &&
-                (fixV2 ? (
+              {activeTab === "Optimize" && (
+                <>
+                  {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
+                      retired — owner 2026-06-19). Only when the gate is on. */}
+                  {gamingEnabled && (
+                    <div className="tune-gaming-feature">
+                      <GamingMode />
+                    </div>
+                  )}
+                  {fixV2 ? (
                   <Fix
                     recs={recs ?? []}
                     startup={startup}
@@ -1679,7 +1676,9 @@ function App() {
                     hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
                     onOpenEncyclopedia={() => setShowEncyclopedia(true)}
                   />
-                ))}
+                  )}
+                </>
+              )}
               {activeTab === "Play" && (
                 <Play
                   active={activeTab === "Play"}
@@ -1734,7 +1733,6 @@ function App() {
               {activeTab === "History" && (
                 <HistoryTab changes={changes} busyId={busyId} onRollback={rollback} />
               )}
-              {activeTab === "Gaming" && <GamingMode />}
             </div>
           </div>
       ) : null}
