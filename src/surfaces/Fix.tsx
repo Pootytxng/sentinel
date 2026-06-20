@@ -9,6 +9,7 @@ import { useDismissed } from "./dismissed";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
 import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
+import { gameModeRevertedExternally } from "./dashboard-data";
 import "./Fix.css";
 
 // Whether the Living Instrument preview is on (DOM-read; the surface re-renders fresh on navigation,
@@ -164,6 +165,7 @@ function FixRow({
   onDismiss,
   onOpenDrawer,
   vendor,
+  gameModeReverted,
 }: {
   rec: Rec;
   applied: boolean;
@@ -174,6 +176,7 @@ function FixRow({
   onDismiss: (id: string) => void;
   onOpenDrawer?: () => void;
   vendor?: GpuVendor;
+  gameModeReverted?: boolean;
 }) {
   return (
     <li className="fix-row">
@@ -189,14 +192,24 @@ function FixRow({
           )}
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
-        {/* Honest heads-up: Windows Game Mode is reset on login by Radeon software on many AMD rigs,
-            so it may not stick across reboots — tell the user instead of silently re-offering it. */}
-        {rec.id === "game-mode" && vendor === "amd" && (
+        {/* Honest Game Mode heads-up. If we can SEE it reverted (applied before, now off), say so
+            pointedly so the user knows re-applying won't hold — instead of silently re-offering it.
+            Otherwise, on AMD, give the proactive warning (Radeon resets it on login). */}
+        {rec.id === "game-mode" && gameModeReverted ? (
           <p className="fix-amd-note">
-            Heads up: on AMD systems, Radeon Adrenalin tends to switch Windows Game Mode back off after
-            you log in (a known Windows/AMD Game Bar conflict). Compy can turn it on, but it may not
-            stay on across reboots — that's the system resetting it, not a Compy bug.
+            You applied this before, but Windows switched Game Mode back off. That's your GPU's
+            recording software (AMD Adrenalin / NVIDIA ShadowPlay) resetting it at login — not Compy.
+            Re-applying works, but it'll reset again after the next restart.
           </p>
+        ) : (
+          rec.id === "game-mode" &&
+          vendor === "amd" && (
+            <p className="fix-amd-note">
+              Heads up: on AMD systems, Radeon Adrenalin tends to switch Windows Game Mode back off
+              after you log in (a known Windows/AMD Game Bar conflict). Compy can turn it on, but it
+              may not stay on across reboots — that's the system resetting it, not a Compy bug.
+            </p>
+          )
         )}
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
@@ -487,6 +500,10 @@ export default function Fix({
     setBatchSummary(res);
   };
 
+  // Did Game Mode revert externally (applied via Compy, since reset by recording software)? Drives
+  // the honest "re-applying won't hold" note instead of silently re-offering the apply each reboot.
+  const gameModeReverted = useMemo(() => gameModeRevertedExternally(changes), [changes]);
+
   // Ledger §2 — Layer 1: currently-active changes, deduped to the latest per rec id (so the same
   // tweak applied/rolled-back N times shows as ONE active card, not N equal rows).
   const active = useMemo(() => {
@@ -570,6 +587,7 @@ export default function Fix({
               key={rec.id}
               rec={rec}
               vendor={vendor}
+              gameModeReverted={gameModeReverted}
               applied={false}
               activeChange={undefined}
               busy={rowBusy(rec)}

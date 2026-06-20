@@ -5,6 +5,18 @@ export function activeChangeCount(changes: AppliedChange[]): number {
   return changes.filter((c) => c.status === "applied" && c.is_still_active).length;
 }
 
+/**
+ * Did Windows Game Mode revert after Compy applied it? True when a "game-mode" change was applied
+ * (not rolled back) but is no longer live — i.e. something reset it externally. On most rigs that's a
+ * GPU recording app (AMD Adrenalin / NVIDIA ShadowPlay) flipping Game Mode off at login. Lets the UI
+ * tell the user honestly ("re-applying won't hold") instead of silently re-offering the apply.
+ */
+export function gameModeRevertedExternally(changes: AppliedChange[]): boolean {
+  return changes.some(
+    (c) => c.rec_id === "game-mode" && c.status === "applied" && !c.is_still_active,
+  );
+}
+
 /** Top N biggest limiters (already rank-ordered by the backend). */
 export function topLimiters(priorities: Priorities | null, n: number): PriorityItem[] {
   return priorities ? priorities.limiters.slice(0, n) : [];

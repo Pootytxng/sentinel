@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { activeChangeCount, topLimiters, latestSession, leaveAloneCount } from "./dashboard-data";
+import {
+  activeChangeCount,
+  topLimiters,
+  latestSession,
+  leaveAloneCount,
+  gameModeRevertedExternally,
+} from "./dashboard-data";
 import type { AppliedChange, Priorities, SessionSummary } from "../types";
 
 const change = (over: Partial<AppliedChange>): AppliedChange => ({
@@ -17,6 +23,30 @@ describe("activeChangeCount", () => {
     expect(activeChangeCount(changes)).toBe(1);
   });
   it("handles empty", () => expect(activeChangeCount([])).toBe(0));
+});
+
+describe("gameModeRevertedExternally", () => {
+  it("true when game-mode was applied but is no longer active (reset externally)", () => {
+    expect(
+      gameModeRevertedExternally([change({ rec_id: "game-mode", status: "applied", is_still_active: false })]),
+    ).toBe(true);
+  });
+  it("false while game-mode is still active (held)", () => {
+    expect(
+      gameModeRevertedExternally([change({ rec_id: "game-mode", status: "applied", is_still_active: true })]),
+    ).toBe(false);
+  });
+  it("false when the user rolled it back themselves (not an external revert)", () => {
+    expect(
+      gameModeRevertedExternally([change({ rec_id: "game-mode", status: "rolled_back", is_still_active: false })]),
+    ).toBe(false);
+  });
+  it("ignores other recs that drifted", () => {
+    expect(
+      gameModeRevertedExternally([change({ rec_id: "hags-enable", status: "applied", is_still_active: false })]),
+    ).toBe(false);
+  });
+  it("false with no changes", () => expect(gameModeRevertedExternally([])).toBe(false));
 });
 
 describe("topLimiters", () => {
