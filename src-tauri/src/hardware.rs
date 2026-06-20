@@ -1629,3 +1629,531 @@ mod net_adapter_tests {
         assert!(!name_is_virtual("Intel Ethernet Connection I219-V"));
     }
 }
+
+// ── Coverage sweep: pure parsers (CPU arch / Intel labels / SMBIOS) ─────────
+// These functions are platform-agnostic pure parsers (no winapi / WMI / registry),
+// so this module needs NO #[cfg(windows)] gate. Synthetic inputs only — the live
+// probe/firmware-table paths are never exercised here.
+#[cfg(test)]
+mod parser_tests {
+    use super::*;
+
+    // ───────────────────────── parse_cpu_arch (AMD) ─────────────────────────
+
+    #[test]
+    fn amd_ryzen_x3d_zen4() {
+        // "7800X3D" -> first model char '7' -> "Zen 4", series "7000 series".
+        let info = parse_cpu_arch("AMD Ryzen 7 7800X3D 8-Core Processor").expect("parsed");
+        assert_eq!(info.vendor, "AMD");
+        assert_eq!(info.family_label, "Ryzen 7 7800X3D");
+        assert_eq!(info.architecture, "Zen 4");
+        assert_eq!(info.generation, "7000 series");
+    }
+
+    #[test]
+    fn amd_ryzen_zen2_zen3_zen5_arch_table() {
+        // Maps the leading model digit straight to the arch label per the match arm.
+        let z2 = parse_cpu_arch("AMD Ryzen 5 3600X 6-Core Processor").unwrap();
+        assert_eq!(z2.architecture, "Zen 2"); // '3' => "Zen 2"
+        assert_eq!(z2.generation, "3000 series");
+
+        let z3 = parse_cpu_arch("AMD Ryzen 9 5950X 16-Core Processor").unwrap();
+        assert_eq!(z3.architecture, "Zen 3"); // '5' => "Zen 3"
+        assert_eq!(z3.family_label, "Ryzen 9 5950X");
+
+        let z5 = parse_cpu_arch("AMD Ryzen 9 9950X 16-Core Processor").unwrap();
+        assert_eq!(z5.architecture, "Zen 5"); // '9' => "Zen 5"
+        assert_eq!(z5.generation, "9000 series");
+    }
+
+    #[test]
+    fn amd_ryzen_zen1_zenplus() {
+        let z1 = parse_cpu_arch("AMD Ryzen 7 1700 8-Core Processor").unwrap();
+        assert_eq!(z1.architecture, "Zen"); // '1' => "Zen"
+        let zp = parse_cpu_arch("AMD Ryzen 5 2600 6-Core Processor").unwrap();
+        assert_eq!(zp.architecture, "Zen+"); // '2' => "Zen+"
+    }
+
+    #[test]
+    fn amd_ryzen_mobile_arch_labels() {
+        // FINDING: the parser keys arch off the FIRST model digit alone, so mobile
+        // labels like "Zen 3 (mobile)" come from a leading '4' / '6' / '8' — it does
+        // NOT inspect a U/H suffix. e.g. a "4800H" reports "Zen 3 (mobile)".
+        let m = parse_cpu_arch("AMD Ryzen 7 4800H with Radeon Graphics").unwrap();
+        assert_eq!(m.architecture, "Zen 3 (mobile)"); // '4'
+        let m8 = parse_cpu_arch("AMD Ryzen 7 8840U with Radeon Graphics").unwrap();
+        assert_eq!(m8.architecture, "Zen 4 (mobile)"); // '8'
+    }
+
+    #[test]
+    fn amd_ryzen_model_starting_zero_returns_none() {
+        // first model digit '0' isn't in the match arm -> inner `return None`.
+        assert!(parse_cpu_arch("AMD Ryzen 5 0600 6-Core").is_none());
+    }
+
+    #[test]
+    fn amd_ryzen_threadripper_tier_word() {
+        // tier is words[i+1] verbatim; for Threadripper the "model" is the next word.
+        // "AMD Ryzen Threadripper 3990X" -> i+1="Threadripper", i+2="3990X" -> '3' => "Zen 2".
+        let info = parse_cpu_arch("AMD Ryzen Threadripper 3990X 64-Core Processor").unwrap();
+        assert_eq!(info.family_label, "Ryzen Threadripper 3990X");
+        assert_eq!(info.architecture, "Zen 2");
+    }
+
+    #[test]
+    fn amd_ryzen_without_two_following_words_is_none() {
+        // "Ryzen" needs i+2 < len (two words after it). Just "AMD Ryzen 7" has none.
+        assert!(parse_cpu_arch("AMD Ryzen 7").is_none());
+    }
+
+    // ───────────────────── parse_cpu_arch (Intel "Nth Gen") ─────────────────
+
+    #[test]
+    fn intel_nth_gen_prefix() {
+        let info = parse_cpu_arch("13th Gen Intel(R) Core(TM) i7-13700K").expect("parsed");
+        assert_eq!(info.vendor, "Intel");
+        assert_eq!(info.architecture, "Raptor Lake");
+        assert_eq!(info.generation, "13th Gen");
+        assert_eq!(info.family_label, "Core i7-13700K");
+    }
+
+    #[test]
+    fn intel_nth_gen_12th_alder_lake() {
+        let info = parse_cpu_arch("12th Gen Intel(R) Core(TM) i9-12900K").unwrap();
+        assert_eq!(info.architecture, "Alder Lake");
+        assert_eq!(info.generation, "12th Gen");
+        assert_eq!(info.family_label, "Core i9-12900K");
+    }
+
+    // ──────────────── parse_cpu_arch (Intel inferred from model) ────────────
+
+    #[test]
+    fn intel_inferred_9th_gen_from_model() {
+        // "i7-9700K" -> 4-digit model "9700" -> leading '9' => 9th gen Coffee Lake Refresh.
+        let info =
+            parse_cpu_arch("Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz").expect("parsed");
+        assert_eq!(info.vendor, "Intel");
+        assert_eq!(info.architecture, "Coffee Lake Refresh");
+        assert_eq!(info.generation, "9th Gen");
+        assert_eq!(info.family_label, "Core i7-9700K");
+    }
+
+    #[test]
+    fn intel_inferred_10th_gen_five_digit_model() {
+        // 5-digit "10900" -> first two digits "10" => 10th gen.
+        let info = parse_cpu_arch("Intel(R) Core(TM) i9-10900K CPU @ 3.70GHz").unwrap();
+        assert_eq!(info.generation, "10th Gen");
+        assert_eq!(info.architecture, "Comet Lake / Ice Lake");
+    }
+
+    #[test]
+    fn intel_inferred_ultra_3digit_maps_to_15th() {
+        // FINDING: the 3-digit Ultra heuristic maps leading '2' (e.g. "285K") to 15th gen.
+        let info = parse_cpu_arch("Intel(R) Core(TM) i9-285K").unwrap();
+        assert_eq!(info.generation, "15th Gen");
+        assert_eq!(info.architecture, "Arrow Lake");
+    }
+
+    #[test]
+    fn intel_inferred_6th_gen_lower_bound() {
+        let info = parse_cpu_arch("Intel(R) Core(TM) i5-6600K CPU @ 3.50GHz").unwrap();
+        assert_eq!(info.generation, "6th Gen");
+        assert_eq!(info.architecture, "Skylake");
+    }
+
+    #[test]
+    fn intel_inferred_out_of_range_gen_returns_none() {
+        // "i3-5005U" -> leading '5' => gen 5, not in (6..=15) -> None.
+        assert!(parse_cpu_arch("Intel(R) Core(TM) i3-5005U CPU @ 2.00GHz").is_none());
+    }
+
+    #[test]
+    fn intel_xeon_inferred_path() {
+        // Xeon also goes down the inferred branch (lower.contains("xeon")).
+        // "E5-2680" -> 4-digit "2680" -> leading '2' => gen 2, out of (6..=15) -> None.
+        // FINDING: classic Xeon SKUs whose leading model digit is <6 yield None.
+        assert!(parse_cpu_arch("Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz").is_none());
+    }
+
+    #[test]
+    fn unrecognized_brand_returns_none() {
+        assert!(parse_cpu_arch("Some Generic CPU 9000").is_none());
+        assert!(parse_cpu_arch("").is_none());
+        assert!(parse_cpu_arch("Apple M2").is_none());
+    }
+
+    // ───────────────────────── intel_arch_for_gen ──────────────────────────
+
+    #[test]
+    fn intel_arch_for_gen_known_table() {
+        assert_eq!(intel_arch_for_gen(15), ("Arrow Lake", "15th Gen".to_string()));
+        assert_eq!(
+            intel_arch_for_gen(14),
+            ("Raptor Lake Refresh", "14th Gen".to_string())
+        );
+        assert_eq!(intel_arch_for_gen(13), ("Raptor Lake", "13th Gen".to_string()));
+        assert_eq!(intel_arch_for_gen(12), ("Alder Lake", "12th Gen".to_string()));
+        assert_eq!(
+            intel_arch_for_gen(11),
+            ("Rocket Lake / Tiger Lake", "11th Gen".to_string())
+        );
+        assert_eq!(
+            intel_arch_for_gen(10),
+            ("Comet Lake / Ice Lake", "10th Gen".to_string())
+        );
+        assert_eq!(
+            intel_arch_for_gen(9),
+            ("Coffee Lake Refresh", "9th Gen".to_string())
+        );
+        assert_eq!(intel_arch_for_gen(8), ("Coffee Lake", "8th Gen".to_string()));
+        assert_eq!(intel_arch_for_gen(7), ("Kaby Lake", "7th Gen".to_string()));
+        assert_eq!(intel_arch_for_gen(6), ("Skylake", "6th Gen".to_string()));
+    }
+
+    #[test]
+    fn intel_arch_for_gen_ordinal_suffixes() {
+        // The ordinal-suffix arithmetic: 1/2/3 are st/nd/rd, 11/12/13 are th.
+        assert_eq!(intel_arch_for_gen(1).1, "1st Gen");
+        assert_eq!(intel_arch_for_gen(2).1, "2nd Gen");
+        assert_eq!(intel_arch_for_gen(3).1, "3rd Gen");
+        assert_eq!(intel_arch_for_gen(4).1, "4th Gen");
+        assert_eq!(intel_arch_for_gen(11).1, "11th Gen");
+        assert_eq!(intel_arch_for_gen(12).1, "12th Gen");
+        assert_eq!(intel_arch_for_gen(13).1, "13th Gen");
+        assert_eq!(intel_arch_for_gen(21).1, "21st Gen");
+        assert_eq!(intel_arch_for_gen(22).1, "22nd Gen");
+        assert_eq!(intel_arch_for_gen(23).1, "23rd Gen");
+    }
+
+    #[test]
+    fn intel_arch_for_gen_unknown_gen() {
+        assert_eq!(intel_arch_for_gen(99).0, "Unknown");
+        assert_eq!(intel_arch_for_gen(0).0, "Unknown");
+        assert_eq!(intel_arch_for_gen(0).1, "0th Gen");
+    }
+
+    // ───────────────────────── intel_family_label ──────────────────────────
+
+    #[test]
+    fn intel_family_label_strips_decoration_and_clock() {
+        assert_eq!(
+            intel_family_label("13th Gen Intel(R) Core(TM) i7-13700K"),
+            "Core i7-13700K"
+        );
+        assert_eq!(
+            intel_family_label("Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz"),
+            "Core i7-9700K"
+        );
+    }
+
+    #[test]
+    fn intel_family_label_collapses_whitespace_and_drops_processor() {
+        // "Processor" is stripped; runs of whitespace collapse to single spaces.
+        assert_eq!(
+            intel_family_label("Intel(R) Core(TM) i5-12400  Processor"),
+            "Core i5-12400"
+        );
+    }
+
+    #[test]
+    fn intel_family_label_handles_plain_and_empty() {
+        // No decoration to strip — just trims/collapses.
+        assert_eq!(intel_family_label("Core i9-14900KS"), "Core i9-14900KS");
+        assert_eq!(intel_family_label(""), "");
+        assert_eq!(intel_family_label("Intel CPU @ 3.0GHz"), "");
+    }
+
+    // ───────────────────────── parse_smbios_strings ─────────────────────────
+
+    #[test]
+    fn smbios_strings_basic_two_strings() {
+        // "Corsair\0Vengeance\0\0" -> two strings, stops at the double-null.
+        let data = b"Corsair\0Vengeance\0\0trailing";
+        let strings = parse_smbios_strings(data);
+        assert_eq!(strings, vec!["Corsair".to_string(), "Vengeance".to_string()]);
+    }
+
+    #[test]
+    fn smbios_strings_empty_and_immediate_null() {
+        assert!(parse_smbios_strings(&[]).is_empty());
+        // First byte is null (empty current) -> immediate break, no strings.
+        assert!(parse_smbios_strings(&[0u8]).is_empty());
+        assert!(parse_smbios_strings(&[0u8, 0u8]).is_empty());
+    }
+
+    #[test]
+    fn smbios_strings_unterminated_tail_dropped() {
+        // FINDING: a trailing string with NO null terminator is NOT emitted —
+        // only null-terminated runs are pushed.
+        let strings = parse_smbios_strings(b"G.Skill\0NoTerminator");
+        assert_eq!(strings, vec!["G.Skill".to_string()]);
+    }
+
+    #[test]
+    fn smbios_strings_lossy_utf8_does_not_panic() {
+        // Invalid UTF-8 bytes are handled via from_utf8_lossy (replacement char).
+        let data = [0xFF, 0xFE, 0x00, 0x00];
+        let strings = parse_smbios_strings(&data);
+        assert_eq!(strings.len(), 1);
+        assert!(strings[0].contains('\u{FFFD}'));
+    }
+
+    // ─────────────────── parse_smbios_memory_devices ───────────────────────
+    //
+    // SMBIOS type-17 (Memory Device) formatted-area offsets the parser reads:
+    //   0x00 type (=17)      0x01 length (formatted-area len)
+    //   0x0C-0x0D size (u16) 0x12 memory type   0x15-0x16 peak speed (u16)
+    //   0x17 manufacturer string-index  0x1A part-number string-index
+    //   0x1C-0x1F extended size (u32, used when size==0x7FFF)
+    //   0x20-0x21 configured speed (u16)
+    // After the formatted area comes the strings section, double-null terminated.
+
+    /// Build a type-17 formatted area of `len` bytes (len drives which fields the
+    /// parser will read), then append a strings section + double-null.
+    #[allow(clippy::too_many_arguments)]
+    fn type17(
+        len: u8,
+        size_raw: u16,
+        mem_type: u8,
+        peak_speed: u16,
+        configured_speed: u16,
+        ext_size: u32,
+        mfg_idx: u8,
+        part_idx: u8,
+        strings: &[&str],
+    ) -> Vec<u8> {
+        let mut f = vec![0u8; len as usize];
+        f[0] = 17;
+        f[1] = len;
+        // handle (0x02-0x03) and phys-array handle left zero — parser ignores them.
+        let set16 = |f: &mut Vec<u8>, at: usize, v: u16| {
+            if at + 1 < f.len() {
+                let b = v.to_le_bytes();
+                f[at] = b[0];
+                f[at + 1] = b[1];
+            }
+        };
+        let set32 = |f: &mut Vec<u8>, at: usize, v: u32| {
+            if at + 3 < f.len() {
+                let b = v.to_le_bytes();
+                f[at..at + 4].copy_from_slice(&b);
+            }
+        };
+        set16(&mut f, 0x0C, size_raw);
+        if 0x12 < f.len() {
+            f[0x12] = mem_type;
+        }
+        set16(&mut f, 0x15, peak_speed);
+        if 0x17 < f.len() {
+            f[0x17] = mfg_idx;
+        }
+        if 0x1A < f.len() {
+            f[0x1A] = part_idx;
+        }
+        set32(&mut f, 0x1C, ext_size);
+        set16(&mut f, 0x20, configured_speed);
+
+        // Strings section: each string null-terminated; double-null at the end.
+        let mut s: Vec<u8> = Vec::new();
+        for st in strings {
+            s.extend_from_slice(st.as_bytes());
+            s.push(0);
+        }
+        if strings.is_empty() {
+            // A device with no strings still ends with the double-null.
+            s.push(0);
+        }
+        s.push(0); // terminating null for the section
+
+        f.extend_from_slice(&s);
+        f
+    }
+
+    /// End-of-table marker (type 127), 4-byte formatted area + double-null.
+    fn type127() -> Vec<u8> {
+        vec![127, 4, 0, 0, 0, 0]
+    }
+
+    #[test]
+    fn smbios_mem_single_ddr5_module_full_fields() {
+        // 4 GB-ish: size_raw 0x4000 (16384) MB? No — keep it small: 0x0008 = 8 MB
+        // to exercise the plain-MB path without huge numbers. Use 8192 MB = 0x2000.
+        let dev = type17(
+            0x22,   // length big enough for configured speed (0x20-0x21)
+            0x2000, // 8192 -> MB path -> 8192 MB
+            0x22,   // DDR5
+            5600,   // peak speed
+            6000,   // configured speed (preferred)
+            0,
+            1, // manufacturer = string #1
+            2, // part = string #2
+            &["Corsair", "CMK32"],
+        );
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods.len(), 1);
+        let m = &mods[0];
+        assert_eq!(m.capacity_bytes, 8192u64 * 1024 * 1024);
+        assert_eq!(m.type_name, "DDR5");
+        assert_eq!(m.speed_mhz, 6000); // configured preferred over peak
+        assert_eq!(m.manufacturer, "Corsair CMK32");
+    }
+
+    #[test]
+    fn smbios_mem_peak_speed_used_when_no_configured() {
+        // configured_speed = 0 -> falls back to peak.
+        let dev = type17(0x22, 0x2000, 0x1A, 3200, 0, 0, 1, 0, &["Kingston"]);
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].type_name, "DDR4");
+        assert_eq!(mods[0].speed_mhz, 3200);
+        // part index 0 -> empty; only manufacturer present.
+        assert_eq!(mods[0].manufacturer, "Kingston");
+    }
+
+    #[test]
+    fn smbios_mem_kb_granularity_bit15() {
+        // bit 15 set => low 15 bits are KB. 0x8400 -> 0x400 = 1024 KB.
+        let dev = type17(0x22, 0x8400, 0x1A, 3200, 0, 0, 1, 0, &["X"]);
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].capacity_bytes, 1024u64 * 1024);
+    }
+
+    #[test]
+    fn smbios_mem_extended_size_path() {
+        // size_raw == 0x7FFF and len >= 0x20 -> read extended size (in MB) at 0x1C.
+        let dev = type17(0x22, 0x7FFF, 0x22, 6000, 6000, 32768, 1, 0, &["Mfg"]);
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].capacity_bytes, 32768u64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn smbios_mem_empty_and_unknown_slots_skipped() {
+        // size_raw 0x0000 (empty) and 0xFFFF (unknown) -> capacity 0 -> skipped.
+        let empty = type17(0x22, 0x0000, 0x22, 6000, 6000, 0, 1, 0, &["Mfg"]);
+        let unknown = type17(0x22, 0xFFFF, 0x22, 6000, 6000, 0, 1, 0, &["Mfg"]);
+        assert!(parse_smbios_memory_devices(&empty).is_empty());
+        assert!(parse_smbios_memory_devices(&unknown).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_placeholder_strings_filtered() {
+        // "Unknown" / "Not Specified" / "0x..." / "Array..." are treated as unset.
+        let dev = type17(
+            0x22,
+            0x2000,
+            0x22,
+            6000,
+            6000,
+            0,
+            1, // mfg = "Unknown"
+            2, // part = "Not Specified"
+            &["Unknown", "Not Specified"],
+        );
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].manufacturer, ""); // both placeholders -> empty
+    }
+
+    #[test]
+    fn smbios_mem_part_only_when_mfg_placeholder() {
+        let dev = type17(
+            0x22, 0x2000, 0x22, 6000, 6000, 0, 1, // mfg index -> "Unknown" (placeholder)
+            2, // part index -> "CMK32GX" (real)
+            &["Unknown", "CMK32GX"],
+        );
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods[0].manufacturer, "CMK32GX");
+    }
+
+    #[test]
+    fn smbios_mem_unknown_type_label() {
+        // mem_type byte not in the table -> "Unknown".
+        let dev = type17(0x22, 0x2000, 0x99, 3200, 0, 0, 1, 0, &["Mfg"]);
+        let mods = parse_smbios_memory_devices(&dev);
+        assert_eq!(mods[0].type_name, "Unknown");
+    }
+
+    #[test]
+    fn smbios_mem_two_modules_in_sequence() {
+        let mut data = type17(0x22, 0x2000, 0x22, 6000, 6000, 0, 1, 0, &["A"]);
+        data.extend(type17(0x22, 0x2000, 0x1A, 3200, 0, 0, 1, 0, &["B"]));
+        let mods = parse_smbios_memory_devices(&data);
+        assert_eq!(mods.len(), 2);
+        assert_eq!(mods[0].type_name, "DDR5");
+        assert_eq!(mods[0].manufacturer, "A");
+        assert_eq!(mods[1].type_name, "DDR4");
+        assert_eq!(mods[1].manufacturer, "B");
+    }
+
+    #[test]
+    fn smbios_mem_stops_at_end_of_table_marker() {
+        // A type-127 marker before a real device stops the walk -> no modules.
+        let mut data = type127();
+        data.extend(type17(0x22, 0x2000, 0x22, 6000, 6000, 0, 1, 0, &["A"]));
+        assert!(parse_smbios_memory_devices(&data).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_non17_struct_skipped_then_17_parsed() {
+        // A non-memory struct (type 4 = processor) is walked past, then a type-17 read.
+        let mut other = vec![4u8, 6, 0, 0, 0, 0]; // type 4, len 6, formatted
+        other.push(0); // strings section: double null
+        other.push(0);
+        let mut data = other;
+        data.extend(type17(0x22, 0x2000, 0x22, 6000, 6000, 0, 1, 0, &["A"]));
+        let mods = parse_smbios_memory_devices(&data);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].manufacturer, "A");
+    }
+
+    // ── Graceful-degradation / malformed-buffer cases (no panic) ────────────
+
+    #[test]
+    fn smbios_mem_empty_buffer() {
+        assert!(parse_smbios_memory_devices(&[]).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_short_buffer_no_panic() {
+        // Fewer than 4 bytes -> loop condition false immediately.
+        assert!(parse_smbios_memory_devices(&[17]).is_empty());
+        assert!(parse_smbios_memory_devices(&[17, 0x22, 0]).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_struct_len_below_4_breaks() {
+        // struct_len < 4 -> break (no panic, empty result).
+        let data = [17u8, 2, 0, 0];
+        assert!(parse_smbios_memory_devices(&data).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_formatted_end_past_buffer_breaks() {
+        // struct_len claims 0x22 bytes but buffer is short -> formatted_end > len -> break.
+        let data = [17u8, 0x22, 0, 0, 0, 0];
+        assert!(parse_smbios_memory_devices(&data).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_type17_too_short_for_layout_skipped() {
+        // type 17 but struct_len < 0x18 -> not parsed as a memory device (no panic).
+        // len = 8, enough bytes present, but below the 0x18 minimum.
+        let mut data = vec![17u8, 8, 0, 0, 0, 0, 0, 0];
+        data.push(0); // strings double-null
+        data.push(0);
+        assert!(parse_smbios_memory_devices(&data).is_empty());
+    }
+
+    #[test]
+    fn smbios_mem_garbage_does_not_panic() {
+        // Random-ish bytes: must terminate without panicking. Result may be empty.
+        let garbage: Vec<u8> = (0u8..=255).cycle().take(300).collect();
+        let _ = parse_smbios_memory_devices(&garbage);
+        // Truncated mid-struct.
+        let _ = parse_smbios_memory_devices(&[17, 0x40, 1, 2, 3]);
+        // All zeros.
+        let _ = parse_smbios_memory_devices(&[0u8; 64]);
+    }
+}
