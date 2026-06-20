@@ -5,8 +5,7 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  display: grid;
-  place-items: center;
+  display: flex;
   padding: clamp(20px, 4vh, 56px);
   overflow: auto;
   color: var(--ix-text-1, #eef1f7);
@@ -27,6 +26,8 @@
   width: 100%;
   max-width: 1180px;
   max-height: 100%;
+  /* margin:auto centers in the flex backdrop AND stays scroll-safe (no top-clip) when it overflows. */
+  margin: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -424,13 +425,22 @@
 
 /* Narrow windows — stack the stage over the panel (still contained, never full-bleed). */
 @media (max-width: 900px) {
+  /* Stack: stage over a natural-height panel; let the whole console grow and the backdrop scroll
+     (so the panel never gets squished to a scroll-strip). */
+  .st-console {
+    max-height: none;
+  }
   .st-body {
     flex-direction: column;
     min-height: 0;
   }
   .st-stage {
     flex: none;
-    min-height: clamp(280px, 38vh, 380px);
+    min-height: clamp(260px, 34vh, 360px);
+  }
+  .st-panel {
+    flex: none;
+    overflow: visible;
   }
 }
 
