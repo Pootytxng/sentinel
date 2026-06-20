@@ -25,7 +25,6 @@ const baseProps = {
   onRollback: vi.fn(),
   onApplyBatch: vi.fn().mockResolvedValue({ applied: 0, skipped: [] }),
   onOpenLibrary: vi.fn(),
-  onDisablePreview: vi.fn(),
   vendor: "any" as const,
 };
 

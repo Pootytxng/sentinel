@@ -75,7 +75,6 @@ type Props = {
   onRollback: (c: AppliedChange) => void;
   onApplyBatch: (recIds: string[]) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
   onOpenLibrary: (focusId: string) => void;
-  onDisablePreview: () => void;
   vendor: GpuVendor;
 };
 
@@ -452,7 +451,6 @@ export default function Fix({
   onRollback,
   onApplyBatch,
   onOpenLibrary,
-  onDisablePreview,
   vendor,
 }: Props) {
   // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
@@ -553,9 +551,6 @@ export default function Fix({
               it belongs where approval actually happens. */}
           <p className="fix-consent">Compy never changes anything without your explicit approval.</p>
         </div>
-        <button className="fix-classic" onClick={onDisablePreview} title="Switch back to classic Optimize">
-          Classic Optimize
-        </button>
       </header>
 
       {/* Worth making for your rig — the outstanding appliable recs, each with its trust-switch. */}

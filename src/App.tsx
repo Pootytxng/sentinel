@@ -26,7 +26,7 @@ import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import Play from "./surfaces/Play";
 import Lab from "./surfaces/Lab";
 import { SessionDebrief } from "./surfaces/SessionDebrief";
-import { GUIDED_STEPS, openGuidedUri } from "./surfaces/guided";
+import { openGuidedUri } from "./surfaces/guided";
 import Settings from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
 import "./App.css";
@@ -198,11 +198,6 @@ function fmtAgo(iso: string): string {
   return days === 1 ? "yesterday" : `${days} days ago`;
 }
 
-// Tabs: Overview is always visible. The category tabs match Recommendation
-// .category strings exactly so filtering is a string equality check. Startup
-// and History only appear when they have content.
-const REC_CATEGORIES = ["Windows", "Power", "GPU", "Display", "Storage", "Network"] as const;
-type RecCategory = (typeof REC_CATEGORIES)[number];
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
@@ -849,7 +844,6 @@ function PrioritiesTab({ priorities }: { priorities: Priorities | null }) {
 // sees them first; OFF in a release build until the reskin lands fully. Additive + reversible — a
 // flag off restores the classic surface untouched.
 const HOME_V2_KEY = "compy_home_v2";
-const FIX_V2_KEY = "compy_fix_v2";
 const ARC_V2_KEY = "compy_arc_v2";
 const CHECK_V2_KEY = "compy_check_v2";
 const PLAY_V2_KEY = "compy_play_v2";
@@ -860,8 +854,7 @@ const APP_VERSION = "0.1.0";
 // Settings "New look" UI that wrote "0"s is gone, so a stale "0" had become an exit-less
 // soft-lock onto a classic surface — the owner hit it live 2026-06-11 (a leftover
 // compy_check_v2="0" routed every Check click to the old Game Readiness page and hid Past
-// Tweaks). M3-spec step 2, executed early. Session-scoped classic (Fix's "Classic Optimize"
-// escape hatch) still works via its runtime setter; a relaunch restores v2.
+// Tweaks). M3-spec step 2, executed early.
 function readDevFlag(key: string): boolean {
   try {
     if (localStorage.getItem(key) === "0") {
@@ -871,13 +864,6 @@ function readDevFlag(key: string): boolean {
     /* ignore — default v2 */
   }
   return true;
-}
-function persistFlag(key: string, on: boolean): void {
-  try {
-    localStorage.setItem(key, on ? "1" : "0");
-  } catch {
-    /* ignore persistence failure — still applies this session */
-  }
 }
 
 function App() {
@@ -923,11 +909,9 @@ function App() {
   // Instrument-surface preview flags — see readDevFlag.
   // v2-look flags: read ONCE from localStorage at startup (the hidden dev A/B path — set the key in
   // devtools + reload to drop a surface to its classic version). No runtime setters / no UI anymore:
-  // the user-facing "New look" hub was removed now that parity is closed. `fixV2` keeps its setter
-  // for the Fix surface's own in-surface "disable preview" escape hatch. `settingsV2` is gone — the
+  // the user-facing "New look" hub was removed now that parity is closed. `settingsV2` is gone — the
   // lockout fix made Settings always open (no classic settings surface ever existed).
   const [homeV2] = useState<boolean>(() => readDevFlag(HOME_V2_KEY));
-  const [fixV2, setFixV2] = useState<boolean>(() => readDevFlag(FIX_V2_KEY));
   const [arcV2] = useState<boolean>(() => readDevFlag(ARC_V2_KEY));
   const [checkV2] = useState<boolean>(() => readDevFlag(CHECK_V2_KEY));
   const [playV2] = useState<boolean>(() => readDevFlag(PLAY_V2_KEY));
@@ -1632,7 +1616,6 @@ function App() {
                       <GamingMode />
                     </div>
                   )}
-                  {fixV2 ? (
                   <Fix
                     recs={recs ?? []}
                     startup={startup}
@@ -1648,23 +1631,8 @@ function App() {
                     onRollback={rollback}
                     onApplyBatch={applyBatch}
                     onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                    onDisablePreview={() => {
-                      setFixV2(false);
-                      persistFlag(FIX_V2_KEY, false);
-                    }}
                     vendor={detectedVendor}
                   />
-                ) : (
-                  <OptimizeTab
-                    recs={recs ?? []}
-                    startup={startup}
-                    busyId={busyId}
-                    onToggleRec={toggleRec}
-                    onToggleStartup={toggleStartup}
-                    hasActiveChange={(recId) => findActiveChangeForRec(recId) !== undefined}
-                    onOpenEncyclopedia={() => setShowEncyclopedia(true)}
-                  />
-                  )}
                 </>
               )}
               {activeTab === "Play" && (
@@ -1747,268 +1715,6 @@ function OverviewTab({ hw }: { hw: HardwareInfo }) {
   return (
     <section className="tab-pane">
       <HardwareSection hw={hw} />
-    </section>
-  );
-}
-
-// Optimize: the six rec categories + Startup, consolidated into one section
-// with an inline segmented filter. Replaces the old per-category tabs so the
-// rail stays short. Behavior (apply/rollback/toggle) is unchanged.
-// "Lead the horse to water AND hold the bendy straw" — for settings Compy
-// detects but deliberately won't mutate (they live in a vendor app / a Windows
-// page with no safe, reversible programmatic toggle), we point the user to the
-// exact place to change it AND, where possible, open that place for them.
-//
-// HONESTY: `state` reflects only what Compy genuinely knows.
-//  - "needs-action": the rec ONLY appears because Compy detected a sub-par
-//    state (e.g. refresh rate below max). Its presence = action available.
-//  - "unknown": Compy cannot read this setting's state at all (e.g. a vendor
-//    app's telemetry toggle). We say so plainly rather than fake an indicator.
-//
-// `openUri` is a FIXED, allowlisted ms-settings: deep link (never from data) —
-// opened via the already-permitted opener plugin. Vendor apps (AMD/NVIDIA) have
-// no reliable deep link, so they get steps only, honestly labelled.
-
-function GuidedCard({ rec }: { rec: Recommendation }) {
-  const [open, setOpen] = useState(false);
-  const guide = GUIDED_STEPS[rec.id];
-  // Status chip — honest: detected-needs-action vs not-readable.
-  const status = guide?.state ?? "unknown";
-  const statusLabel =
-    status === "needs-action" ? "Action available" : "State not readable";
-  return (
-    <div className="rec rec-guided">
-      <div className="rec-head">
-        <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>{rec.category}</span>
-        <span
-          className={`guided-status guided-status-${status}`}
-          title={
-            status === "needs-action"
-              ? "Compy detected this is below its recommended state — worth doing."
-              : "Compy can't read this setting's current state (it lives in a vendor app / outside what we probe). Check it yourself; skip if it's already set."
-          }
-        >
-          <span className="guided-status-dot" aria-hidden="true" />
-          {statusLabel}
-        </span>
-        <span className="rec-guided-pill" title="Compy guides you to where this lives — it won't change it for you, by design.">
-          Guided
-        </span>
-      </div>
-      <h3 className="rec-title">{rec.title}</h3>
-      <div className="rec-impact-line">
-        <span className="rec-impact-dot rec-impact-dot-guided" aria-hidden="true" />
-        <span className="rec-impact-text">{rec.impact}</span>
-      </div>
-      <p className="rec-desc">{rec.description}</p>
-      {guide && (
-        <>
-          <div className="guided-actions">
-            <button
-              className={`rec-details-toggle ${open ? "open" : ""}`}
-              onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-            >
-              <span>{open ? "Hide steps" : `How to → ${guide.where}`}</span>
-              <Icon name="chevron" />
-            </button>
-            {guide.openUri && (
-              <button
-                className="guided-open-btn"
-                onClick={() => openGuidedUri(guide.openUri!)}
-                title={`Opens ${guide.where} directly`}
-              >
-                <Icon name="external" />
-                {guide.openLabel ?? "Open it"}
-              </button>
-            )}
-          </div>
-          {open && (
-            <div className="rec-expand">
-              <div className="guided-where">Where: <strong>{guide.where}</strong></div>
-              <ol className="guided-steps">
-                {guide.steps.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ol>
-              {status === "unknown" && (
-                <p className="guided-note">
-                  Compy can't read this one's current state, so check before you
-                  change it — if it's already set the way you want, you're done.
-                </p>
-              )}
-              <p className="guided-note">
-                Compy won't change this for you — it lives outside what we can
-                safely undo. Doing it yourself keeps you in control.
-              </p>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function OptimizeTab({
-  recs,
-  startup,
-  busyId,
-  onToggleRec,
-  onToggleStartup,
-  hasActiveChange,
-  onOpenEncyclopedia,
-}: {
-  recs: Recommendation[];
-  startup: StartupEntry[];
-  busyId: string | null;
-  onToggleRec: (rec: Recommendation) => void;
-  onToggleStartup: (entry: StartupEntry) => void;
-  hasActiveChange: (recId: string) => boolean;
-  onOpenEncyclopedia: () => void;
-}) {
-  type Filter = "All" | RecCategory | "Guided" | "Startup";
-  const [filter, setFilter] = useState<Filter>("All");
-  const [showSatisfied, setShowSatisfied] = useState(false);
-
-  // Split appliable (Compy-owned toggles) from advisory/guided (Compy
-  // detects but directs you elsewhere to change). The "All" view shows
-  // appliable recs; guided ones live in their own segment so the toggle list
-  // stays clean and the guidance is intentional, not a dead switch.
-  const appliableRecs = recs.filter((r) => APPLIABLE_REC_IDS.has(r.id));
-  const guidedRecs = recs.filter((r) => !APPLIABLE_REC_IDS.has(r.id));
-
-  const catCounts: Record<string, number> = {};
-  appliableRecs.forEach((r) => (catCounts[r.category] = (catCounts[r.category] ?? 0) + 1));
-  const activeCats = REC_CATEGORIES.filter((c) => (catCounts[c] ?? 0) > 0);
-
-  const filters: { id: Filter; label: string; count: number }[] = [
-    { id: "All", label: "All", count: appliableRecs.length },
-    ...activeCats.map((c) => ({ id: c as Filter, label: c as string, count: catCounts[c] ?? 0 })),
-    ...(guidedRecs.length
-      ? [{ id: "Guided" as Filter, label: "Guided", count: guidedRecs.length }]
-      : []),
-    ...(startup.length
-      ? [{ id: "Startup" as Filter, label: "Startup", count: startup.length }]
-      : []),
-  ];
-
-  const shownRecs =
-    filter === "All"
-      ? appliableRecs
-      : filter === "Startup" || filter === "Guided"
-      ? []
-      : appliableRecs.filter((r) => r.category === filter);
-  // Lead with what's still worth doing; fold the already-applied into a collapsed group so the
-  // list reads as "a few things to do", not a 29-switch buffet.
-  const outstandingRecs = shownRecs.filter((r) => !r.currently_applied);
-  const satisfiedRecs = shownRecs.filter((r) => r.currently_applied);
-
-  return (
-    <section className="tab-pane">
-      <div className="section-header">
-        <h2 className="section-title">
-          Optimize
-          <span className="count-badge">{appliableRecs.length}</span>
-        </h2>
-        <div className="read-only-pill">Nothing changes without your approval</div>
-      </div>
-
-      <button className="tweak-launch" onClick={onOpenEncyclopedia}>
-        Look it up — tweaks, jargon &amp; scams →
-      </button>
-
-      <div className="segmented" role="tablist" aria-label="Filter optimizations">
-        {filters.map((f) => (
-          <button
-            key={f.id}
-            role="tab"
-            aria-selected={filter === f.id}
-            className={`seg ${filter === f.id ? "seg-on" : ""}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-            <span className="seg-count">{f.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {filter === "Guided" ? (
-        <>
-          <p className="section-help">
-            Settings Compy detected but <strong>won't change for you</strong> —
-            they live in a vendor app or a Windows page with no safe, reversible
-            switch Compy can own. Instead of a dead toggle, here's exactly where
-            to find each one so you stay in control.
-          </p>
-          <div className="rec-list">
-            {guidedRecs.map((r) => (
-              <GuidedCard key={r.id} rec={r} />
-            ))}
-          </div>
-        </>
-      ) : filter === "Startup" ? (
-        <>
-          <p className="section-help">
-            User-scope auto-start entries. Toggle off to keep them from launching
-            with Windows. Re-enable any time — nothing is deleted.
-          </p>
-          <div className="startup-list">
-            {startup.map((entry) => (
-              <StartupRow
-                key={entry.name}
-                entry={entry}
-                busy={busyId === `startup:${entry.name}`}
-                onToggle={() => onToggleStartup(entry)}
-              />
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="rec-list">
-            {outstandingRecs.map((r) => (
-              <RecCard
-                key={r.id}
-                rec={r}
-                appliable={APPLIABLE_REC_IDS.has(r.id)}
-                busy={busyId === r.id}
-                canToggleOff={hasActiveChange(r.id)}
-                onToggle={() => onToggleRec(r)}
-              />
-            ))}
-            {shownRecs.length === 0 && (
-              <div className="empty">No recommendations in this group right now.</div>
-            )}
-            {shownRecs.length > 0 && outstandingRecs.length === 0 && (
-              <div className="empty">All set here — everything in this group is already applied.</div>
-            )}
-          </div>
-          {satisfiedRecs.length > 0 && (
-            <div className="rec-satisfied">
-              <button
-                className="rec-satisfied-head"
-                onClick={() => setShowSatisfied((s) => !s)}
-              >
-                {showSatisfied ? "▾" : "▸"} Already applied ({satisfiedRecs.length})
-              </button>
-              {showSatisfied && (
-                <div className="rec-list">
-                  {satisfiedRecs.map((r) => (
-                    <RecCard
-                      key={r.id}
-                      rec={r}
-                      appliable={APPLIABLE_REC_IDS.has(r.id)}
-                      busy={busyId === r.id}
-                      canToggleOff={hasActiveChange(r.id)}
-                      onToggle={() => onToggleRec(r)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
     </section>
   );
 }
@@ -2866,240 +2572,6 @@ function HistoryTab({
 }
 
 // ─── Reusable bits ───────────────────────────────────────────────────────
-
-const PROVENANCE_LABEL: Record<Provenance, string> = {
-  verified: "Verified",
-  "measured-signal": "Measured signal",
-  "expected-impact": "Expected impact",
-};
-
-// Tooltip text shown when the user hovers the provenance pill. Each one
-// names the honesty level of the rec's IMPACT claim, not the rec itself.
-const PROVENANCE_TITLE: Record<Provenance, string> = {
-  verified:
-    "Compy directly observes this fact (e.g., reads the current refresh rate, measures free disk space, checks driver date). The claim IS the measurement.",
-  "measured-signal":
-    "Third-party benchmarks or wide community testing has measured this impact. Compy cites established results rather than inventing them.",
-  "expected-impact":
-    "Logical from Windows internals; Compy has NOT measured this itself. Honest 'we believe this but haven't verified it under our own benchmark suite.'",
-};
-
-function RecCard({
-  rec,
-  appliable,
-  busy,
-  canToggleOff,
-  onToggle,
-}: {
-  rec: Recommendation;
-  appliable: boolean;
-  busy: boolean;
-  canToggleOff: boolean;
-  onToggle: () => void;
-}) {
-  // Distinct truths Compy surfaces (per cross-LLM review): the toggle
-  // position must not pretend Compy owns Windows state. We show three
-  // separate facts and let the user reason about them:
-  //   1. Recommended state  — what Compy thinks (always "On" for these recs;
-  //      they're all framed as "do this thing", so the recommendation is to
-  //      apply)
-  //   2. Current state      — what Windows actually is right now (live)
-  //   3. Applied by Compy — did Compy make this change, or did the user
-  //      already have it that way / change it externally?
-  //
-  // The toggle reflects the Current state (so flipping it asks Windows to
-  // change). When Current matches Recommended but Compy didn't apply it,
-  // we surface that distinction explicitly rather than offering a rollback
-  // we don't actually have a contract for.
-  const currentlyOn = rec.currently_applied;
-  const compyOwns = canToggleOff; // we have a still-active applied change
-  const isInfo = !appliable; // advisory / informational only
-
-  const toggleDisabled =
-    busy || isInfo || (currentlyOn && !compyOwns);
-
-  const toggleTitle = isInfo
-    ? "Advisory recommendation — Compy can't auto-apply this; follow the description"
-    : busy
-    ? "Working…"
-    : currentlyOn && !compyOwns
-    ? "Already on, but Compy didn't apply it. Toggle off in the original Windows location."
-    : currentlyOn
-    ? "Click to roll back. Compy will restore the prior state recorded at apply time."
-    : "Click to apply. Compy will snapshot the prior state so you can roll back at any time.";
-
-  // "Applied by Compy" status — three-way: Yes / No (advisory) / No (external)
-  const compyAppliedLabel = isInfo
-    ? "N/A — advisory recommendation"
-    : compyOwns
-    ? "Yes"
-    : currentlyOn
-    ? "No (set outside Compy)"
-    : "No (not applied)";
-  const compyAppliedClass = compyOwns
-    ? "state-on"
-    : currentlyOn && !compyOwns
-    ? "state-warn"
-    : "state-muted";
-
-  const [open, setOpen] = useState(false);
-
-  // Power-up pulse: when this rec flips off → on, flash a brief "energize"
-  // animation. Tracks the previous applied state across renders.
-  const [poweredUp, setPoweredUp] = useState(false);
-  const prevOn = useRef(currentlyOn);
-  useEffect(() => {
-    if (currentlyOn && !prevOn.current) {
-      setPoweredUp(true);
-      const t = setTimeout(() => setPoweredUp(false), 900);
-      prevOn.current = currentlyOn;
-      return () => clearTimeout(t);
-    }
-    prevOn.current = currentlyOn;
-  }, [currentlyOn]);
-
-  const stateClass = isInfo
-    ? "rec-info"
-    : currentlyOn
-    ? "rec-on"
-    : "rec-off";
-
-  return (
-    <div className={`rec rec-${rec.severity} ${stateClass} ${poweredUp ? "rec-powerup" : ""}`}>
-      <div className="rec-head">
-        <span className={`rec-cat rec-cat-${rec.category.toLowerCase()}`}>
-          {rec.category}
-        </span>
-        <span className={`rec-sev rec-sev-${rec.severity}`}>{rec.severity}</span>
-        <span
-          className={`rec-provenance rec-provenance-${rec.provenance}`}
-          title={PROVENANCE_TITLE[rec.provenance]}
-        >
-          {PROVENANCE_LABEL[rec.provenance]}
-        </span>
-        {isInfo ? (
-          <span className="rec-advisory-pill">Guided</span>
-        ) : (
-          (() => {
-            // Blocked = ON but Compy didn't apply it, so there's no rollback
-            // contract to flip it off safely. Surface a clear hover tooltip
-            // explaining why (instead of just a bare "no" cursor).
-            const blockedExternal = currentlyOn && !compyOwns;
-            return (
-              <span
-                className={`toggle-wrap ${blockedExternal ? "toggle-wrap-blocked" : ""}`}
-                data-tip={
-                  blockedExternal
-                    ? "Already on, but you (or Windows) enabled this — not Compy. Compy has no rollback record for changes it didn't make, so it won't flip it off and risk being unable to restore. Turn it off in its original Windows location if you want it off."
-                    : undefined
-                }
-              >
-                <button
-                  className={`toggle rec-toggle ${currentlyOn ? "toggle-on" : ""}`}
-                  onClick={onToggle}
-                  disabled={toggleDisabled}
-                  role="switch"
-                  aria-checked={currentlyOn}
-                  aria-label={`${currentlyOn ? "Roll back" : "Apply"} ${rec.title}`}
-                  title={toggleTitle}
-                >
-                  <span className="toggle-track">
-                    <span className="toggle-thumb" />
-                  </span>
-                </button>
-                {blockedExternal && (
-                  <span className="toggle-tip" role="tooltip">
-                    <strong>Locked for your safety</strong>
-                    Already on, but <em>you</em> or Windows set it — not Compy. With no rollback record, Compy won't flip it off and risk not being able to put it back. Change it in its own Windows location instead.
-                  </span>
-                )}
-              </span>
-            );
-          })()
-        )}
-      </div>
-      <h3 className="rec-title">{rec.title}</h3>
-      <div className="rec-impact-line">
-        <span className="rec-impact-dot" aria-hidden="true" />
-        <span className="rec-impact-text">{rec.impact}</span>
-      </div>
-      <button
-        className={`rec-details-toggle ${open ? "open" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span>{open ? "Hide details" : "Details"}</span>
-        <Icon name="chevron" />
-      </button>
-      {open && (
-        <div className="rec-expand">
-          <p className="rec-desc">{rec.description}</p>
-          <div className="rec-meta">
-            {rec.downside && (
-              <div className="rec-row">
-                <span className="rec-row-label">Tradeoff</span>
-                <span className="rec-row-value downside">{rec.downside}</span>
-              </div>
-            )}
-            <div className="rec-row">
-              <span className="rec-row-label">Why this</span>
-              <span className="rec-row-value muted">{rec.applies_to}</span>
-            </div>
-          </div>
-          <div className="rec-status">
-            <div className="rec-status-row">
-              <span className="rec-status-label">Recommended</span>
-              <span className="rec-status-value state-on">On</span>
-            </div>
-            <div className="rec-status-row">
-              <span className="rec-status-label">Current</span>
-              <span className={`rec-status-value ${currentlyOn ? "state-on" : "state-off"}`}>
-                {currentlyOn ? "On" : "Off"}
-              </span>
-            </div>
-            <div className="rec-status-row">
-              <span className="rec-status-label">Applied by Compy</span>
-              <span className={`rec-status-value ${compyAppliedClass}`}>
-                {compyAppliedLabel}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StartupRow({
-  entry,
-  busy,
-  onToggle,
-}: {
-  entry: StartupEntry;
-  busy: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className={`startup-row ${!entry.enabled ? "startup-row-off" : ""}`}>
-      <div className="startup-main">
-        <div className="startup-name">{entry.name}</div>
-        <div className="startup-command">{entry.command || "(no command)"}</div>
-      </div>
-      <button
-        className={`toggle ${entry.enabled ? "toggle-on" : ""}`}
-        onClick={onToggle}
-        disabled={busy}
-        role="switch"
-        aria-checked={entry.enabled}
-        aria-label={`${entry.enabled ? "Disable" : "Enable"} ${entry.name}`}
-      >
-        <span className="toggle-track">
-          <span className="toggle-thumb" />
-        </span>
-      </button>
-    </div>
-  );
-}
 
 function ChangeRow({
   change,
