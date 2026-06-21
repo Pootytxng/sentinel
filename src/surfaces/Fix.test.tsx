@@ -169,4 +169,21 @@ describe("Fix", () => {
     // Startup + refuse-pile + guided are fixes-side too — gone in ledger view.
     expect(screen.queryByText("Not worth touching")).toBeNull();
   });
+
+  // Active/History split (Optimize merge phase 1c-pulled-forward): the Applied segment shows ONLY the
+  // active layer, the History segment shows ONLY the full-history layer — so the third segment is a
+  // distinct view, not a no-op mirror of the second.
+  it('view="applied" renders the active layer ONLY (no full history, no fixes)', () => {
+    render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="applied" />);
+    expect(screen.getByText("Active on this PC")).toBeTruthy();
+    expect(screen.queryByText("Full history")).toBeNull();
+    expect(screen.queryByText("Worth making for your rig")).toBeNull();
+  });
+
+  it('view="history" renders the full-history layer ONLY (no active layer, no fixes)', () => {
+    render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="history" />);
+    expect(screen.getByText("Full history")).toBeTruthy();
+    expect(screen.queryByText("Active on this PC")).toBeNull();
+    expect(screen.queryByText("Worth making for your rig")).toBeNull();
+  });
 });

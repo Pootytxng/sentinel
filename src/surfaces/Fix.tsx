@@ -76,12 +76,13 @@ type Props = {
   onApplyBatch: (recIds: string[]) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
   onOpenLibrary: (focusId: string) => void;
   vendor: GpuVendor;
-  // Section filter (Optimize merge phase 1a, spec 2026-06-21): "all" (default) = today's whole Tune
-  // surface, byte-identical; "fixes" = the recs / guided / startup / refuse-pile sections only (no
-  // Trust Ledger); "ledger" = the "Active on this PC" + "Full history" sections only. Lets the merged
-  // Optimize shell place the same Fix surface under separate Fixes / Applied / History segments
-  // without duplicating any markup. Old callers pass nothing → "all".
-  view?: "all" | "fixes" | "ledger";
+  // Section filter (Optimize merge, spec 2026-06-21): "all" (default) = today's whole Tune surface,
+  // byte-identical; "fixes" = the recs / guided / startup / refuse-pile sections only (no Trust
+  // Ledger); "ledger" = BOTH ledger layers; "applied" = the "Active on this PC" layer ONLY; "history"
+  // = the "Full history" layer ONLY. Lets the merged Optimize shell place the same Fix surface under
+  // separate Fixes / Applied / History segments without duplicating any markup — and keep each segment
+  // a DISTINCT view (History is not a mirror of Applied). Old callers pass nothing → "all".
+  view?: "all" | "fixes" | "ledger" | "applied" | "history";
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
@@ -460,10 +461,12 @@ export default function Fix({
   vendor,
   view = "all",
 }: Props) {
-  // Which half(s) of the surface to render — the merged Optimize shell drives this via segments;
-  // standalone Tune leaves it "all" so the surface is unchanged.
-  const showFixes = view !== "ledger";
-  const showLedger = view !== "fixes";
+  // Which section(s) of the surface to render — the merged Optimize shell drives this via segments;
+  // standalone Tune leaves it "all" so the surface is unchanged. The two ledger layers gate
+  // independently so Applied (active only) and History (full trail only) are distinct views.
+  const showFixes = view === "all" || view === "fixes";
+  const showActive = view === "all" || view === "ledger" || view === "applied";
+  const showHistory = view === "all" || view === "ledger" || view === "history";
   // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
   // the completion denominator entirely — they sit in a quiet "Not for this rig" bucket with the
   // plain-English reason, never silently dropped, never falsely offered.
@@ -671,9 +674,7 @@ export default function Fix({
 
       {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.
           Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
-      {showLedger && (
-      <>
-      {active.length > 0 && (
+      {showActive && active.length > 0 && (
         <>
           <div className="fix-section-label">Active on this PC</div>
           <ul className="fix-list">
@@ -703,7 +704,7 @@ export default function Fix({
 
       {/* Full history (ledger Layer 2) — the complete audit trail, collapsed; click a row for its
           receipt. Rolled-back + superseded entries stay, muted. */}
-      {history.length > 0 && (
+      {showHistory && history.length > 0 && (
         <CollapsibleSection title="Full history" count={history.length} tint="applied">
           <p className="fix-refuse-intro">
             The complete trail — applied, rolled back, superseded. Click any row for its receipt.
@@ -714,8 +715,6 @@ export default function Fix({
             ))}
           </ul>
         </CollapsibleSection>
-      )}
-      </>
       )}
 
       {showFixes && (

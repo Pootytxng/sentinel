@@ -111,6 +111,16 @@ describe("Optimize — segmented shell (phase 1a)", () => {
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
 
+  it("Applied and History are distinct views — Applied = active layer only, History = full-history layer only", () => {
+    renderOptimize({ changes: [activeChange] });
+    fireEvent.click(screen.getByRole("tab", { name: "Applied" }));
+    expect(screen.getByText("Active on this PC")).toBeTruthy();
+    expect(screen.queryByText("Full history")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    expect(screen.getByText("Full history")).toBeTruthy();
+    expect(screen.queryByText("Active on this PC")).toBeNull();
+  });
+
   it("the active-undo chip shows the count and is absent at 0", () => {
     const { rerender } = render(
       <ConfirmProvider>

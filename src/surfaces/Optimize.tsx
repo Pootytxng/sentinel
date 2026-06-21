@@ -15,10 +15,11 @@ import "./Optimize.css";
 // Three segments (council-renamed from the over-promising originals):
 //   • Fixes   (default) — diagnose + act: <Check> (the scan + ranked limiters) then the featured
 //                         Gaming Mode slot then <Fix view="fixes"> (recs / guided / startup).
-//   • Applied — the Trust Ledger "active on this PC" layer (what Compy is doing now + one-tap undo).
-//   • History — the full audit trail.
-// 1a renders both ledger layers under view="ledger" for BOTH Applied and History (the Active/History
-// visual split is phase 1c); the segment just decides which framing header shows.
+//   • Applied — the Trust Ledger "active on this PC" layer (what Compy is doing now + one-tap undo),
+//               via <Fix view="applied">.
+//   • History — the full audit trail, via <Fix view="history">.
+// Applied and History are DISTINCT views (each segment shows what the other doesn't); the V0 visual
+// treatment of these layers is phase 1b.
 
 // A GpuDriverInfo subset Check wants for driver freshness (object covariance lets GpuInfo pass).
 type GpuDriverInfo = { name: string; driver_age_days: number | null };
@@ -166,7 +167,9 @@ export function Optimize({
             onApplyBatch={onApplyBatchLanding}
             onOpenLibrary={onOpenLibrary}
             vendor={vendor}
-            view="ledger"
+            // Applied = the active layer ("what's on now"); History = the full audit trail. Distinct
+            // views, not a mirror — the third segment shows something the second doesn't.
+            view={segment === "history" ? "history" : "applied"}
           />
         )}
       </div>
