@@ -17,6 +17,10 @@ import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
+// Aliased so the new merged shell never shadows the "Optimize" Tab string literal (which is the
+// INTERNAL name of today's Tune slot; the merged tab reuses that same slot — see the wiring below).
+import { Optimize as OptimizeShell } from "./surfaces/Optimize";
+import { activeChangeCount } from "./surfaces/dashboard-data";
 import { prettyGameName } from "./surfaces/game-name";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
@@ -774,9 +778,17 @@ function App() {
   // so the rail stays short and never needs a horizontal scroll.
   const visibleTabs: Tab[] = useMemo(() => {
     const list: Tab[] = ["Overview"];
-    // Check consolidates Readiness + Priorities into one section.
-    if (readiness || priorities) list.push("Check");
-    if ((recs?.length ?? 0) > 0 || startup.length > 0 || gamingEnabled) list.push("Optimize");
+    // Optimize merge (phase 1a): when merged, Check folds INTO the "Optimize" slot — there is no
+    // standalone Check tab, and the Optimize tab is present whenever EITHER half has content. When
+    // off, the two stay separate exactly as before.
+    const hasCheck = !!(readiness || priorities);
+    const hasTune = (recs?.length ?? 0) > 0 || startup.length > 0 || gamingEnabled;
+    if (optimizeMerged) {
+      if (hasCheck || hasTune) list.push("Optimize");
+    } else {
+      if (hasCheck) list.push("Check"); // Check consolidates Readiness + Priorities into one section.
+      if (hasTune) list.push("Optimize");
+    }
     // Learn is a rail room now (one-rail §1b) and is ALWAYS available — the knowledge library is
     // static/offline. Must be in visibleTabs or the reset effect would bounce it back to Overview.
     list.push("Learn");
@@ -786,7 +798,7 @@ function App() {
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, optimizeMerged]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -814,7 +826,11 @@ function App() {
       id === "home"
         ? "Overview"
         : id === "check"
-          ? "Check"
+          ? // Merged: the rail has no standalone Check room, but map check→Optimize defensively
+            // (e.g. a stale persisted location) so it always lands on the merged tab.
+            optimizeMerged
+            ? "Optimize"
+            : "Check"
           : id === "play"
             ? "Play"
             : id === "fix"
@@ -826,7 +842,9 @@ function App() {
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
-    Check: "check",
+    // Merged: Check has no rail room of its own — it folds into the "fix"-id Optimize room, so it
+    // highlights that one. Off: Check highlights its own room.
+    Check: optimizeMerged ? "fix" : "check",
     Play: "play",
     Optimize: "fix",
     History: "fix",
@@ -1148,7 +1166,9 @@ function App() {
                   wayfinding law holds even when the rail is icons-only (elastic-window §1). */}
               <div className="shell-room-name" aria-hidden="true">{activeRoomName}</div>
               {activeTab === "Overview" && <OverviewTab hw={hw} />}
-              {activeTab === "Check" && (
+              {/* Check renders standalone ONLY when the Optimize merge is off; when merged it folds
+                  into the Optimize shell below (the Check tab is unreachable then anyway). */}
+              {activeTab === "Check" && !optimizeMerged && (
                 <Check
                   isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                   onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
@@ -1158,21 +1178,22 @@ function App() {
                   gpus={hw?.gpus ?? []}
                 />
               )}
-              {activeTab === "Optimize" && (
-                <>
-                  {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
-                      retired — owner 2026-06-19). Only when the gate is on. */}
-                  {gamingEnabled && (
-                    <div className="tune-gaming-feature">
-                      <GamingMode />
-                    </div>
-                  )}
-                  <Fix
+              {activeTab === "Optimize" &&
+                (optimizeMerged ? (
+                  // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
+                  // persistent active-undo chip. Same props the standalone surfaces receive — pure
+                  // composition, no new IPC, same audited apply/rollback handlers.
+                  <OptimizeShell
+                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                    onChanged={refresh}
+                    vendor={detectedVendor}
+                    sessions={sessions}
+                    gpus={hw?.gpus ?? []}
                     recs={recs ?? []}
                     startup={startup}
                     changes={changes}
                     busyId={busyId}
-                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                     activeChangeFor={findActiveChangeForRec}
                     onToggleRec={(recId) => {
                       const r = (recs ?? []).find((x) => x.id === recId);
@@ -1181,11 +1202,37 @@ function App() {
                     onToggleStartup={toggleStartup}
                     onRollback={rollback}
                     onApplyBatch={applyBatch}
-                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                    vendor={detectedVendor}
+                    activeCount={activeChangeCount(changes)}
+                    gamingSlot={gamingEnabled ? <GamingMode /> : null}
                   />
-                </>
-              )}
+                ) : (
+                  <>
+                    {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
+                        retired — owner 2026-06-19). Only when the gate is on. */}
+                    {gamingEnabled && (
+                      <div className="tune-gaming-feature">
+                        <GamingMode />
+                      </div>
+                    )}
+                    <Fix
+                      recs={recs ?? []}
+                      startup={startup}
+                      changes={changes}
+                      busyId={busyId}
+                      isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                      activeChangeFor={findActiveChangeForRec}
+                      onToggleRec={(recId) => {
+                        const r = (recs ?? []).find((x) => x.id === recId);
+                        if (r) toggleRec(r);
+                      }}
+                      onToggleStartup={toggleStartup}
+                      onRollback={rollback}
+                      onApplyBatch={applyBatch}
+                      onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                      vendor={detectedVendor}
+                    />
+                  </>
+                ))}
               {activeTab === "Play" && (
                 <Play
                   active={activeTab === "Play"}
