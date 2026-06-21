@@ -94,13 +94,21 @@ function renderOptimize(overrides = {}) {
 
 describe("Optimize — segmented shell (phase 1a)", () => {
   it("renders the three segment buttons and defaults to Fixes", () => {
-    renderOptimize();
+    const { container } = renderOptimize();
     expect(screen.getByRole("tab", { name: "Fixes" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Applied" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
-    // Fixes is the default — its Check + Fix content is on screen.
-    expect(screen.getByText("Check")).toBeTruthy();
+    // Fixes is the default — its Check + Fix content is on screen. (Check's own "Check" title is
+    // suppressed when embedded to avoid stacked headings, so assert its root renders, not the title.)
+    expect(container.querySelector(".check-root")).toBeTruthy();
     expect(screen.getByText("Worth making for your rig")).toBeTruthy();
+  });
+
+  it("suppresses the redundant Check/Tune tab-titles inside the Fixes segment (no stacked headings)", () => {
+    renderOptimize();
+    // The segment label "Fixes" provides the context; the embedded surfaces drop their own tab-titles.
+    expect(screen.queryByRole("heading", { name: "Check" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Tune" })).toBeNull();
   });
 
   it("clicking 'Applied' shows the ledger and hides the fixes content", () => {

@@ -547,7 +547,10 @@ export default function Fix({
       {showFixes && (
       <header className="fix-header">
         <div>
-          <h2 className="fix-title">Tune</h2>
+          {/* In the merged Optimize "Fixes" segment (view="fixes"), the segment label already names
+              the surface — suppress the standalone "Tune" tab-title to avoid stacked redundant headings
+              (Check's title is suppressed the same way). Standalone Tune (view="all") keeps it. */}
+          {view !== "fixes" && <h2 className="fix-title">Tune</h2>}
           {living ? (
             <p className="fix-subtitle">
               {worthFixing.length === 0

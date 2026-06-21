@@ -102,6 +102,7 @@ export default function Check({
   vendor,
   sessions = [],
   gpus = [],
+  embedded = false,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
@@ -109,6 +110,9 @@ export default function Check({
   vendor: GpuVendor;
   sessions?: SessionSummary[];
   gpus?: GpuDriverInfo[];
+  // When composed inside the merged Optimize "Fixes" segment, the segment label already names the
+  // surface — so suppress the standalone "Check" tab-title to avoid stacked redundant headings.
+  embedded?: boolean;
 }) {
   const { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
@@ -275,7 +279,7 @@ export default function Check({
     <section className="check-root">
       <header className="check-head">
         <div>
-          <h2 className="check-title">Check</h2>
+          {!embedded && <h2 className="check-title">Check</h2>}
           <p className="check-sub">
             {running
               ? "Scanning your rig…"

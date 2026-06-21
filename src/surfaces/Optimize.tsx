@@ -158,6 +158,7 @@ export function Optimize({
               vendor={vendor}
               sessions={sessions}
               gpus={gpus}
+              embedded
             />
             {gamingSlot && <div className="optimize-gaming">{gamingSlot}</div>}
             <Fix
