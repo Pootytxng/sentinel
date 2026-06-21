@@ -227,9 +227,10 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   illegible `btn btn-small` buttons (muted text on accent fill + false danger-red hover, from a
 >   two-`.btn`-rule cascade bug) are fixed at the root (`.btn.btn-small` → dark `--ix-accent-ink`),
 >   app-wide (drift re-apply, startup disable, modal close, gaming stop).
-> - **Installer:** rebuild from `c39ea0e` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
->   `7301003C46F0D1EDFC32FEBC7D3C74515B252E3148715F86D6B646525508D103` (3,166,408 B); installed +
->   running. SUPERSEDES `813BE819…` for owner-clarity (beta-kit/ untouched).
+> - **Installer:** rebuild from `9c5bf3b` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `9779B150B9DE09CD18B24F0EF9931E092CDC80F31C73620DECAC621825DD2645` (3,169,723 B); installed +
+>   running. SUPERSEDES `7301003C…` (carries the startup-load + stale-ref copy fixes + the use-scan
+>   refactor; the 2026-06-20-PM coverage sprint is test-only). beta-kit/ untouched.
 
 > **🛰️🎮 RIG HOLOGRAM + ONBOARDING REBUILD + MOTION OVERRIDE + GAMING-IN-TUNE + OVERNIGHT SWEEP —
 > 2026-06-19→20 (`origin/main` @ `cb7b668`).** Large multi-day run, all reversible, all verified
