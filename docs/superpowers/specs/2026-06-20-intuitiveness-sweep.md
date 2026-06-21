@@ -17,6 +17,27 @@ law [[always-self-review-visual-work]]), batch a rebuild/reinstall every few wav
 
 ---
 
+## Wave 0 — silence the elevated PowerShell flash (owner-flagged 2026-06-20)
+
+**Symptom:** a PowerShell console briefly flashes during an elevated apply/restore (owner hit it on
+the gaming "Restore now": USB-suspend / PCIe-ASPM are the elevated tier).
+**Diagnosis:** all NON-elevated probes already run silent via `quiet_command` (`CREATE_NO_WINDOW`).
+The flash is the ELEVATED path (`actions::run_elevated_powershell` → `runas powershell.exe`): an
+elevated launch is recreated by the UAC broker with its own window settings, so `SW_HIDE` +
+`-WindowStyle Hidden` don't reliably suppress the console (a console-subsystem app). In-process
+self-hide tricks make it WORSE (Add-Type compile keeps the console visible longer). UAC consent
+itself is OS-controlled and must stay visible.
+**The fix (the only clean one):** route elevated work through a **windowless `compy.exe` self-helper**
+— add a `--run-elevated` CLI mode (handled in `main.rs` before any window, like `--fps-capture`); the
+parent launches `compy.exe --run-elevated <…>` via `runas .show(false)`; the helper (release =
+windows-subsystem → no console) runs the command via `quiet_command` (`CREATE_NO_WINDOW`) and writes
+a result file (reuse the §4 batch result-file shape). Release = zero console = zero flash.
+**Why careful:** this is the LOCKED elevation/mutation boundary (rollback-first integrity, UAC
+handling, arg-injection gate `validate_command`). MUST keep: snapshot-before-mutate, per-item
+rollback, UAC-cancel honesty, the deferral/batch sink. Rides its own **§4 elevation QA** (one prompt
+→ no flash → correct apply → per-item rollback → UAC-cancel honest) + `/check` + `/security` before
+ship. Comment at `run_elevated_powershell` corrected to record the real cause + this TODO.
+
 ## Wave 1 — the flag anti-pattern (the card the owner flagged)  ✅ in progress
 
 - [x] **Onboarding First Check "Applied Compy changes" card** (`SetupTour.tsx`) — now names the drifted

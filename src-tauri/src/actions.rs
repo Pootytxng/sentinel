@@ -628,12 +628,16 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
         return Err(ELEVATION_DECLINED_MSG.to_string());
     }
     elevation_outcome(
-        // .show(false) => SW_HIDE: launch the elevated PowerShell HIDDEN so applying a tweak never
-        // flashes a console window in the user's face (interrupting their foreground). In debug builds
-        // compy.exe is console-subsystem, so the default SW_NORMAL pops a visible window for a beat
-        // before `-WindowStyle Hidden` takes hold; SW_HIDE prevents the initial flash. This hides only
-        // the SPAWNED process window — the UAC consent dialog is OS-controlled and UNAFFECTED, so
-        // approval is still required and visible (we never suppress UAC). Mirrors the FPS helper.
+        // .show(false) => SW_HIDE hides the SPAWNED process window. This reliably suppresses the
+        // console for NON-elevated spawns — but for an ELEVATED launch the UAC broker (AppInfo
+        // service) recreates the process with its OWN window settings, so powershell.exe (a console
+        // app) can still briefly FLASH a console despite SW_HIDE + -WindowStyle Hidden. The UAC
+        // consent dialog itself is OS-controlled and UNAFFECTED (approval stays required + visible —
+        // we never suppress UAC).
+        // TODO(no-flash, Wave 0): route elevated work through a windowless compy.exe self-helper
+        // (release = windows-subsystem → no console ever), mirroring the FPS helper, so the elevated
+        // console can't appear. Spec: docs/superpowers/specs/2026-06-20-intuitiveness-sweep.md.
+        // Elevation/mutation boundary change → needs its own §4 elevation QA + /check + /security.
         runas::Command::new("powershell.exe")
             .args(&[
                 "-NoProfile",
