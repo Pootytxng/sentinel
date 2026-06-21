@@ -227,10 +227,10 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   illegible `btn btn-small` buttons (muted text on accent fill + false danger-red hover, from a
 >   two-`.btn`-rule cascade bug) are fixed at the root (`.btn.btn-small` → dark `--ix-accent-ink`),
 >   app-wide (drift re-apply, startup disable, modal close, gaming stop).
-> - **Installer:** rebuild from `9c5bf3b` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
->   `9779B150B9DE09CD18B24F0EF9931E092CDC80F31C73620DECAC621825DD2645` (3,169,723 B); installed +
->   running. SUPERSEDES `7301003C…` (carries the startup-load + stale-ref copy fixes + the use-scan
->   refactor; the 2026-06-20-PM coverage sprint is test-only). beta-kit/ untouched.
+> - **Installer:** rebuild from `b16611d` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `0BFB2BC8BC57AB827B1E080C83270C1B6A32AB3C563CE4E916E346A070A87B65` (3,167,098 B); installed +
+>   running. SUPERSEDES `9779B150…` (adds the tour memory-honesty fix — real total/count + N sticks —
+>   and removes the arbitrary Blackbook recap highlight). beta-kit/ untouched.
 
 > **🛰️🎮 RIG HOLOGRAM + ONBOARDING REBUILD + MOTION OVERRIDE + GAMING-IN-TUNE + OVERNIGHT SWEEP —
 > 2026-06-19→20 (`origin/main` @ `cb7b668`).** Large multi-day run, all reversible, all verified
