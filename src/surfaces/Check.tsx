@@ -110,7 +110,7 @@ export default function Check({
   sessions?: SessionSummary[];
   gpus?: GpuDriverInfo[];
 }) {
-  const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
+  const { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [fineOpen, setFineOpen] = useState(false);
   const confirm = useConfirm();
@@ -144,6 +144,28 @@ export default function Check({
       setApplyingId(null);
     }
   };
+
+  // Turn a specific drifted-off change back on, right here — names the setting + carries its fix,
+  // instead of "1 setting(s) — go to Optimize/Ledger". Re-applies via the snapshotted apply path.
+  const applyReverted = async (rev: { rec_id: string; title: string }) => {
+    const ok = await confirm({
+      title: `Turn "${rev.title}" back on?`,
+      body: "Compy snapshots the prior state so you can roll this back anytime.",
+      confirmLabel: "Turn it on",
+    });
+    if (!ok) return;
+    setApplyingId(rev.rec_id);
+    try {
+      await invoke("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
+      await rerun();
+      onChanged();
+    } catch {
+      /* surfaced on next scan */
+    } finally {
+      setApplyingId(null);
+    }
+  };
+  const gameModeDrifted = reverted.some((r) => r.rec_id === "game-mode");
 
   // Upgrade-path links are copy-only (R3 Lane B): clipboard, per-button feedback, no navigation.
   const [copiedRetail, setCopiedRetail] = useState<string | null>(null);
@@ -327,38 +349,87 @@ export default function Check({
             </p>
           ) : (
             <ul className="check-list">
-              {limiters.map((lim) => (
-                <li key={lim.id} className="check-row">
-                  <div className="check-row-main">
-                    <div className="check-row-head">
-                      <span className="check-row-title">{lim.title}</span>
-                      <span className="check-conf">{cap(lim.confidence)} confidence</span>
+              {limiters.map((lim) => {
+                // The "applied-changes" limiter is the vague-flag anti-pattern: name the actual
+                // drifted setting(s) and carry the inline fix, not "1 setting(s) — go to another tab".
+                if (lim.id === "applied-changes" && reverted.length > 0) {
+                  return (
+                    <li key={lim.id} className="check-row">
+                      <div className="check-row-main">
+                        <div className="check-row-head">
+                          <span className="check-row-title">
+                            {reverted.length === 1
+                              ? `“${reverted[0].title}” turned itself back off`
+                              : `${reverted.length} settings you applied turned back off`}
+                          </span>
+                        </div>
+                        <p className="check-row-reason">
+                          {reverted.length === 1
+                            ? "You turned this on with Compy, but something outside Compy switched it back. Turn it back on right here — or leave it, your call."
+                            : `You turned these on with Compy, but they're off now: ${reverted
+                                .map((r) => r.title)
+                                .join(", ")}. Turn them back on right here.`}
+                        </p>
+                        <div className="check-drift-actions">
+                          {reverted.slice(0, 3).map((rev) => (
+                            <button
+                              key={rev.rec_id}
+                              className="btn btn-small"
+                              disabled={applyingId !== null}
+                              onClick={() => applyReverted(rev)}
+                            >
+                              {applyingId === rev.rec_id
+                                ? "Turning on…"
+                                : reverted.length === 1
+                                  ? "Turn it back on"
+                                  : `Turn “${rev.title}” on`}
+                            </button>
+                          ))}
+                        </div>
+                        {gameModeDrifted && (
+                          <p className="check-drift-note">
+                            Heads-up: Game Mode keeps switching off because your recording software
+                            (AMD Adrenalin) resets it at every restart — turning it on works, but it
+                            won't stick.
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={lim.id} className="check-row">
+                    <div className="check-row-main">
+                      <div className="check-row-head">
+                        <span className="check-row-title">{lim.title}</span>
+                        <span className="check-conf">{cap(lim.confidence)} confidence</span>
+                      </div>
+                      <p className="check-row-reason">{lim.reason}</p>
+                      {/* Advisory checks that need action outside Compy finally show the way
+                          (walkthroughs §3) — the readiness check is no longer a dead "verify it yourself". */}
+                      {!canApply(lim) && walkthroughForKey(lim.linked ?? lim.id) && (
+                        <details className="fix-walkthrough">
+                          <summary>Show me the way</summary>
+                          <Walkthrough
+                            walkthrough={walkthroughForKey(lim.linked ?? lim.id)!}
+                            vendor={vendor}
+                          />
+                        </details>
+                      )}
                     </div>
-                    <p className="check-row-reason">{lim.reason}</p>
-                    {/* Advisory checks that need action outside Compy finally show the way
-                        (walkthroughs §3) — the readiness check is no longer a dead "verify it yourself". */}
-                    {!canApply(lim) && walkthroughForKey(lim.linked ?? lim.id) && (
-                      <details className="fix-walkthrough">
-                        <summary>Show me the way</summary>
-                        <Walkthrough
-                          walkthrough={walkthroughForKey(lim.linked ?? lim.id)!}
-                          vendor={vendor}
-                        />
-                      </details>
+                    {canApply(lim) ? (
+                      <TrustSwitch
+                        applied={false}
+                        busy={applyingId === (lim.linked ?? lim.id)}
+                        onToggle={() => applyLimiter(lim)}
+                        ariaLabel={`Apply ${lim.title}`}
+                      />
+                    ) : (
+                      <span className="check-advisory">advisory</span>
                     )}
-                  </div>
-                  {canApply(lim) ? (
-                    <TrustSwitch
-                      applied={false}
-                      busy={applyingId === (lim.linked ?? lim.id)}
-                      onToggle={() => applyLimiter(lim)}
-                      ariaLabel={`Apply ${lim.title}`}
-                    />
-                  ) : (
-                    <span className="check-advisory">advisory</span>
-                  )}
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
