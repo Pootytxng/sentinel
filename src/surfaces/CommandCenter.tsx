@@ -5,7 +5,7 @@ import { AmbientBackdrop } from "../design/AmbientBackdrop";
 import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { NavGlyph } from "../design/NavGlyph";
-import { HOME_RAIL, type HomeRailId } from "../design/homeRail";
+import { railFor, type HomeRailId } from "../design/homeRail";
 import { useReducedMotion } from "../design/use-motion";
 import {
   type InstrumentTheme,
@@ -328,6 +328,10 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:living-changed", on);
     return () => window.removeEventListener("compy:living-changed", on);
   }, []);
+  // Optimize merge (phase 1a) — read once at render, same flag the app shell reads (default OFF). When
+  // on, the rail collapses Check + Tune → "Optimize" so the Home rail matches the shell rail exactly.
+  const optimizeMerged =
+    typeof localStorage !== "undefined" && localStorage.getItem("compy_optimize") === "1";
   // Committed brand hero (experimental swing, default OFF) — mirrors the flag live for review.
   const [committed, setCommitted] = useState<boolean>(readCommitted);
   useEffect(() => {
@@ -356,8 +360,10 @@ export default function CommandCenter(props: Props) {
   const cpu = hw.cpu_arch?.family_label || hw.cpu_brand || "CPU";
   const os = hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`.trim();
 
-  // Rail items derive from the SHARED HOME_RAIL definition (one-rail §1) — identical to the app-shell
-  // rail by construction. Only the per-id click target + the active flag are CommandCenter-specific.
+  // Rail items derive from the SHARED rail selector (railFor, built from HOME_RAIL — one-rail §1) so
+  // the Home rail is identical to the app-shell rail by construction (including the Optimize merge
+  // collapse). Only the per-id click target + the active flag are CommandCenter-specific. When merged,
+  // the standalone "check" entry is gone, so its onClick simply never renders.
   const NAV_ONCLICK: Record<HomeRailId, () => void> = {
     home: () => {},
     check: () => onNavigate("Check"),
@@ -366,11 +372,13 @@ export default function CommandCenter(props: Props) {
     learn: () => onNavigate("Learn"), // Learn is a rail room now (one-rail §1b)
     lab: () => onNavigate("Lab"),
   };
-  const NAV = HOME_RAIL.filter((it) => !(living && it.id === "lab")).map((it) => ({
-    ...it,
-    onClick: NAV_ONCLICK[it.id],
-    active: it.id === "home",
-  }));
+  const NAV = railFor(optimizeMerged)
+    .filter((it) => !(living && it.id === "lab"))
+    .map((it) => ({
+      ...it,
+      onClick: NAV_ONCLICK[it.id],
+      active: it.id === "home",
+    }));
 
   return (
     <div className="cc-root">
