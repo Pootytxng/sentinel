@@ -182,6 +182,35 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🔇🧹 WAVE 0 (NO-FLASH ELEVATION) + FLAG-CLASS INLINE LAW + RETIREMENT EXECUTED + INTUITIVENESS
+> SWEEP — 2026-06-20 (`origin/main` @ `0ffd3e3`).** All reversible, all verified (cargo **449** ·
+> vitest **464** · clippy/tsc/build clean · /check + /security clean per train). Frozen beta refs
+> (`16069fa`/`beta/private-beta-001`) UNTOUCHED; remote-fetch/updater off.
+> - **🔇 Wave 0 — elevated PowerShell flash KILLED.** `actions::run_elevated_powershell` no longer
+>   elevates `powershell.exe` directly (the UAC broker recreates it with its own window settings, so
+>   `SW_HIDE` can't stop a console flash). It now `runas compy.exe --run-elevated <hex>` → `main.rs`
+>   routes that to `lib::run_elevated_helper`, which decodes the hex command + runs powershell via
+>   `quiet_command` (CREATE_NO_WINDOW). compy.exe is windows-subsystem in release → **no console exists
+>   to flash**; the child powershell inherits the elevated token. `elevation_outcome` (decline 1223 /
+>   non-zero=approved-but-failed / 0=success), the deferral sink + the test seam are UNCHANGED. Plumbing
+>   proven (exit-code propagation + fail-safe, no UAC). **The 60-sec live no-flash eyeball is on the
+>   owner checklist** (the UAC prompt now names compy.exe — consistent with the FPS helper).
+> - **🧭 Flag-class law applied** ([[flags-name-it-and-fix-it-inline]]): the "Applied Compy changes"
+>   drift card (Check + onboarding) now NAMES the drifted setting + an inline "Turn it back on" + the
+>   AMD-reset caveat; **startup-load** names each auto-start app + a "Turn off at startup" inline
+>   (reversible HKCU toggle) — both replace "go to another tab" dead-ends.
+> - **🧹 Classic-surface retirement EXECUTED + merged** (App.tsx −1017 lines): the `compy_*_v2` flags +
+>   the classic Readiness/Priorities/Monitoring/Sessions/Latency/Benchmark renders are gone; the v2
+>   surfaces are the only path. All 6 rooms live-verified.
+> - **🔎 Intuitiveness sweep:** all six rooms walked + audited CLEAN/well-worded (Blackbook's inline
+>   "HOW WE GRADE" key = the explain-in-place gold standard). Doc:
+>   `docs/superpowers/specs/2026-06-20-intuitiveness-sweep.md`. **Owner action checklist:**
+>   `docs/OWNER_ACTION_CHECKLIST.md` (Wave 0 eyeball · Gaming Mode reboot QA · legal/signing) — owner
+>   says "show my checklist".
+> - **Installer:** rebuild from `0ffd3e3` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `813BE819063791C6B65EC7591DBFF56295859F549D3B017FD1F1D795EBCBF1F8` (3,164,998 B); installed +
+>   running. SUPERSEDES `C5B6ED77…` for owner-clarity (beta-kit/ untouched).
+
 > **🛰️🎮 RIG HOLOGRAM + ONBOARDING REBUILD + MOTION OVERRIDE + GAMING-IN-TUNE + OVERNIGHT SWEEP —
 > 2026-06-19→20 (`origin/main` @ `cb7b668`).** Large multi-day run, all reversible, all verified
 > (TS vitest **473** · Rust cargo **448** · clippy/tsc clean · /check + /security clean per train).
