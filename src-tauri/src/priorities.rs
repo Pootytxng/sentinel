@@ -276,7 +276,7 @@ pub(crate) fn build_priorities(
                 PriorityItem {
                     id: "startup-load",
                     title: format!("{enabled} apps launch at startup"),
-                    reason: "A heavy startup load uses RAM and CPU before you even open a game. Review the Startup tab and disable ones you don't need.".into(),
+                    reason: "A heavy startup load uses RAM and CPU before you even open a game. Compy can turn off the ones you don't need — it stops them auto-starting, never uninstalls.".into(),
                     linked: None,
                     confidence: Confidence::Low,
                     status: PriorityStatus::Attention,
