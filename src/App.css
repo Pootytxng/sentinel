@@ -1832,6 +1832,18 @@ body {
 }
 .btn:active:not(:disabled) { transform: translateY(0); filter: brightness(0.97); }
 
+/* "btn btn-small" combines the filled primary (.btn, accent-gradient fill) with the small GHOST
+   (.btn-small, transparent + muted text + danger-red hover). The ghost's muted color and danger
+   hover survive the cascade, so the filled button reads as illegible muted-on-accent and goes
+   falsely-destructive (red) on hover. Pin the legible dark ink on the accent fill, drop the ghost
+   border, and keep the hover non-destructive — fixes every "btn btn-small" (drift re-apply, startup
+   disable, modal close, gaming stop) at the root. */
+.btn.btn-small,
+.btn.btn-small:hover:not(:disabled) {
+  color: var(--ix-accent-ink, #06231c);
+  border-color: transparent;
+}
+
 /* ── Cards & panels → layered material, metallic edge, hover lift ───────── */
 .card, .monitor-panel, .diag-section {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));

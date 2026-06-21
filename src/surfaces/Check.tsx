@@ -296,8 +296,12 @@ export default function Check({
       {/* The ranked result — appears after the rows have streamed. */}
       {phase === "verdict" && (
         <div className="check-result">
-          {/* Drift watch — a check that was good and has since regressed outside Compy. */}
-          {drifts.map((d) => (
+          {/* Drift watch — a check that was good and has since regressed outside Compy. The
+              "applied-changes" drift is EXCLUDED here: it's served (named + inline "turn it back on")
+              by the limiter card below, so this vague banner would just duplicate it. */}
+          {drifts
+            .filter((d) => d.id !== "applied-changes")
+            .map((d) => (
             <div key={d.id} className="check-drift">
               <div className="check-drift-head">
                 <span className="check-drift-label">{d.label}</span>
