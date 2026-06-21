@@ -137,6 +137,21 @@ commit hash(es) · 1–2 line what-changed · one verification line (cargo/npm/c
 message + spec, NOT the chat. Don't re-explain known context or restate the board. **Rigor unchanged**
 — tests/audits/verification never skipped, only reported concisely. Mirrored in `docs/COWORK_HANDOFF.md`.
 
+### SELF-REVIEW + BUG→GUARD — vigilance lives in the toolchain (standing rule, 2026-06-20)
+
+Owner asked to be made "more precise and vigilant" of the laws after I shipped a muted-on-accent button
++ a duplicate banner that green tests + a glance missed. The fix isn't "try harder to remember" — it's
+to move each law OUT of memory INTO the toolchain (the chosen enforcement, 2026-06-20):
+- **Run the `self-review` skill (project skill, `.claude/skills/self-review`) before claiming ANY UI
+  change done** — a forced, evidence-required rubric (capture native/real-res, STATE the computed text
+  color on accent fills, duplication, hover/empty states, stale wording, each part of the ask). A
+  PostToolUse hook (`.claude/hooks/self-review-reminder.mjs`) nudges it when a `src/**.{tsx,css}` file
+  changes. Green tsc/vitest are NOT a visual review.
+- **`bug → guard`:** every defect the owner catches becomes a permanent guard before the fix is done —
+  a vitest/cargo test if mechanizable (e.g. `src/button-legibility-guard.test.ts`,
+  `src/theme-contrast.test.ts`), else a `self-review` rubric item. Tiers: automated guard > forced
+  rubric item > memory. Memories: [[always-self-review-visual-work]] · [[bug-becomes-guard]].
+
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
