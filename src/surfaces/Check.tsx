@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { PriorityItem, SessionSummary } from "../types";
+import type { PriorityItem, SessionSummary, StartupEntry } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
@@ -166,6 +166,39 @@ export default function Check({
     }
   };
   const gameModeDrifted = reverted.some((r) => r.rec_id === "game-mode");
+
+  // startup-load: name the apps + let the user turn them off RIGHT HERE (not "go to the Startup tab").
+  // Fetched lazily only when the limiter is present; the toggle is the same reversible non-elevated
+  // HKCU StartupApproved write the Tune startup list uses (disabling stops auto-start, never uninstalls).
+  const [startup, setStartup] = useState<StartupEntry[]>([]);
+  const [togglingStartup, setTogglingStartup] = useState<string | null>(null);
+  const hasStartupLimiter = (priorities?.limiters ?? []).some((l) => l.id === "startup-load");
+  useEffect(() => {
+    if (!hasStartupLimiter) return;
+    let alive = true;
+    invoke<StartupEntry[]>("get_startup_entries")
+      .then((e) => {
+        if (alive) setStartup(e);
+      })
+      .catch(() => {
+        /* read-only probe; absence just shows nothing */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [hasStartupLimiter]);
+  const disableStartup = async (entry: StartupEntry) => {
+    setTogglingStartup(entry.name);
+    try {
+      await invoke("set_startup_entry_enabled", { name: entry.name, enabled: false });
+      setStartup(await invoke<StartupEntry[]>("get_startup_entries"));
+      onChanged();
+    } catch {
+      /* surfaced on next scan */
+    } finally {
+      setTogglingStartup(null);
+    }
+  };
 
   // Upgrade-path links are copy-only (R3 Lane B): clipboard, per-button feedback, no navigation.
   const [copiedRetail, setCopiedRetail] = useState<string | null>(null);
@@ -392,6 +425,44 @@ export default function Check({
                             (AMD Adrenalin) resets it at every restart — turning it on works, but it
                             won't stick.
                           </p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                }
+                // startup-load: name the auto-start apps + turn them off inline (not "go to a tab").
+                if (lim.id === "startup-load") {
+                  const enabled = startup.filter((s) => s.enabled);
+                  return (
+                    <li key={lim.id} className="check-row">
+                      <div className="check-row-main">
+                        <div className="check-row-head">
+                          <span className="check-row-title">{lim.title}</span>
+                          <span className="check-conf">{cap(lim.confidence)} confidence</span>
+                        </div>
+                        <p className="check-row-reason">
+                          These launch with Windows and use memory + CPU before you open a game. Turn
+                          off any you don't need at startup right here — it won't uninstall them, just
+                          stops the auto-start (reversible anytime in Tune).
+                        </p>
+                        {enabled.length > 0 && (
+                          <ul className="check-startup-list">
+                            {enabled.map((s) => (
+                              <li key={s.name} className="check-startup-row">
+                                <span className="check-startup-name" title={s.command}>
+                                  {s.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-small"
+                                  disabled={togglingStartup !== null}
+                                  onClick={() => disableStartup(s)}
+                                >
+                                  {togglingStartup === s.name ? "Turning off…" : "Turn off at startup"}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                     </li>

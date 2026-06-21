@@ -147,6 +147,35 @@
   line-height: 1.5;
   color: var(--ix-text-3);
 }
+/* startup-load: the named auto-start apps with an inline "turn off at startup" each. */
+.check-startup-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.check-startup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: var(--r, 10px);
+  border: 1px solid var(--ix-glass-border);
+  background: color-mix(in srgb, var(--ix-text-1) 3%, transparent);
+}
+.check-startup-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.check-startup-row .btn {
+  flex: 0 0 auto;
+}
 .check-advisory {
   flex-shrink: 0;
   font-size: 11px;
