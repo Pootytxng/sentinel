@@ -472,7 +472,7 @@ pub(crate) fn evaluate_readiness(
                 format!(
                     "{} setting(s) you turned on with Compy are currently off — changed \
                      outside Compy (by Windows, another app, or you). Not an error: turn them \
-                     back on in Optimize, or roll them back in the Ledger — either one clears this.",
+                     back on or roll them back in Tune — either one clears this.",
                     hist.externally_reverted
                 ),
                 Some(format!(

@@ -276,7 +276,7 @@
     "name": "DPC latency",
     "aliases": ["dpc latency", "dpc", "deferred procedure call", "latencymon"],
     "what": "A measure of how long a driver makes the system wait while it handles a hardware event. When one driver hogs that time, you get audio crackles and stutter that no FPS number explains.",
-    "more": "DPC stands for Deferred Procedure Call — work a driver queues up to do shortly after a hardware interrupt. A single badly-behaved driver (often network, audio, or USB) can spike it and ruin smoothness on an otherwise strong PC. It's a real diagnostic signal, which is exactly what Compy's Latency tab is for — not something to \"fix\" with blind registry edits.",
+    "more": "DPC stands for Deferred Procedure Call — work a driver queues up to do shortly after a hardware interrupt. A single badly-behaved driver (often network, audio, or USB) can spike it and ruin smoothness on an otherwise strong PC. It's a real diagnostic signal, which is exactly what Compy's latency diagnostics (in Advanced) are for — not something to \"fix\" with blind registry edits.",
     "related": ["interrupts", "drivers", "polling-rate"]
   },
   {

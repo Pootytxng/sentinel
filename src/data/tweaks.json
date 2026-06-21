@@ -309,7 +309,7 @@
     "aliases": ["irq priority", "interrupt affinity", "dpc latency tweaks"],
     "verdict": "risky",
     "what": "Registry-deep manual control of which CPU cores service which device interrupts.",
-    "why": "Negligible on modern, healthy systems and easy to break devices with. Only meaningful when diagnosing a specific DPC-latency problem with proper tools — which is what Compy's Latency tab is for."
+    "why": "Negligible on modern, healthy systems and easy to break devices with. Only meaningful when diagnosing a specific DPC-latency problem with proper tools — which is what Compy's latency diagnostics (in Advanced) are for."
   },
   {
     "id": "pbo-curve-optimizer",
