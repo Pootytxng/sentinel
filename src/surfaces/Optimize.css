@@ -1,17 +1,129 @@
-/* Optimize shell (phase 1a) — a PLAIN, minimal segmented control + active-undo chip. No V0, no
-   reskin yet (that's phase 1b): this just proves the merge works. Every color resolves from the
-   instrument token layer so a theme switch recolors it; the active segment + chip use the accent
-   fill, so their text is --ix-accent-ink (dark ink on the bright fill — the contrast law, never
-   muted/white). */
+/* Optimize shell — WINNER: "Volumetric depth / parallax" (Direction C) with the strongest grafts
+   from Direction A (breathing live-dot status + ambient-halo discipline). Phase 1b reskin.
+   ──────────────────────────────────────────────────────────────────────────────────────────────
+   Drop-in replacement for src/surfaces/Optimize.css: SAME classes, SAME selectors, no class
+   renames, no inner Check/Fix restyle (they live untouched in .optimize-body). DOM DELTA: NONE —
+   every effect rides ::before/::after on existing classes, so Optimize.tsx is unchanged.
 
+   WHY C WON (Chairman): it is the boldest hololens reinvention that still scores a clean 10 on
+   motion-correctness, 10 on theme-correctness, 10 on guard-safety, with zero council red flags. Its
+   active-segment FORWARD LIFT is an honest, glanceable "this is selected and alive" signal that maps
+   to real selection state (no faked motion, unlike A's "glide" overclaim; no broken mechanism, unlike
+   B's rotate-mask edge-trace; no over-promising armed glow on the read-only History view).
+
+   GRAFTS from the runners-up:
+   • From A — a breathing LIVE-DOT on the chip (A's clearest "Compy is doing something" identity cue),
+     added on the chip ::after so C's existing ::before refraction trace is kept. A's ambient-halo
+     restraint also informed the toned-down near-parallax layer below.
+   • From A — the explicit accent-invariant pin comment (so a future theme tune can't silently break
+     the active fill's ink contrast).
+   Direction B contributed nothing graftable: its signature edge-trace is a real rendering bug
+   (transform:rotate tilts the masked box, not the perimeter) and its screen-blend orb is a legibility
+   risk over the dark-ink label — both rejected.
+
+   COMPY LAWS honored (re-verified by the integrator):
+   • TOKENS ONLY — every color/border/shadow resolves from the --ix-* layer via color-mix; ZERO
+     literal hex/rgb/rgba. Recolors cleanly under Midnight/Violet/Crimson/Emerald/Hearth.
+     INVARIANT (pinned): the active fill is a FLAT var(--ix-accent) (not a gradient), so the
+     contrast guard's proof of --ix-accent-ink on --ix-accent fully covers it in every theme. If a
+     future tweak makes this fill a gradient, add a contrast case for the gradient's darkest stop.
+   • CONTRAST — the active segment label + the chip count keep color:var(--ix-accent-ink) on a
+     background:var(--ix-accent) fill (dark ink on bright accent, never muted/white). The chip's own
+     label uses var(--ix-accent-text) — the guarded "teal label on neutral surfaces" token that
+     clears AA on the charcoal glass per theme-contrast.test.ts.
+   • MOTION — ON by default and OVERRIDES the OS; every animation is calmed ONLY inside
+     :root[data-motion="reduced"]. No @media (prefers-reduced-motion) anywhere.
+   • SWEEP — no @keyframes named shimmer/sheen (reserved for the win card). Names are
+     drift/trace/breathe/halo/float/pulse/dot.
+   • BORDER HYGIENE — no side-stripe border-(left|right)-color, no border-(left|right)-width ≥2px;
+     every fallback-less var(--ix-*) is a token defined in instrument.css. */
+
+/* ── root: stage + parallax backdrop ───────────────────────────────────────────
+   isolation:isolate traps the negative-z backdrop locally; overflow:clip is the integrator fix for
+   C's must-fix #1 — the backdrop's negative horizontal insets can no longer bleed past the surface
+   at narrow widths (clip, unlike hidden, won't create a scroll container). */
 .optimize-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  isolation: isolate;
+  overflow: clip;
 }
 
-/* The bar holds the segmented control on the left and the persistent chip on the right. */
+/* Deep parallax layer — slow, large drifting accent blobs behind the bar (volumetric depth). */
+.optimize-root::before {
+  content: "";
+  position: absolute;
+  inset: -46px -64px auto -64px;
+  height: 232px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 30px;
+  background:
+    radial-gradient(
+      ellipse 330px 158px at 16% 60%,
+      color-mix(in srgb, var(--ix-accent) 32%, transparent) 0%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 240px 112px at 84% 36%,
+      color-mix(in srgb, var(--ix-accent-2) 25%, transparent) 0%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 180px 80px at 55% 88%,
+      color-mix(in srgb, var(--ix-streak-3) 18%, transparent) 0%,
+      transparent 66%
+    );
+  filter: blur(3px);
+  animation: opt-drift-deep 17s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Near parallax layer — sharper refraction streaks crossing the deep layer. Toned to ~70% of C's
+   original streak opacity (A's ambient-restraint graft) so the depth reads premium, not busy, over
+   the full Check+Fix body beneath. */
+.optimize-root::after {
+  content: "";
+  position: absolute;
+  inset: -46px -64px auto -64px;
+  height: 232px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 30px;
+  background:
+    linear-gradient(
+      105deg,
+      transparent 32%,
+      color-mix(in srgb, var(--ix-accent) 12%, transparent) 50%,
+      transparent 68%
+    ),
+    linear-gradient(
+      255deg,
+      transparent 42%,
+      color-mix(in srgb, var(--ix-accent-2) 10%, transparent) 58%,
+      transparent 76%
+    );
+  animation: opt-drift-near 10s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes opt-drift-deep {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  33%  { transform: translate3d(14px, -8px, 0) scale(1.035); }
+  66%  { transform: translate3d(-11px, 6px, 0) scale(0.975); }
+  100% { transform: translate3d(8px, -12px, 0) scale(1.02); }
+}
+@keyframes opt-drift-near {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-18px, 11px, 0); }
+}
+
+/* The bar holds the glass rail on the left and the floating chip on the right. */
 .optimize-bar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -19,37 +131,123 @@
   gap: 12px;
 }
 
+/* ── the glass rail ─────────────────────────────────────────────────────────── */
 .optimize-segments {
+  position: relative;
   display: inline-flex;
   gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--ix-line);
-  border-radius: 12px;
-  background: var(--ix-surface-2);
+  padding: 5px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 16px;
+  /* translucent charcoal glass with light refraction — depth via layered insets */
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ix-glass-fill) 88%, transparent) 0%,
+      var(--ix-glass-fill) 100%
+    );
+  box-shadow:
+    0 6px 24px color-mix(in srgb, var(--ix-base) 60%, transparent),
+    0 2px 8px color-mix(in srgb, var(--ix-base) 42%, transparent),
+    0 0 28px color-mix(in srgb, var(--ix-accent) 16%, transparent),
+    inset 0 1px 0 var(--ix-glass-top),
+    inset 0 -1px 0 color-mix(in srgb, var(--ix-base) 30%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
 }
 
+/* Thin top-edge refraction trace across the rail (depth highlight, breathing). */
+.optimize-segments::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--ix-accent) 40%, transparent) 30%,
+    color-mix(in srgb, var(--ix-text-1) 35%, transparent) 50%,
+    color-mix(in srgb, var(--ix-accent) 40%, transparent) 70%,
+    transparent 100%
+  );
+  animation: opt-trace-breathe 6s ease-in-out infinite alternate;
+}
+@keyframes opt-trace-breathe {
+  0%   { opacity: 0.5; transform: scaleX(0.86); }
+  100% { opacity: 1;   transform: scaleX(1); }
+}
+
+/* ── segments ───────────────────────────────────────────────────────────────── */
 .optimize-segment {
   appearance: none;
-  border: 0;
+  position: relative;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--ix-text-2);
   font: inherit;
   font-weight: 600;
   font-size: 13px;
-  padding: 7px 16px;
-  border-radius: 9px;
+  letter-spacing: 0.025em;
+  padding: 8px 18px;
+  border-radius: 11px;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  white-space: nowrap;
+  transform: translateY(0);
+  transform-style: preserve-3d;
+  transition:
+    color 320ms cubic-bezier(0.34, 1.3, 0.64, 1),
+    background 320ms cubic-bezier(0.34, 1.3, 0.64, 1),
+    border-color 320ms cubic-bezier(0.34, 1.3, 0.64, 1),
+    box-shadow 320ms cubic-bezier(0.34, 1.3, 0.64, 1),
+    transform 320ms cubic-bezier(0.34, 1.3, 0.64, 1);
+  will-change: transform;
 }
 
+/* idle hover — a faint glass lift, never as bright as the active segment */
 .optimize-segment:hover {
   color: var(--ix-text-1);
+  background: color-mix(in srgb, var(--ix-text-1) 6%, transparent);
+  border-color: color-mix(in srgb, var(--ix-text-1) 10%, transparent);
 }
 
+/* active segment — LIFTS FORWARD: elevation + bright accent glass + halo + ink-on-accent text.
+   CONTRAST LAW: dark ink ON the bright accent fill — never muted/white. INVARIANT: this fill is a
+   FLAT var(--ix-accent), so the contrast guard's accent-ink/accent proof covers it exactly. */
 .optimize-segment-on,
 .optimize-segment-on:hover {
   background: var(--ix-accent);
-  color: var(--ix-accent-ink); /* dark ink ON the bright accent fill — contrast law */
+  color: var(--ix-accent-ink);
+  border-color: color-mix(in srgb, var(--ix-accent) 70%, transparent);
+  transform: translateY(-5px) scale(1.045);
+  box-shadow:
+    0 16px 40px color-mix(in srgb, var(--ix-base) 80%, transparent),
+    0 5px 16px color-mix(in srgb, var(--ix-base) 54%, transparent),
+    0 0 38px color-mix(in srgb, var(--ix-accent) 58%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--ix-text-1) 24%, transparent);
+}
+
+/* breathing halo ring behind the lifted segment (depth glow, motion-gated) */
+.optimize-segment-on::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 18px;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    color-mix(in srgb, var(--ix-accent) 38%, transparent) 0%,
+    transparent 74%
+  );
+  animation: opt-halo-breathe 3s ease-in-out infinite;
+}
+@keyframes opt-halo-breathe {
+  0%, 100% { opacity: 0.8;  transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.14); }
 }
 
 .optimize-segment:focus-visible {
@@ -57,27 +255,105 @@
   outline-offset: 2px;
 }
 
-/* Persistent "N active · undo" chip — quiet by default, accent number, jumps to the Applied layer. */
+/* ── floating "N active · undo" chip ────────────────────────────────────────── */
 .optimize-chip {
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid var(--ix-line);
-  background: var(--ix-surface-2);
-  color: var(--ix-text-2);
+  gap: 7px;
+  /* graft from A: extra left padding leaves room for the breathing live-dot drawn on ::after. */
+  padding: 7px 14px 7px 24px;
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 32%, var(--ix-glass-border));
+  background: color-mix(in srgb, var(--ix-accent) 12%, var(--ix-glass-fill));
+  color: var(--ix-accent-text);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  padding: 6px 12px;
+  letter-spacing: 0.02em;
   border-radius: 999px;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--ix-base) 50%, transparent),
+    0 1px 4px color-mix(in srgb, var(--ix-base) 38%, transparent);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.3, 0.64, 1),
+    box-shadow 320ms cubic-bezier(0.34, 1.3, 0.64, 1),
+    background 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+  animation: opt-chip-float 4.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* chip refraction trace (top-edge depth highlight) — C's ::before kept. */
+.optimize-chip::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 22%;
+  height: 1px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--ix-accent) 55%, transparent) 40%,
+    color-mix(in srgb, var(--ix-text-1) 45%, transparent) 50%,
+    color-mix(in srgb, var(--ix-accent) 55%, transparent) 60%,
+    transparent
+  );
+  opacity: 0.85;
+}
+
+/* GRAFT from A: a breathing "live" status dot at the chip's left edge — the clearest "Compy is doing
+   something live" cue. Drawn on ::after so C's refraction trace (::before) is preserved. Derived
+   purely from the accent token. */
+.optimize-chip::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: var(--ix-accent);
+  box-shadow:
+    0 0 6px var(--ix-accent),
+    0 0 12px color-mix(in srgb, var(--ix-accent) 60%, transparent);
+  animation: opt-live-dot 1.9s ease-in-out infinite;
+}
+@keyframes opt-live-dot {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+@keyframes opt-chip-float {
+  0%, 100% { transform: translateY(-1px); }
+  50%      { transform: translateY(-4px); }
 }
 
 .optimize-chip:hover {
   color: var(--ix-text-1);
-  border-color: var(--ix-accent);
+  background: color-mix(in srgb, var(--ix-accent) 20%, var(--ix-glass-fill));
+  border-color: color-mix(in srgb, var(--ix-accent) 60%, transparent);
+  transform: translateY(-4px) scale(1.03);
+  box-shadow:
+    0 8px 28px color-mix(in srgb, var(--ix-base) 60%, transparent),
+    0 2px 8px color-mix(in srgb, var(--ix-base) 40%, transparent),
+    0 0 18px color-mix(in srgb, var(--ix-accent) 34%, transparent);
+  animation-play-state: paused;
+}
+
+.optimize-chip:active {
+  transform: translateY(-2px) scale(0.99);
 }
 
 .optimize-chip:focus-visible {
@@ -85,6 +361,7 @@
   outline-offset: 2px;
 }
 
+/* the count pill — bright accent fill, dark ink (contrast law), softly pulsing glow */
 .optimize-chip-count {
   display: inline-flex;
   align-items: center;
@@ -94,10 +371,54 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--ix-accent);
-  color: var(--ix-accent-ink); /* dark ink ON the accent pill — contrast law */
+  color: var(--ix-accent-ink); /* dark ink ON the bright accent pill — contrast law */
   font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--ix-accent) 60%, transparent);
+  animation: opt-count-pulse 2.2s ease-in-out infinite;
+}
+@keyframes opt-count-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ix-accent) 55%, transparent); }
+  60%  { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ix-accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ix-accent) 0%, transparent); }
 }
 
+/* App renders <GamingMode/> here only when the gate is on. */
 .optimize-gaming {
   margin: 4px 0;
+}
+
+/* The inner Check/Fix surfaces live here; NOT restyled. Layout only. */
+.optimize-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── motion law: calm/stop ambient motion ONLY when motion is reduced ─────────
+   Motion is ON by default and OVERRIDES the OS; this block is the single opt-out (never an OS
+   reduce-motion media query). The active segment keeps its forward LIFT + halo (the depth/selection
+   signal stays legible), but its breathing settles to a steady state and every ambient
+   drift/trace/float/pulse/dot halts so it reads as alive-but-quiet, not frozen mid-frame. */
+:root[data-motion="reduced"] .optimize-root::before,
+:root[data-motion="reduced"] .optimize-root::after,
+:root[data-motion="reduced"] .optimize-segments::before,
+:root[data-motion="reduced"] .optimize-segment-on::before,
+:root[data-motion="reduced"] .optimize-chip,
+:root[data-motion="reduced"] .optimize-chip::before,
+:root[data-motion="reduced"] .optimize-chip::after,
+:root[data-motion="reduced"] .optimize-chip-count {
+  animation: none !important;
+}
+:root[data-motion="reduced"] .optimize-chip {
+  transform: translateY(-1px);
+}
+:root[data-motion="reduced"] .optimize-chip::after {
+  opacity: 1; /* hold the live-dot lit, just not pulsing */
+}
+:root[data-motion="reduced"] .optimize-segment-on::before {
+  opacity: 0.9; /* hold a calm halo instead of a frozen breath frame */
+  transform: none;
+}
+:root[data-motion="reduced"] .optimize-segment-on {
+  transform: translateY(-3px) scale(1.03);
 }
