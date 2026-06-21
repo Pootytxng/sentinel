@@ -30,7 +30,18 @@ const SHOWCASE_SCALE: Record<RigPartKind, number> = {
 
 // One isolated component: normalized scale, gentle turntable, a soft scale-in on mount (keyed per
 // component so each step re-plays the entrance).
-function Showcase({ part, color, reduced }: { part: RigPart; color: string; reduced: boolean }) {
+function Showcase({
+  part,
+  color,
+  reduced,
+  count = 1,
+}: {
+  part: RigPart;
+  color: string;
+  reduced: boolean;
+  /** How many identical modules to render side-by-side (memory: the REAL stick count). */
+  count?: number;
+}) {
   const ref = useRef<Group>(null);
   const prog = useRef(0);
   const base = SHOWCASE_SCALE[part.kind] ?? 1;
@@ -55,9 +66,15 @@ function Showcase({ part, color, reduced }: { part: RigPart; color: string; redu
     g.position.y = Math.sin(t * 0.9) * 0.05;
     g.scale.setScalar(entrance * (1 + Math.sin(t * 1.1) * 0.018));
   });
+  // Render `count` modules side-by-side (memory shows the rig's REAL stick count). The 0.42 gap clears
+  // the 0.12-wide ram box; count===1 is a single centred part — unchanged for every other component.
   return (
     <group ref={ref} scale={base}>
-      <RigPartGeometry kind={part.kind} color={color} active detected={part.detected} />
+      {Array.from({ length: Math.max(1, count) }, (_, idx) => (
+        <group key={idx} position={[(idx - (count - 1) / 2) * 0.42, 0, 0]}>
+          <RigPartGeometry kind={part.kind} color={color} active detected={part.detected} />
+        </group>
+      ))}
     </group>
   );
 }
@@ -157,7 +174,13 @@ export function HardwareTourScene({
       <pointLight position={[0, -2, 4]} intensity={12} color={colors.accent} />
 
       {focus ? (
-        <Showcase key={focus.id} part={focus} color={focusColor} reduced={reduced} />
+        <Showcase
+          key={focus.id}
+          part={focus}
+          color={focusColor}
+          reduced={reduced}
+          count={focus.kind === "ram" ? parts.filter((p) => p.kind === "ram").length : 1}
+        />
       ) : (
         <AssembledRig parts={parts} colors={colors} reduced={reduced} />
       )}

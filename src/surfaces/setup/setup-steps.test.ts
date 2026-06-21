@@ -60,6 +60,17 @@ describe("buildSetupSteps", () => {
   it("gives every step a unique id", () => {
     expect(new Set(steps.map((s) => s.id)).size).toBe(steps.length);
   });
+
+  it("titles the memory lesson by REAL total + module count, never a misleading 'Slot 1'", () => {
+    const ram = (id: string, gb: number): RigPart => ({
+      ...part(id, "ram", `Memory · ${id}`),
+      capacityBytes: gb * 1024 ** 3,
+    });
+    const two = buildHardwareSteps([part("cpu", "cpu", "CPU"), ram("ram-0", 16), ram("ram-1", 16)]);
+    expect(two.find((s) => s.lesson?.kind === "ram")?.title).toBe("Memory · 32.0 GB · 2 modules");
+    const one = buildHardwareSteps([ram("ram-0", 16)]);
+    expect(one.find((s) => s.lesson?.kind === "ram")?.title).toBe("Memory · 16.0 GB");
+  });
 });
 
 describe("hardware ↔ tab ties", () => {

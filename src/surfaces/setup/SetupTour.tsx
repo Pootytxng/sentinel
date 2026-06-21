@@ -446,7 +446,8 @@ function StepTabMap({ step }: { step: SetupStep }) {
       <p className="st-body-text">{step.body}</p>
       <div className="st-tabgrid">
         {tabs.map((t) => (
-          <div key={t.id} className={`st-tabcard ${t.id === "learn" ? "st-tabcard-hi" : ""}`}>
+          // No single room is highlighted — this recap is a neutral "here's where everything lives".
+          <div key={t.id} className="st-tabcard">
             <span className="st-tabcard-ico">
               <NavGlyph name={t.icon} />
             </span>

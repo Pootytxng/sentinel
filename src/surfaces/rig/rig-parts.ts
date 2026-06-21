@@ -24,6 +24,8 @@ export interface RigPart {
   rotation?: Vec3;
   tagline: string;
   specs: RigSpec[];
+  /** Numeric capacity in bytes (memory modules only) — lets the tour sum the real total/count. */
+  capacityBytes?: number;
 }
 
 // Lay N items out along a line from `start`, stepping by `step`, so a dynamic count (1–4 RAM sticks,
@@ -106,6 +108,7 @@ export function buildRigParts(hw: HardwareInfo): RigPart[] {
         assembled: row([0.78, 1.05, -0.58], [0.26, 0, 0], i),
         exploded: row([2.4, 2.2, 0.3], [0.34, 0.18, 0], i),
         rotation: [0, -0.5, 0.05],
+        capacityBytes: m.capacity_bytes,
         tagline: `${fmtGB(m.capacity_bytes)}${type_ ? ` ${type_}` : ""}`,
         specs: [
           { label: "Capacity", value: fmtGB(m.capacity_bytes) },

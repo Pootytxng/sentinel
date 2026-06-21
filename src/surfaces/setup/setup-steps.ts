@@ -1,5 +1,6 @@
 import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
 import type { RigPart, RigPartKind } from "../rig/rig-parts";
+import { fmtGB } from "../hardware-format";
 
 // Step model for the combined "Compy Setup & Tour". Leg 1 (setup) reuses the existing
 // first-experience content. Leg 2 (tour) is a HARDWARE fly-through — each real component teaches what
@@ -165,12 +166,22 @@ export function buildHardwareSteps(parts: RigPart[]): SetupStep[] {
   return HARDWARE_LESSONS.flatMap((lesson) => {
     const part = parts.find((p) => p.kind === lesson.kind);
     if (!part) return [];
+    // Memory: title by the REAL config (total capacity + module count), never the first slot — a lone
+    // "Memory · Slot 1" misleads (implies only one module is read). Every other kind uses the part name.
+    let title = part.name;
+    if (lesson.kind === "ram") {
+      const rams = parts.filter((p) => p.kind === "ram");
+      const total = rams.reduce((sum, p) => sum + (p.capacityBytes ?? 0), 0);
+      const n = rams.length;
+      const count = n > 1 ? ` · ${n} modules` : "";
+      title = total > 0 ? `Memory · ${fmtGB(total)}${count}` : n > 1 ? `Memory${count}` : "Memory";
+    }
     return [
       {
         id: `tour-${lesson.kind}`,
         leg: "tour" as const,
         kind: "lesson" as const,
-        title: part.name, // the user's REAL component name
+        title,
         body: lesson.role,
         focusId: part.id,
         lesson,
