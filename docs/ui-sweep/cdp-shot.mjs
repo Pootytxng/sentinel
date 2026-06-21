@@ -43,15 +43,16 @@ if (!pages.length) {
   process.exit(2);
 }
 
-// Pick the MAIN window by button count (rail + content buttons); the hidden overlay window shares
-// the same entry HTML/size, so area ties were nondeterministic between nav and shot.
+// Pick the MAIN window: rail-count dominates (shell has 6 .cc-rail-item, the hidden overlay 0),
+// button-count breaks ties (the tour hides the rail). The two windows share the same entry HTML, so
+// plain area/button counts were ambiguous and nav vs shot could land on different targets.
 let best = null;
 for (const p of pages) {
   const c = connect(p.webSocketDebuggerUrl);
   await c.ready;
   await c.send("Runtime.enable");
   const { result } = await c.send("Runtime.evaluate", {
-    expression: "document.querySelectorAll('button').length",
+    expression: "document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length",
     returnByValue: true,
   });
   const area = result.value || 0;

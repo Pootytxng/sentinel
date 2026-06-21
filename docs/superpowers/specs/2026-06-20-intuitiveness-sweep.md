@@ -72,13 +72,27 @@ Walk each surface live; log issues under: **NAV** (hunting / teleporting / uncle
 **WORD** (jargon, vague, hard to interpret) · **ACCESS** (info buried / hard to reach) · **ACT** (the
 control isn't where the need is / non-obvious affordance).
 
-- [ ] **Home (CommandCenter / DashboardV2)** — first impression; is every tile's purpose + next action obvious?
-- [ ] **Check** — limiters/advisories phrasing; is each row's "so what + now what" instant?
-- [ ] **Monitor (Play)** — live stats legibility; session debrief discoverability.
-- [ ] **Tune (Fix)** — rec rows wording; Gaming Mode section clarity; the apply/undo affordances.
-- [ ] **Blackbook (Learn)** — searchability; verdict glossary discoverability.
-- [ ] **Advanced (Lab)** — Benchmark/Latency/Tuning/Diagnostics naming + when-to-use clarity.
-- [ ] **Global** — titlebar/Settings reach, Back/Forward, Export, Action Drawer, theme/motion controls.
+- [x] **Home (CommandCenter / DashboardV2)** — walked (native 1600×980): clean, well-fitted; metric cards + 3D rig read clearly.
+- [x] **Check** — walked: clear; the drift-flag fix (Wave 1) removed its one dead-end; advisories well-worded.
+- [x] **Monitor (Play)** — walked: clear subtitle, honest "anti-cheat safe" line, named external tools for CPU temp.
+- [x] **Tune (Fix)** — walked: gaming section + recs + the game-mode honesty note all clear.
+- [x] **Blackbook (Learn)** — walked: exemplary — the "HOW WE GRADE" inline key defines Real/Placebo/Risky in place; search + filter chips + START HERE quick-guides + counted sections. The pattern to emulate.
+- [x] **Advanced (Lab)** — confirmed during the retirement verify: Benchmark/Latency/Tuning/Diagnostics/Black Box cards render with clear when-to-use.
+- [x] **Global** — titlebar Settings gear (every tab), Back/Forward, Export header action all present + reachable.
+
+**Walk verdict (2026-06-20):** the surfaces are genuinely clean, intuitive, and well-worded — the real
+friction was the two warts now handled (the vague drift flag → Wave 1; the elevated PowerShell flash →
+Wave 0). The ONE concrete flag-class remainder is `startup-load` (below). Harness note: this dev setup
+runs two same-origin webviews (main + hidden overlay), so the CDP nav/shot drivers can still land on
+the wrong target intermittently even with the rail-count picker — captures need a sanity check.
+
+### Remaining concrete item — `startup-load` flag (substantial, queued)
+`priorities.rs:279` reason = "Review the Startup tab and disable ones you don't need" — **stale** (no
+"Startup tab" post-retirement; startup management lives in Tune) AND a go-elsewhere dead-end. Mechanism
+to fix it inline EXISTS: `get_startup_entries` + `set_startup_entry_enabled` (non-elevated HKCU
+StartupApproved\Run toggle, reversible). Proper fix: the limiter names the heaviest startup apps + an
+inline disable toggle each (or expands the Tune startup list in place). Needs visual self-review →
+do it with a reliable harness / fresh focus, not at marathon-tail depth.
 
 ## Status
 

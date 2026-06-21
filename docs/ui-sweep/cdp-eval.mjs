@@ -37,9 +37,10 @@ for (const p of pages) {
   const c = connect(p.webSocketDebuggerUrl);
   await c.ready;
   await c.send("Runtime.enable");
-  // Pick the MAIN window deterministically by button count (rail + content buttons); the hidden
-  // overlay window shares the same entry HTML/size, so area ties were nondeterministic.
-  const { result } = await c.send("Runtime.evaluate", { expression: "document.querySelectorAll('button').length", returnByValue: true });
+  // Pick the MAIN window deterministically: rail-count dominates (the shell has 6 .cc-rail-item; the
+  // hidden overlay has 0), button-count breaks ties (covers the tour, where the rail is hidden). The
+  // two windows share the same entry HTML, so plain area/button counts were ambiguous.
+  const { result } = await c.send("Runtime.evaluate", { expression: "document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length", returnByValue: true });
   const area = result.value || 0;
   if (!best || area > best.area) { if (best) best.ws.close(); best = { ...c, area }; }
   else c.ws.close();
