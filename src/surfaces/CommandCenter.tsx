@@ -328,10 +328,11 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:living-changed", on);
     return () => window.removeEventListener("compy:living-changed", on);
   }, []);
-  // Optimize merge (phase 1a) — read once at render, same flag the app shell reads (default OFF). When
-  // on, the rail collapses Check + Tune → "Optimize" so the Home rail matches the shell rail exactly.
+  // Optimize merge — read once at render, same flag the app shell reads (default ON since 2026-06-21).
+  // When on, the rail collapses Check + Tune → "Optimize" so the Home rail matches the shell rail
+  // exactly. Escape hatch: compy_optimize="0" restores the classic separate Check + Tune.
   const optimizeMerged =
-    typeof localStorage !== "undefined" && localStorage.getItem("compy_optimize") === "1";
+    typeof localStorage === "undefined" || localStorage.getItem("compy_optimize") !== "0";
   // Committed brand hero (experimental swing, default OFF) — mirrors the flag live for review.
   const [committed, setCommitted] = useState<boolean>(readCommitted);
   useEffect(() => {

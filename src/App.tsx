@@ -490,10 +490,12 @@ function App() {
     return () => window.removeEventListener("compy:living-changed", on);
   }, []);
   // Optimize merge (phase 1a, spec 2026-06-21-optimize-merge-design): when on, Check + Tune collapse
-  // into one "Optimize" room (Fixes / Applied / History segments). Default OFF — read once at startup
-  // (mirrors the other compy_* dev-flag readers); old Check + Tune stay fully intact + reachable until
-  // the flag flips. Reversible: the flag governs only which navigation/render path the shell takes.
-  const optimizeMerged = localStorage.getItem("compy_optimize") === "1";
+  // into one "Optimize" room (Fixes / Applied / History segments). Read once at startup (mirrors the
+  // other compy_* dev-flag readers). Reversible: the flag governs only which navigation/render path
+  // the shell takes — the classic separate Check + Tune are one localStorage flag away.
+  // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
+  // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
+  const optimizeMerged = localStorage.getItem("compy_optimize") !== "0";
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.

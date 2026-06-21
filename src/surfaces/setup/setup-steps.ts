@@ -72,7 +72,7 @@ const SETUP_STEPS: readonly SetupStep[] = [
     leg: "setup",
     kind: "seatbelt",
     title: "One click to apply. One click to take it back.",
-    body: "Every change Compy makes is logged in the Tune tab's ledger and undoes in one click.",
+    body: "Every change Compy makes is logged in the Optimize tab's ledger and undoes in one click.",
   },
   {
     id: "setup-rules",
@@ -117,7 +117,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
       "Reserved storage & free-space cleanup — keep the system drive breathing room",
       "On an HDD, Compy flags an SSD upgrade as the single biggest win (advisory)",
     ],
-    tab: { id: "fix", tie: "Apply or undo these in the Tune tab — all in the ledger." },
+    tab: { id: "fix", tie: "Apply or undo these in the Optimize tab — all in the ledger." },
   },
   {
     kind: "gpu",

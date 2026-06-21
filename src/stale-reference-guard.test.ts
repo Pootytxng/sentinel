@@ -3,9 +3,11 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 // bug -> guard (2026-06-20). After the classic-surface retirement, user-facing copy kept naming
-// standalone tabs that no longer exist ("Startup tab", "Latency tab", "Optimize" — owner/audit-caught).
-// Current rooms: Home / Check / Monitor / Tune / Blackbook / Advanced. This guard forbids the Blackbook
-// data copy from naming a RETIRED standalone tab, so the class can't recur.
+// standalone tabs that no longer exist ("Startup tab", "Latency tab" — owner/audit-caught).
+// Current rooms (after the Check+Tune→Optimize merge, 2026-06-21): Home / Optimize / Monitor /
+// Blackbook / Advanced. This guard forbids the Blackbook data copy from naming a RETIRED standalone
+// tab, so the class can't recur. ("Check" + "Tune" are now retired — they merged into "Optimize";
+// "Optimize" is a CURRENT room again, so it left this list.)
 //
 // Matches only "<Retired> tab" — NOT "<Retired> section" (Benchmark/Latency/Diagnostics still exist as
 // CARDS inside Advanced), NOT "Optimize Drives" (a real Windows tool), and NOT current rooms.
@@ -21,7 +23,7 @@ const DATA_FILES = [
 ];
 
 const RETIRED_TAB =
-  /\b(Optimize|Readiness|Priorities|Sessions|Monitoring|Benchmark|Latency|Diagnostics|Garage|Overview|Startup) tab\b/g;
+  /\b(Check|Tune|Readiness|Priorities|Sessions|Monitoring|Benchmark|Latency|Diagnostics|Garage|Overview|Startup) tab\b/g;
 
 describe("no stale references to retired tabs (Blackbook data copy)", () => {
   for (const file of DATA_FILES) {

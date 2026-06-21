@@ -451,7 +451,7 @@ export default function Check({
                         <p className="check-row-reason">
                           These launch with Windows and use memory + CPU before you open a game. Turn
                           off any you don't need at startup right here — it won't uninstall them, just
-                          stops the auto-start (reversible anytime in Tune).
+                          stops the auto-start (reversible anytime in Optimize).
                         </p>
                         {enabled.length > 0 && (
                           <ul className="check-startup-list">
