@@ -5,7 +5,9 @@
 
 export type HomeRailId = "home" | "check" | "play" | "fix" | "learn" | "lab";
 
-export const HOME_RAIL: { id: HomeRailId; label: string; icon: string }[] = [
+export type HomeRailItem = { id: HomeRailId; label: string; icon: string };
+
+export const HOME_RAIL: HomeRailItem[] = [
   { id: "home", label: "Home", icon: "gauge" },
   { id: "check", label: "Check", icon: "check" },
   // Label "Monitor" + a pulse glyph (owner rename 2026-06-15): the room is live monitoring + session
@@ -21,3 +23,25 @@ export const HOME_RAIL: { id: HomeRailId; label: string; icon: string }[] = [
   { id: "learn", label: "Blackbook", icon: "learn" },
   { id: "lab", label: "Lab", icon: "lab" },
 ];
+
+// railFor — THE single source for the rendered rail, shared by the app-shell rail AND the
+// CommandCenter rail (parity by construction). When the Optimize merge (phase 1a) is off, this is
+// HOME_RAIL verbatim (the blessed six-home set). When on, Check + Tune collapse into ONE room: the
+// standalone `check` entry drops and the `fix` entry is relabeled "Optimize" AND moves into Check's
+// slot (position 2) — the spec order Home · Optimize · Monitor · Blackbook · Lab (5), keeping the
+// diagnose-first surface near the top where Check was. The id stays "fix" (the persisted nav key —
+// location history and routing are untouched). Pure: no DOM/localStorage reads here.
+export function railFor(merged: boolean): HomeRailItem[] {
+  if (!merged) return HOME_RAIL;
+  const out: HomeRailItem[] = [];
+  for (const r of HOME_RAIL) {
+    if (r.id === "check") continue; // collapsed into the merged room
+    if (r.id === "fix") continue; // re-inserted at Check's slot below
+    out.push(r);
+    if (r.id === "home") {
+      const fix = HOME_RAIL.find((x) => x.id === "fix")!;
+      out.push({ ...fix, label: "Optimize" }); // Optimize takes the slot Check held (position 2)
+    }
+  }
+  return out;
+}

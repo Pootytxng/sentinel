@@ -11,7 +11,7 @@ import { NavGlyph } from "./design/NavGlyph";
 import { readCloseToTray, persistDisplayRefreshHz, readLivingInstrument } from "./design/theme";
 import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
-import { HOME_RAIL, type HomeRailId } from "./design/homeRail";
+import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import CommandCenter from "./surfaces/CommandCenter";
 import Fix from "./surfaces/Fix";
@@ -485,6 +485,11 @@ function App() {
     window.addEventListener("compy:living-changed", on);
     return () => window.removeEventListener("compy:living-changed", on);
   }, []);
+  // Optimize merge (phase 1a, spec 2026-06-21-optimize-merge-design): when on, Check + Tune collapse
+  // into one "Optimize" room (Fixes / Applied / History segments). Default OFF — read once at startup
+  // (mirrors the other compy_* dev-flag readers); old Check + Tune stay fully intact + reachable until
+  // the flag flips. Reversible: the flag governs only which navigation/render path the shell takes.
+  const optimizeMerged = localStorage.getItem("compy_optimize") === "1";
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
@@ -833,7 +838,7 @@ function App() {
   // Persistent room name for the narrow (icon-only-rail) layout — the wayfinding-law amendment so you
   // always know where you are even when the rail shows only icons (elastic-window §1).
   const activeRoomName =
-    HOME_RAIL.find((r) => r.id === activeHomeId)?.label ?? "Compy";
+    railFor(optimizeMerged).find((r) => r.id === activeHomeId)?.label ?? "Compy";
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
   const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
 
@@ -1097,7 +1102,12 @@ function App() {
                 Command Center rail (parity-guarded). The legacy SECTION_META rail is retired; the
                 posture hero is Home-only (CommandHero removed). */}
             <nav className="rail" role="tablist" aria-label="Sections">
-              {(living ? HOME_RAIL.filter((r) => r.id !== "lab") : HOME_RAIL).map((item) => (
+              {(() => {
+                // railFor collapses Check + Tune → "Optimize" when the merge flag is on (else the
+                // blessed six-home set); the living-instrument Lab-tuck filter then rides on top.
+                const base = railFor(optimizeMerged);
+                return living ? base.filter((r) => r.id !== "lab") : base;
+              })().map((item) => (
                 <button
                   key={item.id}
                   role="tab"
