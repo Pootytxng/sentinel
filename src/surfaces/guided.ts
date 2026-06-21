@@ -90,7 +90,7 @@ export const ALLOWED_OPEN_URIS = new Set(
     .map((g) => g.openUri)
     // Security: only fixed, allowlisted ms-settings: deep links may ever enter the set —
     // enforced here in code, not just by a test, so a stray https:/file: target can't slip in.
-    .filter((u): u is string => Boolean(u) && u.startsWith("ms-settings:")),
+    .filter((u): u is string => typeof u === "string" && u.startsWith("ms-settings:")),
 );
 
 export async function openGuidedUri(uri: string) {
