@@ -371,7 +371,7 @@ export default function Check({
                                 .join(", ")}. Turn them back on right here.`}
                         </p>
                         <div className="check-drift-actions">
-                          {reverted.slice(0, 3).map((rev) => (
+                          {reverted.map((rev) => (
                             <button
                               key={rev.rec_id}
                               className="btn btn-small"

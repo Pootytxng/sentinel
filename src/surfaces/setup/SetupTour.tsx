@@ -352,7 +352,7 @@ function StepCheck() {
                   .join(", ")}. Turn them back on right here.`}
           </p>
           <div className="st-spotlight-foot st-spotlight-actions">
-            {reverted.slice(0, 3).map((rev) => (
+            {reverted.map((rev) => (
               <button
                 key={rev.rec_id}
                 className="btn-small btn-small-on"
