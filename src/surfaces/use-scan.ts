@@ -11,7 +11,12 @@ export type ScanRecLite = { id: string; title: string; currently_applied: boolea
 // A Compy-applied change the live system no longer matches (drifted off outside Compy). Named, so a
 // flag can say WHICH setting + offer its inline fix instead of "1 setting(s) — go to another tab".
 export type RevertedChange = { rec_id: string; title: string };
-type AppliedChangeLite = { rec_id: string; rec_title: string; status: string; is_still_active: boolean };
+export type AppliedChangeLite = {
+  rec_id: string;
+  rec_title: string;
+  status: string;
+  is_still_active: boolean;
+};
 
 const STAGGER_MS = 280; // legibility only (spec: ≤~350ms/row, never sleep for drama)
 
@@ -19,6 +24,18 @@ export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown
   if (s === "attention") return "fix";
   if (s === "ready" || s === "advisory") return "ok";
   return "unknown";
+}
+
+// The ledger is append-only, so collapse to the NEWEST entry per rec first (a re-applied setting
+// must count once, not once per historical apply — mirrors summarize_history), then name the ones
+// that drifted off (we applied them, the live system no longer matches). Pure → unit-tested; it's
+// the core of the flag-class "name the drifted setting + fix it inline" behavior.
+export function deriveReverted(changes: AppliedChangeLite[]): RevertedChange[] {
+  const newestByRec = new Map<string, AppliedChangeLite>();
+  for (const c of changes) newestByRec.set(c.rec_id, c); // later entries win
+  return [...newestByRec.values()]
+    .filter((c) => c.status === "applied" && !c.is_still_active)
+    .map((c) => ({ rec_id: c.rec_id, title: c.rec_title }));
 }
 
 export type ScanState = {
@@ -59,16 +76,7 @@ export function useScan(): ScanState {
       setReadiness(r);
       setPriorities(p);
       setRecs(rc);
-      // Drifted = a change we applied that the live system no longer matches. The ledger is
-      // append-only, so collapse to the NEWEST entry per rec first (mirrors summarize_history) —
-      // otherwise every historical re-apply of one setting counts again. Then name the drifted ones.
-      const newestByRec = new Map<string, AppliedChangeLite>();
-      for (const c of changes) newestByRec.set(c.rec_id, c); // later entries win
-      setReverted(
-        [...newestByRec.values()]
-          .filter((c) => c.status === "applied" && !c.is_still_active)
-          .map((c) => ({ rec_id: c.rec_id, title: c.rec_title })),
-      );
+      setReverted(deriveReverted(changes));
     } catch {
       /* leave nulls — render guards downstream */
     } finally {
