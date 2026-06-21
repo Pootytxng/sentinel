@@ -88,7 +88,9 @@ export const GUIDED_STEPS: Record<string, Guide> = {
 export const ALLOWED_OPEN_URIS = new Set(
   Object.values(GUIDED_STEPS)
     .map((g) => g.openUri)
-    .filter(Boolean) as string[],
+    // Security: only fixed, allowlisted ms-settings: deep links may ever enter the set —
+    // enforced here in code, not just by a test, so a stray https:/file: target can't slip in.
+    .filter((u): u is string => Boolean(u) && u.startsWith("ms-settings:")),
 );
 
 export async function openGuidedUri(uri: string) {
