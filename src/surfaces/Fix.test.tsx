@@ -134,4 +134,39 @@ describe("Fix", () => {
     fireEvent.click(screen.getByRole("switch", { name: /Apply Title game-mode/ }));
     expect(onToggleRec).toHaveBeenCalledWith("game-mode");
   });
+
+  // ── view prop (Optimize merge phase 1a, spec 2026-06-21): render fixes-only or ledger-only ──
+  // An active change drives the ledger sections; a worth-fixing rec drives the fixes sections.
+  const activeChange = {
+    id: "c1",
+    rec_id: "game-mode",
+    rec_title: "Game Mode",
+    applied_at: new Date().toISOString(),
+    snapshot: null,
+    status: "applied" as const,
+    is_still_active: true,
+  };
+
+  it('default view ("all") renders BOTH the fixes sections and the ledger sections (byte-identical Tune)', () => {
+    render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} />);
+    expect(screen.getByText("Worth making for your rig")).toBeTruthy();
+    expect(screen.getByText("Active on this PC")).toBeTruthy();
+    expect(screen.getByText("Full history")).toBeTruthy();
+  });
+
+  it('view="fixes" renders the fixes sections and NONE of the ledger sections', () => {
+    render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="fixes" />);
+    expect(screen.getByText("Worth making for your rig")).toBeTruthy();
+    expect(screen.queryByText("Active on this PC")).toBeNull();
+    expect(screen.queryByText("Full history")).toBeNull();
+  });
+
+  it('view="ledger" renders the ledger sections and NONE of the fixes sections', () => {
+    render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="ledger" />);
+    expect(screen.getByText("Active on this PC")).toBeTruthy();
+    expect(screen.getByText("Full history")).toBeTruthy();
+    expect(screen.queryByText("Worth making for your rig")).toBeNull();
+    // Startup + refuse-pile + guided are fixes-side too — gone in ledger view.
+    expect(screen.queryByText("Not worth touching")).toBeNull();
+  });
 });

@@ -76,6 +76,12 @@ type Props = {
   onApplyBatch: (recIds: string[]) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
   onOpenLibrary: (focusId: string) => void;
   vendor: GpuVendor;
+  // Section filter (Optimize merge phase 1a, spec 2026-06-21): "all" (default) = today's whole Tune
+  // surface, byte-identical; "fixes" = the recs / guided / startup / refuse-pile sections only (no
+  // Trust Ledger); "ledger" = the "Active on this PC" + "Full history" sections only. Lets the merged
+  // Optimize shell place the same Fix surface under separate Fixes / Applied / History segments
+  // without duplicating any markup. Old callers pass nothing → "all".
+  view?: "all" | "fixes" | "ledger";
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
@@ -452,7 +458,12 @@ export default function Fix({
   onApplyBatch,
   onOpenLibrary,
   vendor,
+  view = "all",
 }: Props) {
+  // Which half(s) of the surface to render — the merged Optimize shell drives this via segments;
+  // standalone Tune leaves it "all" so the surface is unchanged.
+  const showFixes = view !== "ledger";
+  const showLedger = view !== "fixes";
   // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
   // the completion denominator entirely — they sit in a quiet "Not for this rig" bucket with the
   // plain-English reason, never silently dropped, never falsely offered.
@@ -530,6 +541,7 @@ export default function Fix({
 
   return (
     <section className="fix-root">
+      {showFixes && (
       <header className="fix-header">
         <div>
           <h2 className="fix-title">Tune</h2>
@@ -552,8 +564,11 @@ export default function Fix({
           <p className="fix-consent">Compy never changes anything without your explicit approval.</p>
         </div>
       </header>
+      )}
 
       {/* Worth making for your rig — the outstanding appliable recs, each with its trust-switch. */}
+      {showFixes && (
+      <>
       <div className="fix-section-label">Worth making for your rig</div>
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
@@ -651,9 +666,13 @@ export default function Fix({
           </div>
         </div>
       )}
+      </>
+      )}
 
       {/* Active on this PC (ledger Layer 1) — what Compy is currently doing, deduped, ghost rollback.
           Answers Sarah's only question: "what is Compy doing to my machine right now?" */}
+      {showLedger && (
+      <>
       {active.length > 0 && (
         <>
           <div className="fix-section-label">Active on this PC</div>
@@ -696,7 +715,11 @@ export default function Fix({
           </ul>
         </CollapsibleSection>
       )}
+      </>
+      )}
 
+      {showFixes && (
+      <>
       {/* Not for this rig — hardware-ineligible recs (eligibility train): set aside with the reason,
           and OUT of the completion denominator, so they never block "all handled" or nag. */}
       {notForThisRig.length > 0 && (
@@ -806,7 +829,11 @@ export default function Fix({
           </ul>
         </CollapsibleSection>
       )}
+      </>
+      )}
 
+      {/* The Action Drawer is opened from either side (fixes rows + active-change cards), so it stays
+          mounted in every view; it self-gates on the `drawer` state. */}
       {drawer && (
         <ActionDrawer
           rec={drawer.rec}
