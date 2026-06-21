@@ -229,4 +229,130 @@ mod scoreboard_tests {
         assert_eq!(completeness_pct(120.0, 100.0), 100.0);
         assert_eq!(completeness_pct(50.0, 0.0), 0.0);
     }
+
+    // ── percentile_rank: appended coverage ──────────────────────────────────
+    // Pins the exact mid-rank-for-ties behavior + the 0..=100 output range.
+
+    #[test]
+    fn percentile_rank_empty_cohort_is_none() {
+        // An empty cohort has no peers to rank against → None (the documented contract).
+        assert_eq!(percentile_rank(42.0, &[]), None);
+        // Holds regardless of the value (incl. 0.0 / negatives).
+        assert_eq!(percentile_rank(0.0, &[]), None);
+        assert_eq!(percentile_rank(-5.0, &[]), None);
+    }
+
+    #[test]
+    fn percentile_rank_single_element_cohort() {
+        let cohort = [10.0];
+        // Below the only member: below=0, equal=0 → 0.0.
+        assert_eq!(percentile_rank(5.0, &cohort), Some(0.0));
+        // Equal to the only member: mid-rank → (0 + 1/2) / 1 * 100 = 50.0.
+        assert_eq!(percentile_rank(10.0, &cohort), Some(50.0));
+        // Above the only member: below=1 → 100.0.
+        assert_eq!(percentile_rank(15.0, &cohort), Some(100.0));
+    }
+
+    #[test]
+    fn percentile_rank_below_all_is_zero() {
+        let cohort = [10.0, 20.0, 30.0, 40.0];
+        // Nothing is < value and nothing equals it → floor of the range.
+        assert_eq!(percentile_rank(1.0, &cohort), Some(0.0));
+    }
+
+    #[test]
+    fn percentile_rank_above_all_is_hundred() {
+        let cohort = [10.0, 20.0, 30.0, 40.0];
+        // Every member is strictly below → ceiling of the range.
+        assert_eq!(percentile_rank(100.0, &cohort), Some(100.0));
+    }
+
+    #[test]
+    fn percentile_rank_equal_to_a_member_uses_mid_rank() {
+        let cohort = [10.0, 20.0, 30.0, 40.0];
+        // value == 20.0: below = {10} = 1, equal = {20} = 1 → (1 + 1/2) / 4 * 100 = 37.5.
+        let r = percentile_rank(20.0, &cohort).unwrap();
+        assert!((r - 37.5).abs() < 1e-9, "expected 37.5, got {r}");
+    }
+
+    #[test]
+    fn percentile_rank_middle_value_counts_strictly_below() {
+        let cohort = [10.0, 20.0, 30.0, 40.0];
+        // value == 25.0 (no exact tie): below = {10,20} = 2, equal = 0 → 2/4 * 100 = 50.0.
+        let r = percentile_rank(25.0, &cohort).unwrap();
+        assert!((r - 50.0).abs() < 1e-9, "expected 50.0, got {r}");
+    }
+
+    #[test]
+    fn percentile_rank_ties_average_their_rank() {
+        // Multiple exact ties: mid-rank splits the tied block in half.
+        let cohort = [10.0, 20.0, 20.0, 20.0, 30.0];
+        // value == 20.0: below = {10} = 1, equal = 3 → (1 + 3/2) / 5 * 100 = 50.0.
+        let r = percentile_rank(20.0, &cohort).unwrap();
+        assert!((r - 50.0).abs() < 1e-9, "expected 50.0, got {r}");
+    }
+
+    #[test]
+    fn percentile_rank_stays_within_zero_to_hundred() {
+        // Range guard over a spread of probe values against a fixed cohort.
+        let cohort = [10.0, 20.0, 30.0, 40.0];
+        for v in [-100.0, 0.0, 10.0, 25.0, 40.0, 1000.0] {
+            let r = percentile_rank(v, &cohort).unwrap();
+            assert!((0.0..=100.0).contains(&r), "rank {r} out of range for value {v}");
+        }
+    }
+
+    // ── completeness_pct: appended coverage ─────────────────────────────────
+    // Pins the div-by-zero guard, the 0..=100 clamp, and the boundary values.
+
+    #[test]
+    fn completeness_pct_ceiling_zero_is_zero_not_nan() {
+        // FINDING-guard: ceiling <= 0 short-circuits to 0.0 BEFORE the division,
+        // so there is no div-by-zero → no NaN/Inf escapes. Verify reality, both
+        // current=0 (0/0) and current>0 (x/0) cases that would otherwise be NaN/Inf.
+        let z = completeness_pct(0.0, 0.0);
+        assert_eq!(z, 0.0);
+        assert!(!z.is_nan() && z.is_finite());
+        let p = completeness_pct(50.0, 0.0);
+        assert_eq!(p, 0.0);
+        assert!(!p.is_nan() && p.is_finite());
+    }
+
+    #[test]
+    fn completeness_pct_negative_ceiling_is_zero() {
+        // The guard is `ceiling <= 0.0`, so a negative ceiling also yields 0.0
+        // (never a negative-then-clamped path).
+        assert_eq!(completeness_pct(50.0, -100.0), 0.0);
+    }
+
+    #[test]
+    fn completeness_pct_current_zero_is_zero() {
+        // No progress against a real ceiling → 0%.
+        assert_eq!(completeness_pct(0.0, 200.0), 0.0);
+    }
+
+    #[test]
+    fn completeness_pct_at_ceiling_is_hundred() {
+        // Exactly at the measured ceiling → fully optimized, 100%.
+        assert_eq!(completeness_pct(150.0, 150.0), 100.0);
+    }
+
+    #[test]
+    fn completeness_pct_above_ceiling_caps_at_hundred() {
+        // Beat the prior best → still capped at 100 (no overflow past full).
+        assert_eq!(completeness_pct(500.0, 150.0), 100.0);
+    }
+
+    #[test]
+    fn completeness_pct_normal_mid_value() {
+        // A representative in-range value reports its straight ratio.
+        let r = completeness_pct(75.0, 150.0);
+        assert!((r - 50.0).abs() < 1e-9, "expected 50.0, got {r}");
+    }
+
+    #[test]
+    fn completeness_pct_negative_current_clamps_to_zero() {
+        // A negative current (with a positive ceiling) clamps up to the 0.0 floor.
+        assert_eq!(completeness_pct(-30.0, 150.0), 0.0);
+    }
 }
