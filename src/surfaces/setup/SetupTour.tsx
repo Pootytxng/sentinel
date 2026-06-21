@@ -254,7 +254,7 @@ function StepRules() {
 }
 
 function StepCheck() {
-  const { readiness, priorities, recs, running, elapsed, phase, rerun } = useScan();
+  const { readiness, priorities, recs, reverted, running, elapsed, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
 
@@ -285,10 +285,34 @@ function StepCheck() {
     }
   };
 
+  // Turn a specific drifted-off change back on, right here (no "go to another tab"). Re-applies the
+  // exact rec the ledger says drifted; the apply path snapshots prior state so it stays reversible.
+  const applyReverted = async (rev: { rec_id: string; title: string }) => {
+    const ok = await confirm({
+      title: `Turn "${rev.title}" back on?`,
+      body: "Compy snapshots the prior state so you can roll this back anytime.",
+      confirmLabel: "Turn it on",
+    });
+    if (!ok) return;
+    setApplyingId(rev.rec_id);
+    try {
+      await invoke("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
+      await rerun();
+    } catch {
+      /* leave state as-is */
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
   const limiters = priorities?.limiters ?? [];
   const fixCount = limiters.length;
   const top = limiters[0] ?? null;
   const checks = readiness?.checks ?? [];
+  // The "applied-changes" limiter is the vague-flag anti-pattern: name the actual drifted setting(s)
+  // and carry the fix inline, instead of "1 setting(s) — go to Optimize/Ledger".
+  const driftTop = top?.id === "applied-changes" && reverted.length > 0;
+  const gameModeDrifted = reverted.some((r) => r.rec_id === "game-mode");
 
   if (running || phase !== "verdict") {
     return (
@@ -312,7 +336,45 @@ function StepCheck() {
           ? "Ready to play — this rig measured clean"
           : `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`}
       </h2>
-      {top ? (
+      {driftTop ? (
+        <div className="st-spotlight">
+          <div className="st-spotlight-tag">#1 BIGGEST LIMITER</div>
+          <div className="st-spotlight-title">
+            {reverted.length === 1
+              ? `“${reverted[0].title}” turned itself back off`
+              : `${reverted.length} settings you applied turned back off`}
+          </div>
+          <p className="st-spotlight-reason">
+            {reverted.length === 1
+              ? "You turned this on with Compy, but something outside Compy switched it back. Turn it back on right here — or leave it, your call."
+              : `You turned these on with Compy, but they're off now: ${reverted
+                  .map((r) => r.title)
+                  .join(", ")}. Turn them back on right here.`}
+          </p>
+          <div className="st-spotlight-foot st-spotlight-actions">
+            {reverted.slice(0, 3).map((rev) => (
+              <button
+                key={rev.rec_id}
+                className="btn-small btn-small-on"
+                disabled={applyingId !== null}
+                onClick={() => applyReverted(rev)}
+              >
+                {applyingId === rev.rec_id
+                  ? "Turning on…"
+                  : reverted.length === 1
+                    ? "Turn it back on"
+                    : `Turn “${rev.title}” on`}
+              </button>
+            ))}
+          </div>
+          {gameModeDrifted && (
+            <p className="st-note">
+              Heads-up: Game Mode keeps switching off because your recording software (AMD Adrenalin)
+              resets it at every restart — turning it on works, but it won't stick.
+            </p>
+          )}
+        </div>
+      ) : top ? (
         <div className="st-spotlight">
           <div className="st-spotlight-tag">#1 BIGGEST LIMITER</div>
           <div className="st-spotlight-title">{top.title}</div>

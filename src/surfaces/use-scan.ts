@@ -8,6 +8,11 @@ import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
 
 export type ScanRecLite = { id: string; title: string; currently_applied: boolean };
 
+// A Compy-applied change the live system no longer matches (drifted off outside Compy). Named, so a
+// flag can say WHICH setting + offer its inline fix instead of "1 setting(s) — go to another tab".
+export type RevertedChange = { rec_id: string; title: string };
+type AppliedChangeLite = { rec_id: string; rec_title: string; status: string; is_still_active: boolean };
+
 const STAGGER_MS = 280; // legibility only (spec: ≤~350ms/row, never sleep for drama)
 
 export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown" {
@@ -20,6 +25,8 @@ export type ScanState = {
   readiness: GameReadiness | null;
   priorities: Priorities | null;
   recs: ScanRecLite[];
+  /** Compy-applied changes that have since drifted off (named) — drives inline "turn it back on". */
+  reverted: RevertedChange[];
   running: boolean;
   elapsed: number | null;
   shownRows: number;
@@ -31,6 +38,7 @@ export function useScan(): ScanState {
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [recs, setRecs] = useState<ScanRecLite[]>([]);
+  const [reverted, setReverted] = useState<RevertedChange[]>([]);
   const [running, setRunning] = useState(true);
   const [elapsed, setElapsed] = useState<number | null>(null);
   const [shownRows, setShownRows] = useState(0);
@@ -42,14 +50,25 @@ export function useScan(): ScanState {
     setShownRows(0);
     const t0 = performance.now();
     try {
-      const [r, p, rc] = await Promise.all([
+      const [r, p, rc, changes] = await Promise.all([
         invoke<GameReadiness>("get_game_readiness"),
         invoke<Priorities>("get_priorities"),
         invoke<ScanRecLite[]>("get_recommendations"),
+        invoke<AppliedChangeLite[]>("get_applied_changes"),
       ]);
       setReadiness(r);
       setPriorities(p);
       setRecs(rc);
+      // Drifted = a change we applied that the live system no longer matches. The ledger is
+      // append-only, so collapse to the NEWEST entry per rec first (mirrors summarize_history) —
+      // otherwise every historical re-apply of one setting counts again. Then name the drifted ones.
+      const newestByRec = new Map<string, AppliedChangeLite>();
+      for (const c of changes) newestByRec.set(c.rec_id, c); // later entries win
+      setReverted(
+        [...newestByRec.values()]
+          .filter((c) => c.status === "applied" && !c.is_still_active)
+          .map((c) => ({ rec_id: c.rec_id, title: c.rec_title })),
+      );
     } catch {
       /* leave nulls — render guards downstream */
     } finally {
@@ -76,5 +95,5 @@ export function useScan(): ScanState {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [running, readiness]);
 
-  return { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun };
+  return { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun };
 }
