@@ -207,9 +207,14 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   `docs/superpowers/specs/2026-06-20-intuitiveness-sweep.md`. **Owner action checklist:**
 >   `docs/OWNER_ACTION_CHECKLIST.md` (Wave 0 eyeball · Gaming Mode reboot QA · legal/signing) — owner
 >   says "show my checklist".
-> - **Installer:** rebuild from `0ffd3e3` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
->   `813BE819063791C6B65EC7591DBFF56295859F549D3B017FD1F1D795EBCBF1F8` (3,164,998 B); installed +
->   running. SUPERSEDES `C5B6ED77…` for owner-clarity (beta-kit/ untouched).
+> - **Owner-found UX fixes (`c39ea0e`):** the stale yellow "Applied Compy changes" drift banner (a
+>   duplicate of the named limiter card, still said "Optimize"/"Ledger") is filtered out; and the
+>   illegible `btn btn-small` buttons (muted text on accent fill + false danger-red hover, from a
+>   two-`.btn`-rule cascade bug) are fixed at the root (`.btn.btn-small` → dark `--ix-accent-ink`),
+>   app-wide (drift re-apply, startup disable, modal close, gaming stop).
+> - **Installer:** rebuild from `c39ea0e` on the owner's Desktop — `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `7301003C46F0D1EDFC32FEBC7D3C74515B252E3148715F86D6B646525508D103` (3,166,408 B); installed +
+>   running. SUPERSEDES `813BE819…` for owner-clarity (beta-kit/ untouched).
 
 > **🛰️🎮 RIG HOLOGRAM + ONBOARDING REBUILD + MOTION OVERRIDE + GAMING-IN-TUNE + OVERNIGHT SWEEP —
 > 2026-06-19→20 (`origin/main` @ `cb7b668`).** Large multi-day run, all reversible, all verified
