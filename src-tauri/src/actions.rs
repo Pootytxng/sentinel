@@ -627,29 +627,59 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
         return Err(ELEVATION_DECLINED_MSG.to_string());
     }
+    // Wave 0 — silence the elevated console: route the command through a WINDOWLESS compy.exe
+    // self-helper instead of elevating powershell.exe directly. An elevated launch is recreated by
+    // the UAC broker (AppInfo) with its OWN window settings, so SW_HIDE can't stop a console-subsystem
+    // app (powershell.exe) from briefly flashing a console. compy.exe is windows-subsystem in release
+    // (no console EVER) and runs powershell via quiet_command (CREATE_NO_WINDOW) — so no console
+    // exists to flash. The helper exits with powershell's exit code, so elevation_outcome's attribution
+    // is preserved EXACTLY: a real UAC decline is still a LAUNCH error 1223 (the user dismissing the
+    // compy.exe prompt), a non-zero exit is still "approved but the operation failed", 0 is success.
+    // The command is hex-encoded into ONE argv (no temp file → no TOCTOU / cleanup); it was already
+    // validated by validate_command before reaching here. UAC consent stays OS-controlled + visible
+    // (the prompt now names compy.exe — consistent with how the FPS helper already elevates).
+    let exe = std::env::current_exe().map_err(|e| format!("cannot find own exe: {e}"))?;
+    let encoded = to_hex(command.as_bytes());
+    // The frozen catalog never approaches this, but never silently truncate a command line (Windows
+    // caps it ~32k chars) — fail loud instead.
+    if encoded.len() > 30_000 {
+        return Err("elevated command is too long to dispatch".to_string());
+    }
     elevation_outcome(
-        // .show(false) => SW_HIDE hides the SPAWNED process window. This reliably suppresses the
-        // console for NON-elevated spawns — but for an ELEVATED launch the UAC broker (AppInfo
-        // service) recreates the process with its OWN window settings, so powershell.exe (a console
-        // app) can still briefly FLASH a console despite SW_HIDE + -WindowStyle Hidden. The UAC
-        // consent dialog itself is OS-controlled and UNAFFECTED (approval stays required + visible —
-        // we never suppress UAC).
-        // TODO(no-flash, Wave 0): route elevated work through a windowless compy.exe self-helper
-        // (release = windows-subsystem → no console ever), mirroring the FPS helper, so the elevated
-        // console can't appear. Spec: docs/superpowers/specs/2026-06-20-intuitiveness-sweep.md.
-        // Elevation/mutation boundary change → needs its own §4 elevation QA + /check + /security.
-        runas::Command::new("powershell.exe")
-            .args(&[
-                "-NoProfile",
-                "-NonInteractive",
-                "-WindowStyle",
-                "Hidden",
-                "-Command",
-                command,
-            ])
+        runas::Command::new(exe)
+            .args(&["--run-elevated", &encoded])
             .show(false)
             .status(),
     )
+}
+
+/// Hex-encode bytes so an elevated command can ride as a single, quoting-safe argv to the
+/// `--run-elevated` helper (Wave 0). Pure; round-trips with `from_hex`. Lowercase, fixed 2 chars/byte.
+pub(crate) fn to_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push(char::from_digit((b >> 4) as u32, 16).unwrap_or('0'));
+        s.push(char::from_digit((b & 0x0f) as u32, 16).unwrap_or('0'));
+    }
+    s
+}
+
+/// Decode `to_hex`. Returns None on odd length or any non-hex digit — the helper then fails safe
+/// (exits non-zero → "approved, but the operation failed"), never running garbage.
+pub(crate) fn from_hex(s: &str) -> Option<Vec<u8>> {
+    if !s.len().is_multiple_of(2) {
+        return None;
+    }
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(s.len() / 2);
+    let mut i = 0;
+    while i < b.len() {
+        let hi = (b[i] as char).to_digit(16)?;
+        let lo = (b[i + 1] as char).to_digit(16)?;
+        out.push(((hi << 4) | lo) as u8);
+        i += 2;
+    }
+    Some(out)
 }
 
 /// Defense-in-depth against elevated-command injection. Any value interpolated into a
@@ -716,7 +746,30 @@ mod ps_injection_tests {
 
 #[cfg(test)]
 mod batch_elevation_tests {
-    use super::{compose_batch_script, parse_batch_receipts, run_elevated_powershell, ElevationDeferral};
+    use super::{
+        compose_batch_script, from_hex, parse_batch_receipts, run_elevated_powershell, to_hex,
+        ElevationDeferral,
+    };
+
+    #[test]
+    fn hex_round_trips_and_rejects_malformed() {
+        // Round-trips arbitrary command bytes (spaces, quotes, $, newlines, unicode) so the
+        // --run-elevated argv survives intact regardless of the command's contents.
+        for s in [
+            "",
+            "powercfg /setactive 12345678-90ab-cdef-1234-567890abcdef",
+            "try { Set-ItemProperty 'X' -Value 0 } catch { 'fail' }; $x = \"q\"\n\t end",
+            "üñîçødé ⚡",
+        ] {
+            let enc = to_hex(s.as_bytes());
+            assert!(enc.len().is_multiple_of(2) && enc.chars().all(|c| c.is_ascii_hexdigit()));
+            assert_eq!(from_hex(&enc).as_deref(), Some(s.as_bytes()));
+        }
+        // Malformed encodings fail safe (None) — never panic, never half-decode.
+        assert_eq!(from_hex("abc"), None); // odd length
+        assert_eq!(from_hex("zz"), None); // non-hex digit
+        assert_eq!(from_hex("6x"), None); // one bad nibble
+    }
 
     #[test]
     fn sink_captures_instead_of_elevating_and_disarms_on_take() {

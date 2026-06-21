@@ -48,6 +48,26 @@ pub fn run_fps_capture() {
     fps::run_capture();
 }
 
+/// Entry point for the elevated command helper (`compy.exe --run-elevated <hex>`, Wave 0). Decodes
+/// the hex-encoded PowerShell command produced by `actions::run_elevated_powershell` and runs it via
+/// `quiet_command` (CREATE_NO_WINDOW) — windowless in a release build, so no console flashes. Returns
+/// PowerShell's exit code so the parent's `elevation_outcome` attribution is preserved; a bad/missing
+/// or non-UTF-8 arg returns non-zero (fail-safe: the parent reports "approved, but the operation
+/// failed" — never a false success, and never runs garbage). Does NOT depend on the live catalog.
+pub fn run_elevated_helper(hex: &str) -> i32 {
+    let Some(bytes) = actions::from_hex(hex) else {
+        return 2;
+    };
+    let Ok(command) = String::from_utf8(bytes) else {
+        return 2;
+    };
+    actions::quiet_command("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+        .status()
+        .map(|s| s.code().unwrap_or(1))
+        .unwrap_or(1)
+}
+
 use serde::Serialize;
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 use winreg::RegKey;

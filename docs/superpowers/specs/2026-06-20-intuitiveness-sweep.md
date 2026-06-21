@@ -36,7 +36,16 @@ a result file (reuse the §4 batch result-file shape). Release = zero console = 
 handling, arg-injection gate `validate_command`). MUST keep: snapshot-before-mutate, per-item
 rollback, UAC-cancel honesty, the deferral/batch sink. Rides its own **§4 elevation QA** (one prompt
 → no flash → correct apply → per-item rollback → UAC-cancel honest) + `/check` + `/security` before
-ship. Comment at `run_elevated_powershell` corrected to record the real cause + this TODO.
+ship.
+
+**BUILT (branch `backend/wave0-elevated-helper`, pending §4 live QA):** chose the hex-argv variant
+(no temp file → no TOCTOU/cleanup). `run_elevated_powershell` now does
+`runas compy.exe --run-elevated <hex>` (`.show(false)`); `main.rs` routes `--run-elevated` to
+`lib::run_elevated_helper`, which decodes the hex + runs powershell via `quiet_command`
+(CREATE_NO_WINDOW) and exits with powershell's code. The child powershell inherits the elevated
+token. `elevation_outcome` + deferral sink + test seam unchanged. cargo 449 · clippy/build clean ·
+/check + /security clean. **NOT merged to main until the owner's §4 live QA confirms no-flash +
+correct apply/rollback** (main stays known-good; QA runs on a branch-built install).
 
 ## Wave 1 — the flag anti-pattern (the card the owner flagged)  ✅ in progress
 
