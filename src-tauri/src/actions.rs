@@ -1633,7 +1633,15 @@ pub(crate) fn current_power_plan_guid() -> Option<String> {
 }
 
 pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
-    let prior_guid = current_power_plan_guid().unwrap_or_default();
+    // Capture the EXACT plan we're switching away from. Refuse if we can't read it —
+    // applying a plan switch whose prior we don't know is a switch we can't honestly roll
+    // back (the rollback would error on the empty GUID, leaving the user stuck on Ultimate).
+    // Mirrors apply_power_setting_off_on_ac and the clean-skip in apply_power_plan_switch_core.
+    let prior_guid = current_power_plan_guid().ok_or_else(|| {
+        "could not determine the active power plan to snapshot; refusing to switch to \
+         Ultimate Performance rather than apply a change that could not be rolled back"
+            .to_string()
+    })?;
     let ps = "$ult = powercfg /list | Select-String 'Ultimate Performance' | Select-Object -First 1; \
               if ($ult -match 'GUID: ([0-9a-f-]{36})') { powercfg /setactive $matches[1]; exit 0 } \
               $dup = powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>&1; \
@@ -1693,38 +1701,106 @@ pub(crate) const PWR_SETTING_USB_SELECTIVE_SUSPEND: &str = "48e6b7a6-50f5-4782-a
 pub(crate) const PWR_SUBGROUP_PCIE: &str = "501a4d13-42af-4429-9fd1-a8218c268e20";
 pub(crate) const PWR_SETTING_PCIE_ASPM: &str = "ee12f906-d277-404b-b6da-e5fa1a576df5";
 
+/// Parse `powercfg /query` output for the "Current AC/DC Power Setting Index" hex values.
+/// Finds the AC/DC index line, then extracts the trailing `0x..` hex token — tolerant of
+/// trailing whitespace and the "Possible Setting Index: 000/001" decoy lines. Returns
+/// (ac, dc); either is `None` when its line is absent or the hex won't parse.
+///
+/// This is the SINGLE powercfg-index parser shared by the USB/PCIe snapshot read below and
+/// `read_core_parking_priors` — so the two can't drift (the PR-#4 "one parser silently
+/// stops matching" class). Pure + unit-tested (see `powercfg_parse_tests`).
+pub(crate) fn parse_powercfg_ac_dc_index(text: &str) -> (Option<u32>, Option<u32>) {
+    let hex_after = |marker: &str| -> Option<u32> {
+        text.lines()
+            .find(|l| l.contains(marker))
+            .and_then(|l| l.rsplit("0x").next())
+            .and_then(|h| u32::from_str_radix(h.trim(), 16).ok())
+    };
+    (
+        hex_after("AC Power Setting Index"),
+        hex_after("DC Power Setting Index"),
+    )
+}
+
 // Returns (ac_value, dc_value) by parsing `powercfg /query SCHEME_CURRENT
-// <subgroup> <setting>`. Returns None if the call fails or output can't
-// be parsed.
+// <subgroup> <setting>`. Returns None if the call fails or the AC index can't
+// be parsed (DC is best-effort, defaulting to 0).
 pub(crate) fn query_power_setting_ac_dc(subgroup: &str, setting: &str) -> Option<(u32, u32)> {
     let output = quiet_command("powercfg")
         .args(["/query", "SCHEME_CURRENT", subgroup, setting])
         .output()
         .ok()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut ac_value: Option<u32> = None;
-    let mut dc_value: Option<u32> = None;
-    for line in stdout.lines() {
-        let lower = line.to_lowercase();
-        if lower.contains("current ac power setting index:") {
-            if let Some(tok) = line.split_whitespace().last() {
-                let stripped = tok.trim_start_matches("0x");
-                ac_value = u32::from_str_radix(stripped, 16).ok();
-            }
-        } else if lower.contains("current dc power setting index:") {
-            if let Some(tok) = line.split_whitespace().last() {
-                let stripped = tok.trim_start_matches("0x");
-                dc_value = u32::from_str_radix(stripped, 16).ok();
-            }
-        }
-    }
+    let (ac_value, dc_value) = parse_powercfg_ac_dc_index(&stdout);
     Some((ac_value?, dc_value.unwrap_or(0)))
 }
 
+#[cfg(test)]
+mod powercfg_parse_tests {
+    use super::parse_powercfg_ac_dc_index;
+
+    // Real `powercfg /query SCHEME_CURRENT <USB subgroup> <selective-suspend>` shape on
+    // en-US Win11 26200 — note the "Possible Setting Index" decoy lines that must be ignored.
+    const USB_SAMPLE: &str = "\
+\r\n  Subgroup GUID: 2a737441-1930-4402-8d77-b2bebba308a3  (USB settings)\r\n\
+    Power Setting GUID: 48e6b7a6-50f5-4782-a5d4-53bb8f07e226  (USB selective suspend setting)\r\n\
+      Possible Setting Index: 000\r\n\
+      Possible Setting Friendly Name: Disabled\r\n\
+      Possible Setting Index: 001\r\n\
+      Possible Setting Friendly Name: Enabled\r\n\
+    Current AC Power Setting Index: 0x00000000\r\n\
+    Current DC Power Setting Index: 0x00000001\r\n";
+
+    // Real core-parking (CPMINCORES) shape — AC = 0x64 (100), DC = 0x0a (10).
+    const CORE_PARK_SAMPLE: &str = "\
+    Power Setting GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (Processor performance core parking min cores)\r\n\
+    Current AC Power Setting Index: 0x00000064\r\n\
+    Current DC Power Setting Index: 0x0000000a\r\n";
+
+    #[test]
+    fn parses_ac_and_dc_ignoring_possible_decoys() {
+        assert_eq!(parse_powercfg_ac_dc_index(USB_SAMPLE), (Some(0), Some(1)));
+        assert_eq!(
+            parse_powercfg_ac_dc_index(CORE_PARK_SAMPLE),
+            (Some(0x64), Some(0x0a))
+        );
+    }
+
+    #[test]
+    fn missing_ac_line_yields_none_ac() {
+        let only_dc = "    Current DC Power Setting Index: 0x00000001\r\n";
+        assert_eq!(parse_powercfg_ac_dc_index(only_dc), (None, Some(1)));
+    }
+
+    #[test]
+    fn line_without_hex_token_does_not_parse() {
+        // A localized/format-drifted line that lost its 0x token must NOT be guessed at.
+        let no_hex = "    Current AC Power Setting Index: (unreadable)\r\n";
+        assert_eq!(parse_powercfg_ac_dc_index(no_hex), (None, None));
+    }
+
+    #[test]
+    fn empty_or_unrelated_output_yields_none() {
+        assert_eq!(parse_powercfg_ac_dc_index(""), (None, None));
+        assert_eq!(
+            parse_powercfg_ac_dc_index("Querying active state...\r\nsome other text\r\n"),
+            (None, None)
+        );
+    }
+}
+
 pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Result<ApplyResult, String> {
-    // Snapshot first — both AC and DC current values.
-    let (prior_ac_value, prior_dc_value) =
-        query_power_setting_ac_dc(subgroup, setting).unwrap_or((1, 1));
+    // Snapshot first — both AC and DC current values. If we can't read the prior
+    // (a future powercfg output change, or a locale whose index lines we can't parse),
+    // REFUSE rather than record a guessed (1,1): a fabricated snapshot would roll the
+    // setting back to the wrong value, breaking rollback-first integrity. Fail-safe,
+    // matching the plan-GUID guard just below and the core-parking / TCP readers.
+    let (prior_ac_value, prior_dc_value) = query_power_setting_ac_dc(subgroup, setting)
+        .ok_or_else(|| {
+            "could not read the current power setting to snapshot it for rollback; \
+             refusing to apply rather than record a guessed prior value"
+                .to_string()
+        })?;
     // Capture the EXACT plan this is applied to. Refuse to apply if we can't —
     // a change whose target plan we don't know is a change we can't honestly
     // roll back, and rollback-first beats applying-anyway.
@@ -2580,7 +2656,7 @@ fn read_mpo_prior() -> Result<Option<u32>, String> {
 }
 
 /// Parse `powercfg /q SCHEME_CURRENT SUB_PROCESSOR CPMINCORES` for the AC + DC index values.
-/// Locale-tolerant: keys off the hex "0x.." token on the AC/DC index lines, not localized words.
+/// Reuses the shared `parse_powercfg_ac_dc_index` so this and the USB/PCIe reader can't drift.
 fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
     let out = quiet_command("powercfg")
         .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
@@ -2590,15 +2666,8 @@ fn read_core_parking_priors() -> Result<(Option<u32>, Option<u32>), String> {
         return Err("powercfg core-parking query failed".to_string());
     }
     let text = String::from_utf8_lossy(&out.stdout);
-    let hex_on = |needle: &str| -> Option<u32> {
-        text.lines()
-            .find(|l| l.contains(needle))
-            .and_then(|l| l.rsplit("0x").next())
-            .and_then(|h| u32::from_str_radix(h.trim(), 16).ok())
-    };
+    let (ac, dc) = parse_powercfg_ac_dc_index(&text);
     // At least the AC index must parse, or we don't have a snapshot to reverse against.
-    let ac = hex_on("AC Power Setting Index");
-    let dc = hex_on("DC Power Setting Index");
     if ac.is_none() {
         return Err("could not parse the core-parking AC index — refusing to restore blind".to_string());
     }
