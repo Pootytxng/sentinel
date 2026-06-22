@@ -198,7 +198,7 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
 > **🧩 PHASE-A 1.0 FEATURES CONTINUED (autonomous run, owner "persist through tasks") — 2026-06-22
-> (`origin/main`).** Four clean, read-only, no-gate features off the reconciled main, each built →
+> (`origin/main`).** Five clean, read-only, no-gate features off the reconciled main, each built →
 > tested → live self-reviewed → shipped (rebuilt + reinstalled) → pushed:
 > - **A3.8 Autopsy Record** (`7486196`) — a local, private rollup of every Guide Autopsy graded
 >   ("N guides graded — of the tweaks recognized: X% real · Y% placebo · Z% risky · W snake-oil tricks
@@ -219,16 +219,31 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   Unknown. `gpu-vram`: discrete GPU (largest VRAM) ≥6 GB → Ready, under → Advisory ("6 GB floor, more
 >   above 1080p"); none → Unknown. Both derived from existing HardwareInfo (no probe); 6 tests. Together
 >   with RAM speed/channels/capacity + drive-health + network, the hardware-readiness panel is complete.
+> - **A4 monitor model detection** (`697ca2a`) — `Win32_DesktopMonitor` only ever says "Generic PnP
+>   Monitor"; new read-only probe reads EDID via **`WmiMonitorID` (root\wmi, on_wmi_thread)** → real
+>   model + vendor (dev rig: Acer XFA253Q Z + ASUS VG245). Pure `decode_edid_string` + cosmetic
+>   `monitor_vendor_name` (unknown code shown as-is, never fabricated); surfaced as a "Monitor(s)" row in
+>   the HardwareGrid GPU card. Backend + render text-verified live (`monitorModels` present); 4 tests.
+>   Also `4adac34` fixed pre-existing GPU-warmth test time-bombs (hardcoded 2026-06-08 fixtures aged out
+>   of the 14-day window on 06-22 — now clock-independent).
+> - **⚠️ FINDING (owner/design call): the default dashV2 Home does NOT render the HardwareGrid.** The
+>   `compy_dash_v2` Home shows DashboardV2 (posture + #1-limiter + last-session + a one-line rig
+>   summary); the full "Your hardware" card grid (`.cc-hardware` / HardwareSection) renders only in the
+>   non-dashV2 branch + classic Overview, and even there defaults to the 3D RigViewer (Cards is a
+>   toggle). So the monitor row **and Cowork's A1 grid surfacing (BIOS/XMP/SMART, `0eafc88`)** are
+>   low-visibility on the shipped default Home — a chunk of hardware-detail work the owner won't see by
+>   default. Not a bug in any one feature; a Home-layout decision (surface the hardware grid / key
+>   detail on the dashV2 Home, or accept it lives in Advanced/Diagnostics + the classic view).
 > - **Reconciled with a Cowork push mid-run** (no force-push): origin/main had advanced to `738e0c2`
 >   (Cowork's **power-source WMI fix** `1ffa968` — the Diagnostics-crash cause CC diagnosed — + a
 >   **service-suspend** Phase-B feature built DARK/gated). CC rebased its CPU/VRAM commit onto it →
 >   `6145c0e` (clean ff). The rebuild below carries Cowork's power-source fix too (clears the crash).
 > - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Verify on the merged
->   tree: cargo **531** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
+>   tree: cargo **539** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
 >   refs (`16069fa`) untouched. Installed build NSIS
-> `E11F8F34D57D8A213AA323CE627ED3EDE952DB3DEB7A1DE3AB5429BD0ED14630` (carries CPU/VRAM + Cowork's
-> power-source fix + service-suspend-dark). The Diagnostics power-source crash CC saw is root-cause-fixed
-> in this build (Cowork's `1ffa968`, WMI on the command thread); app stable across stress testing.
+> `4742ADA84E43F93E6D876667D5A0B33CF3BB4ABEB0198933E6D99F87E4C1615E` (carries all five features + Cowork's
+> power-source fix + service-suspend-dark + debloat-dark). The Diagnostics power-source crash CC saw is
+> root-cause-fixed in this build (Cowork's `1ffa968`, WMI on the command thread); app stable across testing.
 > - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, confidence-chip
 >   colors) · owner-curation (service safe-list/sensor/bloat DBs — Cowork owns the services lane now) ·
 >   detection-walled (thermal/PBO/SpeedShift/GPU-profile). Next clean track would be deeper A4
