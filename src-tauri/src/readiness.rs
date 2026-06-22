@@ -269,6 +269,44 @@ pub(crate) fn evaluate_readiness(
         });
     }
 
+    // Network connection — wired Ethernet is the steadiest path for online gaming (lower, more
+    // consistent latency than Wi-Fi). DERIVED from the already-collected adapter inventory — never a
+    // probe of its own (no WMI call here). Wi-Fi is an Advisory, not a problem: plenty of games run
+    // fine on it and a cable isn't always feasible (laptop across the house). Offline/undetermined
+    // stays Unknown — honest, never a scare.
+    checks.push(match crate::hardware::network_connection_kind(&hw.network_adapters) {
+        "wired" => check(
+            "network-connection",
+            "Network connection",
+            ReadinessStatus::Ready,
+            "Wired Ethernet — the steadiest connection for online gaming (lower, more consistent \
+             latency than Wi-Fi).",
+            Some("Wired Ethernet".into()),
+        ),
+        "wifi" => check(
+            "network-connection",
+            "Network connection",
+            ReadinessStatus::Advisory,
+            "You're on Wi-Fi. A wired Ethernet connection gives lower, more consistent latency for \
+             online gaming — worth a cable if you can run one. (Wi-Fi is fine for plenty of games.)",
+            Some("Wi-Fi".into()),
+        ),
+        "other" => check(
+            "network-connection",
+            "Network connection",
+            ReadinessStatus::Ready,
+            "A network connection is active.",
+            None,
+        ),
+        _ => check(
+            "network-connection",
+            "Network connection",
+            ReadinessStatus::Unknown,
+            "Couldn't determine an active physical network connection.",
+            None,
+        ),
+    });
+
     // 2. Game install drive — where the user's game libraries (Steam/Epic)
     //    actually live, and whether those drives are fast (NVMe/SSD) or slow
     //    (HDD). Falls back to an honest overall storage posture when no library
@@ -1017,8 +1055,9 @@ mod readiness_tests {
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
         );
-        // +3 detection-layer advisory checks (memory-speed, memory-channels, drive-health).
-        assert_eq!(r.checks.len(), 11);
+        // +4 detection-layer advisory checks (memory-speed, memory-channels, drive-health,
+        // network-connection).
+        assert_eq!(r.checks.len(), 12);
     }
 
     #[test]
@@ -1105,6 +1144,36 @@ mod readiness_tests {
         let hw = HardwareInfo { memory_modules: vec![], ..Default::default() };
         let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Unknown);
+    }
+
+    fn nic(physical: bool, medium: &str, connected: bool) -> crate::hardware::NetAdapterInfo {
+        crate::hardware::NetAdapterInfo { name: "NIC".into(), physical, medium: medium.into(), connected }
+    }
+
+    #[test]
+    fn network_connection_wired_is_ready_steadiest() {
+        let hw = HardwareInfo { network_adapters: vec![nic(true, "wired", true)], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "network-connection");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.to_lowercase().contains("wired ethernet"));
+    }
+
+    #[test]
+    fn network_connection_wifi_is_advisory_not_a_problem() {
+        // Advisory keeps the readiness clean (Wi-Fi is fine) while surfacing the wired-is-steadier tip.
+        let hw = HardwareInfo { network_adapters: vec![nic(true, "wifi", true)], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "network-connection");
+        assert_eq!(c.status, ReadinessStatus::Advisory);
+        assert!(c.detail.to_lowercase().contains("wi-fi"));
+    }
+
+    #[test]
+    fn network_connection_offline_is_unknown_never_a_scare() {
+        let hw = HardwareInfo { network_adapters: vec![], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&r, "network-connection").status, ReadinessStatus::Unknown);
     }
 
     #[test]

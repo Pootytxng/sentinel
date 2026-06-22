@@ -1758,6 +1758,27 @@ pub(crate) fn is_physical_adapter(
     connector_present == Some(true) && !pnp_is_root_enumerated(pnp_device_id) && !name_is_virtual(name)
 }
 
+/// Pure: classify the rig's ACTIVE physical network connection from the adapter inventory.
+/// "wired" if a physical wired NIC is connected (it wins — what gaming should use even when Wi-Fi is
+/// also up), else "wifi", else "other" (connected physical but an unclassified medium), else "none"
+/// (offline / no physical link). Virtual/VPN adapters are excluded (only `physical` counts). Read-only.
+pub(crate) fn network_connection_kind(adapters: &[NetAdapterInfo]) -> &'static str {
+    let active = |medium: &str| {
+        adapters
+            .iter()
+            .any(|a| a.physical && a.connected && a.medium == medium)
+    };
+    if active("wired") {
+        "wired"
+    } else if active("wifi") {
+        "wifi"
+    } else if adapters.iter().any(|a| a.physical && a.connected) {
+        "other"
+    } else {
+        "none"
+    }
+}
+
 /// Enumerate + classify network adapters. Fail-soft to an empty inventory (claim NO wired rather than
 /// risk the false-positive we're fixing). Callers derive has_active_wired / has_port from this.
 pub(crate) fn detect_network_adapters() -> Vec<NetAdapterInfo> {
@@ -2020,6 +2041,37 @@ mod net_adapter_tests {
         assert!(name_is_virtual("VirtualBox Host-Only Ethernet Adapter"));
         assert!(!name_is_virtual("Realtek PCIe GbE Family Controller"));
         assert!(!name_is_virtual("Intel Ethernet Connection I219-V"));
+    }
+
+    use super::{network_connection_kind, NetAdapterInfo};
+    fn adapter(physical: bool, medium: &str, connected: bool) -> NetAdapterInfo {
+        NetAdapterInfo { name: "NIC".into(), physical, medium: medium.into(), connected }
+    }
+
+    #[test]
+    fn connection_kind_prefers_active_wired_then_wifi() {
+        // A connected physical wired NIC is the active connection (even if Wi-Fi is also up).
+        assert_eq!(network_connection_kind(&[adapter(true, "wired", true)]), "wired");
+        assert_eq!(
+            network_connection_kind(&[adapter(true, "wired", true), adapter(true, "wifi", true)]),
+            "wired",
+        );
+        // Wired present but DOWN, Wi-Fi up → wifi is the active connection.
+        assert_eq!(
+            network_connection_kind(&[adapter(true, "wired", false), adapter(true, "wifi", true)]),
+            "wifi",
+        );
+    }
+
+    #[test]
+    fn connection_kind_ignores_virtual_and_handles_offline() {
+        // A virtual adapter (physical=false) never counts, even if it claims connected+wired.
+        assert_eq!(network_connection_kind(&[adapter(false, "wired", true)]), "none");
+        // No physical link up at all → none (offline; honest, not a scare).
+        assert_eq!(network_connection_kind(&[adapter(true, "wired", false)]), "none");
+        assert_eq!(network_connection_kind(&[]), "none");
+        // Connected physical of an unclassified medium → "other" (never guessed wired/wifi).
+        assert_eq!(network_connection_kind(&[adapter(true, "other", true)]), "other");
     }
 }
 
