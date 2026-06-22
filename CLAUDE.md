@@ -226,14 +226,14 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   the HardwareGrid GPU card. Backend + render text-verified live (`monitorModels` present); 4 tests.
 >   Also `4adac34` fixed pre-existing GPU-warmth test time-bombs (hardcoded 2026-06-08 fixtures aged out
 >   of the 14-day window on 06-22 — now clock-independent).
-> - **⚠️ FINDING (owner/design call): the default dashV2 Home does NOT render the HardwareGrid.** The
->   `compy_dash_v2` Home shows DashboardV2 (posture + #1-limiter + last-session + a one-line rig
->   summary); the full "Your hardware" card grid (`.cc-hardware` / HardwareSection) renders only in the
->   non-dashV2 branch + classic Overview, and even there defaults to the 3D RigViewer (Cards is a
->   toggle). So the monitor row **and Cowork's A1 grid surfacing (BIOS/XMP/SMART, `0eafc88`)** are
->   low-visibility on the shipped default Home — a chunk of hardware-detail work the owner won't see by
->   default. Not a bug in any one feature; a Home-layout decision (surface the hardware grid / key
->   detail on the dashV2 Home, or accept it lives in Advanced/Diagnostics + the classic view).
+> - **✅ FINDING RESOLVED (owner-greenlit, `034c931`): the full hardware grid is now on the default Home.**
+>   The dashV2 Home's "This rig" Cards toggle previously rendered a sparse 4-metric summary
+>   (Memory/Cores/GPU/OS), so the rich per-component detail — the EDID monitor model, Display, Network,
+>   and the A1 BIOS/XMP/SMART surfacing — was classic/Overview-only. The Cards branch of DashboardV2 now
+>   renders the shared HardwareGrid; the 3D rig hologram stays the DEFAULT centerpiece (Cards = full
+>   detail, one toggle away). Live-verified at 1440px: the Graphics card reads "Monitors: Acer XFA253Q Z
+>   · ASUS VG245", grid composes coherently with the premium dashboard, no duplication. (Cowork's A1
+>   grid surfacing rides along automatically.)
 > - **Reconciled with a Cowork push mid-run** (no force-push): origin/main had advanced to `738e0c2`
 >   (Cowork's **power-source WMI fix** `1ffa968` — the Diagnostics-crash cause CC diagnosed — + a
 >   **service-suspend** Phase-B feature built DARK/gated). CC rebased its CPU/VRAM commit onto it →
@@ -241,7 +241,8 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 > - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Verify on the merged
 >   tree: cargo **539** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
 >   refs (`16069fa`) untouched. Installed build NSIS
-> `4742ADA84E43F93E6D876667D5A0B33CF3BB4ABEB0198933E6D99F87E4C1615E` (carries all five features + Cowork's
+> `69E13D86DD88BA0F685A0C6A6BB408623F05EEA20CFB98F180177DB46EF4B93E` (carries all five features + the
+> default-Home hardware grid + Cowork's
 > power-source fix + service-suspend-dark + debloat-dark). The Diagnostics power-source crash CC saw is
 > root-cause-fixed in this build (Cowork's `1ffa968`, WMI on the command thread); app stable across testing.
 > - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, confidence-chip
