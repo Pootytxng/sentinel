@@ -1217,6 +1217,17 @@ pub(crate) fn power_status_label(
 }
 
 pub(crate) fn detect_power_status() -> String {
+    // WMI needs COM on a thread with a clean apartment. get_diagnostics calls this on the Tauri
+    // command thread, whose COM is already initialized in a conflicting mode → COMLibrary::new()
+    // fails THERE and the probe silently returned "Unknown" on real desktops (caught in a live
+    // self-review, NOT by the pure unit test, which runs on a clean test thread). Every other WMI
+    // probe avoids this by running on a fresh thread; route this one the same way. Map a panicked
+    // thread (on_wmi_thread → "") to "Unknown" so the Diagnostics non-empty-value contract holds.
+    let s = on_wmi_thread(detect_power_status_inner);
+    if s.is_empty() { "Unknown".into() } else { s }
+}
+
+fn detect_power_status_inner() -> String {
     let Some(com) = COMLibrary::new().ok() else {
         return "Unknown".into();
     };
@@ -1241,6 +1252,15 @@ mod power_status_tests {
         assert_eq!(power_status_label(true, Some(1), Some(60)), "On battery (60%)");
         assert_eq!(power_status_label(true, None, Some(80)), "Battery 80%");
         assert_eq!(power_status_label(true, None, None), "Battery present");
+    }
+
+    #[test]
+    fn detect_power_status_is_never_empty() {
+        // The Diagnostics surface requires a non-empty value (no blank rows). Even if the WMI
+        // thread fails or panics, detect_power_status degrades to "Unknown", never "". Guards the
+        // on_wmi_thread wrapping that fixed the command-thread COM-init failure ("Power source:
+        // Unknown" on real desktops).
+        assert!(!super::detect_power_status().is_empty());
     }
 }
 
