@@ -295,6 +295,28 @@ export default function Check({
         </button>
       </header>
 
+      {/* Confidence chips (owner-greenlit) — the readiness breakdown by status, color-coded: a quick
+          green/neutral/red read of where the rig stands. Reuses the counts already computed by
+          get_game_readiness; each chip hidden when its count is 0 (a clean rig shows just "N ready"). */}
+      {phase === "verdict" && readiness && (
+        <div className="check-confidence" role="status" aria-label="Readiness breakdown">
+          {readiness.ready_count > 0 && (
+            <span className="cc-chip cc-chip-ready">{readiness.ready_count} ready</span>
+          )}
+          {readiness.advisory_count > 0 && (
+            <span className="cc-chip cc-chip-advisory">{readiness.advisory_count} advisory</span>
+          )}
+          {readiness.attention_count > 0 && (
+            <span className="cc-chip cc-chip-attention">
+              {readiness.attention_count} need attention
+            </span>
+          )}
+          {readiness.unknown_count > 0 && (
+            <span className="cc-chip cc-chip-unknown">{readiness.unknown_count} unknown</span>
+          )}
+        </div>
+      )}
+
       <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
 
       {/* The ranked result — appears after the rows have streamed. */}

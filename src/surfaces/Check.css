@@ -41,6 +41,38 @@
   color: var(--ix-text-2);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
+
+/* Confidence chips (owner-greenlit) — readiness breakdown by status. Colored-TEXT pills (like the
+   verdict chips): no solid accent fill, so legibility never depends on --ix-accent-ink. */
+.check-confidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 2px;
+}
+.cc-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ix-glass-border);
+}
+.cc-chip-ready {
+  color: var(--ix-accent-text);
+  border-color: var(--accent-line, rgba(46, 230, 192, 0.32));
+  background: var(--accent-soft, rgba(46, 230, 192, 0.1));
+}
+.cc-chip-attention {
+  color: var(--ix-danger);
+  border-color: rgba(240, 114, 111, 0.4);
+  background: rgba(240, 114, 111, 0.1);
+}
+.cc-chip-advisory {
+  color: var(--ix-text-1);
+}
+.cc-chip-unknown {
+  color: var(--ix-text-3);
+}
 .check-rerun {
   flex-shrink: 0;
   padding: 8px 16px;
