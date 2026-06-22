@@ -197,6 +197,31 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🧩 APP-WIDE UI RESTRUCTURE SHIPPED + INSTALLED — 2026-06-21 (branch `ui/home-restructure`,
+> local `main` fast-forwarded to it; NOT pushed).** Owner-driven "condense + keep related things
+> together; simplified meaningful context up front, rich detail never buried." Three tabs restructured
+> + two polished, each designed (council) → spec → built (subagent-driven) → self-reviewed live → flag /
+> fix → batch-built → reinstalled + CDP-verified in the shipped binary. All reversible.
+> - **Optimize** (tab #1, `compy_optimize` default-ON, "0"=classic) — Check + Tune merged into one tab
+>   with **Fixes / Applied / History** segments (the Trust Ledger surfaced as a peer, not buried), a
+>   persistent **"N active · undo"** chip + land-on-Applied, and a V0-derived **gliding segmented
+>   control** (volumetric-depth direction, owner taste-tuned to motion-forward/restrained-glow).
+> - **Monitor** (tab #2, `compy_monitor` default-ON) — **Sessions / Live** segments; the last-session
+>   debrief promoted to a **hero card** (was buried at the bottom); overlay config collapsed in Live.
+> - **Home** (tab #3) — the **#1-limiter CTA restored** to the top of the default (dashV2) Home (it had
+>   been dropped when dashV2 shipped — the actionable card had vanished). Un-gated fix.
+> - **Blackbook + Lab polish** — "HOW WE GRADE" → collapsible chip, "GRADE:" verdict label, an Autopsy
+>   signpost; Lab's redundant welcome band retired, Black Box moved to slot 2, Benchmark summary surfaced.
+> - **Shared `src/design/SegmentedControl.{tsx,css}`** extracted (Optimize + Monitor consume it; gliding
+>   pill measured from the live DOM, contrast/motion/sweep laws preserved). Also folded the stranded
+>   `0907425` coverage commit's unique value (the `guided.ts` ms-settings allowlist *enforcement*).
+> - **Verify:** vitest **518** · cargo **489** · tsc clean · doctrine guards green · adversarial whole-branch
+>   audit clean (reversibility byte-identical OFF, zero new IPC, no boundary/gate touches). Installed build
+>   SHA-256 `0289E55957642ECD85C23BA17BC0235A38350EC99EE693721D7BE3CD735A55BE` on the owner's Desktop +
+>   silent-reinstalled. **Frozen beta refs (`16069fa`) untouched; remote-fetch/updater off; nothing pushed
+>   to origin.** Next (deferred, owner's call): push `main` to origin; Cowork's `roadmap-sequencing.md`
+>   Phase-A 1.0 feature work (branches off this now-current `main`).
+
 > **🔇🧹 WAVE 0 (NO-FLASH ELEVATION) + FLAG-CLASS INLINE LAW + RETIREMENT EXECUTED + INTUITIVENESS
 > SWEEP — 2026-06-20 (`origin/main` @ `0ffd3e3`).** All reversible, all verified (cargo **449** ·
 > vitest **464** · clippy/tsc/build clean · /check + /security clean per train). Frozen beta refs
