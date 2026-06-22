@@ -160,6 +160,8 @@ pub(crate) struct HardwareInfo {
     pub(crate) windows_version: Option<WindowsVersionInfo>,
     /// Motherboard firmware: version + publication date + age. None when Win32_BIOS is unreadable.
     pub(crate) bios_info: Option<BiosInfo>,
+    /// Hypervisor present (VBS/Hyper-V/WSL2/VM) + CPU SVM/VT-x firmware state. None when WMI fails.
+    pub(crate) virtualization: Option<VirtualizationInfo>,
     pub(crate) cpu_arch: Option<CpuArchInfo>,
     pub(crate) has_active_wired_ethernet: bool,
     /// A physical wired-Ethernet PORT exists (regardless of whether a cable is plugged in) —
@@ -978,6 +980,66 @@ pub(crate) fn bios_age_label(age_days: Option<i64>) -> &'static str {
     }
 }
 
+// ─── Virtualization / hypervisor (detection-layer Probe #5, feasible-usermode) ─
+// HypervisorPresent (Win32_ComputerSystem) = a hypervisor IS running — VBS/Memory Integrity,
+// Hyper-V, WSL2, Sandbox, or a VM — which carries a small FPS cost in some games. SVM/VT-x
+// (Win32_Processor.VirtualizationFirmwareEnabled) is the firmware CAPABILITY toggle, neutral on
+// its own. Both are plain user-mode WMI bools; unreadable → None / "Unknown", never guessed.
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct VirtualizationInfo {
+    pub(crate) hypervisor_present: bool,
+    pub(crate) cpu_virtualization_enabled: Option<bool>, // SVM/VT-x enabled in firmware
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_ComputerSystem")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32ComputerSystem {
+    pub(crate) hypervisor_present: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_Processor")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32ProcessorVirt {
+    pub(crate) virtualization_firmware_enabled: Option<bool>,
+}
+
+pub(crate) fn detect_virtualization() -> Option<VirtualizationInfo> {
+    let com = COMLibrary::new().ok()?;
+    let wmi_conn = WMIConnection::new(com).ok()?;
+    let cs: Vec<Win32ComputerSystem> = wmi_conn.query().ok()?;
+    let hypervisor_present = cs
+        .into_iter()
+        .next()
+        .and_then(|c| c.hypervisor_present)
+        .unwrap_or(false);
+    // Best-effort: the CPU virtualization flag is a nice-to-have, not worth failing the probe over.
+    let cpu: Vec<Win32ProcessorVirt> = wmi_conn.query().unwrap_or_default();
+    let cpu_virtualization_enabled =
+        cpu.into_iter().next().and_then(|p| p.virtualization_firmware_enabled);
+    Some(VirtualizationInfo {
+        hypervisor_present,
+        cpu_virtualization_enabled,
+    })
+}
+
+#[cfg(test)]
+mod virtualization_detection_tests {
+    use super::*;
+
+    #[test]
+    fn wmi_virtualization_shapes_deserialize() {
+        // Pins the PascalCase mapping (the easy-to-get-wrong part).
+        let cs: Win32ComputerSystem =
+            serde_json::from_str(r#"{"HypervisorPresent":true}"#).expect("parses");
+        assert_eq!(cs.hypervisor_present, Some(true));
+        let cpu: Win32ProcessorVirt =
+            serde_json::from_str(r#"{"VirtualizationFirmwareEnabled":true}"#).expect("parses");
+        assert_eq!(cpu.virtualization_firmware_enabled, Some(true));
+    }
+}
+
 #[cfg(test)]
 mod bios_detection_tests {
     use super::*;
@@ -1409,6 +1471,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
         bios_info: detect_bios(),
+        virtualization: detect_virtualization(),
         has_active_wired_ethernet,
         has_wired_ethernet_port,
         eee_switch_exposed,

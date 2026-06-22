@@ -109,13 +109,34 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
     // ─── Security ────────────────────────────────────────────────────────
     sections.push(DiagnosticSection {
         name: "Security".into(),
-        entries: vec![DiagnosticEntry {
-            label: "Memory Integrity / VBS active".into(),
-            value: yes_no(memory_integrity_or_vbs_active()),
-            note: Some(
-                "Hypervisor-based kernel protection. Strong against certain malware classes, with measurable FPS cost in some games.".into(),
-            ),
-        }],
+        entries: vec![
+            DiagnosticEntry {
+                label: "Memory Integrity / VBS active".into(),
+                value: yes_no(memory_integrity_or_vbs_active()),
+                note: Some(
+                    "Hypervisor-based kernel protection. Strong against certain malware classes, with measurable FPS cost in some games.".into(),
+                ),
+            },
+            DiagnosticEntry {
+                label: "Hypervisor running".into(),
+                value: match &hw.virtualization {
+                    Some(v) => yes_no(v.hypervisor_present),
+                    None => "Unknown".into(),
+                },
+                note: Some(
+                    "A hypervisor is active when VBS/Memory Integrity, Hyper-V, WSL2, Sandbox, or a VM is on. Small FPS cost in some games.".into(),
+                ),
+            },
+            DiagnosticEntry {
+                label: "CPU virtualization (SVM/VT-x) in firmware".into(),
+                value: match hw.virtualization.as_ref().and_then(|v| v.cpu_virtualization_enabled) {
+                    Some(true) => "Enabled".into(),
+                    Some(false) => "Disabled".into(),
+                    None => "Unknown".into(),
+                },
+                note: None,
+            },
+        ],
     });
 
     // ─── Display ─────────────────────────────────────────────────────────
@@ -387,6 +408,7 @@ mod diagnostics_tests {
         assert!(power.iter().any(|l| l == "Fast Startup"));
         assert!(power.iter().any(|l| l.contains("HAGS")));
         assert!(power.iter().any(|l| l == "BIOS / firmware"));
+        assert!(labels_of("Security").iter().any(|l| l == "Hypervisor running"));
         assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
         // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").
         assert!(labels_of("Network").iter().any(|l| l == "Wired Ethernet"));
