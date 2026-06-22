@@ -197,6 +197,25 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🔬 A1 DETECTION LAYER — TWO LANES RECONCILED + MERGED TO MAIN — 2026-06-22 (`main` ← `reconcile/a1-merge`).**
+> Two A1 efforts were built in parallel: Cowork's 7-probe `roadmap/detection-layer` (spec-backed, in
+> Diagnostics + Home grid + Readiness) and CC's smaller 4-probe `feat/a1-detection` (briefly shipped to
+> the owner's machine). **Owner chose Cowork's as canonical.** This merges Cowork's A1 into the
+> post-restructure `main` (auto-merge, zero conflicts — A1 lives in Diagnostics/HardwareGrid/Readiness,
+> the restructure in Check/Optimize/Monitor; only App.tsx overlapped, merged cleanly), then salvages
+> CC's two unique bits:
+> - **Cowork's 7 probes (canonical):** BIOS age · XMP/EXPO · Hyper-V/VBS/SVM · core-parking *policy* ·
+>   SMART · USB capability tier · power source (AC/battery). Walled ones (thermal-throttle, PBO,
+>   SpeedShift, GPU-profile) correctly excluded per [[detection-feasibility-walls-usermode]].
+> - **Salvaged from CC's lane:** (1) `cim_date_iso` boundary-safety (`.get()`-based — firmware-controlled
+>   `Win32_BIOS.ReleaseDate` with a multi-byte UTF-8 char no longer panics; non-ASCII fixture). (2) New
+>   **`memory-channels`** Readiness check (single DIMM → add a stick for dual-channel; single SOLDERED
+>   LPDDR → Ready, not a dead-end; 2+ → Ready; 0 → Unknown). CC's 3 duplicate probes (BIOS/XMP/SMART) dropped.
+> - **Verify:** cargo **515** · vitest **522** · tsc clean · zero warnings · doctrine guards green ·
+>   /check + /security clean (read-only; capabilities/CSP/updater/remote-fetch untouched). Commits:
+>   `cb95613` (merge) · `dd48966` (salvage). **Frozen beta refs (`16069fa`) untouched.** CC's old
+>   `feat/a1-detection` (4-probe) is superseded — retained as a branch only.
+
 > **🧩 APP-WIDE UI RESTRUCTURE SHIPPED + INSTALLED — 2026-06-21 (branch `ui/home-restructure`,
 > local `main` fast-forwarded to it; NOT pushed).** Owner-driven "condense + keep related things
 > together; simplified meaningful context up front, rich detail never buried." Three tabs restructured
