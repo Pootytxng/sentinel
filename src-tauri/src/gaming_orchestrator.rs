@@ -64,6 +64,31 @@ pub(crate) struct StartOptions {
     pub(crate) advanced_usb: bool,
     #[serde(default)]
     pub(crate) advanced_pcie: bool,
+    /// Optional allowlisted services to SUSPEND for this session (BUILT DARK — gated by
+    /// `service_suspend_gate()`). Absent / empty for every current caller (serde default), so the
+    /// gaming session is unchanged until both the gate is armed AND a picker surfaces these.
+    #[serde(default)]
+    pub(crate) suspend_services: Vec<String>,
+}
+
+/// PURE: the allowlisted services to suspend this session. Empty when the feature is gated off (dark)
+/// — so the gaming session is byte-identical to before — or when a requested name isn't on the
+/// `KnownService` allowlist (off-list / critical services can never reach the suspend primitive).
+/// DEDUPLICATED: the result is bounded to the allowlist size (≤4) regardless of input length, so a
+/// compromised webview can't flood UAC / repeated elevations with a giant or duplicate-laden list.
+fn services_to_suspend(opts: &StartOptions, gate_open: bool) -> Vec<actions::KnownService> {
+    if !gate_open {
+        return vec![];
+    }
+    let mut out: Vec<actions::KnownService> = vec![];
+    for name in &opts.suspend_services {
+        if let Some(svc) = actions::KnownService::from_name(name) {
+            if !out.contains(&svc) {
+                out.push(svc);
+            }
+        }
+    }
+    out
 }
 
 fn push(changes: &mut Vec<SessionChange>, label: &str, r: ApplyResult) {
@@ -144,6 +169,16 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         apply_step!("PCIe ASPM off (AC)", apply_pcie_aspm_off());
     }
 
+    // Session service-suspend (BUILT DARK — gated by service_suspend_gate()). When the gate is closed
+    // `services_to_suspend` returns empty, so this loop never runs and the session is byte-identical to
+    // before. Each suspend rides the SAME session contract (Snapshot::Service + ResumeServiceFromSnapshot),
+    // so resume happens automatically on stop / restore / crash-recovery — no new restore path. Only
+    // allowlisted services reach the primitive (the picker is an arming-time follow-up).
+    for svc in services_to_suspend(&opts, actions::service_suspend_gate()) {
+        let label = format!("Suspend {} for this session", svc.name());
+        apply_step!(&label, actions::apply_service_suspend(svc));
+    }
+
     Ok(file)
 }
 
@@ -217,6 +252,113 @@ mod live_session_tests {
         // No disk session at all.
         assert!(!same_session(None, Some("gm-1")));
         assert!(!same_session(None, None));
+    }
+}
+
+#[cfg(test)]
+mod service_suspend_integration_tests {
+    use super::*;
+    use crate::actions::{KnownService, RollbackAction, Snapshot};
+    use crate::gaming_session::{
+        parse_session_json, resolve_restore_order, SessionChange, SessionFile, SessionStatus,
+        SESSION_SCHEMA_VERSION,
+    };
+
+    #[test]
+    fn gate_closed_suspends_nothing_even_when_requested() {
+        let opts = StartOptions {
+            suspend_services: vec!["WSearch".into(), "SysMain".into()],
+            ..Default::default()
+        };
+        // DARK: gate closed → empty → the gaming session stays byte-identical to before.
+        assert!(services_to_suspend(&opts, false).is_empty());
+    }
+
+    #[test]
+    fn gate_open_maps_allowlisted_and_drops_offlist() {
+        let opts = StartOptions {
+            suspend_services: vec![
+                "WSearch".into(),     // allowlisted
+                "lsass".into(),       // critical → dropped
+                "NotAService".into(), // unknown → dropped
+                "SysMain".into(),     // allowlisted
+                "WSearch".into(),     // duplicate → deduped (bounds UAC/elevation count)
+            ],
+            ..Default::default()
+        };
+        // Order preserved; only allowlisted survive (critical/unknown never reach the primitive); the
+        // duplicate is collapsed so the result is bounded to the allowlist size regardless of input.
+        assert_eq!(
+            services_to_suspend(&opts, true),
+            vec![KnownService::WSearch, KnownService::SysMain]
+        );
+    }
+
+    #[test]
+    fn giant_or_duplicate_list_is_bounded_to_the_allowlist_size() {
+        // A compromised webview sending a flood can't drive a flood of elevations: dedup + allowlist
+        // cap the result at the 4 known services no matter how long the input is.
+        let opts = StartOptions {
+            suspend_services: vec!["WSearch".to_string(); 10_000],
+            ..Default::default()
+        };
+        assert_eq!(services_to_suspend(&opts, true), vec![KnownService::WSearch]);
+    }
+
+    #[test]
+    fn start_options_deserializes_camel_case_and_defaults_empty() {
+        let with: StartOptions = serde_json::from_str(r#"{"suspendServices":["WSearch"]}"#).unwrap();
+        assert_eq!(with.suspend_services, vec!["WSearch".to_string()]);
+        // Every existing caller omits the field → serde default empty → no behavior change.
+        let without: StartOptions = serde_json::from_str("{}").unwrap();
+        assert!(without.suspend_services.is_empty());
+        assert!(!without.advanced_usb && !without.advanced_pcie);
+    }
+
+    #[test]
+    fn service_change_round_trips_through_session_file_no_schema_bump() {
+        // A suspend rides the EXISTING SessionFile shape (no SESSION_SCHEMA_VERSION change): the
+        // Service snapshot + ResumeServiceFromSnapshot already serialize (shipped with the primitive).
+        let file = SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: "gm-svc".into(),
+            status: SessionStatus::Active,
+            started_at: "2026-06-22T00:00:00Z".into(),
+            app_version: "0.1.0".into(),
+            changes: vec![
+                SessionChange {
+                    label: "Windows Game Mode on".into(),
+                    rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+                    snapshot: Snapshot::GameMode { prior_enabled: None, prior_allow: None },
+                    elevated_restore: false,
+                },
+                SessionChange {
+                    label: "Suspend WSearch for this session".into(),
+                    rollback_action: RollbackAction::ResumeServiceFromSnapshot {
+                        service: KnownService::WSearch,
+                    },
+                    snapshot: Snapshot::Service {
+                        prior_state: "Running".into(),
+                        prior_start_mode: "Manual".into(),
+                    },
+                    elevated_restore: true,
+                },
+            ],
+            started_monitoring: false,
+        };
+        let json = serde_json::to_string(&file).unwrap();
+        let back = parse_session_json(&json).expect("round-trips at the current schema");
+        assert_eq!(back.changes.len(), 2);
+        // Restore runs in reverse → the service resume happens BEFORE the game-mode restore.
+        let order: Vec<String> = resolve_restore_order(&back.changes)
+            .iter()
+            .map(|c| c.label.clone())
+            .collect();
+        assert_eq!(order[0], "Suspend WSearch for this session");
+        assert!(matches!(
+            back.changes[1].rollback_action,
+            RollbackAction::ResumeServiceFromSnapshot { .. }
+        ));
     }
 }
 
@@ -332,7 +474,7 @@ mod gaming_mode_qa {
         // so start() must undo the partial core and surface an error — never a partial Active state.
         let res = {
             let _force = crate::actions::ForceElevationError::begin();
-            start(StartOptions { advanced_usb: true, advanced_pcie: false })
+            start(StartOptions { advanced_usb: true, advanced_pcie: false, ..Default::default() })
         };
         let after = snapshot();
         eprintln!("[QA5] after : plan={:?} game_mode_on={} game_bar_off={} err={}", after.0, after.1, after.2, res.is_err());
@@ -340,6 +482,33 @@ mod gaming_mode_qa {
         assert!(res.is_err(), "a cancelled elevation during start must surface as an error");
         assert!(load_session().is_none(), "no contract should remain after a cancelled start (partial undone + cleared)");
         assert_eq!(after, before, "a cancelled start must leave NO partial mutation — exact prior state");
+        let _ = clear_session();
+    }
+
+    #[test]
+    #[ignore = "mutates the live core bundle (game mode HKCU); dev-rig QA only"]
+    fn qa9_in_session_service_suspend_failure_undoes_partial() {
+        use crate::actions::{ForceElevationError, ForceServiceSuspendGate};
+        require_clean();
+        let before = snapshot();
+        eprintln!("[QA9] before: plan={:?} game_mode_on={} game_bar_off={}", before.0, before.1, before.2);
+
+        // Open the service-suspend gate (test seam) so the in-session suspend step is REACHED, and force
+        // its elevation to fail (as a UAC cancel would). The UAC-free core applies, then the elevated
+        // service step is refused → start() must undo the partial core and surface an error, never a
+        // partial Active state. (The SUCCESS path — a real suspend+resume in-session — needs genuine
+        // elevation via the built compy.exe and is an owner-present arming-time QA, not cargo-test.)
+        let res = {
+            let _gate = ForceServiceSuspendGate::begin();
+            let _force = ForceElevationError::begin();
+            start(StartOptions { suspend_services: vec!["WSearch".into()], ..Default::default() })
+        };
+        let after = snapshot();
+        eprintln!("[QA9] after : plan={:?} game_mode_on={} game_bar_off={} err={}", after.0, after.1, after.2, res.is_err());
+
+        assert!(res.is_err(), "a failed in-session service suspend must surface as an error");
+        assert!(load_session().is_none(), "the partial core must be undone + the contract cleared");
+        assert_eq!(after, before, "a failed service step must leave NO partial mutation — exact prior state");
         let _ = clear_session();
     }
 
