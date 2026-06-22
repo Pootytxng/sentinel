@@ -164,6 +164,44 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         entries: display,
     });
 
+    // ─── Memory ──────────────────────────────────────────────────────────
+    // XMP/EXPO honesty: we flag RAM running BELOW its rated speed (actionable — profile likely
+    // off), but never claim a profile is "active" (a JEDEC kit also runs at rated, indistinguishable).
+    let mut memory = Vec::<DiagnosticEntry>::new();
+    if hw.memory_modules.is_empty() {
+        memory.push(DiagnosticEntry {
+            label: "Memory modules".into(),
+            value: "Not detected".into(),
+            note: Some("SMBIOS + WMI both returned no populated DIMM slots.".into()),
+        });
+    } else {
+        for (i, m) in hw.memory_modules.iter().enumerate() {
+            let gb = m.capacity_bytes / 1_073_741_824;
+            let who = if m.manufacturer.is_empty() {
+                format!("{} {}GB", m.type_name, gb)
+            } else {
+                format!("{} {}GB · {}", m.type_name, gb, m.manufacturer)
+            };
+            let (value, note) = match m.xmp_expo_status.as_str() {
+                "running_below_rated" => (
+                    format!("{} of {} MT/s — below rated speed", m.speed_mhz, m.rated_speed_mhz),
+                    Some("Running slower than the kit is rated for — XMP/EXPO may be off. It's a BIOS memory profile, not something Compy changes.".to_string()),
+                ),
+                "running_at_rated" => (format!("{} MT/s (at rated speed)", m.speed_mhz), None),
+                _ => (format!("{} MT/s", m.speed_mhz), None),
+            };
+            memory.push(DiagnosticEntry {
+                label: format!("DIMM {}: {}", i + 1, who),
+                value,
+                note,
+            });
+        }
+    }
+    sections.push(DiagnosticSection {
+        name: "Memory".into(),
+        entries: memory,
+    });
+
     // ─── Storage ─────────────────────────────────────────────────────────
     let mut storage = Vec::<DiagnosticEntry>::new();
     storage.push(DiagnosticEntry {
@@ -313,7 +351,7 @@ mod diagnostics_tests {
         let names: Vec<String> = get_diagnostics().into_iter().map(|s| s.name).collect();
         assert_eq!(
             names,
-            vec!["Power & boot", "Security", "Display", "Storage", "Network", "Background services"],
+            vec!["Power & boot", "Security", "Display", "Memory", "Storage", "Network", "Background services"],
             "the section set/order is a UI + Export contract"
         );
     }

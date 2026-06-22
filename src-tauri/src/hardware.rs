@@ -56,9 +56,15 @@ pub(crate) struct PhysicalDiskInfo {
 #[derive(Serialize, Clone, Default)]
 pub(crate) struct MemoryModuleInfo {
     pub(crate) capacity_bytes: u64,
-    pub(crate) speed_mhz: u32,
+    pub(crate) speed_mhz: u32, // configured / running speed (MT/s)
+    /// Max-capable speed (SMBIOS 0x15 / WMI Speed), MT/s; 0 if unknown. Compared against
+    /// `speed_mhz` to honestly flag RAM running below what it's rated for.
+    pub(crate) rated_speed_mhz: u32,
     pub(crate) type_name: String, // "DDR3" | "DDR4" | "DDR5" | "LPDDR4" | "LPDDR5" | "Unknown"
     pub(crate) manufacturer: String,
+    /// "running_below_rated" (actionable — XMP/EXPO likely off) | "running_at_rated" (no profile
+    /// claim — a JEDEC kit also runs at rated) | "unknown". Never claims a profile is "active".
+    pub(crate) xmp_expo_status: String,
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -419,6 +425,18 @@ pub(crate) fn parse_smbios_strings(data: &[u8]) -> Vec<String> {
     strings
 }
 
+/// Honest memory-speed status from (max-capable, configured) MT/s. We can PROVE "running below
+/// rated" (actionable: XMP/EXPO likely off, or a stability fallback), but NOT "XMP active" — a plain
+/// JEDEC kit also runs at its rated speed and SMBIOS can't tell the two apart. 0 in either field
+/// (pre-2.7 SMBIOS / WMI gap) → "unknown"; we never guess a profile.
+pub(crate) fn mem_speed_status(rated_mhz: u32, configured_mhz: u32) -> &'static str {
+    match (rated_mhz, configured_mhz) {
+        (0, _) | (_, 0) => "unknown",
+        (r, c) if c < r => "running_below_rated",
+        _ => "running_at_rated",
+    }
+}
+
 pub(crate) fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> {
     let mut modules = Vec::new();
     let mut offset = 0usize;
@@ -556,8 +574,11 @@ pub(crate) fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> 
             modules.push(MemoryModuleInfo {
                 capacity_bytes,
                 speed_mhz,
+                rated_speed_mhz: peak_speed as u32,
                 type_name,
                 manufacturer,
+                xmp_expo_status: mem_speed_status(peak_speed as u32, configured_speed as u32)
+                    .to_string(),
             });
         }
 
@@ -589,11 +610,15 @@ pub(crate) fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
                 _ => "Unknown",
             }
             .to_string();
+            let rated = m.speed.unwrap_or(0);
+            let configured = m.configured_clock_speed.unwrap_or(0);
             MemoryModuleInfo {
                 capacity_bytes: m.capacity.unwrap_or(0),
                 speed_mhz: m.configured_clock_speed.or(m.speed).unwrap_or(0),
+                rated_speed_mhz: rated,
                 type_name,
                 manufacturer: m.manufacturer.unwrap_or_default().trim().to_string(),
+                xmp_expo_status: mem_speed_status(rated, configured).to_string(),
             }
         })
         .collect()
@@ -2110,6 +2135,42 @@ mod parser_tests {
         let mods = parse_smbios_memory_devices(&dev);
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].capacity_bytes, 1024u64 * 1024);
+    }
+
+    #[test]
+    fn mem_speed_status_is_honest() {
+        assert_eq!(mem_speed_status(6000, 4800), "running_below_rated");
+        assert_eq!(mem_speed_status(6000, 6000), "running_at_rated");
+        assert_eq!(mem_speed_status(6000, 0), "unknown");
+        assert_eq!(mem_speed_status(0, 6000), "unknown");
+        // configured can't honestly exceed max-capable; a quirk that reports it still isn't "below".
+        assert_eq!(mem_speed_status(5600, 6000), "running_at_rated");
+    }
+
+    #[test]
+    fn smbios_mem_below_rated_flags_xmp_off() {
+        // EXPO/XMP off: configured (4800 JEDEC) below max-capable (6000) → actionable signal.
+        let dev = type17(0x22, 0x2000, 0x22, 6000, 4800, 0, 1, 0, &["G.Skill"]);
+        let m = &parse_smbios_memory_devices(&dev)[0];
+        assert_eq!(m.speed_mhz, 4800);
+        assert_eq!(m.rated_speed_mhz, 6000);
+        assert_eq!(m.xmp_expo_status, "running_below_rated");
+    }
+
+    #[test]
+    fn smbios_mem_at_rated_makes_no_profile_claim() {
+        // EXPO on OR a JEDEC kit at native speed — indistinguishable, so we never claim "active".
+        let dev = type17(0x22, 0x2000, 0x22, 6000, 6000, 0, 1, 0, &["G.Skill"]);
+        let m = &parse_smbios_memory_devices(&dev)[0];
+        assert_eq!(m.rated_speed_mhz, 6000);
+        assert_eq!(m.xmp_expo_status, "running_at_rated");
+    }
+
+    #[test]
+    fn smbios_mem_status_unknown_without_configured() {
+        // Configured-speed field zero (pre-2.7 SMBIOS or unset) → we don't guess.
+        let dev = type17(0x22, 0x2000, 0x22, 3200, 0, 0, 1, 0, &["Kingston"]);
+        assert_eq!(parse_smbios_memory_devices(&dev)[0].xmp_expo_status, "unknown");
     }
 
     #[test]
