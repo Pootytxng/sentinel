@@ -1,0 +1,156 @@
+/* SegmentedControl — the shared measured-glide segmented control, extracted verbatim from
+   Optimize.css (phase 1b "Volumetric depth / parallax" winner). SAME visual treatment: a translucent
+   charcoal glass rail, a breathing top-edge refraction trace, and ONE gliding accent pill that travels
+   to the selected tab (measured from the live DOM in SegmentedControl.tsx — no faked motion). Class
+   names are generic (.seg-control / .seg-indicator / .seg-btn) so Optimize, Monitor, and future tabs
+   share ONE control. The ambient parallax backdrop + the "N active · undo" chip stay in Optimize.css
+   (consumer-specific); only the control itself lives here.
+
+   COMPY LAWS honored (re-verified):
+   • TOKENS ONLY — every color/border/shadow resolves from the --ix-* layer via color-mix; ZERO
+     literal hex/rgb/rgba. Recolors cleanly under Midnight/Violet/Crimson/Emerald/Hearth.
+     INVARIANT (pinned): the active fill is a FLAT var(--ix-accent) (not a gradient), so the contrast
+     guard's proof of --ix-accent-ink on --ix-accent fully covers it in every theme. If a future tweak
+     makes this fill a gradient, add a contrast case for the gradient's darkest stop.
+   • CONTRAST — the active segment label keeps color:var(--ix-accent-ink) on a background:var(--ix-accent)
+     fill (dark ink on bright accent, never muted/white).
+   • MOTION — ON by default and OVERRIDES the OS; every animation is calmed ONLY inside
+     :root[data-motion="reduced"]. No @media (prefers-reduced-motion) anywhere.
+   • SWEEP — no @keyframes named shimmer/sheen. The only name here is seg-trace-breathe.
+   • BORDER HYGIENE — no side-stripe border-(left|right)-color, no border-(left|right)-width ≥2px;
+     every fallback-less var(--ix-*) is a token defined in instrument.css. */
+
+/* ── the glass rail ─────────────────────────────────────────────────────────── */
+.seg-control {
+  position: relative;
+  display: inline-flex;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 16px;
+  /* translucent charcoal glass with light refraction — depth via layered insets */
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ix-glass-fill) 88%, transparent) 0%,
+      var(--ix-glass-fill) 100%
+    );
+  box-shadow:
+    0 6px 24px color-mix(in srgb, var(--ix-base) 60%, transparent),
+    0 2px 8px color-mix(in srgb, var(--ix-base) 42%, transparent),
+    0 0 22px color-mix(in srgb, var(--ix-accent) 9%, transparent),
+    inset 0 1px 0 var(--ix-glass-top),
+    inset 0 -1px 0 color-mix(in srgb, var(--ix-base) 30%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/* Thin top-edge refraction trace across the rail (depth highlight, breathing). */
+.seg-control::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--ix-accent) 40%, transparent) 30%,
+    color-mix(in srgb, var(--ix-text-1) 35%, transparent) 50%,
+    color-mix(in srgb, var(--ix-accent) 40%, transparent) 70%,
+    transparent 100%
+  );
+  animation: seg-trace-breathe 6s ease-in-out infinite alternate;
+}
+@keyframes seg-trace-breathe {
+  0%   { opacity: 0.5; transform: scaleX(0.86); }
+  100% { opacity: 1;   transform: scaleX(1); }
+}
+
+/* ── the gliding active indicator ─────────────────────────────────────────────
+   ONE accent pill that travels to the selected tab (its left/width are measured from the live DOM in
+   SegmentedControl.tsx). THIS is the satisfying "reacts to your click" motion — a confident glide with
+   a small settle, not a playful bounce. CONTRAST LAW: it is a FLAT var(--ix-accent) fill and the active
+   tab's --ix-accent-ink text rides on top of it — exactly what theme-contrast.test.ts proves. */
+.seg-indicator {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 11px;
+  background: var(--ix-accent);
+  box-shadow:
+    0 3px 12px color-mix(in srgb, var(--ix-base) 58%, transparent),
+    0 0 16px color-mix(in srgb, var(--ix-accent) 20%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--ix-text-1) 20%, transparent);
+  transition:
+    transform 380ms cubic-bezier(0.34, 1.2, 0.4, 1),
+    width 380ms cubic-bezier(0.34, 1.2, 0.4, 1),
+    opacity 200ms ease;
+  will-change: transform, width;
+}
+
+/* ── segments (the labels ride ABOVE the gliding pill) ────────────────────────── */
+.seg-btn {
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-2);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.025em;
+  padding: 8px 18px;
+  border-radius: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 280ms ease,
+    transform 130ms cubic-bezier(0.34, 1.5, 0.6, 1);
+}
+
+/* idle hover — a quiet brighten; the gliding pill owns the "selected" emphasis */
+.seg-btn:hover {
+  color: var(--ix-text-1);
+}
+
+/* tactile press — a satisfying little give on click (settles via the spring ease; motion-gated below) */
+.seg-btn:active {
+  transform: scale(0.92);
+}
+
+/* active tab — dark ink ON the gliding accent pill. CONTRAST LAW: never muted/white. */
+.seg-btn-on,
+.seg-btn-on:hover {
+  color: var(--ix-accent-ink);
+}
+
+.seg-btn:focus-visible {
+  outline: 2px solid var(--ix-accent);
+  outline-offset: 2px;
+}
+
+/* ── motion law: calm/stop ambient motion ONLY when motion is reduced ─────────
+   Motion is ON by default and OVERRIDES the OS; this block is the single opt-out (never an OS
+   reduce-motion media query). The gliding pill still SNAPS to the selected tab (selection stays
+   legible) but no longer travels; the tactile press is dropped; and the top-edge trace halts so it
+   reads as alive-but-quiet, not frozen mid-frame. */
+:root[data-motion="reduced"] .seg-control::before {
+  animation: none !important;
+}
+:root[data-motion="reduced"] .seg-indicator {
+  transition: opacity 200ms ease; /* snap to the selection, don't glide */
+}
+:root[data-motion="reduced"] .seg-btn {
+  transition: color 200ms ease; /* keep the label crossfade, drop the press spring */
+}
+:root[data-motion="reduced"] .seg-btn:active {
+  transform: none; /* no tactile give when motion is reduced */
+}

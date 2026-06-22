@@ -1,9 +1,10 @@
-import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { AppliedChange, Recommendation, SessionSummary, StartupEntry } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import Check from "./Check";
 import Fix from "./Fix";
+import { SegmentedControl } from "../design/SegmentedControl";
 import "./Optimize.css";
 
 // Optimize — the merged Check + Tune surface (phase 1a, spec 2026-06-21-optimize-merge-design).
@@ -76,24 +77,9 @@ export function Optimize({
 }: Props) {
   const [segment, setSegment] = useState<Segment>("fixes");
 
-  // Gliding active indicator (phase 1b motion): ONE accent pill that smoothly travels between segments
-  // on selection — the satisfying "react to the interaction" motion, purposeful not playful. Measured
-  // from the live DOM (offsetLeft/Width of the selected tab) so it fits any label width; useLayoutEffect
-  // seats it before paint (no first-frame jump) and a ResizeObserver re-seats it on layout changes.
-  const segmentsRef = useRef<HTMLDivElement>(null);
-  const [pill, setPill] = useState<{ left: number; width: number; ready: boolean }>({ left: 0, width: 0, ready: false });
-  const measurePill = () => {
-    const el = segmentsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth, ready: true });
-  };
-  useLayoutEffect(measurePill, [segment]);
-  useEffect(() => {
-    const c = segmentsRef.current;
-    if (!c || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measurePill);
-    ro.observe(c);
-    return () => ro.disconnect();
-  }, []);
+  // The gliding active indicator (one accent pill measured from the live DOM) is now the shared
+  // <SegmentedControl> — extracted to src/design so Optimize, Monitor, and future tabs use ONE
+  // measured-glide control. The chip + segment-state logic below stay here (consumer-specific).
 
   // Land-on-Applied (council Contrarian: the panic-user must see undo, not "apply more"). Every apply
   // entry point — a worth-fixing toggle, the batch, Check's inline limiter/drift applies (which fire
@@ -116,25 +102,12 @@ export function Optimize({
   return (
     <section className="optimize-root">
       <header className="optimize-bar">
-        <div className="optimize-segments" role="tablist" aria-label="Optimize sections" ref={segmentsRef}>
-          {/* the gliding accent pill — sits behind the active tab's text, glides to the selection */}
-          <span
-            className="optimize-indicator"
-            aria-hidden="true"
-            style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px`, opacity: pill.ready ? 1 : 0 }}
-          />
-          {SEGMENTS.map((s) => (
-            <button
-              key={s.id}
-              role="tab"
-              aria-selected={segment === s.id}
-              className={`optimize-segment ${segment === s.id ? "optimize-segment-on" : ""}`}
-              onClick={() => setSegment(s.id)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          segments={SEGMENTS}
+          value={segment}
+          onChange={(id) => setSegment(id as Segment)}
+          aria-label="Optimize sections"
+        />
         {/* Persistent active-changes affordance (council First-Principles: rollback is one glance from
             anywhere, not buried at the bottom of a tab). Hidden when nothing is active. */}
         {activeCount > 0 && (
