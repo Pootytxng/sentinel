@@ -52,10 +52,14 @@ for (const p of pages) {
   await c.ready;
   await c.send("Runtime.enable");
   const { result } = await c.send("Runtime.evaluate", {
-    expression: "document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length",
+    expression: "JSON.stringify({w:innerWidth, s:document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length})",
     returnByValue: true,
   });
-  const area = result.value || 0;
+  // Width DOMINATES: the FPS overlay is a narrow (~230px) window, the main shell is wide (~1500px).
+  // innerWidth is robust even when the backgrounded main webview transiently reports rail-count 0
+  // (which made the old rail*1000+buttons score lose to the overlay); rail+buttons only breaks ties.
+  const m = (() => { try { return JSON.parse(result.value); } catch { return { w: 0, s: 0 }; } })();
+  const area = m.w * 100000 + m.s;
   if (!best || area > best.area) {
     if (best) best.ws.close();
     best = { ...c, area };

@@ -37,11 +37,13 @@ for (const p of pages) {
   const c = connect(p.webSocketDebuggerUrl);
   await c.ready;
   await c.send("Runtime.enable");
-  // Pick the MAIN window deterministically: rail-count dominates (the shell has 6 .cc-rail-item; the
-  // hidden overlay has 0), button-count breaks ties (covers the tour, where the rail is hidden). The
-  // two windows share the same entry HTML, so plain area/button counts were ambiguous.
-  const { result } = await c.send("Runtime.evaluate", { expression: "document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length", returnByValue: true });
-  const area = result.value || 0;
+  // Pick the MAIN window by WIDTH: the FPS overlay is a narrow (~230px) window, the main shell is wide
+  // (~800-1500px). innerWidth is robust even when the backgrounded main webview transiently reports
+  // rail-count 0 (which made the old rail*1000+buttons score lose to the overlay); rail+buttons only
+  // breaks ties between same-width pages.
+  const { result } = await c.send("Runtime.evaluate", { expression: "JSON.stringify({w:innerWidth, s:document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length})", returnByValue: true });
+  const m = (() => { try { return JSON.parse(result.value); } catch { return { w: 0, s: 0 }; } })();
+  const area = m.w * 100000 + m.s;
   if (!best || area > best.area) { if (best) best.ws.close(); best = { ...c, area }; }
   else c.ws.close();
 }
