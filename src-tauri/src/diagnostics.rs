@@ -9,8 +9,8 @@ use serde::Serialize;
 
 use crate::hardware::{collect_hardware, gpu_vendor_match};
 use crate::{
-    current_power_plan_name, fast_startup_state, hags_state, memory_integrity_or_vbs_active,
-    reserved_storage_enabled, service_running,
+    core_parking_label, core_parking_min_cores_ac, current_power_plan_name, fast_startup_state,
+    hags_state, memory_integrity_or_vbs_active, reserved_storage_enabled, service_running,
 };
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────
@@ -57,6 +57,11 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         note: None,
     });
     power.push(DiagnosticEntry {
+        label: "Power source".into(),
+        value: crate::hardware::detect_power_status(),
+        note: Some("AC vs battery (live). On a laptop, gaming on battery throttles performance.".into()),
+    });
+    power.push(DiagnosticEntry {
         label: "Fast Startup".into(),
         value: match fast_startup_state() {
             Some(1) => "On".into(),
@@ -78,6 +83,36 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         },
         note: None,
     });
+    power.push(DiagnosticEntry {
+        label: "Core parking policy".into(),
+        value: core_parking_label(core_parking_min_cores_ac()),
+        note: Some(
+            "Whether Windows may park CPU cores at low load (policy, not live per-core state). 'No parking' keeps all cores ready — common on gaming power plans.".into(),
+        ),
+    });
+    power.push(DiagnosticEntry {
+        label: "BIOS / firmware".into(),
+        value: match &hw.bios_info {
+            Some(b) if !b.version.is_empty() => {
+                let mut v = b.version.clone();
+                if !b.release_date.is_empty() {
+                    v.push_str(&format!(" · released {}", b.release_date));
+                }
+                if let Some(d) = b.release_date_age_days {
+                    v.push_str(&format!(
+                        " · {} days old ({})",
+                        d,
+                        crate::hardware::bios_age_label(Some(d))
+                    ));
+                }
+                v
+            }
+            _ => "Unknown".into(),
+        },
+        note: Some(
+            "Firmware version + when it was published. Age is publication date, not proof it's out of date.".into(),
+        ),
+    });
     sections.push(DiagnosticSection {
         name: "Power & boot".into(),
         entries: power,
@@ -86,13 +121,34 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
     // ─── Security ────────────────────────────────────────────────────────
     sections.push(DiagnosticSection {
         name: "Security".into(),
-        entries: vec![DiagnosticEntry {
-            label: "Memory Integrity / VBS active".into(),
-            value: yes_no(memory_integrity_or_vbs_active()),
-            note: Some(
-                "Hypervisor-based kernel protection. Strong against certain malware classes, with measurable FPS cost in some games.".into(),
-            ),
-        }],
+        entries: vec![
+            DiagnosticEntry {
+                label: "Memory Integrity / VBS active".into(),
+                value: yes_no(memory_integrity_or_vbs_active()),
+                note: Some(
+                    "Hypervisor-based kernel protection. Strong against certain malware classes, with measurable FPS cost in some games.".into(),
+                ),
+            },
+            DiagnosticEntry {
+                label: "Hypervisor running".into(),
+                value: match &hw.virtualization {
+                    Some(v) => yes_no(v.hypervisor_present),
+                    None => "Unknown".into(),
+                },
+                note: Some(
+                    "A hypervisor is active when VBS/Memory Integrity, Hyper-V, WSL2, Sandbox, or a VM is on. Small FPS cost in some games.".into(),
+                ),
+            },
+            DiagnosticEntry {
+                label: "CPU virtualization (SVM/VT-x) in firmware".into(),
+                value: match hw.virtualization.as_ref().and_then(|v| v.cpu_virtualization_enabled) {
+                    Some(true) => "Enabled".into(),
+                    Some(false) => "Disabled".into(),
+                    None => "Unknown".into(),
+                },
+                note: None,
+            },
+        ],
     });
 
     // ─── Display ─────────────────────────────────────────────────────────
@@ -141,6 +197,44 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         entries: display,
     });
 
+    // ─── Memory ──────────────────────────────────────────────────────────
+    // XMP/EXPO honesty: we flag RAM running BELOW its rated speed (actionable — profile likely
+    // off), but never claim a profile is "active" (a JEDEC kit also runs at rated, indistinguishable).
+    let mut memory = Vec::<DiagnosticEntry>::new();
+    if hw.memory_modules.is_empty() {
+        memory.push(DiagnosticEntry {
+            label: "Memory modules".into(),
+            value: "Not detected".into(),
+            note: Some("SMBIOS + WMI both returned no populated DIMM slots.".into()),
+        });
+    } else {
+        for (i, m) in hw.memory_modules.iter().enumerate() {
+            let gb = m.capacity_bytes / 1_073_741_824;
+            let who = if m.manufacturer.is_empty() {
+                format!("{} {}GB", m.type_name, gb)
+            } else {
+                format!("{} {}GB · {}", m.type_name, gb, m.manufacturer)
+            };
+            let (value, note) = match m.xmp_expo_status.as_str() {
+                "running_below_rated" => (
+                    format!("{} of {} MT/s — below rated speed", m.speed_mhz, m.rated_speed_mhz),
+                    Some("Running slower than the kit is rated for — XMP/EXPO may be off. It's a BIOS memory profile, not something Compy changes.".to_string()),
+                ),
+                "running_at_rated" => (format!("{} MT/s (at rated speed)", m.speed_mhz), None),
+                _ => (format!("{} MT/s", m.speed_mhz), None),
+            };
+            memory.push(DiagnosticEntry {
+                label: format!("DIMM {}: {}", i + 1, who),
+                value,
+                note,
+            });
+        }
+    }
+    sections.push(DiagnosticSection {
+        name: "Memory".into(),
+        entries: memory,
+    });
+
     // ─── Storage ─────────────────────────────────────────────────────────
     let mut storage = Vec::<DiagnosticEntry>::new();
     storage.push(DiagnosticEntry {
@@ -162,6 +256,18 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
                 pct, d.available_bytes, d.total_bytes
             ),
             note: None,
+        });
+    }
+    // SMART summary (OS rolled-up verdict; per-attribute SMART needs a vendor tool).
+    for dh in &hw.disk_health {
+        storage.push(DiagnosticEntry {
+            label: format!("{} health", dh.friendly_name),
+            value: dh.health.clone(),
+            note: if dh.health == "Healthy" {
+                None
+            } else {
+                Some("OS SMART summary (MSFT_PhysicalDisk). Detailed per-attribute SMART needs the drive vendor's tool.".into())
+            },
         });
     }
     sections.push(DiagnosticSection {
@@ -222,6 +328,26 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
     sections.push(DiagnosticSection {
         name: "Network".into(),
         entries: network,
+    });
+
+    // ─── Peripherals ─────────────────────────────────────────────────────
+    sections.push(DiagnosticSection {
+        name: "Peripherals".into(),
+        entries: vec![DiagnosticEntry {
+            label: "USB capability".into(),
+            value: match &hw.usb {
+                Some(u) => format!(
+                    "Up to {} · {} host controller{}",
+                    u.top_spec,
+                    u.controller_count,
+                    if u.controller_count == 1 { "" } else { "s" }
+                ),
+                None => "Unknown".into(),
+            },
+            note: Some(
+                "The fastest USB the system supports. Per-port negotiated speed isn't reliably readable, so Compy doesn't claim it.".into(),
+            ),
+        }],
     });
 
     // ─── Background services ─────────────────────────────────────────────
@@ -290,7 +416,7 @@ mod diagnostics_tests {
         let names: Vec<String> = get_diagnostics().into_iter().map(|s| s.name).collect();
         assert_eq!(
             names,
-            vec!["Power & boot", "Security", "Display", "Storage", "Network", "Background services"],
+            vec!["Power & boot", "Security", "Display", "Memory", "Storage", "Network", "Peripherals", "Background services"],
             "the section set/order is a UI + Export contract"
         );
     }
@@ -323,8 +449,12 @@ mod diagnostics_tests {
         };
         let power = labels_of("Power & boot");
         assert!(power.iter().any(|l| l == "Active power plan"));
+        assert!(power.iter().any(|l| l == "Power source"));
         assert!(power.iter().any(|l| l == "Fast Startup"));
         assert!(power.iter().any(|l| l.contains("HAGS")));
+        assert!(power.iter().any(|l| l == "BIOS / firmware"));
+        assert!(power.iter().any(|l| l == "Core parking policy"));
+        assert!(labels_of("Security").iter().any(|l| l == "Hypervisor running"));
         assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
         // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").
         assert!(labels_of("Network").iter().any(|l| l == "Wired Ethernet"));

@@ -423,6 +423,18 @@ html, body, #root {
   border-top: 1px solid var(--border);
 }
 
+/* Actionable "heads-up" note under a hardware-grid detail (e.g. RAM below rated speed, SMART
+   concern). Amber text + left rule — reads as "you can do better / manage this elsewhere", the
+   same semantic as .state-warn. Not a filled chip, so legibility needs no --ix-accent-ink. */
+.detail-flag {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--attention, #f5c451);
+  margin: 1px 0 7px;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--attention, #f5c451) 45%, transparent);
+}
+
 .tab-bar {
   display: flex;
   gap: 2px;

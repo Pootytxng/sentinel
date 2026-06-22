@@ -56,9 +56,23 @@ pub(crate) struct PhysicalDiskInfo {
 #[derive(Serialize, Clone, Default)]
 pub(crate) struct MemoryModuleInfo {
     pub(crate) capacity_bytes: u64,
-    pub(crate) speed_mhz: u32,
+    pub(crate) speed_mhz: u32, // configured / running speed (MT/s)
+    /// Max-capable speed (SMBIOS 0x15 / WMI Speed), MT/s; 0 if unknown. Compared against
+    /// `speed_mhz` to honestly flag RAM running below what it's rated for.
+    pub(crate) rated_speed_mhz: u32,
     pub(crate) type_name: String, // "DDR3" | "DDR4" | "DDR5" | "LPDDR4" | "LPDDR5" | "Unknown"
     pub(crate) manufacturer: String,
+    /// "running_below_rated" (actionable — XMP/EXPO likely off) | "running_at_rated" (no profile
+    /// claim — a JEDEC kit also runs at rated) | "unknown". Never claims a profile is "active".
+    pub(crate) xmp_expo_status: String,
+}
+
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct BiosInfo {
+    pub(crate) manufacturer: String,   // "American Megatrends International, LLC.", "Phoenix", etc.
+    pub(crate) version: String,        // SMBIOSBIOSVersion, e.g. "1.A95"
+    pub(crate) release_date: String,   // ISO "2026-03-15", or "" if unparseable
+    pub(crate) release_date_age_days: Option<i64>, // days since publication, if parseable
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -123,6 +137,7 @@ pub(crate) struct MsftPhysicalDisk {
     pub(crate) media_type: Option<u16>,
     pub(crate) bus_type: Option<u16>,
     pub(crate) size: Option<u64>,
+    pub(crate) health_status: Option<u16>, // 0 Healthy | 1 Warning | 2 Unhealthy | 5 Unknown
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -141,9 +156,18 @@ pub(crate) struct HardwareInfo {
     pub(crate) disks: Vec<DiskInfo>,
     pub(crate) gpus: Vec<GpuInfo>,
     pub(crate) physical_disks: Vec<PhysicalDiskInfo>,
+    /// OS SMART-summary health per physical disk (separate from physical_disks to avoid touching
+    /// its many test construction sites). Empty when the Storage namespace is blocked.
+    pub(crate) disk_health: Vec<DiskHealth>,
     pub(crate) display: Option<DisplayInfo>,
     pub(crate) memory_modules: Vec<MemoryModuleInfo>,
     pub(crate) windows_version: Option<WindowsVersionInfo>,
+    /// Motherboard firmware: version + publication date + age. None when Win32_BIOS is unreadable.
+    pub(crate) bios_info: Option<BiosInfo>,
+    /// Hypervisor present (VBS/Hyper-V/WSL2/VM) + CPU SVM/VT-x firmware state. None when WMI fails.
+    pub(crate) virtualization: Option<VirtualizationInfo>,
+    /// USB platform capability tier (from host-controller names). None when WMI fails.
+    pub(crate) usb: Option<UsbSummary>,
     pub(crate) cpu_arch: Option<CpuArchInfo>,
     pub(crate) has_active_wired_ethernet: bool,
     /// A physical wired-Ethernet PORT exists (regardless of whether a cable is plugged in) —
@@ -279,6 +303,65 @@ pub(crate) fn detect_physical_disks_msft() -> Vec<PhysicalDiskInfo> {
         .collect()
 }
 
+// ─── Disk health / S.M.A.R.T. summary (detection-layer Probe #6, partial) ─────
+// MSFT_PhysicalDisk.HealthStatus is the OS's rolled-up SMART verdict (Healthy/Warning/Unhealthy).
+// We surface the SUMMARY only — per-attribute SMART (wear %, reallocated sectors) is vendor-
+// proprietary and needs a vendor SDK (honestly dropped). Storage namespace blocked → empty list,
+// never a guessed verdict.
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct DiskHealth {
+    pub(crate) friendly_name: String,
+    pub(crate) health: String, // "Healthy" | "Warning" | "Unhealthy" | "Unknown"
+}
+
+/// MSFT_PhysicalDisk HealthStatus enum → plain English. Unknown for anything unexpected.
+pub(crate) fn disk_health_label(health: Option<u16>) -> &'static str {
+    match health {
+        Some(0) => "Healthy",
+        Some(1) => "Warning",
+        Some(2) => "Unhealthy",
+        _ => "Unknown",
+    }
+}
+
+pub(crate) fn detect_disk_health() -> Vec<DiskHealth> {
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let conn = match WMIConnection::with_namespace_path("ROOT\\Microsoft\\Windows\\Storage", com) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let raw: Vec<MsftPhysicalDisk> = conn.query().unwrap_or_default();
+    raw.into_iter()
+        .filter_map(|d| {
+            let name = d.friendly_name.unwrap_or_default().trim().to_string();
+            if name.is_empty() {
+                return None;
+            }
+            Some(DiskHealth {
+                friendly_name: name,
+                health: disk_health_label(d.health_status).into(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod disk_health_tests {
+    use super::disk_health_label;
+
+    #[test]
+    fn health_status_enum_maps_to_plain_english() {
+        assert_eq!(disk_health_label(Some(0)), "Healthy");
+        assert_eq!(disk_health_label(Some(1)), "Warning");
+        assert_eq!(disk_health_label(Some(2)), "Unhealthy");
+        assert_eq!(disk_health_label(Some(5)), "Unknown");
+        assert_eq!(disk_health_label(None), "Unknown");
+    }
+}
+
 // Fallback when the Storage namespace is blocked / empty. Uses the older
 // Win32_DiskDrive in the standard CIMV2 namespace, which is more universally
 // accessible but loses the NVMe distinction (NVMe drives show as "SCSI"
@@ -407,6 +490,18 @@ pub(crate) fn parse_smbios_strings(data: &[u8]) -> Vec<String> {
         }
     }
     strings
+}
+
+/// Honest memory-speed status from (max-capable, configured) MT/s. We can PROVE "running below
+/// rated" (actionable: XMP/EXPO likely off, or a stability fallback), but NOT "XMP active" — a plain
+/// JEDEC kit also runs at its rated speed and SMBIOS can't tell the two apart. 0 in either field
+/// (pre-2.7 SMBIOS / WMI gap) → "unknown"; we never guess a profile.
+pub(crate) fn mem_speed_status(rated_mhz: u32, configured_mhz: u32) -> &'static str {
+    match (rated_mhz, configured_mhz) {
+        (0, _) | (_, 0) => "unknown",
+        (r, c) if c < r => "running_below_rated",
+        _ => "running_at_rated",
+    }
 }
 
 pub(crate) fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> {
@@ -546,8 +641,11 @@ pub(crate) fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> 
             modules.push(MemoryModuleInfo {
                 capacity_bytes,
                 speed_mhz,
+                rated_speed_mhz: peak_speed as u32,
                 type_name,
                 manufacturer,
+                xmp_expo_status: mem_speed_status(peak_speed as u32, configured_speed as u32)
+                    .to_string(),
             });
         }
 
@@ -579,11 +677,15 @@ pub(crate) fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
                 _ => "Unknown",
             }
             .to_string();
+            let rated = m.speed.unwrap_or(0);
+            let configured = m.configured_clock_speed.unwrap_or(0);
             MemoryModuleInfo {
                 capacity_bytes: m.capacity.unwrap_or(0),
                 speed_mhz: m.configured_clock_speed.or(m.speed).unwrap_or(0),
+                rated_speed_mhz: rated,
                 type_name,
                 manufacturer: m.manufacturer.unwrap_or_default().trim().to_string(),
+                xmp_expo_status: mem_speed_status(rated, configured).to_string(),
             }
         })
         .collect()
@@ -898,6 +1000,284 @@ pub(crate) fn cim_date_iso(cim: &str) -> String {
         return String::new();
     }
     format!("{}-{}-{}", &cim[0..4], &cim[4..6], &cim[6..8])
+}
+
+// ─── BIOS / firmware (detection-layer Probe #1, feasible-usermode) ────────────
+// Win32_BIOS is a plain user-mode WMI read (no kernel driver). We surface version +
+// publication date + a DESCRIPTIVE age band. Honesty rule: the age is when the
+// firmware was PUBLISHED — never a claim that it's out of date, and never a prompt to
+// flash (BIOS updates carry real risk). Anything unreadable degrades to None /
+// "Unknown", never a fabricated value.
+#[derive(Deserialize)]
+#[serde(rename = "Win32_BIOS")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32Bios {
+    pub(crate) manufacturer: Option<String>,
+    // PascalCase would map this to "SmbiosBiosVersion"; the real WMI property is all-caps.
+    #[serde(rename = "SMBIOSBIOSVersion")]
+    pub(crate) smbios_bios_version: Option<String>,
+    pub(crate) release_date: Option<String>, // CIM_DATETIME, e.g. "20260315000000.000000-000"
+}
+
+pub(crate) fn detect_bios() -> Option<BiosInfo> {
+    let com = COMLibrary::new().ok()?;
+    let wmi_conn = WMIConnection::new(com).ok()?;
+    let rows: Vec<Win32Bios> = wmi_conn.query().ok()?;
+    let b = rows.into_iter().next()?;
+    let release_raw = b.release_date.unwrap_or_default();
+    Some(BiosInfo {
+        manufacturer: b.manufacturer.unwrap_or_default(),
+        version: b.smbios_bios_version.unwrap_or_default(),
+        release_date: cim_date_iso(&release_raw),
+        release_date_age_days: cim_date_age_days(&release_raw),
+    })
+}
+
+/// Descriptive (never prescriptive) firmware-age band. No "update now" — BIOS flashing
+/// carries real risk; we report time since publication and let the user judge.
+pub(crate) fn bios_age_label(age_days: Option<i64>) -> &'static str {
+    match age_days {
+        Some(d) if d < 30 => "Very fresh",
+        Some(d) if d < 180 => "Recent",
+        Some(d) if d < 730 => "Mature",
+        Some(_) => "Aging (2+ years)",
+        None => "Unknown",
+    }
+}
+
+// ─── Virtualization / hypervisor (detection-layer Probe #5, feasible-usermode) ─
+// HypervisorPresent (Win32_ComputerSystem) = a hypervisor IS running — VBS/Memory Integrity,
+// Hyper-V, WSL2, Sandbox, or a VM — which carries a small FPS cost in some games. SVM/VT-x
+// (Win32_Processor.VirtualizationFirmwareEnabled) is the firmware CAPABILITY toggle, neutral on
+// its own. Both are plain user-mode WMI bools; unreadable → None / "Unknown", never guessed.
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct VirtualizationInfo {
+    pub(crate) hypervisor_present: bool,
+    pub(crate) cpu_virtualization_enabled: Option<bool>, // SVM/VT-x enabled in firmware
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_ComputerSystem")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32ComputerSystem {
+    pub(crate) hypervisor_present: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_Processor")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32ProcessorVirt {
+    pub(crate) virtualization_firmware_enabled: Option<bool>,
+}
+
+pub(crate) fn detect_virtualization() -> Option<VirtualizationInfo> {
+    let com = COMLibrary::new().ok()?;
+    let wmi_conn = WMIConnection::new(com).ok()?;
+    let cs: Vec<Win32ComputerSystem> = wmi_conn.query().ok()?;
+    let hypervisor_present = cs
+        .into_iter()
+        .next()
+        .and_then(|c| c.hypervisor_present)
+        .unwrap_or(false);
+    // Best-effort: the CPU virtualization flag is a nice-to-have, not worth failing the probe over.
+    let cpu: Vec<Win32ProcessorVirt> = wmi_conn.query().unwrap_or_default();
+    let cpu_virtualization_enabled =
+        cpu.into_iter().next().and_then(|p| p.virtualization_firmware_enabled);
+    Some(VirtualizationInfo {
+        hypervisor_present,
+        cpu_virtualization_enabled,
+    })
+}
+
+#[cfg(test)]
+mod virtualization_detection_tests {
+    use super::*;
+
+    #[test]
+    fn wmi_virtualization_shapes_deserialize() {
+        // Pins the PascalCase mapping (the easy-to-get-wrong part).
+        let cs: Win32ComputerSystem =
+            serde_json::from_str(r#"{"HypervisorPresent":true}"#).expect("parses");
+        assert_eq!(cs.hypervisor_present, Some(true));
+        let cpu: Win32ProcessorVirt =
+            serde_json::from_str(r#"{"VirtualizationFirmwareEnabled":true}"#).expect("parses");
+        assert_eq!(cpu.virtualization_firmware_enabled, Some(true));
+    }
+}
+
+// ─── USB capability (detection-layer Probe #12, partial) ──────────────────────
+// Host-controller names expose the spec TIER the platform supports (USB4 / 3.2 / …). Honest limit:
+// this is the platform CAPABILITY, NOT per-device negotiated speed or which port a device sits on
+// (neither reliably readable in user-mode). Unreadable → None / "Unknown".
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct UsbSummary {
+    pub(crate) top_spec: String, // "USB4" | "USB 3.2" | "USB 3.1" | "USB 3.0" | "USB 2.0" | "Unknown"
+    pub(crate) controller_count: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_USBController")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32UsbController {
+    pub(crate) name: Option<String>,
+}
+
+/// Highest USB spec tier inferred from host-controller names. Capability only — never per-device speed.
+pub(crate) fn usb_top_spec(controller_names: &[String]) -> &'static str {
+    let j = controller_names.join(" ").to_lowercase();
+    if j.contains("usb4") || j.contains("usb 4") {
+        "USB4"
+    } else if j.contains("3.20") || j.contains("3.2") {
+        "USB 3.2"
+    } else if j.contains("3.10") || j.contains("3.1") {
+        "USB 3.1"
+    } else if j.contains("3.0") || j.contains("superspeed") {
+        "USB 3.0"
+    } else if j.contains("2.0") {
+        "USB 2.0"
+    } else {
+        "Unknown"
+    }
+}
+
+pub(crate) fn detect_usb_summary() -> Option<UsbSummary> {
+    let com = COMLibrary::new().ok()?;
+    let conn = WMIConnection::new(com).ok()?;
+    let rows: Vec<Win32UsbController> = conn.query().ok()?;
+    let names: Vec<String> = rows.into_iter().filter_map(|c| c.name).collect();
+    if names.is_empty() {
+        return None;
+    }
+    Some(UsbSummary {
+        top_spec: usb_top_spec(&names).to_string(),
+        controller_count: names.len() as u32,
+    })
+}
+
+#[cfg(test)]
+mod usb_detection_tests {
+    use super::usb_top_spec;
+
+    #[test]
+    fn top_spec_picks_the_highest_tier() {
+        // Real controller-name shapes captured from the AMD dev rig.
+        let amd = vec![
+            "AMD USB 2.0 eXtensible Host Controller".to_string(),
+            "AMD USB 3.10 eXtensible Host Controller".to_string(),
+            "AMD USB 3.20 eXtensible Host Controller".to_string(),
+            "USB4(TM) Host Router".to_string(),
+        ];
+        assert_eq!(usb_top_spec(&amd), "USB4");
+        assert_eq!(
+            usb_top_spec(&["AMD USB 3.20 eXtensible Host Controller".to_string()]),
+            "USB 3.2"
+        );
+        assert_eq!(
+            usb_top_spec(&["AMD USB 3.10 eXtensible Host Controller".to_string()]),
+            "USB 3.1"
+        );
+        assert_eq!(
+            usb_top_spec(&["Intel USB 2.0 Enhanced Host Controller".to_string()]),
+            "USB 2.0"
+        );
+        assert_eq!(usb_top_spec(&[]), "Unknown");
+    }
+}
+
+// ─── Power source / AC state (detection-layer Probe #11) ──────────────────────
+// Win32_Battery is empty on desktops (→ AC) and populated on laptops. No FFI, no kernel — a plain
+// WMI read. Honest: live power source + charge; "Unknown" if WMI fails. More useful on laptops
+// (gaming on battery throttles) than on a desktop, where it's just "AC".
+#[derive(Deserialize)]
+#[serde(rename = "Win32_Battery")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32Battery {
+    pub(crate) battery_status: Option<u16>, // 1 = discharging, 2 = on AC
+    pub(crate) estimated_charge_remaining: Option<u16>, // percent, 0-100
+}
+
+/// Plain-English power source from (has_battery, BatteryStatus, charge%). Pure + testable.
+pub(crate) fn power_status_label(
+    has_battery: bool,
+    battery_status: Option<u16>,
+    pct: Option<u16>,
+) -> String {
+    if !has_battery {
+        return "AC power (no battery — desktop)".into();
+    }
+    match (battery_status, pct) {
+        (Some(2), Some(p)) => format!("AC power (battery {p}%)"),
+        (Some(1), Some(p)) => format!("On battery ({p}%)"),
+        (_, Some(p)) => format!("Battery {p}%"),
+        _ => "Battery present".into(),
+    }
+}
+
+pub(crate) fn detect_power_status() -> String {
+    let Some(com) = COMLibrary::new().ok() else {
+        return "Unknown".into();
+    };
+    let Some(conn) = WMIConnection::new(com).ok() else {
+        return "Unknown".into();
+    };
+    let rows: Vec<Win32Battery> = conn.query().unwrap_or_default();
+    match rows.into_iter().next() {
+        None => power_status_label(false, None, None),
+        Some(b) => power_status_label(true, b.battery_status, b.estimated_charge_remaining),
+    }
+}
+
+#[cfg(test)]
+mod power_status_tests {
+    use super::power_status_label;
+
+    #[test]
+    fn power_label_is_honest_across_states() {
+        assert_eq!(power_status_label(false, None, None), "AC power (no battery — desktop)");
+        assert_eq!(power_status_label(true, Some(2), Some(95)), "AC power (battery 95%)");
+        assert_eq!(power_status_label(true, Some(1), Some(60)), "On battery (60%)");
+        assert_eq!(power_status_label(true, None, Some(80)), "Battery 80%");
+        assert_eq!(power_status_label(true, None, None), "Battery present");
+    }
+}
+
+#[cfg(test)]
+mod bios_detection_tests {
+    use super::*;
+
+    #[test]
+    fn release_date_reuses_cim_helpers() {
+        // Fixture captured live from the AMD dev rig (AMI BIOS 1.A95, released 2026-03-15).
+        let cim = "20260315000000.000000-000";
+        assert_eq!(cim_date_iso(cim), "2026-03-15");
+        assert!(cim_date_age_days(cim).is_some());
+    }
+
+    #[test]
+    fn age_label_bands() {
+        assert_eq!(bios_age_label(Some(10)), "Very fresh");
+        assert_eq!(bios_age_label(Some(100)), "Recent");
+        assert_eq!(bios_age_label(Some(400)), "Mature");
+        assert_eq!(bios_age_label(Some(900)), "Aging (2+ years)");
+        assert_eq!(bios_age_label(None), "Unknown");
+    }
+
+    #[test]
+    fn age_label_boundaries_fall_to_the_older_band() {
+        // No off-by-one optimism: exactly-on-threshold reads as the older band.
+        assert_eq!(bios_age_label(Some(30)), "Recent");
+        assert_eq!(bios_age_label(Some(180)), "Mature");
+        assert_eq!(bios_age_label(Some(730)), "Aging (2+ years)");
+    }
+
+    #[test]
+    fn win32_bios_deserializes_wmi_pascalcase_shape() {
+        let json = r#"{"Manufacturer":"American Megatrends International, LLC.","SMBIOSBIOSVersion":"1.A95","ReleaseDate":"20260315000000.000000-000"}"#;
+        let b: Win32Bios = serde_json::from_str(json).expect("parses the WMI row shape");
+        assert_eq!(b.manufacturer.as_deref(), Some("American Megatrends International, LLC."));
+        assert_eq!(b.smbios_bios_version.as_deref(), Some("1.A95"));
+        assert_eq!(b.release_date.as_deref(), Some("20260315000000.000000-000"));
+    }
 }
 
 // GPU detection has two paths because some user environments (notably certain
@@ -1288,9 +1668,13 @@ fn collect_hardware_inner() -> HardwareInfo {
         disks,
         gpus: detect_gpus(),
         physical_disks: detect_physical_disks(),
+        disk_health: detect_disk_health(),
         display: detect_display_info(),
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
+        bios_info: detect_bios(),
+        virtualization: detect_virtualization(),
+        usb: detect_usb_summary(),
         has_active_wired_ethernet,
         has_wired_ethernet_port,
         eee_switch_exposed,
@@ -2017,6 +2401,42 @@ mod parser_tests {
         let mods = parse_smbios_memory_devices(&dev);
         assert_eq!(mods.len(), 1);
         assert_eq!(mods[0].capacity_bytes, 1024u64 * 1024);
+    }
+
+    #[test]
+    fn mem_speed_status_is_honest() {
+        assert_eq!(mem_speed_status(6000, 4800), "running_below_rated");
+        assert_eq!(mem_speed_status(6000, 6000), "running_at_rated");
+        assert_eq!(mem_speed_status(6000, 0), "unknown");
+        assert_eq!(mem_speed_status(0, 6000), "unknown");
+        // configured can't honestly exceed max-capable; a quirk that reports it still isn't "below".
+        assert_eq!(mem_speed_status(5600, 6000), "running_at_rated");
+    }
+
+    #[test]
+    fn smbios_mem_below_rated_flags_xmp_off() {
+        // EXPO/XMP off: configured (4800 JEDEC) below max-capable (6000) → actionable signal.
+        let dev = type17(0x22, 0x2000, 0x22, 6000, 4800, 0, 1, 0, &["G.Skill"]);
+        let m = &parse_smbios_memory_devices(&dev)[0];
+        assert_eq!(m.speed_mhz, 4800);
+        assert_eq!(m.rated_speed_mhz, 6000);
+        assert_eq!(m.xmp_expo_status, "running_below_rated");
+    }
+
+    #[test]
+    fn smbios_mem_at_rated_makes_no_profile_claim() {
+        // EXPO on OR a JEDEC kit at native speed — indistinguishable, so we never claim "active".
+        let dev = type17(0x22, 0x2000, 0x22, 6000, 6000, 0, 1, 0, &["G.Skill"]);
+        let m = &parse_smbios_memory_devices(&dev)[0];
+        assert_eq!(m.rated_speed_mhz, 6000);
+        assert_eq!(m.xmp_expo_status, "running_at_rated");
+    }
+
+    #[test]
+    fn smbios_mem_status_unknown_without_configured() {
+        // Configured-speed field zero (pre-2.7 SMBIOS or unset) → we don't guess.
+        let dev = type17(0x22, 0x2000, 0x22, 3200, 0, 0, 1, 0, &["Kingston"]);
+        assert_eq!(parse_smbios_memory_devices(&dev)[0].xmp_expo_status, "unknown");
     }
 
     #[test]

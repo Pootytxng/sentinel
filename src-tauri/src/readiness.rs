@@ -153,6 +153,77 @@ pub(crate) fn evaluate_readiness(
         ),
     });
 
+    // Memory speed — RAM running below its rated speed (EXPO/XMP likely off). Read-only advisory:
+    // it's a BIOS profile Compy can't flip, so we name it and point to BIOS (no action_uri). Never
+    // claims a profile is "active" — only flags the provable below-rated case.
+    {
+        let below = hw
+            .memory_modules
+            .iter()
+            .find(|m| m.xmp_expo_status == "running_below_rated" && m.rated_speed_mhz > 0);
+        let any_known = hw.memory_modules.iter().any(|m| {
+            m.xmp_expo_status == "running_below_rated" || m.xmp_expo_status == "running_at_rated"
+        });
+        checks.push(match (below, any_known) {
+            (Some(m), _) => check(
+                "memory-speed",
+                "Memory speed",
+                ReadinessStatus::Attention,
+                "Your RAM is running below its rated speed — enabling EXPO/XMP in BIOS unlocks the \
+                 speed the kit is sold at. It's a BIOS memory profile, not something Compy changes.",
+                Some(format!("{} of {} MT/s", m.speed_mhz, m.rated_speed_mhz)),
+            ),
+            (None, true) => check(
+                "memory-speed",
+                "Memory speed",
+                ReadinessStatus::Ready,
+                "RAM is running at its rated speed.",
+                None,
+            ),
+            (None, false) => check(
+                "memory-speed",
+                "Memory speed",
+                ReadinessStatus::Unknown,
+                "Couldn't compare configured vs rated memory speed on this system.",
+                None,
+            ),
+        });
+    }
+
+    // Drive health — the OS SMART summary. A Warning/Unhealthy verdict is a back-up-now safety signal;
+    // healthy drives read Ready. Per-attribute SMART isn't user-mode readable, so this is the summary.
+    {
+        let bad = hw
+            .disk_health
+            .iter()
+            .find(|d| d.health == "Warning" || d.health == "Unhealthy");
+        let any_healthy = hw.disk_health.iter().any(|d| d.health == "Healthy");
+        checks.push(match (bad, any_healthy) {
+            (Some(d), _) => check(
+                "drive-health",
+                "Drive health",
+                ReadinessStatus::Attention,
+                "A drive is reporting a SMART health warning. Back up important data and check the \
+                 drive with its vendor's tool — this can precede a failure.",
+                Some(format!("{}: {}", d.friendly_name, d.health)),
+            ),
+            (None, true) => check(
+                "drive-health",
+                "Drive health",
+                ReadinessStatus::Ready,
+                "All detected drives report a healthy SMART status.",
+                None,
+            ),
+            (None, false) => check(
+                "drive-health",
+                "Drive health",
+                ReadinessStatus::Unknown,
+                "Drive SMART health couldn't be read (the Storage namespace may be blocked).",
+                None,
+            ),
+        });
+    }
+
     // 2. Game install drive — where the user's game libraries (Steam/Epic)
     //    actually live, and whether those drives are fast (NVMe/SSD) or slow
     //    (HDD). Falls back to an honest overall storage posture when no library
@@ -901,6 +972,73 @@ mod readiness_tests {
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
         );
-        assert_eq!(r.checks.len(), 8);
+        // +2 detection-layer advisory checks (memory-speed, drive-health).
+        assert_eq!(r.checks.len(), 10);
+    }
+
+    #[test]
+    fn memory_speed_below_rated_is_attention_pointing_to_bios() {
+        use crate::hardware::MemoryModuleInfo;
+        let hw = HardwareInfo {
+            memory_modules: vec![MemoryModuleInfo {
+                capacity_bytes: 16 << 30,
+                speed_mhz: 4800,
+                rated_speed_mhz: 6000,
+                type_name: "DDR5".into(),
+                manufacturer: "G.Skill".into(),
+                xmp_expo_status: "running_below_rated".into(),
+            }],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "memory-speed");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        let d = c.detail.to_uppercase();
+        assert!(d.contains("EXPO") || d.contains("XMP"));
+        assert!(d.contains("BIOS"), "must point to BIOS, not imply Compy changes it");
+    }
+
+    #[test]
+    fn memory_speed_at_rated_is_ready_and_makes_no_profile_claim() {
+        use crate::hardware::MemoryModuleInfo;
+        let hw = HardwareInfo {
+            memory_modules: vec![MemoryModuleInfo {
+                capacity_bytes: 16 << 30,
+                speed_mhz: 6000,
+                rated_speed_mhz: 6000,
+                type_name: "DDR5".into(),
+                manufacturer: "G.Skill".into(),
+                xmp_expo_status: "running_at_rated".into(),
+            }],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "memory-speed");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(!c.detail.to_uppercase().contains("ENABLE"), "no fix prompt when already at rated");
+    }
+
+    #[test]
+    fn drive_health_warning_is_attention_healthy_is_ready() {
+        use crate::hardware::DiskHealth;
+        let bad = HardwareInfo {
+            disk_health: vec![DiskHealth {
+                friendly_name: "CT1000".into(),
+                health: "Warning".into(),
+            }],
+            ..Default::default()
+        };
+        let rb = evaluate_readiness(&bad, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&rb, "drive-health").status, ReadinessStatus::Attention);
+
+        let good = HardwareInfo {
+            disk_health: vec![DiskHealth {
+                friendly_name: "CT1000".into(),
+                health: "Healthy".into(),
+            }],
+            ..Default::default()
+        };
+        let rg = evaluate_readiness(&good, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&rg, "drive-health").status, ReadinessStatus::Ready);
     }
 }

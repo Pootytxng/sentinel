@@ -74,8 +74,32 @@ type DisplayInfo = {
 type MemoryModuleInfo = {
   capacity_bytes: number;
   speed_mhz: number;
+  rated_speed_mhz: number;
   type_name: string;
   manufacturer: string;
+  xmp_expo_status: string; // "running_below_rated" | "running_at_rated" | "unknown"
+};
+
+type BiosInfo = {
+  manufacturer: string;
+  version: string;
+  release_date: string;
+  release_date_age_days: number | null;
+};
+
+type VirtualizationInfo = {
+  hypervisor_present: boolean;
+  cpu_virtualization_enabled: boolean | null;
+};
+
+type DiskHealth = {
+  friendly_name: string;
+  health: string; // "Healthy" | "Warning" | "Unhealthy" | "Unknown"
+};
+
+type UsbSummary = {
+  top_spec: string; // "USB4" | "USB 3.2" | ... | "Unknown"
+  controller_count: number;
 };
 
 type WindowsVersionInfo = {
@@ -112,12 +136,16 @@ export type HardwareInfo = {
   disks: DiskInfo[];
   gpus: GpuInfo[];
   physical_disks: PhysicalDiskInfo[];
+  disk_health: DiskHealth[];
   display: DisplayInfo | null;
   memory_modules: MemoryModuleInfo[];
   windows_version: WindowsVersionInfo | null;
   cpu_arch: CpuArchInfo | null;
   network_adapters: NetAdapterInfo[];
   has_wired_ethernet_port: boolean;
+  bios_info: BiosInfo | null;
+  virtualization: VirtualizationInfo | null;
+  usb: UsbSummary | null;
 };
 
 // "Verified"        — Compy directly observes the fact this rec claims.
