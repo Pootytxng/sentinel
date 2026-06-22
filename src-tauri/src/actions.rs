@@ -53,6 +53,50 @@ impl KnownService {
     }
 }
 
+/// Allowlist of well-known, textbook-safe TELEMETRY scheduled tasks Compy may disable. Conservative
+/// STARTER set (Microsoft-documented CEIP / Compatibility-Appraiser telemetry) — explicitly **NO
+/// Defender, NO system policy, nothing that breaks functionality** (those stay on the hard blocklist).
+/// The owner curates/expands this set before the feature is EVER armed (`bloat_removal_gate()`=false
+/// until then), so nothing AI-guessed ships. Type-enforced: only these tasks are ever disable-able.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum KnownBloatTask {
+    CompatibilityAppraiser,
+    CeipConsolidator,
+    CeipUsb,
+}
+
+impl KnownBloatTask {
+    /// (TaskPath, TaskName) — fixed, Microsoft-documented telemetry-task identifiers. Both legitimately
+    /// contain spaces + backslashes, so they go through `ps_safe_squoted` (single-quoted-literal guard).
+    fn path_and_name(&self) -> (&'static str, &'static str) {
+        match self {
+            KnownBloatTask::CompatibilityAppraiser => (
+                "\\Microsoft\\Windows\\Application Experience\\",
+                "Microsoft Compatibility Appraiser",
+            ),
+            KnownBloatTask::CeipConsolidator => (
+                "\\Microsoft\\Windows\\Customer Experience Improvement Program\\",
+                "Consolidator",
+            ),
+            KnownBloatTask::CeipUsb => (
+                "\\Microsoft\\Windows\\Customer Experience Improvement Program\\",
+                "UsbCeip",
+            ),
+        }
+    }
+
+    /// Map an id to the type-enforced allowlist — rejects everything off-list (Defender/policy/etc.
+    /// can never be passed).
+    pub(crate) fn from_id(id: &str) -> Option<KnownBloatTask> {
+        match id {
+            "compatibility-appraiser" => Some(KnownBloatTask::CompatibilityAppraiser),
+            "ceip-consolidator" => Some(KnownBloatTask::CeipConsolidator),
+            "ceip-usb" => Some(KnownBloatTask::CeipUsb),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub(crate) enum AppliedAction {
@@ -84,6 +128,9 @@ pub(crate) enum AppliedAction {
     // The origin-story resolver (option (a), Cowork call 2026-06-11): re-enable Windows-managed
     // paging. Reboot required to take effect — stated, never silent.
     RestorePagefileAutomatic,
+    // OS-debloat (BUILT DARK): disable a well-known telemetry scheduled task. Reversible via
+    // EnableScheduledTask. ONLY the curated KnownBloatTask set (no Defender / policy).
+    DisableScheduledTask { task: KnownBloatTask },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -117,6 +164,7 @@ pub(crate) enum RollbackAction {
     RestoreCoreParkingFromSnapshot,
     RestoreTcpAutotuningFromSnapshot,
     RestorePagefileFromSnapshot,
+    EnableScheduledTask { task: KnownBloatTask },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -212,6 +260,11 @@ pub(crate) enum Snapshot {
         prior_initial_mb: u32,
         prior_maximum_mb: u32,
     },
+    // Prior scheduled-task state ("Ready" | "Disabled" | "Running" | "Unknown"), so rollback re-enables
+    // only a task that was actually enabled before.
+    ScheduledTask {
+        prior_state: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -273,6 +326,13 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
                 None
             }
         }
+        // Rollback (re-enable) restores the task to its prior state.
+        Snapshot::ScheduledTask { prior_state } => match prior_state.trim() {
+            "Ready" => Some("Enabled".to_string()),
+            "Running" => Some("Running".to_string()),
+            "Disabled" => Some("Disabled".to_string()),
+            _ => None,
+        },
         Snapshot::GameMode { prior_enabled, .. } => on_off(*prior_enabled),
         Snapshot::GameBar { prior_enabled, .. } => on_off(*prior_enabled),
         Snapshot::MouseAccel { prior_speed, .. } => match prior_speed.trim() {
@@ -699,6 +759,26 @@ pub(crate) fn ps_safe(token: &str) -> Result<(), String> {
     } else {
         Err(format!(
             "refusing to build an elevated command with an unsafe token: {token:?}"
+        ))
+    }
+}
+
+/// Like `ps_safe`, but for tokens placed INSIDE a SINGLE-QUOTED PowerShell literal (`'...'`) —
+/// scheduled-task names/paths legitimately contain spaces and backslashes. Admits `[A-Za-z0-9_.-]`
+/// PLUS space and backslash, and FORBIDS the single quote itself (so the token can't terminate its
+/// own quoting → no breakout) and every expansion/metacharacter (`"` `$` `` ` `` `;` `|` `&` `<` `>`
+/// `(` `)` `{` `}` `*` `?` `/` newline …). MUST only ever be interpolated inside `'...'`. Today's
+/// only callers pass FIXED, compile-time `KnownBloatTask` constants — never user/remote input.
+pub(crate) fn ps_safe_squoted(token: &str) -> Result<(), String> {
+    if !token.is_empty()
+        && token
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-' | ' ' | '\\'))
+    {
+        Ok(())
+    } else {
+        Err(format!(
+            "refusing to build an elevated command with an unsafe single-quoted token: {token:?}"
         ))
     }
 }
@@ -1145,6 +1225,150 @@ pub(crate) fn rollback_service_disable_typed(
     }
     run_elevated_powershell(&cmd)?;
     Ok(())
+}
+
+// ─── OS-debloat: telemetry scheduled-task disable (BUILT DARK) ────────────
+//
+// GATE — DARK (false) until this feature's own UAC QA + explicit owner sign-off (the owner greenlit
+// adding the gated mutation 2026-06-22, LOCKED-rule-6; the ARMING + the curated KnownBloatTask list
+// both ride that sign-off). Mirrors gaming_mode_gate / restore_gate / service_suspend.
+pub(crate) fn bloat_removal_gate() -> bool {
+    false
+}
+
+/// Read a scheduled task's current state (non-elevated): "Ready" | "Disabled" | "Running" | "Unknown".
+/// Identifiers are FIXED enum constants, guarded by ps_safe_squoted and interpolated only inside '...'.
+pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
+    let (path, name) = task.path_and_name();
+    if ps_safe_squoted(path).is_err() || ps_safe_squoted(name).is_err() {
+        return "Unknown".into();
+    }
+    match quiet_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("(Get-ScheduledTask -TaskPath '{}' -TaskName '{}').State", path, name),
+        ])
+        .output()
+    {
+        Ok(o) => {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() { "Unknown".into() } else { s }
+        }
+        Err(_) => "Unknown".into(),
+    }
+}
+
+/// Disable a curated telemetry scheduled task (elevated). Snapshots prior state first so rollback
+/// re-enables only what was enabled. Reads → ONE elevated command → return (batchable / exit-free).
+pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<ApplyResult, String> {
+    let (path, name) = task.path_and_name();
+    ps_safe_squoted(path)?;
+    ps_safe_squoted(name)?;
+    let prior_state = scheduled_task_state(&task);
+    run_elevated_powershell(&format!(
+        "Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
+        path, name
+    ))?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::DisableScheduledTask { task: task.clone() },
+        rollback_action: RollbackAction::EnableScheduledTask { task },
+        snapshot: Snapshot::ScheduledTask { prior_state },
+        elevation_used: true,
+    })
+}
+
+/// Re-enable a disabled telemetry task — only if it was enabled (Ready/Running) at snapshot time.
+/// Fail-safe: a task that was already disabled stays disabled and issues NO elevated command.
+pub(crate) fn rollback_enable_scheduled_task_typed(
+    task: &KnownBloatTask,
+    prior_state: &str,
+) -> Result<(), String> {
+    let (path, name) = task.path_and_name();
+    ps_safe_squoted(path)?;
+    ps_safe_squoted(name)?;
+    // Rollback-first fidelity: re-enable UNLESS we KNOW it was Disabled. An "Unknown" prior (the
+    // snapshot read failed) is treated as "was enabled" → restored to the stock/enabled state, the
+    // conservative direction (matches apply_service_disable defaulting to the active state). Only a
+    // confirmed-Disabled prior stays disabled — and that path issues no elevated command.
+    if prior_state != "Disabled" {
+        run_elevated_powershell(&format!(
+            "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
+            path, name
+        ))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod bloat_task_tests {
+    use super::*;
+
+    #[test]
+    fn gate_is_dark() {
+        assert!(!bloat_removal_gate(), "bloat-task removal must ship DARK");
+    }
+
+    #[test]
+    fn from_id_enforces_allowlist_and_rejects_offlist() {
+        assert!(KnownBloatTask::from_id("compatibility-appraiser").is_some());
+        assert!(KnownBloatTask::from_id("ceip-usb").is_some());
+        assert!(KnownBloatTask::from_id("defender-scan").is_none());
+        assert!(KnownBloatTask::from_id("").is_none());
+    }
+
+    #[test]
+    fn every_task_identifier_is_squote_safe() {
+        for t in [
+            KnownBloatTask::CompatibilityAppraiser,
+            KnownBloatTask::CeipConsolidator,
+            KnownBloatTask::CeipUsb,
+        ] {
+            let (p, n) = t.path_and_name();
+            assert!(ps_safe_squoted(p).is_ok(), "path must be squote-safe: {p:?}");
+            assert!(ps_safe_squoted(n).is_ok(), "name must be squote-safe: {n:?}");
+        }
+    }
+
+    #[test]
+    fn ps_safe_squoted_allows_task_chars_rejects_breakout() {
+        assert!(ps_safe_squoted("Microsoft Compatibility Appraiser").is_ok());
+        assert!(ps_safe_squoted("\\Microsoft\\Windows\\Application Experience\\").is_ok());
+        for bad in [
+            "a'b", "a$b", "a`b", "a;b", "a|b", "a&b", "a<b", "a>b", "a(b", "a)b", "a\"b", "a\nb", "a/b", "",
+        ] {
+            assert!(ps_safe_squoted(bad).is_err(), "must reject breakout token {bad:?}");
+        }
+    }
+
+    #[test]
+    fn contract_round_trips() {
+        let a = AppliedAction::DisableScheduledTask { task: KnownBloatTask::CompatibilityAppraiser };
+        let back: AppliedAction = serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap();
+        assert!(matches!(back, AppliedAction::DisableScheduledTask { .. }));
+        let r = RollbackAction::EnableScheduledTask { task: KnownBloatTask::CeipUsb };
+        let back2: RollbackAction = serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert!(matches!(back2, RollbackAction::EnableScheduledTask { .. }));
+    }
+
+    #[test]
+    fn rollback_is_noop_when_prior_disabled() {
+        assert!(rollback_enable_scheduled_task_typed(&KnownBloatTask::CeipUsb, "Disabled").is_ok());
+    }
+
+    // Live QA (manual; #[ignore], UAC-on rig) — proves exact disable→enable restore.
+    #[test]
+    #[ignore = "manual: real scheduled-task mutation on a UAC-on rig"]
+    fn qa_disable_then_enable_restores_exact_state() {
+        let t = KnownBloatTask::CompatibilityAppraiser;
+        let prior = scheduled_task_state(&t);
+        let result = apply_disable_scheduled_task(t.clone()).expect("disable applies");
+        assert_eq!(scheduled_task_state(&t), "Disabled", "disable should stop the task");
+        if let Snapshot::ScheduledTask { prior_state } = &result.snapshot {
+            rollback_enable_scheduled_task_typed(&t, prior_state).expect("enable rolls back");
+        }
+        assert_eq!(scheduled_task_state(&t), prior, "rollback must restore the EXACT prior state");
+    }
 }
 
 // ─── Power plan: Ultimate Performance ────────────────────────────────────
@@ -2654,6 +2878,9 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
             R::RestorePagefileFromSnapshot,
             S::PagefileManual { prior_drive_letter, prior_initial_mb, prior_maximum_mb },
         ) => rollback_pagefile_typed(*prior_drive_letter, *prior_initial_mb, *prior_maximum_mb),
+        (R::EnableScheduledTask { task }, S::ScheduledTask { prior_state }) => {
+            rollback_enable_scheduled_task_typed(task, prior_state)
+        }
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
             action

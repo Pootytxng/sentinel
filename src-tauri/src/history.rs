@@ -329,6 +329,31 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
     Ok(into_view(change))
 }
 
+/// OS-debloat: disable a curated telemetry scheduled task (BUILT DARK). Gated by `bloat_removal_gate()`
+/// — refuses until the feature's own UAC QA + owner sign-off (the gated mutation the owner greenlit
+/// 2026-06-22, LOCKED-rule-6). Reuses the audited apply/record path: the typed snapshot lands in the
+/// ledger, so RE-ENABLE flows through the normal `rollback_change` → `dispatch_rollback` path (the new
+/// `EnableScheduledTask` arm). `KnownBloatTask::from_id` enforces the allowlist (off-list → refused).
+#[tauri::command]
+pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeView, String> {
+    if !crate::actions::bloat_removal_gate() {
+        return Err("Bloat-task removal isn't enabled in this build.".to_string());
+    }
+    let task = crate::actions::KnownBloatTask::from_id(&task_id)
+        .ok_or_else(|| format!("'{}' isn't a Compy-removable telemetry task.", task_id))?;
+    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history()?;
+    let result = crate::actions::apply_disable_scheduled_task(task)?;
+    let change = build_applied_change(
+        &format!("bloat-task:{}", task_id),
+        &format!("Disable telemetry task ({})", task_id),
+        result,
+    )?;
+    history.push(change.clone());
+    save_history(&history)?;
+    Ok(into_view(change))
+}
+
 // ─── §4 one-elevation batch apply (spec 2026-06-06-beta-feedback-3 §4) ──────────────────
 // Orchestration ONLY — reuses the audited dispatch_apply / run_elevated_powershell / receipt
 // primitives; it introduces no new mutation primitive. One UAC prompt for the whole batch; one
