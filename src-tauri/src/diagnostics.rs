@@ -9,8 +9,8 @@ use serde::Serialize;
 
 use crate::hardware::{collect_hardware, gpu_vendor_match};
 use crate::{
-    current_power_plan_name, fast_startup_state, hags_state, memory_integrity_or_vbs_active,
-    reserved_storage_enabled, service_running,
+    core_parking_label, core_parking_min_cores_ac, current_power_plan_name, fast_startup_state,
+    hags_state, memory_integrity_or_vbs_active, reserved_storage_enabled, service_running,
 };
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────
@@ -77,6 +77,13 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
             _ => "Not configured".into(),
         },
         note: None,
+    });
+    power.push(DiagnosticEntry {
+        label: "Core parking policy".into(),
+        value: core_parking_label(core_parking_min_cores_ac()),
+        note: Some(
+            "Whether Windows may park CPU cores at low load (policy, not live per-core state). 'No parking' keeps all cores ready — common on gaming power plans.".into(),
+        ),
     });
     power.push(DiagnosticEntry {
         label: "BIOS / firmware".into(),
@@ -408,6 +415,7 @@ mod diagnostics_tests {
         assert!(power.iter().any(|l| l == "Fast Startup"));
         assert!(power.iter().any(|l| l.contains("HAGS")));
         assert!(power.iter().any(|l| l == "BIOS / firmware"));
+        assert!(power.iter().any(|l| l == "Core parking policy"));
         assert!(labels_of("Security").iter().any(|l| l == "Hypervisor running"));
         assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
         // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").

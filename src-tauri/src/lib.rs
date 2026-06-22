@@ -194,6 +194,65 @@ pub(crate) fn hags_state() -> Option<u32> {
         .ok()
 }
 
+// ─── Core parking POLICY (detection-layer Probe #10, partial — config not live state) ─────────
+// CPMINCORES = the minimum % of cores Windows must keep UNPARKED. 100 = no parking (all cores stay
+// ready, the common gaming-plan state); lower = more aggressive parking allowed. We read the POLICY
+// via powercfg — the instantaneous "which cores are parked right now" is kernel-only (dropped, same
+// class as CPU temp). Unreadable → None / "Unknown", never guessed.
+pub(crate) fn core_parking_min_cores_ac() -> Option<u32> {
+    let output = crate::actions::quiet_command("powercfg")
+        .args([
+            "/q",
+            "SCHEME_CURRENT",
+            "SUB_PROCESSOR",
+            "0cc5b647-c1df-4637-891a-dec35c318583", // CPMINCORES
+        ])
+        .output()
+        .ok()?;
+    parse_powercfg_ac_index(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Extract the first "Current AC Power Setting Index: 0xNN" value from `powercfg /q` output (decimal).
+pub(crate) fn parse_powercfg_ac_index(output: &str) -> Option<u32> {
+    let line = output
+        .lines()
+        .find(|l| l.contains("Current AC Power Setting Index"))?;
+    let raw = line.rsplit(':').next()?.trim();
+    let hex = raw.strip_prefix("0x").unwrap_or(raw);
+    u32::from_str_radix(hex, 16).ok()
+}
+
+/// Plain-English core-parking policy from CPMINCORES%. Never describes live per-core state.
+pub(crate) fn core_parking_label(min_cores_pct: Option<u32>) -> String {
+    match min_cores_pct {
+        Some(100) => "All cores kept active (no parking)".into(),
+        Some(p) => format!("Core parking allowed (min {p}% cores active)"),
+        None => "Unknown".into(),
+    }
+}
+
+#[cfg(test)]
+mod core_parking_tests {
+    use super::{core_parking_label, parse_powercfg_ac_index};
+
+    #[test]
+    fn parses_cpmincores_ac_index_hex() {
+        // Real powercfg /q shape; AMD dev rig CPMINCORES AC = 0x64 = 100 (no parking).
+        let out = "  GUID Alias: CPMINCORES\r\n    Current AC Power Setting Index: 0x00000064\r\n    Current DC Power Setting Index: 0x00000064\r\n";
+        assert_eq!(parse_powercfg_ac_index(out), Some(100));
+        assert_eq!(parse_powercfg_ac_index("Current AC Power Setting Index: 0x00000032"), Some(50));
+        assert_eq!(parse_powercfg_ac_index("no index line"), None);
+        assert_eq!(parse_powercfg_ac_index("Current AC Power Setting Index: nothex"), None);
+    }
+
+    #[test]
+    fn label_is_honest_about_policy() {
+        assert_eq!(core_parking_label(Some(100)), "All cores kept active (no parking)");
+        assert_eq!(core_parking_label(Some(50)), "Core parking allowed (min 50% cores active)");
+        assert_eq!(core_parking_label(None), "Unknown");
+    }
+}
+
 pub(crate) fn mouse_accel_disabled() -> bool {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let Ok(key) = hkcu.open_subkey("Control Panel\\Mouse") else {
