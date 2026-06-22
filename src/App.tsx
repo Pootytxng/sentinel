@@ -497,9 +497,9 @@ function App() {
   // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
   // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
   const optimizeMerged = localStorage.getItem("compy_optimize") !== "0";
-  // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. Default
-  // OFF this phase (set compy_monitor="1" to preview) — classic Play stays the default until verified.
-  const monitorMerged = localStorage.getItem("compy_monitor") === "1";
+  // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. DEFAULT ON
+  // (owner sign-off 2026-06-21). Escape hatch: compy_monitor="0" restores the classic single Play surface.
+  const monitorMerged = localStorage.getItem("compy_monitor") !== "0";
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
