@@ -486,6 +486,33 @@ mod gaming_mode_qa {
     }
 
     #[test]
+    #[ignore = "mutates the live core bundle (game mode HKCU); dev-rig QA only"]
+    fn qa9_in_session_service_suspend_failure_undoes_partial() {
+        use crate::actions::{ForceElevationError, ForceServiceSuspendGate};
+        require_clean();
+        let before = snapshot();
+        eprintln!("[QA9] before: plan={:?} game_mode_on={} game_bar_off={}", before.0, before.1, before.2);
+
+        // Open the service-suspend gate (test seam) so the in-session suspend step is REACHED, and force
+        // its elevation to fail (as a UAC cancel would). The UAC-free core applies, then the elevated
+        // service step is refused → start() must undo the partial core and surface an error, never a
+        // partial Active state. (The SUCCESS path — a real suspend+resume in-session — needs genuine
+        // elevation via the built compy.exe and is an owner-present arming-time QA, not cargo-test.)
+        let res = {
+            let _gate = ForceServiceSuspendGate::begin();
+            let _force = ForceElevationError::begin();
+            start(StartOptions { suspend_services: vec!["WSearch".into()], ..Default::default() })
+        };
+        let after = snapshot();
+        eprintln!("[QA9] after : plan={:?} game_mode_on={} game_bar_off={} err={}", after.0, after.1, after.2, res.is_err());
+
+        assert!(res.is_err(), "a failed in-session service suspend must surface as an error");
+        assert!(load_session().is_none(), "the partial core must be undone + the contract cleared");
+        assert_eq!(after, before, "a failed service step must leave NO partial mutation — exact prior state");
+        let _ = clear_session();
+    }
+
+    #[test]
     #[ignore = "writes a session fixture; dev-rig QA only"]
     fn qa7_missing_power_plan_at_restore_fails_loudly() {
         use crate::actions::{RollbackAction, Snapshot};

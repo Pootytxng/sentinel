@@ -1251,7 +1251,38 @@ pub(crate) fn rollback_service_disable_typed(
 // mutating catalog to add this was the owner's explicit decision (2026-06-22, LOCKED-rule-6); the
 // ARMING (flipping this true + wiring a session orchestrator/UI) still rides QA + sign-off.
 pub(crate) fn service_suspend_gate() -> bool {
+    #[cfg(test)]
+    if FORCE_SERVICE_SUSPEND_GATE.with(|f| *f.borrow()) {
+        return true;
+    }
     false
+}
+
+// Test-only: opens `service_suspend_gate` on THIS thread so the in-session suspend wiring (and its
+// fail-safe undo) is testable WITHOUT shipping the gate open. Never compiled into the shipped binary;
+// the production gate stays `false` (pinned by `gate_is_dark_until_qa_and_owner_signoff`).
+#[cfg(test)]
+thread_local! {
+    static FORCE_SERVICE_SUSPEND_GATE: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
+}
+
+/// RAII guard that opens the service-suspend gate on this thread for the guard's lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct ForceServiceSuspendGate;
+
+#[cfg(test)]
+impl ForceServiceSuspendGate {
+    pub(crate) fn begin() -> Self {
+        FORCE_SERVICE_SUSPEND_GATE.with(|f| *f.borrow_mut() = true);
+        ForceServiceSuspendGate
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceServiceSuspendGate {
+    fn drop(&mut self) {
+        FORCE_SERVICE_SUSPEND_GATE.with(|f| *f.borrow_mut() = false);
+    }
 }
 
 // SUSPEND ≠ DISABLE: Stop-Service ONLY, the StartupType is left untouched, so the service fully
@@ -1422,6 +1453,18 @@ mod service_suspend_tests {
     #[test]
     fn gate_is_dark_until_qa_and_owner_signoff() {
         assert!(!service_suspend_gate(), "session service-suspend must ship DARK");
+    }
+
+    #[test]
+    fn gate_bypass_seam_opens_only_while_armed_then_closes_on_drop() {
+        // The #[cfg(test)] seam (compiled OUT of shipped binaries) lets QA exercise the in-session
+        // wiring without flipping the real gate. Default + post-drop = dark; open only inside the guard.
+        assert!(!service_suspend_gate(), "default must be dark");
+        {
+            let _g = ForceServiceSuspendGate::begin();
+            assert!(service_suspend_gate(), "seam must open the gate while the guard is alive");
+        }
+        assert!(!service_suspend_gate(), "gate must return to dark after the guard drops");
     }
 
     #[test]
