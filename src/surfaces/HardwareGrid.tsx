@@ -84,12 +84,18 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
                 const mfg = m.manufacturer && m.manufacturer !== "Undefined"
                   ? ` (${m.manufacturer})`
                   : "";
+                const belowRated =
+                  m.xmp_expo_status === "running_below_rated" && m.rated_speed_mhz > 0;
                 return (
-                  <Detail
-                    key={i}
-                    k={`Slot ${i + 1}`}
-                    v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`}
-                  />
+                  <div key={i}>
+                    <Detail k={`Slot ${i + 1}`} v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`} />
+                    {belowRated && (
+                      <div className="detail-flag">
+                        Running at {m.speed_mhz} of {m.rated_speed_mhz} MT/s — enable EXPO/XMP in
+                        BIOS to reach its rated speed.
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </>
@@ -139,6 +145,16 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
             }
           />
           <Detail k="Hostname" v={hw.hostname} />
+          {hw.bios_info && hw.bios_info.version && (
+            <Detail
+              k="BIOS"
+              v={`${hw.bios_info.version}${
+                hw.bios_info.release_date_age_days != null
+                  ? ` · ${hw.bios_info.release_date_age_days} days old`
+                  : ""
+              }`}
+            />
+          )}
         </Card>
 
         <Card
@@ -155,13 +171,28 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           {hw.physical_disks.length > 0 && (
             <>
               <div className="sub-divider">Physical drives</div>
-              {hw.physical_disks.map((p, i) => (
-                <Detail
-                  key={i}
-                  k={p.friendly_name || `Disk ${i + 1}`}
-                  v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}`}
-                />
-              ))}
+              {hw.physical_disks.map((p, i) => {
+                const health = hw.disk_health.find(
+                  (d) => d.friendly_name === p.friendly_name
+                )?.health;
+                const concern = health != null && health !== "Healthy" && health !== "Unknown";
+                return (
+                  <div key={i}>
+                    <Detail
+                      k={p.friendly_name || `Disk ${i + 1}`}
+                      v={`${p.bus_type} ${p.media_type} · ${fmtGB(p.size_bytes)}${
+                        health ? ` · ${health}` : ""
+                      }`}
+                    />
+                    {concern && (
+                      <div className="detail-flag">
+                        SMART reports {health} — back up important data and run the drive vendor's
+                        health tool.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </>
           )}
         </Card>
