@@ -69,4 +69,28 @@ describe("Play", () => {
     // The full debrief verdict heading now renders inline.
     expect(screen.getByText(/Smooth session|smooth|Rough/i)).toBeInTheDocument();
   });
+
+  // ── view prop (Monitor restructure, spec 2026-06-21): the Monitor shell renders Play twice ──
+  it('view="sessions" shows the last-session hero + sessions, NOT the live/overlay cards', () => {
+    renderPlay({ view: "sessions", sessions: [session("halo.exe", 120)] });
+    expect(screen.getByText("avg FPS")).toBeInTheDocument(); // the hero (unique label)
+    expect(screen.getByText("Recent sessions")).toBeInTheDocument();
+    expect(screen.queryByText("Live monitor")).toBeNull();
+    expect(screen.queryByText("In-game overlay")).toBeNull();
+  });
+
+  it('view="live" shows the live monitor + overlay, NOT the sessions list', () => {
+    renderPlay({ view: "live", sessions: [session("halo.exe", 120)] });
+    expect(screen.getByText("Live monitor")).toBeInTheDocument();
+    expect(screen.getByText("In-game overlay")).toBeInTheDocument();
+    expect(screen.queryByText("Recent sessions")).toBeNull();
+    expect(screen.queryByText("avg FPS")).toBeNull(); // no hero in live
+  });
+
+  it('default view ("all") shows BOTH halves (flag-off, byte-identical)', () => {
+    renderPlay({ sessions: [session("halo.exe", 120)] });
+    expect(screen.getByText("Live monitor")).toBeInTheDocument();
+    expect(screen.getByText("Recent sessions")).toBeInTheDocument();
+    expect(screen.queryByText("avg FPS")).toBeNull(); // hero is sessions-view-only, not in "all"
+  });
 });

@@ -1,0 +1,17 @@
+/* Monitor shell (restructure tab #2) — just the segmented-control bar; the segments' visual treatment
+   lives in the shared src/design/SegmentedControl.css, and the inner live/sessions content stays in
+   Play.css (NOT restyled). Layout only. */
+
+.monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.monitor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}

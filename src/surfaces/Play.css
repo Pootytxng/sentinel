@@ -319,3 +319,74 @@
     gap: 6px;
   }
 }
+
+/* Monitor restructure — the last-session hero card (the Sessions face surfaces the buried debrief). */
+.play-hero {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ix-accent) 6%, var(--ix-glass-fill)) 0%,
+    var(--ix-glass-fill) 100%
+  );
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 18px 20px;
+  backdrop-filter: blur(7px);
+}
+.play-hero-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.play-hero-game {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.play-hero-verdict {
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
+.play-hero-metrics {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.play-hero-metric {
+  display: flex;
+  flex-direction: column;
+}
+.play-hero-value {
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--ix-text-1);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: -0.01em;
+}
+.play-hero-label {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ix-text-2);
+}
+
+/* The collapsed overlay-config expander (Live view only). */
+.play-cfg-toggle {
+  appearance: none;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ix-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+.play-cfg-toggle:hover {
+  border-color: var(--ix-accent);
+  color: var(--ix-text-1);
+}

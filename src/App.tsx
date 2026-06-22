@@ -26,6 +26,7 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import Play from "./surfaces/Play";
+import Monitor from "./surfaces/Monitor";
 import Lab from "./surfaces/Lab";
 import Settings from "./surfaces/Settings";
 import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
@@ -496,6 +497,9 @@ function App() {
   // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
   // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
   const optimizeMerged = localStorage.getItem("compy_optimize") !== "0";
+  // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. Default
+  // OFF this phase (set compy_monitor="1" to preview) — classic Play stays the default until verified.
+  const monitorMerged = localStorage.getItem("compy_monitor") === "1";
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
@@ -1235,22 +1239,26 @@ function App() {
                     />
                   </>
                 ))}
-              {activeTab === "Play" && (
-                <Play
-                  active={activeTab === "Play"}
-                  sessions={sessions}
-                  sessionsSeenAt={sessionsSeenAt}
-                  priorities={priorities}
-                  recs={recs ?? []}
-                  apply={apply}
-                  busyId={busyId}
-                  onExport={onExport}
-                  changes={changes}
-                  rollback={rollback}
-                  deepMonitoring={<MonitoringTab active={activeTab === "Play"} embedded />}
-                  vendor={detectedVendor}
-                />
-              )}
+              {activeTab === "Play" &&
+                (() => {
+                  // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
+                  // control and drives Play's `view`. Behind compy_monitor (default off this phase).
+                  const monitorProps = {
+                    active: activeTab === "Play",
+                    sessions,
+                    sessionsSeenAt,
+                    priorities,
+                    recs: recs ?? [],
+                    apply,
+                    busyId,
+                    onExport,
+                    changes,
+                    rollback,
+                    deepMonitoring: <MonitoringTab active={activeTab === "Play"} embedded />,
+                    vendor: detectedVendor,
+                  };
+                  return monitorMerged ? <Monitor {...monitorProps} /> : <Play {...monitorProps} />;
+                })()}
               {activeTab === "Learn" && (
                 <Learn
                   asPanel

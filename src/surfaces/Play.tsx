@@ -63,6 +63,7 @@ export default function Play({
   rollback,
   deepMonitoring,
   vendor = "any",
+  view = "all",
 }: {
   active: boolean;
   sessions: SessionSummary[];
@@ -76,6 +77,11 @@ export default function Play({
   rollback: (c: AppliedChange) => Promise<void>;
   deepMonitoring?: ReactNode;
   vendor?: GpuVendor;
+  // Monitor restructure (spec 2026-06-21): the Monitor shell renders Play twice under a segmented
+  // control. "all" (default) = today's whole surface byte-identical (flag-off path); "sessions" = the
+  // session list + trends only (no live cards/charts); "live" = the live monitor + overlay + deep
+  // monitoring only (no sessions). Mirrors Fix's `view`.
+  view?: "all" | "sessions" | "live";
 }) {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
@@ -89,6 +95,9 @@ export default function Play({
   );
   const [armed, setArmed] = useState<ArmedLite>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Live view collapses the overlay config (density/background/corner) behind a toggle so the landing
+  // shows just the on/off button; "all" (flag-off) keeps it inline (byte-identical).
+  const [overlayCfgOpen, setOverlayCfgOpen] = useState(false);
 
   // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
   useEffect(() => {
@@ -167,16 +176,56 @@ export default function Play({
   const sample = fps?.sample ?? null;
   const latest = sessions[0] ?? null;
 
+  // Monitor restructure: which half(s) to render. "all" (flag-off) shows both, byte-identical to today.
+  const showLive = view !== "sessions";
+  const showSessions = view !== "live";
+  // Live view collapses the overlay config; "all" keeps it inline.
+  const collapseOverlayCfg = view === "live";
+  const overlayCfgVisible = !collapseOverlayCfg || overlayOn || overlayCfgOpen;
+
   return (
     <section className="play-root">
-      <header className="play-head">
-        <h2 className="play-title">Monitor</h2>
-        <p className="play-sub">Live while you play, and the debriefs after.</p>
-      </header>
+      {/* The standalone "Monitor" title only shows in the classic (flag-off) surface; inside the merged
+          Monitor shell the Sessions/Live segment label provides the context (no stacked headings). */}
+      {view === "all" && (
+        <header className="play-head">
+          <h2 className="play-title">Monitor</h2>
+          <p className="play-sub">Live while you play, and the debriefs after.</p>
+        </header>
+      )}
+
+      {/* Last-session hero — the Sessions face surfaces the debrief that's otherwise buried below. */}
+      {view === "sessions" && latest && (
+        <div className="play-hero">
+          <div className="play-hero-top">
+            <span className="play-hero-game">{prettyGameName(latest.process_name) || "Last session"}</span>
+            <span className="play-hero-verdict">{shortVerdict(latest)} · {fmtDur(latest.duration_secs)}</span>
+          </div>
+          <div className="play-hero-metrics">
+            <div className="play-hero-metric">
+              <span className="play-hero-value">{latest.avg_fps.toFixed(0)}</span>
+              <span className="play-hero-label">avg FPS</span>
+            </div>
+            <div className="play-hero-metric">
+              <span className="play-hero-value">{latest.low1_fps_est.toFixed(0)}</span>
+              <span className="play-hero-label">1% low</span>
+            </div>
+            <div className="play-hero-metric">
+              <span className="play-hero-value">{latest.avg_frametime_ms.toFixed(1)}</span>
+              <span className="play-hero-label">ms frametime</span>
+            </div>
+            <div className="play-hero-metric">
+              <span className="play-hero-value">{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°`}</span>
+              <span className="play-hero-label">peak GPU</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Live telemetry charts (dashboard energy) — rolling CPU/GPU/memory from real sensors. dash_v2. */}
-      {typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on" && <LiveCharts />}
+      {showLive && typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on" && <LiveCharts />}
 
+      {showLive && (
       <div className="play-cards">
         {/* Live monitor card */}
         <div className="play-card">
@@ -219,55 +268,62 @@ export default function Play({
               {overlayOn ? "Hide overlay" : "Show overlay"}
             </button>
           </div>
-          <div className="play-field-label">Density</div>
-          <div className="play-seg" role="group" aria-label="Overlay density">
-            {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
-              <button
-                key={d}
-                className={`play-seg-btn ${density === d ? "play-seg-on" : ""}`}
-                aria-pressed={density === d}
-                onClick={() => chooseDensity(d)}
-              >
-                {d.charAt(0).toUpperCase() + d.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="play-field-label">Background</div>
-          <div className="play-seg" role="group" aria-label="Overlay background">
-            {(["on", "off"] as OverlayBackdrop[]).map((b) => (
-              <button
-                key={b}
-                className={`play-seg-btn ${backdrop === b ? "play-seg-on" : ""}`}
-                aria-pressed={backdrop === b}
-                onClick={() => chooseBackdrop(b)}
-              >
-                {b === "on" ? "On" : "Off"}
-              </button>
-            ))}
-          </div>
-          <div className="play-field-label">Corner</div>
-          <div className="play-corners">
-            {CORNERS.map(([c, glyph]) => (
-              <button
-                key={c}
-                className={`play-corner ${corner === c ? "play-corner-on" : ""}`}
-                onClick={() => chooseCorner(c)}
-                title={c.replace("-", " ")}
-                aria-label={`Move the overlay to the ${c.replace("-", " ")} corner`}
-                aria-pressed={corner === c}
-              >
-                {glyph}
-              </button>
-            ))}
-          </div>
+          {overlayCfgVisible ? (
+            <>
+              <div className="play-field-label">Density</div>
+              <div className="play-seg" role="group" aria-label="Overlay density">
+                {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
+                  <button
+                    key={d}
+                    className={`play-seg-btn ${density === d ? "play-seg-on" : ""}`}
+                    aria-pressed={density === d}
+                    onClick={() => chooseDensity(d)}
+                  >
+                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div className="play-field-label">Background</div>
+              <div className="play-seg" role="group" aria-label="Overlay background">
+                {(["on", "off"] as OverlayBackdrop[]).map((b) => (
+                  <button
+                    key={b}
+                    className={`play-seg-btn ${backdrop === b ? "play-seg-on" : ""}`}
+                    aria-pressed={backdrop === b}
+                    onClick={() => chooseBackdrop(b)}
+                  >
+                    {b === "on" ? "On" : "Off"}
+                  </button>
+                ))}
+              </div>
+              <div className="play-field-label">Corner</div>
+              <div className="play-corners">
+                {CORNERS.map(([c, glyph]) => (
+                  <button
+                    key={c}
+                    className={`play-corner ${corner === c ? "play-corner-on" : ""}`}
+                    onClick={() => chooseCorner(c)}
+                    title={c.replace("-", " ")}
+                    aria-label={`Move the overlay to the ${c.replace("-", " ")} corner`}
+                    aria-pressed={corner === c}
+                  >
+                    {glyph}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <button className="play-cfg-toggle" onClick={() => setOverlayCfgOpen(true)}>
+              Overlay settings ▸
+            </button>
+          )}
         </div>
       </div>
+      )}
 
-      {/* Full monitoring — the deep classic Monitoring panels (memory pressure, per-core, charts),
-          ALWAYS inline (§3: no dropdown — Play is monitoring's home turf, so it shouldn't be a door on
-          its own page). Polling stays gated by MonitoringTab's `active` prop (only while Play is the
-          live room), so the cost stays honest without a collapse. */}
-      {deepMonitoring && (
+      {/* Full monitoring — the deep classic Monitoring panels (memory pressure, per-core, charts).
+          Polling stays gated by MonitoringTab's `active` prop (only while Play is the live room). */}
+      {showLive && deepMonitoring && (
         <div className="play-monitor">
           <div className="play-monitor-head">
             <span className="play-monitor-title">Full monitoring &amp; charts</span>
@@ -278,6 +334,7 @@ export default function Play({
       )}
 
       {/* Sessions — rows expand IN PLACE into the full debrief (no route; navigation never teleports). */}
+      {showSessions && (
       <div className="play-sessions">
         <div className="play-section-label">Recent sessions</div>
         {sessions.length === 0 ? (
@@ -339,6 +396,7 @@ export default function Play({
             licensing is disarmed, gated when armed + not Pro). Self-hides until there are ≥2 sessions. */}
         <SessionTrends sessions={sessions} />
       </div>
+      )}
     </section>
   );
 }
