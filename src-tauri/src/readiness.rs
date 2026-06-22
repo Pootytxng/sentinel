@@ -274,6 +274,79 @@ pub(crate) fn evaluate_readiness(
         });
     }
 
+    // CPU cores — 6 physical cores is the comfortable floor for modern gaming (owner-set, 2026-06-22);
+    // under it a CPU-heavy title (sims, open-world, heavy streaming) can bottleneck the GPU. Read-only
+    // advisory from the already-detected physical-core count — no probe. Unreadable (0) -> Unknown.
+    {
+        let cores = hw.cpu_cores_physical;
+        checks.push(if cores == 0 {
+            check(
+                "cpu-cores",
+                "CPU cores",
+                ReadinessStatus::Unknown,
+                "Couldn't read the CPU's physical-core count.",
+                None,
+            )
+        } else if cores >= 6 {
+            check(
+                "cpu-cores",
+                "CPU cores",
+                ReadinessStatus::Ready,
+                "6 or more physical cores — comfortable for modern gaming.",
+                Some(format!("{cores} cores")),
+            )
+        } else {
+            check(
+                "cpu-cores",
+                "CPU cores",
+                ReadinessStatus::Advisory,
+                "Modern games increasingly want 6+ physical cores — fewer can bottleneck the GPU in \
+                 CPU-heavy titles (sims, big open worlds, or while streaming). A CPU upgrade is the \
+                 fix if you feel it; many games still run fine.",
+                Some(format!("{cores} cores")),
+            )
+        });
+    }
+
+    // GPU VRAM — 6 GB is the comfortable floor for modern gaming (more matters above 1080p); under it,
+    // games force texture downgrades or stutter while streaming them in. Read-only advisory from the
+    // discrete GPU (largest VRAM, same pick as the driver-age check). No discrete GPU / unreadable ->
+    // Unknown (never guess a verdict for an integrated part we can't size honestly).
+    {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        let vram = hw.gpus.iter().map(|g| g.vram_bytes).max().unwrap_or(0);
+        checks.push(if vram == 0 {
+            check(
+                "gpu-vram",
+                "GPU memory",
+                ReadinessStatus::Unknown,
+                "Couldn't read the GPU's video memory.",
+                None,
+            )
+        } else {
+            let gb = (vram + GIB / 2) / GIB; // nearest whole GB
+            if gb >= 6 {
+                check(
+                    "gpu-vram",
+                    "GPU memory",
+                    ReadinessStatus::Ready,
+                    "6 GB or more of video memory — comfortable for modern gaming.",
+                    Some(format!("{gb} GB VRAM")),
+                )
+            } else {
+                check(
+                    "gpu-vram",
+                    "GPU memory",
+                    ReadinessStatus::Advisory,
+                    "6 GB of video memory is the comfortable floor for modern gaming (more matters \
+                     above 1080p) — under it, games can force texture downgrades or stutter streaming \
+                     them in. A GPU upgrade is the fix if you feel it.",
+                    Some(format!("{gb} GB VRAM")),
+                )
+            }
+        });
+    }
+
     // Drive health — the OS SMART summary. A Warning/Unhealthy verdict is a back-up-now safety signal;
     // healthy drives read Ready. Per-attribute SMART isn't user-mode readable, so this is the summary.
     {
@@ -1094,9 +1167,9 @@ mod readiness_tests {
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
         );
-        // +5 detection-layer advisory checks (memory-speed, memory-channels, memory-capacity,
-        // drive-health, network-connection).
-        assert_eq!(r.checks.len(), 13);
+        // +7 detection-layer advisory checks (memory-speed, memory-channels, memory-capacity,
+        // cpu-cores, gpu-vram, drive-health, network-connection).
+        assert_eq!(r.checks.len(), 15);
     }
 
     #[test]
@@ -1244,6 +1317,42 @@ mod readiness_tests {
     #[test]
     fn memory_capacity_unreadable_is_unknown() {
         assert_eq!(find(&with_ram(0), "memory-capacity").status, ReadinessStatus::Unknown);
+    }
+
+    fn with_cores(n: usize) -> GameReadiness {
+        let hw = HardwareInfo { cpu_cores_physical: n, ..Default::default() };
+        evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None)
+    }
+
+    #[test]
+    fn cpu_cores_six_plus_ready_under_six_advisory_zero_unknown() {
+        assert_eq!(find(&with_cores(8), "cpu-cores").status, ReadinessStatus::Ready);
+        assert_eq!(find(&with_cores(6), "cpu-cores").status, ReadinessStatus::Ready);
+        assert_eq!(find(&with_cores(4), "cpu-cores").status, ReadinessStatus::Advisory);
+        assert_eq!(find(&with_cores(0), "cpu-cores").status, ReadinessStatus::Unknown);
+    }
+
+    fn with_vram(bytes: u64) -> GameReadiness {
+        let hw = HardwareInfo {
+            gpus: vec![crate::hardware::GpuInfo { vram_bytes: bytes, ..Default::default() }],
+            ..Default::default()
+        };
+        evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None)
+    }
+
+    #[test]
+    fn gpu_vram_six_gb_floor_ready_above_advisory_below() {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        assert_eq!(find(&with_vram(16 * GIB), "gpu-vram").status, ReadinessStatus::Ready);
+        assert_eq!(find(&with_vram(6 * GIB), "gpu-vram").status, ReadinessStatus::Ready);
+        assert_eq!(find(&with_vram(4 * GIB), "gpu-vram").status, ReadinessStatus::Advisory);
+    }
+
+    #[test]
+    fn gpu_vram_no_gpu_is_unknown() {
+        let hw = HardwareInfo { gpus: vec![], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&r, "gpu-vram").status, ReadinessStatus::Unknown);
     }
 
     #[test]
