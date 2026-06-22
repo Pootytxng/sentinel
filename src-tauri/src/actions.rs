@@ -51,12 +51,28 @@ impl KnownService {
             KnownService::NvTelemetryContainer => "NvTelemetryContainer",
         }
     }
+
+    /// Map a service name to the type-enforced allowlist (the ONLY services Compy may suspend).
+    /// Returns None for anything off-allowlist — including every critical service (csrss / lsass /
+    /// services.exe / Defender / …), which therefore can never reach the suspend primitive.
+    pub(crate) fn from_name(name: &str) -> Option<KnownService> {
+        match name {
+            "SysMain" => Some(KnownService::SysMain),
+            "DiagTrack" => Some(KnownService::DiagTrack),
+            "WSearch" => Some(KnownService::WSearch),
+            "NvTelemetryContainer" => Some(KnownService::NvTelemetryContainer),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub(crate) enum AppliedAction {
     DisableKnownService { service: KnownService },
+    // Session-scoped SUSPEND (Stop only, startup-type untouched) — distinct from the permanent
+    // DisableKnownService. BUILT DARK behind service_suspend_gate() until its own UAC QA + owner sign-off.
+    SuspendKnownService { service: KnownService },
     EnableGameMode,
     DisableMouseAcceleration,
     DisableGameBarAndDvr,
@@ -94,6 +110,7 @@ pub(crate) enum AppliedAction {
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum RollbackAction {
     RestoreServiceFromSnapshot { service: KnownService },
+    ResumeServiceFromSnapshot { service: KnownService },
     RestoreGameModeFromSnapshot,
     RestoreMouseAccelFromSnapshot,
     RestoreGameBarFromSnapshot,
@@ -1145,6 +1162,114 @@ pub(crate) fn rollback_service_disable_typed(
     }
     run_elevated_powershell(&cmd)?;
     Ok(())
+}
+
+// ─── Session-scoped service SUSPEND (Services module, BUILT DARK) ─────────
+//
+// GATE for session service suspension. DARK (false) until the feature's own apply/rollback QA on a
+// UAC-on rig + explicit owner sign-off — mirrors gaming_mode_gate / restore_gate. Expanding the
+// mutating catalog to add this was the owner's explicit decision (2026-06-22, LOCKED-rule-6); the
+// ARMING (flipping this true + wiring a session orchestrator/UI) still rides QA + sign-off.
+pub(crate) fn service_suspend_gate() -> bool {
+    false
+}
+
+// SUSPEND ≠ DISABLE: Stop-Service ONLY, the StartupType is left untouched, so the service fully
+// resumes on Start-Service or the next reboot — the session-scoped "pause while gaming" the roadmap
+// asks for, not the permanent disable apply_service_disable does. The snapshot captures the prior
+// running state so rollback restores exactly. `KnownService` is the type-enforced allowlist, so no
+// critical service can ever be passed. Reuses the audited run_elevated_powershell + service_info.
+pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult, String> {
+    ps_safe(service.name())?;
+    let (prior_state, prior_start_mode) =
+        service_info(service.name()).unwrap_or_else(|| ("Running".into(), "Auto".into()));
+    run_elevated_powershell(&format!(
+        "Stop-Service -Name {} -Force -ErrorAction SilentlyContinue",
+        service.name()
+    ))?;
+    Ok(ApplyResult {
+        applied_action: AppliedAction::SuspendKnownService {
+            service: service.clone(),
+        },
+        rollback_action: RollbackAction::ResumeServiceFromSnapshot { service },
+        snapshot: Snapshot::Service {
+            prior_state,
+            prior_start_mode,
+        },
+        elevation_used: true,
+    })
+}
+
+/// Resume a session-suspended service: Start-Service only if it WAS running at suspend time (suspend
+/// never touched the startup type, so there's nothing to restore there). Fail-safe: a service that
+/// wasn't running stays stopped — and that path issues no elevated command at all.
+pub(crate) fn rollback_service_suspend_typed(
+    service: &KnownService,
+    prior_state: &str,
+) -> Result<(), String> {
+    ps_safe(service.name())?;
+    if prior_state == "Running" {
+        run_elevated_powershell(&format!("Start-Service -Name {}", service.name()))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod service_suspend_tests {
+    use super::*;
+
+    #[test]
+    fn gate_is_dark_until_qa_and_owner_signoff() {
+        assert!(!service_suspend_gate(), "session service-suspend must ship DARK");
+    }
+
+    #[test]
+    fn from_name_enforces_the_allowlist_and_rejects_critical_services() {
+        assert!(KnownService::from_name("WSearch").is_some());
+        assert!(KnownService::from_name("SysMain").is_some());
+        // Critical / off-allowlist services can NEVER reach the suspend primitive.
+        assert!(KnownService::from_name("csrss").is_none());
+        assert!(KnownService::from_name("lsass").is_none());
+        assert!(KnownService::from_name("services").is_none());
+        assert!(KnownService::from_name("").is_none());
+    }
+
+    #[test]
+    fn suspend_typed_contract_round_trips() {
+        let a = AppliedAction::SuspendKnownService { service: KnownService::WSearch };
+        let back: AppliedAction = serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap();
+        assert!(matches!(back, AppliedAction::SuspendKnownService { .. }));
+        let r = RollbackAction::ResumeServiceFromSnapshot { service: KnownService::WSearch };
+        let back2: RollbackAction =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert!(matches!(back2, RollbackAction::ResumeServiceFromSnapshot { .. }));
+    }
+
+    #[test]
+    fn resume_is_a_noop_with_no_elevation_when_prior_was_not_running() {
+        // prior != "Running" → no Start-Service, no elevated command → Ok. (The Running path reaches
+        // run_elevated_powershell, exercised live by the #[ignore]'d QA harness, not here.)
+        assert!(rollback_service_suspend_typed(&KnownService::WSearch, "Stopped").is_ok());
+    }
+
+    // ── Live QA harness (manual; #[ignore], UAC-on rig) — proves EXACT apply→rollback restore. ──
+    // Mirrors manual_elevation_qa / gaming_mode_qa: drives the suspend primitive against a real safe
+    // service (WSearch), reads WMI ground truth, asserts resume restores the prior running state.
+    // Does NOT flip service_suspend_gate (it's #[cfg(test)] — compiled out of shipped binaries).
+    #[test]
+    #[ignore = "manual: real service mutation on a UAC-on rig"]
+    fn qa_suspend_then_resume_restores_exact_state() {
+        let svc = KnownService::WSearch;
+        let (prior_state, _) = service_info(svc.name()).expect("read prior state");
+        let result = apply_service_suspend(svc.clone()).expect("suspend applies");
+        let (after, _) = service_info(svc.name()).expect("read post-suspend");
+        assert_ne!(after, "Running", "suspend should stop the service");
+        if let Snapshot::Service { prior_state: snap, .. } = &result.snapshot {
+            rollback_service_suspend_typed(&svc, snap).expect("resume rolls back");
+        }
+        let (restored, _) = service_info(svc.name()).expect("read post-resume");
+        assert_eq!(restored, prior_state, "resume must restore the EXACT prior running state");
+    }
 }
 
 // ─── Power plan: Ultimate Performance ────────────────────────────────────
@@ -2564,6 +2689,10 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
             R::RestoreServiceFromSnapshot { service },
             S::Service { prior_state, prior_start_mode },
         ) => rollback_service_disable_typed(service, prior_state, prior_start_mode),
+        (
+            R::ResumeServiceFromSnapshot { service },
+            S::Service { prior_state, .. },
+        ) => rollback_service_suspend_typed(service, prior_state),
         (
             R::RestoreGameModeFromSnapshot,
             S::GameMode {
