@@ -457,9 +457,25 @@ export default function CommandCenter(props: Props) {
           </header>
 
           {dashV2 ? (
-            /* Dashboard v2 prototype (evolve-toward-ui-spec) — replaces the daily Home body with the
-               premium telemetry dashboard. Flag-gated; the classic Home is one toggle away. */
-            <DashboardV2 hw={hw} sessions={sessions} />
+            /* Dashboard v2 prototype (evolve-toward-ui-spec) — the premium telemetry dashboard.
+               Flag-gated; the classic Home is one toggle away. */
+            <>
+              {/* The #1-limiter CTA — the one actionable thing worth doing for THIS rig — leads the
+                  default Home. It was dropped when dashV2 shipped (the telemetry dashboard focused on
+                  charts), so the most useful card vanished; restored here as the hero above the
+                  telemetry. Same audited apply flow + props as the classic path (no new IPC). */}
+              <LimiterCard
+                priorities={priorities}
+                limiter={limiter}
+                limiterRec={limiterRec}
+                appliable={limiterAppliable}
+                activeChange={limiterActiveChange}
+                busy={busyLimiter}
+                onToggle={onToggleLimiter}
+                onSeeInFix={onSeeInFix}
+              />
+              <DashboardV2 hw={hw} sessions={sessions} />
+            </>
           ) : (
             <>
               {/* Posture hero */}
