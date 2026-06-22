@@ -996,10 +996,13 @@ pub(crate) fn cim_date_age_days(cim: &str) -> Option<i64> {
 }
 
 pub(crate) fn cim_date_iso(cim: &str) -> String {
-    if cim.len() < 8 {
-        return String::new();
+    // Boundary-safe via .get() (mirrors cim_date_age_days): a multi-byte UTF-8 char straddling an
+    // index would panic on raw byte-slicing (&cim[0..4]). Real CIM_DATETIME is ASCII digits, but
+    // Win32_BIOS.ReleaseDate is firmware-controlled — garbage must yield "" (silent), never a crash.
+    match (cim.get(0..4), cim.get(4..6), cim.get(6..8)) {
+        (Some(y), Some(m), Some(d)) => format!("{y}-{m}-{d}"),
+        _ => String::new(),
     }
-    format!("{}-{}-{}", &cim[0..4], &cim[4..6], &cim[6..8])
 }
 
 // ─── BIOS / firmware (detection-layer Probe #1, feasible-usermode) ────────────
@@ -1251,6 +1254,12 @@ mod bios_detection_tests {
         let cim = "20260315000000.000000-000";
         assert_eq!(cim_date_iso(cim), "2026-03-15");
         assert!(cim_date_age_days(cim).is_some());
+
+        // Firmware-controlled garbage with a multi-byte UTF-8 char straddling a byte index must NOT
+        // panic (raw byte-slicing &cim[0..4] would). 'é' is 2 bytes spanning indices 3..5, so index 4
+        // is not a char boundary; boundary-safe parsing yields honest silence, not a crash.
+        assert_eq!(cim_date_iso("202\u{e9}0115000000"), "");
+        assert_eq!(cim_date_age_days("202\u{e9}0115000000"), None);
     }
 
     #[test]

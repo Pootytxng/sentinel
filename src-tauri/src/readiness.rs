@@ -190,6 +190,51 @@ pub(crate) fn evaluate_readiness(
         });
     }
 
+    // Memory channels — a single populated stick runs single-channel, a real bandwidth loss for
+    // gaming that a matching second stick fixes. EXCEPTION: a single SOLDERED LPDDR module (laptops /
+    // mini-PCs) physically can't take a second stick, so the advice would be an impossible dead-end —
+    // treat that as Ready, not Attention (flags must carry an actionable fix, never a dead-end). The
+    // SMBIOS parser skips empty slots, so memory_modules.len() is the count of POPULATED sticks.
+    {
+        let populated = hw.memory_modules.len();
+        let one = hw.memory_modules.first();
+        let soldered_lpddr = one
+            .map(|m| m.type_name.to_uppercase().starts_with("LPDDR"))
+            .unwrap_or(false);
+        checks.push(match (populated, soldered_lpddr) {
+            (1, false) => check(
+                "memory-channels",
+                "Memory channels",
+                ReadinessStatus::Attention,
+                "You have a single RAM stick — adding a matching second stick enables dual-channel \
+                 memory, a real bandwidth gain for gaming. It's a hardware add, not a BIOS setting.",
+                one.map(|m| format!("1 module ({})", m.type_name)),
+            ),
+            (1, true) => check(
+                "memory-channels",
+                "Memory channels",
+                ReadinessStatus::Ready,
+                "Memory is a single soldered module, so dual-channel isn't an upgrade option on this \
+                 design.",
+                one.map(|m| format!("1 soldered module ({})", m.type_name)),
+            ),
+            (0, _) => check(
+                "memory-channels",
+                "Memory channels",
+                ReadinessStatus::Unknown,
+                "Couldn't read the installed memory modules on this system.",
+                None,
+            ),
+            (n, _) => check(
+                "memory-channels",
+                "Memory channels",
+                ReadinessStatus::Ready,
+                "Running in dual-channel (or wider) — multiple memory modules are populated.",
+                Some(format!("{n} modules")),
+            ),
+        });
+    }
+
     // Drive health — the OS SMART summary. A Warning/Unhealthy verdict is a back-up-now safety signal;
     // healthy drives read Ready. Per-attribute SMART isn't user-mode readable, so this is the summary.
     {
@@ -972,8 +1017,8 @@ mod readiness_tests {
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
         );
-        // +2 detection-layer advisory checks (memory-speed, drive-health).
-        assert_eq!(r.checks.len(), 10);
+        // +3 detection-layer advisory checks (memory-speed, memory-channels, drive-health).
+        assert_eq!(r.checks.len(), 11);
     }
 
     #[test]
@@ -1016,6 +1061,50 @@ mod readiness_tests {
         let c = find(&r, "memory-speed");
         assert_eq!(c.status, ReadinessStatus::Ready);
         assert!(!c.detail.to_uppercase().contains("ENABLE"), "no fix prompt when already at rated");
+    }
+
+    fn mem(type_name: &str) -> crate::hardware::MemoryModuleInfo {
+        crate::hardware::MemoryModuleInfo {
+            capacity_bytes: 16 << 30,
+            speed_mhz: 6000,
+            rated_speed_mhz: 6000,
+            type_name: type_name.into(),
+            manufacturer: "Kit".into(),
+            xmp_expo_status: "running_at_rated".into(),
+        }
+    }
+
+    #[test]
+    fn memory_channels_single_dimm_is_attention_to_add_a_stick() {
+        let hw = HardwareInfo { memory_modules: vec![mem("DDR5")], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        assert!(c.detail.to_lowercase().contains("dual-channel"));
+    }
+
+    #[test]
+    fn memory_channels_single_soldered_lpddr_is_ready_not_a_dead_end() {
+        // Soldered LPDDR can't take a second stick — advising one would be an impossible dead-end.
+        let hw = HardwareInfo { memory_modules: vec![mem("LPDDR5")], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.to_lowercase().contains("soldered"));
+    }
+
+    #[test]
+    fn memory_channels_two_modules_is_ready_dual_channel() {
+        let hw = HardwareInfo { memory_modules: vec![mem("DDR5"), mem("DDR5")], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Ready);
+    }
+
+    #[test]
+    fn memory_channels_no_modules_is_unknown_never_a_scare() {
+        let hw = HardwareInfo { memory_modules: vec![], ..Default::default() };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Unknown);
     }
 
     #[test]
