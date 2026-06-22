@@ -198,7 +198,7 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
 > **🧩 PHASE-A 1.0 FEATURES CONTINUED (autonomous run, owner "persist through tasks") — 2026-06-22
-> (`origin/main`).** Three clean, read-only, no-gate features off the reconciled main, each built →
+> (`origin/main`).** Four clean, read-only, no-gate features off the reconciled main, each built →
 > tested → live self-reviewed → shipped (rebuilt + reinstalled) → pushed:
 > - **A3.8 Autopsy Record** (`7486196`) — a local, private rollup of every Guide Autopsy graded
 >   ("N guides graded — of the tweaks recognized: X% real · Y% placebo · Z% risky · W snake-oil tricks
@@ -214,13 +214,24 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   comfortable floor for modern gaming; heavier titles can stutter/texture-hitch under it; adding RAM
 >   is the fix if you feel it"); unreadable → Unknown. Derived from `ram_total_bytes` (no probe);
 >   OS-visible total rounded generously to the whole GB. 3 tests.
-> - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Verify across the
->   run: cargo **523** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
->   refs (`16069fa`) untouched. Installed build refreshed to carry all three — Desktop NSIS
->   `CB744BB331629AAEE60839D019F15C44397D958D805C90A7669362AFD9199ED7`.
-> - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, chip colors) ·
->   owner-curation (service/sensor/bloat DBs) · Cowork's active lanes (hwchange/drift UX, power-source
->   fix) · detection-walled (thermal/PBO/SpeedShift/GPU-profile). Next clean track would be deeper A4
+> - **CPU-cores + GPU-VRAM readiness checks** (`16d60ee`, owner-greenlit thresholds) — `cpu-cores`:
+>   ≥6 physical → Ready, under → Advisory ("modern games want 6+; fewer can bottleneck the GPU"); 0 →
+>   Unknown. `gpu-vram`: discrete GPU (largest VRAM) ≥6 GB → Ready, under → Advisory ("6 GB floor, more
+>   above 1080p"); none → Unknown. Both derived from existing HardwareInfo (no probe); 6 tests. Together
+>   with RAM speed/channels/capacity + drive-health + network, the hardware-readiness panel is complete.
+> - **Reconciled with a Cowork push mid-run** (no force-push): origin/main had advanced to `738e0c2`
+>   (Cowork's **power-source WMI fix** `1ffa968` — the Diagnostics-crash cause CC diagnosed — + a
+>   **service-suspend** Phase-B feature built DARK/gated). CC rebased its CPU/VRAM commit onto it →
+>   `6145c0e` (clean ff). The rebuild below carries Cowork's power-source fix too (clears the crash).
+> - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Verify on the merged
+>   tree: cargo **531** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
+>   refs (`16069fa`) untouched. Installed build NSIS
+> `E11F8F34D57D8A213AA323CE627ED3EDE952DB3DEB7A1DE3AB5429BD0ED14630` (carries CPU/VRAM + Cowork's
+> power-source fix + service-suspend-dark). The Diagnostics power-source crash CC saw is root-cause-fixed
+> in this build (Cowork's `1ffa968`, WMI on the command thread); app stable across stress testing.
+> - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, confidence-chip
+>   colors) · owner-curation (service safe-list/sensor/bloat DBs — Cowork owns the services lane now) ·
+>   detection-walled (thermal/PBO/SpeedShift/GPU-profile). Next clean track would be deeper A4
 >   advisory surfaces — coordinate the lane first ([[check-parallel-lane-before-building]]).
 
 > **🔬 A1 DETECTION LAYER — TWO LANES RECONCILED + MERGED TO MAIN — 2026-06-22 (`main` ← `reconcile/a1-merge`).**
