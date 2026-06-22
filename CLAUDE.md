@@ -198,7 +198,7 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
 > **🧩 PHASE-A 1.0 FEATURES CONTINUED (autonomous run, owner "persist through tasks") — 2026-06-22
-> (`origin/main`).** Two clean, read-only, no-gate features off the reconciled main, each built →
+> (`origin/main`).** Three clean, read-only, no-gate features off the reconciled main, each built →
 > tested → live self-reviewed → shipped (rebuilt + reinstalled) → pushed:
 > - **A3.8 Autopsy Record** (`7486196`) — a local, private rollup of every Guide Autopsy graded
 >   ("N guides graded — of the tweaks recognized: X% real · Y% placebo · Z% risky · W snake-oil tricks
@@ -210,9 +210,14 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   reducer over the ALREADY-collected `hw.network_adapters` inventory — NOT a new probe (deliberately
 >   avoids the in-process WMI net-adapter thread-safety class being fixed in `fix/power-source-wmi-thread`).
 >   5 tests; wired path verified on the dev rig; Wi-Fi path implemented-not-verified-here (NVIDIA precedent).
-> - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Installed build is
->   current (Desktop NSIS `1A023EC1…`). Verify across the run: cargo **520** · vitest **533** · tsc clean ·
->   zero warnings · doctrine guards green. Frozen beta refs (`16069fa`) untouched.
+> - **RAM-capacity readiness check** (`8d7283c`) — ≥16 GB → Ready; under it → Advisory ("16 GB is the
+>   comfortable floor for modern gaming; heavier titles can stutter/texture-hitch under it; adding RAM
+>   is the fix if you feel it"); unreadable → Unknown. Derived from `ram_total_bytes` (no probe);
+>   OS-visible total rounded generously to the whole GB. 3 tests.
+> - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Verify across the
+>   run: cargo **523** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
+>   refs (`16069fa`) untouched. Installed build refreshed to carry all three — Desktop NSIS
+>   `CB744BB331629AAEE60839D019F15C44397D958D805C90A7669362AFD9199ED7`.
 > - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, chip colors) ·
 >   owner-curation (service/sensor/bloat DBs) · Cowork's active lanes (hwchange/drift UX, power-source
 >   fix) · detection-walled (thermal/PBO/SpeedShift/GPU-profile). Next clean track would be deeper A4
