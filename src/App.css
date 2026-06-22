@@ -302,6 +302,45 @@ html, body, #root {
   letter-spacing: 0.06em;
 }
 
+/* Rough rig-tier line (owner-greenlit) — a quiet, transparent banner above the hardware grid. The
+   value is colored by tier (accent → neutral → muted; Entry is a class, not a problem, so no alarm
+   red). The basis text names the exact specs it read, so the tier is never a black-box claim. */
+.hw-tier {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.hw-tier-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.hw-tier-value {
+  font-size: 14px;
+  font-weight: 700;
+}
+.hw-tier-high .hw-tier-value {
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+}
+.hw-tier-mid .hw-tier-value {
+  color: var(--ix-text-1, var(--text));
+}
+.hw-tier-entry .hw-tier-value {
+  color: var(--ix-text-2, var(--muted));
+}
+.hw-tier-basis {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .card-value {
   font-size: 17px;
   font-weight: 600;

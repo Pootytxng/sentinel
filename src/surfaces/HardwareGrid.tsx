@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 // component as a value. The hardware shape lives in App.tsx; both Homes read the same `hw` object.
 import type { HardwareInfo, GpuInfo } from "../App";
 import { fmtGB, fmtGHz } from "./hardware-format";
+import { rigTierLine } from "../data/rig-tier";
 
 // The detailed "Your hardware" card grid — the SINGLE source for both the classic Overview surface
 // and the CommandCenter Home, so the two can never drift (the regression this restores: the grid was
@@ -47,8 +48,23 @@ function Detail({ k, v }: { k: string; v: string | number }) {
 }
 
 export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
+  // Rough, transparent rig tier (owner-greenlit 2026-06-22) — see src/data/rig-tier.ts. It names the
+  // exact specs it read, and the bands are conservative (a single strong axis can't inflate the tier).
+  const tier = rigTierLine(
+    Math.max(0, ...(hw.gpus ?? []).map((g) => g.vram_bytes)),
+    hw.cpu_cores_physical,
+    hw.ram_total_bytes,
+  );
   return (
-    <div className="grid">
+    <>
+      {tier && (
+        <div className={`hw-tier hw-tier-${tier.tier.toLowerCase()}`} role="note">
+          <span className="hw-tier-label">Rig tier</span>
+          <span className="hw-tier-value">{tier.tier}</span>
+          <span className="hw-tier-basis">{tier.basis}</span>
+        </div>
+      )}
+      <div className="grid">
         <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand}>
           {hw.cpu_arch?.architecture && hw.cpu_arch.architecture !== "Unknown" && (
             <Detail
@@ -241,5 +257,6 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           );
         })()}
       </div>
+    </>
   );
 }
