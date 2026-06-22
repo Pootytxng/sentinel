@@ -1289,13 +1289,59 @@ pub(crate) fn bloat_removal_gate() -> bool {
     false
 }
 
-/// Read a scheduled task's current state (non-elevated): "Ready" | "Disabled" | "Running" | "Unknown".
-/// Identifiers are FIXED enum constants, guarded by ps_safe_squoted and interpolated only inside '...'.
-pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
-    let (path, name) = task.path_and_name();
-    if ps_safe_squoted(path).is_err() || ps_safe_squoted(name).is_err() {
-        return "Unknown".into();
+/// Resolve the concrete TaskName at `path` whose name starts with `base`. Windows renames these tasks
+/// across builds (live-QA found "Microsoft Compatibility Appraiser" → "Microsoft Compatibility Appraiser
+/// Exp" on Win11 26200), so an exact hardcoded name can SILENTLY miss the real task. Prefers an exact
+/// match, else the first prefix match. Non-elevated; `path`/`base` are FIXED enum constants (guarded),
+/// and the returned name is re-guarded by the caller before any elevated use. None → nothing matches.
+fn resolve_task_name(path: &str, base: &str) -> Option<String> {
+    if ps_safe_squoted(path).is_err() || ps_safe_squoted(base).is_err() {
+        return None;
     }
+    let out = quiet_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("Get-ScheduledTask -TaskPath '{}' | ForEach-Object {{ $_.TaskName }}", path),
+        ])
+        .output()
+        .ok()?;
+    let names: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    pick_task_name(&names, base)
+}
+
+/// Pure name picker (build-drift policy): an EXACT match wins (older Windows); otherwise the first
+/// prefix match (a renamed task carrying a suffix like " Exp"). None if nothing at the path matches.
+fn pick_task_name(names: &[String], base: &str) -> Option<String> {
+    if names.iter().any(|n| n == base) {
+        return Some(base.to_string());
+    }
+    names.iter().find(|n| n.starts_with(base)).cloned()
+}
+
+/// `(path, concrete_name)` for a task, resolving build-drift in the name and RE-GUARDING the resolved
+/// name with `ps_safe_squoted` so it stays safe to interpolate into an elevated command. None → the
+/// task is absent on this system (caller fails loud / reports Unknown rather than acting on a guess).
+fn resolved_task_target(task: &KnownBloatTask) -> Option<(&'static str, String)> {
+    let (path, base) = task.path_and_name();
+    let name = resolve_task_name(path, base)?;
+    if ps_safe_squoted(path).is_err() || ps_safe_squoted(&name).is_err() {
+        return None;
+    }
+    Some((path, name))
+}
+
+/// Read a scheduled task's current state (non-elevated): "Ready" | "Disabled" | "Running" | "Unknown".
+/// Resolves the real task name first (build-drift safe); identifiers are FIXED enum constants, guarded
+/// by ps_safe_squoted and interpolated only inside '...'.
+pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
+    let Some((path, name)) = resolved_task_target(task) else {
+        return "Unknown".into();
+    };
     match quiet_command("powershell")
         .args([
             "-NoProfile",
@@ -1315,9 +1361,10 @@ pub(crate) fn scheduled_task_state(task: &KnownBloatTask) -> String {
 /// Disable a curated telemetry scheduled task (elevated). Snapshots prior state first so rollback
 /// re-enables only what was enabled. Reads → ONE elevated command → return (batchable / exit-free).
 pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<ApplyResult, String> {
-    let (path, name) = task.path_and_name();
-    ps_safe_squoted(path)?;
-    ps_safe_squoted(name)?;
+    // Resolve the concrete task name FIRST so a build-drift rename (e.g. "... Exp") fails loud here —
+    // BEFORE any elevation — instead of popping a UAC prompt only to silently no-op on a missing task.
+    let (path, name) = resolved_task_target(&task)
+        .ok_or_else(|| "that telemetry task was not found on this system.".to_string())?;
     let prior_state = scheduled_task_state(&task);
     run_elevated_powershell(&format!(
         "Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
@@ -1351,19 +1398,20 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
     task: &KnownBloatTask,
     prior_state: &str,
 ) -> Result<(), String> {
-    let (path, name) = task.path_and_name();
-    ps_safe_squoted(path)?;
-    ps_safe_squoted(name)?;
     // Rollback-first fidelity: re-enable UNLESS we KNOW it was Disabled. An "Unknown" prior (the
     // snapshot read failed) is treated as "was enabled" → restored to the stock/enabled state, the
     // conservative direction (matches apply_service_disable defaulting to the active state). Only a
     // confirmed-Disabled prior stays disabled — and that path issues no elevated command.
-    if prior_state != "Disabled" {
-        run_elevated_powershell(&format!(
-            "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
-            path, name
-        ))?;
+    if prior_state == "Disabled" {
+        return Ok(());
     }
+    // Resolve the real task name (build-drift safe) before the elevated re-enable.
+    let (path, name) = resolved_task_target(task)
+        .ok_or_else(|| "that telemetry task was not found to re-enable.".to_string())?;
+    run_elevated_powershell(&format!(
+        "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
+        path, name
+    ))?;
     Ok(())
 }
 
@@ -1479,6 +1527,33 @@ mod bloat_task_tests {
     #[test]
     fn rollback_is_noop_when_prior_disabled() {
         assert!(rollback_enable_scheduled_task_typed(&KnownBloatTask::CeipUsb, "Disabled").is_ok());
+    }
+
+    #[test]
+    fn pick_task_name_prefers_exact_then_prefix_then_none() {
+        let names = vec![
+            "MareBackup".to_string(),
+            "Microsoft Compatibility Appraiser Exp".to_string(),
+            "StartupAppTask".to_string(),
+        ];
+        // Build-drift: the hardcoded base has no exact match, so the " Exp"-suffixed task is found.
+        // This is the exact Win11 26200 case the live QA caught.
+        assert_eq!(
+            pick_task_name(&names, "Microsoft Compatibility Appraiser"),
+            Some("Microsoft Compatibility Appraiser Exp".to_string())
+        );
+        // Exact match wins over any prefix sibling (older Windows still has the un-suffixed name).
+        let exact = vec![
+            "Microsoft Compatibility Appraiser".to_string(),
+            "Microsoft Compatibility Appraiser Exp".to_string(),
+        ];
+        assert_eq!(
+            pick_task_name(&exact, "Microsoft Compatibility Appraiser"),
+            Some("Microsoft Compatibility Appraiser".to_string())
+        );
+        // Nothing matches → None (caller fails loud / reports Unknown, never guesses).
+        assert_eq!(pick_task_name(&["Consolidator".to_string()], "UsbCeip"), None);
+        assert_eq!(pick_task_name(&[], "Consolidator"), None);
     }
 
     // Live QA (manual; #[ignore], UAC-on rig) — proves exact disable→enable restore.
