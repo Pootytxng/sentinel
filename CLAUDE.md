@@ -197,6 +197,27 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🧩 PHASE-A 1.0 FEATURES CONTINUED (autonomous run, owner "persist through tasks") — 2026-06-22
+> (`origin/main`).** Two clean, read-only, no-gate features off the reconciled main, each built →
+> tested → live self-reviewed → shipped (rebuilt + reinstalled) → pushed:
+> - **A3.8 Autopsy Record** (`7486196`) — a local, private rollup of every Guide Autopsy graded
+>   ("N guides graded — of the tweaks recognized: X% real · Y% placebo · Z% risky · W snake-oil tricks
+>   flagged"). COUNTS ONLY in localStorage (never the pasted text), capped 100; percentages over
+>   recognized tweaks; an autopsy that recognized nothing is never recorded. `src/data/autopsy-ledger.ts`
+>   + a quiet glass card on the Autopsy tab; 11 tests; no new IPC/mutation.
+> - **A4 Network-connection readiness check** (`50a93c6`) — wired Ethernet → Ready ("steadiest for
+>   gaming"); Wi-Fi → Advisory (not a problem); offline → Unknown. Pure `network_connection_kind()`
+>   reducer over the ALREADY-collected `hw.network_adapters` inventory — NOT a new probe (deliberately
+>   avoids the in-process WMI net-adapter thread-safety class being fixed in `fix/power-source-wmi-thread`).
+>   5 tests; wired path verified on the dev rig; Wi-Fi path implemented-not-verified-here (NVIDIA precedent).
+> - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Installed build is
+>   current (Desktop NSIS `1A023EC1…`). Verify across the run: cargo **520** · vitest **533** · tsc clean ·
+>   zero warnings · doctrine guards green. Frozen beta refs (`16069fa`) untouched.
+> - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, chip colors) ·
+>   owner-curation (service/sensor/bloat DBs) · Cowork's active lanes (hwchange/drift UX, power-source
+>   fix) · detection-walled (thermal/PBO/SpeedShift/GPU-profile). Next clean track would be deeper A4
+>   advisory surfaces — coordinate the lane first ([[check-parallel-lane-before-building]]).
+
 > **🔬 A1 DETECTION LAYER — TWO LANES RECONCILED + MERGED TO MAIN — 2026-06-22 (`main` ← `reconcile/a1-merge`).**
 > Two A1 efforts were built in parallel: Cowork's 7-probe `roadmap/detection-layer` (spec-backed, in
 > Diagnostics + Home grid + Readiness) and CC's smaller 4-probe `feat/a1-detection` (briefly shipped to
