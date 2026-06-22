@@ -57,6 +57,11 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         note: None,
     });
     power.push(DiagnosticEntry {
+        label: "Power source".into(),
+        value: crate::hardware::detect_power_status(),
+        note: Some("AC vs battery (live). On a laptop, gaming on battery throttles performance.".into()),
+    });
+    power.push(DiagnosticEntry {
         label: "Fast Startup".into(),
         value: match fast_startup_state() {
             Some(1) => "On".into(),
@@ -444,6 +449,7 @@ mod diagnostics_tests {
         };
         let power = labels_of("Power & boot");
         assert!(power.iter().any(|l| l == "Active power plan"));
+        assert!(power.iter().any(|l| l == "Power source"));
         assert!(power.iter().any(|l| l == "Fast Startup"));
         assert!(power.iter().any(|l| l.contains("HAGS")));
         assert!(power.iter().any(|l| l == "BIOS / firmware"));

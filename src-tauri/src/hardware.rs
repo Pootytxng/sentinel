@@ -1184,6 +1184,63 @@ mod usb_detection_tests {
     }
 }
 
+// ─── Power source / AC state (detection-layer Probe #11) ──────────────────────
+// Win32_Battery is empty on desktops (→ AC) and populated on laptops. No FFI, no kernel — a plain
+// WMI read. Honest: live power source + charge; "Unknown" if WMI fails. More useful on laptops
+// (gaming on battery throttles) than on a desktop, where it's just "AC".
+#[derive(Deserialize)]
+#[serde(rename = "Win32_Battery")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32Battery {
+    pub(crate) battery_status: Option<u16>, // 1 = discharging, 2 = on AC
+    pub(crate) estimated_charge_remaining: Option<u16>, // percent, 0-100
+}
+
+/// Plain-English power source from (has_battery, BatteryStatus, charge%). Pure + testable.
+pub(crate) fn power_status_label(
+    has_battery: bool,
+    battery_status: Option<u16>,
+    pct: Option<u16>,
+) -> String {
+    if !has_battery {
+        return "AC power (no battery — desktop)".into();
+    }
+    match (battery_status, pct) {
+        (Some(2), Some(p)) => format!("AC power (battery {p}%)"),
+        (Some(1), Some(p)) => format!("On battery ({p}%)"),
+        (_, Some(p)) => format!("Battery {p}%"),
+        _ => "Battery present".into(),
+    }
+}
+
+pub(crate) fn detect_power_status() -> String {
+    let Some(com) = COMLibrary::new().ok() else {
+        return "Unknown".into();
+    };
+    let Some(conn) = WMIConnection::new(com).ok() else {
+        return "Unknown".into();
+    };
+    let rows: Vec<Win32Battery> = conn.query().unwrap_or_default();
+    match rows.into_iter().next() {
+        None => power_status_label(false, None, None),
+        Some(b) => power_status_label(true, b.battery_status, b.estimated_charge_remaining),
+    }
+}
+
+#[cfg(test)]
+mod power_status_tests {
+    use super::power_status_label;
+
+    #[test]
+    fn power_label_is_honest_across_states() {
+        assert_eq!(power_status_label(false, None, None), "AC power (no battery — desktop)");
+        assert_eq!(power_status_label(true, Some(2), Some(95)), "AC power (battery 95%)");
+        assert_eq!(power_status_label(true, Some(1), Some(60)), "On battery (60%)");
+        assert_eq!(power_status_label(true, None, Some(80)), "Battery 80%");
+        assert_eq!(power_status_label(true, None, None), "Battery present");
+    }
+}
+
 #[cfg(test)]
 mod bios_detection_tests {
     use super::*;
