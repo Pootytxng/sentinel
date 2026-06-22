@@ -235,6 +235,45 @@ pub(crate) fn evaluate_readiness(
         });
     }
 
+    // Memory capacity — 16 GB is the comfortable floor for modern gaming; under it, heavier titles can
+    // stutter or hitch while streaming textures (more so with a browser/Discord open). Read-only
+    // advisory from the already-detected total — no probe. ram_total is the OS-VISIBLE total (a few %
+    // under the marketed amount due to reserved / integrated-GPU memory), so round to the whole GB the
+    // user recognizes (15.8 -> 16) and band generously — never nitpick a rounding edge.
+    {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        checks.push(if hw.ram_total_bytes == 0 {
+            check(
+                "memory-capacity",
+                "Memory capacity",
+                ReadinessStatus::Unknown,
+                "Couldn't read how much RAM is installed.",
+                None,
+            )
+        } else {
+            let gb = (hw.ram_total_bytes + GIB / 2) / GIB; // nearest whole GB
+            if gb >= 16 {
+                check(
+                    "memory-capacity",
+                    "Memory capacity",
+                    ReadinessStatus::Ready,
+                    "16 GB or more — comfortable for modern gaming.",
+                    Some(format!("{gb} GB")),
+                )
+            } else {
+                check(
+                    "memory-capacity",
+                    "Memory capacity",
+                    ReadinessStatus::Advisory,
+                    "16 GB is the comfortable floor for modern gaming — under it, heavier titles can \
+                     stutter or hitch while streaming textures (more so with a browser or Discord \
+                     open). Adding RAM is the fix if you feel it.",
+                    Some(format!("{gb} GB")),
+                )
+            }
+        });
+    }
+
     // Drive health — the OS SMART summary. A Warning/Unhealthy verdict is a back-up-now safety signal;
     // healthy drives read Ready. Per-attribute SMART isn't user-mode readable, so this is the summary.
     {
@@ -1055,9 +1094,9 @@ mod readiness_tests {
             r.ready_count + r.attention_count + r.unknown_count + r.advisory_count,
             r.checks.len()
         );
-        // +4 detection-layer advisory checks (memory-speed, memory-channels, drive-health,
-        // network-connection).
-        assert_eq!(r.checks.len(), 12);
+        // +5 detection-layer advisory checks (memory-speed, memory-channels, memory-capacity,
+        // drive-health, network-connection).
+        assert_eq!(r.checks.len(), 13);
     }
 
     #[test]
@@ -1174,6 +1213,37 @@ mod readiness_tests {
         let hw = HardwareInfo { network_adapters: vec![], ..Default::default() };
         let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&r, "network-connection").status, ReadinessStatus::Unknown);
+    }
+
+    fn with_ram(bytes: u64) -> GameReadiness {
+        let hw = HardwareInfo { ram_total_bytes: bytes, ..Default::default() };
+        evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None)
+    }
+
+    #[test]
+    fn memory_capacity_16gb_plus_is_ready() {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        assert_eq!(find(&with_ram(32 * GIB), "memory-capacity").status, ReadinessStatus::Ready);
+        assert_eq!(find(&with_ram(16 * GIB), "memory-capacity").status, ReadinessStatus::Ready);
+        // OS-visible 16GB rig reads a touch under (reserved memory) — rounds to 16, stays Ready.
+        assert_eq!(
+            find(&with_ram(16 * GIB - 200 * 1024 * 1024), "memory-capacity").status,
+            ReadinessStatus::Ready,
+        );
+    }
+
+    #[test]
+    fn memory_capacity_under_16gb_is_advisory_not_a_problem() {
+        const GIB: u64 = 1024 * 1024 * 1024;
+        let r = with_ram(8 * GIB);
+        let c = find(&r, "memory-capacity");
+        assert_eq!(c.status, ReadinessStatus::Advisory);
+        assert!(c.detail.contains("16 GB"));
+    }
+
+    #[test]
+    fn memory_capacity_unreadable_is_unknown() {
+        assert_eq!(find(&with_ram(0), "memory-capacity").status, ReadinessStatus::Unknown);
     }
 
     #[test]
