@@ -9,6 +9,7 @@ import {
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
 import { autopsyScan, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
+import { autopsyStats, readAutopsyLedger, recordAutopsy } from "../data/autopsy-ledger";
 import {
   VERDICT_GLOSSARY,
   VERDICT_GLOSSARY_ENTRY_ID,
@@ -449,6 +450,10 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
     }
     return null;
   });
+  // A1/A3.8 — the local, private autopsy RECORD: a rollup of every guide graded on this PC (counts
+  // only, never the text). Seeded from localStorage; grows on each grading. Local-only, like sessions.
+  const [ledger, setLedger] = useState(readAutopsyLedger);
+  const stats = autopsyStats(ledger);
 
   const clear = () => {
     setText("");
@@ -465,6 +470,32 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
         Paste a tweak guide — a forum post, a video description, a "do these 10 things" list — and get
         the autopsy. Nothing leaves your PC; it's matched against this library, offline.
       </p>
+      {/* A3.8 — your local autopsy record: a running tally of what the guides you've graded turned out
+          to be. Counts only, stored on this PC. Shown once you've graded at least one guide. */}
+      {stats.count > 0 && (
+        <div className="lx-autopsy-record" role="status">
+          <span className="lx-autopsy-record-title">Your autopsy record</span>
+          <span className="lx-autopsy-record-line">
+            {stats.count} guide{stats.count === 1 ? "" : "s"} graded
+            {stats.gradedTweaks > 0 && (
+              <>
+                {" — of the tweaks recognized: "}
+                <b className="lx-rec-real">{stats.realPct}% real</b>
+                {" · "}
+                <b className="lx-rec-placebo">{stats.placeboPct}% placebo</b>
+                {" · "}
+                <b className="lx-rec-risky">{stats.riskyPct}% risky</b>
+              </>
+            )}
+            {stats.scamFlags > 0 && (
+              <>
+                {" · "}
+                {stats.scamFlags} snake-oil trick{stats.scamFlags === 1 ? "" : "s"} flagged
+              </>
+            )}
+          </span>
+        </div>
+      )}
       <textarea
         className="lx-paste"
         rows={7}
@@ -482,8 +513,10 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
           className="lx-btn"
           disabled={!text.trim() || !!urlKind}
           onClick={() => {
-            setResult(autopsyScan(text));
+            const r = autopsyScan(text);
+            setResult(r);
             persistAutopsy(text, true);
+            setLedger(recordAutopsy(r));
           }}
         >
           Grade this guide

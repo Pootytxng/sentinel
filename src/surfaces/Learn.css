@@ -764,3 +764,38 @@
   line-height: 1.5;
   color: var(--ix-text-2);
 }
+
+/* A3.8 — the local autopsy RECORD card: a quiet running tally of graded guides. Glass card matching
+   the grade-key; the three verdict percentages reuse the verdict colors so the tally reads at a glance.
+   Colored TEXT on glass (like the .lx-verdict chips), not text on an accent fill. */
+.lx-autopsy-record {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 4px 0 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  background: var(--ix-glass-fill);
+  border-radius: var(--ix-radius);
+}
+.lx-autopsy-record-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ix-text-3);
+}
+.lx-autopsy-record-line {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}
+.lx-rec-real {
+  color: var(--ix-accent-text);
+}
+.lx-rec-placebo {
+  color: var(--ix-text-1);
+}
+.lx-rec-risky {
+  color: var(--ix-danger);
+}
