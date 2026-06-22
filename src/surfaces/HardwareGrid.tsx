@@ -130,6 +130,16 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
               }
             />
           )}
+          {/* The actual panel model(s) from EDID (WmiMonitorID) — Windows otherwise only knows
+              "Generic PnP Monitor". Names YOUR monitor; one row per connected display. */}
+          {(hw.monitors ?? []).length > 0 && (
+            <Detail
+              k={(hw.monitors ?? []).length > 1 ? "Monitors" : "Monitor"}
+              v={(hw.monitors ?? [])
+                .map((m) => `${m.manufacturer ? `${m.manufacturer} ` : ""}${m.model}`.trim())
+                .join(" · ")}
+            />
+          )}
         </Card>
 
         <Card

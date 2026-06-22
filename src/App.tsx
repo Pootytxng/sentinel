@@ -121,6 +121,7 @@ type CpuArchInfo = {
 // shown to users), `medium` is "wired" | "wifi" | "other". Serialized snake_case by serde.
 type NetAdapterInfo = { name: string; physical: boolean; medium: string; connected: boolean };
 
+export type MonitorInfo = { model: string; manufacturer: string };
 export type HardwareInfo = {
   cpu_brand: string;
   cpu_cores_logical: number;
@@ -142,6 +143,7 @@ export type HardwareInfo = {
   windows_version: WindowsVersionInfo | null;
   cpu_arch: CpuArchInfo | null;
   network_adapters: NetAdapterInfo[];
+  monitors?: MonitorInfo[];
   has_wired_ethernet_port: boolean;
   bios_info: BiosInfo | null;
   virtualization: VirtualizationInfo | null;

@@ -181,6 +181,8 @@ pub(crate) struct HardwareInfo {
     /// Full classified adapter inventory — drives evidence-naming UI + the Export hardware section.
     pub(crate) network_adapters: Vec<NetAdapterInfo>,
     pub(crate) game_storage: GameStorage,
+    /// Connected display models from EDID (WmiMonitorID). Empty when root\wmi is blocked.
+    pub(crate) monitors: Vec<MonitorInfo>,
 }
 
 // Enumerates the primary display's modes via Win32 GDI to find both the
@@ -1709,6 +1711,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         eee_switch_exposed,
         network_adapters,
         game_storage: detect_game_storage(),
+        monitors: detect_monitors(),
     }
 }
 
@@ -1862,6 +1865,87 @@ pub(crate) fn physical_nic_guids() -> Vec<String> {
                 } else {
                     None
                 }
+            })
+            .collect()
+    })
+}
+
+// ── Connected display models (EDID via WmiMonitorID, root\wmi) ────────────────────────────────────
+// Win32_DesktopMonitor only ever reports "Generic PnP Monitor"; WmiMonitorID carries the real EDID
+// strings — the manufacturer PNP code + the user-friendly model — so "for YOUR monitor" can name the
+// actual panel (and later drive model-specific hints). Read-only, on the WMI thread (the safe pattern,
+// per the power-source thread-safety precedent); fail-soft to empty (a blocked root\wmi just hides it).
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct MonitorInfo {
+    pub(crate) model: String,        // EDID UserFriendlyName, e.g. "XFA253Q Z"
+    pub(crate) manufacturer: String, // resolved vendor, e.g. "Acer" (falls back to the raw PNP code)
+}
+
+// EDID strings arrive as uint16 char-code arrays, 0x00-padded (sometimes 0x0A-terminated). Decode to
+// printable ASCII, drop terminator/padding/control bytes, trim. Pure + testable.
+pub(crate) fn decode_edid_string(codes: &[u16]) -> String {
+    codes
+        .iter()
+        .map(|&c| c as u8 as char)
+        .filter(|&c| c != '\0' && !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+// Common monitor-vendor PNP codes → display name (COSMETIC only; an unknown code is shown as-is, never
+// a fabricated name). Not a safety-critical list — a missing entry only changes how the label reads.
+pub(crate) fn monitor_vendor_name(code: &str) -> String {
+    match code {
+        "ACR" | "ACI" => "Acer",
+        "AUS" | "ASU" => "ASUS",
+        "SAM" | "SEC" => "Samsung",
+        "DEL" => "Dell",
+        "LGD" | "GSM" | "LGE" => "LG",
+        "BNQ" => "BenQ",
+        "MSI" => "MSI",
+        "GBT" | "GIG" => "Gigabyte",
+        "HPN" | "HWP" => "HP",
+        "AOC" => "AOC",
+        "VSC" => "ViewSonic",
+        "NEC" => "NEC",
+        "PHL" => "Philips",
+        "DELL" => "Dell",
+        other => other,
+    }
+    .to_string()
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "WmiMonitorID")]
+#[serde(rename_all = "PascalCase")]
+struct WmiMonitorIdRow {
+    user_friendly_name: Option<Vec<u16>>,
+    manufacturer_name: Option<Vec<u16>>,
+}
+
+pub(crate) fn detect_monitors() -> Vec<MonitorInfo> {
+    on_wmi_thread(|| {
+        let com = match COMLibrary::new() {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+        let conn = match WMIConnection::with_namespace_path("ROOT\\WMI", com) {
+            Ok(c) => c,
+            Err(_) => return Vec::new(),
+        };
+        let rows: Vec<WmiMonitorIdRow> = conn.query().unwrap_or_default();
+        rows.into_iter()
+            .filter_map(|r| {
+                let model = decode_edid_string(&r.user_friendly_name.unwrap_or_default());
+                if model.is_empty() {
+                    return None; // no readable model → don't surface a blank monitor
+                }
+                let code = decode_edid_string(&r.manufacturer_name.unwrap_or_default());
+                Some(MonitorInfo {
+                    manufacturer: if code.is_empty() { String::new() } else { monitor_vendor_name(&code) },
+                    model,
+                })
             })
             .collect()
     })
@@ -2092,6 +2176,27 @@ mod net_adapter_tests {
         assert_eq!(network_connection_kind(&[]), "none");
         // Connected physical of an unclassified medium → "other" (never guessed wired/wifi).
         assert_eq!(network_connection_kind(&[adapter(true, "other", true)]), "other");
+    }
+
+    use super::{decode_edid_string, monitor_vendor_name};
+
+    #[test]
+    fn edid_decode_strips_padding_terminators_and_control_bytes() {
+        // "XFA253QZ" clean; "VG245" 0-padded; "ACR" + 0x0A terminator + space pad → trimmed.
+        assert_eq!(decode_edid_string(&[88, 70, 65, 50, 53, 51, 81, 90]), "XFA253QZ");
+        assert_eq!(decode_edid_string(&[86, 71, 50, 52, 53, 0, 0, 0]), "VG245");
+        assert_eq!(decode_edid_string(&[65, 67, 82, 10, 32, 32]), "ACR");
+        assert_eq!(decode_edid_string(&[]), "");
+        assert_eq!(decode_edid_string(&[0, 0, 0]), "");
+    }
+
+    #[test]
+    fn monitor_vendor_maps_common_codes_and_never_fabricates_unknowns() {
+        assert_eq!(monitor_vendor_name("ACR"), "Acer");
+        assert_eq!(monitor_vendor_name("AUS"), "ASUS");
+        assert_eq!(monitor_vendor_name("SAM"), "Samsung");
+        // An unknown PNP code is shown as-is — never a guessed/fabricated vendor name.
+        assert_eq!(monitor_vendor_name("ZZZ"), "ZZZ");
     }
 }
 
