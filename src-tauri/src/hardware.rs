@@ -62,6 +62,14 @@ pub(crate) struct MemoryModuleInfo {
 }
 
 #[derive(Serialize, Clone, Default)]
+pub(crate) struct BiosInfo {
+    pub(crate) manufacturer: String,   // "American Megatrends International, LLC.", "Phoenix", etc.
+    pub(crate) version: String,        // SMBIOSBIOSVersion, e.g. "1.A95"
+    pub(crate) release_date: String,   // ISO "2026-03-15", or "" if unparseable
+    pub(crate) release_date_age_days: Option<i64>, // days since publication, if parseable
+}
+
+#[derive(Serialize, Clone, Default)]
 pub(crate) struct WindowsVersionInfo {
     pub(crate) edition: String,         // "Professional", "Home", "Enterprise", etc.
     pub(crate) display_version: String, // "23H2", "22H2", "21H2"
@@ -144,6 +152,8 @@ pub(crate) struct HardwareInfo {
     pub(crate) display: Option<DisplayInfo>,
     pub(crate) memory_modules: Vec<MemoryModuleInfo>,
     pub(crate) windows_version: Option<WindowsVersionInfo>,
+    /// Motherboard firmware: version + publication date + age. None when Win32_BIOS is unreadable.
+    pub(crate) bios_info: Option<BiosInfo>,
     pub(crate) cpu_arch: Option<CpuArchInfo>,
     pub(crate) has_active_wired_ethernet: bool,
     /// A physical wired-Ethernet PORT exists (regardless of whether a cable is plugged in) —
@@ -900,6 +910,88 @@ pub(crate) fn cim_date_iso(cim: &str) -> String {
     format!("{}-{}-{}", &cim[0..4], &cim[4..6], &cim[6..8])
 }
 
+// ─── BIOS / firmware (detection-layer Probe #1, feasible-usermode) ────────────
+// Win32_BIOS is a plain user-mode WMI read (no kernel driver). We surface version +
+// publication date + a DESCRIPTIVE age band. Honesty rule: the age is when the
+// firmware was PUBLISHED — never a claim that it's out of date, and never a prompt to
+// flash (BIOS updates carry real risk). Anything unreadable degrades to None /
+// "Unknown", never a fabricated value.
+#[derive(Deserialize)]
+#[serde(rename = "Win32_BIOS")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32Bios {
+    pub(crate) manufacturer: Option<String>,
+    // PascalCase would map this to "SmbiosBiosVersion"; the real WMI property is all-caps.
+    #[serde(rename = "SMBIOSBIOSVersion")]
+    pub(crate) smbios_bios_version: Option<String>,
+    pub(crate) release_date: Option<String>, // CIM_DATETIME, e.g. "20260315000000.000000-000"
+}
+
+pub(crate) fn detect_bios() -> Option<BiosInfo> {
+    let com = COMLibrary::new().ok()?;
+    let wmi_conn = WMIConnection::new(com).ok()?;
+    let rows: Vec<Win32Bios> = wmi_conn.query().ok()?;
+    let b = rows.into_iter().next()?;
+    let release_raw = b.release_date.unwrap_or_default();
+    Some(BiosInfo {
+        manufacturer: b.manufacturer.unwrap_or_default(),
+        version: b.smbios_bios_version.unwrap_or_default(),
+        release_date: cim_date_iso(&release_raw),
+        release_date_age_days: cim_date_age_days(&release_raw),
+    })
+}
+
+/// Descriptive (never prescriptive) firmware-age band. No "update now" — BIOS flashing
+/// carries real risk; we report time since publication and let the user judge.
+pub(crate) fn bios_age_label(age_days: Option<i64>) -> &'static str {
+    match age_days {
+        Some(d) if d < 30 => "Very fresh",
+        Some(d) if d < 180 => "Recent",
+        Some(d) if d < 730 => "Mature",
+        Some(_) => "Aging (2+ years)",
+        None => "Unknown",
+    }
+}
+
+#[cfg(test)]
+mod bios_detection_tests {
+    use super::*;
+
+    #[test]
+    fn release_date_reuses_cim_helpers() {
+        // Fixture captured live from the AMD dev rig (AMI BIOS 1.A95, released 2026-03-15).
+        let cim = "20260315000000.000000-000";
+        assert_eq!(cim_date_iso(cim), "2026-03-15");
+        assert!(cim_date_age_days(cim).is_some());
+    }
+
+    #[test]
+    fn age_label_bands() {
+        assert_eq!(bios_age_label(Some(10)), "Very fresh");
+        assert_eq!(bios_age_label(Some(100)), "Recent");
+        assert_eq!(bios_age_label(Some(400)), "Mature");
+        assert_eq!(bios_age_label(Some(900)), "Aging (2+ years)");
+        assert_eq!(bios_age_label(None), "Unknown");
+    }
+
+    #[test]
+    fn age_label_boundaries_fall_to_the_older_band() {
+        // No off-by-one optimism: exactly-on-threshold reads as the older band.
+        assert_eq!(bios_age_label(Some(30)), "Recent");
+        assert_eq!(bios_age_label(Some(180)), "Mature");
+        assert_eq!(bios_age_label(Some(730)), "Aging (2+ years)");
+    }
+
+    #[test]
+    fn win32_bios_deserializes_wmi_pascalcase_shape() {
+        let json = r#"{"Manufacturer":"American Megatrends International, LLC.","SMBIOSBIOSVersion":"1.A95","ReleaseDate":"20260315000000.000000-000"}"#;
+        let b: Win32Bios = serde_json::from_str(json).expect("parses the WMI row shape");
+        assert_eq!(b.manufacturer.as_deref(), Some("American Megatrends International, LLC."));
+        assert_eq!(b.smbios_bios_version.as_deref(), Some("1.A95"));
+        assert_eq!(b.release_date.as_deref(), Some("20260315000000.000000-000"));
+    }
+}
+
 // GPU detection has two paths because some user environments (notably certain
 // AV setups) silently block WMI's Win32_VideoController query. DXGI is what
 // every 3D app and game uses to enumerate adapters — AV products almost never
@@ -1291,6 +1383,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         display: detect_display_info(),
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
+        bios_info: detect_bios(),
         has_active_wired_ethernet,
         has_wired_ethernet_port,
         eee_switch_exposed,

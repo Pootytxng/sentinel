@@ -78,6 +78,29 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         },
         note: None,
     });
+    power.push(DiagnosticEntry {
+        label: "BIOS / firmware".into(),
+        value: match &hw.bios_info {
+            Some(b) if !b.version.is_empty() => {
+                let mut v = b.version.clone();
+                if !b.release_date.is_empty() {
+                    v.push_str(&format!(" · released {}", b.release_date));
+                }
+                if let Some(d) = b.release_date_age_days {
+                    v.push_str(&format!(
+                        " · {} days old ({})",
+                        d,
+                        crate::hardware::bios_age_label(Some(d))
+                    ));
+                }
+                v
+            }
+            _ => "Unknown".into(),
+        },
+        note: Some(
+            "Firmware version + when it was published. Age is publication date, not proof it's out of date.".into(),
+        ),
+    });
     sections.push(DiagnosticSection {
         name: "Power & boot".into(),
         entries: power,
@@ -325,6 +348,7 @@ mod diagnostics_tests {
         assert!(power.iter().any(|l| l == "Active power plan"));
         assert!(power.iter().any(|l| l == "Fast Startup"));
         assert!(power.iter().any(|l| l.contains("HAGS")));
+        assert!(power.iter().any(|l| l == "BIOS / firmware"));
         assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
         // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").
         assert!(labels_of("Network").iter().any(|l| l == "Wired Ethernet"));
