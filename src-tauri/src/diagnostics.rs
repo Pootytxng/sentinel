@@ -253,6 +253,18 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
             note: None,
         });
     }
+    // SMART summary (OS rolled-up verdict; per-attribute SMART needs a vendor tool).
+    for dh in &hw.disk_health {
+        storage.push(DiagnosticEntry {
+            label: format!("{} health", dh.friendly_name),
+            value: dh.health.clone(),
+            note: if dh.health == "Healthy" {
+                None
+            } else {
+                Some("OS SMART summary (MSFT_PhysicalDisk). Detailed per-attribute SMART needs the drive vendor's tool.".into())
+            },
+        });
+    }
     sections.push(DiagnosticSection {
         name: "Storage".into(),
         entries: storage,

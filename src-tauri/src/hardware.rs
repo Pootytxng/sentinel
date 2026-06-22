@@ -137,6 +137,7 @@ pub(crate) struct MsftPhysicalDisk {
     pub(crate) media_type: Option<u16>,
     pub(crate) bus_type: Option<u16>,
     pub(crate) size: Option<u64>,
+    pub(crate) health_status: Option<u16>, // 0 Healthy | 1 Warning | 2 Unhealthy | 5 Unknown
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -155,6 +156,9 @@ pub(crate) struct HardwareInfo {
     pub(crate) disks: Vec<DiskInfo>,
     pub(crate) gpus: Vec<GpuInfo>,
     pub(crate) physical_disks: Vec<PhysicalDiskInfo>,
+    /// OS SMART-summary health per physical disk (separate from physical_disks to avoid touching
+    /// its many test construction sites). Empty when the Storage namespace is blocked.
+    pub(crate) disk_health: Vec<DiskHealth>,
     pub(crate) display: Option<DisplayInfo>,
     pub(crate) memory_modules: Vec<MemoryModuleInfo>,
     pub(crate) windows_version: Option<WindowsVersionInfo>,
@@ -295,6 +299,65 @@ pub(crate) fn detect_physical_disks_msft() -> Vec<PhysicalDiskInfo> {
             }
         })
         .collect()
+}
+
+// ─── Disk health / S.M.A.R.T. summary (detection-layer Probe #6, partial) ─────
+// MSFT_PhysicalDisk.HealthStatus is the OS's rolled-up SMART verdict (Healthy/Warning/Unhealthy).
+// We surface the SUMMARY only — per-attribute SMART (wear %, reallocated sectors) is vendor-
+// proprietary and needs a vendor SDK (honestly dropped). Storage namespace blocked → empty list,
+// never a guessed verdict.
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct DiskHealth {
+    pub(crate) friendly_name: String,
+    pub(crate) health: String, // "Healthy" | "Warning" | "Unhealthy" | "Unknown"
+}
+
+/// MSFT_PhysicalDisk HealthStatus enum → plain English. Unknown for anything unexpected.
+pub(crate) fn disk_health_label(health: Option<u16>) -> &'static str {
+    match health {
+        Some(0) => "Healthy",
+        Some(1) => "Warning",
+        Some(2) => "Unhealthy",
+        _ => "Unknown",
+    }
+}
+
+pub(crate) fn detect_disk_health() -> Vec<DiskHealth> {
+    let com = match COMLibrary::new() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let conn = match WMIConnection::with_namespace_path("ROOT\\Microsoft\\Windows\\Storage", com) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let raw: Vec<MsftPhysicalDisk> = conn.query().unwrap_or_default();
+    raw.into_iter()
+        .filter_map(|d| {
+            let name = d.friendly_name.unwrap_or_default().trim().to_string();
+            if name.is_empty() {
+                return None;
+            }
+            Some(DiskHealth {
+                friendly_name: name,
+                health: disk_health_label(d.health_status).into(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod disk_health_tests {
+    use super::disk_health_label;
+
+    #[test]
+    fn health_status_enum_maps_to_plain_english() {
+        assert_eq!(disk_health_label(Some(0)), "Healthy");
+        assert_eq!(disk_health_label(Some(1)), "Warning");
+        assert_eq!(disk_health_label(Some(2)), "Unhealthy");
+        assert_eq!(disk_health_label(Some(5)), "Unknown");
+        assert_eq!(disk_health_label(None), "Unknown");
+    }
 }
 
 // Fallback when the Storage namespace is blocked / empty. Uses the older
@@ -1467,6 +1530,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         disks,
         gpus: detect_gpus(),
         physical_disks: detect_physical_disks(),
+        disk_health: detect_disk_health(),
         display: detect_display_info(),
         memory_modules: detect_memory_modules(),
         windows_version: detect_windows_version(),
