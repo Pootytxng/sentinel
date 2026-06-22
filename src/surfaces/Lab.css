@@ -22,12 +22,31 @@
   gap: 14px;
 }
 
+.lab-head-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
 .lab-title {
   margin: 0;
   font-size: 22px;
   font-weight: 500;
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
+}
+/* Header benchmark verdict — the room's headline signal, surfaced before any scrolling. Quiet
+   token chip (no accent fill, so no ink-contrast hazard); the verdict word carries the weight. */
+.lab-head-bench {
+  font-size: 12.5px;
+  color: var(--ix-text-3);
+  padding: 3px 10px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 999px;
+}
+.lab-head-bench strong {
+  font-weight: 600;
+  color: var(--ix-text-1);
 }
 .lab-sub {
   margin: 5px 0 4px;

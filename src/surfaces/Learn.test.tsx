@@ -1,8 +1,12 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import Learn from "./Learn";
 
 afterEach(cleanup);
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+});
 
 // Behavior parity with the classic Library (TweakEncyclopedia) — same cores, same copy, restyled.
 const open = () => render(<Learn onClose={() => {}} />);
@@ -85,6 +89,37 @@ describe("Learn surface (reskin)", () => {
     expect(screen.queryByRole("button", { name: /^Apply/i })).not.toBeInTheDocument();
     // "Show me the way" schematic is offered (the walkthrough resolves by the entry id).
     expect(screen.getByText("Show me the way")).toBeInTheDocument();
+  });
+
+  it("shows the full 'How we grade' key on first browse, then collapses it to a re-openable toggle", () => {
+    // First-ever browse: the full key is on the page (foam-pit), and the visit is recorded.
+    open();
+    expect(screen.getByRole("group", { name: "How we grade" })).toBeInTheDocument();
+    expect(localStorage.getItem("compy_blackbook_gradekey_seen_v1")).toBe("1");
+    cleanup();
+    // A later browse opens collapsed: only the quiet toggle, no full key — until the reader re-opens it.
+    open();
+    expect(screen.queryByRole("group", { name: "How we grade" })).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: /How we grade/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("group", { name: "How we grade" })).toBeInTheDocument();
+  });
+
+  it("labels the verdict-filter row so it doesn't read as a second type filter", () => {
+    open();
+    expect(screen.getByText("Grade:")).toBeInTheDocument();
+  });
+
+  it("a quiet Autopsy signpost in browse switches to the Autopsy mode", () => {
+    open();
+    const hint = screen.getByRole("button", { name: /Got a guide to fact-check\? Try Autopsy/i });
+    fireEvent.click(hint);
+    // We're now in Autopsy mode — the paste box is present and the signpost is gone (autopsy-only off).
+    expect(screen.getByLabelText("Paste a tweak guide to autopsy")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Got a guide to fact-check/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("autopsy grades a guide, expands rows in place, and offers a full-entry link (continuity §3)", () => {

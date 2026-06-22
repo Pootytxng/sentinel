@@ -33,6 +33,18 @@ function fmtDate(iso: string | null): string {
   return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
 }
 
+// One-time-seen flag for the welcome band (mirrors compy_sessions_seen_v1 in App.tsx): the band names
+// every instrument a second time over the cards below it, so once the reader has opened ANY instrument
+// — they've found the doors — it folds away. A truly first-ever visit still gets the signpost.
+const WELCOME_SEEN_KEY = "compy_lab_welcome_seen_v1";
+function readWelcomeSeen(): boolean {
+  try {
+    return localStorage.getItem(WELCOME_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function Lab({
   diagnostics,
   vendor = "any",
@@ -45,6 +57,17 @@ export default function Lab({
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [armed, setArmed] = useState<ArmedComparison | null>(null);
   const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
+  // Welcome band: shown on a truly first-ever visit, hidden once any instrument has been opened.
+  const [welcomeSeen, setWelcomeSeen] = useState(readWelcomeSeen);
+  const markInstrumentOpened = () => {
+    if (welcomeSeen) return;
+    setWelcomeSeen(true);
+    try {
+      localStorage.setItem(WELCOME_SEEN_KEY, "1");
+    } catch {
+      /* localStorage unavailable — band just won't persist its hidden state */
+    }
+  };
 
   // v1 ships the AMD GPU undervolt guide only — the hardware-verified path (locked rule #5). No tuning
   // instrument on non-AMD rigs until their own verified-sensor gate (NVIDIA NVML, Intel, Ryzen PBO).
@@ -75,6 +98,11 @@ export default function Lab({
         : "No baseline yet"
     : "—";
 
+  // Promote the most meaningful at-a-glance signal to the Lab header: the last benchmark verdict, if
+  // one exists. Existing data only — absent (no chip) when no benchmark has been graded yet (honest "—"
+  // lives on the card itself). Read-only, no fabrication.
+  const benchVerdict = bench?.efficacy ? VERDICT_LABEL[bench.efficacy.overall] : null;
+
   const latencySummary = latency
     ? `MSI ${latency.msi.msi_on} on · ${latency.msi.msi_off} off${
         latency.timer_current_ms != null ? ` · timer ${latency.timer_current_ms.toFixed(2)}ms` : ""
@@ -88,7 +116,16 @@ export default function Lab({
       <div className="lab-dotgrid" aria-hidden="true" />
       <div className="lab-inner">
         <header className="lab-head">
-          <h2 className="lab-title">Advanced</h2>
+          <div className="lab-head-row">
+            <h2 className="lab-title">Advanced</h2>
+            {/* The last benchmark verdict — the room's most meaningful at-a-glance signal — surfaced
+                on the header so it's read before any scrolling. Existing data only; absent when none. */}
+            {benchVerdict && (
+              <span className="lab-head-bench">
+                Last benchmark: <strong>{benchVerdict}</strong>
+              </span>
+            )}
+          </div>
           <p className="lab-sub">
             Your rig's instrument panel. Everything here only measures — nothing in Advanced
             changes your PC. Start with Benchmark.
@@ -97,7 +134,9 @@ export default function Lab({
 
         {/* Welcome band — a static signpost for newcomers (bathroom law): what each instrument
             answers, in plain words. Deliberately KNOBLESS (doorknob law): no cmp-door, no click
-            handler — the instrument cards below stay the only doors in the room. */}
+            handler — the instrument cards below stay the only doors in the room. Folds away once the
+            reader has opened any instrument (welcomeSeen): it just renames the cards below it. */}
+        {!welcomeSeen && (
         <div className="lab-welcome">
           <span className="lab-welcome-row">
             <span className="lab-welcome-term">Benchmark</span>
@@ -124,14 +163,31 @@ export default function Lab({
             <span className="lab-welcome-gloss">what crashed or froze — read Windows' own record, in plain English.</span>
           </span>
         </div>
+        )}
 
         <LabSection
           icon="chart"
           name="Benchmark"
           oneLiner="Run it, change one thing, re-run — Compy tells you if it actually moved, honestly."
           summary={benchSummary}
+          onFirstOpen={markInstrumentOpened}
         >
           <BenchmarkTab />
+        </LabSection>
+
+        {/* Black Box (Paramedic Mode) — READ-ONLY crash/freeze evidence reader. On-demand scan of
+            the record Windows already keeps + Compy's own last-vitals overlay. Zero causal claims.
+            Promoted to slot 2 (after Benchmark): it's the instrument you reach for in a crisis, so it
+            shouldn't be buried last. Sections are independent inline collapsibles — order is purely
+            presentational, no logic depends on it. */}
+        <LabSection
+          icon="blackbox"
+          name="Black Box"
+          oneLiner="Read the crash and freeze evidence Windows recorded — plain English, with your last vitals."
+          summary="Crash & freeze record"
+          onFirstOpen={markInstrumentOpened}
+        >
+          <BlackBox />
         </LabSection>
 
         <LabSection
@@ -139,6 +195,7 @@ export default function Lab({
           name="Latency"
           oneLiner="The path from your mouse to the screen — Compy names what's adding delay."
           summary={latencySummary}
+          onFirstOpen={markInstrumentOpened}
         >
           <LatencyTab />
         </LabSection>
@@ -152,6 +209,7 @@ export default function Lab({
             name="Tuning"
             oneLiner="Undervolt in AMD's own tool — Compy measures whether temps dropped and frames held."
             summary={tuningSummary}
+            onFirstOpen={markInstrumentOpened}
           >
             <TuningInstrument
               guide={tuningGuide}
@@ -170,21 +228,11 @@ export default function Lab({
             name="Diagnostics"
             oneLiner="Read-only system forensics — what Compy detected about this rig, raw."
             summary="System report"
+            onFirstOpen={markInstrumentOpened}
           >
             {diagnostics}
           </LabSection>
         )}
-
-        {/* Black Box (Paramedic Mode) — READ-ONLY crash/freeze evidence reader. On-demand scan of
-            the record Windows already keeps + Compy's own last-vitals overlay. Zero causal claims. */}
-        <LabSection
-          icon="blackbox"
-          name="Black Box"
-          oneLiner="Read the crash and freeze evidence Windows recorded — plain English, with your last vitals."
-          summary="Crash & freeze record"
-        >
-          <BlackBox />
-        </LabSection>
       </div>
     </section>
   );
@@ -231,21 +279,30 @@ function LabSection({
   oneLiner,
   summary,
   children,
+  onFirstOpen,
 }: {
   icon: string;
   name: string;
   oneLiner: string;
   summary: string;
   children: ReactNode;
+  // Fired the FIRST time this section is expanded — lets Lab retire the welcome band once the reader
+  // has found a door. Opt-in (undefined = no-op), so the section stays a self-contained collapsible.
+  onFirstOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const toggle = () =>
+    setOpen((o) => {
+      if (!o) onFirstOpen?.(); // opening (not closing) is the "found a door" signal
+      return !o;
+    });
   return (
     <div className={`lab-card ${open ? "lab-card-open" : ""}`}>
       {/* WAI-ARIA accordion: the toggle button is wrapped in a native heading so screen-reader
           users get the instrument list as a navigable h3 structure (under Lab's h2). `font: inherit`
           + `margin: 0` on .lab-card-heading keep the visual byte-identical to a bare button. */}
       <h3 className="lab-card-heading">
-        <button className="lab-card-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <button className="lab-card-head cmp-door" onClick={toggle} aria-expanded={open}>
           <svg
             className="lab-card-icon"
             viewBox="0 0 24 24"

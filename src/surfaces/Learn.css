@@ -352,6 +352,77 @@
   line-height: 1.45;
   color: var(--ix-text-2);
 }
+/* Collapsible "How we grade" — full key on first browse, a quiet re-openable toggle thereafter. */
+.lx-gradekey-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 2px;
+}
+.lx-gradekey-wrap .lx-gradekey {
+  margin: 0;
+}
+.lx-gradekey-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 4px 0 2px;
+  padding: 5px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-3);
+  font-size: 11px;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+.lx-gradekey-toggle:hover {
+  color: var(--ix-text-2);
+}
+.lx-gradekey-toggle .cmp-door-chevron {
+  transition: transform 160ms ease;
+}
+.lx-gradekey-toggle-open .cmp-door-chevron {
+  transform: rotate(90deg);
+}
+
+/* "Grade:" axis label before the verdict-filter chips — names what this row narrows. */
+.lx-vfilter-label {
+  align-self: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ix-text-3);
+}
+
+/* Quiet Autopsy signpost above the mode bar — names the offline fact-check trick to first-timers. */
+.lx-autopsy-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin: 0 0 12px;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+.lx-autopsy-hint:hover {
+  color: var(--ix-accent-text);
+}
+.lx-autopsy-hint .cmp-door-chevron {
+  transition: transform 160ms ease;
+}
+.lx-autopsy-hint:hover .cmp-door-chevron {
+  transform: translateX(2px);
+}
 .lx-typepill {
   color: var(--ix-text-2);
 }

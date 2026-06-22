@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 // Lab + the embedded Benchmark/Latency tabs poll on mount; mock invoke so they don't throw.
@@ -7,6 +7,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 import Lab from "./Lab";
 
 afterEach(cleanup);
+beforeEach(() => localStorage.clear());
 
 describe("Lab", () => {
   it("renders the two instrument sections with plain-English one-liners", () => {
@@ -37,6 +38,49 @@ describe("Lab", () => {
     expect(benchHeader.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(benchHeader);
     expect(benchHeader.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("retires the welcome band once any instrument has been opened (one-time-seen)", () => {
+    const { container } = render(<Lab />);
+    // First-ever visit: the band is present.
+    expect(container.querySelector(".lab-welcome")).not.toBeNull();
+    // Open any instrument → the band folds away and the visit is recorded.
+    fireEvent.click(screen.getByRole("button", { name: /Benchmark/ }));
+    expect(container.querySelector(".lab-welcome")).toBeNull();
+    expect(localStorage.getItem("compy_lab_welcome_seen_v1")).toBe("1");
+    cleanup();
+    // A later visit never shows the band again.
+    const next = render(<Lab />).container;
+    expect(next.querySelector(".lab-welcome")).toBeNull();
+  });
+
+  it("Black Box is promoted to slot 2 — directly after Benchmark, before Latency", () => {
+    render(<Lab />);
+    const names = Array.from(document.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
+    expect(names[0]).toBe("Benchmark");
+    expect(names[1]).toBe("Black Box");
+    expect(names.indexOf("Black Box")).toBeLessThan(names.indexOf("Latency"));
+  });
+
+  it("surfaces the last benchmark verdict on the header only when one exists (honest absence)", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const mock = vi.mocked(invoke);
+    // No benchmark yet → no header chip (and no fabricated text).
+    mock.mockResolvedValue(null);
+    const first = render(<Lab />).container;
+    expect(first.querySelector(".lab-head-bench")).toBeNull();
+    cleanup();
+    // A graded benchmark → the verdict word rides the header.
+    mock.mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === "get_benchmark_state"
+          ? { baseline: {}, baseline_at: null, efficacy: { overall: "improved" } }
+          : null,
+      ),
+    );
+    render(<Lab />);
+    const chip = await screen.findByText(/Last benchmark:/i);
+    expect(chip.textContent).toMatch(/Improved/);
   });
 
   it("shows the Tuning instrument only on AMD rigs (v1 verified-sensor scope)", () => {

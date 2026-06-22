@@ -61,6 +61,61 @@ function GradeKey() {
   );
 }
 
+// One-time-seen flag for the browse "How we grade" key (mirrors compy_sessions_seen_v1 in App.tsx):
+// the full key earns its space on a reader's FIRST browse, then folds into a quiet "How we grade ▸"
+// toggle they can re-open inline on any later visit. The Autopsy key (where the verdict chips are the
+// whole point of the result) stays always-on — this collapse is browse-only.
+const GRADEKEY_SEEN_KEY = "compy_blackbook_gradekey_seen_v1";
+function readGradeKeySeen(): boolean {
+  try {
+    return localStorage.getItem(GRADEKEY_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+// Browse-mode "How we grade" key: full on first view, a re-openable toggle thereafter. The "seen"
+// flag is written once the full key has been shown, so later visits open collapsed.
+function CollapsibleGradeKey() {
+  const [seen] = useState(readGradeKeySeen);
+  const [open, setOpen] = useState(!seen);
+  useEffect(() => {
+    if (seen) return;
+    try {
+      localStorage.setItem(GRADEKEY_SEEN_KEY, "1");
+    } catch {
+      /* localStorage unavailable — degrade to per-render expanded */
+    }
+  }, [seen]);
+  if (open) {
+    return (
+      <div className="lx-gradekey-wrap">
+        {seen && (
+          <button
+            className="lx-gradekey-toggle lx-gradekey-toggle-open cmp-door"
+            aria-expanded={true}
+            onClick={() => setOpen(false)}
+          >
+            How we grade
+            <span className="cmp-door-chevron" aria-hidden="true">▸</span>
+          </button>
+        )}
+        <GradeKey />
+      </div>
+    );
+  }
+  return (
+    <button
+      className="lx-gradekey-toggle cmp-door"
+      aria-expanded={false}
+      onClick={() => setOpen(true)}
+    >
+      How we grade
+      <span className="cmp-door-chevron" aria-hidden="true">▸</span>
+    </button>
+  );
+}
+
 const GOLDEN_RULES = "One change at a time · restore point first · measure, don't vibe";
 
 const FILTERS: { key: Filter; label: string }[] = [
@@ -585,6 +640,15 @@ export default function Learn({
             )}
           </div>
 
+          {/* Surface the Autopsy — Blackbook's most distinctive trick (paste a guide, get it graded
+              offline) otherwise hides behind the mode tab. One quiet honest line, browse-only. */}
+          {mode === "browse" && (
+            <button className="lx-autopsy-hint cmp-door" onClick={() => setMode("autopsy")}>
+              Got a guide to fact-check? Try Autopsy
+              <span className="cmp-door-chevron" aria-hidden="true">→</span>
+            </button>
+          )}
+
           <div className="lx-modes" role="tablist" aria-label="Blackbook mode">
             <button
               role="tab"
@@ -631,8 +695,10 @@ export default function Learn({
                   </button>
                 ))}
               </div>
-              {/* §5 verdict chips — narrow tweaks by our verdict, alongside the type filters. */}
+              {/* §5 verdict chips — narrow tweaks by our verdict, alongside the type filters. The
+                  inline "Grade:" label names the axis so this row doesn't read as a second type filter. */}
               <div className="lx-filters lx-vfilters" role="group" aria-label="Filter tweaks by verdict">
+                <span className="lx-vfilter-label" aria-hidden="true">Grade:</span>
                 <button
                   className={`lx-filter ${verdict === "all" ? "lx-filter-on" : ""}`}
                   aria-pressed={verdict === "all"}
@@ -653,8 +719,9 @@ export default function Learn({
                 ))}
               </div>
               {/* The visible "How we grade" key — gives the verdict filter chips above their meaning
-                  (foam-pit law: on the page, not hover-only). One source with the chips + the entry. */}
-              <GradeKey />
+                  (foam-pit law: on the page, not hover-only). Full on a reader's first browse, a quiet
+                  re-openable toggle thereafter so it stops re-claiming a block every visit. */}
+              <CollapsibleGradeKey />
               {results.length === 0 ? (
                 <div className="lx-empty">
                   No entry for that yet — we only answer what we've verified. If you're unsure about a
