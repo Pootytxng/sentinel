@@ -7,13 +7,12 @@ import {
   gradeLow1,
   gradeFrametimeMs,
   gradeGpuTempC,
-  gradeRamPct,
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
-import { shortGpu } from "./hardware-format";
 import { AnimatedNumber } from "../design/AnimatedNumber";
 import { RigViewer } from "./rig/RigViewer";
+import { HardwareGrid } from "./HardwareGrid";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import "./HardwareSection.css";
 import "./DashboardV2.css";
@@ -29,11 +28,6 @@ type CpuSnap = { usage_overall_pct: number; frequency_mhz: number; ram_used_byte
 type GpuSnap = { temperature_c: number | null; utilization_gpu_pct: number | null; name: string; vendor: string };
 
 const N = 48; // rolling-buffer length (~48s at 1 Hz)
-
-function fmtGB(b: number | null | undefined): string {
-  if (!b || b <= 0) return "—";
-  return (b / 1024 ** 3).toFixed(1);
-}
 
 // Lean gradient area chart (custom SVG — no recharts). Smooth-ish polyline + a gradient fill fading into
 // the card. Honest: it draws exactly the values handed to it (a rolling window of live sensor reads).
@@ -124,9 +118,6 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   const last = sessions[0];
   const gpuName = gpu?.name || hw.gpus?.[0]?.name || "GPU";
   const cpuName = hw.cpu_arch?.family_label || hw.cpu_brand || "CPU";
-  const ramUsed = cpu ? cpu.ram_used_bytes : null;
-  const ramTotal = cpu ? cpu.ram_total_bytes : hw.ram_total_bytes;
-  const ramPct = ramUsed && ramTotal ? Math.round((ramUsed / ramTotal) * 100) : null;
   // Hardware-tailored grading context: FPS/frametime are judged against THIS rig's refresh rate.
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const gpuTempColor = gradeColor(gradeGpuTempC(gpu?.temperature_c ?? null));
@@ -207,12 +198,10 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       {rig3d ? (
         <RigViewer hw={hw} />
       ) : (
-        <div className="d2-grid d2-grid-4">
-          <Metric label="Memory" value={ramPct == null ? fmtGB(ramTotal) : `${ramPct}`} unit={ramPct == null ? "GB" : "%"} grade={gradeRamPct(ramPct)} sub={`${fmtGB(ramUsed)} / ${fmtGB(ramTotal)} GB`} />
-          <Metric label="Cores" animate={hw.cpu_cores_logical ?? undefined} value="—" fmt={(v) => String(Math.round(v))} unit="threads" sub={cpuName} />
-          <Metric label="GPU" value={shortGpu(gpuName)} mono={false} sub={gpu?.vendor || ""} />
-          <Metric label="OS" value={hw.windows_version?.product_name?.replace(/^Windows /, "Win ") || hw.os_name || "—"} mono={false} sub={hw.os_version || ""} />
-        </div>
+        // The detailed "Your hardware" grid — the full per-component detail (incl. the EDID monitor
+        // model, Display, Network, and the A1 BIOS/XMP/SMART surfacing) the owner wanted on Home, not a
+        // sparse 4-metric summary. The 3D rig stays the default centerpiece; this is the Cards toggle.
+        <HardwareGrid hw={hw} />
       )}
     </div>
   );
