@@ -166,6 +166,8 @@ pub(crate) struct HardwareInfo {
     pub(crate) bios_info: Option<BiosInfo>,
     /// Hypervisor present (VBS/Hyper-V/WSL2/VM) + CPU SVM/VT-x firmware state. None when WMI fails.
     pub(crate) virtualization: Option<VirtualizationInfo>,
+    /// USB platform capability tier (from host-controller names). None when WMI fails.
+    pub(crate) usb: Option<UsbSummary>,
     pub(crate) cpu_arch: Option<CpuArchInfo>,
     pub(crate) has_active_wired_ethernet: bool,
     /// A physical wired-Ethernet PORT exists (regardless of whether a cable is plugged in) —
@@ -1103,6 +1105,85 @@ mod virtualization_detection_tests {
     }
 }
 
+// ─── USB capability (detection-layer Probe #12, partial) ──────────────────────
+// Host-controller names expose the spec TIER the platform supports (USB4 / 3.2 / …). Honest limit:
+// this is the platform CAPABILITY, NOT per-device negotiated speed or which port a device sits on
+// (neither reliably readable in user-mode). Unreadable → None / "Unknown".
+#[derive(Serialize, Clone, Default)]
+pub(crate) struct UsbSummary {
+    pub(crate) top_spec: String, // "USB4" | "USB 3.2" | "USB 3.1" | "USB 3.0" | "USB 2.0" | "Unknown"
+    pub(crate) controller_count: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_USBController")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32UsbController {
+    pub(crate) name: Option<String>,
+}
+
+/// Highest USB spec tier inferred from host-controller names. Capability only — never per-device speed.
+pub(crate) fn usb_top_spec(controller_names: &[String]) -> &'static str {
+    let j = controller_names.join(" ").to_lowercase();
+    if j.contains("usb4") || j.contains("usb 4") {
+        "USB4"
+    } else if j.contains("3.20") || j.contains("3.2") {
+        "USB 3.2"
+    } else if j.contains("3.10") || j.contains("3.1") {
+        "USB 3.1"
+    } else if j.contains("3.0") || j.contains("superspeed") {
+        "USB 3.0"
+    } else if j.contains("2.0") {
+        "USB 2.0"
+    } else {
+        "Unknown"
+    }
+}
+
+pub(crate) fn detect_usb_summary() -> Option<UsbSummary> {
+    let com = COMLibrary::new().ok()?;
+    let conn = WMIConnection::new(com).ok()?;
+    let rows: Vec<Win32UsbController> = conn.query().ok()?;
+    let names: Vec<String> = rows.into_iter().filter_map(|c| c.name).collect();
+    if names.is_empty() {
+        return None;
+    }
+    Some(UsbSummary {
+        top_spec: usb_top_spec(&names).to_string(),
+        controller_count: names.len() as u32,
+    })
+}
+
+#[cfg(test)]
+mod usb_detection_tests {
+    use super::usb_top_spec;
+
+    #[test]
+    fn top_spec_picks_the_highest_tier() {
+        // Real controller-name shapes captured from the AMD dev rig.
+        let amd = vec![
+            "AMD USB 2.0 eXtensible Host Controller".to_string(),
+            "AMD USB 3.10 eXtensible Host Controller".to_string(),
+            "AMD USB 3.20 eXtensible Host Controller".to_string(),
+            "USB4(TM) Host Router".to_string(),
+        ];
+        assert_eq!(usb_top_spec(&amd), "USB4");
+        assert_eq!(
+            usb_top_spec(&["AMD USB 3.20 eXtensible Host Controller".to_string()]),
+            "USB 3.2"
+        );
+        assert_eq!(
+            usb_top_spec(&["AMD USB 3.10 eXtensible Host Controller".to_string()]),
+            "USB 3.1"
+        );
+        assert_eq!(
+            usb_top_spec(&["Intel USB 2.0 Enhanced Host Controller".to_string()]),
+            "USB 2.0"
+        );
+        assert_eq!(usb_top_spec(&[]), "Unknown");
+    }
+}
+
 #[cfg(test)]
 mod bios_detection_tests {
     use super::*;
@@ -1536,6 +1617,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         windows_version: detect_windows_version(),
         bios_info: detect_bios(),
         virtualization: detect_virtualization(),
+        usb: detect_usb_summary(),
         has_active_wired_ethernet,
         has_wired_ethernet_port,
         eee_switch_exposed,

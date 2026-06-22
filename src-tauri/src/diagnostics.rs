@@ -325,6 +325,26 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         entries: network,
     });
 
+    // ─── Peripherals ─────────────────────────────────────────────────────
+    sections.push(DiagnosticSection {
+        name: "Peripherals".into(),
+        entries: vec![DiagnosticEntry {
+            label: "USB capability".into(),
+            value: match &hw.usb {
+                Some(u) => format!(
+                    "Up to {} · {} host controller{}",
+                    u.top_spec,
+                    u.controller_count,
+                    if u.controller_count == 1 { "" } else { "s" }
+                ),
+                None => "Unknown".into(),
+            },
+            note: Some(
+                "The fastest USB the system supports. Per-port negotiated speed isn't reliably readable, so Compy doesn't claim it.".into(),
+            ),
+        }],
+    });
+
     // ─── Background services ─────────────────────────────────────────────
     let mut services = Vec::<DiagnosticEntry>::new();
     for (label, name) in &[
@@ -391,7 +411,7 @@ mod diagnostics_tests {
         let names: Vec<String> = get_diagnostics().into_iter().map(|s| s.name).collect();
         assert_eq!(
             names,
-            vec!["Power & boot", "Security", "Display", "Memory", "Storage", "Network", "Background services"],
+            vec!["Power & boot", "Security", "Display", "Memory", "Storage", "Network", "Peripherals", "Background services"],
             "the section set/order is a UI + Export contract"
         );
     }
