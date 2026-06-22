@@ -34,6 +34,7 @@ function baseHw(overrides: Partial<HardwareInfo> = {}): HardwareInfo {
     has_wired_ethernet_port: false,
     bios_info: null,
     virtualization: null,
+    usb: null,
     ...overrides,
   };
 }

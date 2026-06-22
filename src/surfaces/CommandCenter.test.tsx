@@ -37,6 +37,7 @@ const hw: HardwareInfo = {
   disk_health: [],
   bios_info: null,
   virtualization: null,
+  usb: null,
   display: null,
   memory_modules: [],
   windows_version: {

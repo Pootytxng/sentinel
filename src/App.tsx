@@ -92,6 +92,11 @@ type DiskHealth = {
   health: string; // "Healthy" | "Warning" | "Unhealthy" | "Unknown"
 };
 
+type UsbSummary = {
+  top_spec: string; // "USB4" | "USB 3.2" | ... | "Unknown"
+  controller_count: number;
+};
+
 type WindowsVersionInfo = {
   edition: string;
   display_version: string;
@@ -135,6 +140,7 @@ export type HardwareInfo = {
   has_wired_ethernet_port: boolean;
   bios_info: BiosInfo | null;
   virtualization: VirtualizationInfo | null;
+  usb: UsbSummary | null;
 };
 
 // "Verified"        — Compy directly observes the fact this rec claims.
