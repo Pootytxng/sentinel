@@ -234,15 +234,23 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 >   detail, one toggle away). Live-verified at 1440px: the Graphics card reads "Monitors: Acer XFA253Q Z
 >   · ASUS VG245", grid composes coherently with the premium dashboard, no duplication. (Cowork's A1
 >   grid surfacing rides along automatically.)
+> - **Rough rig-tier line** (`006a5de`) + **confidence chips** (`91505ec`) — the last two greenlit items
+>   (owner greenlit 5×, after repeated honesty caveats). **Tier:** transparent Entry/Mid/High above the
+>   hardware grid, computed from MEASURED specs (VRAM·cores·RAM) with the inputs NAMED ("rough, from 16 GB
+>   VRAM · 8 cores · 31 GB RAM") + conservative bands (one strong axis can't inflate it) — NOT a fabricated
+>   GPU-class DB. **Chips:** the readiness breakdown by status as color-coded pills in the Check header
+>   (dev rig: "14 ready" accent · "1 advisory" neutral) — surfaces the advisory the "Measured clean"
+>   summary glosses, so NOT redundant after all. Both pure + tested (rigTier 6 tests); colored-text pills
+>   (no accent-ink dependency); live self-reviewed.
 > - **Reconciled with a Cowork push mid-run** (no force-push): origin/main had advanced to `738e0c2`
 >   (Cowork's **power-source WMI fix** `1ffa968` — the Diagnostics-crash cause CC diagnosed — + a
 >   **service-suspend** Phase-B feature built DARK/gated). CC rebased its CPU/VRAM commit onto it →
 >   `6145c0e` (clean ff). The rebuild below carries Cowork's power-source fix too (clears the crash).
 > - **Also:** CDP self-review tooling hardened (`4ec079d`, width-based window pick). Verify on the merged
->   tree: cargo **539** · vitest **533** · tsc clean · zero warnings · doctrine guards green. Frozen beta
+>   tree: cargo **539** · vitest **539** · tsc clean · zero warnings · doctrine guards green. Frozen beta
 >   refs (`16069fa`) untouched. Installed build NSIS
-> `69E13D86DD88BA0F685A0C6A6BB408623F05EEA20CFB98F180177DB46EF4B93E` (carries all five features + the
-> default-Home hardware grid + Cowork's
+> `E70A1CA85CF7C43D62AF4C8F41E1BDD83995F3ADE425016C926E7F7F0C100BB3` (carries all features + the
+> default-Home hardware grid + rig-tier + confidence chips + Cowork's
 > power-source fix + service-suspend-dark + debloat-dark). The Diagnostics power-source crash CC saw is
 > root-cause-fixed in this build (Cowork's `1ffa968`, WMI on the command thread); app stable across testing.
 > - **Remaining Phase A is gated** (per the run's survey): owner-taste (tier labels, confidence-chip
