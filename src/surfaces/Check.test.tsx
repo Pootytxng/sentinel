@@ -63,7 +63,10 @@ afterEach(() => {
 
 function sess(temp: number | null): SessionSummary {
   return {
-    started_at: "2026-06-08T13:00:00Z",
+    // Relative to now: the "running warm" nudge is a claim about RECENT sessions (14-day window in
+    // gpuRunningHot), and Check calls it with the real Date.now(). A hardcoded date silently ages out
+    // of the window once real time passes it (it did, on 2026-06-22) — so keep these fixtures recent.
+    started_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     duration_secs: 3600,
     process_name: "game.exe",
     samples: 100,

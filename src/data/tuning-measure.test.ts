@@ -183,7 +183,13 @@ describe("measureTuning", () => {
 
 describe("gpuRunningHot — the Check nudge signal (bathroom law)", () => {
   it("fires only on SUSTAINED warmth — the last 3 temp'd sessions all at/over the threshold", () => {
-    const hot = gpuRunningHot([sess({ peak_gpu_temp_c: 84 }), sess({ peak_gpu_temp_c: 82 }), sess({ peak_gpu_temp_c: 81 })]);
+    // `now` pinned just after the 2026-06-08 fixtures so the 14-day window always includes them.
+    // Without it (relying on Date.now()) this positive-result test rots — it silently aged out once
+    // real time passed 14 days beyond the hardcoded fixture date.
+    const hot = gpuRunningHot(
+      [sess({ peak_gpu_temp_c: 84 }), sess({ peak_gpu_temp_c: 82 }), sess({ peak_gpu_temp_c: 81 })],
+      Date.parse("2026-06-08T20:00:00Z"),
+    );
     expect(hot).toEqual({ peakC: 84, sessions: 3 });
   });
 
