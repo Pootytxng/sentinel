@@ -329,6 +329,32 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
     Ok(into_view(change))
 }
 
+/// Session-scoped service SUSPEND (Services module, BUILT DARK). Gated by `service_suspend_gate()` —
+/// refuses until the feature's own UAC QA + owner sign-off (it's a NEW mutating capability the owner
+/// greenlit on 2026-06-22, LOCKED-rule-6, but the ARMING still rides QA). Reuses the audited
+/// apply/record machinery: the typed snapshot lands in the ledger, so RESUME goes through the normal
+/// `rollback_change` → `dispatch_rollback` path (the new `ResumeServiceFromSnapshot` arm). The
+/// `KnownService` allowlist + `from_name` mean only the four safe services are ever suspendable.
+#[tauri::command]
+pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChangeView, String> {
+    if !crate::actions::service_suspend_gate() {
+        return Err("Session service-suspend isn't enabled in this build.".to_string());
+    }
+    let service = crate::actions::KnownService::from_name(&service_name)
+        .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
+    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history()?;
+    let result = crate::actions::apply_service_suspend(service)?;
+    let change = build_applied_change(
+        &format!("service-suspend:{}", service_name),
+        &format!("Suspend {} for this session", service_name),
+        result,
+    )?;
+    history.push(change.clone());
+    save_history(&history)?;
+    Ok(into_view(change))
+}
+
 /// OS-debloat: disable a curated telemetry scheduled task (BUILT DARK). Gated by `bloat_removal_gate()`
 /// — refuses until the feature's own UAC QA + owner sign-off (the gated mutation the owner greenlit
 /// 2026-06-22, LOCKED-rule-6). Reuses the audited apply/record path: the typed snapshot lands in the

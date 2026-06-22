@@ -847,6 +847,7 @@ pub fn run() {
             set_overlay_corner,
             apply_recommendation,
             history::apply_recommendations_batch,
+            history::suspend_known_service,
             history::disable_known_bloat_task,
             rollback_change,
             get_applied_changes,
