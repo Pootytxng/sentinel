@@ -11,6 +11,40 @@
 
 ---
 
+## ✅ SHIPPED STATUS (2026-06-21, branch `roadmap/detection-layer`)
+
+This document was the feasibility research. What actually shipped, reconciled against it:
+
+**Built — 7 probes, all TDD'd, in Diagnostics + the Export receipt:**
+
+| Probe | Commit |
+|---|---|
+| BIOS version + publication age | `09a9877` |
+| RAM XMP/EXPO (flag below-rated) | `4cba8a2` |
+| Hyper-V / VBS / SVM | `79b80b7` |
+| Core-parking policy | `635e4c8` |
+| SMART disk-health summary | `c1bf41b` |
+| USB capability tier | `63d7d96` |
+| Power source (AC/battery) | `284c846` |
+
+Surfacing: BIOS/XMP/SMART in the Home hardware grid (`0eafc88`); RAM-below-rated + SMART-warning as
+Readiness advisories (`3a6de3e`); TS↔Rust `usb` field sync (`9bd5166`).
+
+**Excluded — capture-proven user-mode honesty walls (see the `detection-feasibility-walls-usermode` memory):**
+- **Thermal-throttle** — `PerformanceLimitFlags` reads all-zero / may not populate on AMD; can't tell
+  "no throttle" from "not reported", so a "no throttling" badge would be a false claim.
+- **AMD PBO** — Ryzen-Master-registry only; absent on most rigs → "Unknown" almost always.
+- **Intel SpeedShift** — Intel-only; unverifiable on the AMD dev rig (don't build blind).
+- **BIOS-tweak annotation** — redundant with already-shipped facts.
+- **AMD GPU-profile settings** — the GPU class key exposes only `*_component_na` capability flags +
+  191 binary blobs; real state lives in Adrenalin's own store. Only `KMD_ChillEnabled` is cleanly
+  readable (one low-value, driver-version-fragile setting) → not worth a misleading probe.
+
+Verify at HEAD: cargo **506** · vitest **488** · clippy `-D warnings` clean · `/check` + `/security` clean.
+Read-only invariant held: no new IPC / mutation / FFI / network / capability changes.
+
+---
+
 ## Probe #1: BIOS Version + Release Date (Firmware Staleness Detection)
 
 **Verdict:** `feasible-usermode`
