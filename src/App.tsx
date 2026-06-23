@@ -25,6 +25,7 @@ import { prettyGameName } from "./surfaces/game-name";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
+import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
 import Play from "./surfaces/Play";
 import Monitor from "./surfaces/Monitor";
 import Lab from "./surfaces/Lab";
@@ -526,10 +527,11 @@ function App() {
   // the shell takes — the classic separate Check + Tune are one localStorage flag away.
   // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
   // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
-  const optimizeMerged = localStorage.getItem("compy_optimize") !== "0";
+  const optimizeMerged = readOptimizeMerged();
   // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. DEFAULT ON
   // (owner sign-off 2026-06-21). Escape hatch: compy_monitor="0" restores the classic single Play surface.
-  const monitorMerged = localStorage.getItem("compy_monitor") !== "0";
+  // Guarded readers — a bare getItem in the render body throws (→ blank app) on storage-disabled WebView2.
+  const monitorMerged = readMonitorMerged();
   const [readiness, setReadiness] = useState<GameReadiness | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
@@ -1311,7 +1313,13 @@ function App() {
               )}
             </div>
           </div>
-      ) : null}
+      ) : (
+        // hw still null — detection in flight (or slow WMI). A calm placeholder, never a blank window.
+        <div className="app-booting" role="status" aria-live="polite">
+          <Wordmark size={30} />
+          <p className="app-booting-line">Reading your hardware…</p>
+        </div>
+      )}
 
       {!ccActive && !settingsActive && (
       <footer className="footer">

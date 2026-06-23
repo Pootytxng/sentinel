@@ -8,6 +8,7 @@ import { NavGlyph } from "../design/NavGlyph";
 import { railFor, type HomeRailId } from "../design/homeRail";
 import { useReducedMotion } from "../design/use-motion";
 import { PROVENANCE_LABEL } from "../data/provenance";
+import { readOptimizeMerged } from "../data/nav-flags";
 import {
   type InstrumentTheme,
   readInstrumentTheme,
@@ -333,8 +334,9 @@ export default function CommandCenter(props: Props) {
   // Optimize merge — read once at render, same flag the app shell reads (default ON since 2026-06-21).
   // When on, the rail collapses Check + Tune → "Optimize" so the Home rail matches the shell rail
   // exactly. Escape hatch: compy_optimize="0" restores the classic separate Check + Tune.
-  const optimizeMerged =
-    typeof localStorage === "undefined" || localStorage.getItem("compy_optimize") !== "0";
+  // Guarded reader — a present-but-throwing localStorage (storage-disabled WebView2) would otherwise
+  // blank the default Home; default merged-ON.
+  const optimizeMerged = readOptimizeMerged();
   // Committed brand hero (experimental swing, default OFF) — mirrors the flag live for review.
   const [committed, setCommitted] = useState<boolean>(readCommitted);
   useEffect(() => {

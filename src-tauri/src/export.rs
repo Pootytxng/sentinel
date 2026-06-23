@@ -553,7 +553,7 @@ pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, St
 #[tauri::command]
 pub(crate) fn open_export_folder() -> Result<(), String> {
     let dir = compy_data_dir().join("exports");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not open the export folder: {e}"))?;
     // Reveal the folder in Explorer — read-only, no elevation, no UAC.
     std::process::Command::new("explorer")
         .arg(dir.as_os_str())
