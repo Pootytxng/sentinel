@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { lazy, memo, Suspense, useEffect, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { HardwareInfo } from "../../App";
@@ -16,7 +16,11 @@ const RigHologram = lazy(() =>
   import("./RigHologram").then((m) => ({ default: m.RigHologram })),
 );
 
-export function RigViewer({ hw }: { hw: HardwareInfo }) {
+// Memoized: `hw` is its only prop and is referentially stable (App sets hw only on refresh/apply,
+// never on the 1 Hz monitoring tick). So the parent dashboard's per-second self-tick (which repaints
+// the live charts) no longer drags the whole react-three-fiber rig scene through a reconcile every
+// second — it only re-renders on a real hw change or its own interactions.
+export const RigViewer = memo(function RigViewer({ hw }: { hw: HardwareInfo }) {
   const [exploded, setExploded] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -187,4 +191,4 @@ export function RigViewer({ hw }: { hw: HardwareInfo }) {
       </div>
     </div>
   );
-}
+});

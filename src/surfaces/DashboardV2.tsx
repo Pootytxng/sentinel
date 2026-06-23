@@ -87,6 +87,9 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
+      // Don't burn sensor IPC while the window is minimized/hidden — the dashboard isn't visible.
+      // Re-checked every tick, so it self-resumes when the window is shown again (no event needed).
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
         const c = await invoke<CpuSnap>("get_cpu_sensors");
         if (!cancelled && c) {
