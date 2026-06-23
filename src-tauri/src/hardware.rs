@@ -1915,7 +1915,6 @@ pub(crate) fn monitor_vendor_name(code: &str) -> String {
         "VSC" => "ViewSonic",
         "NEC" => "NEC",
         "PHL" => "Philips",
-        "DELL" => "Dell",
         other => other,
     }
     .to_string()

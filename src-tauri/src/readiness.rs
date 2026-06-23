@@ -818,9 +818,13 @@ fn load_dismissals() -> Vec<String> {
 }
 
 fn save_dismissals(ids: &[String]) -> Result<(), String> {
-    std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
-    let json = serde_json::to_string_pretty(ids).map_err(|e| e.to_string())?;
-    std::fs::write(dismissals_path(), json).map_err(|e| e.to_string())
+    // User-framed errors (match export.rs's house pattern) — never a raw OS string to the UI.
+    std::fs::create_dir_all(crate::compy_data_dir())
+        .map_err(|e| format!("could not create the Compy data folder: {e}"))?;
+    let json = serde_json::to_string_pretty(ids)
+        .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))?;
+    std::fs::write(dismissals_path(), json)
+        .map_err(|e| format!("could not save your dismissed-checks setting: {e}"))
 }
 
 /// Dismiss a readiness check by id (idempotent) — the user has judged it and wants it silenced.
