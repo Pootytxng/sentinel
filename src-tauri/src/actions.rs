@@ -21,7 +21,7 @@ use wmi::{COMLibrary, WMIConnection};
 use crate::history::AppliedChange;
 // State probes stay in lib (least-wrong place until a cleaner seam); some
 // apply_* fns read them to snapshot prior state before mutating.
-use crate::{fast_startup_state, hags_state, reserved_storage_enabled};
+use crate::{fast_startup_state_checked, hags_state, reserved_storage_enabled_checked};
 
 /// Build a `Command` that never flashes a console window. EVERY non-elevated CLI probe (powercfg,
 /// sc, logman, powershell) MUST use this — without `CREATE_NO_WINDOW`, Windows briefly pops a
@@ -1208,8 +1208,19 @@ pub(crate) fn ps_service_startup_for_mode(mode: &str) -> &'static str {
 // rollback returns the service to exactly where it was.
 pub(crate) fn apply_service_disable(service: KnownService) -> Result<ApplyResult, String> {
     ps_safe(service.name())?;
-    let (prior_state, prior_start_mode) =
-        service_info(service.name()).unwrap_or_else(|| ("Running".into(), "Auto".into()));
+    // Snapshot the prior state FIRST. If WMI can't read it (COM/MTA glitch, ACL, query error),
+    // REFUSE rather than fabricate a Running/Auto prior: a guessed prior would later restore a
+    // genuinely Stopped/Manual service to Automatic + Start-Service, corrupting the user's config.
+    // Rollback-first (1206-1208) wants the EXACT prior; matches apply_power_setting_off_on_ac and
+    // restore_memory_compression_with. (Rollback-TIME conservatism stays — see
+    // rollback_enable_scheduled_task_typed — because there the change is already made and must act.)
+    let (prior_state, prior_start_mode) = service_info(service.name()).ok_or_else(|| {
+        format!(
+            "could not read the current state of {} to snapshot it for rollback; \
+             refusing to disable a service we can't roll back",
+            service.name()
+        )
+    })?;
     let cmd = format!(
         "Set-Service -Name {0} -StartupType Disabled; Stop-Service -Name {0} -Force -ErrorAction SilentlyContinue",
         service.name()
@@ -1292,8 +1303,15 @@ impl Drop for ForceServiceSuspendGate {
 // critical service can ever be passed. Reuses the audited run_elevated_powershell + service_info.
 pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult, String> {
     ps_safe(service.name())?;
-    let (prior_state, prior_start_mode) =
-        service_info(service.name()).unwrap_or_else(|| ("Running".into(), "Auto".into()));
+    // Same fail-safe as apply_service_disable: refuse if the prior state can't be snapshotted
+    // rather than guessing Running/Auto (gated dark today, but hardened before the gate flips).
+    let (prior_state, prior_start_mode) = service_info(service.name()).ok_or_else(|| {
+        format!(
+            "could not read the current state of {} to snapshot it for rollback; \
+             refusing to suspend a service we can't roll back",
+            service.name()
+        )
+    })?;
     run_elevated_powershell(&format!(
         "Stop-Service -Name {} -Force -ErrorAction SilentlyContinue",
         service.name()
@@ -1429,10 +1447,12 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
     task: &KnownBloatTask,
     prior_state: &str,
 ) -> Result<(), String> {
-    // Rollback-first fidelity: re-enable UNLESS we KNOW it was Disabled. An "Unknown" prior (the
-    // snapshot read failed) is treated as "was enabled" → restored to the stock/enabled state, the
-    // conservative direction (matches apply_service_disable defaulting to the active state). Only a
-    // confirmed-Disabled prior stays disabled — and that path issues no elevated command.
+    // Rollback-first fidelity: re-enable UNLESS we KNOW it was Disabled. An "Unknown" prior is
+    // treated as "was enabled" → restored to the stock/enabled state, the conservative direction.
+    // This is rollback-TIME (the task is already disabled and we must act, and Enable-ScheduledTask
+    // on an already-enabled task is harmless) — distinct from apply-time, which now REFUSES on an
+    // unreadable prior rather than guessing. Only a confirmed-Disabled prior stays disabled — and
+    // that path issues no elevated command.
     if prior_state == "Disabled" {
         return Ok(());
     }
@@ -1668,7 +1688,11 @@ pub(crate) fn rollback_power_ultimate_typed(prior_guid: &str) -> Result<(), Stri
 // ─── Reserved Storage off (PowerShell cmdlet, admin) ─────────────────────
 
 pub(crate) fn apply_reserved_storage_off() -> Result<ApplyResult, String> {
-    let prior_enabled = reserved_storage_enabled();
+    // Refuse on an unreadable prior rather than letting reserved_storage_enabled()'s infallible
+    // false fabricate the snapshot: a guessed prior_enabled=false would make rollback leave this
+    // default-ON feature disabled instead of restoring the user's true Enabled state.
+    let prior_enabled = reserved_storage_enabled_checked()
+        .map_err(|e| format!("{e}; refusing to apply rather than record a guessed prior value"))?;
     run_elevated_powershell("Set-WindowsReservedStorageState -State Disabled")?;
     Ok(ApplyResult {
         applied_action: AppliedAction::DisableReservedStorage,
@@ -2298,7 +2322,11 @@ pub(crate) fn rollback_eee_disable_typed(adapters: &[EeeNicSnapshot]) -> Result<
 // ─── Fast Startup off (HKLM, admin) ──────────────────────────────────────
 
 pub(crate) fn apply_fast_startup_off() -> Result<ApplyResult, String> {
-    let prior_hiberboot = fast_startup_state();
+    // Refuse if the Power key is unreadable rather than snapshotting a guessed None: a None prior
+    // makes rollback DELETE HiberbootEnabled (Windows default = ON), which would silently re-enable
+    // Fast Startup on a rig that had it explicitly off. A genuinely-absent value stays Ok(None) and
+    // rollback-delete remains the faithful inverse. Mirrors the power-setting refuse discipline.
+    let prior_hiberboot = fast_startup_state_checked()?;
     run_elevated_powershell(
         "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name 'HiberbootEnabled' -Value 0 -Type DWord",
     )?;
@@ -2878,9 +2906,20 @@ pub(crate) fn apply_mouse_accel_off() -> Result<ApplyResult, String> {
         .map_err(|e| e.to_string())?;
 
     // All three values are REG_SZ strings, not DWORDs. Windows is weird.
-    let prior_speed: String = key.get_value("MouseSpeed").unwrap_or_default();
-    let prior_threshold1: String = key.get_value("MouseThreshold1").unwrap_or_default();
-    let prior_threshold2: String = key.get_value("MouseThreshold2").unwrap_or_default();
+    // Distinguish a genuinely-absent value (NotFound => "" — rollback deletes, the faithful inverse)
+    // from a value that's PRESENT but unreadable (e.g. stored as the wrong type => Err, refuse).
+    // Folding a failed read of a present value into "" would make rollback delete the user's real
+    // setting and reconstitute the default accel curve. Mirrors read_mmcss_priors' NotFound split.
+    let read_sz = |name: &str| -> Result<String, String> {
+        match key.get_value::<String, _>(name) {
+            Ok(v) => Ok(v),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(format!("cannot snapshot {name} for rollback: {e}")),
+        }
+    };
+    let prior_speed = read_sz("MouseSpeed")?;
+    let prior_threshold1 = read_sz("MouseThreshold1")?;
+    let prior_threshold2 = read_sz("MouseThreshold2")?;
 
     let zero = "0".to_string();
     key.set_value("MouseSpeed", &zero).map_err(|e| e.to_string())?;

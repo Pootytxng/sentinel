@@ -161,6 +161,9 @@ pub(crate) fn memory_integrity_or_vbs_active() -> bool {
 pub(crate) fn reserved_storage_enabled() -> bool {
     // Win10/11 stashes the reserved-storage configuration here. BaseHardReserveSize
     // is the byte count currently set aside; > 0 = reserved storage is active.
+    // Infallible (any error => false) — for READ-ONLY/advisory callers (Check, recs,
+    // diagnostics) where a guessed-off is harmless. The MUTATING apply path must use
+    // `reserved_storage_enabled_checked` so a read failure can't fabricate a snapshot.
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     hklm.open_subkey("Software\\Microsoft\\ReserveManager")
         .and_then(|k| k.get_value::<u32, _>("BaseHardReserveSize"))
@@ -168,11 +171,70 @@ pub(crate) fn reserved_storage_enabled() -> bool {
         .unwrap_or(false)
 }
 
+/// Like `reserved_storage_enabled` but distinguishes a genuinely-absent key/value
+/// (`Ok(false)` — a faithful "off" prior) from an UNREADABLE one (`Err` — the apply
+/// refuses rather than snapshotting a guess). Used only by the mutating apply path so a
+/// transient/ACL read failure can't fabricate `prior_enabled=false` and have rollback
+/// leave a default-ON feature disabled. Mirrors `read_priority_separation_prior`.
+pub(crate) fn reserved_storage_enabled_checked() -> Result<bool, String> {
+    use std::io::ErrorKind;
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    match hklm.open_subkey("Software\\Microsoft\\ReserveManager") {
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(false), // key absent = off (true prior)
+        Err(e) => Err(format!("cannot snapshot reserved-storage state: {e}")),
+        Ok(k) => match k.get_value::<u32, _>("BaseHardReserveSize") {
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(false), // value absent = off
+            Err(e) => Err(format!("cannot read BaseHardReserveSize to snapshot: {e}")),
+            Ok(v) => Ok(v > 0),
+        },
+    }
+}
+
 pub(crate) fn fast_startup_state() -> Option<u32> {
+    // Infallible (open/read failure and genuine absence both => None) — for READ-ONLY
+    // detection callers. The MUTATING apply path uses `fast_startup_state_checked`.
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power")
         .and_then(|k| k.get_value::<u32, _>("HiberbootEnabled"))
         .ok()
+}
+
+/// Like `fast_startup_state` but distinguishes a genuinely-absent value (`Ok(None)` — a
+/// faithful prior; rollback deletes it, which Windows treats as the default) from an
+/// UNREADABLE key (`Err` — the apply refuses rather than snapshotting a guess). Used only by
+/// the mutating apply path. Mirrors `read_priority_separation_prior`.
+pub(crate) fn fast_startup_state_checked() -> Result<Option<u32>, String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power") {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot snapshot Fast Startup state: {e}")),
+        Ok(k) => Ok(k.get_value::<u32, _>("HiberbootEnabled").ok()),
+    }
+}
+
+#[cfg(test)]
+mod checked_prior_reader_tests {
+    use super::*;
+
+    // The mutating apply path reads its rollback priors through these checked variants. On a healthy
+    // rig they must AGREE with the infallible detection readers (regression guard against a broken
+    // key path), reserving Err only for a genuine read failure — the fail-safe refuse the apply
+    // relies on so a read failure can't fabricate a snapshot.
+    #[test]
+    fn fast_startup_checked_reads_ok_and_matches_infallible() {
+        // Session Manager\Power is a standard key on every Windows install — must read Ok.
+        let checked = fast_startup_state_checked().expect("standard Power key must read Ok");
+        assert_eq!(checked, fast_startup_state());
+    }
+
+    #[test]
+    fn reserved_storage_checked_matches_infallible_when_readable() {
+        // ReserveManager may be absent (Ok(false)) or present; whenever it reads, the checked and
+        // infallible variants must report the same state.
+        if let Ok(v) = reserved_storage_enabled_checked() {
+            assert_eq!(v, reserved_storage_enabled());
+        }
+    }
 }
 
 pub(crate) fn game_bar_disabled() -> bool {
