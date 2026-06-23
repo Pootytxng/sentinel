@@ -6,6 +6,7 @@ import { measureTuning } from "../data/tuning-measure";
 import { type GpuVendor } from "./walkthroughs";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningVerdictCard } from "./TuningVerdict";
+import { prettyGameName } from "./game-name";
 import "./TuningDebrief.css";
 
 // Play before/after for a vendor-tool tune (spec 2026-06-08). Threads into the session debrief beside
@@ -123,7 +124,7 @@ export function TuningDebrief({
     <div className="td-measure">
       <div className="td-measure-head">
         <span className="td-measure-title">
-          {tuneLabel} check · {s.process_name}
+          {tuneLabel} check · {prettyGameName(s.process_name)}
         </span>
         <button className="td-clear cmp-door" disabled={busy} onClick={clearTune}>
           I reset / re-tuned

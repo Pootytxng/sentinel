@@ -7,6 +7,7 @@ import { BackButton, ForwardButton } from "../design/BackButton";
 import { NavGlyph } from "../design/NavGlyph";
 import { railFor, type HomeRailId } from "../design/homeRail";
 import { useReducedMotion } from "../design/use-motion";
+import { PROVENANCE_LABEL } from "../data/provenance";
 import {
   type InstrumentTheme,
   readInstrumentTheme,
@@ -153,10 +154,11 @@ function SignalRingGauge({ readiness, progress }: { readiness: GameReadiness | n
   );
 }
 
+// Labels from the shared provenance source of truth (can't drift from Fix / ActionDrawer); CSS class local.
 const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
-  verified: { label: "Verified", cls: "verified" },
-  "measured-signal": { label: "Measured", cls: "measured" },
-  "expected-impact": { label: "Expected", cls: "expected" },
+  verified: { label: PROVENANCE_LABEL.verified, cls: "verified" },
+  "measured-signal": { label: PROVENANCE_LABEL["measured-signal"], cls: "measured" },
+  "expected-impact": { label: PROVENANCE_LABEL["expected-impact"], cls: "expected" },
 };
 
 // ─── #1 limiter card — the one thing worth doing, through the audited apply flow ─

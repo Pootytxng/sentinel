@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { friendlyLabel } from "../data/friendly-labels";
 import { recMutation } from "../data/rec-mutations";
+import { type Provenance, PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
 import "./ActionDrawer.css";
 
 // Action Drawer (owner: "lil pop-up windows tied to the function", 2026-06-15). A premium right-sliding
@@ -14,13 +15,15 @@ export type DrawerRec = {
   title: string;
   description?: string;
   impact?: string;
-  provenance?: "verified" | "measured-signal" | "expected-impact";
+  provenance?: Provenance;
 };
 
-const PROVENANCE: Record<string, { label: string; tone: string; note: string }> = {
-  verified: { label: "Measured", tone: "ready", note: "Compy has observed this gain on real hardware." },
-  "measured-signal": { label: "Measured signal", tone: "accent", note: "Backed by third-party / community measurement." },
-  "expected-impact": { label: "Expected", tone: "muted", note: "Sound from how Windows works — not yet benchmarked here." },
+// Per-surface chip TONE only. The label + honesty note come from the shared source of truth
+// (src/data/provenance.ts) so they can't drift from the Fix row / CommandCenter wording.
+const TONE: Record<Provenance, string> = {
+  verified: "ready",
+  "measured-signal": "accent",
+  "expected-impact": "muted",
 };
 
 export function ActionDrawer({
@@ -83,7 +86,9 @@ export function ActionDrawer({
   const headline = f?.headline ?? rec.title;
   const tech = f?.tech ?? null;
   const mut = recMutation(rec.id);
-  const prov = rec.provenance ? PROVENANCE[rec.provenance] : null;
+  const prov = rec.provenance
+    ? { label: PROVENANCE_LABEL[rec.provenance], tone: TONE[rec.provenance], note: PROVENANCE_NOTE[rec.provenance] }
+    : null;
   const what = rec.impact || rec.description || "";
 
   // Portal to <body> so the fixed backdrop/sheet escapes any transformed/animated ancestor (the Living

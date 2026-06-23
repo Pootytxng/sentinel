@@ -44,8 +44,10 @@ describe("SessionDebrief (audit M1)", () => {
         <SessionDebrief {...baseProps} />
       </ConfirmProvider>,
     );
-    // Header names the actual process — the receipt, not a vibe.
-    expect(await screen.findByText(/eldenring\.exe/)).toBeInTheDocument();
+    // Header names the game (de-jargoned for display — the trailing ".exe" is stripped; the raw
+    // name is kept for exports/comparison matching, never shown in the title).
+    expect(await screen.findByText(/eldenring/)).toBeInTheDocument();
+    expect(screen.queryByText(/eldenring\.exe/)).not.toBeInTheDocument();
     // Tiles: avg FPS + 1% low, with the honest-measurement "estimate" tag on the 1% low.
     expect(screen.getByText("142")).toBeInTheDocument();
     expect(screen.getByText("118")).toBeInTheDocument();
@@ -64,7 +66,7 @@ describe("SessionDebrief (audit M1)", () => {
         />
       </ConfirmProvider>,
     );
-    await screen.findByText(/eldenring\.exe/);
+    await screen.findByText(/eldenring/);
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 

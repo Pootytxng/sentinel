@@ -7,32 +7,16 @@ import {
 } from "../surfaces/walkthroughs";
 import { openGuidedUri } from "../surfaces/guided";
 import { bumpLocalStat } from "../data/local-stats";
+import { useReducedMotion } from "./use-motion";
 import "./Walkthrough.css";
 
 // Animated schematic walkthrough (spec 2026-06-06; presentation reworked 2026-06-12 §B — the
 // stacked five-panel storyboard read as clutter). ONE token-only abstracted window + a stepper
 // (prev/next + jump dots, keyboard accessible): step N highlights in place, captions rail along.
-// Auto-advance runs only when motion is allowed AND the user hasn't taken the wheel; under
-// prefers-reduced-motion it is a manual stepper — never an auto-loop, never the 5-stack. It NEVER
-// dresses as real OS chrome — it's labeled a schematic.
-
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() => {
-    try {
-      return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    if (!mq) return;
-    const on = () => setReduced(mq.matches);
-    mq.addEventListener?.("change", on);
-    return () => mq.removeEventListener?.("change", on);
-  }, []);
-  return reduced;
-}
+// Auto-advance runs only when motion is allowed AND the user hasn't taken the wheel; when motion is
+// reduced it is a manual stepper — never an auto-loop, never the 5-stack. It NEVER dresses as real
+// OS chrome — it's labeled a schematic. Motion gates on the APP's own signal (useReducedMotion,
+// motion-on-by-default, OS-override), NOT raw prefers-reduced-motion — see src/design/use-motion.ts.
 
 function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: number; cursor: boolean }) {
   const cur = steps[active] ?? steps[0];
@@ -72,7 +56,7 @@ function Stage({ steps, active, cursor }: { steps: WalkthroughStep[]; active: nu
 }
 
 export function Walkthrough({ walkthrough, vendor }: { walkthrough: WT; vendor: GpuVendor }) {
-  const reduced = usePrefersReducedMotion();
+  const reduced = useReducedMotion();
   const [variantIdx, setVariantIdx] = useState(() => {
     const i = walkthrough.variants.findIndex((v) => v.vendor === vendor);
     return i >= 0 ? i : 0;

@@ -1886,6 +1886,11 @@ pub(crate) struct MonitorInfo {
 pub(crate) fn decode_edid_string(codes: &[u16]) -> String {
     codes
         .iter()
+        // ASCII only. A code unit >0x7F is NOT printable ASCII — `as u8` would truncate it to
+        // its low byte and fabricate a wrong char (e.g. 0x0141 -> 'A'), violating the file's
+        // "never a fabricated name" rule. Drop it instead so a non-conforming panel reads short,
+        // never wrong. (Within 0x00-0x7F the cast is lossless.)
+        .filter(|&&c| c < 0x80)
         .map(|&c| c as u8 as char)
         .filter(|&c| c != '\0' && !c.is_control())
         .collect::<String>()
@@ -2188,6 +2193,9 @@ mod net_adapter_tests {
         assert_eq!(decode_edid_string(&[65, 67, 82, 10, 32, 32]), "ACR");
         assert_eq!(decode_edid_string(&[]), "");
         assert_eq!(decode_edid_string(&[0, 0, 0]), "");
+        // A >0x7F code unit (non-conforming firmware) is DROPPED, never truncated into a
+        // fabricated ASCII char: 0x0141 must not become 'A' (would yield "XAF").
+        assert_eq!(decode_edid_string(&[88, 0x0141, 70]), "XF");
     }
 
     #[test]

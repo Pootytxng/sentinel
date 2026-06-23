@@ -8,6 +8,7 @@ import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
+import { PROVENANCE_LABEL } from "../data/provenance";
 import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
 import { gameModeRevertedExternally } from "./dashboard-data";
 import "./Fix.css";
@@ -97,10 +98,12 @@ function humanizeWhen(iso: string): string {
   return `${t.toLocaleDateString([], { month: "short", day: "numeric" })} · ${time}`;
 }
 
+// Labels come from the shared provenance source of truth so they can't drift from the
+// CommandCenter / ActionDrawer wording; the CSS class stays local to this surface.
 const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
-  verified: { label: "Verified", cls: "verified" },
-  "measured-signal": { label: "Measured", cls: "measured" },
-  "expected-impact": { label: "Expected", cls: "expected" },
+  verified: { label: PROVENANCE_LABEL.verified, cls: "verified" },
+  "measured-signal": { label: PROVENANCE_LABEL["measured-signal"], cls: "measured" },
+  "expected-impact": { label: PROVENANCE_LABEL["expected-impact"], cls: "expected" },
 };
 
 // The refuse-pile (spec §2 v1 trio). Calm one-liners consistent with tweaks.json verdicts; each

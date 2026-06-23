@@ -10,6 +10,7 @@ import type {
 import { Term } from "../design/Term";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningDebrief } from "./TuningDebrief";
+import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeGpuTempC, gradeColor, type Grade } from "../data/metric-grade";
 import { readDisplayRefreshHz } from "../design/theme";
@@ -277,7 +278,7 @@ export function SessionDebrief({
     <div className={`debrief${arcV2 ? " arc-v2" : ""}`}>
       <div className="debrief-head">
         <span className="debrief-title">
-          {s.process_name || "Last session"} · {fmtDur(s.duration_secs)} · {range}
+          {prettyGameName(s.process_name) || "Last session"} · {fmtDur(s.duration_secs)} · {range}
         </span>
         <button className="btn-small" onClick={onExport}>
           Share

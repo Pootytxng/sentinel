@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { Walkthrough } from "./Walkthrough";
+import { setMotionPref } from "./use-motion";
 import { walkthroughForKey } from "../surfaces/walkthroughs";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  try {
+    localStorage.clear(); // reset the app motion pref to its "full" default between tests
+  } catch {
+    /* no localStorage */
+  }
 });
 
 function stubReducedMotion(matches: boolean) {
@@ -71,7 +77,9 @@ describe("Walkthrough", () => {
   });
 
   it("reduced-motion = the SAME single panel as a MANUAL stepper (no cursor, controls work)", () => {
-    stubReducedMotion(true);
+    // Motion gates on the APP's own signal (on-by-default, OS-override) — force the app's "reduced"
+    // pref, NOT just the OS media query, which the app deliberately ignores in its default "full" mode.
+    setMotionPref("reduced");
     const wt = walkthroughForKey("amd-gpu-undervolt")!;
     const { container } = render(<Walkthrough walkthrough={wt} vendor="amd" />);
     expect(container.querySelectorAll(".wt-stage").length).toBe(1);
@@ -82,7 +90,7 @@ describe("Walkthrough", () => {
   });
 
   it("prev from the first step wraps to the last (no dead control — doorknob honesty)", () => {
-    stubReducedMotion(true);
+    setMotionPref("reduced");
     const wt = walkthroughForKey("amd-gpu-undervolt")!;
     const { container } = render(<Walkthrough walkthrough={wt} vendor="amd" />);
     fireEvent.click(screen.getByRole("button", { name: "Previous step" }));
