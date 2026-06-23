@@ -1203,6 +1203,49 @@ pub(crate) fn ps_service_startup_for_mode(mode: &str) -> &'static str {
     }
 }
 
+/// Refuse-contract seam (pure, unit-tested): the prior service state MUST be readable to snapshot
+/// it for rollback. Returns the prior verbatim or a typed refusal naming the action — never a
+/// guess. Factored out of the service applies so the fail-safe contract is testable without WMI
+/// or elevation. Mirrors `restore_memory_compression_with`'s explicit-prior refusal pattern.
+fn require_service_prior(
+    name: &str,
+    prior: Option<(String, String)>,
+    verb: &str,
+) -> Result<(String, String), String> {
+    prior.ok_or_else(|| {
+        format!(
+            "could not read the current state of {name} to snapshot it for rollback; \
+             refusing to {verb} a service we can't roll back"
+        )
+    })
+}
+
+#[cfg(test)]
+mod service_prior_refusal_tests {
+    use super::require_service_prior;
+
+    #[test]
+    fn refuses_when_prior_unreadable() {
+        // The serious fix: an unreadable (None) prior must REFUSE, never fabricate Running/Auto.
+        let err = require_service_prior("WSearch", None, "disable").unwrap_err();
+        assert!(err.contains("refusing to disable"), "must refuse, got: {err}");
+        assert!(err.contains("WSearch"), "must name the service, got: {err}");
+    }
+
+    #[test]
+    fn passes_a_readable_prior_through_verbatim() {
+        // A genuinely-read Stopped/Manual prior must survive unchanged (no coercion to Running/Auto).
+        let ok = require_service_prior("SysMain", Some(("Stopped".into(), "Manual".into())), "suspend");
+        assert_eq!(ok.unwrap(), ("Stopped".to_string(), "Manual".to_string()));
+    }
+
+    #[test]
+    fn refusal_names_the_action_verb() {
+        let err = require_service_prior("X", None, "suspend").unwrap_err();
+        assert!(err.contains("refusing to suspend"), "got: {err}");
+    }
+}
+
 // Generic "disable a Windows service" — used for SysMain, NVIDIA telemetry,
 // and any future service-shaped rec. Snapshots prior state + start mode so
 // rollback returns the service to exactly where it was.
@@ -1214,13 +1257,8 @@ pub(crate) fn apply_service_disable(service: KnownService) -> Result<ApplyResult
     // Rollback-first (1206-1208) wants the EXACT prior; matches apply_power_setting_off_on_ac and
     // restore_memory_compression_with. (Rollback-TIME conservatism stays — see
     // rollback_enable_scheduled_task_typed — because there the change is already made and must act.)
-    let (prior_state, prior_start_mode) = service_info(service.name()).ok_or_else(|| {
-        format!(
-            "could not read the current state of {} to snapshot it for rollback; \
-             refusing to disable a service we can't roll back",
-            service.name()
-        )
-    })?;
+    let (prior_state, prior_start_mode) =
+        require_service_prior(service.name(), service_info(service.name()), "disable")?;
     let cmd = format!(
         "Set-Service -Name {0} -StartupType Disabled; Stop-Service -Name {0} -Force -ErrorAction SilentlyContinue",
         service.name()
@@ -1305,13 +1343,8 @@ pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult
     ps_safe(service.name())?;
     // Same fail-safe as apply_service_disable: refuse if the prior state can't be snapshotted
     // rather than guessing Running/Auto (gated dark today, but hardened before the gate flips).
-    let (prior_state, prior_start_mode) = service_info(service.name()).ok_or_else(|| {
-        format!(
-            "could not read the current state of {} to snapshot it for rollback; \
-             refusing to suspend a service we can't roll back",
-            service.name()
-        )
-    })?;
+    let (prior_state, prior_start_mode) =
+        require_service_prior(service.name(), service_info(service.name()), "suspend")?;
     run_elevated_powershell(&format!(
         "Stop-Service -Name {} -Force -ErrorAction SilentlyContinue",
         service.name()
