@@ -138,7 +138,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
                 {rest.map((lim) => (
                   <div key={lim.id} className="fc-rest-row">
                     <span className="fc-rest-title">{lim.title}</span>
-                    <span className="fc-rest-conf">{lim.confidence} confidence</span>
+                    <span className="fc-rest-conf">{lim.confidence[0].toUpperCase() + lim.confidence.slice(1)} confidence</span>
                   </div>
                 ))}
               </div>

@@ -14,7 +14,9 @@ import { rigTierLine } from "../data/rig-tier";
 // Driver version + coarse age. Grid-only formatter (kept here, not in the shared module).
 const fmtDriver = (g: GpuInfo) => {
   const version = g.driver_version || "—";
-  if (g.driver_age_days == null) return version;
+  // Honest empty-state for an unreadable age — say so (matches the Export "driver age —" /
+  // readiness "Couldn't read a driver date") instead of silently hiding the freshness datum.
+  if (g.driver_age_days == null) return version === "—" ? version : `${version} · age unknown`;
   const months = Math.floor(g.driver_age_days / 30);
   const age = months < 1 ? "<1 mo" : months === 1 ? "1 mo" : `${months} mo`;
   return `${version} · ${age} old`;

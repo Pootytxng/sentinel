@@ -271,7 +271,7 @@ function LiveStrip({ sessions, progress }: { sessions: SessionSummary[]; progres
         <LiveMetric value={`${countUp(strip.avgFps, progress)}`} label="Avg FPS" />
         <LiveMetric value={`${countUp(strip.low1Est, progress)}`} label="1% low" note="est" />
         <LiveMetric
-          value={strip.peakTempC == null ? "—" : `${countUp(strip.peakTempC, progress)}°`}
+          value={strip.peakTempC == null ? "—" : `${countUp(strip.peakTempC, progress)}°C`}
           label="Peak temp"
         />
       </div>

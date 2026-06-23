@@ -10,6 +10,7 @@ import {
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
+import { gpuSensorVerified } from "../data/gpu-sensor";
 import { AnimatedNumber } from "../design/AnimatedNumber";
 import { RigViewer } from "./rig/RigViewer";
 import { HardwareGrid } from "./HardwareGrid";
@@ -120,7 +121,11 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   const cpuName = hw.cpu_arch?.family_label || hw.cpu_brand || "CPU";
   // Hardware-tailored grading context: FPS/frametime are judged against THIS rig's refresh rate.
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
-  const gpuTempColor = gradeColor(gradeGpuTempC(gpu?.temperature_c ?? null));
+  // NVIDIA NVML sensors aren't hardware-verified yet (LOCKED rule #5) — don't grade their temp as
+  // authoritative; AMD/unknown stay graded. Same gate the Play + classic Monitoring surfaces use.
+  const tempGrade = (c: number | null | undefined) =>
+    gpuSensorVerified(gpu?.vendor) ? gradeGpuTempC(c) : ("neutral" as const);
+  const gpuTempColor = gradeColor(tempGrade(gpu?.temperature_c ?? null));
 
   return (
     <div className="d2-root">
@@ -165,7 +170,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
           <Metric label="Avg FPS" animate={last.avg_fps} fmt={(v) => v.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
           <Metric label="1% low" animate={last.low1_fps_est} fmt={(v) => v.toFixed(0)} sub="estimate" grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
           <Metric label="Frametime" animate={last.avg_frametime_ms} fmt={(v) => v.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
-          <Metric label="Peak GPU" animate={last.peak_gpu_temp_c ?? undefined} value="—" fmt={(v) => v.toFixed(0)} unit="°C" grade={gradeGpuTempC(last.peak_gpu_temp_c)} />
+          <Metric label="Peak GPU" animate={last.peak_gpu_temp_c ?? undefined} value="—" fmt={(v) => v.toFixed(0)} unit="°C" grade={tempGrade(last.peak_gpu_temp_c)} />
         </div>
       ) : (
         <div className="d2-card d2-empty">Play a game with monitoring on — your FPS, 1% low and frametime land here.</div>

@@ -135,7 +135,7 @@ pub(crate) fn build_markdown_report(
         for g in gpus {
             let vram = vu64(g, "vram_bytes").map(gib).unwrap_or_else(|| "—".into());
             let age = vi64(g, "driver_age_days")
-                .map(|d| format!("{d}d old"))
+                .map(|d| format!("{d} days old"))
                 .unwrap_or_else(|| "driver age —".into());
             let _ = writeln!(o, "- **GPU:** {} ({vram} VRAM, {age})", vstr(g, "name"));
         }

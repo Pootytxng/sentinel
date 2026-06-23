@@ -23,6 +23,7 @@ import {
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
+import { gpuSensorVerified } from "../data/gpu-sensor";
 import "./Play.css";
 
 // PLAY — live + debrief (halfway-home §1: navigation never teleports). The live-monitor card +
@@ -119,6 +120,10 @@ export default function Play({
   // Hardware-tailored grade context (this rig's monitor refresh) — the same source SessionDebrief
   // uses, so Play's FPS/frametime grade matches Home / debrief / overlay.
   const rig = { refreshHz: readDisplayRefreshHz() };
+  // NVIDIA NVML sensors aren't hardware-verified yet (LOCKED rule #5) — don't grade their temp as
+  // authoritative; AMD/unknown stay graded. Same gate the Home + classic Monitoring surfaces use.
+  const tempGrade = (c: number | null | undefined): Grade =>
+    gpuSensorVerified(vendor) ? gradeGpuTempC(c) : "neutral";
 
   // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
   useEffect(() => {
@@ -236,7 +241,7 @@ export default function Play({
               <span className="play-hero-label">ms frametime</span>
             </div>
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={gradeStyle(gradeGpuTempC(latest.peak_gpu_temp_c))}>{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°`}</span>
+              <span className="play-hero-value" style={gradeStyle(tempGrade(latest.peak_gpu_temp_c))}>{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°C`}</span>
               <span className="play-hero-label">peak GPU</span>
             </div>
           </div>
@@ -270,7 +275,7 @@ export default function Play({
               <div className="play-metric-label">1% low · est</div>
             </div>
             <div className="play-metric">
-              <div className="play-metric-value" style={gradeStyle(gradeGpuTempC(gpu?.temperature_c ?? null))}>{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°`}</div>
+              <div className="play-metric-value" style={gradeStyle(tempGrade(gpu?.temperature_c ?? null))}>{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°C`}</div>
               <div className="play-metric-label">GPU temp</div>
             </div>
             <div className="play-metric">
