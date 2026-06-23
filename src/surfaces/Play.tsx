@@ -208,7 +208,7 @@ export default function Play({
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value">{latest.low1_fps_est.toFixed(0)}</span>
-              <span className="play-hero-label">1% low</span>
+              <span className="play-hero-label">1% low · est</span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value">{latest.avg_frametime_ms.toFixed(1)}</span>
@@ -246,7 +246,7 @@ export default function Play({
             </div>
             <div className="play-metric">
               <div className="play-metric-value">{sample ? Math.round(sample.low1_fps) : "—"}</div>
-              <div className="play-metric-label">1% low</div>
+              <div className="play-metric-label">1% low · est</div>
             </div>
             <div className="play-metric">
               <div className="play-metric-value">{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°`}</div>
@@ -366,7 +366,7 @@ export default function Play({
                     </span>
                     <span className="play-session-right">
                       <span className="play-session-nums">
-                        {s.avg_fps.toFixed(0)} avg · {s.low1_fps_est.toFixed(0)} 1% low
+                        {s.avg_fps.toFixed(0)} avg · {s.low1_fps_est.toFixed(0)} 1% low (est)
                       </span>
                       <span className="cmp-door-chevron" aria-hidden="true">▸</span>
                     </span>

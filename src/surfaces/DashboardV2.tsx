@@ -163,7 +163,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
       {last ? (
         <div className="d2-grid d2-grid-4">
           <Metric label="Avg FPS" animate={last.avg_fps} fmt={(v) => v.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
-          <Metric label="1% low" animate={last.low1_fps_est} fmt={(v) => v.toFixed(0)} grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
+          <Metric label="1% low" animate={last.low1_fps_est} fmt={(v) => v.toFixed(0)} sub="estimate" grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
           <Metric label="Frametime" animate={last.avg_frametime_ms} fmt={(v) => v.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
           <Metric label="Peak GPU" animate={last.peak_gpu_temp_c ?? undefined} value="—" fmt={(v) => v.toFixed(0)} unit="°C" grade={gradeGpuTempC(last.peak_gpu_temp_c)} />
         </div>

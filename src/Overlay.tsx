@@ -145,7 +145,7 @@ export default function Overlay() {
         </div>
         {density !== "minimal" && (
           <div className="ovl2-row">
-            <span>1% low <span style={low1Color ? { color: low1Color } : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</span></span>
+            <span>1% low <span style={low1Color ? { color: low1Color } : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</span> <span className="ovl2-est">est</span></span>
             <span className="ovl2-dot">·</span>
             <span><span style={tempColor ? { color: tempColor } : undefined}>{gpu?.temperature_c ?? "—"}</span>°C</span>
             {/* §2: Full density adds CPU USAGE (never CPU temp — no kernel driver); data already fetched. */}

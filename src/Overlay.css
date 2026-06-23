@@ -119,6 +119,12 @@ html.overlay-mode #root {
 .ovl2-dot {
   color: #58626f;
 }
+/* The 1% low is a live session-signal estimate, never benchmark-grade — mark it small + dim. */
+.ovl2-est {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: #6b7480;
+}
 .ovl2-ft {
   display: block;
   margin-top: 1px;
