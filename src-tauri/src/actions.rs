@@ -21,7 +21,7 @@ use wmi::{COMLibrary, WMIConnection};
 use crate::history::AppliedChange;
 // State probes stay in lib (least-wrong place until a cleaner seam); some
 // apply_* fns read them to snapshot prior state before mutating.
-use crate::{fast_startup_state_checked, hags_state, reserved_storage_enabled_checked};
+use crate::{fast_startup_state_checked, hags_state_checked, reserved_storage_enabled_checked};
 
 /// Build a `Command` that never flashes a console window. EVERY non-elevated CLI probe (powercfg,
 /// sc, logman, powershell) MUST use this — without `CREATE_NO_WINDOW`, Windows briefly pops a
@@ -2417,7 +2417,11 @@ pub(crate) fn rollback_game_bar_disable_typed(
 // ─── HAGS (HKLM, admin) ──────────────────────────────────────────────────
 
 pub(crate) fn apply_hags_enable() -> Result<ApplyResult, String> {
-    let prior = hags_state();
+    // Refuse if the GraphicsDrivers key is unreadable rather than snapshotting a guessed None:
+    // a None prior makes rollback DELETE HwSchMode, which would discard a rig's explicit setting
+    // (e.g. HAGS deliberately off) and let the driver default take over. A genuinely-absent value
+    // stays Ok(None) and rollback-delete remains faithful. Mirrors apply_fast_startup_off.
+    let prior = hags_state_checked()?;
     run_elevated_powershell(
         "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name 'HwSchMode' -Value 2 -Type DWord",
     )?;

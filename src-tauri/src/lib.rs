@@ -235,6 +235,13 @@ mod checked_prior_reader_tests {
             assert_eq!(v, reserved_storage_enabled());
         }
     }
+
+    #[test]
+    fn hags_checked_reads_ok_and_matches_infallible() {
+        // GraphicsDrivers is a standard key on every Windows install — must read Ok.
+        let checked = hags_state_checked().expect("standard GraphicsDrivers key must read Ok");
+        assert_eq!(checked, hags_state());
+    }
 }
 
 pub(crate) fn game_bar_disabled() -> bool {
@@ -251,10 +258,26 @@ pub(crate) fn game_bar_disabled() -> bool {
 }
 
 pub(crate) fn hags_state() -> Option<u32> {
+    // Infallible (open/read failure and genuine absence both => None) — for READ-ONLY
+    // detection callers. The MUTATING apply path uses `hags_state_checked`.
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers")
         .and_then(|k| k.get_value::<u32, _>("HwSchMode"))
         .ok()
+}
+
+/// Like `hags_state` but distinguishes a genuinely-absent value (`Ok(None)` — a faithful
+/// prior; rollback deletes it) from an UNREADABLE key (`Err` — the apply refuses rather than
+/// snapshotting a guess). Used only by the mutating apply path so a key-open failure can't
+/// fabricate `None` and have rollback DELETE a user's explicit HwSchMode. Mirrors
+/// `read_priority_separation_prior` / `fast_startup_state_checked`.
+pub(crate) fn hags_state_checked() -> Result<Option<u32>, String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers") {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("cannot snapshot HAGS (HwSchMode) state: {e}")),
+        Ok(k) => Ok(k.get_value::<u32, _>("HwSchMode").ok()),
+    }
 }
 
 // ─── Core parking POLICY (detection-layer Probe #10, partial — config not live state) ─────────
