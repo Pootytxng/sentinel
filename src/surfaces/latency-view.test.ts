@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { msiStatus, usbShared, usbStatus, fmtMs } from "./latency-view";
+import {
+  msiStatus,
+  usbShared,
+  usbStatus,
+  fmtMs,
+  pollingJitterStatus,
+  pollingJitterLabel,
+} from "./latency-view";
 import type { UsbControllerLoad } from "../types";
 
 describe("msiStatus", () => {
@@ -67,5 +74,31 @@ describe("fmtMs", () => {
   it("uses 2 decimals sub-10ms, 1 above", () => {
     expect(fmtMs(0.51)).toBe("0.51 ms");
     expect(fmtMs(15.6)).toBe("15.6 ms");
+  });
+});
+
+describe("pollingJitterStatus", () => {
+  it("bands jitter: tight <0.5 → ready, 0.5–1.5 → info, >1.5 → attention", () => {
+    expect(pollingJitterStatus(0.2)).toBe("ready");
+    expect(pollingJitterStatus(0.49)).toBe("ready");
+    expect(pollingJitterStatus(0.5)).toBe("info"); // 0.5 boundary = normal, not tight
+    expect(pollingJitterStatus(1.0)).toBe("info");
+    expect(pollingJitterStatus(1.5)).toBe("info"); // 1.5 boundary = normal, not high
+    expect(pollingJitterStatus(1.51)).toBe("attention");
+    expect(pollingJitterStatus(4.0)).toBe("attention");
+  });
+  it("non-finite / negative → unknown (never a guessed verdict)", () => {
+    expect(pollingJitterStatus(NaN)).toBe("unknown");
+    expect(pollingJitterStatus(Infinity)).toBe("unknown");
+    expect(pollingJitterStatus(-0.1)).toBe("unknown");
+  });
+});
+
+describe("pollingJitterLabel", () => {
+  it("plain-word bands match pollingJitterStatus", () => {
+    expect(pollingJitterLabel(0.2)).toBe("tight");
+    expect(pollingJitterLabel(1.0)).toBe("normal");
+    expect(pollingJitterLabel(2.0)).toBe("high");
+    expect(pollingJitterLabel(NaN)).toBe("unknown");
   });
 });

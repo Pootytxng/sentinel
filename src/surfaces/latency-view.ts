@@ -42,3 +42,23 @@ export function usbStatus(usb: UsbControllerLoad[]): Status {
 export function fmtMs(ms: number): string {
   return ms < 10 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`;
 }
+
+/** Classify measured mouse-polling jitter (std-dev of report intervals, in ms) into honest bands:
+ * **tight** (<0.5 ms) reads ready, **normal** (0.5–1.5 ms) is neutral info, **high** (>1.5 ms) is a
+ * heads-up that the effective rate is wobbling. Non-finite / negative input → unknown, never a
+ * guessed verdict (jitter is a sample std-dev, so it should be ≥0). Boundaries: 0.5 and 1.5 are
+ * inclusive-up — exactly 0.5 ms is normal (not tight), exactly 1.5 ms is normal (not high). */
+export function pollingJitterStatus(jitterMs: number): Status {
+  if (!Number.isFinite(jitterMs) || jitterMs < 0) return "unknown";
+  if (jitterMs < 0.5) return "ready";
+  if (jitterMs <= 1.5) return "info";
+  return "attention";
+}
+
+/** Plain-word band label paired with `pollingJitterStatus` for the pill text. */
+export function pollingJitterLabel(jitterMs: number): string {
+  if (!Number.isFinite(jitterMs) || jitterMs < 0) return "unknown";
+  if (jitterMs < 0.5) return "tight";
+  if (jitterMs <= 1.5) return "normal";
+  return "high";
+}

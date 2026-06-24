@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
-import { msiStatus, usbStatus, controllerSeverity, fmtMs } from "./latency-view";
+import {
+  msiStatus,
+  usbStatus,
+  controllerSeverity,
+  fmtMs,
+  pollingJitterStatus,
+  pollingJitterLabel,
+} from "./latency-view";
 import type { LatencyReport, WakeMeasurement, MouseMeasurement } from "../types";
 import "./Latency.css";
 
@@ -186,7 +193,17 @@ export function LatencyTab() {
       </Card>
 
       <Card>
-        <SectionHeader title="Mouse polling rate" />
+        <SectionHeader
+          title="Mouse polling rate"
+          right={
+            mouse ? (
+              <StatusPill
+                status={pollingJitterStatus(mouse.polling.jitter_ms)}
+                label={`jitter ${pollingJitterLabel(mouse.polling.jitter_ms)}`}
+              />
+            ) : undefined
+          }
+        />
         {mouse ? (
           <>
             <p className="lat-stat">
