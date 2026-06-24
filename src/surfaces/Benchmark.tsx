@@ -35,6 +35,8 @@ export function BenchmarkTab() {
   const [arcade, setArcade] = useState<boolean>(
     () => localStorage.getItem("compy_score_face") === "arcade",
   );
+  // Award drill-down: which award's full certified receipt is expanded (its list key, or null).
+  const [openAward, setOpenAward] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Inline dependency (wayfinding §2): the live-game measurement needs FPS monitoring, which used to
@@ -423,22 +425,74 @@ export function BenchmarkTab() {
         ) : (
           <>
             <ul className="bench-awards">
-              {score.awards.map((a, i) => (
-                <li key={`${a.rec_id}-${a.at}-${i}`} className="bench-award">
-                  {arcade ? (
-                    <span>
-                      <strong className="bench-award-pts">+{a.points}</strong> · {a.rec_title} boosted{" "}
-                      {a.metric} by {fmtDelta(a.effect_pct)}
-                    </span>
-                  ) : (
-                    <span>
-                      <strong>{a.rec_title}</strong> — {a.metric} {fmtDelta(a.effect_pct)} (95% CI{" "}
-                      {fmtDelta(a.ci_lo_pct)}…{fmtDelta(a.ci_hi_pct)}) · {a.points} pts ·{" "}
-                      {fmtWhen(a.at)}
-                    </span>
-                  )}
-                </li>
-              ))}
+              {score.awards.map((a, i) => {
+                const key = `${a.rec_id}-${a.at}-${i}`;
+                const open = openAward === key;
+                return (
+                  <li key={key} className="bench-award">
+                    <button
+                      type="button"
+                      className="bench-award-row"
+                      aria-expanded={open}
+                      onClick={() => setOpenAward(open ? null : key)}
+                    >
+                      {arcade ? (
+                        <span>
+                          <strong className="bench-award-pts">+{a.points}</strong> · {a.rec_title} boosted{" "}
+                          {a.metric} by {fmtDelta(a.effect_pct)}
+                        </span>
+                      ) : (
+                        <span>
+                          <strong>{a.rec_title}</strong> — {a.metric} {fmtDelta(a.effect_pct)} (95% CI{" "}
+                          {fmtDelta(a.ci_lo_pct)}…{fmtDelta(a.ci_hi_pct)}) · {a.points} pts ·{" "}
+                          {fmtWhen(a.at)}
+                        </span>
+                      )}
+                      <span className="bench-award-caret" aria-hidden="true">{open ? "▾" : "▸"}</span>
+                    </button>
+                    {open && (
+                      <div className="bench-award-detail">
+                        <span className="bench-award-eyebrow">Certified receipt</span>
+                        <dl className="bench-award-rows">
+                          <div>
+                            <dt>Tweak</dt>
+                            <dd>{a.rec_title}</dd>
+                          </div>
+                          <div>
+                            <dt>Tweak id</dt>
+                            <dd className="bench-award-mono">{a.rec_id}</dd>
+                          </div>
+                          <div>
+                            <dt>Certified metric</dt>
+                            <dd>{a.metric}</dd>
+                          </div>
+                          <div>
+                            <dt>Measured effect</dt>
+                            <dd>
+                              {fmtDelta(a.effect_pct)}{" "}
+                              <span className="bench-award-ci">
+                                95% CI {fmtDelta(a.ci_lo_pct)}…{fmtDelta(a.ci_hi_pct)}
+                              </span>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Points</dt>
+                            <dd>+{a.points}</dd>
+                          </div>
+                          <div>
+                            <dt>Recorded</dt>
+                            <dd>{fmtWhen(a.at)}</dd>
+                          </div>
+                        </dl>
+                        <p className="bench-award-trace">
+                          Every figure here is the raw verdict receipt — no score exists without its
+                          measurement.
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
             <button className="bench-btn bench-btn-ghost" onClick={clearScore}>
               Clear scoreboard
