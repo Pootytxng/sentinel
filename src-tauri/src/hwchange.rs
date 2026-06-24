@@ -63,6 +63,20 @@ fn fingerprint_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("hardware-fingerprint.json")
 }
 
+/// Load a persisted fingerprint (None when absent or unreadable — both mean "no baseline yet").
+fn load_fingerprint(path: &std::path::Path) -> Option<HardwareFingerprint> {
+    std::fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok())
+}
+
+/// Persist a fingerprint as the new baseline (creates the data dir if needed).
+fn write_fingerprint(path: &std::path::Path, fp: &HardwareFingerprint) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let j = serde_json::to_string_pretty(fp).map_err(|e| e.to_string())?;
+    std::fs::write(path, j).map_err(|e| e.to_string())
+}
+
 #[derive(Serialize)]
 pub(crate) struct HardwareChangeReport {
     /// True when core hardware differs from the recorded baseline.
@@ -75,20 +89,14 @@ pub(crate) struct HardwareChangeReport {
 
 /// Read-only: compare current hardware against the persisted fingerprint. First run records the
 /// baseline (and reports no change). Never auto-updates on a detected change — the change persists
-/// until the user re-baselines (a future Re-Run Setup acknowledgement), so it can't silently vanish.
+/// until the user re-baselines (`acknowledge_hardware_changes`), so it can't silently vanish.
 #[tauri::command]
 pub(crate) fn get_hardware_changes() -> HardwareChangeReport {
     let hw = crate::hardware::collect_hardware();
     let current = fingerprint(&hw);
-    let prior: Option<HardwareFingerprint> = std::fs::read_to_string(fingerprint_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok());
-    match prior {
+    match load_fingerprint(&fingerprint_path()) {
         None => {
-            let _ = std::fs::create_dir_all(crate::compy_data_dir());
-            if let Ok(j) = serde_json::to_string_pretty(&current) {
-                let _ = std::fs::write(fingerprint_path(), j);
-            }
+            let _ = write_fingerprint(&fingerprint_path(), &current);
             HardwareChangeReport { changed: false, changes: Vec::new(), baseline_recorded: true }
         }
         Some(p) => {
@@ -96,6 +104,15 @@ pub(crate) fn get_hardware_changes() -> HardwareChangeReport {
             HardwareChangeReport { changed: !changes.is_empty(), changes, baseline_recorded: false }
         }
     }
+}
+
+/// Re-baseline: record the CURRENT hardware as the new baseline so a previously-flagged change stops
+/// being reported (the user acknowledged "this is my rig now"). Writes ONLY the local fingerprint
+/// file — mutates no Windows state. Without it, a detected change would re-appear every launch.
+#[tauri::command]
+pub(crate) fn acknowledge_hardware_changes() -> Result<(), String> {
+    let hw = crate::hardware::collect_hardware();
+    write_fingerprint(&fingerprint_path(), &fingerprint(&hw))
 }
 
 #[cfg(test)]
@@ -150,5 +167,25 @@ mod hwchange_tests {
         assert!(diff_fingerprint(&sorted, &sorted).is_empty());
         // and the unsorted literal differs from sorted — proving the sort in fingerprint() matters.
         assert!(!diff_fingerprint(&a, &sorted).is_empty());
+    }
+
+    #[test]
+    fn write_then_load_round_trips_and_rebaseline_clears_the_change() {
+        let dir = std::env::temp_dir().join("compy_hwchange_test_rebaseline");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("hardware-fingerprint.json");
+
+        let old = fp("old cpu", &["RX 9070 XT"], 32, &["CT1000"]);
+        write_fingerprint(&path, &old).unwrap();
+        assert_eq!(load_fingerprint(&path), Some(old)); // persists + round-trips field-for-field
+
+        // a swapped rig differs from the stored baseline...
+        let new = fp("new cpu", &["RTX 5080"], 64, &["SN850"]);
+        assert!(!diff_fingerprint(&load_fingerprint(&path).unwrap(), &new).is_empty());
+        // ...and acknowledging (re-baselining to the new rig) clears the change so it can't re-nag.
+        write_fingerprint(&path, &new).unwrap();
+        assert!(diff_fingerprint(&load_fingerprint(&path).unwrap(), &new).is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

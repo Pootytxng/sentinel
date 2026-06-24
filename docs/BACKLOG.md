@@ -139,7 +139,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] green/yellow/red confidence chips (color-coded) — `Check.tsx:298`
 - [~] exportable setup summary — report exists but no dedicated setup-summary card
 - [~] Re-Run Setup — re-run check exists; no explicit re-baseline flow
-- [~] **hardware-change detection** — backend `hwchange.rs` is **BUILT but NOT WIRED to UI** ← easy win
+- [x] **hardware-change detection** — wired into Check (Optimize→Fixes): advisory card names what changed + inline acknowledge/re-baseline (`acknowledge_hardware_changes`) so it never nags; live-verified 2026-06-24
 - [ ] override toggle (dismiss exists; no override-all)
 - [x] drift-watch integration — `drift.rs`, `Check.tsx:325`
 - [x] historical-ledger surfacing — `Fix.tsx:712`

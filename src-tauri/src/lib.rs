@@ -915,6 +915,7 @@ pub fn run() {
             get_recommendations,
             get_diagnostics,
             hwchange::get_hardware_changes,
+            hwchange::acknowledge_hardware_changes,
             blackbox::get_crash_blackbox,
             license::get_license_status,
             license::set_license_key,

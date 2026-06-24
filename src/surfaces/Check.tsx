@@ -52,6 +52,9 @@ const VENDOR_SUPPORT: Partial<Record<GpuVendor, { label: string; url: string }>>
   intel: { label: "Intel", url: "https://www.intel.com/content/www/us/en/download-center/home.html" },
 };
 
+// Hardware-change detection (A5) — mirrors the Rust HardwareChangeReport shape.
+type HardwareChangeReport = { changed: boolean; changes: string[]; baseline_recorded: boolean };
+
 // NIC driver freshness (R2 driver win-source v1) — mirrors the Rust NicDriverInfo shape.
 type NicDriverInfo = { name: string; driver_date: string; driver_age_days: number | null; vendor: string };
 const NIC_SUPPORT: Record<string, { label: string; url: string }> = {
@@ -292,6 +295,33 @@ export default function Check({
     (n) => n.driver_age_days != null && n.driver_age_days > 90,
   );
 
+  // Hardware-change detection (A5): the backend fingerprints the rig and flags when core parts
+  // changed since last setup. Built but previously UNWIRED — surfaced here as an advisory card that
+  // names exactly what changed, with an inline "this is my rig now" that re-baselines so it can
+  // never nag forever (the no-dead-end-flags law).
+  const [hwChange, setHwChange] = useState<HardwareChangeReport | null>(null);
+  const [ackingHw, setAckingHw] = useState(false);
+  useEffect(() => {
+    let live = true;
+    invoke<HardwareChangeReport>("get_hardware_changes")
+      .then((r) => live && setHwChange(r))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const acknowledgeHwChange = async () => {
+    setAckingHw(true);
+    try {
+      await invoke("acknowledge_hardware_changes");
+      setHwChange((p) => (p ? { ...p, changed: false, changes: [] } : p));
+    } catch {
+      /* leave the card up; the user can retry or just re-check */
+    } finally {
+      setAckingHw(false);
+    }
+  };
+
   const livingPreview =
     typeof document !== "undefined" && document.documentElement.dataset.living === "on";
 
@@ -342,6 +372,27 @@ export default function Check({
       {/* The ranked result — appears after the rows have streamed. */}
       {phase === "verdict" && (
         <div className="check-result">
+          {/* Hardware-change advisory (A5): names exactly what changed since last setup + offers a
+              re-check and an inline "this is my rig now" that re-baselines (so it never nags). */}
+          {hwChange?.changed && hwChange.changes.length > 0 && (
+            <div className="check-drift check-hwchange" role="status">
+              <div className="check-drift-head">
+                <span className="check-drift-label">Your hardware changed since last setup</span>
+              </div>
+              <p className="check-drift-detail">
+                {hwChange.changes.join(" · ")} — new parts can want different settings, so it's worth
+                re-checking your setup.
+              </p>
+              <div className="check-drift-actions">
+                <button className="btn btn-small" disabled={running} onClick={() => rerun()}>
+                  Re-check my setup
+                </button>
+                <button className="btn btn-small" disabled={ackingHw} onClick={acknowledgeHwChange}>
+                  {ackingHw ? "Saving…" : "This is my rig now"}
+                </button>
+              </div>
+            </div>
+          )}
           {/* Drift watch — a check that was good and has since regressed outside Compy. The
               "applied-changes" drift is EXCLUDED here: it's served (named + inline "turn it back on")
               by the limiter card below, so this vague banner would just duplicate it. */}
