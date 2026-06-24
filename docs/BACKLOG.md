@@ -128,6 +128,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 **Network (detection only)**
 - [x] connection-type classification (wired/Wi-Fi/other) — `hardware.rs:1788`
 - [x] Wi-Fi link quality (band · signal% · link-rate) — enriches the network-connection advisory when on Wi-Fi (read-only `netsh wlan`; parser unit-tested; not verifiable on the wired dev rig)
+- [x] wired-port-aware Wi-Fi nudge — on Wi-Fi AND a wired Ethernet port exists → names it ("plug it in") instead of the hedged "if you can run a cable" (read-only, reuses `has_wired_ethernet_port`; unit-tested)
 - [ ] ISP speed snapshot (local)
 - [ ] network-readiness pills
 - [ ] Wi-Fi channel / interference

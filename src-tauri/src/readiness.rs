@@ -396,9 +396,7 @@ pub(crate) fn evaluate_readiness(
             Some("Wired Ethernet".into()),
         ),
         "wifi" => {
-            // Enrich with the measured link (band/signal/rate) when netsh gave us readable values;
-            // otherwise the honest generic line. Wi-Fi stays Advisory either way — not a problem,
-            // just steadier on a cable.
+            // Measured link (band/signal/rate) when netsh gave readable values; else nothing.
             let measured: Option<String> = hw
                 .wifi_link
                 .as_ref()
@@ -416,17 +414,21 @@ pub(crate) fn evaluate_readiness(
                     parts.join(" · ")
                 })
                 .filter(|s| !s.is_empty());
-            let detail = match &measured {
-                Some(m) => format!(
-                    "You're on Wi-Fi ({m}). A wired Ethernet connection gives lower, more consistent \
-                     latency for online gaming — worth a cable if you can run one. (Wi-Fi is fine for \
-                     plenty of games.)"
-                ),
-                None => "You're on Wi-Fi. A wired Ethernet connection gives lower, more consistent \
-                     latency for online gaming — worth a cable if you can run one. (Wi-Fi is fine for \
-                     plenty of games.)"
-                    .to_string(),
+            let on_wifi = match &measured {
+                Some(m) => format!("You're on Wi-Fi ({m})."),
+                None => "You're on Wi-Fi.".to_string(),
             };
+            // Port-aware nudge: if this rig actually HAS a wired Ethernet port, name it — plugging in is
+            // the concrete win. Only fall back to the hedged "if you can run a cable" when there's no
+            // port (a laptop / Wi-Fi-only rig where a cable may not be feasible). Wi-Fi stays Advisory.
+            let wired_clause = if hw.has_wired_ethernet_port {
+                "This PC has a wired Ethernet port — plugging it in gives lower, more consistent latency \
+                 for online gaming."
+            } else {
+                "A wired Ethernet connection gives lower, more consistent latency for online gaming — \
+                 worth a cable if you can run one."
+            };
+            let detail = format!("{on_wifi} {wired_clause} (Wi-Fi is fine for plenty of games.)");
             let chip = match hw.wifi_link.as_ref().and_then(|w| w.band.clone()) {
                 Some(b) => format!("Wi-Fi · {b}"),
                 None => "Wi-Fi".to_string(),
@@ -1346,6 +1348,29 @@ mod readiness_tests {
         assert_eq!(c.status, ReadinessStatus::Advisory);
         assert!(c.detail.contains("5 GHz") && c.detail.contains("86% signal") && c.detail.contains("867 Mbps"));
         assert_eq!(c.value.as_deref(), Some("Wi-Fi · 5 GHz")); // band-aware chip
+    }
+
+    #[test]
+    fn network_connection_wifi_names_the_wired_port_when_one_exists() {
+        // On Wi-Fi but the rig HAS an Ethernet port → name it (plug in), not the hedged "if you can
+        // run a cable" (which is only for port-less laptops / Wi-Fi-only rigs).
+        let with_port = HardwareInfo {
+            network_adapters: vec![nic(true, "wifi", true)],
+            has_wired_ethernet_port: true,
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&with_port, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "network-connection");
+        assert_eq!(c.status, ReadinessStatus::Advisory); // still advisory, not a problem
+        assert!(c.detail.contains("wired Ethernet port") && c.detail.contains("plugging it in"));
+        assert!(!c.detail.contains("if you can run one"), "no hedged copy when the port exists");
+
+        // A port-less rig keeps the hedged copy (a cable may not be feasible).
+        let no_port =
+            HardwareInfo { network_adapters: vec![nic(true, "wifi", true)], ..Default::default() };
+        let r2 = evaluate_readiness(&no_port, None, false, false, &AppliedChangesSummary::default(), None);
+        let c2 = find(&r2, "network-connection");
+        assert!(c2.detail.contains("worth a cable if you can run one"));
     }
 
     fn with_ram(bytes: u64) -> GameReadiness {
