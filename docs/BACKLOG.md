@@ -72,7 +72,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] cross-session comparison — `comparison.rs`, `sessions.rs:212`
 - [x] session history with hardware snapshot — `sessions.rs:35` (`hw_fingerprint`)
 - [x] drift-regression advisory — `drift.rs`
-- [~] local award/score ledger — recorded on Keep verdicts but **display-only**; no Arcade/drill-down UI — `benchmark_scoreboard.rs:131`
+- [x] local award/score ledger — drill-down UI: each award expands to its full certified receipt (rec_id handle + metric + 95% CI + points + timestamp) from the existing get_scoreboard data — `260f943`
 - [~] hardware-tier segmentation — `percentile_rank` exists but **unwired**; no budget/mid/high mapping
 - [~] percentile stub — function tested, **never called**, no cohort data (needs Phase C network) — `benchmark_scoreboard.rs:60`
 
