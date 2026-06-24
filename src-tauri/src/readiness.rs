@@ -396,14 +396,19 @@ pub(crate) fn evaluate_readiness(
             Some("Wired Ethernet".into()),
         ),
         "wifi" => {
-            // Measured link (band/signal/rate) when netsh gave readable values; else nothing.
+            // Measured link (band/signal/rate) when netsh gave readable values; else nothing. The
+            // channel is shown only on 2.4 GHz (where overlap matters; 5/6 GHz channels are wide and
+            // non-overlapping, so the number adds nothing there).
             let measured: Option<String> = hw
                 .wifi_link
                 .as_ref()
                 .map(|w| {
                     let mut parts: Vec<String> = Vec::new();
                     if let Some(b) = &w.band {
-                        parts.push(b.clone());
+                        match w.channel {
+                            Some(ch) if b.contains("2.4") => parts.push(format!("{b} · ch {ch}")),
+                            _ => parts.push(b.clone()),
+                        }
                     }
                     if let Some(s) = w.signal_pct {
                         parts.push(format!("{s}% signal"));
@@ -428,7 +433,23 @@ pub(crate) fn evaluate_readiness(
                 "A wired Ethernet connection gives lower, more consistent latency for online gaming — \
                  worth a cable if you can run one."
             };
-            let detail = format!("{on_wifi} {wired_clause} (Wi-Fi is fine for plenty of games.)");
+            // 2.4 GHz overlap advisory: only channels 1/6/11 are non-overlapping. A router parked on any
+            // other 2.4 GHz channel co-channel-interferes with neighbors — a real, common gaming gotcha.
+            let interference = hw.wifi_link.as_ref().and_then(|w| {
+                match (w.band.as_deref(), w.channel) {
+                    (Some(b), Some(ch)) if b.contains("2.4") && !matches!(ch, 1 | 6 | 11) => Some(
+                        format!(
+                            " On 2.4 GHz channel {ch}, only channels 1, 6, and 11 don't overlap — if \
+                             Wi-Fi feels congested, switching your router to 1/6/11 (or to 5 GHz) helps."
+                        ),
+                    ),
+                    _ => None,
+                }
+            });
+            let detail = format!(
+                "{on_wifi} {wired_clause}{} (Wi-Fi is fine for plenty of games.)",
+                interference.as_deref().unwrap_or("")
+            );
             let chip = match hw.wifi_link.as_ref().and_then(|w| w.band.clone()) {
                 Some(b) => format!("Wi-Fi · {b}"),
                 None => "Wi-Fi".to_string(),
@@ -1340,6 +1361,7 @@ mod readiness_tests {
                 signal_pct: Some(86),
                 rx_mbps: Some(867),
                 radio_type: Some("802.11ax".into()),
+                channel: Some(36),
             }),
             ..Default::default()
         };
@@ -1371,6 +1393,38 @@ mod readiness_tests {
         let r2 = evaluate_readiness(&no_port, None, false, false, &AppliedChangesSummary::default(), None);
         let c2 = find(&r2, "network-connection");
         assert!(c2.detail.contains("worth a cable if you can run one"));
+    }
+
+    #[test]
+    fn network_connection_wifi_warns_only_on_overlapping_2_4ghz_channel() {
+        let link = |band: &str, ch: u32| {
+            Some(crate::hardware::WifiLink {
+                band: Some(band.into()),
+                signal_pct: Some(70),
+                rx_mbps: Some(144),
+                radio_type: Some("802.11n".into()),
+                channel: Some(ch),
+            })
+        };
+        let eval = |wifi_link| {
+            let hw = HardwareInfo {
+                network_adapters: vec![nic(true, "wifi", true)],
+                wifi_link,
+                ..Default::default()
+            };
+            let r =
+                evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+            find(&r, "network-connection").detail.clone()
+        };
+
+        // 2.4 GHz on an overlapping channel → channel shown + the 1/6/11 advisory.
+        let bad = eval(link("2.4 GHz", 3));
+        assert!(bad.contains("ch 3") && bad.contains("1, 6, and 11"));
+        // 2.4 GHz on a non-overlapping channel (6) → no advisory.
+        assert!(!eval(link("2.4 GHz", 6)).contains("don't overlap"));
+        // 5 GHz → never the 2.4 advisory, and the channel number isn't shown (overlap doesn't apply).
+        let ghz5 = eval(link("5 GHz", 149));
+        assert!(!ghz5.contains("don't overlap") && !ghz5.contains("ch 149"));
     }
 
     fn with_ram(bytes: u64) -> GameReadiness {

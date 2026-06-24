@@ -1826,6 +1826,8 @@ pub(crate) struct WifiLink {
     pub rx_mbps: Option<u32>,
     /// Radio type, e.g. "802.11ax" (Wi-Fi 6) / "802.11ac" (Wi-Fi 5).
     pub radio_type: Option<String>,
+    /// Wi-Fi channel number (drives the 2.4 GHz overlap advisory: only 1/6/11 are non-overlapping).
+    pub channel: Option<u32>,
 }
 
 /// Pure: parse `netsh wlan show interfaces` output into the active link's quality fields. Matches the
@@ -1856,14 +1858,13 @@ pub(crate) fn parse_netsh_wlan_interfaces(out: &str) -> Option<WifiLink> {
         .and_then(|s| s.parse::<f64>().ok())
         .map(|f| f.round() as u32);
     let radio_type = map.get("radio type").cloned();
+    let channel = map.get("channel").and_then(|c| c.parse::<u32>().ok());
     let band = map.get("band").cloned().or_else(|| {
         // Win10 omits Band — infer 2.4-vs-5 from Channel (1–14 = 2.4 GHz). 6 GHz channel numbering
         // overlaps, so we never GUESS 6 GHz from a channel; only an explicit Band line reports it.
-        map.get("channel")
-            .and_then(|c| c.parse::<u32>().ok())
-            .map(|ch| if ch <= 14 { "2.4 GHz" } else { "5 GHz" }.to_string())
+        channel.map(|ch| if ch <= 14 { "2.4 GHz" } else { "5 GHz" }.to_string())
     });
-    Some(WifiLink { band, signal_pct, rx_mbps, radio_type })
+    Some(WifiLink { band, signal_pct, rx_mbps, radio_type, channel })
 }
 
 /// Read-only Wi-Fi link probe via `netsh wlan show interfaces` (no admin, no mutation, no network).
@@ -2279,6 +2280,7 @@ There is 1 interface on the system:
         assert_eq!(w.signal_pct, Some(86));
         assert_eq!(w.rx_mbps, Some(867)); // 866.7 rounds to 867
         assert_eq!(w.radio_type.as_deref(), Some("802.11ax"));
+        assert_eq!(w.channel, Some(36));
     }
 
     #[test]
@@ -2289,6 +2291,7 @@ There is 1 interface on the system:
         assert_eq!(w.band.as_deref(), Some("2.4 GHz"));
         assert_eq!(w.signal_pct, Some(50));
         assert_eq!(w.rx_mbps, None); // no receive-rate line → honestly None, not 0
+        assert_eq!(w.channel, Some(11)); // surfaced for the 2.4 GHz overlap advisory
     }
 
     #[test]

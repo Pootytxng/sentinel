@@ -131,7 +131,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] wired-port-aware Wi-Fi nudge — on Wi-Fi AND a wired Ethernet port exists → names it ("plug it in") instead of the hedged "if you can run a cable" (read-only, reuses `has_wired_ethernet_port`; unit-tested)
 - [ ] ISP speed snapshot (local)
 - [ ] network-readiness pills
-- [ ] Wi-Fi channel / interference
+- [x] Wi-Fi channel / interference — `channel` surfaced on 2.4 GHz + overlap advisory (only 1/6/11 don't overlap → switch router or to 5 GHz); read-only, parser already read it, unit-tested
 - [ ] DNS resolution-time probe
 - [ ] powerline / MoCA Learn guides
 - [ ] QoS advisory
