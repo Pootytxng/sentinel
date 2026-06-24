@@ -6,11 +6,10 @@ import {
   gradeFps,
   gradeLow1,
   gradeFrametimeMs,
-  gradeGpuTempC,
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
-import { gpuSensorVerified } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { AnimatedNumber } from "../design/AnimatedNumber";
 import { RigViewer } from "./rig/RigViewer";
 import { HardwareGrid } from "./HardwareGrid";
@@ -126,8 +125,7 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   // NVIDIA NVML sensors aren't hardware-verified yet (LOCKED rule #5) — don't grade their temp as
   // authoritative; AMD/unknown stay graded. Same gate the Play + classic Monitoring surfaces use.
-  const tempGrade = (c: number | null | undefined) =>
-    gpuSensorVerified(gpu?.vendor) ? gradeGpuTempC(c) : ("neutral" as const);
+  const tempGrade = (c: number | null | undefined) => gradeGpuTempForVendor(gpu?.vendor, c);
   const gpuTempColor = gradeColor(tempGrade(gpu?.temperature_c ?? null));
 
   return (

@@ -12,7 +12,8 @@ import { useConfirm } from "../design/ConfirmDialog";
 import { TuningDebrief } from "./TuningDebrief";
 import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
-import { gradeFps, gradeLow1, gradeGpuTempC, gradeColor, type Grade } from "../data/metric-grade";
+import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
+import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
@@ -218,6 +219,10 @@ export function SessionDebrief({
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [reverting, setReverting] = useState(false);
   const confirm = useConfirm();
+  // Honesty gate (LOCKED rule #5): NVIDIA GPU temp comes from NVML — implemented, NOT hardware-verified
+  // — so it's never graded authoritatively. Routed through the shared gpu-sensor helper (one source,
+  // can't drift) — same gate Play + the Home/Monitoring surfaces use.
+  const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(vendor, c);
   // Show a resolved comparison only if it's for THIS session's game (Moment 4). A TUNING result is
   // NOT a fix comparison — it has no ledger entry to revert — so it's excluded here and rendered by
   // the dedicated TuningDebrief instead (no duplicate card, no meaningless revert button).
@@ -308,7 +313,7 @@ export function SessionDebrief({
         <DebriefTile
           label="Peak temp"
           value={s.peak_gpu_temp_c == null ? "—" : `${s.peak_gpu_temp_c}°C`}
-          grade={gradeGpuTempC(s.peak_gpu_temp_c)}
+          grade={tempGrade(s.peak_gpu_temp_c)}
         />
       </div>
 

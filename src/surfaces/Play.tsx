@@ -19,11 +19,10 @@ import {
   gradeFps,
   gradeLow1,
   gradeFrametimeMs,
-  gradeGpuTempC,
   gradeColor,
   type Grade,
 } from "../data/metric-grade";
-import { gpuSensorVerified } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import "./Play.css";
 
 // PLAY — live + debrief (halfway-home §1: navigation never teleports). The live-monitor card +
@@ -121,9 +120,8 @@ export default function Play({
   // uses, so Play's FPS/frametime grade matches Home / debrief / overlay.
   const rig = { refreshHz: readDisplayRefreshHz() };
   // NVIDIA NVML sensors aren't hardware-verified yet (LOCKED rule #5) — don't grade their temp as
-  // authoritative; AMD/unknown stay graded. Same gate the Home + classic Monitoring surfaces use.
-  const tempGrade = (c: number | null | undefined): Grade =>
-    gpuSensorVerified(vendor) ? gradeGpuTempC(c) : "neutral";
+  // authoritative; AMD/unknown stay graded. Routed through the shared gpu-sensor helper (one source).
+  const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(vendor, c);
 
   // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
   useEffect(() => {

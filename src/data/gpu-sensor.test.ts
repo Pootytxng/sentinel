@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gpuSensorVerified } from "./gpu-sensor";
+import { gpuSensorVerified, gradeGpuTempForVendor } from "./gpu-sensor";
 
 // Guard for the LOCKED rule #5 honesty gate the consistency audit caught: the default Home + Play
 // grade GPU temperature, but NVIDIA NVML readings aren't hardware-verified — so they must NOT be
@@ -19,5 +19,28 @@ describe("gpuSensorVerified (LOCKED rule #5 — NVIDIA sensor not yet hardware-v
     expect(gpuSensorVerified(null)).toBe(true);
     expect(gpuSensorVerified(undefined)).toBe(true);
     expect(gpuSensorVerified("any")).toBe(true);
+  });
+});
+
+// The shared temp-grade helper EVERY surface (SessionDebrief, Play, DashboardV2) routes through, so
+// the rule #5 gate can't drift. A hot 90°C reading: graded "bad" on AMD/unknown, forced "neutral" on
+// NVIDIA (NVML unverified) — never an authoritative red the user can't trust.
+describe("gradeGpuTempForVendor (one source — the gate can't drift across surfaces)", () => {
+  it("NVIDIA temp is NEVER graded — neutral even when the reading is alarmingly hot", () => {
+    expect(gradeGpuTempForVendor("NVIDIA GeForce RTX 4090", 90)).toBe("neutral");
+    expect(gradeGpuTempForVendor("nvidia", 60)).toBe("neutral");
+  });
+
+  it("AMD / unknown grade normally (good when cool, bad when hot)", () => {
+    expect(gradeGpuTempForVendor("AMD Radeon RX 9070 XT", 60)).toBe("good");
+    expect(gradeGpuTempForVendor("AMD", 90)).toBe("bad");
+    expect(gradeGpuTempForVendor(undefined, 60)).toBe("good"); // dev/AMD path
+    expect(gradeGpuTempForVendor(null, 60)).toBe("good");
+  });
+
+  it("a missing reading is neutral for any vendor — never a fabricated grade", () => {
+    expect(gradeGpuTempForVendor("AMD", null)).toBe("neutral");
+    expect(gradeGpuTempForVendor("NVIDIA", null)).toBe("neutral");
+    expect(gradeGpuTempForVendor(undefined, undefined)).toBe("neutral");
   });
 });
