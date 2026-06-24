@@ -197,6 +197,34 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🔬 THREE-AUDIT 1.0 QUALITY SWEEP (autonomous, owner away→back) — 2026-06-23 (`main` @ `6ecb434`).**
+> Three adversarially-verified sub-agent audits (quality · cross-surface consistency · robustness/perf);
+> every fix-now triaged + fixed with full rigor (tsc/vite/vitest/cargo + /check + /security + live
+> self-review) + landed reversibly. **8 commits**, suites **vitest 543 · cargo 546** green throughout;
+> frozen refs (`16069fa`) + Cowork lanes untouched.
+> - **Honesty:** NVIDIA GPU-sensor grade GATE — LOCKED rule #5 (`src/data/gpu-sensor.ts`
+>   `gpuSensorVerified(vendor)`: NVML temp shown NEUTRAL/ungraded on NVIDIA, AMD graded; guard test) —
+>   `9f53e6a`. ActionDrawer "Verified" claimed "observed this gain on real hardware" → honest-FACT reword +
+>   shared `src/data/provenance.ts` (one label/note source, can't drift) — `093dda7`. EDID decoder no longer
+>   truncates a >0x7F unit into a fabricated char + 1%-low labeled an ESTIMATE on every surface (was bare on
+>   Home/Play/Overlay) — `7c57c72`; dead `"DELL"` arm + readiness friendly errors — `62ebfc1`; Walkthrough
+>   motion-law (app signal, not raw matchMedia) — `093dda7`.
+> - **Consistency:** Play now uses the hardware-tailored grade colors (was the ONLY metric surface left
+>   neutral) — `acfcf9c`; `°`→`°C`, "High confidence" casing, "N days old", honest "age unknown" — `9f53e6a`.
+> - **Robustness/perf:** RigViewer **memoized** (the 3D rig was reconciling EVERY SECOND on the default Home;
+>   `hw` is stable → behavior-neutral) + DashboardV2 sensor poll skips while window hidden — `92bc28d`;
+>   localStorage nav-flag reads GUARDED (`src/data/nav-flags.ts`, was a blank-app risk on storage-disabled
+>   WebView2) + calm "Reading your hardware…" booting state (was a blank window during detection) + export
+>   friendly error — `f4ab318`; nav-flags crash-safety guard test — `6ecb434`.
+> - **Deferred (sound reasons, NOT done):** Overlay poll visibility-gate (needs a live overlay show/hide rig
+>   test — a wrong `visibilityState` read would blank the HUD mid-game); driver days-vs-months /
+>   decimal-precision / "Expected" vs "Expected impact" (defensible detailed-vs-compact registers);
+>   CommandCenter LiveStrip grading (non-default classic path); React-19-benign cancelled-flag nits.
+> - **✅ REBUILD (2026-06-23) from `6ecb434`:** NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+>   `9CE42CFB515BA8140E5ADF6AB7FE6BA1B563507C2FDC7EF02F5AAFDC94CF4EF2` (3,211,401 B) + MSI (4,657,152 B);
+>   on the owner's Desktop (supersedes `E70A1CA8…`). **REINSTALL is owner-gated** (not yet done — replaces
+>   the running app). Frozen refs verified untouched.
+
 > **🧩 PHASE-A 1.0 FEATURES CONTINUED (autonomous run, owner "persist through tasks") — 2026-06-22
 > (`origin/main`).** Five clean, read-only, no-gate features off the reconciled main, each built →
 > tested → live self-reviewed → shipped (rebuilt + reinstalled) → pushed:
