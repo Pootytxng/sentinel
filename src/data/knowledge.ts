@@ -25,6 +25,12 @@ interface BaseEntry {
   name: string;
   aliases: string[];
   related: string[];
+  // Lifecycle (A3) — an entry whose guidance has gone stale is MARKED here, not silently left wrong
+  // or deleted: "superseded" points to the entry that replaces it; "deprecated" is outdated with no
+  // single replacement. Absent = current. Surfaced honestly in Learn (the corpus stays publishable —
+  // an old debunk reads "superseded → see X" rather than misleading a reader). Entries default current.
+  status?: "deprecated" | "superseded";
+  supersededBy?: string; // an existing entry id; set when status === "superseded"
 }
 export interface TweakEntry extends BaseEntry {
   type: "tweak";
@@ -55,6 +61,15 @@ export type KnowledgeEntry = TweakEntry | TermEntry | TrickEntry | GuideEntry;
 type Raw = Record<string, unknown>;
 const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)) : []);
 
+// Pull the optional lifecycle fields off a raw entry (A3). Absent/unknown → current (no fields).
+// Only "superseded" carries a supersededBy id. Lint (knowledge.lint.test.ts) enforces that the id is
+// real + different; this mapper just shapes whatever the data declares.
+export function lifecycle(t: Raw): { status?: "deprecated" | "superseded"; supersededBy?: string } {
+  if (t.status === "superseded") return { status: "superseded", supersededBy: String(t.supersededBy ?? "") };
+  if (t.status === "deprecated") return { status: "deprecated" };
+  return {};
+}
+
 const TWEAKS: TweakEntry[] = (rawTweaks as Raw[]).map((t) => ({
   type: "tweak",
   id: String(t.id),
@@ -64,6 +79,7 @@ const TWEAKS: TweakEntry[] = (rawTweaks as Raw[]).map((t) => ({
   verdict: t.verdict as TweakVerdict,
   what: String(t.what),
   why: String(t.why),
+  ...lifecycle(t),
 }));
 
 const TERMS: TermEntry[] = (rawTerms as Raw[]).map((t) => ({
@@ -74,6 +90,7 @@ const TERMS: TermEntry[] = (rawTerms as Raw[]).map((t) => ({
   related: strArr(t.related),
   what: String(t.what),
   more: String(t.more),
+  ...lifecycle(t),
 }));
 
 const TRICKS: TrickEntry[] = (rawTricks as Raw[]).map((t) => ({
@@ -85,6 +102,7 @@ const TRICKS: TrickEntry[] = (rawTricks as Raw[]).map((t) => ({
   pattern: String(t.pattern),
   tell: String(t.tell),
   honest_version: String(t.honest_version),
+  ...lifecycle(t),
 }));
 
 const GUIDES: GuideEntry[] = (rawGuides as Raw[]).map((t) => ({
@@ -97,6 +115,7 @@ const GUIDES: GuideEntry[] = (rawGuides as Raw[]).map((t) => ({
   goal: String(t.goal),
   steps: strArr(t.steps),
   undo: String(t.undo),
+  ...lifecycle(t),
 }));
 
 // Injected meta-entry: "How Compy grades things" — explains our own verdict vocabulary (from live-

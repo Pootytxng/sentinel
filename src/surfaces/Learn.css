@@ -799,3 +799,19 @@
 .lx-rec-risky {
   color: var(--ix-danger);
 }
+
+/* A3 lifecycle — the honest "this entry is outdated" advisory note (amber, boxed, never hidden). */
+.lx-superseded {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+  background: color-mix(in srgb, var(--ix-amber) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ix-amber) 28%, transparent);
+  border-radius: 8px;
+}
+.lx-superseded b {
+  color: var(--ix-text-1);
+  font-weight: 600;
+}

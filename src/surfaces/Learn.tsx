@@ -181,6 +181,39 @@ function EntryBody({ entry }: { entry: KnowledgeEntry }) {
   // shared single source — same component the Lab Tuning instrument uses, so they can't drift.
   const tuning = TUNING_GUIDE_BY_ID.get(entry.id);
   if (tuning) return <TuningGuideBody guide={tuning} />;
+  return (
+    <>
+      {entry.status && <SupersededNote entry={entry} />}
+      {entryTypeBody(entry)}
+    </>
+  );
+}
+
+// A3 lifecycle — an outdated entry stays findable but reads honestly as superseded/deprecated
+// (the corpus is publishable: an old debunk points to its replacement, never silently misleads).
+function SupersededNote({ entry }: { entry: KnowledgeEntry }) {
+  const target =
+    entry.status === "superseded" && entry.supersededBy
+      ? KNOWLEDGE_BY_ID.get(entry.supersededBy)
+      : undefined;
+  return (
+    <p className="lx-superseded" role="note">
+      {entry.status === "superseded" ? (
+        <>
+          ⚠ Superseded{target ? (
+            <>
+              {" "}— see <b>{target.name}</b>
+            </>
+          ) : null}. Kept for reference; the current guidance has moved on.
+        </>
+      ) : (
+        <>⚠ Outdated — kept for reference; this guidance is no longer current.</>
+      )}
+    </p>
+  );
+}
+
+function entryTypeBody(entry: KnowledgeEntry) {
   switch (entry.type) {
     case "tweak":
       return (

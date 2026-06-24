@@ -95,6 +95,32 @@ describe("knowledge dataset lint", () => {
     expect(offenders, `self-referencing related: ${offenders.join(", ")}`).toEqual([]);
   });
 
+  it("lifecycle: status is valid, and a 'superseded' entry points to a real, different entry", () => {
+    // A3 lifecycle guard: an outdated entry is MARKED, not silently wrong. Keeps the publishable
+    // corpus honest — a "superseded" entry must point to a real, different entry that replaces it.
+    const known = new Set(KNOWLEDGE.map((e) => e.id));
+    const offenders: string[] = [];
+    for (const [type, list] of groups) {
+      for (const e of list) {
+        if (e.status === undefined) continue;
+        if (e.status !== "deprecated" && e.status !== "superseded") {
+          offenders.push(`${type} ${String(e.id)}: invalid status "${String(e.status)}"`);
+          continue;
+        }
+        if (e.status === "superseded") {
+          const by = e.supersededBy;
+          if (!isStr(by) || by.length === 0)
+            offenders.push(`${type} ${String(e.id)}: superseded but no supersededBy`);
+          else if (!known.has(by))
+            offenders.push(`${type} ${String(e.id)}: superseded by unknown id "${by}"`);
+          else if (by === String(e.id))
+            offenders.push(`${type} ${String(e.id)}: cannot supersede itself`);
+        }
+      }
+    }
+    expect(offenders, `lifecycle problems:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
   it("no two entries of the SAME type claim the same alias (search/autopsy shadowing)", () => {
     // Cross-TYPE sharing is deliberate (a graded tweak and its term explainer both answer "XMP");
     // within one type a duplicate alias makes name+alias resolution ambiguous — one entry silently
