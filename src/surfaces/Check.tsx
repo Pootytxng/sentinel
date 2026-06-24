@@ -142,8 +142,16 @@ export default function Check({
       await invoke("apply_recommendation", { recId: r.id, recTitle: r.title });
       await rerun();
       onChanged(); // keep App's other surfaces in sync
-    } catch {
-      /* surfaced on next scan */
+    } catch (e) {
+      setApplyingId(null);
+      // Don't fail silently — a declined UAC prompt or a refused apply must TELL the user it
+      // didn't happen, not leave them guessing until the next scan re-derives state.
+      await confirm({
+        title: "Couldn't apply that fix",
+        body: String(e),
+        confirmLabel: "OK",
+        acknowledge: true,
+      });
     } finally {
       setApplyingId(null);
     }
@@ -163,8 +171,14 @@ export default function Check({
       await invoke("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
       await rerun();
       onChanged();
-    } catch {
-      /* surfaced on next scan */
+    } catch (e) {
+      setApplyingId(null);
+      await confirm({
+        title: "Couldn't turn that back on",
+        body: String(e),
+        confirmLabel: "OK",
+        acknowledge: true,
+      });
     } finally {
       setApplyingId(null);
     }
@@ -197,8 +211,14 @@ export default function Check({
       await invoke("set_startup_entry_enabled", { name: entry.name, enabled: false });
       setStartup(await invoke<StartupEntry[]>("get_startup_entries"));
       onChanged();
-    } catch {
-      /* surfaced on next scan */
+    } catch (e) {
+      setTogglingStartup(null);
+      await confirm({
+        title: "Couldn't change that startup item",
+        body: String(e),
+        confirmLabel: "OK",
+        acknowledge: true,
+      });
     } finally {
       setTogglingStartup(null);
     }

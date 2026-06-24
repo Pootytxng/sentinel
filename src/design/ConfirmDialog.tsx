@@ -19,6 +19,11 @@ export type ConfirmOpts = {
   body?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Single-button NOTICE mode: hide the cancel button so the dialog is a dismiss-only
+   *  acknowledgement (e.g. surfacing an apply failure the user can only read + close).
+   *  The promise still resolves true on the button / false on Esc/backdrop — callers that
+   *  only need to notify can ignore the result. */
+  acknowledge?: boolean;
 };
 
 type ConfirmFn = (opts: ConfirmOpts) => Promise<boolean>;
@@ -104,9 +109,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <h3 className="cmp-confirm-title">{opts.title}</h3>
             {opts.body && <p className="cmp-confirm-body">{opts.body}</p>}
             <div className="cmp-confirm-actions">
-              <button type="button" className="cmp-confirm-cancel" onClick={() => close(false)}>
-                {opts.cancelLabel ?? "Cancel"}
-              </button>
+              {!opts.acknowledge && (
+                <button type="button" className="cmp-confirm-cancel" onClick={() => close(false)}>
+                  {opts.cancelLabel ?? "Cancel"}
+                </button>
+              )}
               <button
                 ref={confirmBtn}
                 type="button"
