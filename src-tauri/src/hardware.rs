@@ -180,6 +180,9 @@ pub(crate) struct HardwareInfo {
     pub(crate) eee_switch_exposed: bool,
     /// Full classified adapter inventory — drives evidence-naming UI + the Export hardware section.
     pub(crate) network_adapters: Vec<NetAdapterInfo>,
+    /// Active Wi-Fi link quality (band/signal/rate) — Some ONLY when the active connection is Wi-Fi
+    /// (probed read-only via `netsh wlan show interfaces`; None on wired rigs / when unparseable).
+    pub(crate) wifi_link: Option<WifiLink>,
     pub(crate) game_storage: GameStorage,
     /// Connected display models from EDID (WmiMonitorID). Empty when root\wmi is blocked.
     pub(crate) monitors: Vec<MonitorInfo>,
@@ -1683,6 +1686,14 @@ fn collect_hardware_inner() -> HardwareInfo {
             crate::actions::EeeResolution::Ready(_)
         );
 
+    // Wi-Fi link quality — only when the ACTIVE connection is Wi-Fi (skips a netsh spawn on wired
+    // rigs). Read-only; fails soft to None (localized Windows / older netsh → the generic advisory).
+    let wifi_link = if network_connection_kind(&network_adapters) == "wifi" {
+        detect_wifi_link()
+    } else {
+        None
+    };
+
     HardwareInfo {
         cpu_brand,
         cpu_cores_logical: sys.cpus().len(),
@@ -1710,6 +1721,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         has_wired_ethernet_port,
         eee_switch_exposed,
         network_adapters,
+        wifi_link,
         game_storage: detect_game_storage(),
         monitors: detect_monitors(),
     }
@@ -1800,6 +1812,68 @@ pub(crate) fn network_connection_kind(adapters: &[NetAdapterInfo]) -> &'static s
     } else {
         "none"
     }
+}
+
+/// Active Wi-Fi link quality, read once when the rig is on Wi-Fi. Every field is optional — netsh
+/// reports vary by Windows version and locale, so we surface only what we can parse, never a guess.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub(crate) struct WifiLink {
+    /// "2.4 GHz" / "5 GHz" / "6 GHz" — from the Band line (Win11), else inferred 2.4-vs-5 from Channel.
+    pub band: Option<String>,
+    /// Signal strength percentage (0–100) as Windows reports it.
+    pub signal_pct: Option<u8>,
+    /// Negotiated receive (link) rate in Mbps — the headline "how fast is this link" number.
+    pub rx_mbps: Option<u32>,
+    /// Radio type, e.g. "802.11ax" (Wi-Fi 6) / "802.11ac" (Wi-Fi 5).
+    pub radio_type: Option<String>,
+}
+
+/// Pure: parse `netsh wlan show interfaces` output into the active link's quality fields. Matches the
+/// English labels best-effort and fails soft — a localized Windows (translated labels) or a "not
+/// connected" interface yields None, so the readiness row falls back to the generic Wi-Fi advisory
+/// rather than fabricating numbers. First interface wins (the primary connection).
+pub(crate) fn parse_netsh_wlan_interfaces(out: &str) -> Option<WifiLink> {
+    let mut map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for line in out.lines() {
+        if let Some((k, v)) = line.split_once(':') {
+            let key = k.trim().to_lowercase();
+            let val = v.trim().to_string();
+            if !key.is_empty() && !val.is_empty() {
+                map.entry(key).or_insert(val); // first occurrence (primary interface) wins
+            }
+        }
+    }
+    // Only report a link when an interface is actually connected.
+    if map.get("state").map(|s| s.eq_ignore_ascii_case("connected")) != Some(true) {
+        return None;
+    }
+    let signal_pct = map
+        .get("signal")
+        .and_then(|s| s.trim_end_matches('%').trim().parse::<u8>().ok());
+    let rx_mbps = map
+        .get("receive rate (mbps)")
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|f| f.round() as u32);
+    let radio_type = map.get("radio type").cloned();
+    let band = map.get("band").cloned().or_else(|| {
+        // Win10 omits Band — infer 2.4-vs-5 from Channel (1–14 = 2.4 GHz). 6 GHz channel numbering
+        // overlaps, so we never GUESS 6 GHz from a channel; only an explicit Band line reports it.
+        map.get("channel")
+            .and_then(|c| c.parse::<u32>().ok())
+            .map(|ch| if ch <= 14 { "2.4 GHz" } else { "5 GHz" }.to_string())
+    });
+    Some(WifiLink { band, signal_pct, rx_mbps, radio_type })
+}
+
+/// Read-only Wi-Fi link probe via `netsh wlan show interfaces` (no admin, no mutation, no network).
+/// Called only when the active connection is Wi-Fi, so wired rigs never pay for the spawn.
+fn detect_wifi_link() -> Option<WifiLink> {
+    let out = crate::actions::quiet_command("netsh")
+        .args(["wlan", "show", "interfaces"])
+        .output()
+        .ok()?;
+    parse_netsh_wlan_interfaces(&String::from_utf8_lossy(&out.stdout))
 }
 
 /// Enumerate + classify network adapters. Fail-soft to an empty inventory (claim NO wired rather than
@@ -2180,6 +2254,50 @@ mod net_adapter_tests {
         assert_eq!(network_connection_kind(&[]), "none");
         // Connected physical of an unclassified medium → "other" (never guessed wired/wifi).
         assert_eq!(network_connection_kind(&[adapter(true, "other", true)]), "other");
+    }
+
+    use super::parse_netsh_wlan_interfaces;
+
+    #[test]
+    fn wlan_parse_reads_band_signal_rate_radio_from_win11_output() {
+        let out = "\
+There is 1 interface on the system:
+
+    Name                   : Wi-Fi
+    Description            : Intel(R) Wi-Fi 6E AX211 160MHz
+    State                  : connected
+    SSID                   : MyNet
+    Radio type             : 802.11ax
+    Band                   : 5 GHz
+    Channel                : 36
+    Receive rate (Mbps)    : 866.7
+    Transmit rate (Mbps)   : 866.7
+    Signal                 : 86%
+";
+        let w = parse_netsh_wlan_interfaces(out).expect("connected → Some");
+        assert_eq!(w.band.as_deref(), Some("5 GHz"));
+        assert_eq!(w.signal_pct, Some(86));
+        assert_eq!(w.rx_mbps, Some(867)); // 866.7 rounds to 867
+        assert_eq!(w.radio_type.as_deref(), Some("802.11ax"));
+    }
+
+    #[test]
+    fn wlan_parse_infers_band_from_channel_when_band_line_absent() {
+        // Win10 omits the Band line — infer 2.4 GHz from a low channel, never a guess for 6 GHz.
+        let out = "    State : connected\n    Channel : 11\n    Signal : 50%\n";
+        let w = parse_netsh_wlan_interfaces(out).unwrap();
+        assert_eq!(w.band.as_deref(), Some("2.4 GHz"));
+        assert_eq!(w.signal_pct, Some(50));
+        assert_eq!(w.rx_mbps, None); // no receive-rate line → honestly None, not 0
+    }
+
+    #[test]
+    fn wlan_parse_returns_none_when_not_connected_or_unparseable() {
+        // Disconnected interface → None (no link to report).
+        assert!(parse_netsh_wlan_interfaces("    State : disconnected\n").is_none());
+        // No State line at all (e.g. localized labels we can't match) → None, falls back to generic.
+        assert!(parse_netsh_wlan_interfaces("    Nombre : Wi-Fi\n    Señal : 70%\n").is_none());
+        assert!(parse_netsh_wlan_interfaces("").is_none());
     }
 
     use super::{decode_edid_string, monitor_vendor_name};

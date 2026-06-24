@@ -395,14 +395,50 @@ pub(crate) fn evaluate_readiness(
              latency than Wi-Fi).",
             Some("Wired Ethernet".into()),
         ),
-        "wifi" => check(
-            "network-connection",
-            "Network connection",
-            ReadinessStatus::Advisory,
-            "You're on Wi-Fi. A wired Ethernet connection gives lower, more consistent latency for \
-             online gaming — worth a cable if you can run one. (Wi-Fi is fine for plenty of games.)",
-            Some("Wi-Fi".into()),
-        ),
+        "wifi" => {
+            // Enrich with the measured link (band/signal/rate) when netsh gave us readable values;
+            // otherwise the honest generic line. Wi-Fi stays Advisory either way — not a problem,
+            // just steadier on a cable.
+            let measured: Option<String> = hw
+                .wifi_link
+                .as_ref()
+                .map(|w| {
+                    let mut parts: Vec<String> = Vec::new();
+                    if let Some(b) = &w.band {
+                        parts.push(b.clone());
+                    }
+                    if let Some(s) = w.signal_pct {
+                        parts.push(format!("{s}% signal"));
+                    }
+                    if let Some(r) = w.rx_mbps {
+                        parts.push(format!("{r} Mbps"));
+                    }
+                    parts.join(" · ")
+                })
+                .filter(|s| !s.is_empty());
+            let detail = match &measured {
+                Some(m) => format!(
+                    "You're on Wi-Fi ({m}). A wired Ethernet connection gives lower, more consistent \
+                     latency for online gaming — worth a cable if you can run one. (Wi-Fi is fine for \
+                     plenty of games.)"
+                ),
+                None => "You're on Wi-Fi. A wired Ethernet connection gives lower, more consistent \
+                     latency for online gaming — worth a cable if you can run one. (Wi-Fi is fine for \
+                     plenty of games.)"
+                    .to_string(),
+            };
+            let chip = match hw.wifi_link.as_ref().and_then(|w| w.band.clone()) {
+                Some(b) => format!("Wi-Fi · {b}"),
+                None => "Wi-Fi".to_string(),
+            };
+            check(
+                "network-connection",
+                "Network connection",
+                ReadinessStatus::Advisory,
+                detail,
+                Some(chip),
+            )
+        }
         "other" => check(
             "network-connection",
             "Network connection",
@@ -1290,6 +1326,26 @@ mod readiness_tests {
         let hw = HardwareInfo { network_adapters: vec![], ..Default::default() };
         let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
         assert_eq!(find(&r, "network-connection").status, ReadinessStatus::Unknown);
+    }
+
+    #[test]
+    fn network_connection_wifi_enriches_detail_with_measured_link_when_present() {
+        // When the netsh probe gave us a link, the Wi-Fi row names band/signal/rate (still Advisory).
+        let hw = HardwareInfo {
+            network_adapters: vec![nic(true, "wifi", true)],
+            wifi_link: Some(crate::hardware::WifiLink {
+                band: Some("5 GHz".into()),
+                signal_pct: Some(86),
+                rx_mbps: Some(867),
+                radio_type: Some("802.11ax".into()),
+            }),
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = find(&r, "network-connection");
+        assert_eq!(c.status, ReadinessStatus::Advisory);
+        assert!(c.detail.contains("5 GHz") && c.detail.contains("86% signal") && c.detail.contains("867 Mbps"));
+        assert_eq!(c.value.as_deref(), Some("Wi-Fi · 5 GHz")); // band-aware chip
     }
 
     fn with_ram(bytes: u64) -> GameReadiness {
