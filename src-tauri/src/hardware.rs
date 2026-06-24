@@ -183,6 +183,9 @@ pub(crate) struct HardwareInfo {
     /// Active Wi-Fi link quality (band/signal/rate) — Some ONLY when the active connection is Wi-Fi
     /// (probed read-only via `netsh wlan show interfaces`; None on wired rigs / when unparseable).
     pub(crate) wifi_link: Option<WifiLink>,
+    /// Policy-based QoS policy names (machine + user). Empty on the common case (no policies); when
+    /// present they shape network traffic priority — surfaced as an advisory. Read-only registry read.
+    pub(crate) qos_policies: Vec<String>,
     pub(crate) game_storage: GameStorage,
     /// Connected display models from EDID (WmiMonitorID). Empty when root\wmi is blocked.
     pub(crate) monitors: Vec<MonitorInfo>,
@@ -1722,6 +1725,7 @@ fn collect_hardware_inner() -> HardwareInfo {
         eee_switch_exposed,
         network_adapters,
         wifi_link,
+        qos_policies: detect_qos_policies(),
         game_storage: detect_game_storage(),
         monitors: detect_monitors(),
     }
@@ -1875,6 +1879,23 @@ fn detect_wifi_link() -> Option<WifiLink> {
         .output()
         .ok()?;
     parse_netsh_wlan_interfaces(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Read-only: Policy-based QoS policy NAMES from the standard policy keys (machine HKLM + user HKCU).
+/// These shape network traffic priority/throttling. Returns empty on the common case (key absent =
+/// no policies, NOT an error) — so the readiness advisory only appears on rigs that actually have one.
+/// No elevation, no mutation, no network.
+fn detect_qos_policies() -> Vec<String> {
+    const QOS_PATH: &str = "SOFTWARE\\Policies\\Microsoft\\Windows\\QoS";
+    let mut names: Vec<String> = Vec::new();
+    for hive in [HKEY_LOCAL_MACHINE, winreg::enums::HKEY_CURRENT_USER] {
+        if let Ok(key) = RegKey::predef(hive).open_subkey(QOS_PATH) {
+            names.extend(key.enum_keys().flatten());
+        }
+    }
+    names.sort();
+    names.dedup();
+    names
 }
 
 /// Enumerate + classify network adapters. Fail-soft to an empty inventory (claim NO wired rather than

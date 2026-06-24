@@ -478,6 +478,26 @@ pub(crate) fn evaluate_readiness(
         ),
     });
 
+    // Policy-based QoS traffic shaping — rare on home rigs, but a policy can deprioritize/throttle
+    // game traffic. Surfaced ONLY when one actually exists (no clutter when clean): named, as-found,
+    // never a fabricated problem. Read-only registry read upstream.
+    if !hw.qos_policies.is_empty() {
+        let n = hw.qos_policies.len();
+        let names = hw.qos_policies.join(", ");
+        checks.push(check(
+            "network-qos",
+            "Network QoS policy",
+            ReadinessStatus::Advisory,
+            format!(
+                "Windows QoS traffic-priority {} active ({names}). These shape which apps get network \
+                 priority — listed as-found, not a problem on their own. If online play feels \
+                 inconsistent, they're worth a look.",
+                if n == 1 { "policy is" } else { "policies are" }
+            ),
+            Some(format!("{n} QoS {}", if n == 1 { "policy" } else { "policies" })),
+        ));
+    }
+
     // 2. Game install drive — where the user's game libraries (Steam/Epic)
     //    actually live, and whether those drives are fast (NVMe/SSD) or slow
     //    (HDD). Falls back to an honest overall storage posture when no library
@@ -1425,6 +1445,31 @@ mod readiness_tests {
         // 5 GHz → never the 2.4 advisory, and the channel number isn't shown (overlap doesn't apply).
         let ghz5 = eval(link("5 GHz", 149));
         assert!(!ghz5.contains("don't overlap") && !ghz5.contains("ch 149"));
+    }
+
+    #[test]
+    fn qos_policy_advisory_only_appears_when_policies_present() {
+        // Clean rig (no policies) → no QoS row at all (no clutter).
+        let none = evaluate_readiness(
+            &HardwareInfo::default(),
+            None,
+            false,
+            false,
+            &AppliedChangesSummary::default(),
+            None,
+        );
+        assert!(!none.checks.iter().any(|c| c.id == "network-qos"), "no QoS row on a clean rig");
+
+        // Policies present → one Advisory row that NAMES them as-found.
+        let hw = HardwareInfo {
+            qos_policies: vec!["GameThrottle".into(), "BulkDownload".into()],
+            ..Default::default()
+        };
+        let r =
+            evaluate_readiness(&hw, None, false, false, &AppliedChangesSummary::default(), None);
+        let c = r.checks.iter().find(|c| c.id == "network-qos").expect("QoS advisory present");
+        assert_eq!(c.status, ReadinessStatus::Advisory);
+        assert!(c.detail.contains("GameThrottle") && c.detail.contains("BulkDownload"));
     }
 
     fn with_ram(bytes: u64) -> GameReadiness {
