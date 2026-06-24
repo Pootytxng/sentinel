@@ -52,8 +52,15 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
     try {
       await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });
       await rerun(); // re-run so the verdict + limiters reflect the change
-    } catch {
-      /* reload surfaces state */
+    } catch (e) {
+      setApplyingId(null);
+      // Tell the user it didn't apply (e.g. a declined UAC prompt) instead of silently moving on.
+      await confirm({
+        title: "Couldn't apply that fix",
+        body: String(e),
+        confirmLabel: "OK",
+        acknowledge: true,
+      });
     } finally {
       setApplyingId(null);
     }
