@@ -82,7 +82,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [ ] date-added / last-updated metadata — no temporal fields on entries
 - [x] filter-by-category + verdict UI — `Learn.tsx:578`
 - [x] alias-collision lint + CI guard — `knowledge.lint.test.ts:98`
-- [ ] deprecated/superseded status field — no lifecycle field on entries
+- [x] deprecated/superseded status field — `status` + `supersededBy` on BaseEntry + `lifecycle()` mapper + lint guard (real/different target) + honest Learn surfacing (`aedb3ab`)
 - [x] orphaned-`related[]` lint — `knowledge.lint.test.ts:84`
 - [~] Autopsy structured schema — typed result exists, no versioning/migration — `knowledge-autopsy.ts:15`
 - [x] Autopsy "what did we learn?" rollup — `autopsy-ledger.ts`, `Learn.tsx:453`
