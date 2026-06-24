@@ -134,8 +134,19 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
                 Err(e) => {
                     file.status = SessionStatus::RestorePending;
                     let _ = save_session(&file);
-                    let _ = restore(&mut file); // best-effort undo of partial state
-                    return Err(format!("{}: {}", $label, e));
+                    // Best-effort undo of partial state. If the undo ITSELF fails, the session is
+                    // left RestoreFailed + orphan-recoverable — say so rather than implying a clean
+                    // failure. Honesty doctrine: never mislead about whether the system was left
+                    // changed. (A core step refusing mid-bundle is now reachable via the unreadable-
+                    // prior fail-safe, not just UAC-cancel.)
+                    let mut msg = format!("{}: {}", $label, e);
+                    if let Err(undo_err) = restore(&mut file) {
+                        msg.push_str(&format!(
+                            " — and undoing the partial session also failed ({undo_err}); \
+                             your system may still be changed. Recover it from the prompt next launch."
+                        ));
+                    }
+                    return Err(msg);
                 }
             }
         }};
