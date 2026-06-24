@@ -210,6 +210,10 @@ export function LatencyTab() {
               Median <strong>{Math.round(mouse.polling.median_hz)} Hz</strong> over{" "}
               {mouse.polling.reports} reports (jitter {fmtMs(mouse.polling.jitter_ms)})
             </p>
+            <p className="lat-muted">
+              Report gaps ranged {fmtMs(mouse.polling.min_interval_ms)} (fastest) to{" "}
+              {fmtMs(mouse.polling.max_interval_ms)} (slowest)
+            </p>
             <p className="lat-advisory">{mouse.note}</p>
             <button className="lat-btn lat-btn-ghost" onClick={measureMouse} disabled={mouseBusy}>
               {mouseBusy ? "Measuring…" : "Measure again"}
