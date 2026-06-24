@@ -159,7 +159,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] copy-only buttons (no URL opener) — `Check.tsx:207`
 - [x] plain retailer links (no tags) + disclosure — `priorities.rs:81`
 - [~] markdown-export anchors — present; not independently tested
-- [~] test "no tags + disclosure always paired" — tag-absence tested; single-item disclosure pairing untested
+- [x] test "no tags + disclosure always paired" — comprehensive affiliate/tracking guard over ALL retail links (const tables, 12 markers, https-only) + single-item disclosure pairing locked (`priorities.rs` tests)
 
 ---
 

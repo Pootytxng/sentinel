@@ -490,6 +490,51 @@ mod priority_tests {
     }
 
     #[test]
+    fn every_retail_link_is_a_plain_search_never_affiliate_or_tracking() {
+        // Affiliate-safety guard (Receipts Doctrine, money stack #1): the Phase-D tag swap must happen
+        // ONLY by editing this module's link table — never slip in silently. Until then EVERY shipped
+        // retail URL is a plain https search, free of any affiliate/tracking marker. Scans the const
+        // tables directly so a link is caught even before it has a render path.
+        const FORBIDDEN: &[&str] = &[
+            "tag=", "affiliate", "aff_", "utm_", "ref=", "/ref/", "ascsubtag", "linkcode", "linkid",
+            "campaign", "partner", "subid",
+        ];
+        let all: Vec<&RetailLink> = GPU_LINKS.iter().chain(SSD_LINKS.iter()).collect();
+        assert!(!all.is_empty(), "there are retail links to guard");
+        for l in all {
+            let url = l.url.to_lowercase();
+            assert!(url.starts_with("https://"), "{} link must be https: {}", l.retailer, l.url);
+            for marker in FORBIDDEN {
+                assert!(
+                    !url.contains(marker),
+                    "{} link carries a tracking/affiliate marker '{}': {} — Phase-D tag swap must be \
+                     a deliberate, reviewed edit, never silent",
+                    l.retailer,
+                    marker,
+                    l.url
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn disclosure_is_paired_with_every_single_item_path() {
+        // Each qualifying path ON ITS OWN must render the disclosure — links must never appear
+        // disclosure-less (the combined 2-item case is covered above; this pins the single-item shapes,
+        // the BACKLOG-noted gap). Links + disclosure are inseparable by construction.
+        let gpu_only = build_upgrade_path(&readiness(vec![]), &json!([{ "peak_gpu_usage_pct": 99 }]))
+            .expect("gpu-only qualifies");
+        let ssd_only =
+            build_upgrade_path(&readiness(vec![chk("install-drive", "attention")]), &json!([]))
+                .expect("ssd-only qualifies");
+        for up in [gpu_only, ssd_only] {
+            assert_eq!(up.items.len(), 1, "single-item path");
+            assert!(!up.items[0].links.is_empty(), "the path renders links...");
+            assert_eq!(up.disclosure, AFFILIATE_DISCLOSURE, "...so the disclosure MUST be present");
+        }
+    }
+
+    #[test]
     fn monitor_refresh_issue_ranks_highest() {
         let r = readiness(vec![chk("monitor-refresh", "attention"), chk("gpu-driver-age", "attention")]);
         let p = build_priorities(&r, &json!([]), &json!([]), &json!([]));
