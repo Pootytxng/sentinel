@@ -11,6 +11,42 @@
 > **Status anchored to `main` @ `47e93e6` (2026-06-23 audit).** Verified by a 5-agent read-only sweep of
 > the actual source tree, not commit messages.
 
+---
+
+## 🛰️ HQ STEERING LOG — live lane board (newest on top)
+
+> Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
+> stay in your file domain, rebase onto `main` before every push.
+
+### Cycle 2026-06-24a — `main` @ `b90bd1d` · integrated tree GREEN
+**Integrate-verify (merged agent + bench push):** cargo **566** · vitest **558** · `npm run build` ✓ (only the
+pre-existing >500 kB chunk advisory, not a regression). Agent (`Latency.tsx` / `latency-view.ts`) ⟂ bench
+(`Benchmark.tsx`) — disjoint files, clean compose.
+
+**Lane assignments (disjoint file domains — only the backend lane edits `lib.rs` this cycle):**
+
+| Lane | Next item (non-gated) | File domain | Keep OUT of |
+|---|---|---|---|
+| **backend/readiness** | A4 Services → real **read-only service inventory by category** (expand the 4-service stub at `history.rs:118`). *(curated "safe-to-suspend" list = owner-curated/gated — NOT this)* | `src-tauri/{history.rs, new svc module, lib.rs reg}` | `actions.rs`\*, `benchmark_*`, `latency.rs` |
+| **bench/measurement** | A2 → **hardware-tier segmentation** (budget/mid/high LOCAL mapping; wire the unwired `percentile_rank`). *(cohort percentile = Phase C gated)* | `src-tauri/benchmark_scoreboard.rs` + `Benchmark.tsx` | `lib.rs`, `history.rs`, `latency.rs` |
+| **agent/peripheral** | A4 Peripheral → **wired-vs-wireless latency model** (pure advisory over existing latency + adapter data) | `src-tauri/latency.rs` + `Latency.tsx` / new `Peripheral.tsx` | `lib.rs`\*, `benchmark_*`, knowledge |
+| **content/knowledge** | A3 → **category + hardware tags + date-added/last-updated** entry metadata (the named A3 gap, lines 81–82). Start a FRESH branch off `main` (current `feat/blackbook-lifecycle` is fully merged) | `src/data/knowledge*.ts` + `Learn.tsx` | all `src-tauri/`, other surfaces |
+
+\* Prefer pure-logic / reuse existing IPC so only ONE lane touches `lib.rs` / `actions.rs` per cycle.
+
+**🔴 Stranded work to land (surface to owner — needs per-PR sign-off):**
+- `qa/locale-drift-hardening` (4 ahead, 29 behind) — **real mutation-boundary safety fixes**: refuse instead of
+  fabricating a rollback snapshot when powercfg / HAGS priors are unreadable (completes the key-open-collapse
+  fail-safe tier — this is the fix for the 2026-06-22 completeness-critic finding). Touches `actions.rs` (the
+  rollback boundary) → **owner per-PR merge instruction + adversarial review required** ([[merge-to-main-needs-explicit-per-pr-instruction]]).
+  Assigned for rebase to the backend lane; **the merge itself is owner-gated.**
+- `gaming/honest-partial-undo` (1 ahead) — honest-error fix in gated Gaming-Mode code; land when Gaming-Mode QA resumes.
+
+**Hygiene done:** pruned `spike/backend-agent` + `benchmark` (fully merged). Superseded/stale, left in place
+(unmerged, low value): `feat/a1-detection` (4-probe, superseded by `reconcile/a1-merge`), `latency-capture`
+(merge-commit only, no unique work), `tests/coverage-sweep-2026-06-18` (unique value already folded into main).
+Frozen beta refs (`16069fa`) untouched.
+
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
 When running a `/loop` or scheduled session against "the checklist":
