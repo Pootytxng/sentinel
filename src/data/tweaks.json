@@ -186,7 +186,7 @@
     "aliases": ["sysmain", "superfetch"],
     "verdict": "real",
     "what": "Stops the service that preloads frequently-used apps into RAM.",
-    "why": "Frees 0.5–1.5 GB on SSD/NVMe systems where preloading earns nothing. KEEP it on hard drives. Compy already gates this recommendation on your storage type.",
+    "why": "On an SSD/NVMe there's little to gain from preloading, so turning SysMain off cuts its background disk activity and steadies RAM use. It doesn't 'free' a set amount of memory — that cache was reclaimable standby RAM Windows already releases when apps need it. KEEP it on hard drives. Compy already gates this recommendation on your storage type.",
     "related": ["nvme-ssd-hdd"]
   },
   {
