@@ -558,5 +558,29 @@
     "what": "Chroma subsampling is a bandwidth-saving trick: the display keeps full detail in brightness (luma) but throws away some of the color (chroma) detail. 4:4:4 keeps full color for every pixel; 4:2:2 and 4:2:0 keep less color information to fit through a cable with limited bandwidth. Your eyes are far more sensitive to brightness than to fine color, which is why the lower modes are often hard to notice at all.",
     "more": "Where it does show up is on sharp, high-contrast color edges — most of all small colored text on the desktop, which can look fringed or smeary at 4:2:0. In actual game scenes and video, 4:2:0 is usually very hard to tell apart from 4:4:4, so it matters far less for gaming than for desktop reading. None of it changes your frame rate — this is an image-quality and bandwidth setting, not a performance one. The reason you would be stuck below 4:4:4 is running out of cable or port bandwidth at your resolution, refresh rate, and color depth combined; the honest fix is a cable and port rated for that bandwidth (a solid DisplayPort 1.4/2.1 or HDMI 2.1 link), or easing back one of refresh rate, resolution, or color depth — not forcing 4:4:4 and hoping. Forcing 4:4:4 never adds frames.",
     "related": ["displayport-vs-hdmi", "set-refresh-rate", "hz-vs-fps", "srgb-clamp", "gamma-vs-hdr"]
+  },
+  {
+    "id": "backlight-strobing",
+    "name": "Backlight strobing (ULMB / motion blur reduction)",
+    "aliases": ["ulmb", "backlight strobing", "motion blur reduction", "mbr", "elmb", "dyac", "black frame insertion", "bfi", "strobing", "blur reduction"],
+    "what": "Backlight strobing — sold as ULMB, ELMB, DyAc, or just 'motion blur reduction' — flashes the monitor's backlight off between frames so each frame is shown for less time. That cuts the natural blur you get on modern (sample-and-hold) LCD and OLED panels, making fast motion look sharper, closer to an old CRT.",
+    "more": "The catches are real. It usually cannot run at the same time as VRR (G-Sync / FreeSync) — most monitors make you pick one or the other — so you trade tear-free smoothness for motion clarity. It also costs brightness (the backlight is off part of the time) and works best at a fixed, high, steady frame rate that matches the strobe; an unstable frame rate makes it flicker or double-image, and some people find the flicker tiring on the eyes. It does not change your frame rate — it changes how clear motion looks. Treat it as a per-game preference for fast competitive titles where you can hold a high steady FPS, not a must-on.",
+    "related": ["vrr", "gsync-freesync", "monitor-overdrive", "gtg-vs-mprt", "monitor-response-time-fps"]
+  },
+  {
+    "id": "monitor-overdrive",
+    "name": "Pixel overdrive (ghosting & overshoot)",
+    "aliases": ["pixel overdrive", "monitor overdrive", "ghosting", "overshoot", "inverse ghosting", "trace free", "overdrive setting"],
+    "what": "Overdrive is a monitor setting (sometimes called Response Time, Trace Free, or OD) that pushes pixels to change color faster, reducing the smear — ghosting — that trails behind fast-moving objects. It is about motion clarity, not frame rate.",
+    "more": "There is a sweet spot. Too little overdrive leaves visible ghosting — a dark smear trailing behind moving objects; too much overshoots — the pixel races past the target color and throws a bright halo or corona ('inverse ghosting') onto the leading edge, ahead of the object, which looks just as wrong. The best level depends on the panel and even your refresh rate, so the right setting on one monitor or at one Hz can be wrong on another. The honest approach is to test the on-screen-menu levels on a moving-image pattern (the UFO pursuit test) and pick the cleanest — usually a middle setting rather than the maximum. None of this affects your FPS; it changes how clean motion looks on the panel you already have.",
+    "related": ["monitor-response-time-fps", "gtg-vs-mprt", "backlight-strobing", "vrr"]
+  },
+  {
+    "id": "gtg-vs-mprt",
+    "name": "Response time: GtG vs MPRT",
+    "aliases": ["gtg", "mprt", "gtg vs mprt", "grey to grey", "gray to gray", "moving picture response time", "1ms gtg", "1ms mprt", "response time spec"],
+    "what": "Monitors advertise a '1ms response time,' but there are two different numbers behind that. GtG (grey-to-grey) measures how fast one pixel shifts from one shade to another. MPRT (moving picture response time) measures how long a frame stays visible to your eye, which is tied to motion blur and persistence.",
+    "more": "They are not interchangeable, and marketing picks whichever sounds best. A low GtG (driven by overdrive) reduces ghosting; a low MPRT usually requires backlight strobing, which is why a '1ms MPRT' panel often hits that figure only with strobing turned on, and the trade-offs that brings. Neither number is an FPS spec — a faster-rated panel does not produce more frames; your GPU does that. (One nuance: MPRT, the motion-blur number, does shrink as your actual frame rate rises on a normal non-strobing display — but that is your frame rate sharpening the motion, not the panel making frames.) For most people the bigger smoothness wins are a higher refresh rate and VRR; treat the response-time sticker as one factor for fast games, read which number it actually is, and remember the headline figure is usually a best-case lab result.",
+    "related": ["monitor-response-time-fps", "monitor-overdrive", "backlight-strobing", "set-refresh-rate", "vrr"]
   }
 ]
