@@ -99,7 +99,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 ### `measurement` — benchmark / scoreboard / comparison  ✅ active
 **Worktree:** `sentinel-worktrees/benchmark` · **Owns:** `src-tauri/{benchmark_scoreboard.rs, comparison.rs, benchmark*.rs}` + `src/surfaces/Benchmark.tsx`
 - [x] A2 **hardware-tier segmentation** — LOCAL Entry/Mid/High band on the Benchmark surface from measured VRAM·cores·RAM (inputs named); reuses canonical rig-tier via pure `benchRigTier`; like-to-like framing, no cohort/network (`372bde1`)
-- [x] A2 **percentile display** — wired `percentile_rank` as a LOCAL display-only stub: each verified win ranked within the cohort of the user's OWN wins, shown "Top X% of your verified wins" in the award drill-down, labeled "local — no peer cohort yet"; 4-win cohort floor; never persisted; peer cohort stays Phase C gated (`<pending>`)
+- [x] A2 **percentile display** — wired `percentile_rank` as a LOCAL display-only stub: each verified win ranked within the cohort of the user's OWN wins, shown "Top X% of your verified wins" in the award drill-down, labeled "local — no peer cohort yet"; 4-win cohort floor; never persisted; peer cohort stays Phase C gated (`0de96f0`)
 
 ### `peripheral` — latency / mouse / keyboard / USB
 **Worktree:** `sentinel-worktrees/agent` · **Owns:** `src-tauri/latency.rs` + `src/surfaces/Latency.tsx` / new `Peripheral.tsx` + peripheral data JSON
