@@ -126,6 +126,11 @@ When running a `/loop` or scheduled session against "the checklist":
 3. **A green test suite is NOT the stop signal.** The stop signal is "no un-ticked, non-gated item remains."
 4. Owner-gated items (🔒 money/distribution, 🪪 mutation catalog-expansion, 📡 telemetry/outbound,
    🎨 taste) are *blockers to surface*, never silently skipped or marked done.
+5. **Branch redundancy: judge by the TREE, not ahead/behind.** Lanes merge via PR (new hashes), so a branch can
+   read "N ahead / `git cherry` all `+`" while its content is **already in main**. Before flagging a branch as
+   "stranded/unmerged work," run `git merge-tree --write-tree main <branch>` — if it equals `git rev-parse main^{tree}`,
+   the merge is a no-op → already shipped → prune, don't surface. Only a tree-changing merge is real unmerged work.
+   And re-RUN cargo/vitest for counts each cycle — never carry an assumed number forward. ([[branch-redundancy-detect-by-mergetree]])
 
 ## 🌿 Branch-integration health (a contributing cause)
 
