@@ -186,6 +186,10 @@ pub(crate) struct HardwareInfo {
     /// Policy-based QoS policy names (machine + user). Empty on the common case (no policies); when
     /// present they shape network traffic priority — surfaced as an advisory. Read-only registry read.
     pub(crate) qos_policies: Vec<String>,
+    /// Compact at-a-glance network-readiness pills (connection · Wi-Fi quality · QoS), DERIVED from
+    /// the fields above — no probe of its own. The backend half of the network-readiness pills; the
+    /// UI half (content/peripheral) renders them. Read-only, zero-outbound.
+    pub(crate) network_pills: Vec<NetworkPill>,
     pub(crate) game_storage: GameStorage,
     /// Connected display models from EDID (WmiMonitorID). Empty when root\wmi is blocked.
     pub(crate) monitors: Vec<MonitorInfo>,
@@ -1739,6 +1743,12 @@ fn collect_hardware_inner() -> HardwareInfo {
         None
     };
 
+    // Derived network-readiness pills (backend signal) — built from the read-only inventory above,
+    // no extra probe. Bind qos_policies first so both the pills and the struct field share one read.
+    let qos_policies = detect_qos_policies();
+    let network_pills =
+        network_readiness_pills(&network_adapters, wifi_link.as_ref(), has_wired_ethernet_port, &qos_policies);
+
     HardwareInfo {
         cpu_brand,
         cpu_cores_logical: sys.cpus().len(),
@@ -1767,7 +1777,8 @@ fn collect_hardware_inner() -> HardwareInfo {
         eee_switch_exposed,
         network_adapters,
         wifi_link,
-        qos_policies: detect_qos_policies(),
+        qos_policies,
+        network_pills,
         game_storage: detect_game_storage(),
         monitors: detect_monitors(),
     }
@@ -1858,6 +1869,81 @@ pub(crate) fn network_connection_kind(adapters: &[NetAdapterInfo]) -> &'static s
     } else {
         "none"
     }
+}
+
+/// A compact, at-a-glance network-readiness "pill" — a tiny labeled status chip the UI renders
+/// (content/peripheral own the visual half). Backend signal only: derived ENTIRELY from the
+/// already-collected read-only network inventory (adapters · Wi-Fi link · wired-port · QoS) — NO
+/// probe of its own, NO outbound query, never a fabricated number.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct NetworkPill {
+    /// Short chip text, e.g. "Wired Ethernet", "Wi-Fi · 5 GHz", "82% signal", "650 Mbps".
+    pub label: String,
+    /// Honest tone for the UI to color the chip — never a score:
+    /// `"good"` = the steady/ideal state · `"neutral"` = a fine, plain fact · `"advisory"` = worth a
+    /// glance, never a problem · `"unknown"` = couldn't read it.
+    pub tone: String,
+}
+
+impl NetworkPill {
+    fn new(label: impl Into<String>, tone: &str) -> Self {
+        NetworkPill { label: label.into(), tone: tone.to_string() }
+    }
+}
+
+/// Pure: fold the already-collected network signals into the compact readiness pills. Mirrors the
+/// `network-connection` readiness check's honesty — wired is the steady ideal (`good`), Wi-Fi is
+/// `advisory` (fine for plenty of games, never a problem), offline is `unknown` (never a scare).
+/// Only surfaces what was actually read; absent Wi-Fi fields add no pill. No WMI/netsh here — every
+/// input is passed in, so the whole pill set is fixture-testable with zero system access.
+pub(crate) fn network_readiness_pills(
+    adapters: &[NetAdapterInfo],
+    wifi: Option<&WifiLink>,
+    has_wired_port: bool,
+    qos_policies: &[String],
+) -> Vec<NetworkPill> {
+    let mut pills = Vec::new();
+    match network_connection_kind(adapters) {
+        "wired" => pills.push(NetworkPill::new("Wired Ethernet", "good")),
+        "wifi" => {
+            let band = wifi.and_then(|w| w.band.clone());
+            pills.push(NetworkPill::new(
+                match &band {
+                    Some(b) => format!("Wi-Fi · {b}"),
+                    None => "Wi-Fi".to_string(),
+                },
+                "advisory",
+            ));
+            // Signal — a plain fact, but a weak signal is worth a glance.
+            if let Some(s) = wifi.and_then(|w| w.signal_pct) {
+                pills.push(NetworkPill::new(format!("{s}% signal"), if s < 50 { "advisory" } else { "neutral" }));
+            }
+            // Negotiated link rate — a plain fact.
+            if let Some(r) = wifi.and_then(|w| w.rx_mbps) {
+                pills.push(NetworkPill::new(format!("{r} Mbps"), "neutral"));
+            }
+            // 2.4 GHz overlap: only channels 1/6/11 don't overlap (matches the readiness advisory).
+            if let Some(w) = wifi {
+                if let (Some(b), Some(ch)) = (w.band.as_deref(), w.channel) {
+                    if b.contains("2.4") && !matches!(ch, 1 | 6 | 11) {
+                        pills.push(NetworkPill::new(format!("ch {ch} overlaps"), "advisory"));
+                    }
+                }
+            }
+            // The concrete win when a cable is actually an option on this rig.
+            if has_wired_port {
+                pills.push(NetworkPill::new("Wired port available", "advisory"));
+            }
+        }
+        "other" => pills.push(NetworkPill::new("Connected", "neutral")),
+        _ => pills.push(NetworkPill::new("Offline", "unknown")),
+    }
+    // A QoS policy shapes which apps get network priority — surfaced as-found (advisory), never a problem.
+    if !qos_policies.is_empty() {
+        let label = if qos_policies.len() == 1 { "QoS policy".to_string() } else { format!("{} QoS policies", qos_policies.len()) };
+        pills.push(NetworkPill::new(label, "advisory"));
+    }
+    pills
 }
 
 /// Active Wi-Fi link quality, read once when the rig is on Wi-Fi. Every field is optional — netsh
@@ -2318,6 +2404,104 @@ mod net_adapter_tests {
         assert_eq!(network_connection_kind(&[]), "none");
         // Connected physical of an unclassified medium → "other" (never guessed wired/wifi).
         assert_eq!(network_connection_kind(&[adapter(true, "other", true)]), "other");
+    }
+
+    // ── network-readiness pills (A4, backend signal) ───────────────────────────────────────────
+
+    use super::{network_readiness_pills, WifiLink};
+
+    fn pill_labels(pills: &[super::NetworkPill]) -> Vec<String> {
+        pills.iter().map(|p| p.label.clone()).collect()
+    }
+    fn tone_of<'a>(pills: &'a [super::NetworkPill], label: &str) -> Option<&'a str> {
+        pills.iter().find(|p| p.label == label).map(|p| p.tone.as_str())
+    }
+
+    #[test]
+    fn pills_wired_is_a_single_good_chip() {
+        let pills = network_readiness_pills(&[adapter(true, "wired", true)], None, true, &[]);
+        assert_eq!(pill_labels(&pills), vec!["Wired Ethernet"]);
+        assert_eq!(pills[0].tone, "good");
+    }
+
+    #[test]
+    fn pills_offline_is_unknown_never_a_scare() {
+        let pills = network_readiness_pills(&[], None, false, &[]);
+        assert_eq!(pill_labels(&pills), vec!["Offline"]);
+        assert_eq!(pills[0].tone, "unknown");
+        // "other" (connected, unclassified medium) is a plain neutral fact.
+        let other = network_readiness_pills(&[adapter(true, "other", true)], None, false, &[]);
+        assert_eq!(pill_labels(&other), vec!["Connected"]);
+        assert_eq!(other[0].tone, "neutral");
+    }
+
+    #[test]
+    fn pills_wifi_surfaces_only_readable_quality_and_stays_advisory() {
+        let adapters = [adapter(true, "wifi", true)];
+        // Full link: band + strong signal + rate. Wi-Fi chip is advisory; signal/rate are neutral facts.
+        let link = WifiLink {
+            band: Some("5 GHz".into()),
+            signal_pct: Some(82),
+            rx_mbps: Some(866),
+            radio_type: Some("802.11ax".into()),
+            channel: Some(36),
+        };
+        let pills = network_readiness_pills(&adapters, Some(&link), false, &[]);
+        assert_eq!(pill_labels(&pills), vec!["Wi-Fi · 5 GHz", "82% signal", "866 Mbps"]);
+        assert_eq!(tone_of(&pills, "Wi-Fi · 5 GHz"), Some("advisory"));
+        assert_eq!(tone_of(&pills, "82% signal"), Some("neutral"));
+        assert_eq!(tone_of(&pills, "866 Mbps"), Some("neutral"));
+        // No readable link fields → just the bare Wi-Fi chip, nothing fabricated.
+        let bare = network_readiness_pills(&adapters, None, false, &[]);
+        assert_eq!(pill_labels(&bare), vec!["Wi-Fi"]);
+    }
+
+    #[test]
+    fn pills_weak_signal_is_advisory_and_24ghz_overlap_flagged() {
+        let adapters = [adapter(true, "wifi", true)];
+        let weak = WifiLink {
+            band: Some("2.4 GHz".into()),
+            signal_pct: Some(35),
+            rx_mbps: None,
+            radio_type: None,
+            channel: Some(3), // not 1/6/11 → overlaps
+        };
+        let pills = network_readiness_pills(&adapters, Some(&weak), false, &[]);
+        assert_eq!(tone_of(&pills, "35% signal"), Some("advisory"), "a weak signal is worth a glance");
+        assert!(pill_labels(&pills).iter().any(|l| l == "ch 3 overlaps"));
+        assert_eq!(tone_of(&pills, "ch 3 overlaps"), Some("advisory"));
+        // A non-overlapping 2.4 GHz channel adds no overlap pill.
+        let clean = WifiLink { channel: Some(6), ..weak.clone() };
+        let clean_pills = network_readiness_pills(&adapters, Some(&clean), false, &[]);
+        assert!(!pill_labels(&clean_pills).iter().any(|l| l.contains("overlaps")));
+    }
+
+    #[test]
+    fn pills_wifi_with_wired_port_nudges_to_plug_in() {
+        let adapters = [adapter(true, "wifi", true)];
+        let link = WifiLink { band: Some("5 GHz".into()), signal_pct: None, rx_mbps: None, radio_type: None, channel: None };
+        let pills = network_readiness_pills(&adapters, Some(&link), true, &[]);
+        assert!(pill_labels(&pills).iter().any(|l| l == "Wired port available"));
+        assert_eq!(tone_of(&pills, "Wired port available"), Some("advisory"));
+        // Wired connection never nudges (it's already the ideal).
+        let wired = network_readiness_pills(&[adapter(true, "wired", true)], None, true, &[]);
+        assert!(!pill_labels(&wired).iter().any(|l| l.contains("Wired port")));
+    }
+
+    #[test]
+    fn pills_qos_policy_is_advisory_and_counts_plurally() {
+        let one = network_readiness_pills(&[adapter(true, "wired", true)], None, true, &["GameQoS".into()]);
+        assert_eq!(tone_of(&one, "QoS policy"), Some("advisory"));
+        let many = network_readiness_pills(
+            &[adapter(true, "wired", true)],
+            None,
+            true,
+            &["A".into(), "B".into()],
+        );
+        assert!(pill_labels(&many).iter().any(|l| l == "2 QoS policies"));
+        // No policy → no QoS pill (no clutter when clean).
+        let none = network_readiness_pills(&[adapter(true, "wired", true)], None, true, &[]);
+        assert!(!none.iter().any(|p| p.label.contains("QoS")));
     }
 
     use super::parse_netsh_wlan_interfaces;
