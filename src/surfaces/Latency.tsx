@@ -162,8 +162,13 @@ export function LatencyTab() {
             {cpu.physical_cores} cores / {cpu.logical_processors} threads · {cpu.l3_complexes} L3
             complex{cpu.l3_complexes === 1 ? "" : "es"}
           </p>
-          {report.cpu_affinity_advisory && (
-            <p className="lat-advisory">{report.cpu_affinity_advisory}</p>
+          {/* The device-named suggestion is the DEEPENED version of the general advisory (it includes
+              everything the general line says + the named devices + the manual/never-writes caveats),
+              so show it INSTEAD of the general line when present — never both (avoids saying it twice). */}
+          {(report.affinity_suggestion || report.cpu_affinity_advisory) && (
+            <p className="lat-advisory">
+              {report.affinity_suggestion || report.cpu_affinity_advisory}
+            </p>
           )}
         </Card>
       )}

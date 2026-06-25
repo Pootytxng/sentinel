@@ -163,6 +163,8 @@ export type LatencyReport = {
   timer_current_ms: number | null;
   cpu: CpuTopology | null;
   cpu_affinity_advisory: string | null;
+  // Named read-only interrupt-affinity suggestion (multi-complex CPU + latency-sensitive devices); else null.
+  affinity_suggestion?: string | null;
   usb: UsbControllerLoad[];
   usb_advisory: string | null;
   // Honest wired-vs-wireless input note; present only when a device name clearly reads as wireless.

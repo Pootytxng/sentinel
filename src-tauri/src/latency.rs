@@ -478,6 +478,32 @@ pub(crate) fn affinity_advisory(topo: &CpuTopology) -> String {
     }
 }
 
+/// Pure: deepen the general affinity advisory into a NAMED, still read-only suggestion. On a
+/// multi-complex CPU, name the latency-sensitive devices (GPU / NIC / NVMe) whose interrupts are
+/// worth keeping on the complex the game runs on — the actionable half of `affinity_advisory`.
+/// `None` on a single-complex CPU (nothing to steer between) OR when no latency-sensitive device is
+/// present, so we never suggest a tweak with no target. Compy NEVER writes interrupt affinity (a
+/// manual, advanced step); this only points at where it could help, and is explicit the gain is small.
+pub(crate) fn affinity_device_suggestion(topo: &CpuTopology, devices: &[MsiDevice]) -> Option<String> {
+    if !affinity_is_meaningful(topo) {
+        return None;
+    }
+    let mut sensitive: Vec<&str> =
+        devices.iter().filter(|d| is_latency_sensitive(&d.name)).map(|d| d.name.as_str()).collect();
+    sensitive.dedup();
+    if sensitive.is_empty() {
+        return None;
+    }
+    let names = sensitive.iter().take(3).copied().collect::<Vec<_>>().join(", ");
+    Some(format!(
+        "Advanced, optional: on this {}-complex CPU, keeping the interrupts for your latency-sensitive \
+         devices ({names}) on the same complex your game runs on can trim cross-CCD hops. It's a MANUAL \
+         step (the device's interrupt-affinity policy) — Compy only points it out, never writes it — and \
+         the gain is small, so measure before/after.",
+        topo.l3_complexes
+    ))
+}
+
 /// Query one relationship class of `GetLogicalProcessorInformationEx` into a correctly-aligned,
 /// zero-initialized buffer. Returns `(backing, byte_len)` where the first `byte_len` bytes hold the
 /// API's records. The `u64` backing is 8-byte aligned (satisfying the record type's alignment) and
@@ -1214,6 +1240,9 @@ pub(crate) struct LatencyReport {
     pub timer_current_ms: Option<f64>,
     pub cpu: Option<CpuTopology>,
     pub cpu_affinity_advisory: Option<String>,
+    /// Named, read-only interrupt-affinity SUGGESTION (multi-complex CPU + latency-sensitive devices
+    /// present); None otherwise. Compy never writes affinity — this only points where it could help.
+    pub affinity_suggestion: Option<String>,
     pub usb: Vec<UsbControllerLoad>,
     pub usb_advisory: Option<String>,
     /// Honest wired-vs-wireless input note — present ONLY when an input-device name clearly indicates
@@ -1244,6 +1273,8 @@ fn gather_latency_report_inner() -> LatencyReport {
     let timer_current_ms = timer.as_ref().map(|t| t.current_ms());
     let cpu = read_cpu_topology();
     let cpu_affinity_advisory = cpu.as_ref().map(affinity_advisory);
+    let affinity_suggestion =
+        cpu.as_ref().and_then(|t| affinity_device_suggestion(t, &msi_devices));
     let usb = read_usb_topology();
     let usb_advisory = shared_controller_advisory(&usb);
     let peripheral_link_advisory = wired_vs_wireless_advisory(&usb);
@@ -1257,6 +1288,7 @@ fn gather_latency_report_inner() -> LatencyReport {
         timer_current_ms,
         cpu,
         cpu_affinity_advisory,
+        affinity_suggestion,
         usb,
         usb_advisory,
         peripheral_link_advisory,
@@ -1667,6 +1699,26 @@ mod latency_tests {
         let multi = affinity_advisory(&topo(16, 32, 2));
         assert!(multi.contains("2 cache complexes"));
         assert!(multi.contains("reversible"));
+    }
+
+    #[test]
+    fn affinity_device_suggestion_names_sensitive_devices_only_on_multi_complex() {
+        let devs = [
+            dev("AMD Radeon RX 9070 XT", true),
+            dev("Realtek Gaming GbE", true),
+            dev("High Definition Audio Bus", true),
+        ];
+        // Multi-complex + latency-sensitive devices → a NAMED suggestion that's explicit it's manual/read-only.
+        let s = affinity_device_suggestion(&topo(16, 32, 2), &devs).expect("multi-complex suggestion");
+        assert!(s.contains("Radeon") || s.contains("GbE"), "names a latency-sensitive device");
+        assert!(s.contains("never writes it"), "honest: Compy does not write affinity");
+        assert!(s.contains("gain is small"), "honest: sets the expectation low");
+        assert!(!s.contains("Audio"), "non-latency-sensitive devices are not named");
+        // Single-complex → None (nothing to steer between — matches the credibility gate).
+        assert!(affinity_device_suggestion(&topo(8, 16, 1), &devs).is_none());
+        // Multi-complex but no latency-sensitive device → None (never suggest a tweak with no target).
+        assert!(affinity_device_suggestion(&topo(16, 32, 2), &[dev("USB Audio Bus", true)]).is_none());
+        assert!(affinity_device_suggestion(&topo(16, 32, 2), &[]).is_none());
     }
 
     #[cfg(target_os = "windows")]
