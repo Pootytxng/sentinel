@@ -227,3 +227,43 @@ false; reworded, `a4ee40e`). No tweaks/tricks/guides entries were added (84/14/7
 
 **Verdict: CLEAN.** No Rule-5 violation, no fabricated number, no FPS-gain overclaim in any net-new
 claim. The one fix (`rapid-trigger` Valorant) had already landed; the rest is honest by construction.
+
+### Surface claim-copy audit (the whole LIVE app, beyond the knowledge corpus) — CLEAN
+
+The app's SURFACES (not just the Learn/Blackbook corpus) have grown a lot since the last full honesty
+sweep — hardware grid on the default Home · rig-tier line · confidence chips · the completed readiness
+panel · monitor/EDID + network detection · network pills — so this cycle also ran a fresh
+**adversarial sweep of the live user-facing claim copy**: 3 parallel skeptic sub-agents over
+Readiness/Priorities/rig-tier · Session/Monitoring/Overlay/Benchmark · Home/Setup/Fix/HardwareGrid/
+Export, each hunting the 4 cardinal sins (fabricated/unmeasured number · FPS-gain promise · Rule-5
+NVIDIA-sensor grading · over-claim in Compy's own voice) and **web-verifying every numeric/factual claim**.
+
+**Verdict: CLEAN — zero BLOCKING, zero MINOR.** Every number traces to a measured fact or a named
+static spec; advisories hedge ("may help / if you feel it / not guaranteeing FPS") instead of
+promising; **Rule-5 is actively enforced** (every GPU-temp grade routes through
+`gradeGpuTempForVendor`, NVIDIA→neutral; raw CPU/GPU utilization stays neutral at all 5 render sites);
+the 1%-low is labelled an estimate everywhere; rig-tier and benchmark-tier return `null` rather than
+fabricate; Export is literally "Measured, not promised". Web-verified accurate: VRR pacing/tearing ·
+2.4 GHz ch 1/6/11 · dual-channel gain · GPU thermal ramp 75/85 °C · Reserved-Storage ~7 GB baseline.
+
+**3 NITs flagged to the owning lanes (voice/precision = their territory, NOT honesty's to rewrite):**
+- `src/data/friendly-labels.ts:49` / `src/data/rec-mutations.ts:51` — *"Reclaim **~7–10 GB** on your C:
+  drive"* is the one hard-coded numeric range stated as fact (not read from the rig). Microsoft Reserved
+  Storage is ~7 GB baseline, typically 3–7 GB reclaimable; the 10 GB high end is plausible-but-optimistic.
+  Hedged with "~", not an FPS claim → NIT. Suggest "~7 GB" / "several GB" to be strictly defensible.
+- `src/data/metric-grade.ts:67` `gradeGpuTempC` uses a FIXED 75/85 °C ramp while the grading system is
+  sold app-wide as "tailored to your hardware" — GPU-temp is the one metric not rig-derived. Thresholds
+  are factually sound (web-verified) so it's a framing NIT, not a fabrication. → measurement/owner.
+- `src/surfaces/Check.tsx:418` AMD undervolt nudge *"…cooler and quieter, **with frames held**"* states a
+  near-certainty before this rig measured it. Advisory + AMD-gated + points to a Learn guide (no one-click
+  apply) → defensible NIT, owner eyeball.
+
+Also audited backend's **`32146bc` service-inventory expansion** (Riot Vanguard `vgc` · GOG Galaxy ·
+NVIDIA Container) — **CLEAN**: faithful DisplayName-paraphrase facts (Vanguard = Valorant/LoL
+anti-cheat that loads at startup · NvContainer hosts GeForce Experience / NVIDIA App tasks · GOG
+Galaxy platform service), all web-accurate, inventory-not-advice (no safe-to-suspend judgement, no
+FPS claim).
+
+**Bottom line: the live surface is honest where it counts** — the only forward-leaning copy is three
+hedged/gated NITs, and the one hard-coded number (the cleanup estimate) is roughly accurate, not a
+fabricated performance claim.
