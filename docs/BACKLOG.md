@@ -300,7 +300,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] recovery guide — `services.rs`: pure `build_recovery_guide` attaches by-hand, plain-English services.msc restore steps to drift findings (Automatic startup → Start); reference data, NO mutation (Compy performs none); names the exact affected services from the curated const catalog; honest origin-uncertainty + grammar/law guards; folds into Diagnostics as "Background services · How to restore", no new IPC; 5 tests — `a5d5cca`
 
 **Peripheral** (no Peripheral surface exists in the rail — whole section missing)
-- [ ] mouse DPI / genre audit
+- [x] mouse DPI / genre audit — handed off to content (DPI isn't OS-readable → can't be a hardware-tailored peripheral card); shipped as the `effective-sensitivity` (eDPI) input-topic Learn entry: eDPI = DPI × in-game sensitivity is the number that decides aim feel, match it (not just DPI) to copy a setup; names the can't-read-DPI limit + the 400–800 (rarely >1600) rule-of-thumb; no FPS claim; guard test (`bcf7316`)
 - [ ] debounce / Snap-Tap / Null-Bind / Rapid-Trigger detection
 - [ ] sensor ID + known-issue DB (bundled JSON)
 - [x] wired-vs-wireless latency model — honest conservative wireless-name advisory, read-only (`27f3651`)
