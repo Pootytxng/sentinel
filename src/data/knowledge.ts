@@ -10,13 +10,40 @@ import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
 import { VERDICT_GLOSSARY, VERDICT_GLOSSARY_ENTRY_ID } from "./verdict-glossary";
 import { TUNING_GUIDE_ENTRIES } from "./tuning-guides";
-import { TOPIC_BY_ID, type Topic } from "./knowledge-topics";
+import { TOPIC_BY_ID, type Topic, type Applicability } from "./knowledge-topics";
 
-export type { Topic } from "./knowledge-topics";
+export type { Topic, Applicability } from "./knowledge-topics";
 
 /** The entry's topic from the central map (A3); falls back to "general" only if unmapped — the
  * knowledge lint enforces that every id IS mapped, so the fallback never fires in practice. */
 const topicOf = (id: unknown): Topic => TOPIC_BY_ID[String(id)] ?? "general";
+
+// Hardware applicability (AMD/NVIDIA/Intel/laptop/desktop) — central, owner-reviewable map from an
+// entry id to the rigs it's RELEVANT to. OPTIONAL: an id absent here is universal (applies to every
+// rig — the common case), so the map only lists entries that genuinely narrow. Tags are validated by
+// the knowledge lint (real ids, known tags, no empties/dupes). Organizational metadata, never a verdict.
+export const APPLIES_BY_ID: Record<string, Applicability[]> = {
+  // GPU vendor-specific
+  "nvidia-reflex": ["nvidia"],
+  "nvidia-prefer-max-performance": ["nvidia"],
+  "anti-lag-plus": ["amd"],
+  // NOTE: amd-gpu-undervolt is a tuning GUIDE whose KNOWLEDGE copy is value-pinned to its derived form
+  // by tuning-guides.test.ts, so it is deliberately NOT tagged here; the AMD-undervolt knowledge is
+  // covered by the amd-undervolting term below.
+  "amd-undervolting": ["amd"],
+  // CPU vendor-specific
+  "pbo-curve-optimizer": ["amd"],
+  "pbo": ["amd"],
+  // Memory — the profile name differs by platform (XMP = Intel's name, EXPO = AMD's)
+  "xmp-expo": ["amd", "intel"],
+  "xmp": ["amd", "intel"],
+  "xmp-guide": ["amd", "intel"],
+  // Form-factor specific
+  "laptop-plugged-in-fps": ["laptop"],
+};
+
+/** The entry's hardware applicability from the central map; undefined (universal) when unmapped. */
+const appliesOf = (id: unknown): Applicability[] | undefined => APPLIES_BY_ID[String(id)];
 
 // Version field on the dataset root, for future migrations. Bump + migrate when a shape changes.
 export const KNOWLEDGE_VERSION = 1;
@@ -42,6 +69,10 @@ interface BaseEntry {
   // an old debunk reads "superseded → see X" rather than misleading a reader). Entries default current.
   status?: "deprecated" | "superseded";
   supersededBy?: string; // an existing entry id; set when status === "superseded"
+  // Hardware applicability — which rigs this entry is relevant to (AMD/NVIDIA/Intel/laptop/desktop),
+  // from the central APPLIES_BY_ID map. Absent = universal (applies to every rig). Organizational
+  // metadata only, never a verdict; drives Learn's "fits my rig" filter.
+  applies?: Applicability[];
 }
 export interface TweakEntry extends BaseEntry {
   type: "tweak";
@@ -79,6 +110,15 @@ export function lifecycle(t: Raw): { status?: "deprecated" | "superseded"; super
   if (t.status === "superseded") return { status: "superseded", supersededBy: String(t.supersededBy ?? "") };
   if (t.status === "deprecated") return { status: "deprecated" };
   return {};
+}
+
+// Apply the central applicability map to a fully-built entry — adds `applies` ONLY when this id has
+// tags, so an unmapped (universal) entry keeps `applies` undefined rather than an empty array. Done as
+// one normalization pass over the assembled corpus so it covers EVERY source uniformly (the four JSON
+// types, the derived tuning guides, and the grading meta-entry) without touching each builder.
+function withApplicability<T extends KnowledgeEntry>(e: T): T {
+  const a = appliesOf(e.id);
+  return a ? { ...e, applies: a } : e;
 }
 
 const TWEAKS: TweakEntry[] = (rawTweaks as Raw[]).map((t) => ({
@@ -161,7 +201,7 @@ export const KNOWLEDGE: KnowledgeEntry[] = [
   ...GUIDES,
   ...TUNING_GUIDE_ENTRIES,
   GRADING_ENTRY,
-];
+].map(withApplicability);
 
 export const KNOWLEDGE_BY_ID: Map<string, KnowledgeEntry> = new Map(
   KNOWLEDGE.map((e) => [e.id, e]),

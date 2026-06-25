@@ -18,6 +18,21 @@ export type Topic =
 
 export const TOPICS: Topic[] = ["display", "input", "network", "cpu", "gpu", "memory", "storage", "windows", "power", "general"];
 
+// Hardware applicability tags — OPTIONAL metadata flagging which rigs an entry is relevant to. An
+// entry with NO applicability is universal (the common case); a tag set NARROWS it (e.g. NVIDIA
+// Reflex applies to "nvidia" rigs only). Organizational metadata, NOT a verdict — never a safety
+// judgement. The id -> tags map lives in knowledge.ts (APPLIES_BY_ID), owner-reviewable like topics;
+// absent there means universal. The Learn filter uses these to hide entries that don't fit a chosen rig.
+export type Applicability = "amd" | "nvidia" | "intel" | "laptop" | "desktop";
+export const APPLICABILITY: Applicability[] = ["amd", "nvidia", "intel", "laptop", "desktop"];
+export const APPLICABILITY_LABELS: Record<Applicability, string> = {
+  amd: "AMD",
+  nvidia: "NVIDIA",
+  intel: "Intel",
+  laptop: "Laptop",
+  desktop: "Desktop",
+};
+
 export const TOPIC_LABELS: Record<Topic, string> = {
   display: "Display & monitor",
   input: "Mouse & keyboard",

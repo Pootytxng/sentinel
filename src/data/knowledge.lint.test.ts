@@ -6,8 +6,9 @@ import rawTweaks from "./tweaks.json";
 import rawTerms from "./terms.json";
 import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
-import { KNOWLEDGE } from "./knowledge";
+import { KNOWLEDGE, KNOWLEDGE_BY_ID, APPLIES_BY_ID } from "./knowledge";
 import { TOPIC_BY_ID, TOPICS } from "./knowledge-topics";
+import { APPLICABILITY, type Applicability } from "./knowledge-topics";
 
 type Raw = Record<string, unknown>;
 
@@ -180,6 +181,49 @@ describe("knowledge dataset lint", () => {
     expect(badTopic, `entries with an invalid topic: ${badTopic.join(", ")}`).toEqual([]);
     const orphans = Object.keys(TOPIC_BY_ID).filter((id) => !realIds.has(id));
     expect(orphans, `TOPIC_BY_ID has ids no entry uses: ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  it("hardware applicability: APPLIES_BY_ID maps only to real ids, valid tags, no empties/dupes", () => {
+    // Applicability tags (AMD/NVIDIA/Intel/laptop/desktop) are OPTIONAL, central, owner-reviewable
+    // metadata — an entry with no map entry applies to everything (no filter restriction). This guard
+    // keeps the map honest: no orphan ids, only known tags, no empty arrays, no duplicate tags.
+    const valid = new Set<string>(APPLICABILITY);
+    const realIds = new Set(KNOWLEDGE.map((e) => e.id));
+    const orphans = Object.keys(APPLIES_BY_ID).filter((id) => !realIds.has(id));
+    expect(orphans, `APPLIES_BY_ID has ids no entry uses: ${orphans.join(", ")}`).toEqual([]);
+    const problems: string[] = [];
+    for (const [id, tags] of Object.entries(APPLIES_BY_ID)) {
+      if (!Array.isArray(tags) || tags.length === 0) {
+        problems.push(`${id}: applicability must be a NON-EMPTY array (omit the id instead of [])`);
+        continue;
+      }
+      for (const t of tags) if (!valid.has(t)) problems.push(`${id}: invalid tag "${t}"`);
+      if (new Set(tags).size !== tags.length) problems.push(`${id}: duplicate tags`);
+    }
+    expect(problems, `applicability problems:\n${problems.join("\n")}`).toEqual([]);
+  });
+
+  it("hardware applicability: entries carry the mapped tags (absent = applies to all)", () => {
+    for (const e of KNOWLEDGE) {
+      const mapped = APPLIES_BY_ID[e.id];
+      if (mapped) {
+        expect(e.applies, `${e.id} should carry its mapped tags`).toEqual(mapped);
+      } else {
+        expect(e.applies, `${e.id} has no map entry → applies should be undefined`).toBeUndefined();
+      }
+    }
+  });
+
+  it("hardware applicability: vendor-specific seed entries are tagged for their vendor", () => {
+    // Spot-check a few unambiguous vendor entries so the map can't silently empty out. NVIDIA Reflex
+    // is NVIDIA-only; AMD undervolt is AMD; the XMP/EXPO profile covers both AMD + Intel.
+    const tagsOf = (id: string): Applicability[] | undefined => KNOWLEDGE_BY_ID.get(id)?.applies;
+    expect(tagsOf("nvidia-reflex")).toContain("nvidia");
+    expect(tagsOf("amd-undervolting")).toContain("amd");
+    expect(tagsOf("xmp-expo")).toEqual(["amd", "intel"]);
+    expect(tagsOf("laptop-plugged-in-fps")).toContain("laptop");
+    // A universal entry (no map row) carries no applies — it fits every rig.
+    expect(tagsOf("fps-cap")).toBeUndefined();
   });
 
   it("ships the expected dataset volume (sanity floor)", () => {
