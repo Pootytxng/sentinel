@@ -1342,7 +1342,7 @@ mod readiness_tests {
     }
 
     fn nic(physical: bool, medium: &str, connected: bool) -> crate::hardware::NetAdapterInfo {
-        crate::hardware::NetAdapterInfo { name: "NIC".into(), physical, medium: medium.into(), connected }
+        crate::hardware::NetAdapterInfo { name: "NIC".into(), physical, medium: medium.into(), connected, link_speed_bps: None }
     }
 
     #[test]

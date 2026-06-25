@@ -303,6 +303,24 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
             "Physical NIC + 802.3 medium + link state (virtual adapters excluded). Gates the Energy Efficient Ethernet rec.".into(),
         ),
     });
+    // Wired link rate — the negotiated speed of the active wired NIC (read-only, zero-outbound). A
+    // ≤100 Mbps link on a gigabit-era port usually means an older cable or switch port; harmless for
+    // gaming (games need very little bandwidth), worth a check only if faster transfers were expected.
+    if let Some(bps) = crate::hardware::active_wired_link_speed(&hw.network_adapters) {
+        let low = bps <= 100_000_000;
+        network.push(DiagnosticEntry {
+            label: "Wired link speed".into(),
+            value: crate::hardware::format_link_rate(bps),
+            note: Some(if low {
+                "Negotiated link rate. Most modern Ethernet links at gigabit (1000 Mbps) — a wired link \
+                 this low usually means an older cable or switch port. It's still fine for gaming; worth \
+                 a check only if you expected faster file transfers."
+                    .into()
+            } else {
+                "Negotiated link rate of the active wired connection.".into()
+            }),
+        });
+    }
     // Adapter inventory — each row self-identifies, so a false positive (e.g. a VPN's TAP adapter)
     // is visible to the user AND to us via their Export.
     for a in &hw.network_adapters {

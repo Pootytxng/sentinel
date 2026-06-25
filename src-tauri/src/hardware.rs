@@ -1794,6 +1794,10 @@ pub(crate) struct NetAdapterInfo {
     pub physical: bool,
     pub medium: String,
     pub connected: bool,
+    /// Negotiated link speed in bits/sec (MSFT_NetAdapter.Speed), when readable. The *current*
+    /// negotiated rate, not the NIC's max — `None` when unreadable. Drives the wired link-rate pill.
+    #[serde(default)]
+    pub link_speed_bps: Option<u64>,
 }
 
 // MSFT_NetAdapter (root\StandardCimv2) — unlike Win32_NetworkAdapter it exposes ConnectorPresent
@@ -1811,6 +1815,8 @@ struct MsftNetAdapter {
     #[serde(rename = "PnPDeviceID")]
     pnp_device_id: Option<String>,
     interface_guid: Option<String>,
+    /// Current negotiated link speed in bits/sec (uint64). `None`/0 when not reporting.
+    speed: Option<u64>,
 }
 
 // Belt-and-suspenders virtual exclusion (a SECOND signal — never the only one): name patterns of the
@@ -1891,6 +1897,35 @@ impl NetworkPill {
     }
 }
 
+/// Pure: the negotiated link speed (bits/sec) of the active physical WIRED adapter, when known.
+/// Picks the first connected physical wired NIC that reports a speed — the link gaming should use.
+pub(crate) fn active_wired_link_speed(adapters: &[NetAdapterInfo]) -> Option<u64> {
+    adapters
+        .iter()
+        .find(|a| a.physical && a.connected && a.medium == "wired" && a.link_speed_bps.is_some())
+        .and_then(|a| a.link_speed_bps)
+}
+
+/// Pure: format a bits/sec link rate as plain English ("1 Gbps", "2.5 Gbps", "100 Mbps"). Whole
+/// gigabit values drop the decimal; sub-gigabit shows Mbps. 0 should never reach here (callers gate
+/// on `> 0`), but degrades to "unknown" rather than printing "0 bps".
+pub(crate) fn format_link_rate(bps: u64) -> String {
+    if bps >= 1_000_000_000 {
+        let gbps = bps as f64 / 1_000_000_000.0;
+        if (gbps.fract()).abs() < 1e-9 {
+            format!("{} Gbps", gbps as u64)
+        } else {
+            format!("{gbps:.1} Gbps")
+        }
+    } else if bps >= 1_000_000 {
+        format!("{} Mbps", bps / 1_000_000)
+    } else if bps > 0 {
+        format!("{bps} bps")
+    } else {
+        "unknown".to_string()
+    }
+}
+
 /// Pure: fold the already-collected network signals into the compact readiness pills. Mirrors the
 /// `network-connection` readiness check's honesty — wired is the steady ideal (`good`), Wi-Fi is
 /// `advisory` (fine for plenty of games, never a problem), offline is `unknown` (never a scare).
@@ -1904,7 +1939,16 @@ pub(crate) fn network_readiness_pills(
 ) -> Vec<NetworkPill> {
     let mut pills = Vec::new();
     match network_connection_kind(adapters) {
-        "wired" => pills.push(NetworkPill::new("Wired Ethernet", "good")),
+        "wired" => {
+            pills.push(NetworkPill::new("Wired Ethernet", "good"));
+            // Negotiated link rate — a plain fact, like the Wi-Fi rate pill. A ≤100 Mbps wired link
+            // is worth a glance (modern Ethernet is gigabit; a low link usually means an old cable or
+            // switch port) — never a problem (games need very little bandwidth), so `advisory`, not a scare.
+            if let Some(bps) = active_wired_link_speed(adapters) {
+                let tone = if bps <= 100_000_000 { "advisory" } else { "neutral" };
+                pills.push(NetworkPill::new(format_link_rate(bps), tone));
+            }
+        }
         "wifi" => {
             let band = wifi.and_then(|w| w.band.clone());
             pills.push(NetworkPill::new(
@@ -2056,6 +2100,8 @@ pub(crate) fn detect_network_adapters() -> Vec<NetAdapterInfo> {
                     ),
                     medium: classify_medium(a.ndis_physical_medium).to_string(),
                     connected: a.media_connect_state == Some(1),
+                    // 0 (the "not reporting" sentinel) collapses to None so we never show "0 bps".
+                    link_speed_bps: a.speed.filter(|&s| s > 0),
                     name,
                 })
             })
@@ -2377,7 +2423,7 @@ mod net_adapter_tests {
 
     use super::{network_connection_kind, NetAdapterInfo};
     fn adapter(physical: bool, medium: &str, connected: bool) -> NetAdapterInfo {
-        NetAdapterInfo { name: "NIC".into(), physical, medium: medium.into(), connected }
+        NetAdapterInfo { name: "NIC".into(), physical, medium: medium.into(), connected, link_speed_bps: None }
     }
 
     #[test]
@@ -2433,6 +2479,69 @@ mod net_adapter_tests {
         let other = network_readiness_pills(&[adapter(true, "other", true)], None, false, &[]);
         assert_eq!(pill_labels(&other), vec!["Connected"]);
         assert_eq!(other[0].tone, "neutral");
+    }
+
+    // ── wired link-rate detection (A4, zero-outbound) ──────────────────────────────────────────
+
+    fn wired_at(bps: u64) -> NetAdapterInfo {
+        NetAdapterInfo {
+            name: "NIC".into(),
+            physical: true,
+            medium: "wired".into(),
+            connected: true,
+            link_speed_bps: Some(bps),
+        }
+    }
+
+    #[test]
+    fn format_link_rate_reads_plain_english() {
+        use super::format_link_rate;
+        assert_eq!(format_link_rate(1_000_000_000), "1 Gbps");
+        assert_eq!(format_link_rate(2_500_000_000), "2.5 Gbps");
+        assert_eq!(format_link_rate(10_000_000_000), "10 Gbps");
+        assert_eq!(format_link_rate(100_000_000), "100 Mbps");
+        assert_eq!(format_link_rate(10_000_000), "10 Mbps");
+        assert_eq!(format_link_rate(0), "unknown");
+    }
+
+    #[test]
+    fn active_wired_link_speed_picks_the_connected_physical_wired_nic() {
+        use super::active_wired_link_speed;
+        // Wins over a Wi-Fi adapter and a disconnected/virtual one; ignores adapters with no speed.
+        let adapters = vec![
+            adapter(true, "wifi", true),                  // wrong medium
+            adapter(true, "wired", false),                // down
+            wired_at(1_000_000_000),                      // the one
+        ];
+        assert_eq!(active_wired_link_speed(&adapters), Some(1_000_000_000));
+        // No wired link at all → None (never fabricated).
+        assert_eq!(active_wired_link_speed(&[adapter(true, "wifi", true)]), None);
+        // Wired up but speed unreadable → None (the adapter() helper has link_speed_bps: None).
+        assert_eq!(active_wired_link_speed(&[adapter(true, "wired", true)]), None);
+    }
+
+    #[test]
+    fn pills_wired_shows_gigabit_as_a_neutral_fact() {
+        let pills = network_readiness_pills(&[wired_at(1_000_000_000)], None, false, &[]);
+        assert_eq!(pill_labels(&pills), vec!["Wired Ethernet", "1 Gbps"]);
+        assert_eq!(tone_of(&pills, "Wired Ethernet"), Some("good"));
+        assert_eq!(tone_of(&pills, "1 Gbps"), Some("neutral"));
+    }
+
+    #[test]
+    fn pills_wired_flags_a_100mbps_link_as_advisory_not_a_scare() {
+        // A gigabit-era port linked at 100 Mbps is worth a glance (cable/port), never a problem.
+        let pills = network_readiness_pills(&[wired_at(100_000_000)], None, false, &[]);
+        assert_eq!(tone_of(&pills, "100 Mbps"), Some("advisory"));
+        // Still "good" for the connection itself — the advisory is only on the rate chip.
+        assert_eq!(tone_of(&pills, "Wired Ethernet"), Some("good"));
+    }
+
+    #[test]
+    fn pills_wired_without_a_readable_rate_stays_a_single_chip() {
+        // Unreadable speed must not add a chip or fabricate a rate.
+        let pills = network_readiness_pills(&[adapter(true, "wired", true)], None, false, &[]);
+        assert_eq!(pill_labels(&pills), vec!["Wired Ethernet"]);
     }
 
     #[test]
