@@ -265,7 +265,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] alias-collision lint + CI guard — `knowledge.lint.test.ts:98`
 - [x] deprecated/superseded status field — `status` + `supersededBy` on BaseEntry + `lifecycle()` mapper + lint guard (real/different target) + honest Learn surfacing (`aedb3ab`)
 - [x] orphaned-`related[]` lint — `knowledge.lint.test.ts:84`
-- [~] Autopsy structured schema — typed result exists, no versioning/migration — `knowledge-autopsy.ts:15`
+- [x] Autopsy structured schema — versioning/migration added to the PERSISTED store: `autopsy-ledger.ts` now writes a versioned envelope `{ v, entries }` + `migrateLedger()` (forward-only, idempotent, lossless) carries the legacy bare-array form forward and seams in per-version upgrades for future field changes; +10 tests. The transient `AutopsyResult` (`knowledge-autopsy.ts:15`) is recomputed from re-graded text each session (never persisted) → nothing to migrate there (`3e16618`)
 - [x] Autopsy "what did we learn?" rollup — `autopsy-ledger.ts`, `Learn.tsx:453`
 - [x] local autopsy stats — `autopsy-ledger.ts`, `local-stats.ts`
 
