@@ -18,6 +18,25 @@
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
 > stay in your file domain, rebase onto `main` before every push.
 
+### Cycle 2026-06-24e — branch-redundancy CORRECTION (honesty fix to this ledger)
+**Trigger:** owner greenlit landing `qa/locale-drift-hardening`. Setting up the isolated merge, the result tree was
+**byte-identical to main** (`git diff main HEAD` = 0 lines) → its rollback-safety fixes are **ALREADY IN MAIN** via
+PR #6 `5ab304d` ("fail-safe refuse instead of fabricating rollback snapshots across the mutation boundary, 5 paths").
+`git cherry` showed `+` only because the PR landed under different hashes. Same for `gaming/honest-partial-undo` →
+**already in main** via PR #7 `47e93e6` (no-op merge). **Both were redundant, not stranded.** My earlier
+"🔴 stranded safety work needing owner sign-off" framing (cycles a–d, and the branch-health note) was **WRONG** — lanes
+merge via PRs, leaving same-content branches behind by hash. The "always clean-merges" signal I kept citing was clean
+*because* it was a no-op.
+**Actions:** discarded the no-op merge + its worktree; **pruned `qa/locale-drift-hardening` + `gaming/honest-partial-undo`**
+(content proven 100% in main, reflog-recoverable). Completeness sweep — the 3 remaining unmerged branches DO carry real
+divergent content, stay archived (do NOT land): `feat/a1-detection` (~666 lines, 4-probe superseded by 7-probe),
+`latency-capture` (~196, overlaps `latency.rs`), `tests/coverage-sweep-2026-06-18` (~410, value already folded).
+**🔧 Cargo-count CORRECTION:** main is **580** (measured directly this cycle), not the **566** I carried in cycles c–d.
+That 566 was assumed from a truncated capture + a commit message and NOT re-run — cycle d's "verified, not assumed" was
+itself inaccurate. The real count rose 566→580 at cycle b when `services.rs` landed and never dropped back. (vitest 564, build ✓.)
+**New lane:** `lane/honesty` worktree spun up (`C:/Users/Kuya/code/sentinel-honesty`, synced to main, no work yet).
+**Net:** the rollback-safety property the owner greenlit is already shipped — nothing to merge; ledger now matches reality.
+
 ### Cycle 2026-06-24d — `main` @ `327cc87` · integrated tree GREEN
 **Two more frontend/data pushes:** content → A4 **monitor motion-clarity explainers** (strobing/ULMB, overdrive,
 GtG-vs-MPRT) in `terms.json` +24 (`6d41137`); agent → A4 Peripheral **plain-English polling-rate class** on the
@@ -75,6 +94,8 @@ pre-existing >500 kB chunk advisory, not a regression). Agent (`Latency.tsx` / `
 \* Prefer pure-logic / reuse existing IPC so only ONE lane touches `lib.rs` / `actions.rs` per cycle.
 
 **🔴 Stranded work to land (surface to owner — needs per-PR sign-off):**
+> **❌ SUPERSEDED by Cycle 2026-06-24e:** both branches below were found to be **already in main** (PR #6 `5ab304d`
+> and PR #7 `47e93e6`) — redundant, not stranded; both pruned. The "clean-merge" claim was a no-op. Disregard this block.
 - `qa/locale-drift-hardening` (4 ahead, 29 behind) — **real mutation-boundary safety fixes**: refuse instead of
   fabricating a rollback snapshot when powercfg / HAGS priors are unreadable (completes the key-open-collapse
   fail-safe tier — this is the fix for the 2026-06-22 completeness-critic finding). Touches `actions.rs` (the
@@ -126,18 +147,20 @@ the product:
   and HQ does not remove other lanes' worktrees): `content/color-science-debunks` (worktree `content/`),
   `feat/a4-service-inventory` (worktree `svc/`), `feat/blackbook-lifecycle` (worktree `qa/`). They free up when the
   lane re-branches or the owner cleans the worktree.
-- **Unmerged, deliberately retained** (dispositions verified, see the HQ STEERING LOG above): `qa/locale-drift-hardening`
-  (owner-gated safety merge), `gaming/honest-partial-undo` (land when Gaming-Mode QA resumes), `feat/a1-detection`
-  (superseded archive), `latency-capture` (superseded — overlaps `latency.rs`, do NOT land),
+- **Already in main → PRUNED (Cycle 2026-06-24e):** `qa/locale-drift-hardening` (= PR #6 `5ab304d`),
+  `gaming/honest-partial-undo` (= PR #7 `47e93e6`) — both no-op merges; their content shipped under different hashes.
+- **Unmerged, real divergent content, deliberately retained as archive (do NOT land):** `feat/a1-detection`
+  (4-probe superseded by the 7-probe `reconcile/a1-merge`), `latency-capture` (older latency impl, overlaps `latency.rs`),
   `tests/coverage-sweep-2026-06-18` (value already folded). `beta/private-beta-001` = FROZEN, never touch.
 - **Lane heartbeat:** `work/agent` 1 behind (active), **`work/bench` 13 behind — no push since the award-ledger
   (`1f712b1`); bench's A2 hardware-tier-segmentation assignment looks unstarted/stalled — watching.**
 
 **Action item (A0):** reconcile/prune stranded branches so "merged into main" == "shipped." A branch whose
 work is described as complete but sits unmerged is exactly how a session loses the thread.
-*(Status: every branch now has a verified disposition ↑. A0 stays `[ ]` because two unmerged branches —
-`qa/locale-drift-hardening`, `gaming/honest-partial-undo` — are intentionally un-landed behind gates, so "main =
-single product truth" isn't 100% until the owner lands them.)*
+*(Status (updated 2026-06-24e): every branch has a verified disposition ↑. The two branches once thought "stranded behind
+gates" were found **already in main** (PRs #6/#7) and pruned. The only remaining unmerged branches are deliberately-superseded
+archives (rejected/redundant content), so **`main` IS the single product truth** for shipped content. A0's reconcile sub-item
+is effectively complete — see A0 below.)*
 
 ---
 
@@ -146,8 +169,8 @@ single product truth" isn't 100% until the owner lands them.)*
 Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]` excluded by feasibility/design.
 
 ### A0 · Repo hygiene
-- [ ] Reconcile + prune the stranded branches above; confirm `main` is the single product truth.
-- [ ] Adopt this ledger as the persistent-workflow target (replace "continue the checklist" prompts).
+- [x] Reconcile + prune the stranded branches; confirm `main` is the single product truth — done 2026-06-24e: pruned `spike/backend-agent`, `benchmark`, and the two no-op-redundant safety branches (`qa/locale-drift-hardening`=#6, `gaming/honest-partial-undo`=#7, both already in main); the 3 remaining unmerged branches are deliberately-superseded archives. `main` IS the single product truth.
+- [x] Adopt this ledger as the persistent-workflow target — the HQ STEERING LOG (top) is the live per-cycle target; `/loop` + scheduled HQ sessions drive off it.
 
 ### A1 · DETECTION layer — **effectively complete** (feasibility-bounded)
 - [x] core-parking state (policy/registry + powercfg) — `hardware.rs`, `lib.rs:288`
