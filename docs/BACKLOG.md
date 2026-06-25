@@ -22,6 +22,21 @@
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-06-25b — crash-recovery / resume-after-API-error (owner ask)
+**Owner ask:** let sessions re-establish work / resume after API errors that halt the loop.
+**Added to `LANE_BUS.md`:** (§① step 0 + §⑦) a **RECOVER-FIRST routine** that makes each lane loop **idempotent**
+— on every wake it surveys uncommitted WIP (finish+commit or stash-with-note, never discard), handles a
+half-rebase, checks whether the item already landed (merge-tree no-op / BACKLOG tick → skip, no duplication),
+re-establishes a green cargo+npm baseline, then resumes. (§⑧) a **WATCHDOG**: steering reads each lane's
+last-activity by its **file-domain on origin/main** (branch HEAD false-alarms since lanes merge via ephemeral
+branches) and posts a restart instruction + pings owner for any lane quiet >~30m with open queue work. The §②
+loop prompt now leads with RECOVER-FIRST and is explicitly idempotent.
+**Why it survives API errors:** committed work is on origin, WIP is in the worktree, the checkpoint says where the
+lane was → a restarted loop resumes without loss or duplication. `/loop` already rides out *transient* errors
+(next tick recovers); a *hard* halt is recovered by RECOVER-FIRST on restart (manual / stop-hook / watchdog-prompted).
+**Live watchdog run:** peripheral active (30m) · backend/content/honesty idle 3–4h (no loop running) · **measurement
+~13.6h stalled — restart needed.** `main` @ `2f134e6` green; docs-only.
+
 ### Cycle 2026-06-25a — LANE BUS established (owner ask: lanes self-sustain + coordinate)
 **Owner ask:** a lane ("Tab 2") was stalling "awaiting direction from steering"; make lanes able to communicate +
 prompt one another to continue to the next task after completion → sustained autonomous workflow.
