@@ -8,6 +8,7 @@ import {
   type TweakVerdict,
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
+import { TOPICS, TOPIC_LABELS, type Topic } from "../data/knowledge-topics";
 import { autopsyScan, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
 import { autopsyStats, readAutopsyLedger, recordAutopsy } from "../data/autopsy-ledger";
 import {
@@ -610,6 +611,7 @@ export default function Learn({
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [verdict, setVerdict] = useState<TweakVerdict | "all">("all"); // §5 verdict chips
+  const [topic, setTopic] = useState<Topic | "all">("all"); // A3 topic filter (what an entry is about)
   const [openCats, setOpenCats] = useState<Set<KnowledgeType>>(new Set()); // §5 collapsed categories
   const [focused, setFocused] = useState<string | null>(focusId);
   const [phIdx, setPhIdx] = useState(0);
@@ -624,6 +626,7 @@ export default function Learn({
       setQ("");
       setFilter("all");
       setVerdict("all");
+      setTopic("all");
       const e = KNOWLEDGE_BY_ID.get(focusId);
       if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category so it's reachable
     }
@@ -650,8 +653,9 @@ export default function Learn({
     let hits = searchKnowledge(deferredQ);
     if (filter !== "all") hits = hits.filter((e) => e.type === filter);
     if (verdict !== "all") hits = hits.filter((e) => e.type === "tweak" && e.verdict === verdict);
+    if (topic !== "all") hits = hits.filter((e) => e.topic === topic);
     return hits;
-  }, [deferredQ, filter, verdict]);
+  }, [deferredQ, filter, verdict, topic]);
 
   // §5 "Start here" — the guides are the actionable entry points (capped). Shown only in pure browse.
   const startHere = useMemo(() => KNOWLEDGE.filter((e) => e.type === "guide").slice(0, 5), []);
@@ -673,6 +677,7 @@ export default function Learn({
     setQ("");
     setFilter("all");
     setVerdict("all");
+    setTopic("all");
     setFocused(id);
     const e = KNOWLEDGE_BY_ID.get(id);
     if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category
@@ -784,6 +789,29 @@ export default function Learn({
                   </button>
                 ))}
               </div>
+              {/* A3 topic filter — narrow the library by what an entry is ABOUT (display, GPU,
+                  network…), orthogonal to the type + verdict axes. Labelled so the row reads as its
+                  own axis, not a third type filter. */}
+              <div className="lx-filters lx-vfilters" role="group" aria-label="Filter by topic">
+                <span className="lx-vfilter-label" aria-hidden="true">Topic:</span>
+                <button
+                  className={`lx-filter ${topic === "all" ? "lx-filter-on" : ""}`}
+                  aria-pressed={topic === "all"}
+                  onClick={() => setTopic("all")}
+                >
+                  Any topic
+                </button>
+                {TOPICS.map((t) => (
+                  <button
+                    key={t}
+                    className={`lx-filter ${topic === t ? "lx-filter-on" : ""}`}
+                    aria-pressed={topic === t}
+                    onClick={() => setTopic(t)}
+                  >
+                    {TOPIC_LABELS[t]}
+                  </button>
+                ))}
+              </div>
               {/* The visible "How we grade" key — gives the verdict filter chips above their meaning
                   (foam-pit law: on the page, not hover-only). Full on a reader's first browse, a quiet
                   re-openable toggle thereafter so it stops re-claiming a block every visit. */}
@@ -793,7 +821,7 @@ export default function Learn({
                   No entry for that yet — we only answer what we've verified. If you're unsure about a
                   tweak that isn't here, measure it with Compy's benchmark instead of trusting a forum.
                 </div>
-              ) : !deferredQ.trim() && filter === "all" && verdict === "all" ? (
+              ) : !deferredQ.trim() && filter === "all" && verdict === "all" && topic === "all" ? (
                 // §5 PURE BROWSE — "Start here" strip + collapsed category sections (the calm open).
                 <>
                   <div className="lx-starthere">

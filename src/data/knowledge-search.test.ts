@@ -8,6 +8,7 @@ const term = (id: string, name: string, aliases: string[], what = "", more = "")
   name,
   aliases,
   related: [],
+  topic: "general",
   what,
   more,
 });

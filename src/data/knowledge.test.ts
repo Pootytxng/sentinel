@@ -14,6 +14,7 @@ const e = (id: string, related: string[]): KnowledgeEntry => ({
   name: id,
   aliases: [],
   related,
+  topic: "general",
   what: "what",
   more: "more",
 });

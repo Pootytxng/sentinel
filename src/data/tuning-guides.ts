@@ -11,6 +11,7 @@
 import raw from "./tuning-guides.json";
 import type { GuideEntry } from "./knowledge";
 import type { Walkthrough } from "../surfaces/walkthroughs";
+import { TOPIC_BY_ID } from "./knowledge-topics";
 
 export type TuningKind = "undervolt" | "overclock";
 
@@ -57,6 +58,7 @@ export function toGuideEntry(g: TuningGuide): GuideEntry {
     name: g.name,
     aliases: g.aliases,
     related: [],
+    topic: TOPIC_BY_ID[g.id] ?? "general",
     tier: "safe",
     goal: g.goal,
     steps: g.steps,

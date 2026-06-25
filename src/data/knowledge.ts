@@ -10,6 +10,13 @@ import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
 import { VERDICT_GLOSSARY, VERDICT_GLOSSARY_ENTRY_ID } from "./verdict-glossary";
 import { TUNING_GUIDE_ENTRIES } from "./tuning-guides";
+import { TOPIC_BY_ID, type Topic } from "./knowledge-topics";
+
+export type { Topic } from "./knowledge-topics";
+
+/** The entry's topic from the central map (A3); falls back to "general" only if unmapped — the
+ * knowledge lint enforces that every id IS mapped, so the fallback never fires in practice. */
+const topicOf = (id: unknown): Topic => TOPIC_BY_ID[String(id)] ?? "general";
 
 // Version field on the dataset root, for future migrations. Bump + migrate when a shape changes.
 export const KNOWLEDGE_VERSION = 1;
@@ -25,6 +32,10 @@ interface BaseEntry {
   name: string;
   aliases: string[];
   related: string[];
+  // Topic (A3) — what the entry is ABOUT (display, gpu, network…), from the central knowledge-topics
+  // map. Drives Learn's topic filter; organizational metadata only, never a verdict. Required, so a
+  // new entry can't compile without a topic; the lint enforces an EXPLICIT map entry (no silent default).
+  topic: Topic;
   // Lifecycle (A3) — an entry whose guidance has gone stale is MARKED here, not silently left wrong
   // or deleted: "superseded" points to the entry that replaces it; "deprecated" is outdated with no
   // single replacement. Absent = current. Surfaced honestly in Learn (the corpus stays publishable —
@@ -76,6 +87,7 @@ const TWEAKS: TweakEntry[] = (rawTweaks as Raw[]).map((t) => ({
   name: String(t.name),
   aliases: strArr(t.aliases),
   related: strArr(t.related),
+  topic: topicOf(t.id),
   verdict: t.verdict as TweakVerdict,
   what: String(t.what),
   why: String(t.why),
@@ -88,6 +100,7 @@ const TERMS: TermEntry[] = (rawTerms as Raw[]).map((t) => ({
   name: String(t.name),
   aliases: strArr(t.aliases),
   related: strArr(t.related),
+  topic: topicOf(t.id),
   what: String(t.what),
   more: String(t.more),
   ...lifecycle(t),
@@ -99,6 +112,7 @@ const TRICKS: TrickEntry[] = (rawTricks as Raw[]).map((t) => ({
   name: String(t.name),
   aliases: strArr(t.aliases),
   related: strArr(t.related),
+  topic: topicOf(t.id),
   pattern: String(t.pattern),
   tell: String(t.tell),
   honest_version: String(t.honest_version),
@@ -111,6 +125,7 @@ const GUIDES: GuideEntry[] = (rawGuides as Raw[]).map((t) => ({
   name: String(t.name),
   aliases: strArr(t.aliases),
   related: strArr(t.related),
+  topic: topicOf(t.id),
   tier: t.tier as GuideTier,
   goal: String(t.goal),
   steps: strArr(t.steps),
@@ -130,6 +145,7 @@ const GRADING_ENTRY: TermEntry = {
   name: "How Compy grades things",
   aliases: ["how we grade", "how compy grades", "verdict glossary"],
   related: [],
+  topic: topicOf(VERDICT_GLOSSARY_ENTRY_ID),
   what:
     "Compy gives every tweak one of three honest verdicts — Real, Placebo, or Risky — so you can tell what's worth your time before you change anything.",
   more: VERDICT_GLOSSARY.map((r) => `${r.chip}: ${r.definition}`).join("  "),

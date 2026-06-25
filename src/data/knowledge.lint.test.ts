@@ -7,6 +7,7 @@ import rawTerms from "./terms.json";
 import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
 import { KNOWLEDGE } from "./knowledge";
+import { TOPIC_BY_ID, TOPICS } from "./knowledge-topics";
 
 type Raw = Record<string, unknown>;
 
@@ -166,6 +167,19 @@ describe("knowledge dataset lint", () => {
       }
     }
     expect(offenders, `banned words found:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("every entry has a valid topic, explicitly mapped (A3 completeness guard)", () => {
+    // No silent fallback: a new entry must get an EXPLICIT topic in knowledge-topics.ts, the topic
+    // must be a known one, and the map must carry no orphan ids. This is the corpus taxonomy drift-guard.
+    const valid = new Set<string>(TOPICS);
+    const realIds = new Set(KNOWLEDGE.map((e) => e.id));
+    const unmapped = KNOWLEDGE.filter((e) => !(e.id in TOPIC_BY_ID)).map((e) => e.id);
+    expect(unmapped, `entries with no explicit topic mapping: ${unmapped.join(", ")}`).toEqual([]);
+    const badTopic = KNOWLEDGE.filter((e) => !valid.has(e.topic)).map((e) => `${e.id}:${e.topic}`);
+    expect(badTopic, `entries with an invalid topic: ${badTopic.join(", ")}`).toEqual([]);
+    const orphans = Object.keys(TOPIC_BY_ID).filter((id) => !realIds.has(id));
+    expect(orphans, `TOPIC_BY_ID has ids no entry uses: ${orphans.join(", ")}`).toEqual([]);
   });
 
   it("ships the expected dataset volume (sanity floor)", () => {
