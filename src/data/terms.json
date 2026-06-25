@@ -534,5 +534,29 @@
     "what": "Which cable you use sets the ceiling on the refresh rate and resolution your monitor can run — pick an old version (or a cheap cable) and a 144Hz monitor can be stuck at 60Hz.",
     "more": "Both can be excellent; what matters is the VERSION and the bandwidth it carries. For high-refresh PC gaming, DisplayPort (1.4 or 2.1) is the safe default — it generally carries more bandwidth and handles high refresh rates and variable refresh (VRR) cleanly. HDMI 2.1 is also great (it is what modern consoles and TVs use for 4K120), while older HDMI 2.0 or a cheap cable can quietly cap you at 4K60 or 1080p120. If your monitor will not offer its top refresh rate, the cable and port are among the first things to check — use the best port your GPU and monitor share, with a cable rated for it. The cable does not change your FPS; it changes how much of it the screen is allowed to show.",
     "related": ["set-refresh-rate", "hz-vs-fps", "vrr"]
+  },
+  {
+    "id": "srgb-clamp",
+    "name": "sRGB mode (gamut clamp)",
+    "aliases": ["srgb mode", "srgb clamp", "srgb emulation", "gamut clamp", "oversaturated colors", "wide gamut oversaturation"],
+    "what": "Many gaming monitors have a 'wide gamut' panel that can show more colors than standard (sRGB) content was made for. Left unchecked that makes ordinary SDR games, the desktop, and video look oversaturated — neon reds, radioactive greens. An sRGB mode (also called sRGB clamp or emulation) reins the panel back to the sRGB range so those colors look the way they were meant to.",
+    "more": "It is a color-accuracy setting, not a performance one — it changes how colors LOOK, never your frame rate or input lag. The trade is that while it is on you also give up that extra saturation for content actually built for a wider gamut (HDR, some color-managed apps), so it is not a blanket always-on. On many monitors the sRGB mode lives in the on-screen menu and can lock out brightness or other controls, which is the usual reason people leave it off. If your SDR colors look cartoonishly vivid and you want them accurate, sRGB mode is the fix; if you prefer the punchier look, leaving it off is a fair choice — just know that is a preference, not correctness.",
+    "related": ["auto-hdr", "disable-hdr-fps", "gamma-vs-hdr", "chroma-subsampling"]
+  },
+  {
+    "id": "gamma-vs-hdr",
+    "name": "Gamma vs HDR",
+    "aliases": ["gamma vs hdr", "fake hdr", "gamma hdr", "brightness hdr", "is gamma hdr"],
+    "what": "Turning up your monitor's gamma, brightness, or contrast does not give you HDR. Gamma is the curve that decides how the mid-tones of a standard (SDR) picture map to light — push it and you just redistribute the same limited range of brightness, which tends to crush shadow detail or blow out highlights rather than add range.",
+    "more": "Real HDR (high dynamic range) is a different thing end to end: a much wider span of brightness — highlights that can be many times brighter than SDR while shadows stay deep — plus a wider color range and usually 10-bit color, sent as an actual HDR signal (HDR10, Dolby Vision) the game or video outputs. It needs a display that can physically produce that brightness and contrast; a panel that cannot will render HDR as washed-out or dim no matter how you set it. So you cannot convert SDR into HDR by nudging gamma — you are remapping a small range, not widening it. Windows Auto HDR is the legitimate exception: it expands SDR games toward HDR, but only on a real HDR display. If a so-called HDR mode just looks like more contrast and saturation, that is a tone tweak, not HDR.",
+    "related": ["auto-hdr", "disable-hdr-fps", "srgb-clamp", "chroma-subsampling"]
+  },
+  {
+    "id": "chroma-subsampling",
+    "name": "Chroma subsampling (4:4:4 vs 4:2:0)",
+    "aliases": ["chroma subsampling", "4:4:4", "4:2:0", "4:2:2", "444 vs 420", "color compression"],
+    "what": "Chroma subsampling is a bandwidth-saving trick: the display keeps full detail in brightness (luma) but throws away some of the color (chroma) detail. 4:4:4 keeps full color for every pixel; 4:2:2 and 4:2:0 keep less color information to fit through a cable with limited bandwidth. Your eyes are far more sensitive to brightness than to fine color, which is why the lower modes are often hard to notice at all.",
+    "more": "Where it does show up is on sharp, high-contrast color edges — most of all small colored text on the desktop, which can look fringed or smeary at 4:2:0. In actual game scenes and video, 4:2:0 is usually very hard to tell apart from 4:4:4, so it matters far less for gaming than for desktop reading. None of it changes your frame rate — this is an image-quality and bandwidth setting, not a performance one. The reason you would be stuck below 4:4:4 is running out of cable or port bandwidth at your resolution, refresh rate, and color depth combined; the honest fix is a cable and port rated for that bandwidth (a solid DisplayPort 1.4/2.1 or HDMI 2.1 link), or easing back one of refresh rate, resolution, or color depth — not forcing 4:4:4 and hoping. Forcing 4:4:4 never adds frames.",
+    "related": ["displayport-vs-hdmi", "set-refresh-rate", "hz-vs-fps", "srgb-clamp", "gamma-vs-hdr"]
   }
 ]

@@ -155,7 +155,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [~] vendor-aware monitor walkthroughs — generic VRR/HDR exist; no model-specific
 - [ ] FreeSync↔VRB exclusion warning (FreeSync detected, but no VRB feature)
 - [ ] Acer XFA253QZ (and family) model-hint cards
-- [~] refresh-rate / sRGB / gamma-vs-HDR / chroma debunk Learn entries — HDR+VRR only; sRGB/gamma/chroma missing
+- [x] refresh-rate / sRGB / gamma-vs-HDR / chroma debunk Learn entries — added `srgb-clamp`, `gamma-vs-hdr`, `chroma-subsampling` term explainers (factual color-science, debunk woven in, adversarially fact-checked, lint-clean); refresh-rate covered by `set-refresh-rate` + `hz-vs-fps`. Flagged for owner brand-voice skim.
 - [x] monitor model detection (EDID / WmiMonitorID, read-only) — `hardware.rs:1879`
 
 **GPU**
