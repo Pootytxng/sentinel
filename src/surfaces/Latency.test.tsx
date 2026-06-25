@@ -6,13 +6,17 @@ import type { LatencyReport } from "../types";
 const mocks = vi.hoisted(() => ({
   report: null as LatencyReport | null,
   mouse: null as unknown,
+  mouseError: false, // when true, latency_measure_mouse rejects (simulates a capture failure)
   hw: null as unknown, // get_hardware_info — only network_pills is read by this surface
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     if (cmd === "get_latency_diagnostics") return Promise.resolve(mocks.report);
-    if (cmd === "latency_measure_mouse") return Promise.resolve(mocks.mouse);
+    if (cmd === "latency_measure_mouse")
+      return mocks.mouseError
+        ? Promise.reject(new Error("capture failed"))
+        : Promise.resolve(mocks.mouse);
     if (cmd === "get_hardware_info") return Promise.resolve(mocks.hw);
     return Promise.resolve(null);
   }),
@@ -23,6 +27,7 @@ import { LatencyTab } from "./Latency";
 afterEach(() => {
   cleanup();
   mocks.hw = null; // don't leak the network signal into other tests' ordering
+  mocks.mouseError = false;
 });
 
 const fullReport: LatencyReport = {
@@ -144,5 +149,26 @@ describe("LatencyTab (audit M1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Measure mouse polling" }));
     expect(await screen.findByText(/999 Hz/)).toBeInTheDocument();
     expect(screen.getByText(/over\s+1980 reports/)).toBeInTheDocument();
+  });
+
+  // bug→guard: mouseMsg was only rendered in the no-result branch, so once a measurement existed a
+  // failed "Measure again" was swallowed silently (and the re-measure coaching prompt vanished). The
+  // capture status must render in BOTH states. This guards the failure half (the clearest signal).
+  it("surfaces a failed re-measure instead of failing silently, keeping the prior result", async () => {
+    mocks.report = fullReport;
+    mocks.mouse = {
+      polling: { reports: 1980, median_hz: 998.7, min_interval_ms: 0.9, max_interval_ms: 1.4, jitter_ms: 0.1 },
+      note: "Consistent with a 1000 Hz mouse.",
+    };
+    render(<LatencyTab />);
+    // Get into the result state (the "Measure again" button only exists once a result is present).
+    fireEvent.click(await screen.findByRole("button", { name: "Measure mouse polling" }));
+    const again = await screen.findByRole("button", { name: "Measure again" });
+    // The re-measure fails — the message must appear even though a prior result is still shown.
+    mocks.mouseError = true;
+    fireEvent.click(again);
+    expect(await screen.findByText("Measurement failed.")).toBeInTheDocument();
+    // The prior measurement is preserved, not blown away by the failure.
+    expect(screen.getByText(/999 Hz/)).toBeInTheDocument();
   });
 });

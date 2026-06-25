@@ -253,13 +253,15 @@ export function LatencyTab() {
             </button>
           </>
         ) : (
-          <>
-            <button className="lat-btn" onClick={measureMouse} disabled={mouseBusy}>
-              {mouseBusy ? "Measuring…" : "Measure mouse polling"}
-            </button>
-            {mouseMsg && <p className="lat-muted">{mouseMsg}</p>}
-          </>
+          <button className="lat-btn" onClick={measureMouse} disabled={mouseBusy}>
+            {mouseBusy ? "Measuring…" : "Measure mouse polling"}
+          </button>
         )}
+        {/* Capture status renders in BOTH states (not just the no-result branch): a returning user
+            who clicks "Measure again" needs the same "move your mouse for ~2 seconds" coaching the
+            first-timer gets, and a failed re-measure must surface "Measurement failed." rather than
+            swallow it silently. Cleared to null on a successful capture, so it never lingers. */}
+        {mouseMsg && <p className="lat-muted">{mouseMsg}</p>}
       </Card>
 
       {/* Network connection — the online-latency axis (ping/lag), distinct from the local
