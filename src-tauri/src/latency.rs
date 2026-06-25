@@ -804,6 +804,36 @@ pub(crate) fn shared_controller_advisory(loads: &[UsbControllerLoad]) -> Option<
     None
 }
 
+/// Pure: conservative wireless-input match on a device NAME. Only well-known, unambiguous wireless
+/// tokens — so a wired device is never mislabeled wireless (a false "you're on wireless" would be a
+/// fabricated claim). "Receiver"/"dongle" denote a wireless USB receiver; the brand tokens are
+/// vendor wireless techs (Logitech Lightspeed, Razer HyperSpeed).
+fn is_wireless_input_name(name: &str) -> bool {
+    let n = name.to_lowercase();
+    ["wireless", "bluetooth", "lightspeed", "hyperspeed", "receiver", "dongle"]
+        .iter()
+        .any(|k| n.contains(k))
+}
+
+/// Pure: an honest wired-vs-wireless input advisory over the already-detected input-device names.
+/// Fires ONLY when a name clearly indicates a wireless connection — name-based detection can't see
+/// every wireless device, so a no-match returns `None` rather than asserting "you're wired" (we never
+/// fabricate a connection we can't verify). Advisory only; the model is accurate (2.4 GHz gaming
+/// receivers ≈ wired; Bluetooth is worse) and the detection caveat is stated in the copy.
+pub(crate) fn wired_vs_wireless_advisory(loads: &[UsbControllerLoad]) -> Option<String> {
+    let wireless = loads
+        .iter()
+        .flat_map(|l| l.input_devices.iter())
+        .find(|n| is_wireless_input_name(n))?;
+    Some(format!(
+        "{wireless} looks like a wireless connection. A modern 2.4 GHz gaming receiver is competitive \
+         with wired — about a millisecond more, and rock-steady; Bluetooth adds noticeably more lag and \
+         jitter. For the lowest, most consistent input latency a wired connection is the safe pick, but \
+         a good 2.4 GHz dongle is plenty for most play. (Read from the device name — if it's wrong, \
+         trust your own setup over this.)"
+    ))
+}
+
 /// Live: build the USB-controller → input-device map (read-only WMI: `Win32_USBController`,
 /// `Win32_USBControllerDevice`, `Win32_PnPEntity`). No elevation, no network. Empty on any error.
 ///
@@ -1186,6 +1216,9 @@ pub(crate) struct LatencyReport {
     pub cpu_affinity_advisory: Option<String>,
     pub usb: Vec<UsbControllerLoad>,
     pub usb_advisory: Option<String>,
+    /// Honest wired-vs-wireless input note — present ONLY when an input-device name clearly indicates
+    /// a wireless connection (else None; we never assert "wired" we can't verify).
+    pub peripheral_link_advisory: Option<String>,
 }
 
 /// Gather the fast read-only latency diagnostics. Each underlying reader degrades
@@ -1213,6 +1246,7 @@ fn gather_latency_report_inner() -> LatencyReport {
     let cpu_affinity_advisory = cpu.as_ref().map(affinity_advisory);
     let usb = read_usb_topology();
     let usb_advisory = shared_controller_advisory(&usb);
+    let peripheral_link_advisory = wired_vs_wireless_advisory(&usb);
     LatencyReport {
         msi_devices,
         msi,
@@ -1225,6 +1259,7 @@ fn gather_latency_report_inner() -> LatencyReport {
         cpu_affinity_advisory,
         usb,
         usb_advisory,
+        peripheral_link_advisory,
     }
 }
 
@@ -1742,6 +1777,40 @@ mod latency_tests {
             has_high_rate_input: false,
         }];
         assert!(shared_controller_advisory(&solo).is_none());
+    }
+
+    #[test]
+    fn wired_vs_wireless_fires_only_on_a_clear_wireless_name() {
+        let ctrl = |inputs: Vec<&str>| {
+            vec![UsbControllerLoad {
+                controller_name: "USB 3.10".into(),
+                controller_id: "PCIA".into(),
+                input_devices: inputs.into_iter().map(String::from).collect(),
+                streaming_neighbors: vec![],
+                has_high_rate_input: true,
+            }]
+        };
+        // Clear wireless indicators → advisory naming the device + the honest model.
+        let a = wired_vs_wireless_advisory(&ctrl(vec!["Logitech USB Receiver"])).expect("wireless");
+        assert!(a.contains("Logitech USB Receiver") && a.contains("2.4 GHz"));
+        assert!(wired_vs_wireless_advisory(&ctrl(vec!["G Pro Wireless"])).is_some());
+        assert!(wired_vs_wireless_advisory(&ctrl(vec!["Razer HyperSpeed Mouse"])).is_some());
+        assert!(wired_vs_wireless_advisory(&ctrl(vec!["Bluetooth Keyboard"])).is_some());
+        // No clear indicator → None (never asserts "wired" we can't verify).
+        assert!(wired_vs_wireless_advisory(&ctrl(vec!["HID-compliant mouse"])).is_none());
+        assert!(wired_vs_wireless_advisory(&ctrl(vec!["Razer Viper", "HID Keyboard Device"])).is_none());
+        assert!(wired_vs_wireless_advisory(&[]).is_none());
+    }
+
+    #[test]
+    fn wireless_name_match_is_conservative() {
+        assert!(is_wireless_input_name("Logitech G305 LIGHTSPEED"));
+        assert!(is_wireless_input_name("USB Receiver"));
+        assert!(is_wireless_input_name("Bluetooth Low Energy Mouse"));
+        // Wired devices must never match (a false "wireless" claim is the failure to avoid).
+        assert!(!is_wireless_input_name("Razer DeathAdder V3"));
+        assert!(!is_wireless_input_name("HID-compliant mouse"));
+        assert!(!is_wireless_input_name("Corsair K70 Keyboard"));
     }
 
     #[test]

@@ -194,6 +194,9 @@ export function LatencyTab() {
           </ul>
         )}
         {report.usb_advisory && <p className="lat-advisory">{report.usb_advisory}</p>}
+        {report.peripheral_link_advisory && (
+          <p className="lat-advisory">{report.peripheral_link_advisory}</p>
+        )}
       </Card>
 
       <Card>

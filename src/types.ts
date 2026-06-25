@@ -165,6 +165,8 @@ export type LatencyReport = {
   cpu_affinity_advisory: string | null;
   usb: UsbControllerLoad[];
   usb_advisory: string | null;
+  // Honest wired-vs-wireless input note; present only when a device name clearly reads as wireless.
+  peripheral_link_advisory?: string | null;
 };
 export type WakeMeasurement = { granularity: SleepGranularity; note: string };
 export type MouseMeasurement = { polling: PollingRate; note: string };
