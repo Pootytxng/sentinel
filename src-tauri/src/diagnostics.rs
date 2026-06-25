@@ -350,25 +350,54 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         }],
     });
 
-    // ─── Background services (read-only inventory, A4) ───────────────────
+    // ─── Background services (read-only inventory + startup drift, A4) ────
     // A categorised inventory of the gaming-relevant services Compy recognises,
-    // plus an honest coverage count. This is informational only — it never
-    // recommends turning a service off (that owner-curated advisory layer is a
-    // separate, gated feature). Replaces the old hard-coded 4-service stub.
-    let inv = crate::services::collect_service_inventory();
-    sections.push(DiagnosticSection {
-        name: "Background services".into(),
-        entries: vec![DiagnosticEntry {
-            label: "Service inventory".into(),
-            value: format!("{} recognised of {} total", inv.recognized, inv.total),
-            note: Some(
-                "The gaming-relevant services Compy recognises are grouped below. The rest are \
-                 mostly core Windows services Compy doesn't flag. This is an inventory, not advice \
-                 — Compy never tells you to turn a service off."
-                    .into(),
-            ),
-        }],
-    });
+    // plus an honest coverage count, plus read-only startup-DRIFT findings: a
+    // curated, closed catalog of services whose stock startup is unambiguous
+    // (e.g. Windows Audio) that "disable services for FPS" scripts turn off.
+    // Both are informational — the inventory never says "turn a service off"
+    // (that owner-curated advisory layer is a separate, gated feature), and
+    // drift only points out a change someone already made, with no enable
+    // action wired and full origin-uncertainty honesty.
+    let report = crate::services::collect_service_report();
+    let inv = report.inventory;
+    let mut svc_entries = vec![DiagnosticEntry {
+        label: "Service inventory".into(),
+        value: format!("{} recognised of {} total", inv.recognized, inv.total),
+        note: Some(
+            "The gaming-relevant services Compy recognises are grouped below. The rest are \
+             mostly core Windows services Compy doesn't flag. This is an inventory, not advice \
+             — Compy never tells you to turn a service off."
+                .into(),
+        ),
+    }];
+    if report.drift.is_empty() {
+        // "Nothing found" is first-class — but only claim it when the enumeration actually ran
+        // (total > 0). A failed WMI read (total == 0) must NOT read as "all clear".
+        if inv.total > 0 {
+            svc_entries.push(DiagnosticEntry {
+                label: "Startup drift".into(),
+                value: "None — the services Compy checks are at their stock startup".into(),
+                note: Some(
+                    "Compy checks a short list of services whose stock startup is well-known (e.g. \
+                     Windows Audio). None of them have been switched off on this PC."
+                        .into(),
+                ),
+            });
+        }
+    } else {
+        for f in &report.drift {
+            svc_entries.push(DiagnosticEntry {
+                label: f.label.clone(),
+                value: format!("{} (stock: {})", f.current, f.stock),
+                note: Some(format!(
+                    "{} {} This matches {}. {}",
+                    f.cost, f.verdict, f.matched_tweak, f.restore_note
+                )),
+            });
+        }
+    }
+    sections.push(DiagnosticSection { name: "Background services".into(), entries: svc_entries });
     for group in inv.groups {
         sections.push(DiagnosticSection {
             name: format!("Services · {}", group.category),

@@ -305,9 +305,131 @@ fn enumerate_services() -> Vec<SvcRow> {
     })
 }
 
-/// Collect the live, categorised, read-only service inventory.
-pub(crate) fn collect_service_inventory() -> Inventory {
-    build_inventory(enumerate_services())
+// ─── Service startup drift (A4 — read-only advisory: the "Leftovers" of services) ─────────────
+//
+// The service analog of optimizer-rot (see `leftovers.rs`). A CLOSED, curated catalog of Windows
+// services whose Windows stock startup type is **Automatic on every supported Windows** — stable,
+// unambiguous, not version-fragile — that "disable these services for FPS" debloat scripts commonly
+// turn OFF, AND that **Compy itself never recommends disabling** (so a drift finding can never
+// contradict the rec engine — SysMain / DiagTrack / Xbox / Search and friends are deliberately
+// absent; turning those off is a Compy-endorsed choice, not rot). The charter mirrors Leftovers:
+//   - Closed catalog — only the curated list; no heuristics, no "guess the stock state".
+//   - Receipts, not adjectives — current vs stock, the matched guide tweak, the concrete cost.
+//   - Honest uncertainty — origin is unprovable; every finding says "if you did this on purpose, keep it".
+//   - Conservative — only the two unambiguous changed values (Manual / Disabled) are flagged;
+//     Boot/System/Unknown are never guessed at, and a service that simply isn't present is never
+//     flagged (we can't tell "removed" from "never installed").
+//   - No alarm, no promise, no action — advisory only; Compy wires NO enable/suspend here.
+
+/// One curated drift detector. Every entry's stock startup is Automatic (asserted by
+/// `drift_catalog_is_all_automatic_stock` + documented above), which is what makes a non-Automatic
+/// value an unambiguous change rather than a Windows-version quirk.
+struct DriftSpec {
+    /// Exact WMI service Name, matched case-insensitively (and against the per-user base name).
+    name: &'static str,
+    /// Friendly service name for the receipt.
+    label: &'static str,
+    /// The guide-era tweak that turns it off — the curated "wanted poster", never a guess.
+    matched_tweak: &'static str,
+    /// The concrete, named functional cost while it is off.
+    cost: &'static str,
+    /// Honest, plain verdict for the user — never a boost promise, never an alarm.
+    verdict: &'static str,
+}
+
+const DRIFT: &[DriftSpec] = &[
+    DriftSpec {
+        name: "Audiosrv",
+        label: "Windows Audio",
+        matched_tweak: "\"disable services for FPS\" debloat scripts",
+        cost: "With Windows Audio turned off the PC has no sound at all until it is switched back on.",
+        verdict: "Turning off core Windows services is a debloat-script habit — it trades real functionality for no measured FPS.",
+    },
+    DriftSpec {
+        name: "AudioEndpointBuilder",
+        label: "Windows Audio Endpoint Builder",
+        matched_tweak: "\"disable services for FPS\" debloat scripts",
+        cost: "Windows cannot see your speakers, headset, or microphone while this is off — audio devices simply disappear.",
+        verdict: "This service is why your audio devices show up at all; disabling it breaks sound for no measured FPS.",
+    },
+    DriftSpec {
+        name: "Themes",
+        label: "Themes",
+        matched_tweak: "\"disable the Themes service to save RAM\" guides",
+        cost: "Windows drops to the basic classic look and some apps render oddly; it frees only a trivial amount of RAM.",
+        verdict: "The RAM this frees is negligible on a gaming rig — the visual breakage is the only thing you will actually notice.",
+    },
+];
+
+/// One service-startup-drift finding — receipts, not adjectives. Advisory only (no action wired).
+#[derive(Debug, PartialEq)]
+pub(crate) struct DriftFinding {
+    pub label: String,
+    /// The exact current startup type + live state, e.g. "Stopped · Disabled".
+    pub current: String,
+    /// The Windows stock startup type for this service.
+    pub stock: String,
+    /// Which guide-era tweak this matches (the curated wanted-poster, not a guess).
+    pub matched_tweak: String,
+    /// One plain sentence: the concrete cost of it being off.
+    pub cost: String,
+    /// Honest, plain verdict for this finding.
+    pub verdict: String,
+    /// Origin-uncertainty + reversibility, in one honest sentence. Compy wires no enable action.
+    pub restore_note: String,
+}
+
+/// Case-insensitive match of a live service Name against a curated catalog Name (raw or the
+/// per-user base name, so a `_<luid>` suffix never blocks a match). Pure.
+fn service_name_matches(row_name: &str, catalog_name: &str) -> bool {
+    let cn = catalog_name.to_ascii_lowercase();
+    row_name.to_ascii_lowercase() == cn || base_name(row_name).to_ascii_lowercase() == cn
+}
+
+/// Build the read-only service-startup-drift findings from raw service rows. Pure (no WMI), so the
+/// catalog + judgement is fully fixture-testable. Findings follow catalog order.
+pub(crate) fn build_service_drift(rows: &[SvcRow]) -> Vec<DriftFinding> {
+    let mut findings = Vec::new();
+    for spec in DRIFT {
+        // The first matching live row for this curated service (there is normally exactly one).
+        let Some(row) = rows.iter().find(|r| service_name_matches(&r.name, spec.name)) else {
+            continue; // not present → never flagged (can't tell "removed" from "never installed").
+        };
+        // Stock is Automatic for every catalog entry; only the two unambiguous "someone changed it"
+        // values are flagged. Boot/System/Unknown are never guessed at.
+        if !matches!(row.start_mode.as_str(), "Manual" | "Disabled") {
+            continue;
+        }
+        findings.push(DriftFinding {
+            label: format!("{} — startup changed", spec.label),
+            current: format_state(&row.state, &row.start_mode),
+            stock: "Automatic start".into(),
+            matched_tweak: spec.matched_tweak.into(),
+            cost: spec.cost.into(),
+            verdict: spec.verdict.into(),
+            restore_note:
+                "Compy can't prove who changed this — if you did it on purpose, keep it. Otherwise it is \
+                 reversible: set the startup back to Automatic in Services (services.msc). Compy makes no \
+                 change here."
+                    .into(),
+        });
+    }
+    findings
+}
+
+/// The full read-only services report: the categorised inventory plus any startup-drift findings,
+/// built from ONE service enumeration (the WMI read is the expensive part — do it once).
+pub(crate) struct ServiceReport {
+    pub inventory: Inventory,
+    pub drift: Vec<DriftFinding>,
+}
+
+/// Collect the live, read-only services report (categorised inventory + startup drift).
+pub(crate) fn collect_service_report() -> ServiceReport {
+    let rows = enumerate_services();
+    let drift = build_service_drift(&rows);
+    let inventory = build_inventory(rows);
+    ServiceReport { inventory, drift }
 }
 
 #[cfg(test)]
@@ -461,5 +583,138 @@ mod tests {
     fn no_empty_groups_are_emitted() {
         let inv = build_inventory(vec![row("DiagTrack", "x", "Stopped", "Disabled")]);
         assert!(inv.groups.iter().all(|g| !g.rows.is_empty()));
+    }
+
+    // ── Service startup drift (A4) ─────────────────────────────────────────────────────────────
+
+    fn drift_find<'a>(d: &'a [DriftFinding], label_prefix: &str) -> Option<&'a DriftFinding> {
+        d.iter().find(|f| f.label.starts_with(label_prefix))
+    }
+
+    #[test]
+    fn stock_services_yield_no_drift_first_class() {
+        // Every catalog service present at its stock Automatic startup → ZERO findings.
+        let rows = vec![
+            row("Audiosrv", "Windows Audio", "Running", "Auto"),
+            row("AudioEndpointBuilder", "Windows Audio Endpoint Builder", "Running", "Auto"),
+            row("Themes", "Themes", "Running", "Auto"),
+            row("RpcSs", "Remote Procedure Call (RPC)", "Running", "Auto"), // non-catalog
+        ];
+        assert!(build_service_drift(&rows).is_empty(), "stock startup must yield no drift");
+    }
+
+    #[test]
+    fn disabled_catalog_service_is_flagged_with_full_receipt() {
+        let rows = vec![row("Audiosrv", "Windows Audio", "Stopped", "Disabled")];
+        let d = build_service_drift(&rows);
+        let f = drift_find(&d, "Windows Audio").expect("disabled audio → finding");
+        // Receipt: exact current value, stock default, matched tweak, cost, verdict, restore note.
+        assert!(f.current.contains("Disabled"), "current names the real value: {}", f.current);
+        assert!(f.stock.to_lowercase().contains("automatic"));
+        assert!(!f.matched_tweak.is_empty() && !f.cost.is_empty() && !f.verdict.is_empty());
+        assert!(f.restore_note.to_lowercase().contains("reversible"));
+        // Honest origin-uncertainty is carried, not assumed.
+        assert!(f.restore_note.to_lowercase().contains("on purpose"));
+    }
+
+    #[test]
+    fn manual_startup_is_also_drift_for_an_automatic_stock_service() {
+        // Stock is Automatic; Manual is non-stock and audio won't auto-start — still drift.
+        let rows = vec![row("Audiosrv", "Windows Audio", "Stopped", "Manual")];
+        let f = &build_service_drift(&rows)[0];
+        assert!(f.current.contains("Manual start"), "current: {}", f.current);
+    }
+
+    #[test]
+    fn absent_catalog_service_is_never_flagged() {
+        // Not present at all → we can't tell "removed" from "never installed" → no finding.
+        let rows = vec![row("RpcSs", "Remote Procedure Call (RPC)", "Running", "Auto")];
+        assert!(build_service_drift(&rows).is_empty());
+    }
+
+    #[test]
+    fn non_catalog_service_changes_are_ignored() {
+        // Closed catalog: a disabled service we don't curate is NEVER drift (no heuristics).
+        let rows = vec![row("SomeRandomVendorSvc", "Random", "Stopped", "Disabled")];
+        assert!(build_service_drift(&rows).is_empty());
+    }
+
+    #[test]
+    fn boot_system_and_unknown_start_modes_are_not_guessed() {
+        // Only Manual/Disabled are the guide pattern; anything else is left unjudged (honesty).
+        for sm in ["Boot", "System", "Unknown", ""] {
+            let rows = vec![row("Audiosrv", "Windows Audio", "Running", sm)];
+            assert!(
+                build_service_drift(&rows).is_empty(),
+                "start mode {sm:?} must not be guessed as drift"
+            );
+        }
+    }
+
+    #[test]
+    fn matching_is_case_insensitive_and_handles_base_name() {
+        // Live names vary in case; per-user LUID suffixes must still match the base catalog name.
+        assert!(service_name_matches("audiosrv", "Audiosrv"));
+        assert!(service_name_matches("AUDIOSRV", "Audiosrv"));
+        assert!(service_name_matches("Themes_5ca62", "Themes"));
+        assert!(!service_name_matches("AudioEndpointBuilder", "Audiosrv"));
+    }
+
+    #[test]
+    fn law_every_drift_spec_can_fire_with_a_full_receipt() {
+        // A silent detector is a lie: every curated entry must fire on its own disabled fixture,
+        // and every receipt field must be present.
+        let rows: Vec<SvcRow> =
+            DRIFT.iter().map(|s| row(s.name, s.label, "Stopped", "Disabled")).collect();
+        let d = build_service_drift(&rows);
+        assert_eq!(d.len(), DRIFT.len(), "every curated drift detector must fire on its rotted fixture");
+        for f in &d {
+            for (field, v) in [
+                ("current", &f.current),
+                ("stock", &f.stock),
+                ("matched_tweak", &f.matched_tweak),
+                ("cost", &f.cost),
+                ("verdict", &f.verdict),
+                ("restore_note", &f.restore_note),
+            ] {
+                assert!(!v.trim().is_empty(), "{}: empty {} — a finding without its receipt", f.label, field);
+            }
+        }
+    }
+
+    #[test]
+    fn law_no_boost_promises_no_alarm_in_drift_copy() {
+        // Counting, not alarm; honest-measurement — never promise a gain. (Honest negations like
+        // "no measured FPS" are fine; these tokens never are.)
+        let banned = ["boost", "speed up", "speeds up", "guaranteed", "instantly faster", "unlock fps"];
+        let alarm = ["danger", "warning!", "critical!", "fix now", "issues found"];
+        for s in DRIFT {
+            let copy = format!("{} {} {} {}", s.label, s.matched_tweak, s.cost, s.verdict).to_lowercase();
+            for b in banned {
+                assert!(!copy.contains(b), "{}: promise language '{b}' in: {copy}", s.name);
+            }
+            for a in alarm {
+                assert!(!copy.contains(a), "{}: alarm language '{a}' in: {copy}", s.name);
+            }
+            assert!(!s.label.contains('!'), "{}: exclamation in label — sirens are not placards", s.name);
+        }
+    }
+
+    #[test]
+    fn law_drift_catalog_never_targets_a_compy_endorsed_disable() {
+        // The non-contradiction invariant: the drift catalog must never flag a service Compy's own
+        // engine recommends turning OFF (else "you disabled this" would contradict "we told you to").
+        // These are the canonical Compy-endorsed-disable / commonly-deliberate targets.
+        let endorsed_or_deliberate = [
+            "SysMain", "DiagTrack", "WSearch", "XblAuthManager", "XblGameSave", "XboxGipSvc",
+            "XboxNetApiSvc", "BcastDVRUserService", "Spooler",
+        ];
+        for s in DRIFT {
+            assert!(
+                !endorsed_or_deliberate.iter().any(|e| service_name_matches(s.name, e)),
+                "{} must not be a drift target — it's a Compy-endorsed or commonly-deliberate disable",
+                s.name
+            );
+        }
     }
 }
