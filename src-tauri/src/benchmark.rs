@@ -459,6 +459,15 @@ mod refs {
 }
 
 fn normalize(raw: f64, ref_100: f64) -> u32 {
+    // Fail SAFE on the honesty boundary: a non-finite measurement (Inf/NaN) or an invalid
+    // reference must never fabricate a score. An `Inf` raw would otherwise `.round().clamp()`
+    // straight to a maxed-out 100 — an unmeasured "perfect" result, the worst honesty failure.
+    // The raw producers already guard their divisors (`.max(1e-6)` / `is_finite`), so this is
+    // defense-in-depth that keeps a future producer-guard regression honest (0 = no credit)
+    // instead of inventing a win. A legitimately-zero raw still scores an honest 0.
+    if !raw.is_finite() || !ref_100.is_finite() || ref_100 <= 0.0 {
+        return 0;
+    }
     ((raw / ref_100) * 100.0).round().clamp(0.0, 100.0) as u32
 }
 
@@ -1296,5 +1305,24 @@ mod benchmark_tests {
         assert_eq!(normalize(0.0, 100.0), 0);
         assert_eq!(normalize(50.0, 100.0), 50);
         assert_eq!(normalize(1000.0, 100.0), 100); // clamped
+    }
+
+    #[test]
+    fn normalize_non_finite_fails_safe_to_zero() {
+        // Honesty boundary: a non-finite raw must NEVER fabricate a score — least of all a
+        // maxed-out 100. An `Inf` (what a divide-by-~0 in a future producer regression yields)
+        // would otherwise `.round().clamp(0,100)` straight to 100 — an unmeasured "perfect"
+        // result, the single worst honesty failure. It must fail SAFE to 0 (no credit).
+        assert_eq!(normalize(f64::INFINITY, 100.0), 0); // was 100 (fabricated perfect score)
+        assert_eq!(normalize(f64::NEG_INFINITY, 100.0), 0);
+        assert_eq!(normalize(f64::NAN, 100.0), 0);
+        // An invalid reference (a future `refs::` mistake — zero/negative/non-finite) likewise
+        // can't be allowed to fabricate or divide-by-zero into a bogus score.
+        assert_eq!(normalize(50.0, 0.0), 0);
+        assert_eq!(normalize(50.0, -100.0), 0);
+        assert_eq!(normalize(50.0, f64::INFINITY), 0);
+        assert_eq!(normalize(50.0, f64::NAN), 0);
+        // A legitimately-zero raw (e.g. a cancelled run that did no work) stays an honest 0.
+        assert_eq!(normalize(0.0, 100.0), 0);
     }
 }
