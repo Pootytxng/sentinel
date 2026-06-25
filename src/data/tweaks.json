@@ -37,8 +37,8 @@
     "name": "Disable Core Isolation / VBS",
     "aliases": ["memory integrity", "virtualization based security", "HVCI"],
     "verdict": "risky",
-    "what": "Turns off virtualization-based security / memory integrity, which can cost a few percent CPU.",
-    "why": "Real performance gain, real security cost — it removes a kernel exploit mitigation. Compy shows it as a trade-off you decide, never auto-applied."
+    "what": "Turns off virtualization-based security / memory integrity, which can cost CPU performance.",
+    "why": "Real performance gain, real security cost — it removes a kernel exploit mitigation. The gain is genuine: often a few percent, and more in some CPU-bound games depending on your chip — but you're trading away a real protection for it, so Compy shows it as a trade-off you decide, never auto-applied."
   },
   {
     "id": "registry-fps-hacks",
@@ -269,7 +269,7 @@
     "aliases": ["defender off", "disable antivirus", "defender fps"],
     "verdict": "risky",
     "what": "Turns off Windows' built-in antivirus for a supposed FPS gain.",
-    "why": "Hard no. The measured gain is a rounding error; the cost is your only always-on protection — and some anti-cheats react badly to tampered security. Permanently blocklisted in Compy."
+    "why": "Hard no. For the average rig the measured gain is a rounding error, and the cost is your only always-on protection — and some anti-cheats react badly to tampered security. If Defender's live scanning ever does cause stutter on one game (heavy disk I/O can trigger it), the right fix is a per-game folder exclusion, never killing your antivirus. Permanently blocklisted in Compy."
   },
   {
     "id": "disable-windows-update",
@@ -358,7 +358,7 @@
     "aliases": ["disable hyperthreading", "disable smt", "smt off", "hyperthreading off", "fewer cores faster"],
     "verdict": "placebo",
     "what": "Turning off your CPU's second thread per core (Hyper-Threading on Intel, SMT on AMD) in BIOS, on the theory that fewer, 'cleaner' threads game better.",
-    "why": "On any modern 6-plus-core CPU this is a step backwards or a wash — you hand the game fewer threads to spread across and leave background work fighting it for what's left. It only ever helped ancient quad-cores choking on thread count, a problem today's CPUs don't have. There's no measurable win waiting here; if you want to prove it, change the one thing and watch your 1% low, which is exactly what it won't move. Compy never touches BIOS core settings.",
+    "why": "On almost any modern 6-plus-core CPU this is a step backwards or a wash — you hand the game fewer threads to spread across and leave background work fighting it for what's left. The idea comes from ancient quad-cores that genuinely choked on thread count, a problem today's CPUs don't have. There is one honest exception: a narrow set of specific, heavily CPU-bound titles has measured a small gain with it off — so it isn't literally nothing everywhere, but that's the rare case, not the rule, and you'd be giving up thread headroom in everything else to chase it. Don't assume either way: change the one thing and watch your own 1% low. Compy never touches BIOS core settings.",
     "related": ["core-unparking", "interrupt-affinity", "one-percent-lows"]
   },
   {
@@ -474,7 +474,7 @@
     "aliases": ["fullscreen vs borderless", "borderless lag", "borderless costs fps", "always exclusive fullscreen"],
     "verdict": "placebo",
     "what": "Always picking exclusive fullscreen over borderless, on the old rule that borderless costs FPS and adds lag.",
-    "why": "That rule was true a decade ago. On Windows 10 and 11, a borderless game with nothing covering it gets handed the display almost as directly as exclusive mode ever did — same frames, near-identical latency, plus instant alt-tab and overlays that keep working. Where the two modes still differ in a specific game, that's worth knowing, and it's measurable: play a session in each and compare, which is exactly the before/after Compy can time for you. Pick by measurement, not by 2014's rule.",
+    "why": "That rule was true a decade ago. On Windows 10 and 11, a borderless game with nothing covering it gets handed the display almost as directly as exclusive mode ever did — the same frames, plus instant alt-tab and overlays that keep working. The one honest caveat is latency: exclusive fullscreen bypasses the desktop compositor, so at the competitive tier it can still shave a small, measurable slice of input lag — meaningful if you count every millisecond, invisible to most players. Either way it's measurable: play a session in each and compare, which is exactly the before/after Compy can time for you. Pick by measurement, not by 2014's rule.",
     "related": ["fullscreen-modes", "fullscreen-optimizations", "overlay"]
   },
   {
