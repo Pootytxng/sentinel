@@ -273,7 +273,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 ### A4 · ADVISORY surfaces — **THE MAJOR REMAINING LANE (~24 of 33 not built)**
 
 **Monitor/Display**
-- [ ] OSD detection
+- [x] OSD detection — shipped the feasible+honest reading: `overlay_tools.rs` read-only probe detects third-party in-game overlay/OSD TOOLS running (RTSS · MSI Afterburner · Fraps · Bandicam — only tools whose running process reliably means an OSD is drawn), surfaced as an "On-screen overlays" Diagnostics section so a double-overlay with Compy's own overlay isn't a mystery. Informational only (no perf/FPS claim, no "close it"); curated labels only (live process names never surfaced/sent); honest coverage. Monitor-HARDWARE-OSD reading deliberately NOT attempted (DDC/CI is an unreliable per-monitor honesty-hazard). No new IPC; 8 tests + law guards — `bf0272f`
 - [ ] 3-mode preset GUIDED checklists (Visual Fidelity / Smooth / Clarity) advisory cards
 - [~] vendor-aware monitor walkthroughs — generic VRR/HDR exist; no model-specific
 - [ ] FreeSync↔VRB exclusion warning (FreeSync detected, but no VRB feature)
