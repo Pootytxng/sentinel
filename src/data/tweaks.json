@@ -277,7 +277,7 @@
     "aliases": ["windows update off", "wuauserv disable"],
     "verdict": "risky",
     "what": "Kills the update service so Windows never patches.",
-    "why": "Breaks Game Pass, anti-cheat compatibility, and security patching — and modern updates fix game-relevant bugs (fTPM stutter was fixed by an update). Pause or schedule updates instead."
+    "why": "Breaks Game Pass, anti-cheat compatibility, and security patching — and modern updates regularly fix game-relevant bugs and stability issues. Pause or schedule updates instead."
   },
   {
     "id": "cpu-mitigations",
@@ -447,7 +447,7 @@
     "aliases": ["defrag ssd", "defragment ssd", "disk defragmenter", "defrag for gaming"],
     "verdict": "risky",
     "what": "Running a full defragmenter pass on an SSD the way you would on an old hard drive.",
-    "why": "Defrag fixes a mechanical problem: a spinning drive's read head physically traveling between scattered pieces of a file. An SSD has no moving parts and reads scattered pieces as fast as neat ones, so there is no speed to win back — but a full defrag pass still burns through write cycles, the thing an SSD has a finite budget of. Windows already knows the difference: its built-in Optimize Drives gives an SSD a TRIM pass (a housekeeping hint that marks deleted space reusable), not a defrag. Leave the schedule alone and skip the third-party defragmenters.",
+    "why": "Defrag fixes a mechanical problem: a spinning drive's read head physically traveling between scattered pieces of a file. An SSD has no moving parts and reads scattered pieces as fast as neat ones, so there is no speed to win back — but a full defrag pass still burns through write cycles, the thing an SSD has a finite budget of. Windows already knows the difference: its built-in Optimize Drives mainly gives an SSD a TRIM pass (a housekeeping hint that marks deleted space reusable), and only runs an occasional light defrag when System Restore is enabled — never the heavy, write-burning full pass a third-party defragmenter forces. Leave the built-in schedule alone and skip the third-party defragmenters.",
     "related": ["nvme-ssd-hdd"]
   },
   {

@@ -57,5 +57,107 @@ are minor precision / wording handed to `content`/owner.
 
 ---
 
-## Batch 2 — the 17 `risky` verdicts — **PENDING** (next tick)
-## Batch 3 — the 39 `placebo` verdicts — **PENDING** (next tick)
+## Batch 2 — the 17 `risky` verdicts (audited 2026-06-25, 2 adversarial sub-agents, web-verified)
+
+**Headline: CLEAN for the brand — zero false-`risky` verdicts (every "real danger" call is sound).
+Two factual errors in the mechanism text fixed by honesty; the rest minor precision handed to `content`.**
+
+### Fixed by honesty (factual errors — wrong/falsifiable claim, the brand-damage class)
+- **`disable-windows-update`** — the `why` read *"modern updates fix game-relevant bugs (fTPM stutter
+  was fixed by an update)."* In a sentence about **Windows** Update, that parenthetical **misattributes**
+  the AMD Ryzen fTPM-stutter fix, which shipped as a **BIOS / AGESA (V2 PI 1.2.0.7)** update — *not*
+  Windows Update (AMD support article; Tom's Hardware; TechPowerUp). Dropped the false example; the true
+  general point ("updates regularly fix game-relevant bugs and stability issues") stays. Verdict `risky`
+  unchanged. Fixed this tick.
+- **`defrag-ssd`** — the `why` claimed Optimize Drives *"gives an SSD a TRIM pass … **not a defrag**."*
+  **False as an absolute:** Windows' Storage Optimizer **does** run a real, intentional defrag on an SSD
+  ~monthly **when Volume Shadow Copy / System Restore is enabled** (Windows Storage team via Hanselman,
+  *"Does Windows defragment your SSD?"* — authoritative, and trivially falsifiable by a knowledgeable
+  user). Reworded to: mainly a TRIM pass, *plus an occasional light defrag when System Restore is on*,
+  never the heavy write-burning full pass a third-party tool forces. The verdict (skip third-party
+  defraggers, leave the built-in schedule alone) survives untouched — only the false premise is fixed.
+  Fixed this tick.
+
+### Handed to `content` / owner (verdict-precision + voice — NOT honesty's to unilaterally rewrite)
+- **`disable-vbs`** (minor) — *"can cost a few percent CPU"* may understate the measured gaming cost
+  (independent benches cite up to ~10–15% on CPUs lacking MBEC/hardware acceleration) and labels a
+  gaming/VM-overhead cost as "CPU." NOT auto-fixed: "a few percent" is a conservative hedge, and
+  *understating* the gain on a security-loss tweak we discourage is the safe direction — not a
+  fabrication. Optional precision tighten only.
+- **`disable-defender`** (nit) — *"the measured gain is a rounding error"* is an absolute with a known
+  exception (TechPowerUp's Defender × Intel GDS/Downfall-mitigation interaction). Consider "typically
+  negligible." Verdict sound.
+- **`gpu-overclocking`** (nit) — *"typically buys a few percent"* errs conservative vs the measured
+  ~5–15% band — safe direction, no brand risk. Optional only.
+
+### Verified CLEAN (no issues)
+`useplatformclock` · `cstates-disable` · `pagefile-disable` · `cpu-mitigations` (the flagged "~0–4%"
+gaming figure is honest/well-grounded, not fabricated) · `debloat-scripts` · `anti-lag-plus` (the CS2
+VAC-ban story is accurate — Valve/AMD confirmed) · `interrupt-affinity` · `pbo-curve-optimizer` ·
+`secure-boot-csm` (Vanguard Secure-Boot/TPM requirement accurate) · `dll-injectors` · `registry-cleaners` ·
+`cpu-overclock-fps`.
+
+---
+
+## Batch 3 — the 39 `placebo` verdicts (audited 2026-06-25, 3 adversarial sub-agents, web-verified)
+
+**Headline: CLEAN for the brand — zero fabricated numbers; no factual mechanism errors.** The whole
+batch deliberately avoids hard figures (the right instinct). One **verdict-grade** finding (a `placebo`
+that the entry's own text describes as measurable) + a handful of "name the real subset" precision
+nits — all **verdict/voice calls handed to `content`/owner**, none auto-fixed (honesty fixes facts,
+not grades).
+
+### Handed to `content` / owner — VERDICT call (the strongest finding this batch)
+- **`timer-resolution`** (verdict `placebo` → likely `risky`) — the entry's OWN `why` describes a
+  **measurable, double-edged** effect (*"a minority measure slightly better lows, some measure worse …
+  at higher idle power"*) plus a documented Windows-2004 regression where some pre-2020 games hit an
+  artificial ~64-FPS cap at the 15.6 ms default tick and **recover** when the timer is raised (Bruce
+  Dawson / randomascii — authoritative). `placebo` means "no measurable effect," which contradicts the
+  entry's own honest text. Recommend re-grading to `risky` and keeping the `why` near-verbatim (it's
+  already framed honestly). **Do NOT adopt the tool-vendor "30%/30–60 FPS" figures** — those sources
+  aren't authoritative. This is a verdict change = content/owner territory; flagged, not done by honesty.
+
+### Handed to `content` / owner — precision (name the real subset)
+- **`disable-smt-gaming`** (minor) — *"It only ever helped ancient quad-cores"* / *"no measurable win"*
+  overshoots: a few CPU-bound titles measurably gain with SMT off on **modern** chips (TechSpot:
+  Hitman 2 ~+10%, For Honor ~+3–4%; TPU Zen 5). Net-loss-on-average recommendation is right; soften the
+  absolutes to "a per-game test, never a blanket fix."
+- **`exclusive-fullscreen-fps`** (minor) — *"near-identical latency"* buries a still-measurable
+  competitive-tier input-lag edge for exclusive fullscreen (Reflex-analyzer testing, DX11/CS2). The
+  entry's tail already hedges ("where they differ … it's measurable") — pull that into the body.
+- **`integrated-graphics-disable-fps`** (minor) — omits the common misassigned-GPU case (a game
+  accidentally rendering on the iGPU); the real fix there is forcing the game onto the dGPU, not
+  disabling the iGPU. Verdict (placebo) still correct for the normal case.
+- **`win32priorityseparation`** (minor) — denies *any* benefit; a contested low-confidence "dirty
+  system" 0.1%-low signal exists. Optional carve-out.
+- **`game-boosters`** (minor) — the "healthy rig" qualifier mostly rescues it; could add the low-RAM/
+  cluttered-rig stutter-reduction subset explicitly.
+- **`ram-cleaners`** (minor) — *"the … standby-list stutter bug … was fixed in Windows itself years
+  ago"* isn't cleanly documented (no MS changelog; some low-RAM rigs still report it). Soften to
+  "modern memory management handles most rigs" rather than asserting a fix. Borderline — not a clear
+  falsehood, so not auto-fixed; flagged to content.
+
+### Verified CLEAN (no issues — verdict sound, no fabricated numbers)
+`registry-fps-hacks` · `windows-search-off` (gold-standard subset carve-out) · `visual-effects` ·
+`mmcss-systemresponsiveness` · `core-unparking` · `tcp-mega-packs` · `aim-tweaks` · `cpu-affinity-games`
+(dual-CCD subset correctly credited) · `memory-compression-off` · `app-hw-accel-off` · `dns-for-gaming` ·
+`run-as-admin-fps` · `high-priority-games` · `clean-install-windows` · `monitoring-overlay-fps` ·
+`monitor-overclock-fps` · `close-background-apps-fps` · `audio-enhancements-fps` · `disable-hdr-fps`
+(old GTX-1080-era HDR-cost benchmark is stale; modern native HDR ≈ free — entry accurate) ·
+`mouse-acceleration-fps` · `disable-nagle` · `fast-startup-fps` · `wifi-vs-ethernet-fps` ·
+`bigger-psu-fps` · `monitor-response-time-fps` · `ram-capacity-fps` (8/16/32/64 GB tiers match 2026
+benches) · `pcie-gen-fps` (x8/x4 narrow-lane case correctly carved out) · `motherboard-fps` ·
+`bios-update-fps` (the "on its own" qualifier keeps it honest — keep it) · `ssd-fps` (SATA→NVMe ≈ no
+FPS still accurate; watch DirectStorage) · `windows-11-vs-10-fps` · `gaming-mouse-dpi-fps` (high-poll-
+rate-costs-a-sliver direction is correct).
+
+---
+
+## Corpus audit COMPLETE (all 84 entries, 2026-06-25)
+
+**Brand verdict: CLEAN.** Across 84 entries / 8 adversarial web-verified sub-agents: **zero false `real`
+verdicts, zero false `risky` verdicts, zero fabricated numbers surviving.** Three factual fixes landed by
+honesty (`sysmain-superfetch` invented GB number · `disable-windows-update` fTPM misattribution ·
+`defrag-ssd` "Windows never defrags an SSD" falsehood). One verdict re-grade candidate (`timer-resolution`
+placebo→risky) + a set of precision/voice nits handed to `content`/owner (verdict & taste = their
+territory). The corpus is honest where it counts.
