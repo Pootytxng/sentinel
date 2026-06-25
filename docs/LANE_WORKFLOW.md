@@ -31,12 +31,12 @@ Returns: `{ shipped[], skipped[], verify, spent }`.
 **This preserves quality** (same rigor + a final integration gate + disjoint domains so lanes can't corrupt each
 other) and **productivity** (parallel, fast) while making **cost bounded** (finite items + hard budget cap).
 
-## 3. Cost model (gauge output vs remaining budget)
-- Per burst ≈ **(N builds + triage + verify)** agents. Rough: `COST_PER_ITEM ≈ 60k` output tokens/build (tune from
-  real runs), triage/verify cheap.
-- The script **sizes N to the budget**: with a target set, `N ≈ floor(remaining / 60k) − 1`, capped at 6. With no
-  target, it defaults to a conservative 3.
-- So a "+300k" burst builds ~4 items and **stops**; a "+120k" burst builds ~1–2. Predictable, never runaway.
+## 3. Cost model (gauge output vs remaining budget) — CALIBRATED 2026-06-25 (first real burst)
+- Per burst ≈ **(N builds + triage + verify)** agents. **Real data: ~200k output tokens per built item**
+  (~402k output / **~660k TOTAL** for a 2-item burst); triage/verify are cheap.
+- The script **sizes N to the budget**: with a target set, `N ≈ floor(remaining / 200k) − 1`, capped at 6. With no
+  target it defaults to 3 — but at ~200k/item that's ~600k output, so **prefer giving a budget**.
+- Rule of thumb: **~300k budget → ~1 item · ~600k → ~2 · ~1M → ~4.** Predictable, never runaway.
 
 ## 4. How to run it
 ```

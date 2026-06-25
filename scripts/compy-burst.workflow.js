@@ -9,8 +9,9 @@ export const meta = {
 }
 
 // ---------- budget-aware sizing ----------
-// Rough output-token cost of one full build agent (TDD + checks + green + land). Tune from real runs.
-const COST_PER_ITEM = 60_000
+// Output-token cost of one full build agent (TDD + checks + green + land).
+// CALIBRATED from the first real burst (2026-06-25): ~402k output / ~660k total for ~2 built items => ~200k output/item.
+const COST_PER_ITEM = 200_000
 const HARD_MAX = 6                                   // never exceed this many builds per burst
 const reqMax = (args && args.maxItems) || null       // optional caller cap
 const includeMarginal = !!(args && args.includeMarginal)

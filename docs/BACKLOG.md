@@ -22,6 +22,18 @@
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-06-25e — FIRST compy-burst run (cost-bounded workflow PROVEN) — `main` @ `a1fd03e`
+First real run of `scripts/compy-burst.workflow.js` (maxItems 3): **2 shipped · 1 honestly skipped · GREEN.**
+- ✅ 3-mode preset GUIDED checklists (`1daf03b`) · ✅ hardware-applicability tags on knowledge entries (`a1fd03e`).
+- ⏭️ override-all toggle SKIPPED by the build agent — its assigned files couldn't support it without orphaned/incoherent
+  UI; it refused + flagged the re-scope (needs `dismissed.ts` + `Fix.tsx`). Good discipline, no fabrication.
+- **Verify GREEN:** cargo **636** · vitest **1956 / 318 files** · build clean. (HQ note: my first vitest re-check flaked
+  "318 failed/no tests" from leftover burst workers — clean re-run passed. Re-confirm flakes in isolation, don't revert.)
+- **💰 COST CALIBRATION:** burst cost **~660k total / ~402k output** for ~2 items ≈ **200k output/item** — ~2× the 60k
+  estimate. `COST_PER_ITEM`→200k; LANE_WORKFLOW §3 updated. Rule of thumb: ~300k→1 item · ~600k→2 · ~1M→4.
+- Structure VALIDATED: bounded, finite, self-skips gated/incoherent work, and HQ's independent re-verify caught the
+  flake the agent's self-report missed — the safety net works.
+
 ### Cycle 2026-06-25c — API-error AUTO-RECOVERY (owner: "resume isn't recovering from the API error")
 **Diagnosis:** the honesty lane resumed correctly (RECOVER-FIRST worked — it read LANE_BUS, found its
 assignment) then hit a **rate-limit mid-task and halted with no auto-restart.** Root cause: RECOVER-FIRST (§⑦)
