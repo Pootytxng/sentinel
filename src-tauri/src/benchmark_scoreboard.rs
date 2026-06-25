@@ -73,7 +73,13 @@ pub(crate) fn percentile_rank(value: f64, cohort: &[f64]) -> Option<f64> {
 /// has actually measured on THIS rig (`ceiling`) — self-improvement vs your own headroom, not a
 /// peer/vendor number. Honest by construction.
 pub(crate) fn completeness_pct(current: f64, ceiling: f64) -> f64 {
-    if ceiling <= 0.0 {
+    // Fail SAFE on the honesty boundary (sibling of `benchmark::normalize`'s Inf→100 fix): the
+    // `ceiling <= 0.0` gate alone does NOT catch a non-finite input (`NaN <= 0.0` is false, so a
+    // NaN/Inf slips through). A non-finite `current` would otherwise `(Inf / ceiling * 100)
+    // .clamp(0,100)` straight to 100 — a fabricated "fully optimized" score — and a `NaN` would
+    // leak through the clamp untouched (clamp returns NaN for a NaN self). Never award
+    // completeness we did not actually measure.
+    if !current.is_finite() || !ceiling.is_finite() || ceiling <= 0.0 {
         return 0.0;
     }
     (current / ceiling * 100.0).clamp(0.0, 100.0)
@@ -436,5 +442,20 @@ mod scoreboard_tests {
     fn completeness_pct_negative_current_clamps_to_zero() {
         // A negative current (with a positive ceiling) clamps up to the 0.0 floor.
         assert_eq!(completeness_pct(-30.0, 150.0), 0.0);
+    }
+
+    #[test]
+    fn completeness_pct_non_finite_fails_safe_to_zero() {
+        // bug→guard (sibling of `benchmark::normalize`'s Inf→100 honesty hazard): a non-finite
+        // input must NEVER fabricate a "fully optimized" score. The `ceiling <= 0.0` gate does
+        // NOT catch these (NaN <= 0.0 is false), so the point-of-use is_finite check is what
+        // closes the class. The two real pre-fix leaks were `+Inf current → 100` (fabricated
+        // perfect) and `NaN → NaN` (leaked through clamp); the others were already safe but are
+        // pinned here so the whole boundary stays honest.
+        assert_eq!(completeness_pct(f64::INFINITY, 150.0), 0.0); // was 100.0 (fabricated perfect)
+        assert_eq!(completeness_pct(f64::NAN, 150.0), 0.0); // was NaN (leaked through clamp)
+        assert_eq!(completeness_pct(f64::NEG_INFINITY, 150.0), 0.0);
+        assert_eq!(completeness_pct(50.0, f64::NAN), 0.0); // was NaN (leaked through clamp)
+        assert_eq!(completeness_pct(50.0, f64::INFINITY), 0.0);
     }
 }
