@@ -166,8 +166,9 @@ territory). The corpus is honest where it counts.
 
 ## Rest of the knowledge corpus audited (2026-06-25) — tricks (14) + guides (7) CLEAN
 
-Closing the loop so the WHOLE corpus is on record as honesty-audited (178 entries: 84 tweaks · 73
-terms · 14 tricks · 7 guides).
+Closing the loop so the WHOLE corpus is on record as honesty-audited (186 entries: 84 tweaks · 81
+terms · 14 tricks · 7 guides — the terms count is the 73 from the 2026-06-24 baseline audit + 8
+net-new A4-content explainers audited this cycle; see the cross-cutting record below).
 
 - **`tricks.json` (14 snake-oil "tells") — CLEAN.** Every pattern/tell/honest_version is a factually
   accurate characterization of a real deceptive pattern (fake deep scan, invented issue counter, fake
@@ -188,6 +189,41 @@ terms · 14 tricks · 7 guides).
   setting's existence. Vendor-completeness/precision = `content`'s call (guides.json is theirs); not a
   fabrication, so not honesty-auto-fixed.
 
-**Whole-corpus honesty verdict: CLEAN.** 178/178 entries audited; the only factual errors found were
+**Whole-corpus honesty verdict: CLEAN.** 186/186 entries audited; the only factual errors found were
 the three tweak fixes above (all landed); everything else is precision/voice/verdict handed to the
 owning lane.
+
+---
+
+## Cycle 2026-06-25b — new-entry + new-claim-copy cross-cutting re-audit (honesty standing trigger)
+
+The corpus grew since the 2026-06-24 baseline; the standing trigger re-audited everything net-new.
+
+**8 new term explainers** (terms.json 73→81, verified by an exact `id` set-diff against the
+baseline commit `02f9d1b`, NOT by assumption): `human-eye-fps-myth` · `powerline-ethernet` ·
+`moca-ethernet` · `keyboard-actuation` · `nkro` · `rapid-trigger` · `amd-undervolting` ·
+`effective-sensitivity` — **all audited this cycle.** 7 CLEAN; `rapid-trigger` took one factual fix
+(Snap Tap/SOCD is banned in CS2 but **permitted** in Valorant — the "banned in Valorant" claim was
+false; reworded, `a4ee40e`). No tweaks/tricks/guides entries were added (84/14/7 unchanged).
+
+**New user-facing CLAIM copy shipped by the other lanes this cycle — independently audited, CLEAN:**
+- **network-readiness pills** (backend `network_readiness_pills` + peripheral Latency UI) — every label
+  is a read fact (wired=`good`, Wi-Fi=`advisory` never a scare, offline=`unknown`), no fabricated
+  number, no FPS-gain promise; the 2.4 GHz "ch 1/6/11 don't overlap" note is the standard-correct
+  20 MHz heuristic.
+- **wired link-speed pill** (`format_link_rate`) — plain negotiated rate; ≤100 Mbps `advisory` framed
+  as "old cable/switch port", never a gaming scare; degrades to "unknown", never prints "0 bps".
+- **USB-tier advisory** (peripheral `usb_tier_advisory`) — factually correct (a 1000 Hz mouse isn't
+  bandwidth-limited → same polling rate on USB 2.0 as USB4) and names the "which port a device uses
+  isn't readable" limit.
+- **local percentile display** (measurement) — explicitly "local — your own results, no peer cohort
+  yet", a 4-win floor against degenerate small samples, peer/network cohort Phase-C gated.
+- **service-drift + recovery guide** (backend `services.rs`) — "no measured FPS" honesty, honest
+  origin-uncertainty (only unambiguous drift flagged), by-hand restore steps only (no mutation).
+- **OSD/overlay-tools** (backend `overlay_tools.rs`) — "presence is all we honestly know", distinguishes
+  "none recognised running" from "the scan didn't run".
+- **interrupt-affinity advisory** (peripheral) — verified from the allocated IRQ (not just the
+  advertised setting), "usually lowers latency — advisory, reversible", no FPS promise.
+
+**Verdict: CLEAN.** No Rule-5 violation, no fabricated number, no FPS-gain overclaim in any net-new
+claim. The one fix (`rapid-trigger` Valorant) had already landed; the rest is honest by construction.
