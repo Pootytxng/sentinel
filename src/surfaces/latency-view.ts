@@ -1,7 +1,7 @@
 // Pure presentation helpers for the Latency tab — derive status pills and format
 // values. Kept separate from the component so they're unit-tested without a DOM.
 import type { Status } from "../design";
-import type { MsiActiveSummary, UsbControllerLoad } from "../types";
+import type { MsiActiveSummary, TimerResolution, UsbControllerLoad } from "../types";
 
 /** MSI health from the VERIFIED active state: any device that advertises MSI but
  * actually runs on a line IRQ is worth a heads-up; otherwise devices confirmed on
@@ -41,6 +41,17 @@ export function usbStatus(usb: UsbControllerLoad[]): Status {
  * figures want 2 decimals, coarser wake times read fine at 1. */
 export function fmtMs(ms: number): string {
   return ms < 10 ? `${ms.toFixed(2)} ms` : `${ms.toFixed(1)} ms`;
+}
+
+/** Windows reports the timer resolution it ALLOWS as a [finest, coarsest] window (NtQueryTimerResolution);
+ * `finest_100ns` is the most precise (smallest interval) the machine supports, `coarsest_100ns` the least.
+ * The UI only ever showed the *current* value — this surfaces the supported range, which is the honest
+ * answer to the "force 0.5 ms" guides: it names the real floor (`finest`) below which no setting can go on
+ * this machine. 100-ns units → ms is `/ 10_000`. Pure + factual: just the measured window, no verdict. */
+export function timerRangeLabel(timer: TimerResolution): string {
+  const finestMs = timer.finest_100ns / 10_000;
+  const coarsestMs = timer.coarsest_100ns / 10_000;
+  return `Windows can run this timer between ${fmtMs(finestMs)} (finest) and ${fmtMs(coarsestMs)} (coarsest) on this machine — ${fmtMs(finestMs)} is as fine as it goes here.`;
 }
 
 /** Classify measured mouse-polling jitter (std-dev of report intervals, in ms) into honest bands:

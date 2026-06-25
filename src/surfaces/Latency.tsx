@@ -6,6 +6,7 @@ import {
   usbStatus,
   controllerSeverity,
   fmtMs,
+  timerRangeLabel,
   pollingJitterStatus,
   pollingJitterLabel,
 } from "./latency-view";
@@ -135,6 +136,7 @@ export function LatencyTab() {
             Current timer resolution: <strong>{fmtMs(report.timer_current_ms)}</strong>
           </p>
         )}
+        {report.timer && <p className="lat-muted">{timerRangeLabel(report.timer)}</p>}
         {wake ? (
           <>
             <p className="lat-stat">

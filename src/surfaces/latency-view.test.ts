@@ -4,6 +4,7 @@ import {
   usbShared,
   usbStatus,
   fmtMs,
+  timerRangeLabel,
   pollingJitterStatus,
   pollingJitterLabel,
 } from "./latency-view";
@@ -74,6 +75,21 @@ describe("fmtMs", () => {
   it("uses 2 decimals sub-10ms, 1 above", () => {
     expect(fmtMs(0.51)).toBe("0.51 ms");
     expect(fmtMs(15.6)).toBe("15.6 ms");
+  });
+});
+
+describe("timerRangeLabel", () => {
+  // Dev-rig-like values: coarsest 156250×100ns = 15.625 ms, finest 5000×100ns = 0.50 ms.
+  it("names the finest and coarsest supported resolution with fmtMs precision", () => {
+    const label = timerRangeLabel({ coarsest_100ns: 156250, finest_100ns: 5000, current_100ns: 10000 });
+    expect(label).toContain("0.50 ms (finest)"); // sub-10ms → 2 decimals
+    expect(label).toContain("15.6 ms (coarsest)"); // ≥10ms → 1 decimal
+    expect(label).toContain("0.50 ms is as fine as it goes"); // names the real floor (debunks "force 0.5 ms")
+  });
+  it("reads sensibly when the window collapses to a single supported value", () => {
+    const label = timerRangeLabel({ coarsest_100ns: 10000, finest_100ns: 10000, current_100ns: 10000 });
+    expect(label).toContain("1.00 ms (finest)");
+    expect(label).toContain("1.00 ms (coarsest)");
   });
 });
 
