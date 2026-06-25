@@ -304,7 +304,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [ ] sensor ID + known-issue DB (bundled JSON)
 - [x] wired-vs-wireless latency model — honest conservative wireless-name advisory, read-only (`27f3651`)
 - [ ] keyboard actuation / NKRO / Rapid-Trigger guide
-- [ ] USB-port recommendations
+- [x] USB-port recommendations — both halves shipped: SHARING (`shared_controller_advisory`) + TIER (`usb_tier_advisory`: honest 2.0-fine-for-input + 3.x/USB4 myth-buster, read-only, owns the tier dimension only — never re-issues the "move device X" call) (`9a045d9`)
 - [x] **(backend signal)** per-rig USB top-spec exposed for the tier advisory — `hardware::detect_usb_top_spec() -> Option<String>` (capability tier only; `"Unknown"`→`None`); unblocks peripheral's USB-tier port half — `84a2af1`
 - [x] polling-rate read — `latency.rs` (`latency_measure_mouse`)
 - [x] interrupt-affinity suggestion — deepened into a NAMED read-only suggestion (multi-CCD + latency-sensitive devices named; never writes affinity) — `affinity_device_suggestion` (`e5d2356`)

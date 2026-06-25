@@ -21,9 +21,10 @@ Pure, read-only, in `latency.rs`. Returns `None` unless we know the tier AND at 
 detected (else there's nothing peripheral-relevant to say — never fabricate).
 
 - **USB 2.0-capped platform:** honest reassurance for input (a 1000 Hz mouse uses a sliver of USB 2.0
-  bandwidth → polling rate is the SAME as on a USB 3 port), plus the one genuinely-actionable caveat: a
-  bandwidth-hungry neighbour (USB audio / capture / webcam) sharing that lower-ceiling 2.0 bus has less
-  headroom — give those their own controller. Names a real streaming neighbour when one is present.
+  bandwidth → polling rate is the SAME as on a USB 3 port). It notes the lower ceiling only affects
+  bandwidth-hungry devices (USB audio / capture / webcam), not your input — but deliberately does NOT
+  name a device or say "move it": that "move device X" instruction is `shared_controller_advisory`'s
+  job (the sharing dimension), so the two advisories never issue the same instruction twice.
 - **USB 3.0/3.1/3.2/USB4 platform:** a **myth-buster** (Compy brand: out-credibles the tweak guides) — a
   faster USB port does NOT raise a mouse's polling rate; the same tiny reports flow on USB 2.0 or USB4, so
   don't hunt for "the fast port" for input. The extra bandwidth helps storage/capture/audio, not input.
