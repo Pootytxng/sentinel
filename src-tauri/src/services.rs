@@ -82,10 +82,12 @@ const KNOWN: &[Known] = &[
     Known { name: "amd3dvcacheSvc", category: Category::Vendor, desc: "Steers game threads onto the 3D V-Cache cores on Ryzen X3D CPUs." },
     Known { name: "NvTelemetryContainer", category: Category::Vendor, desc: "NVIDIA driver telemetry — collects GPU driver usage data." },
     Known { name: "NVDisplay.ContainerLocalSystem", category: Category::Vendor, desc: "Hosts the NVIDIA Control Panel and display driver services." },
+    Known { name: "NvContainerLocalSystem", category: Category::Vendor, desc: "NVIDIA container — hosts GeForce Experience / NVIDIA App background tasks." },
     // ── Game platforms & launchers ──────────────────────────────────────
     Known { name: "Steam Client Service", category: Category::GamePlatform, desc: "Steam platform background service." },
     Known { name: "EpicGamesUpdater", category: Category::GamePlatform, desc: "Epic Games Launcher updater." },
     Known { name: "EpicOnlineServices", category: Category::GamePlatform, desc: "Epic Online Services — cross-platform multiplayer and sign-in." },
+    Known { name: "GalaxyClientService", category: Category::GamePlatform, desc: "GOG Galaxy platform background service." },
     // ── Anti-cheat ──────────────────────────────────────────────────────
     Known { name: "AntiCheatExpert Protection", category: Category::AntiCheat, desc: "Tencent Anti-Cheat Expert (ACE) — kernel-level protection." },
     Known { name: "AntiCheatExpert Service", category: Category::AntiCheat, desc: "Tencent Anti-Cheat Expert (ACE) service." },
@@ -93,6 +95,7 @@ const KNOWN: &[Known] = &[
     Known { name: "EAAntiCheatService", category: Category::AntiCheat, desc: "EA anti-cheat." },
     Known { name: "EasyAntiCheat", category: Category::AntiCheat, desc: "Easy Anti-Cheat." },
     Known { name: "EasyAntiCheat_EOS", category: Category::AntiCheat, desc: "Epic's Easy Anti-Cheat — the EOS (Epic Online Services) variant." },
+    Known { name: "vgc", category: Category::AntiCheat, desc: "Riot Vanguard — Riot Games' anti-cheat for Valorant and League of Legends; loads at startup." },
     // ── Xbox & Game Bar ─────────────────────────────────────────────────
     Known { name: "XblAuthManager", category: Category::Xbox, desc: "Xbox Live sign-in." },
     Known { name: "XblGameSave", category: Category::Xbox, desc: "Xbox Live cloud game saves." },
@@ -601,6 +604,27 @@ mod tests {
         assert_eq!(categorize("BEService").map(|c| c.0), Some(Category::AntiCheat));
         assert_eq!(categorize("XblGameSave").map(|c| c.0), Some(Category::Xbox));
         assert_eq!(categorize("wuauserv").map(|c| c.0), Some(Category::Updates));
+    }
+
+    #[test]
+    fn categorize_recognizes_added_gaming_services() {
+        // Well-established, gaming-relevant services that were previously unrecognised. Riot Vanguard
+        // is the flagship gap (Valorant/LoL) — the most-asked-about anti-cheat.
+        assert_eq!(categorize("vgc").map(|c| c.0), Some(Category::AntiCheat));
+        assert_eq!(categorize("VGC").map(|c| c.0), Some(Category::AntiCheat));
+        assert_eq!(categorize("GalaxyClientService").map(|c| c.0), Some(Category::GamePlatform));
+        assert_eq!(categorize("NvContainerLocalSystem").map(|c| c.0), Some(Category::Vendor));
+        // The Vanguard description names the games it belongs to (faithful fact, not advice).
+        assert!(categorize("vgc").unwrap().1.contains("Valorant"));
+    }
+
+    #[test]
+    fn known_catalog_has_no_duplicate_names() {
+        // A duplicate Name would make the first silently shadow the second — keep the catalog clean.
+        let mut seen = std::collections::HashSet::new();
+        for k in KNOWN {
+            assert!(seen.insert(k.name.to_ascii_lowercase()), "duplicate KNOWN name: {}", k.name);
+        }
     }
 
     #[test]
