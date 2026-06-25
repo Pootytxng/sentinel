@@ -72,6 +72,9 @@ export const TOPIC_BY_ID: Record<string, Topic> = {
   "interrupts": "input",
   "polling-rate": "input",
   "dpi-ppi": "input",
+  "keyboard-actuation": "input",
+  "nkro": "input",
+  "rapid-trigger": "input",
 
   // Network
   "tcp-mega-packs": "network",

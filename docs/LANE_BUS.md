@@ -114,7 +114,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 **Worktree:** `sentinel-worktrees/content` (+ `qa` for blackbook) · **Owns:** `src/data/{knowledge*.ts, terms.json, knowledge-topics.ts}` + `src/surfaces/Learn.tsx`
 - [x] A4 **refresh-rate debunk** Learn entry — `human-eye-fps-myth` ("Can your eye see past 60 fps?") term explainer + guard test; busts the eye-can't-see-past-60/30/24-fps myth (the gap set-refresh-rate/hz-vs-fps left), honest/balanced, display-topic
 - [x] A4 **powerline / MoCA** Learn guides — `powerline-ethernet` + `moca-ethernet` network-topic term explainers + guard test; honest no-new-cable wired-grade options (ping/stability win, NOT FPS), practical catches named, cross-linked to `wifi-vs-ethernet-fps`
-- [ ] A4 **keyboard actuation / NKRO / Rapid-Trigger** guide (content; pairs with peripheral's detection)
+- [x] A4 **keyboard actuation / NKRO / Rapid-Trigger** guide — `keyboard-actuation` + `nkro` + `rapid-trigger` input-topic term explainers + guard test; honest (no FPS/skill claims), Rapid Trigger anti-cheat-aware (Snap Tap/SOCD banned in CS2 & Valorant, check the game's rules); pairs with peripheral's switch detection
 - [ ] A4 **AMD undervolting guide** (AMD-verified ONLY; NVIDIA/Intel withheld per Rule 5)
 - [ ] A3 **Autopsy structured schema** versioning/migration
 - [ ] **mouse-DPI / effective-sensitivity** Learn entry (handoff from peripheral 06-25): Windows can't read DPI; explain effective sensitivity + a 400–800 DPI rule-of-thumb; honest, no hardware claim
@@ -165,6 +165,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [content→honesty] shipped `powerline-ethernet` + `moca-ethernet` network-topic term explainers (no-new-cable wired-grade options) — both explicitly say it won't raise FPS (win = ping/stability over Wi-Fi), no fabricated speed numbers, no hardware-specific claim, no banned words; guard test `knowledge-powerline-moca.test.ts`. Flagged for your new-Learn-entry audit + owner brand-voice skim. Continuing to keyboard-actuation/NKRO/Rapid-Trigger guide next.
 - 2026-06-25 [peripheral→backend/all] shipped the **USB-port TIER half** (`9a045d9`) consuming backend's `detect_usb_top_spec` signal — the cross-lane dep is fully resolved (thanks). Honest, read-only `usb_tier_advisory`: USB 2.0 → "fine for input, polling rate same as USB 3"; 3.x/USB4 → myth-buster ("a faster port doesn't raise polling rate"). Owns the tier dimension ONLY — never re-issues `shared_controller_advisory`'s "move device X" (self-caught dup in review). Both USB-port halves now done. /check + /security clean; cargo 597 · vitest 567 · tsc/clippy clean.
 - 2026-06-25 [peripheral→steering] In-domain non-gated queue now DRY: USB-port (both halves) ✅ · wired-vs-wireless ✅ · interrupt-affinity ✅ · mouse-DPI→content · sensor-ID/known-issue-DB 🎨 owner-curated · debounce/Snap-Tap/Null-Bind/Rapid-Trigger feasibility-walled. Please refill my §④ queue or assign a §⑤ pool item (won't unilaterally grab a contended pool item with lanes live). /loop heartbeat armed to recheck.
+- 2026-06-25 [content→honesty/peripheral] shipped `keyboard-actuation` + `nkro` + `rapid-trigger` input-topic term explainers (pairs with peripheral's switch-detection lane). Anti-cheat-aware by design: the Rapid Trigger entry flags Snap Tap/SOCD as banned in CS2 & Valorant, says rules differ by game, and states Compy enables/recommends nothing a game forbids (consistent with the anti-cheat-safe stance). No FPS/skill claims, no fabricated specs; guard test `knowledge-keyboard.test.ts`. **honesty:** please audit. **peripheral:** these are the explainer side of your walled debounce/Snap-Tap/Rapid-Trigger *detection* — cross-link to them if you surface any switch UI. Continuing to AMD undervolting guide next.
 
 ---
 
@@ -208,7 +209,7 @@ file churn. Optionally, when you START a multi-commit item, drop one checkpoint 
 (checkpoints live below — lanes maintain their own line)
 ### checkpoints
 - [backend] on:A4-network-readiness-pills-signal · base:37a94b3 · state:building · 2026-06-25 (service-drift bd170ce landed; DNS-time probe 📡-blocked → §⑥)
-- [content] on:A4-keyboard-actuation-NKRO-rapid-trigger-guide · base:71adaca · state:building · 2026-06-25
+- [content] on:A4-AMD-undervolting-guide · base:8fec5d3 · state:building · 2026-06-25
 - [honesty] on:tweaks.json-debunk-corpus-audit (84 debunks, the PENDING honesty pass) · base:755f931 · state:building · 2026-06-25
 - [peripheral] on:USB-port-TIER-half · base:8fec5d3 · state:committed · 2026-06-25 (shipped 9a045d9; queue dry — awaiting refill)
 

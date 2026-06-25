@@ -304,6 +304,30 @@
     "related": ["polling-rate", "input-latency", "native-resolution"]
   },
   {
+    "id": "keyboard-actuation",
+    "name": "Actuation point (how far a key travels to register)",
+    "aliases": ["actuation point", "actuation distance", "key actuation", "pre-travel", "actuation force", "adjustable actuation", "key travel"],
+    "what": "The actuation point is how far down you press a key before it registers. On most mechanical keyboards it is fixed by the switch (often around 2 mm). On Hall-effect and other magnetic or optical-analog boards it is adjustable — you can set keys to register from a feather-light tap to a deliberate deep press.",
+    "more": "A shorter actuation registers your press a hair sooner, which is why analog boards let competitive players set very short distances. The honest trade is real: the shorter you set it, the easier it is to fire a key by accident — resting a finger or a tiny bump can trigger it — so the 'best' point is a personal balance between speed and misfires, not a free win. It does not change your frame rate and it does not make your aim better on its own; it changes when a keypress counts. If your keyboard has fixed switches, the actuation point is whatever the switch is rated at and is not something software can move. Treat a custom actuation as a feel preference to tune, then leave alone.",
+    "related": ["rapid-trigger", "nkro", "input-latency", "polling-rate"]
+  },
+  {
+    "id": "nkro",
+    "name": "N-key rollover (NKRO) & key ghosting",
+    "aliases": ["nkro", "n-key rollover", "key rollover", "6kro", "key ghosting", "anti-ghosting", "rollover"],
+    "what": "N-key rollover (NKRO) means every key you hold registers at the same time, no matter how many. Older or cheaper keyboards have a limit — often '6-key rollover' — and beyond it extra presses get dropped or 'ghost,' which is why a key sometimes does not fire when you are already holding several.",
+    "more": "It matters when a game asks for several keys at once — sprint + strafe + crouch + ability, fighting-game inputs, or rhythm games — where a non-NKRO board can swallow a press at the worst moment. Most modern gaming keyboards are NKRO (or at least anti-ghost the common gaming cluster); some have a switch between a 'full NKRO' and a '6KRO' compatibility mode, so it is worth confirming yours is in the full mode. This is about inputs not being dropped, not about speed — it will not raise your frame rate or your polling rate, and on a board that already does NKRO there is nothing further to gain.",
+    "related": ["keyboard-actuation", "polling-rate", "input-latency"]
+  },
+  {
+    "id": "rapid-trigger",
+    "name": "Rapid Trigger (Hall-effect / magnetic keyboards)",
+    "aliases": ["rapid trigger", "hall effect keyboard", "magnetic switches", "analog keyboard", "he switches", "wooting", "continuous rapid trigger"],
+    "what": "Rapid Trigger is a feature of Hall-effect and other magnetic or analog keyboards: instead of waiting to reset at a fixed point, a key re-arms the instant you start lifting it, so rapid up-down taps register faster than on a normal switch. Players use it for things like quicker counter-strafing.",
+    "more": "It is a genuine mechanical capability of analog switches, not software you can add to an ordinary keyboard and not a cheat in itself — but it needs compatible hardware, and there is an honest caveat to flag. Some competitive titles restrict or ban related keyboard features, and one in particular — Snap Tap / SOCD handling, where pressing one direction key instantly cancels the opposite for frame-perfect strafing — has been banned in major games such as Counter-Strike 2 and Valorant. Rapid Trigger and Snap Tap are not the same thing, and the rules differ by game and even by tournament, so the honest advice is to check your specific game's current rules before relying on any of it. None of this changes your frame rate or aim quality; it changes how quickly key presses and releases are read. Compy stays anti-cheat-safe and does not enable, configure, or recommend any feature your game forbids — this entry only explains what the terms mean.",
+    "related": ["keyboard-actuation", "nkro", "input-latency", "anti-cheat"]
+  },
+  {
     "id": "shader-compilation",
     "name": "Shader compilation",
     "aliases": ["shader compilation", "shader comp", "shader stutter", "compiling shaders", "shaders"],
