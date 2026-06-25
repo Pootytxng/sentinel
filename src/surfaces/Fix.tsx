@@ -408,7 +408,11 @@ function ActiveChangeCard({
         </div>
         <p className="fix-row-reason">
           Active since {humanizeWhen(change.applied_at)}
-          {change.restores_label ? ` · rolls back to ${change.restores_label}` : ""}
+          {change.restores_label && change.applied_label
+            ? ` · ${change.restores_label} → ${change.applied_label}`
+            : change.restores_label
+              ? ` · rolls back to ${change.restores_label}`
+              : ""}
         </p>
       </div>
       <button className="fix-ghost-rollback" disabled={busy} onClick={onRollback}>
@@ -433,10 +437,21 @@ function HistoryRow({ change }: { change: AppliedChange }) {
       </button>
       {open && (
         <div className="fix-hist-detail">
-          {change.restores_label && (
+          {change.restores_label && change.applied_label ? (
+            <div>
+              Before <strong>{change.restores_label}</strong> → after{" "}
+              <strong>{change.applied_label}</strong>
+            </div>
+          ) : change.restores_label ? (
             <div>
               Restores: <strong>{change.restores_label}</strong>
             </div>
+          ) : (
+            change.applied_label && (
+              <div>
+                Set to <strong>{change.applied_label}</strong>
+              </div>
+            )
           )}
           <div>
             Applied {humanizeWhen(change.applied_at)}

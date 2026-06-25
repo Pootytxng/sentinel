@@ -24,6 +24,9 @@ export type AppliedChange = {
   // Read-only, computed-at-read: what a rollback restores ("Running"/"On"/"Best performance"/…),
   // derived from the captured typed snapshot. null when no clean label → UI shows a generic prior.
   restores_label?: string | null;
+  // The "after" half of the before/after pair: the state Compy's change set things TO, derived from
+  // the typed applied_action. null for legacy entries with no captured action → UI shows just prior.
+  applied_label?: string | null;
 };
 
 export type ReadinessCheck = { id: string; label: string; status: ReadinessStatus; detail: string; value: string | null; action_uri?: string | null; action_label?: string | null };

@@ -101,6 +101,10 @@ pub(crate) struct AppliedChangeView {
     // state a rollback restores, for the Fix surface trust-switch. Derived only from the captured
     // typed snapshot; None → the UI shows the generic "your previous setting".
     restores_label: Option<String>,
+    // The "after" half of the before/after pair: the state Compy's change set things TO, derived
+    // from the typed AppliedAction. Read-only, computed-at-read, never persisted. None for legacy
+    // entries with no captured action → the UI shows just the prior ("before").
+    applied_label: Option<String>,
 }
 
 impl AppliedChangeView {
@@ -135,6 +139,32 @@ fn check_change_active(c: &AppliedChange) -> bool {
     }
 }
 
+/// Read-only enrichment (computed-at-read, never persisted): the "after" state Compy's change set
+/// things TO — the second half of the Trust-Ledger before/after pair (`restores_label` is the
+/// "before"). Derived ONLY from the typed `AppliedAction`, so it can't drift from what was actually
+/// applied; `None` for a legacy entry with no captured action → the UI shows just the prior. The
+/// match is exhaustive on purpose: a new catalog action won't compile until its after-label is set,
+/// so the ledger can never silently mislabel a change.
+fn applied_label_from_action(action: &Option<AppliedAction>) -> Option<String> {
+    use AppliedAction::*;
+    let label = match action.as_ref()? {
+        EnableGameMode | EnableHardwareGpuScheduling => "On",
+        DisableMouseAcceleration | DisableGameBarAndDvr | DisableFastStartup
+        | DisableReservedStorage => "Off",
+        DisableUsbSelectiveSuspendOnAc | DisablePcieAspmOnAc => "Off (on AC)",
+        SetVisualEffectsBestPerformance => "Best performance",
+        SetUltimatePerformancePlan => "Ultimate performance",
+        SuspendKnownService { .. } => "Stopped",
+        DisableKnownService { .. } | DisableNagleOnActiveNics
+        | DisableEnergyEfficientEthernet | DisableScheduledTask { .. } => "Disabled",
+        // Leftovers v2 restores all return a setting to its Windows stock default.
+        RestoreMemoryCompressionDefault | RestoreMmcssDefaults | RestorePrioritySeparationDefault
+        | RestoreMpoDefault | RestoreCoreParkingDefault | RestoreTcpAutotuningDefault
+        | RestorePagefileAutomatic => "Windows default",
+    };
+    Some(label.to_string())
+}
+
 fn into_view(c: AppliedChange) -> AppliedChangeView {
     let is_still_active = if c.status == "applied" {
         check_change_active(&c)
@@ -142,6 +172,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         false
     };
     let restores_label = restores_label_from_snapshot(&c.snapshot);
+    let applied_label = applied_label_from_action(&c.applied_action);
     AppliedChangeView {
         id: c.id,
         rec_id: c.rec_id,
@@ -156,6 +187,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         ruleset_version_at_apply: c.ruleset_version_at_apply,
         elevation_used: c.elevation_used,
         restores_label,
+        applied_label,
     }
 }
 
@@ -1563,6 +1595,41 @@ mod history_tests {
         // live system — honest history regardless of current machine state.
         let v = into_view(record("game-mode", "rolled_back"));
         assert!(!v.is_still_active);
+    }
+
+    #[test]
+    fn applied_label_describes_the_after_state_per_action() {
+        // The "after" half of the before/after pair, derived from the typed AppliedAction.
+        assert_eq!(applied_label_from_action(&Some(AppliedAction::EnableGameMode)).as_deref(), Some("On"));
+        assert_eq!(
+            applied_label_from_action(&Some(AppliedAction::SetUltimatePerformancePlan)).as_deref(),
+            Some("Ultimate performance")
+        );
+        assert_eq!(
+            applied_label_from_action(&Some(AppliedAction::SetVisualEffectsBestPerformance)).as_deref(),
+            Some("Best performance")
+        );
+        assert_eq!(
+            applied_label_from_action(&Some(AppliedAction::SuspendKnownService { service: KnownService::WSearch })).as_deref(),
+            Some("Stopped")
+        );
+        assert_eq!(
+            applied_label_from_action(&Some(AppliedAction::DisableUsbSelectiveSuspendOnAc)).as_deref(),
+            Some("Off (on AC)")
+        );
+        assert_eq!(
+            applied_label_from_action(&Some(AppliedAction::RestoreMpoDefault)).as_deref(),
+            Some("Windows default")
+        );
+    }
+
+    #[test]
+    fn applied_label_is_none_for_legacy_entries_without_a_captured_action() {
+        // A pre-typed-contract ledger entry (applied_action: None) → no "after" half; the UI shows
+        // just the prior. into_view must surface that None straight through.
+        assert_eq!(applied_label_from_action(&None), None);
+        let v = into_view(record("game-mode", "applied"));
+        assert_eq!(v.applied_label, None, "legacy entry has no after-label");
     }
 
     #[test]
