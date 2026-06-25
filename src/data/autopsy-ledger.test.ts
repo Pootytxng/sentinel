@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
+  AUTOPSY_SCHEMA_VERSION,
   autopsyStats,
+  migrateLedger,
   readAutopsyLedger,
   recordAutopsy,
   type AutopsyLedgerEntry,
@@ -89,7 +91,8 @@ describe("recordAutopsy", () => {
     const raw = localStorage.getItem(LEDGER_KEY) ?? "";
     expect(raw).not.toContain("hits");
     expect(raw).not.toContain("truncated");
-    expect(Object.keys(JSON.parse(raw)[0]).sort()).toEqual(
+    // Entries live inside the versioned envelope now; each entry still carries ONLY verdict counts.
+    expect(Object.keys(JSON.parse(raw).entries[0]).sort()).toEqual(
       ["at", "placebo", "real", "risky", "scamFlags", "unknown"].sort(),
     );
   });
@@ -137,5 +140,77 @@ describe("readAutopsyLedger", () => {
     const led = readAutopsyLedger();
     expect(led).toHaveLength(1);
     expect(led[0].at).toBe(1);
+  });
+});
+
+// Schema versioning / migration (A3). The persisted form is a versioned ENVELOPE so a future change to
+// AutopsyLedgerEntry's shape can migrate old localStorage data forward instead of silently dropping it.
+// Older builds wrote a BARE ARRAY (no envelope) — that legacy form must still be read losslessly.
+describe("autopsy ledger schema versioning / migration", () => {
+  const valid: AutopsyLedgerEntry = { at: 1, real: 1, placebo: 0, risky: 0, unknown: 0, scamFlags: 0 };
+
+  it("exposes a positive integer schema version", () => {
+    expect(Number.isInteger(AUTOPSY_SCHEMA_VERSION)).toBe(true);
+    expect(AUTOPSY_SCHEMA_VERSION).toBeGreaterThanOrEqual(1);
+  });
+
+  it("new writes persist a versioned envelope { v, entries }, not a bare array", () => {
+    recordAutopsy(res(2, 1, 0, 0, 0), 5);
+    const stored = JSON.parse(localStorage.getItem(LEDGER_KEY) ?? "null");
+    expect(Array.isArray(stored)).toBe(false); // no longer a bare array
+    expect(stored.v).toBe(AUTOPSY_SCHEMA_VERSION);
+    expect(Array.isArray(stored.entries)).toBe(true);
+    expect(stored.entries[0]).toMatchObject({ at: 5, real: 2, placebo: 1 });
+  });
+
+  it("migrates a legacy bare array (pre-envelope) forward on read", () => {
+    localStorage.setItem(LEDGER_KEY, JSON.stringify([valid, { at: 2, real: 0, placebo: 0, risky: 1, unknown: 0, scamFlags: 0 }]));
+    const led = readAutopsyLedger();
+    expect(led).toHaveLength(2);
+    expect(led[0]).toEqual(valid);
+  });
+
+  it("upgrades the stored form to the envelope after the next record (legacy → versioned)", () => {
+    localStorage.setItem(LEDGER_KEY, JSON.stringify([valid])); // legacy bare array on disk
+    recordAutopsy(res(0, 1, 0, 0, 0), 9); // appends; read-migrate-write upgrades the on-disk shape
+    const stored = JSON.parse(localStorage.getItem(LEDGER_KEY) ?? "null");
+    expect(stored.v).toBe(AUTOPSY_SCHEMA_VERSION);
+    expect(stored.entries).toHaveLength(2); // the legacy entry was preserved, not dropped
+    expect(stored.entries[0]).toEqual(valid);
+  });
+
+  describe("migrateLedger (pure)", () => {
+    it("reads a legacy bare array, sanitizing malformed entries", () => {
+      expect(migrateLedger([valid, { real: 1 }, null, 7])).toEqual([valid]);
+    });
+
+    it("reads a current versioned envelope", () => {
+      expect(migrateLedger({ v: AUTOPSY_SCHEMA_VERSION, entries: [valid] })).toEqual([valid]);
+    });
+
+    it("reads entries DEFENSIVELY from a newer-than-current envelope (downgrade never nukes history)", () => {
+      // A newer build wrote v=current+1; an older build must still surface the recognizable entries.
+      expect(migrateLedger({ v: AUTOPSY_SCHEMA_VERSION + 1, entries: [valid] })).toEqual([valid]);
+    });
+
+    it("returns [] for an envelope whose entries are not an array", () => {
+      expect(migrateLedger({ v: AUTOPSY_SCHEMA_VERSION, entries: "nope" })).toEqual([]);
+    });
+
+    it("returns [] for non-ledger shapes (object without v/entries, primitives, null)", () => {
+      expect(migrateLedger({ not: "a ledger" })).toEqual([]);
+      expect(migrateLedger(42)).toEqual([]);
+      expect(migrateLedger(null)).toEqual([]);
+      expect(migrateLedger(undefined)).toEqual([]);
+    });
+
+    it("is lossless + idempotent across a JSON round-trip of the envelope", () => {
+      const entries = [valid, { at: 3, real: 0, placebo: 2, risky: 0, unknown: 1, scamFlags: 0 }];
+      const envelope = { v: AUTOPSY_SCHEMA_VERSION, entries };
+      const once = migrateLedger(JSON.parse(JSON.stringify(envelope)));
+      expect(once).toEqual(entries);
+      // re-wrapping the migrated output and migrating again yields the same entries
+      expect(migrateLedger({ v: AUTOPSY_SCHEMA_VERSION, entries: once })).toEqual(entries);
+    });
   });
 });
