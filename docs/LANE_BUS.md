@@ -90,7 +90,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 
 ### `backend` — readiness / probes / services / network detection
 **Worktree:** `sentinel-worktrees/svc` (or a fresh `../sentinel-backend` off `main`) · **Owns:** `src-tauri/{services.rs, history.rs, hardware.rs, diagnostics.rs, new modules}` + `lib.rs` registration
-- [ ] A4 Services **service-drift detection** (extend Leftovers; read-only advisory; builds on `services.rs`)
+- [x] A4 Services **service-drift detection** — read-only "Leftovers of services"; closed catalog (Windows Audio · Audio Endpoint Builder · Themes) flagged when startup drifts from stock Automatic; receipts + honest uncertainty; folds into Diagnostics, no new IPC (`bd170ce`)
 - [ ] A4 Network **DNS resolution-time probe** (read-only, local timing only — NO outbound payload)
 - [ ] A4 Network **network-readiness pills** (backend signal feeding the pills; UI half → content/peripheral)
 - [ ] A4 Services **recovery guide** (advisory reference data; no mutation)
@@ -159,6 +159,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [backend→peripheral] **UNBLOCKED:** the USB-top-spec signal is on `main` (`84a2af1`). Call `crate::hardware::detect_usb_top_spec() -> Option<String>` from `gather_latency_report_inner` — it returns the named tier (`"USB4"`/`"USB 3.2"`/…) or `None` (the `"Unknown"` sentinel already collapses to `None`, so no special-casing). Add your `usb_top_spec: Option<String>` field on `LatencyReport` + the tier advisory in your domain; the getter is `allow(dead_code)` until you wire it. Resume your USB-tier port half.
 - 2026-06-25 [content→honesty] shipped `human-eye-fps-myth` refresh-rate debunk Learn entry (the eye-can't-see-past-60-fps myth) — built honest (returns-diminish nuance, no fabricated study/number, no hardware-specific claim, no banned words), display-topic, guard test `knowledge-refresh-myth.test.ts`. Flagged for your new-Learn-entry audit + owner brand-voice skim. Continuing to powerline/MoCA Learn guides next.
 - 2026-06-25 [honesty→all] Shipped the metric-grading Rule-5 sweep (`755f931`). Sweep is CLEAN: every authoritative GPU-temp grade routes through `gradeGpuTempForVendor`; the tuning path (TuningDebrief/Instrument/Verdict + `gpuRunningHot` Check nudge) is AMD-walled via `tuningGuideForVendor`; App.tsx classic MetricRow uses a static sparkline color, not a value-grade — no live NVIDIA-grading gap anywhere. Hardened `gpu-temp-gate-guard.test.ts` to scan production `.ts` too (was `.tsx`-only) — a data-module helper can no longer grade temp bare and bypass the gate. **Heads-up to ALL lanes:** if you add a surface showing GPU temp, grade it via `gradeGpuTempForVendor(vendor, c)` (src/data/gpu-sensor.ts), never `gradeGpuTempC` directly — the guard will fail your build otherwise.
+- 2026-06-25 [backend→honesty] shipped A4 **service-startup-drift detection** (`bd170ce`, `services.rs`, read-only, folds into Diagnostics — no new IPC). Curated closed catalog (Windows Audio · Audio Endpoint Builder · Themes) flagged when startup ≠ stock Automatic; receipts not adjectives; origin-uncertainty honesty; "nothing found" only claimed when WMI actually ran. Honesty law-guards in-module (no boost/alarm copy; catalog can't target a Compy-endorsed disable). Flagging for your claim-honesty pass. Continuing to A4 Network DNS-resolution-time probe.
 
 ---
 
@@ -201,7 +202,7 @@ file churn. Optionally, when you START a multi-commit item, drop one checkpoint 
 
 (checkpoints live below — lanes maintain their own line)
 ### checkpoints
-- [backend] on:A4-service-drift-detection · base:84a2af1 · state:building · 2026-06-25
+- [backend] on:A4-DNS-resolution-probe · base:bd170ce · state:building · 2026-06-25 (service-drift landed bd170ce)
 - [content] on:A4-powerline-MoCA-Learn-guides · base:a0fcbcf · state:committed · 2026-06-25
 - [honesty] on:audit-new-Learn-entries-for-fabricated-claims · base:755f931 · state:building · 2026-06-25
 
