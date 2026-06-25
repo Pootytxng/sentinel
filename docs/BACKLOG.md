@@ -149,7 +149,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [ ] AMD undervolting guide (AMD-verified; NVIDIA/Intel withheld per Rule 5)
 
 **Services**
-- [~] read-only service inventory by category — only 4 known services, no categorization — `history.rs:118`
+- [x] read-only service inventory by category — `services.rs` (new): WMI enumerate-all → 9 plain-English gaming-relevant categories (vendor/launchers/anti-cheat/Xbox/perf/telemetry/updates/app-updaters/search), live state + factual descriptions, honest "<n> recognised of <m> total" coverage; folds into `get_diagnostics` (no new IPC, zero frontend change); pure-core unit-tested; inventory-not-advice (no safe-to-suspend judgement) — `b5b16b0`
 - [ ] curated "safe-to-suspend" reference data (must be owner-curated, never LLM-generated)
 - [ ] use-case profile selector (Gaming/Streaming/Creation/Idle — localStorage)
 - [ ] service-drift detection (extend Leftovers)
