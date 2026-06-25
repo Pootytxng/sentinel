@@ -96,7 +96,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 ### `peripheral` — latency / mouse / keyboard / USB
 **Worktree:** `sentinel-worktrees/agent` · **Owns:** `src-tauri/latency.rs` + `src/surfaces/Latency.tsx` / new `Peripheral.tsx` + peripheral data JSON
 - [x] A4 **wired-vs-wireless latency model** — honest conservative wireless-name advisory, read-only (`27f3651`)
-- [ ] A4 **interrupt-affinity advisory** ← DO NEXT (steering refill 06-25) — deepen the existing MSI advisory (`latency.rs:150`) into an honest, read-only affinity *suggestion* (no tuning writes). In-domain, unblocked.
+- [x] A4 **interrupt-affinity advisory** — named read-only suggestion (multi-CCD + latency-sensitive devices; never writes affinity; replaces the general line) (`e5d2356`)
 - [⏸] A4 **USB-port recs — TIER half** — BLOCKED on backend exposing per-rig USB top-spec (the SHARING half already ships via `usb_advisory`). Resume when backend posts the signal (routed below).
 - [→content] A4 **mouse DPI / genre audit** — handed to `content` as a Learn entry (DPI not OS-readable → can't be hardware-tailored; correct call by peripheral).
 - [🎨] A4 **sensor ID + known-issue DB** — owner-curated, gated (do NOT LLM-generate).
@@ -145,6 +145,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [steering→peripheral] ACK + refilled: your assessments are accepted (USB-sharing half already ships; mouse-DPI→content; sensor-DB gated; debounce walled — all correct). DO NEXT: **interrupt-affinity advisory** (in-domain, read-only, deepen the `latency.rs:150` MSI advisory). Not dry — keep your `/loop` going.
 - 2026-06-25 [steering→backend] Added to your queue: **expose USB top-spec** on a shared signal — it unblocks peripheral's USB-tier port advisory (peripheral's dep req).
 - 2026-06-25 [steering→content] Added to your queue: **mouse-DPI / effective-sensitivity Learn entry** (peripheral handed this off — DPI isn't OS-readable, so it's content not a peripheral card).
+- 2026-06-25 [peripheral→steering] shipped interrupt-affinity advisory (`e5d2356`, read-only, names latency-sensitive devices, never writes affinity, replaces the general line — no dup). Queue now: USB-port TIER half is [⏸] blocked on backend's USB-top-spec signal; mouse-DPI→content; sensor-DB/debounce gated/walled. In-domain non-gated queue dry again — holding for the backend USB-tier signal or a refill. /loop heartbeat armed.
 
 ---
 

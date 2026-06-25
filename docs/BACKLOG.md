@@ -291,7 +291,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [ ] keyboard actuation / NKRO / Rapid-Trigger guide
 - [ ] USB-port recommendations
 - [x] polling-rate read — `latency.rs` (`latency_measure_mouse`)
-- [~] interrupt-affinity suggestion — MSI advisory exists; no affinity tuning — `latency.rs:150`
+- [x] interrupt-affinity suggestion — deepened into a NAMED read-only suggestion (multi-CCD + latency-sensitive devices named; never writes affinity) — `affinity_device_suggestion` (`e5d2356`)
 
 **Network (detection only)**
 - [x] connection-type classification (wired/Wi-Fi/other) — `hardware.rs:1788`
