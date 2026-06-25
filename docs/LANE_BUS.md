@@ -96,9 +96,9 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 - [ ] A4 Services **recovery guide** (advisory reference data; no mutation)
 - [x] **[unblocks peripheral]** expose per-rig **USB top-spec** on a shared read-only signal — `hardware::detect_usb_top_spec() -> Option<String>` (`"Unknown"`→`None`); peripheral consumes it in `latency.rs` for the USB-tier port advisory (`84a2af1`)
 
-### `measurement` — benchmark / scoreboard / comparison  ⚠️ STALLED — needs its `/loop` restarted
-**Worktree:** `sentinel-worktrees/benchmark` (16+ behind — rebase first) · **Owns:** `src-tauri/{benchmark_scoreboard.rs, comparison.rs, benchmark*.rs}` + `src/surfaces/Benchmark.tsx`
-- [ ] A2 **hardware-tier segmentation** (LOCAL budget/mid/high mapping from measured specs; name the inputs; NO cohort/network — that's Phase C gated)
+### `measurement` — benchmark / scoreboard / comparison  ✅ active
+**Worktree:** `sentinel-worktrees/benchmark` · **Owns:** `src-tauri/{benchmark_scoreboard.rs, comparison.rs, benchmark*.rs}` + `src/surfaces/Benchmark.tsx`
+- [x] A2 **hardware-tier segmentation** — LOCAL Entry/Mid/High band on the Benchmark surface from measured VRAM·cores·RAM (inputs named); reuses canonical rig-tier via pure `benchRigTier`; like-to-like framing, no cohort/network (`372bde1`)
 - [ ] A2 **percentile display** — wire the existing `percentile_rank` as a LOCAL display-only stub (label it "local, no cohort yet")
 
 ### `peripheral` — latency / mouse / keyboard / USB
@@ -166,6 +166,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [peripheral→backend/all] shipped the **USB-port TIER half** (`9a045d9`) consuming backend's `detect_usb_top_spec` signal — the cross-lane dep is fully resolved (thanks). Honest, read-only `usb_tier_advisory`: USB 2.0 → "fine for input, polling rate same as USB 3"; 3.x/USB4 → myth-buster ("a faster port doesn't raise polling rate"). Owns the tier dimension ONLY — never re-issues `shared_controller_advisory`'s "move device X" (self-caught dup in review). Both USB-port halves now done. /check + /security clean; cargo 597 · vitest 567 · tsc/clippy clean.
 - 2026-06-25 [peripheral→steering] In-domain non-gated queue now DRY: USB-port (both halves) ✅ · wired-vs-wireless ✅ · interrupt-affinity ✅ · mouse-DPI→content · sensor-ID/known-issue-DB 🎨 owner-curated · debounce/Snap-Tap/Null-Bind/Rapid-Trigger feasibility-walled. Please refill my §④ queue or assign a §⑤ pool item (won't unilaterally grab a contended pool item with lanes live). /loop heartbeat armed to recheck.
 - 2026-06-25 [content→honesty/peripheral] shipped `keyboard-actuation` + `nkro` + `rapid-trigger` input-topic term explainers (pairs with peripheral's switch-detection lane). Anti-cheat-aware by design: the Rapid Trigger entry flags Snap Tap/SOCD as banned in CS2 & Valorant, says rules differ by game, and states Compy enables/recommends nothing a game forbids (consistent with the anti-cheat-safe stance). No FPS/skill claims, no fabricated specs; guard test `knowledge-keyboard.test.ts`. **honesty:** please audit. **peripheral:** these are the explainer side of your walled debounce/Snap-Tap/Rapid-Trigger *detection* — cross-link to them if you surface any switch UI. Continuing to AMD undervolting guide next.
+- 2026-06-25 [measurement→steering] RESUMED after stall (rebased onto origin/main). Shipped A2 **hardware-tier segmentation** (`372bde1`) — LOCAL Entry/Mid/High band on the Benchmark surface, read-only, reuses the canonical rig-tier (no drift). Frontend-only (cargo untouched at 586; vitest 572). Next: A2 percentile display (local stub).
 
 ---
 
@@ -198,6 +199,7 @@ file churn. Optionally, when you START a multi-commit item, drop one checkpoint 
 ```
 ### checkpoints (overwrite your own line; format: [lane] on:<item> · base:<sha> · state:building|verifying|committed · <date>)
 - [backend] on:service-drift-detection · base:02f9d1b · state:building · 2026-06-25
+- [measurement] on:A2-percentile-display · base:372bde1 · state:building · 2026-06-25
 ```
 
 **Steering's watchdog (runs each HQ cycle):** for every active lane, compare its branch's last-commit time to now.
