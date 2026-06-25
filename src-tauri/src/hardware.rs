@@ -1165,9 +1165,51 @@ pub(crate) fn detect_usb_summary() -> Option<UsbSummary> {
     })
 }
 
+/// Pure: reduce a (possibly absent) USB summary to the shared top-spec signal.
+/// `"Unknown"` collapses to `None` so a consumer never has to special-case the
+/// sentinel string — `Some(tier)` always means a real, named capability tier.
+// `allow(dead_code)`: cross-lane shared signal — exercised by the test below and
+// reached in production only via `detect_usb_top_spec` (see its note).
+#[allow(dead_code)]
+fn usb_top_spec_signal(summary: Option<UsbSummary>) -> Option<String> {
+    summary
+        .map(|u| u.top_spec)
+        .filter(|s| !s.is_empty() && s != "Unknown")
+}
+
+/// Read-only shared signal for other lanes (e.g. peripheral's USB-tier port
+/// advisory in `latency.rs`): the per-rig top USB spec tier, or `None` when the
+/// platform capability can't be read or is `"Unknown"`. Capability tier only —
+/// never per-device negotiated speed or which port a device sits on (neither is
+/// reliably readable in user-mode). Does a fresh, read-only WMI query; mutates
+/// nothing.
+// `allow(dead_code)`: this is a deliberate cross-lane API surface — the peripheral
+// lane consumes it from `latency.rs` for the USB-tier port advisory (wire-up
+// pending). Landing the backend signal first is what unblocks that lane.
+#[allow(dead_code)]
+pub(crate) fn detect_usb_top_spec() -> Option<String> {
+    usb_top_spec_signal(detect_usb_summary())
+}
+
 #[cfg(test)]
 mod usb_detection_tests {
-    use super::usb_top_spec;
+    use super::{usb_top_spec, usb_top_spec_signal, UsbSummary};
+
+    fn summary(top: &str) -> UsbSummary {
+        UsbSummary { top_spec: top.to_string(), controller_count: 1 }
+    }
+
+    #[test]
+    fn top_spec_signal_collapses_unknown_and_absent_to_none() {
+        // A real, named tier passes through verbatim — the shared signal peripheral consumes.
+        assert_eq!(usb_top_spec_signal(Some(summary("USB4"))), Some("USB4".to_string()));
+        assert_eq!(usb_top_spec_signal(Some(summary("USB 2.0"))), Some("USB 2.0".to_string()));
+        // The "Unknown" sentinel and an empty/absent summary all collapse to None so the
+        // consumer never has to special-case a not-really-a-tier string.
+        assert_eq!(usb_top_spec_signal(Some(summary("Unknown"))), None);
+        assert_eq!(usb_top_spec_signal(Some(summary(""))), None);
+        assert_eq!(usb_top_spec_signal(None), None);
+    }
 
     #[test]
     fn top_spec_picks_the_highest_tier() {
