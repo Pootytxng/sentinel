@@ -414,7 +414,21 @@ pub(crate) fn sleep_granularity_note(g: &SleepGranularity, timer: Option<&TimerR
         g.median_ms, g.jitter_ms, g.samples
     );
     match timer {
-        // A global high-res request is in effect AND this process is actually getting it
+        // No app has requested a finer timer right now, so the ACTIVE resolution is still the coarse
+        // default (current == coarsest). The process necessarily runs at that coarse tick — claiming it
+        // "IS receiving the high-resolution timer" here would assert the opposite of the truth (the
+        // OS-reported figure IS the low-res default), so name the honest state instead. This must come
+        // before the "measured ≈ reported" arm: on a stock machine the measured value also ≈ the coarse
+        // reported value, which would otherwise satisfy that arm's slack test and print the false claim.
+        Some(t) if t.current_100ns >= t.coarsest_100ns => {
+            note.push_str(&format!(
+                "Windows is on its default timer tick (~{:.2}ms) — no app has requested a finer one \
+                 right now. That's normal: modern games raise the timer themselves when they need it, \
+                 so blindly forcing a global fine timer (the cargo-cult tweak) buys nothing here. ",
+                t.current_ms()
+            ));
+        }
+        // A finer timer IS active (some process raised it) AND this process is actually getting it
         // (measured ≈ reported, within scheduling slack).
         Some(t) if g.median_ms <= (t.current_ms() * 3.0).max(2.0) => {
             note.push_str(&format!(
@@ -499,9 +513,17 @@ pub(crate) fn affinity_device_suggestion(topo: &CpuTopology, devices: &[MsiDevic
     if !affinity_is_meaningful(topo) {
         return None;
     }
-    let mut sensitive: Vec<&str> =
-        devices.iter().filter(|d| is_latency_sensitive(&d.name)).map(|d| d.name.as_str()).collect();
-    sensitive.dedup();
+    // Order-preserving full dedup: two identically-named latency-sensitive devices (e.g. a dual-NIC
+    // board) must not appear twice in the advisory. `Vec::dedup` only collapses ADJACENT equals, and
+    // `devices` is in registry-walk order, so a duplicate name separated by another sensitive device
+    // would otherwise survive and read as "I226-V, GPU, I226-V". Keep first-seen order.
+    let mut seen = std::collections::HashSet::new();
+    let sensitive: Vec<&str> = devices
+        .iter()
+        .filter(|d| is_latency_sensitive(&d.name))
+        .map(|d| d.name.as_str())
+        .filter(|n| seen.insert(*n))
+        .collect();
     if sensitive.is_empty() {
         return None;
     }
@@ -1656,6 +1678,36 @@ mod latency_tests {
         let note = sleep_granularity_note(&g, None);
         assert!(note.contains("unavailable"));
         assert!(note.contains("not interrupt/DPC latency"));
+    }
+
+    #[test]
+    fn sleep_note_default_coarse_timer_does_not_claim_high_res() {
+        // bug→guard: stock machine — nothing has raised the timer, so the active resolution is still
+        // the coarse default (current == coarsest, ~15.62ms) and the process measures that same tick.
+        // The old code's "measured ≈ reported" slack test was satisfied here (15.6 <= 15.62*3) and
+        // printed "This process IS receiving the high-resolution timer (OS-reported 15.62ms)" — the
+        // exact opposite of the truth. The note must instead name the honest default-tick state.
+        let g = SleepGranularity { samples: 200, min_ms: 15.4, median_ms: 15.6, max_ms: 16.2, jitter_ms: 0.3 };
+        let timer = TimerResolution { coarsest_100ns: 156250, finest_100ns: 5000, current_100ns: 156250 };
+        let note = sleep_granularity_note(&g, Some(&timer));
+        assert!(!note.contains("IS receiving the high-resolution timer"));
+        assert!(note.contains("default timer tick"));
+        assert!(note.contains("not interrupt/DPC latency")); // shared honesty correction preserved
+    }
+
+    #[test]
+    fn affinity_suggestion_dedupes_non_adjacent_duplicate_names() {
+        // bug→guard: two identically-named latency-sensitive NICs separated by another sensitive
+        // device (registry-walk order) stay NON-adjacent after filtering, so the old `Vec::dedup`
+        // (adjacent-only) let the duplicate name reach the advisory twice. Full dedup collapses it.
+        let devs = [
+            dev("Intel Ethernet I226-V", true),
+            dev("AMD Radeon RX 9070 XT", true),
+            dev("Intel Ethernet I226-V", true),
+        ];
+        let s = affinity_device_suggestion(&topo(16, 32, 2), &devs).expect("multi-complex suggestion");
+        assert_eq!(s.matches("Intel Ethernet I226-V").count(), 1, "duplicate name appears once");
+        assert!(s.contains("Radeon"), "the other sensitive device is still named");
     }
 
     #[test]
