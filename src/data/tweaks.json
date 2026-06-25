@@ -234,9 +234,9 @@
     "id": "timer-resolution",
     "name": "Forcing 0.5 ms global timer resolution",
     "aliases": ["timer resolution", "0.5ms timer", "timerresolution.exe"],
-    "verdict": "placebo",
+    "verdict": "risky",
     "what": "Forces Windows' interrupt timer to its finest interval system-wide.",
-    "why": "Inconsistent: a minority of systems measure slightly better lows, some measure worse, most see nothing — at higher idle power. If you must, change it alone, measure, and revert unless clearly better."
+    "why": "This one does change things you can measure — just not reliably for the better, which is why it isn't a free win. A minority of systems get slightly steadier lows, some get worse, many see no change, and it raises idle power draw the whole time the timer is pinned; on a few specific older games it can also lift an odd frame-rate ceiling. Because the effect is inconsistent and comes with that cost, treat it as a measure-and-revert experiment, not a set-and-forget tweak: change it alone, watch your own numbers, and put it back unless it is clearly better on your machine."
   },
   {
     "id": "core-unparking",
