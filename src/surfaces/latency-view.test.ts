@@ -3,6 +3,7 @@ import {
   msiStatus,
   usbShared,
   usbStatus,
+  controllerSeverity,
   fmtMs,
   timerRangeLabel,
   pollingJitterStatus,
@@ -75,6 +76,33 @@ describe("fmtMs", () => {
   it("uses 2 decimals sub-10ms, 1 above", () => {
     expect(fmtMs(0.51)).toBe("0.51 ms");
     expect(fmtMs(15.6)).toBe("15.6 ms");
+  });
+  it("locks the 10 ms precision-switch boundary (cutoff is exclusive: < 10 → 2 decimals)", () => {
+    expect(fmtMs(9.99)).toBe("9.99 ms"); // just under → 2 decimals
+    expect(fmtMs(10)).toBe("10.0 ms"); // exactly 10 → 1 decimal
+    expect(fmtMs(0)).toBe("0.00 ms"); // zero is still 2-decimal, never bare "0"
+  });
+});
+
+describe("controllerSeverity", () => {
+  // Latency.tsx branches on the EXACT strings this returns (sev === "attention" / "info"); pin them
+  // directly so a refactor can't silently change which badge a controller row renders.
+  const mk = (
+    input_devices: string[],
+    streaming_neighbors: string[],
+    has_high_rate_input: boolean
+  ): UsbControllerLoad => ({
+    controller_name: "c",
+    controller_id: "x",
+    input_devices,
+    streaming_neighbors,
+    has_high_rate_input,
+  });
+  it("returns none/info/attention per the sharing+streaming rule", () => {
+    expect(controllerSeverity(mk(["mouse"], [], true))).toBe("none"); // solo input → not shared
+    expect(controllerSeverity(mk(["mouse", "kbd"], [], true))).toBe("info"); // quiet 2-input sharing
+    expect(controllerSeverity(mk(["mouse"], ["USB Audio"], true))).toBe("attention"); // high-rate + streaming
+    expect(controllerSeverity(mk(["kbd"], ["USB Audio"], false))).toBe("info"); // shared w/ streaming, no high-rate
   });
 });
 
