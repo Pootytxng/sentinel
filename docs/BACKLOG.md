@@ -22,6 +22,19 @@
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-06-25c — API-error AUTO-RECOVERY (owner: "resume isn't recovering from the API error")
+**Diagnosis:** the honesty lane resumed correctly (RECOVER-FIRST worked — it read LANE_BUS, found its
+assignment) then hit a **rate-limit mid-task and halted with no auto-restart.** Root cause: RECOVER-FIRST (§⑦)
+is *what to do on wake* — it can't *make* a dead loop wake. A bare `/loop` does NOT reliably survive an API
+error (it can abort before rescheduling); re-sending by hand re-hits the transient throttle.
+**Fix — the missing WAKE mechanism:** new **`scripts/lane-runner.ps1`** (LANE_BUS §⑨) runs a lane headlessly
+(`claude --print`) in an **exponential-backoff retry loop** (30s→10min) + **`--fallback-model`** (rate-limit →
+auto-switch model, not death). Because RECOVER-FIRST + the bus make a lane **stateless** (every tick reconciles
+from git + LANE_BUS), each retry is a fresh cold run that resumes exactly where it left off — nothing lost or
+duplicated. PowerShell parse-verified. Three resilience tiers documented (wait-and-resume · `--fallback-model`
+on interactive tabs · the runner for hands-off; `-BypassPermissions` = owner opt-in for unattended).
+**Corrected §②'s earlier over-claim** that `/loop` self-recovers from API errors — it doesn't. `main` green; script + docs only.
+
 ### Cycle 2026-06-25b — crash-recovery / resume-after-API-error (owner ask)
 **Owner ask:** let sessions re-establish work / resume after API errors that halt the loop.
 **Added to `LANE_BUS.md`:** (§① step 0 + §⑦) a **RECOVER-FIRST routine** that makes each lane loop **idempotent**
