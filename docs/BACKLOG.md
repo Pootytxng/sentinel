@@ -213,8 +213,8 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 ### A3 · CONTENT reorg (Blackbook/Autopsy) — **half built; missing entry metadata**
 - [x] entry dedup lint — `knowledge.lint.test.ts:78`
-- [ ] category + **hardware tags** on entries — only type-grouping exists; no hardware tags in schema
-- [ ] date-added / last-updated metadata — no temporal fields on entries
+- [~] category + **hardware tags** on entries — **category DONE** (`knowledge-topics.ts`: central id→topic map, 10 topics, all 180 entries classified; required `BaseEntry.topic` + lint completeness guard + Learn "Topic:" filter; self-reviewed) — `cf77e0b`. **Hardware tags still open** (AMD/NVIDIA/Intel/laptop/desktop applicability) — follow-up. Topic enum/labels flagged for owner taxonomy skim.
+- [ ] date-added / last-updated metadata — no temporal fields on entries (deferred: backfilling historical add-dates can't be done honestly; would ship forward-only when meaningful)
 - [x] filter-by-category + verdict UI — `Learn.tsx:578`
 - [x] alias-collision lint + CI guard — `knowledge.lint.test.ts:98`
 - [x] deprecated/superseded status field — `status` + `supersededBy` on BaseEntry + `lifecycle()` mapper + lint guard (real/different target) + honest Learn surfacing (`aedb3ab`)
