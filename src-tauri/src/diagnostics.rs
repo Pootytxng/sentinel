@@ -7,10 +7,10 @@
 
 use serde::Serialize;
 
-use crate::hardware::{collect_hardware, gpu_vendor_match};
+use crate::hardware::collect_hardware;
 use crate::{
     core_parking_label, core_parking_min_cores_ac, current_power_plan_name, fast_startup_state,
-    hags_state, memory_integrity_or_vbs_active, reserved_storage_enabled, service_running,
+    hags_state, memory_integrity_or_vbs_active, reserved_storage_enabled,
 };
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────
@@ -350,34 +350,39 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         }],
     });
 
-    // ─── Background services ─────────────────────────────────────────────
-    let mut services = Vec::<DiagnosticEntry>::new();
-    for (label, name) in &[
-        ("DiagTrack (Connected User Experiences and Telemetry)", "DiagTrack"),
-        ("SysMain (Superfetch)", "SysMain"),
-        ("WSearch (Windows Search indexer)", "WSearch"),
-    ] {
-        services.push(DiagnosticEntry {
-            label: (*label).into(),
-            value: if service_running(name) { "Running".into() } else { "Stopped / Disabled".into() },
-            note: None,
-        });
-    }
-    if gpu_vendor_match(&hw, "NVIDIA").is_some() {
-        services.push(DiagnosticEntry {
-            label: "NvTelemetryContainer (NVIDIA telemetry)".into(),
-            value: if service_running("NvTelemetryContainer") {
-                "Running".into()
-            } else {
-                "Stopped / Disabled".into()
-            },
-            note: None,
-        });
-    }
+    // ─── Background services (read-only inventory, A4) ───────────────────
+    // A categorised inventory of the gaming-relevant services Compy recognises,
+    // plus an honest coverage count. This is informational only — it never
+    // recommends turning a service off (that owner-curated advisory layer is a
+    // separate, gated feature). Replaces the old hard-coded 4-service stub.
+    let inv = crate::services::collect_service_inventory();
     sections.push(DiagnosticSection {
         name: "Background services".into(),
-        entries: services,
+        entries: vec![DiagnosticEntry {
+            label: "Service inventory".into(),
+            value: format!("{} recognised of {} total", inv.recognized, inv.total),
+            note: Some(
+                "The gaming-relevant services Compy recognises are grouped below. The rest are \
+                 mostly core Windows services Compy doesn't flag. This is an inventory, not advice \
+                 — Compy never tells you to turn a service off."
+                    .into(),
+            ),
+        }],
     });
+    for group in inv.groups {
+        sections.push(DiagnosticSection {
+            name: format!("Services · {}", group.category),
+            entries: group
+                .rows
+                .into_iter()
+                .map(|r| DiagnosticEntry {
+                    label: r.label,
+                    value: r.value,
+                    note: r.note,
+                })
+                .collect(),
+        });
+    }
 
     sections
 }
@@ -414,11 +419,29 @@ mod diagnostics_tests {
     #[test]
     fn sections_are_the_fixed_set_in_order() {
         let names: Vec<String> = get_diagnostics().into_iter().map(|s| s.name).collect();
-        assert_eq!(
-            names,
-            vec!["Power & boot", "Security", "Display", "Memory", "Storage", "Network", "Peripherals", "Background services"],
-            "the section set/order is a UI + Export contract"
-        );
+        // The fixed prefix is a machine-independent UI + Export contract, always
+        // in this order. The trailing "Services · …" inventory groups are
+        // rig-dependent (which categories appear depends on the live services),
+        // so they are NOT part of the fixed set — but every section past the
+        // prefix MUST be one.
+        let fixed = [
+            "Power & boot",
+            "Security",
+            "Display",
+            "Memory",
+            "Storage",
+            "Network",
+            "Peripherals",
+            "Background services",
+        ];
+        assert!(names.len() >= fixed.len(), "expected at least the fixed set, got {names:?}");
+        assert_eq!(&names[..fixed.len()], &fixed, "the fixed section set/order is a UI + Export contract");
+        for extra in &names[fixed.len()..] {
+            assert!(
+                extra.starts_with("Services · "),
+                "unexpected non-inventory section after the fixed set: {extra}"
+            );
+        }
     }
 
     #[test]
@@ -458,10 +481,37 @@ mod diagnostics_tests {
         assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
         // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").
         assert!(labels_of("Network").iter().any(|l| l == "Wired Ethernet"));
-        let services = labels_of("Background services");
-        for svc in ["DiagTrack", "SysMain", "WSearch"] {
-            assert!(services.iter().any(|l| l.contains(svc)), "missing service row {svc}");
-        }
+        // The service inventory always carries its summary row (even if WMI
+        // returns nothing). The categorised per-service rows live in
+        // "Services · …" groups and are rig-dependent, so they aren't asserted
+        // here — see `service_inventory_summary_matches_listed_rows`.
+        assert!(labels_of("Background services").iter().any(|l| l == "Service inventory"));
+    }
+
+    #[test]
+    fn service_inventory_summary_matches_listed_rows() {
+        // Machine-independent invariant: every recognised service becomes exactly
+        // one row in exactly one "Services · …" group, so the summary's
+        // "recognised" count must equal the total rows across those groups.
+        let sections = get_diagnostics();
+        let listed: usize = sections
+            .iter()
+            .filter(|s| s.name.starts_with("Services · "))
+            .map(|s| s.entries.len())
+            .sum();
+        let summary = sections
+            .iter()
+            .find(|s| s.name == "Background services")
+            .and_then(|s| s.entries.iter().find(|e| e.label == "Service inventory"))
+            .map(|e| e.value.clone())
+            .expect("summary row present");
+        // value format: "<recognised> recognised of <total> total"
+        let recognised: usize = summary
+            .split_whitespace()
+            .next()
+            .and_then(|n| n.parse().ok())
+            .expect("recognised count parses");
+        assert_eq!(recognised, listed, "summary 'recognised' must equal listed service rows ({summary})");
     }
 
     #[test]

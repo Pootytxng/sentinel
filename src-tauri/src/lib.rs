@@ -29,6 +29,7 @@ mod readiness;
 mod receipts; // Receipts telemetry GROUNDWORK — DARK (gate hard-false; payload logic only, the send path does not exist).
 mod recommendations;
 mod remote_rules;
+mod services; // A4 read-only service inventory — categorised, informational, mutates nothing.
 mod sessions;
 mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).
 use actions::*;
