@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  Resilient LANE_BUS runner — keeps a Compy build lane alive ACROSS API errors / rate-limits.
+  [DEPRECATED for perpetual use — prefer scripts/compy-burst.workflow.js for cost control; see docs/LANE_WORKFLOW.md]
+  Resilient LANE_BUS runner — keeps a Compy build lane alive ACROSS API errors / rate-limits. Now HARD-CAPPED at -MaxTicks.
 
 .DESCRIPTION
   The problem: an API error (e.g. "Server is temporarily limiting requests · Rate limited") kills a
@@ -39,6 +40,7 @@ param(
   [int]$MinBackoffSec = 30,
   [int]$MaxBackoffSec = 600,
   [int]$PaceSec = 30,
+  [int]$MaxTicks = 8,            # HARD CAP — prevents runaway/dry-spin (v1 ran ~50 ticks/lane = the token burn)
   [switch]$BypassPermissions
 )
 
@@ -79,7 +81,7 @@ Write-Host "lane-runner: backoff $MinBackoffSec..$MaxBackoffSec s, pace $PaceSec
 
 $backoff = $MinBackoffSec
 $tick = 0
-while ($true) {
+while ($tick -lt $MaxTicks) {
   $tick++
   $stamp = (Get-Date).ToString('s')
   "[$stamp] tick $tick START (lane=$Lane)" | Tee-Object -FilePath $log -Append | Write-Host
@@ -103,3 +105,4 @@ while ($true) {
     $backoff = [Math]::Min($backoff * 2, $MaxBackoffSec)
   }
 }
+"[lane-runner] $Lane stopped after $tick tick(s) (cap=$MaxTicks). Re-run to do more, or prefer scripts/compy-burst.workflow.js for cost-bounded bursts." | Tee-Object -FilePath $log -Append | Write-Host
