@@ -1172,25 +1172,19 @@ pub(crate) fn detect_usb_summary() -> Option<UsbSummary> {
 /// Pure: reduce a (possibly absent) USB summary to the shared top-spec signal.
 /// `"Unknown"` collapses to `None` so a consumer never has to special-case the
 /// sentinel string — `Some(tier)` always means a real, named capability tier.
-// `allow(dead_code)`: cross-lane shared signal — exercised by the test below and
-// reached in production only via `detect_usb_top_spec` (see its note).
-#[allow(dead_code)]
+/// Reached in production via `detect_usb_top_spec` (the cross-lane signal below).
 fn usb_top_spec_signal(summary: Option<UsbSummary>) -> Option<String> {
     summary
         .map(|u| u.top_spec)
         .filter(|s| !s.is_empty() && s != "Unknown")
 }
 
-/// Read-only shared signal for other lanes (e.g. peripheral's USB-tier port
-/// advisory in `latency.rs`): the per-rig top USB spec tier, or `None` when the
-/// platform capability can't be read or is `"Unknown"`. Capability tier only —
-/// never per-device negotiated speed or which port a device sits on (neither is
-/// reliably readable in user-mode). Does a fresh, read-only WMI query; mutates
-/// nothing.
-// `allow(dead_code)`: this is a deliberate cross-lane API surface — the peripheral
-// lane consumes it from `latency.rs` for the USB-tier port advisory (wire-up
-// pending). Landing the backend signal first is what unblocks that lane.
-#[allow(dead_code)]
+/// Read-only shared signal for other lanes: the per-rig top USB spec tier, or
+/// `None` when the platform capability can't be read or is `"Unknown"`.
+/// Capability tier only — never per-device negotiated speed or which port a
+/// device sits on (neither is reliably readable in user-mode). Does a fresh,
+/// read-only WMI query; mutates nothing. Consumed in production by the
+/// peripheral lane's USB-tier port advisory (`latency.rs` → `usb_tier_advisory`).
 pub(crate) fn detect_usb_top_spec() -> Option<String> {
     usb_top_spec_signal(detect_usb_summary())
 }
