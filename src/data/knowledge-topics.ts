@@ -183,6 +183,7 @@ export const TOPIC_BY_ID: Record<string, Topic> = {
 
   // Power & cooling
   "fan-curves": "power",
+  "amd-undervolting": "power",
   "power-plan": "power",
   "bigger-psu-fps": "power",
   "laptop-plugged-in-fps": "power",

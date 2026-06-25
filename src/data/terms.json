@@ -136,6 +136,14 @@
     "related": ["pbo", "thermal-throttling", "fan-curves"]
   },
   {
+    "id": "amd-undervolting",
+    "name": "AMD undervolting — Radeon GPU vs Ryzen CPU",
+    "aliases": ["amd undervolt", "amd undervolting", "undervolt amd", "radeon undervolt", "ryzen undervolt", "undervolt radeon", "undervolt ryzen"],
+    "what": "\"Undervolting an AMD system\" is really two different jobs with very different difficulty and risk: lowering voltage on your Radeon GPU, and lowering it on your Ryzen CPU. They use different tools, and which one you should reach for first is not a coin flip — start with the GPU.",
+    "more": "The Radeon GPU side is the friendly one: you do it inside AMD's Adrenalin software in Windows (Performance → Tuning), it is fully reversible with a reset button, and a careful undervolt tends to mean a cooler, quieter card at the same or even slightly better performance — this is the path Compy actually walks you through (see the AMD GPU undervolt guide). The Ryzen CPU side is advanced and genuinely risky: it lives in the BIOS as Precision Boost Overdrive / Curve Optimizer, and pushing the offsets too far causes crashes that look 'random' for weeks before you trace them back — so it is small steps, hours of stability testing, and a known-good fallback (loading BIOS defaults undoes it). Both are about heat and efficiency, not a magic FPS switch, and how far you can go varies chip to chip — the 'silicon lottery' — so no specific number is guaranteed. If you are new to this, do the GPU undervolt first and leave the CPU's Curve Optimizer until you are comfortable. (This is the AMD-verified path; Compy withholds NVIDIA and Intel undervolt guidance until each is verified on real hardware.)",
+    "related": ["amd-gpu-undervolt", "undervolting", "pbo", "pbo-curve-optimizer", "thermal-throttling"]
+  },
+  {
     "id": "thermal-throttling",
     "name": "Thermal throttling",
     "aliases": ["thermal throttling", "throttling", "overheating", "temp throttle"],
