@@ -1,12 +1,23 @@
-//! Latency module (the edge) — **PARKED + DARK**.
+//! Latency module (the edge) — **read-only diagnostics WIRED; deep ETW capture still DARK**.
 //!
 //! Design: `docs/superpowers/specs/2026-06-03-latency-module-design.md`.
 //!
-//! Phase-1 first increment: a **read-only** MSI-mode (Message-Signaled Interrupts) checker.
-//! No mutation, no elevation, no network. `mod latency;` only — **not registered** in
-//! `lib.rs`'s `invoke_handler`. Any *fix* this surfaces is advisory and would go through the
-//! existing typed apply/rollback path, never a new mutation primitive.
-#![allow(dead_code)] // parked/dark: wired by HQ when the latency surface lands.
+//! **Live half (registered + user-facing on the Latency tab).** The passive, **read-only**
+//! diagnostics: verified MSI-mode (Message-Signaled Interrupts), timer resolution + measured
+//! wake granularity, CPU/CCD topology + interrupt-affinity advisory, USB-controller sharing +
+//! spec-tier, wired-vs-wireless, network-readiness pills, and on-demand mouse polling. Surfaced
+//! via `get_latency_diagnostics` / `latency_measure_wake` / `latency_measure_mouse` (registered
+//! in `lib.rs`'s `invoke_handler`). No mutation, no elevation, no network. Any *fix* these
+//! surface is advisory and would go through the existing typed apply/rollback path, never a new
+//! mutation primitive.
+//!
+//! **Dark half (built + unit-tested ahead of integration, NOT wired).** The Stage 1-2 ETW
+//! DPC/ISR capture core + the Stage-3 stutter↔driver Correlate engine. These need an elevated
+//! ETW kernel session (the data SOURCE) on HQ's shared helper before they can be surfaced, so
+//! they stay unreached in production for now.
+#![allow(dead_code)] // covers the still-dark Stage 1-2/3 capture+correlate half (+ a few
+                      // superseded pures kept for their tests), unreached in production until
+                      // the elevated ETW helper is wired; the live diagnostics half IS reached.
 
 use std::collections::HashMap;
 
