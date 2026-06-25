@@ -7,7 +7,8 @@ import {
   readOverlayBackdrop,
   readDisplayRefreshHz,
 } from "./design/theme";
-import { gradeFps, gradeLow1, gradeGpuTempC, gradeColor } from "./data/metric-grade";
+import { gradeFps, gradeLow1, gradeColor } from "./data/metric-grade";
+import { gradeGpuTempForVendor } from "./data/gpu-sensor";
 import "./Overlay.css";
 
 // Minimal shapes — the overlay only reads a few fields from the same sensor
@@ -133,10 +134,12 @@ export default function Overlay() {
     const fpsNum = sample ? Math.round(sample.fps) : null;
     // Hardware-tailored grade colors (same per-rig system as the app) — FPS/1%-low against this
     // display's refresh, GPU temp on the thermal ramp. Utilization stays neutral (good when busy).
+    // GPU temp is vendor-gated (LOCKED rule #5): NVIDIA NVML temp is unverified → neutral, never a
+    // graded color the user can't trust (one source, gradeGpuTempForVendor).
     const rig = { refreshHz };
     const fpsColor = gradeColor(gradeFps(sample?.fps ?? null, rig));
     const low1Color = gradeColor(gradeLow1(sample?.low1_fps ?? null, sample?.fps ?? null));
-    const tempColor = gradeColor(gradeGpuTempC(gpu?.temperature_c ?? null));
+    const tempColor = gradeColor(gradeGpuTempForVendor(gpu?.vendor, gpu?.temperature_c ?? null));
     return (
       <div className={`ovl2 ovl2-${density}${backdrop === "off" ? " ovl2-nobg" : ""}`}>
         <div className="ovl2-fps">

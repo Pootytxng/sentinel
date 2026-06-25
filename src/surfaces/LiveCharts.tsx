@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./DashboardV2.css";
 import "./LiveCharts.css";
-import { gradeGpuTempC, gradeRamPct, gradeColor } from "../data/metric-grade";
+import { gradeRamPct, gradeColor } from "../data/metric-grade";
+import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { AnimatedNumber } from "../design/AnimatedNumber";
 
 // LiveCharts — a rolling live-telemetry panel for the Monitor tab (owner: bring the Home dashboard's
@@ -11,7 +12,7 @@ import { AnimatedNumber } from "../design/AnimatedNumber";
 // CPU/RAM are always available (even idle), GPU when sensors report. Flag-gated by the parent.
 
 type CpuSnap = { usage_overall_pct: number; frequency_mhz: number; ram_used_bytes: number; ram_total_bytes: number };
-type GpuSnap = { temperature_c: number | null; utilization_gpu_pct: number | null };
+type GpuSnap = { vendor: string; temperature_c: number | null; utilization_gpu_pct: number | null };
 
 const N = 56;
 
@@ -73,7 +74,8 @@ export function LiveCharts() {
   const ramPct = cpu?.ram_total_bytes ? Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100) : null;
   // Hardware-tailored grade colors — GPU temp + RAM pressure carry green/amber/red; utilization stays
   // neutral (high util is good while gaming). No refresh needed here (no FPS/frametime in this panel).
-  const gpuTempColor = gradeColor(gradeGpuTempC(gpu?.temperature_c ?? null));
+  // GPU temp is vendor-gated (LOCKED rule #5): NVIDIA NVML temp is unverified → neutral (one source).
+  const gpuTempColor = gradeColor(gradeGpuTempForVendor(gpu?.vendor, gpu?.temperature_c ?? null));
   const ramColor = gradeColor(gradeRamPct(ramPct));
 
   return (
