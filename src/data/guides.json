@@ -52,12 +52,13 @@
     "tier": "safe",
     "goal": "Reduce shader-compilation stutter — especially in UE5 titles — by letting the driver keep more compiled shaders on disk.",
     "steps": [
-      "Open your graphics driver's control panel and find the Shader Cache Size setting in the global 3D options.",
-      "Set it to Unlimited, or to 10 GB if your driver offers fixed sizes. It only costs disk space.",
-      "Separately, when a game shows a \"compiling shaders\" screen, let it finish instead of skipping it — that work prevents in-game hitching.",
+      "Open your graphics driver's control panel — NVIDIA Control Panel, AMD Software: Adrenalin Edition, or your Intel graphics app.",
+      "NVIDIA: open Manage 3D Settings and set Shader Cache Size to Unlimited (or 10 GB). It only costs disk space.",
+      "AMD and Intel don't offer a size — just an on/off Shader Cache that is on by default (AMD: Graphics → Advanced). Leave it on; the only other control there is a Reset/Clear button for troubleshooting.",
+      "When a game shows a \"compiling shaders\" screen, let it finish instead of skipping it — that work prevents in-game hitching.",
       "Play a shader-heavy game; the first run still compiles, but repeat sessions should hitch less."
     ],
-    "undo": "Set Shader Cache Size back to Driver Default, and clear the cache from the same panel if you want the disk space back.",
+    "undo": "NVIDIA: set Shader Cache Size back to Driver Default. AMD and Intel have no size to undo — leave the cache on. To reclaim the disk space, use the Reset/Clear Shader Cache button in the same panel.",
     "related": ["shader-cache-size", "shader-compilation", "ue5", "traversal-stutter"]
   },
   {
