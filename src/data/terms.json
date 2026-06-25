@@ -309,7 +309,15 @@
     "aliases": ["dpi", "ppi", "dots per inch", "pixels per inch", "mouse sensitivity", "mouse dpi"],
     "what": "Two related \"how dense\" numbers. Mouse DPI is how far the cursor moves per inch you slide the mouse; screen PPI is how tightly packed your monitor's pixels are.",
     "more": "DPI is dots per inch; PPI is pixels per inch. A higher mouse DPI moves the cursor further per motion — it's about your aim feel, not performance, and most players pair a moderate DPI with in-game sensitivity. Higher screen PPI only means a sharper-looking panel at a given size. Cranking mouse DPI sky-high doesn't make you faster, it makes you twitchier.",
-    "related": ["polling-rate", "input-latency", "native-resolution"]
+    "related": ["polling-rate", "input-latency", "native-resolution", "effective-sensitivity"]
+  },
+  {
+    "id": "effective-sensitivity",
+    "name": "Effective sensitivity (eDPI) — the number that actually matters",
+    "aliases": ["edpi", "effective dpi", "effective sensitivity", "true sensitivity", "match sensitivity", "matching sensitivity", "sensitivity matching"],
+    "what": "How far your aim swings isn't set by mouse DPI alone or in-game sensitivity alone — it's the two multiplied together, often called eDPI (mouse DPI × in-game sensitivity). That combined number decides how far your view turns for a given hand movement, so it's the thing worth keeping consistent — not the DPI dial on its own.",
+    "more": "Because the feel comes from the product of the two, a 400-DPI / 2.0-sensitivity setup and an 800-DPI / 1.0-sensitivity setup aim identically — same eDPI, same swing. That's why, when you copy someone's settings, you match their eDPI rather than just their DPI: change one number and adjust the other to keep the product the same and your aim doesn't move. One honest limit worth naming: Compy can't read your DPI — it's stored on the mouse itself (or in its own software), not in Windows — so unlike most things Compy tailors from a hardware read, this one it can't, which is why it's a rule-of-thumb instead of a per-rig number. The usual advice is a low-to-moderate DPI (many players sit around 400–800, and rarely above 1600) plus an in-game sensitivity that lets you spin a comfortable 180° turn with about a forearm's sweep of the pad. There's no single 'correct' value — consistency and comfort beat chasing a number, and switching games or mice means recomputing eDPI to keep the same feel. None of this changes your frame rate (raising DPI to gain frames is a myth — see that entry); it's purely about aim feel, and it pairs best with mouse acceleration off and raw input on so the movement stays one-to-one.",
+    "related": ["dpi-ppi", "gaming-mouse-dpi-fps", "polling-rate", "mouse-acceleration-fps", "input-latency"]
   },
   {
     "id": "keyboard-actuation",
