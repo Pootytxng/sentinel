@@ -74,6 +74,32 @@ export function pollingJitterLabel(jitterMs: number): string {
   return "high";
 }
 
+/** A single network-readiness chip from the backend signal (mirrors `hardware.rs` `NetworkPill`,
+ * surfaced on `HardwareInfo.network_pills`). `label` is a plain fact ("Wired Ethernet", "Wi-Fi · 5 GHz",
+ * "82% signal"); `tone` is an honest color cue, never a score. */
+export type NetworkPill = { label: string; tone: string };
+
+/** The four honest tones the Latency chips render. */
+export type NetworkPillTone = "good" | "neutral" | "advisory" | "unknown";
+
+/** Normalize a backend pill `tone` to the calm chip class the Latency surface knows how to color.
+ * The four tones map 1:1 (`good` = the steady ideal · `advisory` = worth a glance, never a problem —
+ * the same calm accent language as `.lat-advisory` · `neutral` = a plain fact · `unknown` = couldn't
+ * read it). Any UNRECOGNIZED tone (a future backend value) falls back to `neutral` so a new tone can
+ * never render with no class or — worse — borrow an alarming one. Pure + total: no DOM, fully tested. */
+export function networkPillTone(tone: string): NetworkPillTone {
+  switch (tone) {
+    case "good":
+      return "good";
+    case "advisory":
+      return "advisory";
+    case "unknown":
+      return "unknown";
+    default:
+      return "neutral"; // "neutral" itself + any unknown future tone → the safe, calm default
+  }
+}
+
 /** Plain-English interpretation of the MEASURED effective polling rate (Hz) — translate the raw
  * number into a class a non-technical gamer understands, and make a low rate ACTIONABLE (it names the
  * mouse as the limiter). Bands key off the measured effective rate (already what reaches the game), so

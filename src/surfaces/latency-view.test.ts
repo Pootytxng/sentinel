@@ -9,6 +9,7 @@ import {
   pollingJitterStatus,
   pollingJitterLabel,
   pollingRateClass,
+  networkPillTone,
 } from "./latency-view";
 import type { UsbControllerLoad } from "../types";
 
@@ -145,6 +146,20 @@ describe("pollingJitterLabel", () => {
     expect(pollingJitterLabel(1.0)).toBe("normal");
     expect(pollingJitterLabel(2.0)).toBe("high");
     expect(pollingJitterLabel(NaN)).toBe("unknown");
+  });
+});
+
+describe("networkPillTone", () => {
+  it("maps the four backend tones 1:1", () => {
+    expect(networkPillTone("good")).toBe("good");
+    expect(networkPillTone("neutral")).toBe("neutral");
+    expect(networkPillTone("advisory")).toBe("advisory");
+    expect(networkPillTone("unknown")).toBe("unknown");
+  });
+  it("falls back to neutral for any unrecognized / future tone (never an alarming class)", () => {
+    expect(networkPillTone("danger")).toBe("neutral"); // a hypothetical alarming tone is defused
+    expect(networkPillTone("")).toBe("neutral");
+    expect(networkPillTone("GOOD")).toBe("neutral"); // case-sensitive: only exact backend strings map
   });
 });
 

@@ -6,19 +6,24 @@ import type { LatencyReport } from "../types";
 const mocks = vi.hoisted(() => ({
   report: null as LatencyReport | null,
   mouse: null as unknown,
+  hw: null as unknown, // get_hardware_info — only network_pills is read by this surface
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     if (cmd === "get_latency_diagnostics") return Promise.resolve(mocks.report);
     if (cmd === "latency_measure_mouse") return Promise.resolve(mocks.mouse);
+    if (cmd === "get_hardware_info") return Promise.resolve(mocks.hw);
     return Promise.resolve(null);
   }),
 }));
 
 import { LatencyTab } from "./Latency";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.hw = null; // don't leak the network signal into other tests' ordering
+});
 
 const fullReport: LatencyReport = {
   msi_devices: [],
@@ -86,6 +91,40 @@ describe("LatencyTab (audit M1)", () => {
     expect(
       screen.getByText(/A faster USB port does NOT raise a mouse's polling rate/),
     ).toBeInTheDocument();
+  });
+
+  it("renders network-readiness chips from the backend signal, tone-classed, never alarming", async () => {
+    mocks.report = fullReport;
+    mocks.hw = {
+      network_pills: [
+        { label: "Wi-Fi · 5 GHz", tone: "advisory" },
+        { label: "82% signal", tone: "neutral" },
+        { label: "Wired port available", tone: "advisory" },
+        { label: "Offline", tone: "unknown" },
+        { label: "danger", tone: "danger" }, // a hypothetical future/alarming tone → defused to neutral
+      ],
+    };
+    render(<LatencyTab />);
+    // The card and its honest context line render.
+    expect(await screen.findByText("Network connection")).toBeInTheDocument();
+    expect(screen.getByText(/shapes online-game latency \(ping and lag\)/)).toBeInTheDocument();
+    // Each pill shows its label, colored by tone — and NONE carries an alarm/danger class.
+    const advisory = screen.getByText("Wi-Fi · 5 GHz");
+    expect(advisory).toHaveClass("lat-pill", "lat-pill-advisory");
+    expect(screen.getByText("82% signal")).toHaveClass("lat-pill-neutral");
+    expect(screen.getByText("Offline")).toHaveClass("lat-pill-unknown");
+    // The unknown future tone is defused to the calm neutral class (never borrows an alarming one).
+    expect(screen.getByText("danger")).toHaveClass("lat-pill-neutral");
+  });
+
+  it("hides the network card entirely when the signal is absent (never an empty shell)", async () => {
+    mocks.report = fullReport;
+    mocks.hw = null; // get_hardware_info unavailable / no pills
+    render(<LatencyTab />);
+    // The rest of the surface still renders…
+    expect(await screen.findByText(/Nothing here\s+changes a setting/)).toBeInTheDocument();
+    // …but no Network connection card appears.
+    expect(screen.queryByText("Network connection")).not.toBeInTheDocument();
   });
 
   it("time-windowed measurements are on-demand and report honestly when empty", async () => {

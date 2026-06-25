@@ -10,6 +10,8 @@ import {
   pollingJitterStatus,
   pollingJitterLabel,
   pollingRateClass,
+  networkPillTone,
+  type NetworkPill,
 } from "./latency-view";
 import type { LatencyReport, WakeMeasurement, MouseMeasurement } from "../types";
 import "./Latency.css";
@@ -27,6 +29,7 @@ export function LatencyTab() {
   const [mouse, setMouse] = useState<MouseMeasurement | null>(null);
   const [mouseBusy, setMouseBusy] = useState(false);
   const [mouseMsg, setMouseMsg] = useState<string | null>(null);
+  const [netPills, setNetPills] = useState<NetworkPill[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +41,14 @@ export function LatencyTab() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    // Network-readiness chips read the authoritative backend signal (`hw.network_pills`, derived
+    // read-only + zero-outbound in hardware.rs). The Latency surface has no `hw` in scope, so it reads
+    // it directly — a narrow shape, the Benchmark `RigSpecs` precedent. Failure leaves the card hidden.
+    invoke<{ network_pills?: NetworkPill[] } | null>("get_hardware_info")
+      .then((hw) => {
+        if (!cancelled && hw?.network_pills) setNetPills(hw.network_pills);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -250,6 +261,27 @@ export function LatencyTab() {
           </>
         )}
       </Card>
+
+      {/* Network connection — the online-latency axis (ping/lag), distinct from the local
+          responsiveness above. Chips render the backend's read-only readiness signal as-is, colored
+          by an honest tone (never a score). Only shown when the signal was actually read. */}
+      {netPills.length > 0 && (
+        <Card>
+          <SectionHeader title="Network connection" />
+          <ul className="lat-pills">
+            {netPills.map((p, i) => (
+              <li key={`${p.label}-${i}`} className={`lat-pill lat-pill-${networkPillTone(p.tone)}`}>
+                {p.label}
+              </li>
+            ))}
+          </ul>
+          <p className="lat-muted">
+            How your PC reaches the internet — this shapes online-game latency (ping and lag), separate
+            from the local responsiveness above. Wired Ethernet is the steadiest; Wi-Fi is fine for
+            plenty of games.
+          </p>
+        </Card>
+      )}
     </div>
   );
 }
