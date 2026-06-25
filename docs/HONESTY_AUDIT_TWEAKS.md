@@ -161,3 +161,33 @@ honesty (`sysmain-superfetch` invented GB number · `disable-windows-update` fTP
 `defrag-ssd` "Windows never defrags an SSD" falsehood). One verdict re-grade candidate (`timer-resolution`
 placebo→risky) + a set of precision/voice nits handed to `content`/owner (verdict & taste = their
 territory). The corpus is honest where it counts.
+
+---
+
+## Rest of the knowledge corpus audited (2026-06-25) — tricks (14) + guides (7) CLEAN
+
+Closing the loop so the WHOLE corpus is on record as honesty-audited (178 entries: 84 tweaks · 73
+terms · 14 tricks · 7 guides).
+
+- **`tricks.json` (14 snake-oil "tells") — CLEAN.** Every pattern/tell/honest_version is a factually
+  accurate characterization of a real deceptive pattern (fake deep scan, invented issue counter, fake
+  score, scareware tone, RAM-cleaner, paid driver-updater, tweak-megapack, +X%-no-method, mismatched
+  before/after, subscription trap, "secret settings", bundled bloat, testimonial wall, paid one-click
+  optimizers). The numbers in them (45-sec scan · "847 issues" · 61→94 score · "+40% FPS") are
+  **illustrative characterizations of the SCAMS being called out, not Compy claiming a gain** — so NOT
+  the fabricated-number cardinal sin. All category-level (no named product → no defamation risk). The
+  honest_versions are sound and self-consistent (e.g. `fps-claim-no-methodology` mirrors Compy's own
+  measurement doctrine). No fix.
+- **`guides.json` (7 safe appliable guides) — CLEAN, one vendor-precision nit → `content`.** The steps
+  for VRR-stack (VRR+V-Sync-On+cap-below-refresh+Reflex = the correct Blur Busters stack), fps-cap,
+  startup-cleanup, driver-update, fan-curve, and XMP (concept-not-clicks + CMOS recovery path named
+  first) are all procedurally accurate and appropriately cautious. **Nit:** `shader-cache-guide` step 1
+  ("find the **Shader Cache Size** setting … set Unlimited / 10 GB") is **NVIDIA-Control-Panel-specific**
+  — AMD Adrenalin exposes a shader-cache on/off + Reset, NOT a size knob, so an AMD user (Compy's own
+  dev-rig vendor) can't find that setting. Hedged on the "10 GB if fixed sizes" half but not on the
+  setting's existence. Vendor-completeness/precision = `content`'s call (guides.json is theirs); not a
+  fabrication, so not honesty-auto-fixed.
+
+**Whole-corpus honesty verdict: CLEAN.** 178/178 entries audited; the only factual errors found were
+the three tweak fixes above (all landed); everything else is precision/voice/verdict handed to the
+owning lane.
