@@ -26,7 +26,7 @@ On waking, and **again immediately after finishing each item** (do NOT stop to a
 2. Open this file → **find your lane row** in §④ → take the **TOP unchecked `[ ]` item** in your queue.
    - Queue empty? **Claim** one from the §⑤ pool by posting `[<lane>] claiming: <item>` to §⑥, then do it.
    - Pool empty of work in your domain? Post `[<lane>] queue dry — steering please refill` to §⑥ and stop. *(That is the ONLY valid "I'm waiting" — and it's a posted request, not a silent stall.)*
-3. **Build it, in YOUR file domain only** (§④ "owns"): spec → TDD → `/check` + `/security` → `self-review` if it's visual → `cargo test` + `npm test` + `npm run build` green → commit (after `git branch --show-current` + `git status` per [[cowork-worktree-collision-guard]]) → push.
+3. **Build it, in YOUR file domain only** (§④ "owns"): spec → TDD → `/check` + `/security` → `self-review` if it's visual → `cargo test` + `npm test` + `npm run build` green → commit (after `git branch --show-current` + `git status` per [[cowork-worktree-collision-guard]]). **Then LAND IT ON MAIN** (lanes push to `main`, not their branch): `git fetch origin` → `git rebase origin/main` → re-confirm green → `git push origin HEAD:main`. If the push is rejected (another lane landed first), re-fetch/rebase/retest and retry until it lands. (HEAD:main is a fast-forward after the rebase — your branch name is irrelevant.)
 4. **Tick it** `[x]` in `docs/BACKLOG.md` (with the commit hash) **and** in your §④ queue here.
 5. If your work **unblocked another lane** (a dependency, a shared signal), post `[<lane>→<other>] <X> is ready` to §⑥.
 6. **Go straight to your next queue item.** Never stop while non-gated work remains in your queue, the pool, or your domain.

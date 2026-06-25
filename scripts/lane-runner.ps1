@@ -54,10 +54,15 @@ You are the $Lane lane for Compy (repo sentinel). FIRST RECOVER (docs/LANE_BUS.m
 rebase onto origin/main; re-run cargo+npm to confirm a GREEN baseline. THEN run the SELF-CONTINUATION
 PROTOCOL (section 1): take the top unchecked item in your lane's queue (section 4) or claim one from the pool
 (section 5), build it in YOUR file domain ONLY with full rigor (spec, TDD, /check, /security, self-review if
-visual, cargo+npm green, commit after a branch+status check, push), update your section-8 checkpoint, tick it
-in BACKLOG + your queue, and post any cross-lane signal to section 6. Then continue to your next item. Only
-stop on the section-1 stop conditions, posting the reason to section 6 first. This prompt is IDEMPOTENT and
-safe to re-fire at any point.
+visual). When cargo+npm are green, LAND IT ON MAIN: git add your files + commit (after a branch+status check),
+then git fetch origin, git rebase origin/main, re-confirm cargo+npm green, and push with: git push origin
+HEAD:main . If that push is REJECTED because another lane landed first, re-run git fetch origin + git rebase
+origin/main + the tests, then retry git push origin HEAD:main — repeat until it lands. (Pushing HEAD:main is a
+fast-forward after the rebase; your branch name does not matter.) On any rebase conflict in docs/BACKLOG.md or
+docs/LANE_BUS.md, UNION both sides — never delete another lane's line (section 3). After it lands, update your
+section-8 checkpoint, tick it in BACKLOG + your queue, and post any cross-lane signal to section 6. Then
+continue to your next item. Only stop on the section-1 stop conditions, posting the reason to section 6 first.
+This prompt is IDEMPOTENT and safe to re-fire at any point.
 "@
 
 $logDir = Join-Path $Worktree '.lane-runner'
