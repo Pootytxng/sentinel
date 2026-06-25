@@ -655,4 +655,99 @@ mod gaming_mode_qa {
             "restore must target the STORED prior GUID, not the external change"
         );
     }
+
+    // ── Service-suspend QA arms (Phase-B BUILT-DARK; gate stays false) ───────────────────────────
+    // These prove the session SERVICE-SUSPEND contract rides the identical crash-safe restore path as
+    // the core bundle, WITHOUT flipping service_suspend_gate (driven via the #[cfg(test)] seam).
+
+    #[test]
+    #[ignore = "writes a session fixture; dev-rig QA only (NO elevation, NO real service mutation)"]
+    fn qa_svc_orphan_recovery_resolves_service_change_and_clears() {
+        use crate::actions::{KnownService, RollbackAction, Snapshot};
+        use crate::gaming_session::{save_session, SessionChange, SessionFile, SESSION_SCHEMA_VERSION};
+        require_clean();
+
+        // A contract left Active on disk by a "crashed" run, carrying a SUSPENDED service whose prior
+        // was NOT running. detect_orphan() must flag it; recover(true) must resolve the Service change
+        // via the typed dispatcher (resume is a no-op for a non-running prior → ZERO elevation, ZERO
+        // real mutation) and CLEAR the contract — proving a service rides the SAME orphan→recover→clear
+        // flow as the core bundle. (The running-prior real-resume path is the elevated arm below + the
+        // primitive actions::…::qa_suspend_then_resume_restores_exact_state.)
+        let file = SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: "qa-svc-orphan".into(),
+            status: SessionStatus::Active,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            app_version: "qa".into(),
+            changes: vec![SessionChange {
+                label: "Suspend WSearch for this session".into(),
+                rollback_action: RollbackAction::ResumeServiceFromSnapshot {
+                    service: KnownService::WSearch,
+                },
+                snapshot: Snapshot::Service {
+                    prior_state: "Stopped".into(),
+                    prior_start_mode: "Manual".into(),
+                },
+                elevated_restore: true,
+            }],
+            started_monitoring: false,
+        };
+        save_session(&file).expect("save fixture");
+
+        let orphan = detect_orphan().map(|f| f.status);
+        let recovered = recover(true);
+        eprintln!("[QA-SVC-ORPHAN] orphan={orphan:?} recover={recovered:?}");
+
+        assert!(
+            matches!(orphan, Some(SessionStatus::Active)),
+            "an Active service-suspend session must be detected as a recoverable orphan"
+        );
+        recovered.expect("recover(true) must resolve a Service change (no-op resume for non-running prior)");
+        assert!(
+            load_session().is_none(),
+            "the contract must be CLEARED after a confirmed service recovery"
+        );
+        let _ = clear_session();
+    }
+
+    #[test]
+    #[ignore = "REAL service suspend in a live session + crash-recovery; OWNER-PRESENT UAC run only"]
+    fn qa_svc_session_crash_recovery_resumes_exact_state() {
+        use crate::actions::{service_info, ForceServiceSuspendGate, KnownService};
+        require_clean();
+        let svc = KnownService::WSearch;
+        let (before_state, _) = service_info(svc.name()).expect("read prior WSearch state");
+        eprintln!("[QA-SVC-CRASH] before: WSearch={before_state}");
+
+        // Open the gate via the test seam (the real gate stays false) so the session actually suspends
+        // the service. Stop-Service is ELEVATED → a REAL UAC prompt. Then simulate a CRASH: start, never
+        // stop — the Active contract (carrying the Service change) is left on disk like a killed process.
+        let started = {
+            let _gate = ForceServiceSuspendGate::begin();
+            start(StartOptions { suspend_services: vec!["WSearch".into()], ..Default::default() })
+        };
+        let suspended = service_info(svc.name()).map(|s| s.0);
+        eprintln!("[QA-SVC-CRASH] suspended: WSearch={suspended:?} started_ok={}", started.is_ok());
+
+        // Crash-recovery: detect the orphan, recover (Start-Service if it was running → REAL UAC). recover
+        // resumes the service BEFORE the asserts, so a confirmed recovery leaves the rig restored.
+        let orphan = detect_orphan().map(|f| f.status);
+        let recovered = recover(true);
+        let after = service_info(svc.name()).map(|s| s.0);
+        let _ = clear_session(); // belt-and-suspenders: never leave a fixture behind
+
+        eprintln!("[QA-SVC-CRASH] orphan={orphan:?} recover={recovered:?} after={after:?}");
+        started.expect("start() should suspend the service (gate seam open)");
+        assert!(
+            matches!(orphan, Some(SessionStatus::Active)),
+            "the suspended-service session must be a recoverable orphan after a crash"
+        );
+        recovered.expect("recover(true) should resume the service from the orphaned contract");
+        assert_eq!(
+            after.as_deref(),
+            Some(before_state.as_str()),
+            "crash-recovery must restore WSearch to its EXACT prior state"
+        );
+        assert!(load_session().is_none(), "contract must be cleared after a confirmed recovery");
+    }
 }
