@@ -70,6 +70,24 @@ describe("LatencyTab (audit M1)", () => {
     expect(screen.getByText("USB xHCI Controller")).toBeInTheDocument();
   });
 
+  it("surfaces the USB top-spec tier and the tier advisory honestly", async () => {
+    mocks.report = {
+      ...fullReport,
+      usb_top_spec: "USB 3.2",
+      usb_tier_advisory:
+        "Your system supports up to USB 3.2. A faster USB port does NOT raise a mouse's polling rate.",
+    };
+    render(<LatencyTab />);
+    // The capability tier is shown, explicitly labelled as a tier (not a per-port speed).
+    expect(await screen.findByText(/Platform supports up to/)).toBeInTheDocument();
+    expect(screen.getByText("USB 3.2")).toBeInTheDocument();
+    expect(screen.getByText(/capability tier — not a\s+per-port speed/)).toBeInTheDocument();
+    // The honest tier advisory renders.
+    expect(
+      screen.getByText(/A faster USB port does NOT raise a mouse's polling rate/),
+    ).toBeInTheDocument();
+  });
+
   it("time-windowed measurements are on-demand and report honestly when empty", async () => {
     mocks.report = fullReport;
     mocks.mouse = null; // capture window caught nothing

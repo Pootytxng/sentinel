@@ -169,6 +169,10 @@ export type LatencyReport = {
   usb_advisory: string | null;
   // Honest wired-vs-wireless input note; present only when a device name clearly reads as wireless.
   peripheral_link_advisory?: string | null;
+  // Platform top USB spec tier ("USB4"/"USB 3.2"/…/"USB 2.0"); capability only, never per-device speed.
+  usb_top_spec?: string | null;
+  // The TIER half of the USB-port advisory — what the top USB tier does/doesn't mean for input latency.
+  usb_tier_advisory?: string | null;
 };
 export type WakeMeasurement = { granularity: SleepGranularity; note: string };
 export type MouseMeasurement = { polling: PollingRate; note: string };

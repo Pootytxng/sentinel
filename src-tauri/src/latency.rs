@@ -860,6 +860,51 @@ pub(crate) fn wired_vs_wireless_advisory(loads: &[UsbControllerLoad]) -> Option<
     ))
 }
 
+/// Pure: the TIER half of the USB-port advisory. The honest, hardware-tailored note built on the
+/// platform's top USB spec tier (`top_spec`, from the backend's `detect_usb_top_spec()` signal) — the
+/// one USB-spec fact that IS readable in user-mode. We do NOT know which port a device sits on or its
+/// negotiated speed (neither is readable), so this never claims "your mouse is on a slow port"; it
+/// teaches what the tier does and doesn't mean for input latency.
+///
+/// `None` unless the tier is known AND at least one USB input device was detected (`loads` non-empty)
+/// — with no tier or no peripheral there's nothing honest+relevant to say.
+///
+/// - **USB 2.0-capped:** input is genuinely fine (a 1000Hz mouse uses a sliver of 2.0 bandwidth → same
+///   polling rate as on a USB 3 port). The one thing the lower ceiling affects is bandwidth-hungry
+///   devices (USB audio/capture/webcam), not your mouse.
+/// - **USB 3.x / USB4:** a myth-buster — a faster port does NOT raise a mouse's polling rate; the same
+///   tiny reports flow on USB 2.0 or USB4, so don't hunt for "the fast port" for input. The bandwidth
+///   helps storage/capture/audio, not your mouse.
+///
+/// This owns the **spec-tier** dimension only. It deliberately does NOT name a specific device or tell
+/// you to move one — that's `shared_controller_advisory`'s job (the sharing dimension), so the two
+/// never issue the same "move device X" instruction twice. Advisory only; Compy never moves a device or
+/// changes a port. Read-only.
+pub(crate) fn usb_tier_advisory(top_spec: Option<&str>, loads: &[UsbControllerLoad]) -> Option<String> {
+    let tier = top_spec?;
+    if loads.is_empty() {
+        return None; // no USB input device detected → nothing peripheral-relevant to tailor
+    }
+    if tier == "USB 2.0" {
+        return Some(
+            "Your USB controllers top out at USB 2.0. For a mouse or keyboard that's genuinely fine — a \
+             1000Hz mouse sends tiny reports and uses a sliver of USB 2.0's bandwidth, so its polling \
+             rate is the same as it would be on a USB 3 port. The lower ceiling only matters for \
+             bandwidth-hungry devices (USB audio interfaces, capture cards, webcams), not your input. \
+             (Tier read from the controller names; which port a device actually uses isn't readable in \
+             user-mode.)"
+                .to_string(),
+        );
+    }
+    Some(format!(
+        "Your system supports up to {tier}. Worth knowing for input latency, but not worth chasing: a \
+         faster USB port does NOT raise a mouse's polling rate — a 1000Hz mouse sends the same tiny \
+         reports on a USB 2.0 or a {tier} port, so there's no need to hunt for \"the fast port\" for your \
+         mouse or keyboard. The extra bandwidth helps storage, capture and audio devices, not input. \
+         (Tier read from the controller names; per-port speed isn't readable in user-mode.)"
+    ))
+}
+
 /// Live: build the USB-controller → input-device map (read-only WMI: `Win32_USBController`,
 /// `Win32_USBControllerDevice`, `Win32_PnPEntity`). No elevation, no network. Empty on any error.
 ///
@@ -1248,6 +1293,14 @@ pub(crate) struct LatencyReport {
     /// Honest wired-vs-wireless input note — present ONLY when an input-device name clearly indicates
     /// a wireless connection (else None; we never assert "wired" we can't verify).
     pub peripheral_link_advisory: Option<String>,
+    /// Platform top USB spec tier (`"USB4"`/`"USB 3.2"`/…/`"USB 2.0"`) from the backend's shared
+    /// `detect_usb_top_spec()` signal, or None when unreadable. Capability tier only — never per-device
+    /// speed or which port a device uses (neither is readable in user-mode).
+    pub usb_top_spec: Option<String>,
+    /// The TIER half of the USB-port advisory: an honest, hardware-tailored note about what the top
+    /// USB spec tier does (and doesn't) mean for input latency. None when the tier is unknown or no
+    /// USB input device was detected.
+    pub usb_tier_advisory: Option<String>,
 }
 
 /// Gather the fast read-only latency diagnostics. Each underlying reader degrades
@@ -1278,6 +1331,8 @@ fn gather_latency_report_inner() -> LatencyReport {
     let usb = read_usb_topology();
     let usb_advisory = shared_controller_advisory(&usb);
     let peripheral_link_advisory = wired_vs_wireless_advisory(&usb);
+    let usb_top_spec = crate::hardware::detect_usb_top_spec();
+    let usb_tier_advisory = usb_tier_advisory(usb_top_spec.as_deref(), &usb);
     LatencyReport {
         msi_devices,
         msi,
@@ -1292,6 +1347,8 @@ fn gather_latency_report_inner() -> LatencyReport {
         usb,
         usb_advisory,
         peripheral_link_advisory,
+        usb_top_spec,
+        usb_tier_advisory,
     }
 }
 
@@ -1852,6 +1909,49 @@ mod latency_tests {
         assert!(wired_vs_wireless_advisory(&ctrl(vec!["HID-compliant mouse"])).is_none());
         assert!(wired_vs_wireless_advisory(&ctrl(vec!["Razer Viper", "HID Keyboard Device"])).is_none());
         assert!(wired_vs_wireless_advisory(&[]).is_none());
+    }
+
+    #[test]
+    fn usb_tier_advisory_is_honest_and_tailored() {
+        let load = |inputs: Vec<&str>, streaming: Vec<&str>, hr: bool| {
+            vec![UsbControllerLoad {
+                controller_name: "Host".into(),
+                controller_id: "PCIA".into(),
+                input_devices: inputs.into_iter().map(String::from).collect(),
+                streaming_neighbors: streaming.into_iter().map(String::from).collect(),
+                has_high_rate_input: hr,
+            }]
+        };
+        let mouse = load(vec!["HID-compliant mouse"], vec![], true);
+
+        // Unknown tier → never fabricate a tier claim.
+        assert!(usb_tier_advisory(None, &mouse).is_none());
+
+        // Tier known but no USB input device detected → nothing peripheral-relevant to say.
+        assert!(usb_tier_advisory(Some("USB4"), &[]).is_none());
+
+        // USB 3.x / USB4 → the myth-buster (a faster port doesn't raise polling rate), names the tier.
+        let u4 = usb_tier_advisory(Some("USB4"), &mouse).expect("tier note");
+        assert!(u4.contains("USB4"));
+        assert!(u4.contains("does NOT raise a mouse's polling rate"));
+        assert!(u4.contains("isn't readable in user-mode"));
+        let u32 = usb_tier_advisory(Some("USB 3.2"), &mouse).expect("tier note");
+        assert!(u32.contains("USB 3.2") && u32.contains("polling rate"));
+
+        // USB 2.0 → "fine for input" + the tier-level caveat (bandwidth-hungry devices, not input).
+        let two = usb_tier_advisory(Some("USB 2.0"), &mouse).expect("tier note");
+        assert!(two.contains("top out at USB 2.0"));
+        assert!(two.contains("genuinely fine"));
+        assert!(two.contains("USB audio interface")); // generic device examples
+        assert!(two.contains("isn't readable in user-mode"));
+
+        // The tier advisory owns the TIER dimension only: it must NEVER name a specific device or
+        // re-issue a "move device X" instruction — that's shared_controller_advisory's job (no dup).
+        let two_shared =
+            usb_tier_advisory(Some("USB 2.0"), &load(vec!["HID-compliant mouse"], vec!["Arctis Headset"], true))
+                .expect("tier note");
+        assert!(!two_shared.contains("Arctis Headset"));
+        assert!(!two_shared.to_lowercase().contains("give it its own"));
     }
 
     #[test]

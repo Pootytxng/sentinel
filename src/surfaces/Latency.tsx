@@ -198,9 +198,18 @@ export function LatencyTab() {
             })}
           </ul>
         )}
+        {report.usb_top_spec && (
+          <p className="lat-muted">
+            Platform supports up to <strong>{report.usb_top_spec}</strong> (capability tier — not a
+            per-port speed)
+          </p>
+        )}
         {report.usb_advisory && <p className="lat-advisory">{report.usb_advisory}</p>}
         {report.peripheral_link_advisory && (
           <p className="lat-advisory">{report.peripheral_link_advisory}</p>
+        )}
+        {report.usb_tier_advisory && (
+          <p className="lat-advisory">{report.usb_tier_advisory}</p>
         )}
       </Card>
 
