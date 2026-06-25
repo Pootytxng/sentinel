@@ -8,6 +8,7 @@ import {
   timerRangeLabel,
   pollingJitterStatus,
   pollingJitterLabel,
+  pollingRateClass,
 } from "./latency-view";
 import type { UsbControllerLoad } from "../types";
 
@@ -144,5 +145,25 @@ describe("pollingJitterLabel", () => {
     expect(pollingJitterLabel(1.0)).toBe("normal");
     expect(pollingJitterLabel(2.0)).toBe("high");
     expect(pollingJitterLabel(NaN)).toBe("unknown");
+  });
+});
+
+describe("pollingRateClass", () => {
+  it("classifies the measured effective rate into plain-English bands (inclusive-down boundaries)", () => {
+    expect(pollingRateClass(1000)).toMatch(/Gaming-class/);
+    expect(pollingRateClass(998)).toMatch(/Gaming-class/); // a 1000 Hz mouse measured slightly under
+    expect(pollingRateClass(950)).toMatch(/Gaming-class/); // boundary inclusive
+    expect(pollingRateClass(500)).toMatch(/Mid polling rate/);
+    expect(pollingRateClass(450)).toMatch(/Mid polling rate/); // boundary inclusive
+    expect(pollingRateClass(250)).toMatch(/Modest/);
+    expect(pollingRateClass(200)).toMatch(/Modest/); // boundary inclusive
+    expect(pollingRateClass(125)).toMatch(/Basic/);
+    expect(pollingRateClass(125)).toMatch(/the mouse is the limiter/); // low rate is actionable
+  });
+  it("returns null for a non-finite / non-positive rate (never a guessed verdict)", () => {
+    expect(pollingRateClass(0)).toBeNull();
+    expect(pollingRateClass(-5)).toBeNull();
+    expect(pollingRateClass(NaN)).toBeNull();
+    expect(pollingRateClass(Infinity)).toBeNull(); // non-finite is excluded, not classified
   });
 });

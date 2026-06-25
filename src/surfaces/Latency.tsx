@@ -9,6 +9,7 @@ import {
   timerRangeLabel,
   pollingJitterStatus,
   pollingJitterLabel,
+  pollingRateClass,
 } from "./latency-view";
 import type { LatencyReport, WakeMeasurement, MouseMeasurement } from "../types";
 import "./Latency.css";
@@ -85,6 +86,7 @@ export function LatencyTab() {
   }
 
   const { msi, msi_active, cpu, usb } = report;
+  const rateClass = mouse ? pollingRateClass(mouse.polling.median_hz) : null;
 
   return (
     <div className="lat-wrap">
@@ -212,6 +214,7 @@ export function LatencyTab() {
               Median <strong>{Math.round(mouse.polling.median_hz)} Hz</strong> over{" "}
               {mouse.polling.reports} reports (jitter {fmtMs(mouse.polling.jitter_ms)})
             </p>
+            {rateClass && <p className="lat-muted">{rateClass}</p>}
             <p className="lat-muted">
               Report gaps ranged {fmtMs(mouse.polling.min_interval_ms)} (fastest) to{" "}
               {fmtMs(mouse.polling.max_interval_ms)} (slowest)

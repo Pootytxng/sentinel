@@ -73,3 +73,17 @@ export function pollingJitterLabel(jitterMs: number): string {
   if (jitterMs <= 1.5) return "normal";
   return "high";
 }
+
+/** Plain-English interpretation of the MEASURED effective polling rate (Hz) — translate the raw
+ * number into a class a non-technical gamer understands, and make a low rate ACTIONABLE (it names the
+ * mouse as the limiter). Bands key off the measured effective rate (already what reaches the game), so
+ * no over-claim of an exact advertised tier. `null` for a non-finite / non-positive rate so the card
+ * shows nothing rather than a guessed verdict. Boundaries are inclusive-down: 950→gaming, 450→mid,
+ * 200→modest, anything positive below→basic. */
+export function pollingRateClass(medianHz: number): string | null {
+  if (!Number.isFinite(medianHz) || medianHz <= 0) return null;
+  if (medianHz >= 950) return "Gaming-class polling rate (≈1000 Hz or better) — plenty for fast aim.";
+  if (medianHz >= 450) return "Mid polling rate (≈500 Hz) — fine for most play; gaming mice reach 1000 Hz+.";
+  if (medianHz >= 200) return "Modest polling rate (≈250 Hz) — usable, but a gaming mouse polls 1000 Hz+.";
+  return "Basic polling rate (≈125 Hz, office-mouse tier) — a gaming mouse polls 1000 Hz+; the mouse is the limiter here.";
+}
