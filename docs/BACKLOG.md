@@ -18,6 +18,15 @@
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
 > stay in your file domain, rebase onto `main` before every push.
 
+### Cycle 2026-06-24d — `main` @ `327cc87` · integrated tree GREEN
+**Two more frontend/data pushes:** content → A4 **monitor motion-clarity explainers** (strobing/ULMB, overdrive,
+GtG-vs-MPRT) in `terms.json` +24 (`6d41137`); agent → A4 Peripheral **plain-English polling-rate class** on the
+mouse card (`Latency.tsx`/`latency-view.ts`, `327cc87`). Disjoint, read-only/advisory, zero src-tauri/IPC/capability.
+**Integrate-verify:** vitest **564** / `npm run build` ✓; cargo unchanged at **566** (no `src-tauri` diff since the
+565d94b run — verified, not assumed). **Lane heartbeat:** content + agent actively shipping; **`work/bench` now 16
+behind, still no push — bench's A2 tier-segmentation looks stalled (2 cycles).** Owner items unchanged
+(`qa/locale-drift-hardening` clean-merge gated; brand-voice skim now spans 6 new Learn debunks).
+
 ### Cycle 2026-06-24c — `main` @ `565d94b` · integrated tree GREEN
 **Two more pushes integrated:** content/knowledge → A4 **color-science debunks** (sRGB-clamp, gamma-vs-HDR,
 chroma-subsampling) in `terms.json` +24, zero `Learn.tsx` change (`113a2d7`); Phase-B → **service-suspend
