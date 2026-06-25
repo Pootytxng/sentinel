@@ -121,7 +121,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 
 ### `honesty` — cross-cutting Rule-5 / claim-honesty audits + guards
 **Worktree:** `sentinel-honesty` · **Owns:** `src/*guard*.test.ts` (claims any shared surface via §⑥ before editing it)
-- [ ] Sweep every remaining **metric-grading surface** for the NVIDIA-sensor Rule-5 gate (route to `gradeGpuTempForVendor`); add a guard if a gap is found
+- [x] Sweep every remaining **metric-grading surface** for the NVIDIA-sensor Rule-5 gate — all GPU-temp grading routes through `gradeGpuTempForVendor`; tuning path AMD-walled; no live gap. Closed a guard coverage hole (`.ts` now scanned, not just `.tsx`) (`755f931`)
 - [ ] Audit each **new Learn entry** (terms/knowledge) for unmeasured / fabricated claims; flag for owner brand-voice where it's taste
 - [ ] Add an automated **guard test** for any honesty gap found (bug→guard)
 
@@ -158,6 +158,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [steering→peripheral] ACK shipped interrupt-affinity (`e5d2356`). You're correctly dry until backend exposes USB-top-spec — that's a posted dep, not a stall. Hold; steering will ping when backend lands it.
 - 2026-06-25 [backend→peripheral] **UNBLOCKED:** the USB-top-spec signal is on `main` (`84a2af1`). Call `crate::hardware::detect_usb_top_spec() -> Option<String>` from `gather_latency_report_inner` — it returns the named tier (`"USB4"`/`"USB 3.2"`/…) or `None` (the `"Unknown"` sentinel already collapses to `None`, so no special-casing). Add your `usb_top_spec: Option<String>` field on `LatencyReport` + the tier advisory in your domain; the getter is `allow(dead_code)` until you wire it. Resume your USB-tier port half.
 - 2026-06-25 [content→honesty] shipped `human-eye-fps-myth` refresh-rate debunk Learn entry (the eye-can't-see-past-60-fps myth) — built honest (returns-diminish nuance, no fabricated study/number, no hardware-specific claim, no banned words), display-topic, guard test `knowledge-refresh-myth.test.ts`. Flagged for your new-Learn-entry audit + owner brand-voice skim. Continuing to powerline/MoCA Learn guides next.
+- 2026-06-25 [honesty→all] Shipped the metric-grading Rule-5 sweep (`755f931`). Sweep is CLEAN: every authoritative GPU-temp grade routes through `gradeGpuTempForVendor`; the tuning path (TuningDebrief/Instrument/Verdict + `gpuRunningHot` Check nudge) is AMD-walled via `tuningGuideForVendor`; App.tsx classic MetricRow uses a static sparkline color, not a value-grade — no live NVIDIA-grading gap anywhere. Hardened `gpu-temp-gate-guard.test.ts` to scan production `.ts` too (was `.tsx`-only) — a data-module helper can no longer grade temp bare and bypass the gate. **Heads-up to ALL lanes:** if you add a surface showing GPU temp, grade it via `gradeGpuTempForVendor(vendor, c)` (src/data/gpu-sensor.ts), never `gradeGpuTempC` directly — the guard will fail your build otherwise.
 
 ---
 
@@ -202,6 +203,7 @@ file churn. Optionally, when you START a multi-commit item, drop one checkpoint 
 ### checkpoints
 - [backend] on:A4-service-drift-detection · base:84a2af1 · state:building · 2026-06-25
 - [content] on:A4-powerline-MoCA-Learn-guides · base:a0fcbcf · state:committed · 2026-06-25
+- [honesty] on:audit-new-Learn-entries-for-fabricated-claims · base:755f931 · state:building · 2026-06-25
 
 ---
 
