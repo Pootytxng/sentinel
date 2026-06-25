@@ -73,6 +73,14 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 - **`honesty` lane** is cross-cutting: it OWNS `src/*guard*.test.ts`; to *fix* a violation in a surface another lane owns, it posts `[honesty] claiming <file> for a Rule-5 fix` first.
 - **Rebase before every push.** Never force-push. Never touch frozen beta refs (`16069fa` / `beta/private-beta-001`).
 - **"Already done?" check** — before claiming a branch/item is unmerged work, confirm with the merge-tree no-op test ([[branch-redundancy-detect-by-mergetree]]): `git merge-tree --write-tree main <branch>` == `git rev-parse main^{tree}` ⇒ already in main.
+- **Conflicts in the shared ledgers (`docs/BACKLOG.md`, `docs/LANE_BUS.md`) — UNION, never clobber.** These are
+  append-mostly logs that every lane writes to, so rebase conflicts here are normal and expected. Resolve by
+  **keeping BOTH sides** (your line AND the other lane's) — never delete, overwrite, or "win" another lane's
+  queue tick, checkpoint, or §⑥ message. If a conflict looks tangled, the safe move is `git checkout --theirs
+  docs/BACKLOG.md docs/LANE_BUS.md` (take origin's version wholesale) → `git add` → `git rebase --continue`, then
+  RE-APPLY only your own one-line addition in a fresh edit and push again. Losing your own status line is harmless
+  (re-add it); deleting someone else's is data loss. **Keep your ledger edits to the minimum lines** (one tick,
+  one §⑥ line) to shrink the conflict surface. Your actual feature code is in your disjoint domain and never conflicts.
 
 ---
 
