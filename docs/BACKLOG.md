@@ -18,6 +18,15 @@
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
 > stay in your file domain, rebase onto `main` before every push.
 
+### Cycle 2026-06-24f — `main` @ `1648c00`+ · integrated tree GREEN (measured)
+**Two pushes integrated + verified** (counts re-RUN, not assumed): `lane/honesty` → LOCKED-rule-5 fix —
+vendor-gate NVIDIA GPU temp in **Overlay + LiveCharts** onto the one-source `gradeGpuTempForVendor`, + a
+class-wide `gpu-temp-gate-guard.test.ts` that fails if any `.tsx` calls `gradeGpuTempC` bare (`8355c4e`);
+backend/ledger → A5 **true before→after delta in the Trust Ledger** (pure `applied_label_from_action()` in
+`history.rs`, read-only, exhaustive match so a new catalog action can't silently mislabel) (`1648c00`).
+Both read-only, no IPC/capability/mutation. **Verify:** cargo **582** · vitest **565** (94 files) · `npm run build` ✓.
+Also this turn: merge-tree no-op guard added to the protocol (§5) + memory [[branch-redundancy-detect-by-mergetree]].
+
 ### Cycle 2026-06-24e — branch-redundancy CORRECTION (honesty fix to this ledger)
 **Trigger:** owner greenlit landing `qa/locale-drift-hardening`. Setting up the isolated merge, the result tree was
 **byte-identical to main** (`git diff main HEAD` = 0 lines) → its rollback-safety fixes are **ALREADY IN MAIN** via
