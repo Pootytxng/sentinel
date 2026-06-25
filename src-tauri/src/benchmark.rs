@@ -296,7 +296,11 @@ fn cpu_kernel(deadline: Instant, cancel: &AtomicBool) -> u64 {
     let mut acc: u64 = 0;
     let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
     let mut iters: u64 = 0;
-    while Instant::now() < deadline {
+    // Do-while: always run at least one chunk unless pre-cancelled. A starved thread that
+    // is scheduled only after a short deadline already elapsed must still measure real work
+    // (else throughput reads 0 and false-fails the shape invariant). Cancel is still checked
+    // before every chunk; the deadline is checked after, so a long run stops on time.
+    loop {
         if cancel.load(Ordering::Relaxed) {
             break;
         }
@@ -305,6 +309,9 @@ fn cpu_kernel(deadline: Instant, cancel: &AtomicBool) -> u64 {
             acc = acc.wrapping_add(x ^ (x >> 33));
         }
         iters += 4096;
+        if Instant::now() >= deadline {
+            break;
+        }
     }
     std::hint::black_box(acc);
     iters
@@ -1125,6 +1132,22 @@ mod benchmark_tests {
         assert!(raw.single_kops > 0.0);
         assert!(raw.multi_kops > 0.0);
         assert!(raw.threads >= 1);
+    }
+
+    // Regression guard (backend lane flagged the flake, 2026-06-25): under heavy parallel
+    // test load a tiny CPU run could be scheduled only AFTER its short deadline already
+    // elapsed, so the old `while now < deadline` kernel did zero chunks → `multi_kops == 0.0`
+    // → false-failed the shared green baseline. The kernel now guarantees ≥1 chunk
+    // (do-while), so a not-cancelled run always measures real work. This pins that contract:
+    // an already-past deadline must still return a positive iteration count.
+    #[test]
+    fn cpu_kernel_runs_at_least_one_chunk_past_deadline() {
+        let cancel = AtomicBool::new(false);
+        // `checked_sub` so the guard itself can never panic on a cold monotonic clock.
+        let already_past =
+            Instant::now().checked_sub(Duration::from_secs(1)).unwrap_or_else(Instant::now);
+        let iters = cpu_kernel(already_past, &cancel);
+        assert!(iters > 0, "kernel must do at least one chunk even past the deadline");
     }
 
     #[test]
