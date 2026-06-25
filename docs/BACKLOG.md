@@ -35,6 +35,23 @@ duplicated. PowerShell parse-verified. Three resilience tiers documented (wait-a
 on interactive tabs · the runner for hands-off; `-BypassPermissions` = owner opt-in for unattended).
 **Corrected §②'s earlier over-claim** that `/loop` self-recovers from API errors — it doesn't. `main` green; script + docs only.
 
+### Cycle 2026-06-25d — autonomous fleet STOPPED to conserve tokens; Phase-A non-gated work ~complete
+**Owner directive:** complete all work + be self-sufficient, but **minimize tokens** (half the weekly budget already
+spent). The 5 bypass-perms runners had each looped ~50 ticks (full Claude sessions) → that was the burn. **Stopped
+all 5 runners** (TaskStop + verified no `lane-runner` loop alive; building ceased, main stable). The dashboard
+(`lane-dashboard.ps1`) still shows the worktrees (now idle).
+**What the fleet delivered (all green, all on main):** cargo **636** (+70 this session) · vitest **643** / 105 files
+(+85) · build ✓ @ `0c2d4ce`. Across the run lanes shipped, e.g., service inventory + startup-drift + recovery guide +
+network-readiness pills (backend), hardware-tier segmentation + LOCAL percentile (measurement, A2 done), USB-tier +
+interrupt-affinity + wired-vs-wireless (peripheral), refresh-rate/powerline-MoCA/AMD-undervolt/eDPI/driver guides
+(content), and a full tweak-debunk corpus honesty audit + extra Rule-5 guards (honesty). Cross-lane handoffs +
+gate-flagging (DNS probe held as outbound-gated) worked end-to-end.
+**Remaining work, tiered (for token-aware prioritization):**
+- ⛔ **WALLED (impossible w/o kernel/vendor SDK — do NOT spend):** OSD detection · FreeSync↔VRB strobe detection · (+ the [[detection-feasibility-walls-usermode]] set).
+- 🟡 **Buildable but MARGINAL (low ROI — deferred):** 3-mode preset checklists · monitor model-hint cards · use-case profile selector · A5 override toggle.
+- 🔒 **GATED = the real remaining VALUE (needs an owner gate decision, not tokens-on-spec):** Phase B mutations (GPU-profile apply, service-suspend arming, bloat removal, one-click re-apply) · Phase C telemetry/Receipts · Phase D money/affiliate/funnel.
+**Recommendation:** the high-value work left is GATED — spend remaining budget there *after* you open a gate, not on the marginal Phase-A tail. Phase-A non-gated product completeness is effectively DONE.
+
 ### Cycle 2026-06-25b — crash-recovery / resume-after-API-error (owner ask)
 **Owner ask:** let sessions re-establish work / resume after API errors that halt the loop.
 **Added to `LANE_BUS.md`:** (§① step 0 + §⑦) a **RECOVER-FIRST routine** that makes each lane loop **idempotent**
