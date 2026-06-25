@@ -68,7 +68,7 @@
     "tier": "safe",
     "goal": "Keep your graphics driver current for new-game performance without third-party updater tools.",
     "steps": [
-      "Get the driver straight from the vendor — AMD's or NVIDIA's own site or app — not from a third-party \"driver updater.\"",
+      "Get the driver straight from the GPU maker — AMD's, NVIDIA's, or Intel's own site or app — not from a third-party \"driver updater.\"",
       "For a routine update, the standard installer is fine; you don't need to wipe anything first.",
       "Only reach for DDU (Display Driver Uninstaller, a trusted free scrubbing tool) when something's actually wrong — artifacts, a botched install, or switching card brands.",
       "If you do use DDU, run it, then install the vendor's current driver right after."
