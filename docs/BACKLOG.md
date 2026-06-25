@@ -39,12 +39,16 @@ pre-existing >500 kB chunk advisory, not a regression). Agent (`Latency.tsx` / `
   fabricating a rollback snapshot when powercfg / HAGS priors are unreadable (completes the key-open-collapse
   fail-safe tier — this is the fix for the 2026-06-22 completeness-critic finding). Touches `actions.rs` (the
   rollback boundary) → **owner per-PR merge instruction + adversarial review required** ([[merge-to-main-needs-explicit-per-pr-instruction]]).
-  Assigned for rebase to the backend lane; **the merge itself is owner-gated.**
+  ✅ HQ-verified: **merges CLEAN onto current `main`** (no conflicts; diff = `actions.rs` +233/−44, `lib.rs` +85 guard tests).
+  No rebase conflicts to resolve — it's review-ready; **the merge itself is owner-gated.**
 - `gaming/honest-partial-undo` (1 ahead) — honest-error fix in gated Gaming-Mode code; land when Gaming-Mode QA resumes.
 
 **Hygiene done:** pruned `spike/backend-agent` + `benchmark` (fully merged). Superseded/stale, left in place
-(unmerged, low value): `feat/a1-detection` (4-probe, superseded by `reconcile/a1-merge`), `latency-capture`
-(merge-commit only, no unique work), `tests/coverage-sweep-2026-06-18` (unique value already folded into main).
+(unmerged — kept as archive, do NOT land; all HQ-verified, not inferred):
+- `feat/a1-detection` (658 unique lines = the 4-probe A1; superseded by the owner-chosen `reconcile/a1-merge` 7-probe — retained per CLAUDE.md).
+- `latency-capture` (195 unique `latency.rs` lines = an **older latency impl** superseded by the active agent lane; **overlaps `latency.rs`** so it would collide — don't land).
+- `tests/coverage-sweep-2026-06-18` (its 4 frontend test files + the `guided.ts` ms-settings allowlist enforcement are **confirmed present on `main`**; trivial 1-line `guided.ts` delta remains — coverage value is already shipped).
+
 Frozen beta refs (`16069fa`) untouched.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
