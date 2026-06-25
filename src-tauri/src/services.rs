@@ -335,6 +335,11 @@ struct DriftSpec {
     cost: &'static str,
     /// Honest, plain verdict for the user — never a boost promise, never an alarm.
     verdict: &'static str,
+    /// The friendly `label` of another curated service that MUST be started before this one, or
+    /// `None`. A closed, well-established fact (e.g. Windows Audio's required services include the
+    /// Audio Endpoint Builder on every supported Windows) — NOT a live WMI dependency read. Used by
+    /// the recovery guide to restore a prerequisite first when both are drifted.
+    requires: Option<&'static str>,
 }
 
 const DRIFT: &[DriftSpec] = &[
@@ -344,6 +349,8 @@ const DRIFT: &[DriftSpec] = &[
         matched_tweak: "\"disable services for FPS\" debloat scripts",
         cost: "With Windows Audio turned off the PC has no sound at all until it is switched back on.",
         verdict: "Turning off core Windows services is a debloat-script habit — it trades real functionality for no measured FPS.",
+        // Windows Audio will not start unless the Audio Endpoint Builder is started first.
+        requires: Some("Windows Audio Endpoint Builder"),
     },
     DriftSpec {
         name: "AudioEndpointBuilder",
@@ -351,6 +358,7 @@ const DRIFT: &[DriftSpec] = &[
         matched_tweak: "\"disable services for FPS\" debloat scripts",
         cost: "Windows cannot see your speakers, headset, or microphone while this is off — audio devices simply disappear.",
         verdict: "This service is why your audio devices show up at all; disabling it breaks sound for no measured FPS.",
+        requires: None,
     },
     DriftSpec {
         name: "Themes",
@@ -358,6 +366,7 @@ const DRIFT: &[DriftSpec] = &[
         matched_tweak: "\"disable the Themes service to save RAM\" guides",
         cost: "Windows drops to the basic classic look and some apps render oddly; it frees only a trivial amount of RAM.",
         verdict: "The RAM this frees is negligible on a gaming rig — the visual breakage is the only thing you will actually notice.",
+        requires: None,
     },
 ];
 
@@ -379,6 +388,10 @@ pub(crate) struct DriftFinding {
     pub verdict: String,
     /// Origin-uncertainty + reversibility, in one honest sentence. Compy wires no enable action.
     pub restore_note: String,
+    /// The friendly name of a curated service that must be started BEFORE this one (or `None`) — a
+    /// closed, well-established Windows fact. The recovery guide uses it to restore a prerequisite
+    /// first when both are drifted, so the user doesn't hit a dependency-start failure.
+    pub requires: Option<String>,
 }
 
 /// Case-insensitive match of a live service Name against a curated catalog Name (raw or the
@@ -415,6 +428,7 @@ pub(crate) fn build_service_drift(rows: &[SvcRow]) -> Vec<DriftFinding> {
                  reversible: set the startup back to Automatic in Services (services.msc). Compy makes no \
                  change here."
                     .into(),
+            requires: spec.requires.map(str::to_string),
         });
     }
     findings
@@ -463,7 +477,22 @@ pub(crate) fn build_recovery_guide(findings: &[DriftFinding]) -> Option<Recovery
     if findings.is_empty() {
         return None;
     }
-    let services: Vec<String> = findings.iter().map(|f| f.service.clone()).collect();
+    // Restore ORDER: a drifted service that another drifted service depends on must be restored
+    // FIRST — otherwise the dependent's Start fails with "a dependency service or group failed to
+    // start". Within the curated catalog the only such pair is Windows Audio → Windows Audio
+    // Endpoint Builder. Rank a finding by how many OTHER drifted findings require it (a prerequisite
+    // has ≥1, a leaf has 0) and sort that rank first, falling back to the original (catalog) order —
+    // a stable sort that only moves a drifted prerequisite ahead of its drifted dependent.
+    let is_drifted = |label: &str| findings.iter().any(|f| f.service == label);
+    let dependents: Vec<usize> = findings
+        .iter()
+        .map(|f| findings.iter().filter(|o| o.requires.as_deref() == Some(f.service.as_str())).count())
+        .collect();
+    let mut order: Vec<usize> = (0..findings.len()).collect();
+    order.sort_by(|&a, &b| dependents[b].cmp(&dependents[a]).then(a.cmp(&b)));
+    let ordered: Vec<&DriftFinding> = order.iter().map(|&i| &findings[i]).collect();
+
+    let services: Vec<String> = ordered.iter().map(|f| f.service.clone()).collect();
     let list = join_names(&services);
     let one = services.len() == 1;
     // Grammatical pronouns: singular "it / this / leave it as it is"; plural "them / these /
@@ -478,23 +507,44 @@ pub(crate) fn build_recovery_guide(findings: &[DriftFinding]) -> Option<Recovery
          no change here — you do it yourself. If you switched {this_these} off on purpose, you can \
          {leave_clause}."
     );
-    let steps = vec![
+    // Dependency-ordering caution — present ONLY when a drifted service AND its prerequisite are both
+    // off (never lecture about a dependency that is already fine). Names both services and explains
+    // the failure a wrong order would cause, so the user restores them in the right sequence.
+    let dep_step: Option<String> = ordered.iter().find_map(|f| {
+        let req = f.requires.as_deref()?;
+        is_drifted(req).then(|| {
+            let dependent = &f.service;
+            format!(
+                "Order matters here: {dependent} depends on {req}, so start {req} first. If you turn \
+                 {dependent} on before it, Windows reports that a dependency service failed to start. \
+                 Set {req} to Automatic and Start it, then do {dependent}."
+            )
+        })
+    });
+    let mut steps = vec![
         "Press the Windows key + R together, type  services.msc  and press Enter to open the Services window."
             .to_string(),
-        format!(
-            "In the list (it is sorted A–Z), find {}. Double-click the row to open its settings.",
-            if one { list.clone() } else { format!("the first of: {list}") }
-        ),
+    ];
+    if let Some(dep) = dep_step {
+        steps.push(dep);
+    }
+    steps.push(format!(
+        "In the list (it is sorted A–Z), find {}. Double-click the row to open its settings.",
+        if one { list.clone() } else { format!("the first of: {list}") }
+    ));
+    steps.push(
         "On the General tab, click the \"Startup type\" dropdown and choose \"Automatic\", then click Apply."
             .to_string(),
+    );
+    steps.push(
         "If the \"Service status\" says Stopped, click the Start button to turn it on now, then click OK."
             .to_string(),
-        if one {
-            "That's it — the service is back to how Windows sets it by default.".to_string()
-        } else {
-            "Repeat for each of the services listed above, then close the Services window.".to_string()
-        },
-    ];
+    );
+    steps.push(if one {
+        "That's it — the service is back to how Windows sets it by default.".to_string()
+    } else {
+        "Repeat for each of the services listed above, then close the Services window.".to_string()
+    });
     Some(RecoveryGuide { services, intro, steps })
 }
 
@@ -833,6 +883,78 @@ mod tests {
         assert!(!g.intro.contains("them is"), "plural grammar break: {}", g.intro);
         // Plural guidance to handle every service.
         assert!(g.steps.join(" ").to_lowercase().contains("repeat for each"));
+    }
+
+    #[test]
+    fn requires_field_names_the_curated_prerequisite() {
+        // Windows Audio's start dependency is a curated, well-established fact (Audio Endpoint Builder
+        // must be running first). The prerequisite itself, and unrelated services, require nothing.
+        let audio = build_service_drift(&[row("Audiosrv", "Windows Audio", "Stopped", "Disabled")]);
+        assert_eq!(audio[0].requires.as_deref(), Some("Windows Audio Endpoint Builder"));
+        let aeb = build_service_drift(&[row(
+            "AudioEndpointBuilder",
+            "Windows Audio Endpoint Builder",
+            "Stopped",
+            "Disabled",
+        )]);
+        assert_eq!(aeb[0].requires, None);
+        let themes = build_service_drift(&[row("Themes", "Themes", "Stopped", "Disabled")]);
+        assert_eq!(themes[0].requires, None);
+    }
+
+    #[test]
+    fn recovery_guide_restores_a_drifted_prerequisite_first_with_an_ordering_note() {
+        // Both audio services off: the Endpoint Builder must be restored BEFORE Windows Audio, or
+        // starting Windows Audio fails with "a dependency service failed to start". The guide must
+        // order the prerequisite first (despite catalog order) and explain why.
+        let rows = vec![
+            row("Audiosrv", "Windows Audio", "Stopped", "Disabled"),
+            row("AudioEndpointBuilder", "Windows Audio Endpoint Builder", "Stopped", "Disabled"),
+        ];
+        let g = build_recovery_guide(&build_service_drift(&rows)).expect("two drifts → a guide");
+        assert_eq!(
+            g.services,
+            vec!["Windows Audio Endpoint Builder".to_string(), "Windows Audio".to_string()],
+            "the prerequisite must be listed first: {:?}",
+            g.services
+        );
+        let all = g.steps.join(" ");
+        assert!(
+            all.contains("Windows Audio Endpoint Builder") && all.contains("Windows Audio"),
+            "an ordering step names both services: {all}"
+        );
+        assert!(all.to_lowercase().contains("depend"), "the ordering step explains the dependency: {all}");
+    }
+
+    #[test]
+    fn no_ordering_note_when_only_the_dependent_drifted() {
+        // Windows Audio off but the Endpoint Builder at stock → starting Windows Audio just works →
+        // never lecture about a dependency that is already fine.
+        let g = build_recovery_guide(&build_service_drift(&[row(
+            "Audiosrv",
+            "Windows Audio",
+            "Stopped",
+            "Disabled",
+        )]))
+        .expect("one drift → a guide");
+        assert!(
+            !g.steps.join(" ").to_lowercase().contains("depend"),
+            "no dependency lecture when the prerequisite is at stock: {:?}",
+            g.steps
+        );
+    }
+
+    #[test]
+    fn law_requires_references_a_real_catalog_label() {
+        // A prerequisite must name an actual curated service (and never itself), so the recovery
+        // ordering can't drift into a dangling/self reference.
+        let labels: Vec<&str> = DRIFT.iter().map(|s| s.label).collect();
+        for s in DRIFT {
+            if let Some(req) = s.requires {
+                assert!(labels.contains(&req), "{}: requires '{req}' is not a curated catalog label", s.name);
+                assert_ne!(req, s.label, "{}: a service cannot require itself", s.name);
+            }
+        }
     }
 
     #[test]
