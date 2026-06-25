@@ -364,6 +364,8 @@ const DRIFT: &[DriftSpec] = &[
 /// One service-startup-drift finding — receipts, not adjectives. Advisory only (no action wired).
 #[derive(Debug, PartialEq)]
 pub(crate) struct DriftFinding {
+    /// The clean, friendly service name (e.g. "Windows Audio") — used by the recovery guide.
+    pub service: String,
     pub label: String,
     /// The exact current startup type + live state, e.g. "Stopped · Disabled".
     pub current: String,
@@ -401,6 +403,7 @@ pub(crate) fn build_service_drift(rows: &[SvcRow]) -> Vec<DriftFinding> {
             continue;
         }
         findings.push(DriftFinding {
+            service: spec.label.into(),
             label: format!("{} — startup changed", spec.label),
             current: format_state(&row.state, &row.start_mode),
             stock: "Automatic start".into(),
@@ -417,19 +420,100 @@ pub(crate) fn build_service_drift(rows: &[SvcRow]) -> Vec<DriftFinding> {
     findings
 }
 
-/// The full read-only services report: the categorised inventory plus any startup-drift findings,
-/// built from ONE service enumeration (the WMI read is the expensive part — do it once).
+// ─── Service recovery guide (A4 — read-only advisory: HOW to undo the drift, by hand) ─────────────
+//
+// Drift detection says WHAT a debloat script switched off; this is the plain-English procedure to
+// switch it back on yourself, in the Windows Services console. It is REFERENCE DATA, never an action:
+// Compy performs none of these steps (no `sc`, no PowerShell, no registry write) — consistent with
+// the no-mutation charter and the rollback-first / "recover from a bad guide" positioning. The same
+// services.msc procedure restores any service, so the guide is built ONCE and simply names the
+// services this rig actually drifted, so it reads "for YOUR PC" rather than generic.
+//   - Only appears when there is real drift to recover (no findings → None; nothing to fix).
+//   - Names the exact affected services (receipts, not generic boilerplate).
+//   - Honest framing: origin is unprovable ("if you turned these off on purpose, leave them") and
+//     Compy makes no change — the steps are yours to follow.
+//   - Steps are the real, correct Windows 10/11 procedure (Automatic startup + Start), no jargon.
+
+/// A read-only recovery guide: the exact, plain-English steps to restore the drifted services to
+/// their stock startup by hand in the Services console. Compy wires NO mutation.
+#[derive(Debug, PartialEq)]
+pub(crate) struct RecoveryGuide {
+    /// The friendly names of the services this guide restores (the drifted ones).
+    pub services: Vec<String>,
+    /// One honest intro line: what this restores + origin-uncertainty + Compy-makes-no-change.
+    pub intro: String,
+    /// Ordered, plain-English steps — the real `services.msc` procedure.
+    pub steps: Vec<String>,
+}
+
+/// Join names into a plain-English list: "A", "A and B", "A, B and C". Pure.
+fn join_names(names: &[String]) -> String {
+    match names {
+        [] => String::new(),
+        [a] => a.clone(),
+        [a, b] => format!("{a} and {b}"),
+        [head @ .., last] => format!("{} and {}", head.join(", "), last),
+    }
+}
+
+/// Build the recovery guide from drift findings. Returns `None` when there is no drift (nothing to
+/// recover). Pure — fully unit-testable. The steps are the real Services-console procedure; Compy
+/// performs none of them.
+pub(crate) fn build_recovery_guide(findings: &[DriftFinding]) -> Option<RecoveryGuide> {
+    if findings.is_empty() {
+        return None;
+    }
+    let services: Vec<String> = findings.iter().map(|f| f.service.clone()).collect();
+    let list = join_names(&services);
+    let one = services.len() == 1;
+    // Grammatical pronouns: singular "it / this / leave it as it is"; plural "them / these /
+    // leave them as they are" (the trailing clause changes BOTH pronoun and verb).
+    let (object, this_these, leave_clause) = if one {
+        ("it", "this", "leave it as it is")
+    } else {
+        ("them", "these", "leave them as they are")
+    };
+    let intro = format!(
+        "These steps put {list} back the way Windows ships {object} (Automatic startup). Compy makes \
+         no change here — you do it yourself. If you switched {this_these} off on purpose, you can \
+         {leave_clause}."
+    );
+    let steps = vec![
+        "Press the Windows key + R together, type  services.msc  and press Enter to open the Services window."
+            .to_string(),
+        format!(
+            "In the list (it is sorted A–Z), find {}. Double-click the row to open its settings.",
+            if one { list.clone() } else { format!("the first of: {list}") }
+        ),
+        "On the General tab, click the \"Startup type\" dropdown and choose \"Automatic\", then click Apply."
+            .to_string(),
+        "If the \"Service status\" says Stopped, click the Start button to turn it on now, then click OK."
+            .to_string(),
+        if one {
+            "That's it — the service is back to how Windows sets it by default.".to_string()
+        } else {
+            "Repeat for each of the services listed above, then close the Services window.".to_string()
+        },
+    ];
+    Some(RecoveryGuide { services, intro, steps })
+}
+
+/// The full read-only services report: the categorised inventory, any startup-drift findings, and a
+/// by-hand recovery guide when there is drift — built from ONE service enumeration (the WMI read is
+/// the expensive part — do it once).
 pub(crate) struct ServiceReport {
     pub inventory: Inventory,
     pub drift: Vec<DriftFinding>,
+    pub recovery: Option<RecoveryGuide>,
 }
 
-/// Collect the live, read-only services report (categorised inventory + startup drift).
+/// Collect the live, read-only services report (categorised inventory + startup drift + recovery guide).
 pub(crate) fn collect_service_report() -> ServiceReport {
     let rows = enumerate_services();
     let drift = build_service_drift(&rows);
+    let recovery = build_recovery_guide(&drift);
     let inventory = build_inventory(rows);
-    ServiceReport { inventory, drift }
+    ServiceReport { inventory, drift, recovery }
 }
 
 #[cfg(test)]
@@ -697,6 +781,93 @@ mod tests {
                 assert!(!copy.contains(a), "{}: alarm language '{a}' in: {copy}", s.name);
             }
             assert!(!s.label.contains('!'), "{}: exclamation in label — sirens are not placards", s.name);
+        }
+    }
+
+    // ── Service recovery guide (A4) ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn no_drift_yields_no_recovery_guide() {
+        // Nothing switched off → nothing to recover → None (never an empty guide, never noise).
+        assert!(build_recovery_guide(&[]).is_none());
+        let stock = vec![row("Audiosrv", "Windows Audio", "Running", "Auto")];
+        assert!(build_recovery_guide(&build_service_drift(&stock)).is_none());
+    }
+
+    #[test]
+    fn one_drift_yields_a_named_singular_guide() {
+        let drift = build_service_drift(&[row("Audiosrv", "Windows Audio", "Stopped", "Disabled")]);
+        let g = build_recovery_guide(&drift).expect("one drift → a guide");
+        // Names the exact affected service (receipts, not generic boilerplate).
+        assert_eq!(g.services, vec!["Windows Audio".to_string()]);
+        assert!(g.intro.contains("Windows Audio"), "intro names the service: {}", g.intro);
+        // Honest framing: origin-uncertainty + Compy-makes-no-change.
+        assert!(g.intro.to_lowercase().contains("on purpose"));
+        assert!(g.intro.to_lowercase().contains("compy makes no change"));
+        // Grammar guard (bug→guard): singular reads "ships it" / "leave it as it is".
+        assert!(g.intro.contains("ships it"), "singular pronoun: {}", g.intro);
+        assert!(g.intro.contains("leave it as it is"), "singular clause: {}", g.intro);
+        // The real procedure is present and self-contained.
+        assert!(!g.steps.is_empty());
+        let all = g.steps.join(" ").to_lowercase();
+        assert!(all.contains("services.msc"), "steps open the Services console");
+        assert!(all.contains("automatic"), "steps set Automatic startup");
+        // Singular phrasing — no "repeat for each" when there is only one.
+        assert!(!all.contains("repeat for each"));
+    }
+
+    #[test]
+    fn multiple_drift_lists_all_services_and_says_repeat() {
+        let rows = vec![
+            row("Audiosrv", "Windows Audio", "Stopped", "Disabled"),
+            row("Themes", "Themes", "Stopped", "Manual"),
+        ];
+        let g = build_recovery_guide(&build_service_drift(&rows)).expect("two drifts → a guide");
+        assert_eq!(g.services, vec!["Windows Audio".to_string(), "Themes".to_string()]);
+        // Plain-English join names BOTH services.
+        assert!(g.intro.contains("Windows Audio and Themes"), "intro: {}", g.intro);
+        // Grammar guard (bug→guard): plural reads "ships them" / "leave them as they are" — never
+        // the "leave them as them is" break the singular/plural collapse once produced.
+        assert!(g.intro.contains("ships them"), "plural pronoun: {}", g.intro);
+        assert!(g.intro.contains("leave them as they are"), "plural clause: {}", g.intro);
+        assert!(!g.intro.contains("them is"), "plural grammar break: {}", g.intro);
+        // Plural guidance to handle every service.
+        assert!(g.steps.join(" ").to_lowercase().contains("repeat for each"));
+    }
+
+    #[test]
+    fn join_names_reads_as_plain_english() {
+        let mk = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(join_names(&mk(&[])), "");
+        assert_eq!(join_names(&mk(&["A"])), "A");
+        assert_eq!(join_names(&mk(&["A", "B"])), "A and B");
+        assert_eq!(join_names(&mk(&["A", "B", "C"])), "A, B and C");
+    }
+
+    #[test]
+    fn law_recovery_guide_is_advisory_no_promise_no_alarm_no_mutation_verb() {
+        // The guide is reference data the USER follows — it must never promise a gain, never alarm,
+        // and never imply Compy itself flips anything (no auto/one-click/apply language).
+        let banned = ["boost", "speed up", "speeds up", "guaranteed", "instantly faster", "unlock fps"];
+        let alarm = ["danger", "warning!", "critical!", "fix now", "issues found"];
+        let auto = ["compy will", "click apply in compy", "one-click", "apply all", "let compy"];
+        // Cover the maximal case: every catalog entry drifted at once.
+        let rows: Vec<SvcRow> =
+            DRIFT.iter().map(|s| row(s.name, s.label, "Stopped", "Disabled")).collect();
+        let g = build_recovery_guide(&build_service_drift(&rows)).expect("guide");
+        let copy = format!("{} {}", g.intro, g.steps.join(" ")).to_lowercase();
+        for b in banned {
+            assert!(!copy.contains(b), "recovery guide carries promise language '{b}': {copy}");
+        }
+        for a in alarm {
+            assert!(!copy.contains(a), "recovery guide carries alarm language '{a}': {copy}");
+        }
+        for a in auto {
+            assert!(!copy.contains(a), "recovery guide implies Compy mutates '{a}': {copy}");
+        }
+        // Every step is a real instruction, never an empty placeholder.
+        for (i, s) in g.steps.iter().enumerate() {
+            assert!(!s.trim().is_empty(), "recovery step {i} is empty");
         }
     }
 

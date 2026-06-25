@@ -398,6 +398,27 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         }
     }
     sections.push(DiagnosticSection { name: "Background services".into(), entries: svc_entries });
+    // A by-hand recovery guide appears ONLY when there is real drift to undo: the exact,
+    // plain-English Services-console steps to switch the affected services back on. Reference
+    // data — Compy performs none of it (no mutation), and the intro carries origin-uncertainty.
+    if let Some(guide) = &report.recovery {
+        let mut steps = vec![DiagnosticEntry {
+            label: "Restore by hand".into(),
+            value: guide.intro.clone(),
+            note: None,
+        }];
+        for (i, step) in guide.steps.iter().enumerate() {
+            steps.push(DiagnosticEntry {
+                label: format!("Step {}", i + 1),
+                value: step.clone(),
+                note: None,
+            });
+        }
+        sections.push(DiagnosticSection {
+            name: "Background services · How to restore".into(),
+            entries: steps,
+        });
+    }
     for group in inv.groups {
         sections.push(DiagnosticSection {
             name: format!("Services · {}", group.category),
