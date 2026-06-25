@@ -24,6 +24,7 @@ mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 
 mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
 mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zeros placeholder pubkey → always free; private key never in repo). No outbound, no Windows mutation.
 mod monitoring;
+mod overlay_tools; // A4 read-only: detect third-party in-game overlay/OSD tools running (advisory, mutates nothing).
 mod priorities;
 mod readiness;
 mod receipts; // Receipts telemetry GROUNDWORK — DARK (gate hard-false; payload logic only, the send path does not exist).

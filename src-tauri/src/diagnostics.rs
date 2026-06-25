@@ -434,6 +434,33 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         });
     }
 
+    // ─── On-screen overlays (read-only, A4) ──────────────────────────────
+    // Compy draws its own in-game overlay; this lists third-party overlay/OSD
+    // tools running so a double-overlay isn't a mystery. Informational only —
+    // never a performance claim, never "close it". Only the tools whose running
+    // process reliably means an OSD is drawn are detected (honest coverage).
+    let overlay = crate::overlay_tools::collect_overlay_scan();
+    if overlay.scanned > 0 {
+        let entries = if overlay.findings.is_empty() {
+            vec![DiagnosticEntry {
+                label: "Overlay tools".into(),
+                value: "None of the overlay tools Compy recognises are running".into(),
+                note: Some(
+                    "Compy checks for a few well-known on-screen-display tools (e.g. RivaTuner / MSI \
+                     Afterburner). None of them are running, so nothing should overlap Compy's overlay."
+                        .into(),
+                ),
+            }]
+        } else {
+            overlay
+                .findings
+                .into_iter()
+                .map(|f| DiagnosticEntry { label: f.label, value: f.value, note: Some(f.note) })
+                .collect()
+        };
+        sections.push(DiagnosticSection { name: "On-screen overlays".into(), entries });
+    }
+
     sections
 }
 
@@ -486,10 +513,15 @@ mod diagnostics_tests {
         ];
         assert!(names.len() >= fixed.len(), "expected at least the fixed set, got {names:?}");
         assert_eq!(&names[..fixed.len()], &fixed, "the fixed section set/order is a UI + Export contract");
+        // The tail is rig-dependent + condition-gated: the per-category "Services · …" inventory
+        // groups (which appear depends on the live services), plus the drift-only recovery guide and
+        // the (scan-gated) overlay-tools advisory. Every trailing section must be one of these.
         for extra in &names[fixed.len()..] {
             assert!(
-                extra.starts_with("Services · "),
-                "unexpected non-inventory section after the fixed set: {extra}"
+                extra.starts_with("Services · ")
+                    || extra == "Background services · How to restore"
+                    || extra == "On-screen overlays",
+                "unexpected section after the fixed set: {extra}"
             );
         }
     }
