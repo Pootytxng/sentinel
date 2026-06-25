@@ -995,26 +995,31 @@ pub(crate) fn get_nic_driver_info() -> Vec<NicDriverInfo> {
     on_wmi_thread(collect_nic_drivers)
 }
 
-pub(crate) fn cim_date_age_days(cim: &str) -> Option<i64> {
-    if cim.len() < 8 {
-        return None;
-    }
+/// Parse the date prefix of a CIM_DATETIME (`yyyymmdd…`) into a real calendar date, or `None`.
+/// The SINGLE source of truth for both the ISO string and the age, so the two can never disagree.
+/// Boundary-safe via `.get()` (a multi-byte UTF-8 char straddling an index would panic on raw
+/// byte-slicing) AND value-safe: `Win32_BIOS.ReleaseDate` is firmware-controlled, so non-digit or
+/// impossible-calendar bytes (e.g. "Not Available", month 13) must yield `None` — never a fabricated
+/// date — which is exactly what `parse` + `from_ymd_opt` guarantee.
+fn parse_cim_date(cim: &str) -> Option<chrono::NaiveDate> {
     let year: i32 = cim.get(0..4)?.parse().ok()?;
     let month: u32 = cim.get(4..6)?.parse().ok()?;
     let day: u32 = cim.get(6..8)?.parse().ok()?;
-    let dt = chrono::NaiveDate::from_ymd_opt(year, month, day)?;
+    chrono::NaiveDate::from_ymd_opt(year, month, day)
+}
+
+pub(crate) fn cim_date_age_days(cim: &str) -> Option<i64> {
+    let dt = parse_cim_date(cim)?;
     let today = Utc::now().date_naive();
     Some((today - dt).num_days().max(0))
 }
 
 pub(crate) fn cim_date_iso(cim: &str) -> String {
-    // Boundary-safe via .get() (mirrors cim_date_age_days): a multi-byte UTF-8 char straddling an
-    // index would panic on raw byte-slicing (&cim[0..4]). Real CIM_DATETIME is ASCII digits, but
-    // Win32_BIOS.ReleaseDate is firmware-controlled — garbage must yield "" (silent), never a crash.
-    match (cim.get(0..4), cim.get(4..6), cim.get(6..8)) {
-        (Some(y), Some(m), Some(d)) => format!("{y}-{m}-{d}"),
-        _ => String::new(),
-    }
+    // A date string is emitted IFF `parse_cim_date` accepts it (the same validation the age uses),
+    // so `release_date`/`driver_date` and their `*_age_days` siblings are always consistent — garbage
+    // firmware bytes yield "" here exactly as they yield None for the age, never a fabricated
+    // real-looking date on the Diagnostics tab or in the exported report.
+    parse_cim_date(cim).map(|dt| dt.format("%Y-%m-%d").to_string()).unwrap_or_default()
 }
 
 // ─── BIOS / firmware (detection-layer Probe #1, feasible-usermode) ────────────
@@ -1328,6 +1333,28 @@ mod bios_detection_tests {
         // is not a char boundary; boundary-safe parsing yields honest silence, not a crash.
         assert_eq!(cim_date_iso("202\u{e9}0115000000"), "");
         assert_eq!(cim_date_age_days("202\u{e9}0115000000"), None);
+    }
+
+    #[test]
+    fn cim_date_iso_never_fabricates_a_date_from_garbage_firmware() {
+        // bug→guard: `cim_date_iso` once sliced bytes WITHOUT validating they were digits / a real
+        // calendar date (only the age helper validated), so firmware-authored Win32_BIOS.ReleaseDate
+        // garbage produced a fabricated, real-looking date on the Diagnostics tab + in the exported
+        // report while the age honestly read "unknown". Both helpers now share `parse_cim_date`, so
+        // the ISO string is present IFF the age is computable — they can never disagree.
+        for bad in [
+            "Not Available",                // non-digit text (pre-fix → "Not -Av-ai")
+            "20261345000000.000000+000",    // impossible calendar: month 13, day 45 (pre-fix → "2026-13-45")
+            "00000000000000.000000+000",    // month 0 / day 0 (pre-fix → "0000-00-00")
+            "2026021",                      // too short (no day field)
+            "",                             // empty
+        ] {
+            assert_eq!(cim_date_iso(bad), "", "garbage firmware date must yield \"\": {bad:?}");
+            assert_eq!(cim_date_age_days(bad), None, "and the age must agree (None): {bad:?}");
+        }
+        // A real, in-calendar date still passes (the fix only rejects fabrications).
+        assert_eq!(cim_date_iso("20240229000000.000000+000"), "2024-02-29"); // leap day — valid
+        assert!(cim_date_age_days("20240229000000.000000+000").is_some());
     }
 
     #[test]
