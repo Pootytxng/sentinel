@@ -90,3 +90,18 @@ export function benchRigTier(hw: RigSpecs): { tier: RigTier; basis: string } | n
     hw.ram_total_bytes,
   );
 }
+
+// ── A2 LOCAL percentile stub (display-only; no peer cohort) ──
+/**
+ * Format a verified win's standing among the user's OWN wins as a "top X%" line. The input is
+ * `percentile_rank` (0–100) of the win's effect within the cohort of all the user's wins; the
+ * "top %" shown is its complement (a higher percentile → a smaller, better top %), matching the
+ * backend `percentile_rank` doc framing. Returns `null` when there's no rankable percentile yet
+ * (too few wins → backend sends null; or a non-finite value), so the UI shows nothing rather than
+ * a meaningless number. Strictly LOCAL — there is no peer/network cohort (that's Phase C, gated).
+ */
+export function fmtLocalWinTopPct(percentile: number | null | undefined): string | null {
+  if (percentile == null || !Number.isFinite(percentile)) return null;
+  const top = Math.min(100, Math.max(1, Math.round(100 - percentile)));
+  return `Top ${top}% of your verified wins`;
+}

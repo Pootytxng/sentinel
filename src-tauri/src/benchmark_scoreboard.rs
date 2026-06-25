@@ -107,6 +107,28 @@ struct ScoreStore {
 pub(crate) struct ScoreboardView {
     pub total_points: u32,
     pub awards: Vec<AwardEntry>,
+    /// A2 LOCAL display-only stub (parallel to `awards`, same order): each win's `effect_pct`
+    /// ranked within the cohort of ALL the user's verified wins — an honest self-relative standing,
+    /// NOT a peer/network percentile (that's Phase C, gated). `None` per entry until the cohort is
+    /// large enough to rank meaningfully. Never persisted; recomputed on each read.
+    pub local_percentiles: Vec<Option<f64>>,
+}
+
+/// Minimum verified wins before a LOCAL percentile is meaningful. Below this, ranking 1–3 results
+/// is degenerate (a single win is trivially "50th percentile of itself"), so we surface nothing
+/// rather than a number that overclaims significance.
+const MIN_COHORT_FOR_PERCENTILE: usize = 4;
+
+/// LOCAL, display-only (A2 stub): rank each award's `effect_pct` within the cohort of ALL the
+/// user's verified wins. Honest self-relative standing — there is NO peer/network cohort yet
+/// (Phase C, gated), so "percentile" here means *among your own results*. Returns a vec parallel to
+/// `awards` (same length, same order); every entry is `None` until the cohort clears the floor.
+fn local_win_percentiles(awards: &[AwardEntry]) -> Vec<Option<f64>> {
+    if awards.len() < MIN_COHORT_FOR_PERCENTILE {
+        return vec![None; awards.len()];
+    }
+    let cohort: Vec<f64> = awards.iter().map(|a| a.effect_pct).collect();
+    awards.iter().map(|a| percentile_rank(a.effect_pct, &cohort)).collect()
 }
 
 fn store_path() -> std::path::PathBuf {
@@ -151,7 +173,8 @@ pub(crate) fn scoreboard() -> ScoreboardView {
     let total_points = store.awards.iter().map(|a| a.points).sum();
     let mut awards = store.awards;
     awards.reverse(); // newest first
-    ScoreboardView { total_points, awards }
+    let local_percentiles = local_win_percentiles(&awards);
+    ScoreboardView { total_points, awards, local_percentiles }
 }
 
 pub(crate) fn clear_scoreboard() -> Result<(), String> {
@@ -300,6 +323,65 @@ mod scoreboard_tests {
             let r = percentile_rank(v, &cohort).unwrap();
             assert!((0.0..=100.0).contains(&r), "rank {r} out of range for value {v}");
         }
+    }
+
+    // ── local_win_percentiles (A2 display-only stub) ─────────────────────────
+    // Pins the cohort floor (degenerate small samples show nothing), the parallel-length
+    // invariant, and the in-range self-relative standing. NO peer cohort is involved — this
+    // ranks the user's own wins against each other.
+
+    fn entry(effect: f64) -> AwardEntry {
+        AwardEntry {
+            points: (effect * POINTS_PER_PCT) as u32,
+            rec_id: "rec".into(),
+            rec_title: "Rec".into(),
+            metric: "1% low".into(),
+            effect_pct: effect,
+            ci_lo_pct: effect - 1.0,
+            ci_hi_pct: effect + 1.0,
+            at: "2026-06-25T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn local_percentiles_empty_for_too_few_wins() {
+        // Below the cohort floor → every entry is None (we show nothing, never a degenerate rank).
+        for n in 0..MIN_COHORT_FOR_PERCENTILE {
+            let awards: Vec<AwardEntry> = (0..n).map(|i| entry(i as f64 + 1.0)).collect();
+            let pcts = local_win_percentiles(&awards);
+            assert_eq!(pcts.len(), n, "length must mirror awards for n={n}");
+            assert!(pcts.iter().all(|p| p.is_none()), "expected all-None for n={n}");
+        }
+    }
+
+    #[test]
+    fn local_percentiles_rank_within_own_wins_at_floor() {
+        // At the floor (4 wins, distinct effects) every entry gets a Some standing, parallel to
+        // awards and in 0..=100. Self-inclusive mid-rank → strongest ≈ 87.5, weakest ≈ 12.5.
+        let awards = vec![entry(2.0), entry(4.0), entry(6.0), entry(8.0)];
+        let pcts = local_win_percentiles(&awards);
+        assert_eq!(pcts.len(), awards.len());
+        assert!(pcts.iter().all(|p| p.is_some()));
+        for p in &pcts {
+            let v = p.unwrap();
+            assert!((0.0..=100.0).contains(&v), "rank {v} out of range");
+        }
+        // Order follows the awards' effects: weakest entry ranks lowest, strongest highest.
+        assert!((pcts[0].unwrap() - 12.5).abs() < 1e-9, "weakest got {:?}", pcts[0]);
+        assert!((pcts[3].unwrap() - 87.5).abs() < 1e-9, "strongest got {:?}", pcts[3]);
+        assert!(pcts[0].unwrap() < pcts[3].unwrap());
+    }
+
+    #[test]
+    fn local_percentiles_align_to_award_order() {
+        // The vec is strictly parallel to `awards` — index i is award i's standing, whatever the
+        // ordering. A higher effect at any position must carry a higher percentile.
+        let awards = vec![entry(9.0), entry(1.0), entry(5.0), entry(7.0), entry(3.0)];
+        let pcts = local_win_percentiles(&awards);
+        assert_eq!(pcts.len(), 5);
+        // award[0]=9.0 is the strongest → top rank; award[1]=1.0 the weakest → bottom rank.
+        assert!(pcts[0].unwrap() > pcts[3].unwrap()); // 9.0 > 7.0
+        assert!(pcts[1].unwrap() < pcts[4].unwrap()); // 1.0 < 3.0
     }
 
     // ── completeness_pct: appended coverage ─────────────────────────────────

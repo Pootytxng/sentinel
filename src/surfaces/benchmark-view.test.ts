@@ -8,6 +8,7 @@ import {
   trialVerdictTone,
   trialReasonText,
   benchRigTier,
+  fmtLocalWinTopPct,
 } from "./benchmark-view";
 import type { TrialVerdict } from "../types";
 
@@ -103,5 +104,29 @@ describe("benchRigTier (A2 hardware-tier segmentation)", () => {
 
   it("returns null when nothing is readable — never a fabricated tier", () => {
     expect(benchRigTier({ gpus: [], cpu_cores_physical: 0, ram_total_bytes: 0 })).toBeNull();
+  });
+});
+
+describe("fmtLocalWinTopPct (A2 LOCAL percentile stub)", () => {
+  it("shows nothing when there's no rankable percentile yet", () => {
+    // null/undefined (too few wins → backend sends null) and non-finite all suppress the row.
+    expect(fmtLocalWinTopPct(null)).toBeNull();
+    expect(fmtLocalWinTopPct(undefined)).toBeNull();
+    expect(fmtLocalWinTopPct(NaN)).toBeNull();
+    expect(fmtLocalWinTopPct(Infinity)).toBeNull();
+  });
+
+  it("renders the complement (top %) of the percentile — higher percentile → smaller top %", () => {
+    // Strongest self-inclusive win of 4 ≈ 87.5th percentile → top ~13% (round of 12.5).
+    expect(fmtLocalWinTopPct(87.5)).toBe("Top 13% of your verified wins");
+    // The midpoint maps to top half.
+    expect(fmtLocalWinTopPct(50)).toBe("Top 50% of your verified wins");
+    // A weak win (low percentile) honestly reads as a large top %.
+    expect(fmtLocalWinTopPct(12.5)).toBe("Top 88% of your verified wins");
+  });
+
+  it("clamps the boundaries to 1..=100 (never 'top 0%')", () => {
+    expect(fmtLocalWinTopPct(100)).toBe("Top 1% of your verified wins");
+    expect(fmtLocalWinTopPct(0)).toBe("Top 100% of your verified wins");
   });
 });

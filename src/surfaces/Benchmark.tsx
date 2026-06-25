@@ -10,6 +10,7 @@ import {
   trialVerdictTone,
   trialReasonText,
   benchRigTier,
+  fmtLocalWinTopPct,
   type RigSpecs,
 } from "./benchmark-view";
 import type {
@@ -458,6 +459,9 @@ export function BenchmarkTab() {
               {score.awards.map((a, i) => {
                 const key = `${a.rec_id}-${a.at}-${i}`;
                 const open = openAward === key;
+                // A2 LOCAL percentile stub — this win's standing among the user's OWN wins (no
+                // peer cohort yet). Defensive read so a missing/stale field never throws.
+                const localTopPct = fmtLocalWinTopPct(score.local_percentiles?.[i]);
                 return (
                   <li key={key} className="bench-award">
                     <button
@@ -505,6 +509,17 @@ export function BenchmarkTab() {
                               </span>
                             </dd>
                           </div>
+                          {localTopPct && (
+                            <div>
+                              <dt>Among your wins</dt>
+                              <dd>
+                                {localTopPct}{" "}
+                                <span className="bench-award-ci">
+                                  local — your own results, no peer cohort yet
+                                </span>
+                              </dd>
+                            </div>
+                          )}
                           <div>
                             <dt>Points</dt>
                             <dd>+{a.points}</dd>

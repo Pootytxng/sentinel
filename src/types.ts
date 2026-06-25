@@ -239,6 +239,10 @@ export type AwardEntry = {
 export type ScoreboardView = {
   total_points: number;
   awards: AwardEntry[];
+  // A2 LOCAL display-only stub (parallel to `awards`, same order): each win's effect_pct ranked
+  // within the cohort of ALL the user's own verified wins — a self-relative standing, NOT a
+  // peer/network percentile (Phase C, gated). null per entry until enough wins exist to rank.
+  local_percentiles: (number | null)[];
 };
 
 // Memory pressure — RAM-maxed → stutter warning (mirrors monitoring.rs serde).
