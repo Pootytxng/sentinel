@@ -78,6 +78,8 @@ export const TOPIC_BY_ID: Record<string, Topic> = {
   "dns-for-gaming": "network",
   "disable-nagle": "network",
   "wifi-vs-ethernet-fps": "network",
+  "powerline-ethernet": "network",
+  "moca-ethernet": "network",
 
   // CPU
   "core-unparking": "cpu",

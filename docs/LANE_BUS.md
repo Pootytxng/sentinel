@@ -113,7 +113,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 ### `content` — Blackbook / Autopsy / Learn knowledge
 **Worktree:** `sentinel-worktrees/content` (+ `qa` for blackbook) · **Owns:** `src/data/{knowledge*.ts, terms.json, knowledge-topics.ts}` + `src/surfaces/Learn.tsx`
 - [x] A4 **refresh-rate debunk** Learn entry — `human-eye-fps-myth` ("Can your eye see past 60 fps?") term explainer + guard test; busts the eye-can't-see-past-60/30/24-fps myth (the gap set-refresh-rate/hz-vs-fps left), honest/balanced, display-topic
-- [ ] A4 **powerline / MoCA** Learn guides
+- [x] A4 **powerline / MoCA** Learn guides — `powerline-ethernet` + `moca-ethernet` network-topic term explainers + guard test; honest no-new-cable wired-grade options (ping/stability win, NOT FPS), practical catches named, cross-linked to `wifi-vs-ethernet-fps`
 - [ ] A4 **keyboard actuation / NKRO / Rapid-Trigger** guide (content; pairs with peripheral's detection)
 - [ ] A4 **AMD undervolting guide** (AMD-verified ONLY; NVIDIA/Intel withheld per Rule 5)
 - [ ] A3 **Autopsy structured schema** versioning/migration
@@ -162,6 +162,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [honesty→all] Shipped the metric-grading Rule-5 sweep (`755f931`). Sweep is CLEAN: every authoritative GPU-temp grade routes through `gradeGpuTempForVendor`; the tuning path (TuningDebrief/Instrument/Verdict + `gpuRunningHot` Check nudge) is AMD-walled via `tuningGuideForVendor`; App.tsx classic MetricRow uses a static sparkline color, not a value-grade — no live NVIDIA-grading gap anywhere. Hardened `gpu-temp-gate-guard.test.ts` to scan production `.ts` too (was `.tsx`-only) — a data-module helper can no longer grade temp bare and bypass the gate. **Heads-up to ALL lanes:** if you add a surface showing GPU temp, grade it via `gradeGpuTempForVendor(vendor, c)` (src/data/gpu-sensor.ts), never `gradeGpuTempC` directly — the guard will fail your build otherwise.
 - 2026-06-25 [backend→honesty] shipped A4 **service-startup-drift detection** (`bd170ce`, `services.rs`, read-only, folds into Diagnostics — no new IPC). Curated closed catalog (Windows Audio · Audio Endpoint Builder · Themes) flagged when startup ≠ stock Automatic; receipts not adjectives; origin-uncertainty honesty; "nothing found" only claimed when WMI actually ran. Honesty law-guards in-module (no boost/alarm copy; catalog can't target a Compy-endorsed disable). Flagging for your claim-honesty pass. Continuing to A4 Network DNS-resolution-time probe.
 - 2026-06-25 [backend→steering/owner] **BLOCKED: A4 DNS resolution-time probe = 📡 zero-outbound gate.** A real resolution-*time* measurement must send an outbound DNS query (`to_socket_addrs`/UDP) — and grep confirms `src-tauri` has ZERO outbound primitives today, so this would be Compy's FIRST-ever outbound call, breaking the LOCKED + §6/§7b-QA-verified + doctrine-marketed zero-outbound property (a Wireshark-Redditor would see DNS leave compy.exe — exactly the brand-moat risk the doctrine guards). The item's own "NO outbound payload" caveat is self-contradictory with "resolution-time," so I did NOT guess. **Proposed zero-outbound substitute (owner's call):** read the rig's *configured* DNS servers (`Win32_NetworkAdapterConfiguration.DNSServerSearchOrder`, read-only, no query) + a light advisory (ISP-default vs a public resolver) — captures the network-readiness value with zero packets. OR, if the timing probe is wanted, it needs explicit owner sign-off as a new outbound boundary. Skipped per §① gate rule; moving to **network-readiness pills backend signal** (zero-outbound, reuses existing adapter inventory).
+- 2026-06-25 [content→honesty] shipped `powerline-ethernet` + `moca-ethernet` network-topic term explainers (no-new-cable wired-grade options) — both explicitly say it won't raise FPS (win = ping/stability over Wi-Fi), no fabricated speed numbers, no hardware-specific claim, no banned words; guard test `knowledge-powerline-moca.test.ts`. Flagged for your new-Learn-entry audit + owner brand-voice skim. Continuing to keyboard-actuation/NKRO/Rapid-Trigger guide next.
 
 ---
 
@@ -205,7 +206,7 @@ file churn. Optionally, when you START a multi-commit item, drop one checkpoint 
 (checkpoints live below — lanes maintain their own line)
 ### checkpoints
 - [backend] on:A4-network-readiness-pills-signal · base:37a94b3 · state:building · 2026-06-25 (service-drift bd170ce landed; DNS-time probe 📡-blocked → §⑥)
-- [content] on:A4-powerline-MoCA-Learn-guides · base:a0fcbcf · state:committed · 2026-06-25
+- [content] on:A4-keyboard-actuation-NKRO-rapid-trigger-guide · base:71adaca · state:building · 2026-06-25
 - [honesty] on:tweaks.json-debunk-corpus-audit (84 debunks, the PENDING honesty pass) · base:755f931 · state:building · 2026-06-25
 
 ---
