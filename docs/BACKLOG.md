@@ -17,6 +17,24 @@
 
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
 > stay in your file domain, rebase onto `main` before every push.
+>
+> **🚌 Live per-lane QUEUES + the cross-lane MESSAGE BUS now live in [`docs/LANE_BUS.md`](LANE_BUS.md).**
+> Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
+> direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
+
+### Cycle 2026-06-25a — LANE BUS established (owner ask: lanes self-sustain + coordinate)
+**Owner ask:** a lane ("Tab 2") was stalling "awaiting direction from steering"; make lanes able to communicate +
+prompt one another to continue to the next task after completion → sustained autonomous workflow.
+**Built `docs/LANE_BUS.md`:** (1) a **self-continuation protocol** every lane runs — after finishing an item it
+rebases, pulls the next item from its queue, and continues; the only valid "wait" is a *posted* `queue dry` request,
+never a silent stall. (2) A **per-lane queue** (backend · measurement · peripheral · content · honesty) with disjoint
+file domains + deep runway from the open A4/A5/A3 items. (3) A **claimable pool** (Monitor/Display, GPU-advisory,
+etc.) lanes grab via the message log so two never collide. (4) An append-only **message bus** for cross-lane
+hand-offs / dependency signals / refill requests. (5) **Collision rules** (disjoint domains, only backend edits
+`lib.rs`/`actions.rs`, honesty claims shared files, rebase-before-push, merge-tree no-op check).
+**Mechanism (honest):** separate sessions can't wake each other → the channel is this file via git + each lane's
+`/loop`. **OWNER ACTION to activate:** paste the §② `/loop` prompt into each lane tab once (esp. the stalled
+`measurement` tab). `main` @ `02f9d1b` green (cargo 582 · vitest 565 · build ✓); docs-only change, no code touched.
 
 ### Cycle 2026-06-24f — `main` @ `1648c00`+ · integrated tree GREEN (measured)
 **Two pushes integrated + verified** (counts re-RUN, not assumed): `lane/honesty` → LOCKED-rule-5 fix —
