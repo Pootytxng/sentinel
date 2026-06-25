@@ -560,6 +560,14 @@
     "related": ["displayport-vs-hdmi", "set-refresh-rate", "hz-vs-fps", "srgb-clamp", "gamma-vs-hdr"]
   },
   {
+    "id": "human-eye-fps-myth",
+    "name": "Can your eye see past 60 fps?",
+    "aliases": ["human eye fps", "eye can't see past 60", "60 fps limit", "30 fps eye", "is 144hz worth it", "is 240hz worth it", "can you see 144hz", "human eye refresh rate", "movies are 24 fps", "60hz vs 144hz"],
+    "what": "Yes. The idea that your eye 'maxes out' at 60 fps — or 30, or the 24 fps of movies — is a myth: human vision doesn't work in a fixed number of frames per second, so there's no hard ceiling it stops at. In fast-moving games most people can clearly see and feel the jump from 60 to 144 Hz, which is exactly why high-refresh monitors took over.",
+    "more": "Two things keep improving as refresh rate climbs: motion stays sharper (each frame is shown for less time, so fast objects blur less) and the game feels more responsive (a fresh frame arrives sooner after you move the mouse). Neither is the eye 'reading frames' — they're separate effects, and they're real. The honest nuance is that the returns diminish: the step from 60 to 144 Hz is far more obvious than 144 to 240, and the gains are biggest in fast, competitive games and smaller for slow or mostly-static content — so past a point it becomes preference and budget, not 'your eyes can't tell.' Two catches before you spend, though: a higher refresh rate only helps if your PC actually feeds enough frames to use it, and Windows often defaults a 144 or 240 Hz monitor to 60 Hz until you set the higher rate by hand (see Set your refresh rate). None of this is about a bigger FPS number being 'fake' — it's that the upgrade is worth it for the right person, not magic for everyone.",
+    "related": ["hz-vs-fps", "set-refresh-rate", "vrr", "frametime", "one-percent-lows"]
+  },
+  {
     "id": "backlight-strobing",
     "name": "Backlight strobing (ULMB / motion blur reduction)",
     "aliases": ["ulmb", "backlight strobing", "motion blur reduction", "mbr", "elmb", "dyac", "black frame insertion", "bfi", "strobing", "blur reduction"],

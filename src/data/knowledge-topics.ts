@@ -56,6 +56,7 @@ export const TOPIC_BY_ID: Record<string, Topic> = {
   "srgb-clamp": "display",
   "gamma-vs-hdr": "display",
   "chroma-subsampling": "display",
+  "human-eye-fps-myth": "display",
   "backlight-strobing": "display",
   "monitor-overdrive": "display",
   "gtg-vs-mprt": "display",
