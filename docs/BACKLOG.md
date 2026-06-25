@@ -109,8 +109,26 @@ the product:
 - `ui/honest-apply-errors` — 1 ahead (pushed to origin)
 - The working branch `tests/coverage-sweep-2026-06-18` is **140 behind main** — a stale checkout, easy to mistake for current.
 
+**✅ Reconciled 2026-06-24 (HQ — full local+remote sweep; supersedes the audit-time snapshot above for live status):**
+- **`ui/honest-apply-errors` is MERGED + DELETED** (its work is `6ce622d` on `main`) — it no longer exists local or
+  remote; the bullet above is historical. Don't chase it.
+- **Pruned** (fully merged, not checked out): `spike/backend-agent`, `benchmark`.
+- **Merged but still checked out in a lane worktree** (NOT cruft — the lane's own workspace; git refuses to prune,
+  and HQ does not remove other lanes' worktrees): `content/color-science-debunks` (worktree `content/`),
+  `feat/a4-service-inventory` (worktree `svc/`), `feat/blackbook-lifecycle` (worktree `qa/`). They free up when the
+  lane re-branches or the owner cleans the worktree.
+- **Unmerged, deliberately retained** (dispositions verified, see the HQ STEERING LOG above): `qa/locale-drift-hardening`
+  (owner-gated safety merge), `gaming/honest-partial-undo` (land when Gaming-Mode QA resumes), `feat/a1-detection`
+  (superseded archive), `latency-capture` (superseded — overlaps `latency.rs`, do NOT land),
+  `tests/coverage-sweep-2026-06-18` (value already folded). `beta/private-beta-001` = FROZEN, never touch.
+- **Lane heartbeat:** `work/agent` 1 behind (active), **`work/bench` 13 behind — no push since the award-ledger
+  (`1f712b1`); bench's A2 hardware-tier-segmentation assignment looks unstarted/stalled — watching.**
+
 **Action item (A0):** reconcile/prune stranded branches so "merged into main" == "shipped." A branch whose
 work is described as complete but sits unmerged is exactly how a session loses the thread.
+*(Status: every branch now has a verified disposition ↑. A0 stays `[ ]` because two unmerged branches —
+`qa/locale-drift-hardening`, `gaming/honest-partial-undo` — are intentionally un-landed behind gates, so "main =
+single product truth" isn't 100% until the owner lands them.)*
 
 ---
 
