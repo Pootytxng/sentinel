@@ -7,8 +7,11 @@ import {
   trialVerdictLabel,
   trialVerdictTone,
   trialReasonText,
+  benchRigTier,
 } from "./benchmark-view";
 import type { TrialVerdict } from "../types";
+
+const GIB = 1024 ** 3;
 
 describe("componentLabel", () => {
   it("maps each component to a friendly label", () => {
@@ -56,5 +59,49 @@ describe("trial verdict", () => {
   it("explains inconclusive reasons", () => {
     expect(trialReasonText("within-noise")).toMatch(/noise/);
     expect(trialReasonText("invalid-trial")).toMatch(/invalid/);
+  });
+});
+
+describe("benchRigTier (A2 hardware-tier segmentation)", () => {
+  it("classifies a strong-on-all-axes rig as High and names the measured inputs", () => {
+    const ctx = benchRigTier({
+      gpus: [{ vram_bytes: 16 * GIB }],
+      cpu_cores_physical: 8,
+      ram_total_bytes: 32 * GIB,
+    });
+    expect(ctx).not.toBeNull();
+    expect(ctx!.tier).toBe("High");
+    // Honest, transparent basis — exactly the three facts it read (matches rig-tier.ts wording).
+    expect(ctx!.basis).toBe("rough, from 16 GB VRAM · 8 cores · 32 GB RAM");
+  });
+
+  it("is conservative: one weak axis drops it to Entry (a strong spec can't carry it)", () => {
+    // 16 GB VRAM + 32 GB RAM but only 2 cores → Entry, never inflated to High/Mid.
+    const ctx = benchRigTier({
+      gpus: [{ vram_bytes: 16 * GIB }],
+      cpu_cores_physical: 2,
+      ram_total_bytes: 32 * GIB,
+    });
+    expect(ctx!.tier).toBe("Entry");
+  });
+
+  it("reads the LARGEST VRAM across adapters (discrete dGPU, not the iGPU)", () => {
+    const ctx = benchRigTier({
+      gpus: [{ vram_bytes: 1 * GIB }, { vram_bytes: 12 * GIB }],
+      cpu_cores_physical: 8,
+      ram_total_bytes: 16 * GIB,
+    });
+    expect(ctx!.tier).toBe("High");
+    expect(ctx!.basis).toContain("12 GB VRAM");
+  });
+
+  it("treats a missing GPU list as 0 VRAM rather than throwing", () => {
+    const ctx = benchRigTier({ cpu_cores_physical: 8, ram_total_bytes: 16 * GIB });
+    expect(ctx!.tier).toBe("Entry"); // <6 GB VRAM floor
+    expect(ctx!.basis).toContain("0 GB VRAM");
+  });
+
+  it("returns null when nothing is readable — never a fabricated tier", () => {
+    expect(benchRigTier({ gpus: [], cpu_cores_physical: 0, ram_total_bytes: 0 })).toBeNull();
   });
 });

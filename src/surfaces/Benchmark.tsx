@@ -9,6 +9,8 @@ import {
   trialVerdictLabel,
   trialVerdictTone,
   trialReasonText,
+  benchRigTier,
+  type RigSpecs,
 } from "./benchmark-view";
 import type {
   BenchmarkState,
@@ -37,6 +39,9 @@ export function BenchmarkTab() {
   );
   // Award drill-down: which award's full certified receipt is expanded (its list key, or null).
   const [openAward, setOpenAward] = useState<string | null>(null);
+  // A2 hardware-tier segmentation — the rough, transparent rig class (Entry/Mid/High) the
+  // measurements are read against. Reuses the canonical rig-tier bands; LOCAL only, no cohort.
+  const [rigTier, setRigTier] = useState<ReturnType<typeof benchRigTier>>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Inline dependency (wayfinding §2): the live-game measurement needs FPS monitoring, which used to
@@ -84,6 +89,16 @@ export function BenchmarkTab() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Read the rig's measured specs once to segment the surface by hardware tier (A2). Existing
+  // read-only command; only three fields are used (max VRAM · physical cores · total RAM).
+  useEffect(() => {
+    invoke<RigSpecs>("get_hardware_info")
+      .then((hw) => setRigTier(benchRigTier(hw)))
+      .catch(() => {
+        /* no tier band if hardware is unreadable — never a fabricated tier */
+      });
+  }, []);
 
   // Poll FPS-monitoring state so the live-game card can offer to start it inline (wayfinding §2).
   useEffect(() => {
@@ -247,6 +262,21 @@ export function BenchmarkTab() {
           not a win.
         </p>
       </header>
+
+      {rigTier && (
+        <div className={`bench-tier bench-tier-${rigTier.tier.toLowerCase()}`} role="note">
+          <div className="bench-tier-line">
+            <span className="bench-tier-label">Your rig tier</span>
+            <span className="bench-tier-value">{rigTier.tier}</span>
+            <span className="bench-tier-basis">{rigTier.basis}</span>
+          </div>
+          <p className="bench-tier-note">
+            Compy measures against your own rig — scores and verdicts are relative to your saved
+            baseline, not a universal grade. Your tier (rough, from the specs above) keeps any
+            comparison like-to-like: same-class rigs only, never a cross-tier ranking.
+          </p>
+        </div>
+      )}
 
       <div className="bench-actions">
         <button className="bench-btn bench-btn-primary" onClick={run} disabled={running}>

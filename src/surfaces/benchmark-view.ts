@@ -2,6 +2,7 @@
 // formatting. Kept separate from the component so they're unit-tested without a DOM.
 import type { Status } from "../design";
 import type { BenchComponent, Verdict, TrialVerdict } from "../types";
+import { rigTierLine, type RigTier } from "../data/rig-tier";
 
 const COMPONENT_LABELS: Record<BenchComponent, string> = {
   cpu: "CPU",
@@ -64,4 +65,28 @@ export function trialReasonText(reason: string): string {
     default:
       return reason;
   }
+}
+
+// ── A2 hardware-tier segmentation (LOCAL, no cohort/network) ──
+// The measured inputs the rough rig tier reads — a structural subset of HardwareInfo, so this stays
+// a pure, DOM-free, easily-tested helper (no coupling to the full App.tsx type).
+export type RigSpecs = {
+  gpus?: { vram_bytes: number }[];
+  cpu_cores_physical: number;
+  ram_total_bytes: number;
+};
+
+/**
+ * Rig-tier segmentation for the Benchmark surface. Reuses the SAME transparent, owner-greenlit
+ * bands the hardware grid shows (`src/data/rig-tier.ts`) so the two surfaces can never disagree, and
+ * extracts the inputs the one canonical way (max VRAM across adapters · physical cores · total RAM).
+ * Returns `null` when nothing is readable — never a fabricated tier from nothing. Purely LOCAL: it
+ * classes YOUR rig from YOUR specs; no peer cohort, no network (that's Phase C, gated).
+ */
+export function benchRigTier(hw: RigSpecs): { tier: RigTier; basis: string } | null {
+  return rigTierLine(
+    Math.max(0, ...(hw.gpus ?? []).map((g) => g.vram_bytes)),
+    hw.cpu_cores_physical,
+    hw.ram_total_bytes,
+  );
 }

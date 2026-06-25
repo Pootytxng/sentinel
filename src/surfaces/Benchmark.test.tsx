@@ -5,6 +5,12 @@ import { render, screen, cleanup } from "@testing-library/react";
 const mocks = vi.hoisted(() => ({
   benchState: { running: false, baseline: null, baseline_at: null, latest: null, latest_at: null, efficacy: null } as unknown,
   fpsActive: false,
+  // Measured specs for the A2 rig-tier band: 16 GB VRAM · 8 cores · 32 GB RAM → High.
+  hw: {
+    gpus: [{ vram_bytes: 16 * 1024 ** 3 }],
+    cpu_cores_physical: 8,
+    ram_total_bytes: 32 * 1024 ** 3,
+  } as unknown,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -25,6 +31,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(["game-mode"]);
       case "get_fps_status":
         return Promise.resolve({ active: mocks.fpsActive });
+      case "get_hardware_info":
+        return Promise.resolve(mocks.hw);
       default:
         return Promise.resolve(null);
     }
@@ -56,5 +64,15 @@ describe("BenchmarkTab (audit M1)", () => {
     render(<BenchmarkTab />);
     // The live-game measurement needs monitoring; the switch comes to the need — no page trip.
     expect(await screen.findByRole("button", { name: "Start monitoring" })).toBeInTheDocument();
+  });
+
+  it("A2: segments the surface by hardware tier from measured specs (like-to-like framing)", async () => {
+    mocks.benchState = { running: false, baseline: null, baseline_at: null, latest: null, latest_at: null, efficacy: null };
+    render(<BenchmarkTab />);
+    // The band names the tier + the exact specs it read, and frames comparison as same-class only.
+    expect(await screen.findByText("Your rig tier")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
+    expect(screen.getByText(/16 GB VRAM · 8 cores · 32 GB RAM/)).toBeInTheDocument();
+    expect(screen.getByText(/like-to-like/)).toBeInTheDocument();
   });
 });
