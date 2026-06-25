@@ -72,3 +72,56 @@ describe("disable-defender — safe remedy named, hard-no held (corpus audit)", 
     expect(body).toMatch(/exclusion/);
   });
 });
+
+// --- Batch 1 handoff (the broader "Handed to content" set that honesty's §⑥ digest under-listed) ---
+
+describe("power-plan — overstatement scoped to CPU-bound (corpus audit)", () => {
+  const { verdict, body } = tweakBody("power-plan");
+  it("stays real but no longer claims a win on 'many rigs' — scoped to CPU-bound", () => {
+    expect(verdict).toBe("real");
+    expect(body).toMatch(/cpu-bound/);
+    expect(body).not.toMatch(/win.{0,20}many rigs/);
+  });
+});
+
+describe("shader-cache-size — re-compile mechanism + vendor specificity (corpus audit)", () => {
+  const { verdict, body } = tweakBody("shader-cache-size");
+  it("attributes the benefit to re-compiles (not first-run) and notes it's mainly NVIDIA", () => {
+    expect(verdict).toBe("real");
+    expect(body).toMatch(/reuse|re-?use|rebuild|after a driver|recompile/);
+    expect(body).toMatch(/nvidia/);
+  });
+});
+
+describe("nvidia-reflex — uses NVIDIA's own 'click-to-display' term (corpus audit)", () => {
+  const { body } = tweakBody("nvidia-reflex");
+  it("says click-to-display, not click-to-pixel", () => {
+    expect(body).toMatch(/click-to-display/);
+    expect(body).not.toMatch(/click-to-pixel/);
+  });
+});
+
+describe("fan-curves — fan-noise trade-off named, absolute softened (corpus audit)", () => {
+  const { verdict, body } = tweakBody("fan-curves");
+  it("stays real and now names the honest fan-noise trade-off", () => {
+    expect(verdict).toBe("real");
+    expect(body).toMatch(/noise|louder/);
+  });
+});
+
+describe("low-latency-mode — Ultra's real condition is GPU-bound (corpus audit)", () => {
+  const { verdict, body } = tweakBody("low-latency-mode");
+  it("states GPU-bound as the condition for Ultra (not the vaguer 'above refresh')", () => {
+    expect(verdict).toBe("real");
+    expect(body).toMatch(/gpu-bound/);
+  });
+});
+
+describe("ram-cleaners — undocumented 'fixed years ago' absolute softened (corpus audit)", () => {
+  const { verdict, body } = tweakBody("ram-cleaners");
+  it("stays placebo and no longer asserts the bug 'was fixed in Windows itself years ago'", () => {
+    expect(verdict).toBe("placebo");
+    expect(body).not.toMatch(/fixed in windows itself years ago/);
+    expect(body).toMatch(/modern.{0,20}memory|most rigs|handles/);
+  });
+});

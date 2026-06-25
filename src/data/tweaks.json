@@ -72,14 +72,14 @@
     "aliases": ["fan curve", "thermal throttling fix", "undervolt cooling"],
     "verdict": "real",
     "what": "Tunes case/GPU/CPU fan response so parts stay cooler under load.",
-    "why": "The safest 'performance' tweak that exists: modern parts boost higher when cooler, so a sane curve is free sustained clocks. No registry, no risk, just airflow."
+    "why": "One of the safest 'performance' tweaks there is: modern parts boost higher when cooler, so a sane curve buys free sustained clocks. No registry to edit — the one real trade-off is fan noise, since a more aggressive curve spins up louder, so it is a comfort-vs-cooling balance you set to taste."
   },
   {
     "id": "nvidia-reflex",
     "name": "NVIDIA Reflex",
     "aliases": ["reflex", "reflex low latency", "on+boost"],
     "verdict": "real",
-    "what": "In-game toggle that syncs rendering to input to genuinely cut click-to-pixel latency.",
+    "what": "In-game toggle that syncs rendering to input to genuinely cut click-to-display latency.",
     "why": "The real latency win on NVIDIA — turn it on wherever a game offers it. (With Reflex on, leave the driver's Low Latency Mode off; they conflict.)"
   },
   {
@@ -88,7 +88,7 @@
     "aliases": ["LLM", "ultra low latency", "nvidia low latency", "anti-lag"],
     "verdict": "real",
     "what": "Driver-level cap on how many frames the CPU queues ahead of the GPU.",
-    "why": "Real but conditional: 'On' is a good default, 'Ultra' only helps when GPU-bound above refresh — and turn it OFF in games with Reflex / Anti-Lag 2 integration, which supersede it."
+    "why": "Real but conditional: 'On' is a good default, 'Ultra' only helps when you are GPU-bound (the GPU pegged near 100%) — and turn it OFF in games with Reflex / Anti-Lag 2 integration, which supersede it."
   },
   {
     "id": "anti-lag-plus",
@@ -137,7 +137,7 @@
     "aliases": ["shader cache", "dxcache"],
     "verdict": "real",
     "what": "Lets the driver keep more compiled shaders on disk.",
-    "why": "Cheap and real against shader-compilation stutter, especially in UE5 titles — costs only disk space. Also: let games finish their shader pre-compile screens instead of skipping them."
+    "why": "Cheap and real, but for a specific kind of stutter: a bigger cache lets the driver reuse compiled shaders instead of rebuilding them after a driver update or a cache wipe — it does not stop a game's first-run shader compile (that is the engine's job, which is why letting games finish their shader pre-compile screens matters more). The size knob is mainly an NVIDIA thing; AMD's cache has no size cap. Costs only disk space."
   },
   {
     "id": "power-plan",
@@ -145,7 +145,7 @@
     "aliases": ["power plan", "ultimate performance", "balanced vs high performance"],
     "verdict": "real",
     "what": "Stops Windows from downclocking/parking CPU cores at light load.",
-    "why": "Real responsiveness win mid-game on many rigs, at the cost of idle watts. Compy can switch plans for you — with the exact previous plan recorded for rollback."
+    "why": "Real but narrower than it sounds: it mainly steadies frame pacing in CPU-bound games (and stops light-load core downclocking), with little to gain in GPU-bound ones — at the cost of idle watts. Compy can switch plans for you, with the exact previous plan recorded for rollback."
   },
   {
     "id": "game-dvr-off",
@@ -402,7 +402,7 @@
     "aliases": ["islc", "intelligent standby list cleaner", "ram optimizer", "memory cleaner", "free up ram"],
     "verdict": "placebo",
     "what": "Utilities that 'free' RAM by purging Windows' standby list or trimming process memory on a timer.",
-    "why": "Free RAM is wasted RAM: the standby list IS your file cache, and purging it throws away data Windows would have reused instantly — the next read comes from disk instead. The 2018-era standby-list stutter bug these tools were built around was fixed in Windows itself years ago. Today the falling 'in use' number just looks satisfying while cold loads get slower.",
+    "why": "Free RAM is wasted RAM: the standby list IS your file cache, and purging it throws away data Windows would have reused instantly — the next read comes from disk instead. The 2018-era standby-list stutter these tools were built around is something modern Windows memory management handles for most rigs now; today the falling 'in use' number mostly just looks satisfying while cold loads get slower.",
     "related": ["game-boosters", "memory-compression-off", "pagefile-disable"]
   },
   {
