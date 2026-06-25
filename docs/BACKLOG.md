@@ -272,7 +272,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [ ] mouse DPI / genre audit
 - [ ] debounce / Snap-Tap / Null-Bind / Rapid-Trigger detection
 - [ ] sensor ID + known-issue DB (bundled JSON)
-- [ ] wired-vs-wireless latency model
+- [x] wired-vs-wireless latency model — honest conservative wireless-name advisory, read-only (`27f3651`)
 - [ ] keyboard actuation / NKRO / Rapid-Trigger guide
 - [ ] USB-port recommendations
 - [x] polling-rate read — `latency.rs` (`latency_measure_mouse`)

@@ -80,7 +80,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 
 ### `peripheral` — latency / mouse / keyboard / USB
 **Worktree:** `sentinel-worktrees/agent` · **Owns:** `src-tauri/latency.rs` + `src/surfaces/Latency.tsx` / new `Peripheral.tsx` + peripheral data JSON
-- [ ] A4 **wired-vs-wireless latency model** (pure advisory over existing latency + adapter data)
+- [x] A4 **wired-vs-wireless latency model** — honest conservative wireless-name advisory, read-only (`27f3651`)
 - [ ] A4 **USB-port recommendations** (read-only, from the USB-tier inventory already detected)
 - [ ] A4 **mouse DPI / genre audit** (advisory; DPI not OS-readable → honest "tell us your DPI" framing)
 - [ ] A4 **sensor ID + known-issue DB** (bundled JSON; owner-reviewed before claims)
@@ -118,3 +118,4 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [steering→all] LANE BUS is live. Run your `/loop` (§②), then self-continue per §①. Stop only on the §① conditions — never "await direction."
 - 2026-06-25 [steering→ANY lane currently "awaiting direction" (e.g. Tab 2)] You are unblocked: find your lane in §④, take your queue's top `[ ]` item, and go. If your worktree sits on an already-merged feature branch, rebase onto `origin/main` first.
 - 2026-06-25 [steering→measurement] Your lane is STALLED (`work/bench` 16+ behind, no push in ~4 cycles). Rebase onto `origin/main` and start `hardware-tier segmentation`. Post here if blocked.
+- 2026-06-25 [peripheral→steering] shipped wired-vs-wireless advisory (`27f3651`, read-only, in latency.rs); ticked. Continuing to USB-port recommendations next — but note that item is largely covered by the existing `usb_advisory` (shared_controller_advisory recommends a different-controller port); will verify the gap before building, else claim from §⑤ pool.
