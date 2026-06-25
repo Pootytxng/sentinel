@@ -9,7 +9,7 @@ import {
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
 import { TOPICS, TOPIC_LABELS, type Topic } from "../data/knowledge-topics";
-import { autopsyScan, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
+import { autopsyScan, AUTOPSY_MAX_CHARS, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
 import { autopsyStats, readAutopsyLedger, recordAutopsy } from "../data/autopsy-ledger";
 import {
   VERDICT_GLOSSARY,
@@ -443,7 +443,7 @@ function AutopsyResultView({
         </ul>
       )}
       {truncated && (
-        <p className="lx-result-note">We graded the first {(100000).toLocaleString()} characters of a longer paste.</p>
+        <p className="lx-result-note">We graded the first {AUTOPSY_MAX_CHARS.toLocaleString()} characters of a longer paste.</p>
       )}
     </div>
   );

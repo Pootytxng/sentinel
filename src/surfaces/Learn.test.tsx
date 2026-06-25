@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import Learn from "./Learn";
+import { AUTOPSY_MAX_CHARS } from "../data/knowledge-autopsy";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -143,5 +144,22 @@ describe("Learn surface (reskin)", () => {
     // The quiet full-entry link is the only deliberate travel into the library.
     fireEvent.click(screen.getByText(/Open full entry in Library/i));
     expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument();
+  });
+
+  it("an over-cap paste reports the SAME char count it actually graded (no hardcoded drift)", () => {
+    // bug->guard: the truncation note must use AUTOPSY_MAX_CHARS — the single source the scan truncates
+    // by — not a hardcoded literal. A drifted literal would tell the user we graded more (or fewer)
+    // characters than we did, an honesty/accuracy violation. Pinning the rendered number to the imported
+    // constant catches any re-hardcoded value (or a constant change the note fails to follow).
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    const overCap = "force hpet\n" + "x".repeat(AUTOPSY_MAX_CHARS + 50); // exceeds the grading cap
+    fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
+      target: { value: overCap },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Grade this guide" }));
+    expect(
+      screen.getByText(new RegExp(`first ${AUTOPSY_MAX_CHARS.toLocaleString()} characters`)),
+    ).toBeInTheDocument();
   });
 });
