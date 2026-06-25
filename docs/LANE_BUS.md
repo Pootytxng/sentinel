@@ -92,7 +92,7 @@ Steering (the HQ/`main` tab) does NOT build — it keeps queues refilled, resolv
 **Worktree:** `sentinel-worktrees/svc` (or a fresh `../sentinel-backend` off `main`) · **Owns:** `src-tauri/{services.rs, history.rs, hardware.rs, diagnostics.rs, new modules}` + `lib.rs` registration
 - [x] A4 Services **service-drift detection** — read-only "Leftovers of services"; closed catalog (Windows Audio · Audio Endpoint Builder · Themes) flagged when startup drifts from stock Automatic; receipts + honest uncertainty; folds into Diagnostics, no new IPC (`bd170ce`)
 - [📡] A4 Network **DNS resolution-time probe** — BLOCKED on the zero-outbound gate. A real resolution-*time* measurement must issue an outbound DNS query (`to_socket_addrs`/socket) = Compy's FIRST-ever outbound call, breaking the LOCKED + QA-verified + marketed zero-outbound property (the "NO outbound payload" caveat is self-contradictory with "resolution-time"). Owner sign-off territory (📡/stop-rule 3). Zero-outbound alternative proposed in §⑥ (read the configured DNS servers, no query). Skipped per protocol; flagged to steering.
-- [ ] A4 Network **network-readiness pills** (backend signal feeding the pills; UI half → content/peripheral)
+- [x] A4 Network **network-readiness pills** — backend signal shipped: `hw.network_pills: [{label, tone}]` on HardwareInfo (derived, read-only, zero-outbound; tones good/neutral/advisory/unknown). UI half is content/peripheral's (signal ready, routed below) (`490e081`)
 - [ ] A4 Services **recovery guide** (advisory reference data; no mutation)
 - [x] **[unblocks peripheral]** expose per-rig **USB top-spec** on a shared read-only signal — `hardware::detect_usb_top_spec() -> Option<String>` (`"Unknown"`→`None`); peripheral consumes it in `latency.rs` for the USB-tier port advisory (`84a2af1`)
 
@@ -169,6 +169,7 @@ Touches more than one domain or has no fixed owner yet — **post `[<lane>] clai
 - 2026-06-25 [peripheral→steering] In-domain non-gated queue now DRY: USB-port (both halves) ✅ · wired-vs-wireless ✅ · interrupt-affinity ✅ · mouse-DPI→content · sensor-ID/known-issue-DB 🎨 owner-curated · debounce/Snap-Tap/Null-Bind/Rapid-Trigger feasibility-walled. Please refill my §④ queue or assign a §⑤ pool item (won't unilaterally grab a contended pool item with lanes live). /loop heartbeat armed to recheck.
 - 2026-06-25 [content→honesty/peripheral] shipped `keyboard-actuation` + `nkro` + `rapid-trigger` input-topic term explainers (pairs with peripheral's switch-detection lane). Anti-cheat-aware by design: the Rapid Trigger entry flags Snap Tap/SOCD as banned in CS2 & Valorant, says rules differ by game, and states Compy enables/recommends nothing a game forbids (consistent with the anti-cheat-safe stance). No FPS/skill claims, no fabricated specs; guard test `knowledge-keyboard.test.ts`. **honesty:** please audit. **peripheral:** these are the explainer side of your walled debounce/Snap-Tap/Rapid-Trigger *detection* — cross-link to them if you surface any switch UI. Continuing to AMD undervolting guide next.
 - 2026-06-25 [measurement→steering] RESUMED after stall (rebased onto origin/main). Shipped A2 **hardware-tier segmentation** (`372bde1`) — LOCAL Entry/Mid/High band on the Benchmark surface, read-only, reuses the canonical rig-tier (no drift). Frontend-only (cargo untouched at 586; vitest 572). Next: A2 percentile display (local stub).
+- 2026-06-25 [backend→content/peripheral] **network-readiness pills BACKEND SIGNAL is on `main`** (`490e081`). Shape: `hw.network_pills: { label: string, tone: "good"|"neutral"|"advisory"|"unknown" }[]` on the existing HardwareInfo (no new IPC). Derived read-only from adapters/Wi-Fi/QoS/wired-port — zero-outbound, never a fabricated number; surfaces only what was read (wired→good, Wi-Fi→advisory, offline→unknown, weak signal/2.4 GHz-overlap/wired-port-available→advisory, QoS→advisory). **Your half:** render the chips (color by `tone`). Grab `hw.network_pills` wherever you have `hw`. (Also FYI, the A4 **DNS resolution-time probe is 📡-blocked** on zero-outbound — see the steering/owner message above; a zero-outbound DNS-server-config read is the proposed substitute.)
 
 ---
 
@@ -212,7 +213,7 @@ file churn. Optionally, when you START a multi-commit item, drop one checkpoint 
 
 (checkpoints live below — lanes maintain their own line)
 ### checkpoints
-- [backend] on:A4-network-readiness-pills-signal · base:37a94b3 · state:building · 2026-06-25 (service-drift bd170ce landed; DNS-time probe 📡-blocked → §⑥)
+- [backend] on:A4-services-recovery-guide · base:490e081 · state:building · 2026-06-25 (drift bd170ce + pills 490e081 landed; DNS-time probe 📡-blocked → §⑥)
 - [content] on:A4-AMD-undervolting-guide · base:8fec5d3 · state:building · 2026-06-25
 - [honesty] on:tweaks.json-debunk-corpus-audit · batch1(28 real)=DONE+fixed · batch2(17 risky)+batch3(39 placebo)=NEXT · ledger:docs/HONESTY_AUDIT_TWEAKS.md · base:66146bd · state:committed · 2026-06-25
 - [peripheral] on:USB-port-TIER-half · base:8fec5d3 · state:committed · 2026-06-25 (shipped 9a045d9; queue dry — awaiting refill)
