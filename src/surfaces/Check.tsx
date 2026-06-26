@@ -125,6 +125,9 @@ export default function Check({
     useScan({ cache: true });
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [fineOpen, setFineOpen] = useState(false);
+  // Post-scan, the full per-check row list collapses behind a quiet toggle (the confidence chips carry
+  // the summary; the actionable items render in the verdict below) — keeps the settled tab neat.
+  const [showAllChecks, setShowAllChecks] = useState(false);
   const confirm = useConfirm();
 
   const linkedRec = (lim: PriorityItem) => {
@@ -377,7 +380,35 @@ export default function Check({
         </div>
       )}
 
-      <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
+      {/* During the scan: the live streaming radar. Once settled: the full per-check receipt collapses
+          behind a quiet toggle — the confidence chips above carry the summary and the verdict below
+          carries the actions, so the long row list no longer dominates the settled tab. */}
+      {running || phase === "scan" ? (
+        <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
+      ) : (
+        readiness &&
+        readiness.checks.length > 0 && (
+          <div className="check-fine check-allchecks">
+            <button
+              className="check-fine-head"
+              onClick={() => setShowAllChecks((o) => !o)}
+              aria-expanded={showAllChecks}
+            >
+              <span>All {readiness.checks.length} checks</span>
+              <span>{showAllChecks ? "▾" : "▸"}</span>
+            </button>
+            {showAllChecks && (
+              <ScanStream
+                readiness={readiness}
+                shownRows={readiness.checks.length}
+                running={false}
+                phase="verdict"
+                plain
+              />
+            )}
+          </div>
+        )
+      )}
 
       {/* The ranked result — appears after the rows have streamed. */}
       {phase === "verdict" && (

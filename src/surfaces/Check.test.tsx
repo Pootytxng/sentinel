@@ -96,6 +96,21 @@ describe("Check", () => {
     expect(await screen.findByText("SSD check")).toBeInTheDocument();
   });
 
+  it("settled view collapses the scanned rows behind 'All N checks'; expanding reveals them", async () => {
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    // The collapse toggle only renders once the scan settles (verdict phase).
+    const toggle = await screen.findByRole("button", { name: /All 1 checks/ });
+    // Default settled state: the full per-check row list is collapsed (the chips carry the summary).
+    expect(screen.queryByText("SSD check")).not.toBeInTheDocument();
+    // Expanding reveals the full checklist — progressive disclosure, nothing deleted.
+    fireEvent.click(toggle);
+    expect(screen.getByText("SSD check")).toBeInTheDocument();
+  });
+
   it("shows the tuning nudge ONLY when an AMD rig has run sustained-warm, linking to the guide", async () => {
     const onOpenLibrary = vi.fn();
     render(

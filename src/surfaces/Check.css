@@ -342,6 +342,13 @@
   color: var(--ix-accent);
 }
 
+/* The "All N checks" disclosure reuses the .check-fine collapsible shell; the streamed rows render
+   plain inside it (no padding of their own), so pad them to line up with the toggle head above. */
+.check-allchecks .fc-scan {
+  padding: 0 16px 14px;
+  margin-bottom: 0;
+}
+
 .check-notworth {
   display: flex;
   flex-direction: column;
