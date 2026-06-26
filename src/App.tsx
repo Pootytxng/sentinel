@@ -26,6 +26,7 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
+import { invalidateProbe } from "./data/probe-cache";
 import Play from "./surfaces/Play";
 import Monitor from "./surfaces/Monitor";
 import Lab from "./surfaces/Lab";
@@ -645,6 +646,9 @@ function App() {
 
   const refresh = async () => {
     setError(null);
+    // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
+    // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).
+    invalidateProbe();
     try {
       const [
         info,

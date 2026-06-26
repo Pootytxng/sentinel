@@ -8,6 +8,7 @@ import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
+import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { useScan } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./Check.css";
@@ -284,6 +285,9 @@ export default function Check({
 
   // NIC driver freshness — LAZY: fetched once, only when the driver card actually renders
   // (its own command keeps the slow Win32_PnPSignedDriver read off the hardware hot path).
+  // Not probe-cached: this read is already conditional + lazy (only fires when a stale-driver advisory
+  // is shown AND nicDrivers is null), so it's off the hot path, and keeping it live preserves a fresh
+  // read each time the card appears.
   const [nicDrivers, setNicDrivers] = useState<NicDriverInfo[] | null>(null);
   useEffect(() => {
     if (!driver || nicDrivers !== null) return;
@@ -299,11 +303,13 @@ export default function Check({
   // changed since last setup. Built but previously UNWIRED — surfaced here as an advisory card that
   // names exactly what changed, with an inline "this is my rig now" that re-baselines so it can
   // never nag forever (the no-dead-end-flags law).
-  const [hwChange, setHwChange] = useState<HardwareChangeReport | null>(null);
+  const [hwChange, setHwChange] = useState<HardwareChangeReport | null>(
+    () => peekProbe("hardware-changes") ?? null,
+  );
   const [ackingHw, setAckingHw] = useState(false);
   useEffect(() => {
     let live = true;
-    invoke<HardwareChangeReport>("get_hardware_changes")
+    cachedProbe("hardware-changes", () => invoke<HardwareChangeReport>("get_hardware_changes"), 60_000)
       .then((r) => live && setHwChange(r))
       .catch(() => {});
     return () => {

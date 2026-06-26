@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
+import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { BlackBox } from "./BlackBox";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
@@ -52,8 +53,10 @@ export default function Lab({
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
 }) {
-  const [bench, setBench] = useState<BenchmarkState | null>(null);
-  const [latency, setLatency] = useState<LatencyReport | null>(null);
+  // Seed from the probe cache so re-opening Advanced paints last-known instantly instead of cold-
+  // re-running get_latency_diagnostics (a synchronous MSI/timer/USB scan) every visit.
+  const [bench, setBench] = useState<BenchmarkState | null>(() => peekProbe("benchmark-state") ?? null);
+  const [latency, setLatency] = useState<LatencyReport | null>(() => peekProbe("latency-diag") ?? null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [armed, setArmed] = useState<ArmedComparison | null>(null);
   const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
@@ -75,8 +78,12 @@ export default function Lab({
 
   // Recent-results summary — existing commands, read once on mount (no polling, ZERO new IPC).
   useEffect(() => {
-    invoke<BenchmarkState>("get_benchmark_state").then(setBench).catch(() => {});
-    invoke<LatencyReport>("get_latency_diagnostics").then(setLatency).catch(() => {});
+    cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
+      .then(setBench)
+      .catch(() => {});
+    cachedProbe("latency-diag", () => invoke<LatencyReport>("get_latency_diagnostics"), 60_000)
+      .then(setLatency)
+      .catch(() => {});
     if (tuningGuide) {
       invoke<SessionSummary[]>("get_session_summaries").then(setSessions).catch(() => {});
       invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});

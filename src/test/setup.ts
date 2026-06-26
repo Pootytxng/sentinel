@@ -1,4 +1,11 @@
 import "@testing-library/jest-dom";
+import { afterEach } from "vitest";
+import { invalidateProbe } from "../data/probe-cache";
+
+// The probe cache (src/data/probe-cache.ts) is module-level and intentionally survives component
+// unmounts in production (instant tab re-visits). In tests that means one test's cached probe value
+// would leak into the next mount — so reset it between tests for isolation.
+afterEach(() => invalidateProbe());
 
 // Node-environment test files (e.g. scripts/export-library.test.mjs, which must run vite/esbuild
 // outside jsdom) have no DOM at all — the stubs below are jsdom-only.
