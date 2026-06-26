@@ -123,9 +123,13 @@ export default function Play({
   // authoritative; AMD/unknown stay graded. Routed through the shared gpu-sensor helper (one source).
   const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(vendor, c);
 
-  // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active.
+  // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active AND
+  // the live view is actually showing. On the Sessions segment (the default landing) the live cards
+  // aren't rendered, so polling there was pure waste that also kept the backend sensor threads awake —
+  // demand-gate it on the segment, not just the tab. (LiveCharts + the deep MonitoringTab are already
+  // mount-gated on `showLive`, so they never polled on Sessions; this closes the last segment-leak.)
   useEffect(() => {
-    if (!active) return;
+    if (!active || view === "sessions") return;
     let cancelled = false;
     const tick = () => {
       invoke<GpuLite[]>("get_gpu_sensors").then((g) => !cancelled && setGpu(pickGpu(g))).catch(() => {});
@@ -140,7 +144,7 @@ export default function Play({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [active]);
+  }, [active, view]);
 
   // Reflect the actual overlay window state + any armed comparison (existing commands).
   useEffect(() => {

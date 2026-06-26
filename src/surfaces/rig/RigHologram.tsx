@@ -7,6 +7,7 @@ import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-par
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
 import { useRigColors, partColor } from "./use-rig-colors";
 import { useReducedMotion } from "../../design/use-motion";
+import { useDocumentVisible } from "../../data/use-document-visible";
 import { RigCase } from "./RigCase";
 import { RigPart } from "./RigPart";
 import { RigFan, type FanInfo } from "./RigFan";
@@ -42,6 +43,7 @@ export function RigHologram({
   const colors = useRigColors();
   const parts = useMemo(() => buildRigParts(hw), [hw]);
   const reduced = useReducedMotion();
+  const visible = useDocumentVisible();
   const [gameActive, setGameActive] = useState(false);
   const [fanSensors, setFanSensors] = useState<{ label: string; rpm: number; source: string }[] | null>(
     null,
@@ -158,7 +160,11 @@ export function RigHologram({
     });
   }, [fans]);
 
-  const frameloop: "always" | "demand" = gameActive || reduced ? "demand" : "always";
+  // Drop the WebGL render loop to on-demand whenever the user can't see it — during a game (step-aside),
+  // under reduced-motion, OR while this window is hidden/minimized — so the orbiting hologram never
+  // burns GPU off-screen. (Was the highest-cost hidden-work leak: a full-rate r3f canvas painting while
+  // the window was occluded.)
+  const frameloop: "always" | "demand" = gameActive || reduced || !visible ? "demand" : "always";
   const orbiting = autoRotate && !gameActive && !reduced;
 
   return (

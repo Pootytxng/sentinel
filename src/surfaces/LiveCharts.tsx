@@ -5,6 +5,7 @@ import "./LiveCharts.css";
 import { gradeRamPct, gradeColor } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { AnimatedNumber } from "../design/AnimatedNumber";
+import { useDocumentVisible } from "../data/use-document-visible";
 
 // LiveCharts — a rolling live-telemetry panel for the Monitor tab (owner: bring the Home dashboard's
 // live charts here too, 2026-06-15). Three d2-style cards (CPU · GPU · memory), each a big monospace
@@ -44,8 +45,12 @@ export function LiveCharts() {
   const gpuH = useRef<number[]>([]);
   const ramH = useRef<number[]>([]);
   const [, tick] = useState(0);
+  const visible = useDocumentVisible();
 
   useEffect(() => {
+    // Pause the 1 Hz sensor poll while this window is hidden/minimized — no point reading sensors the
+    // user can't see, and it lets the backend sensor threads idle. Resumes immediately on focus.
+    if (!visible) return;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -69,7 +74,7 @@ export function LiveCharts() {
     poll();
     const iv = window.setInterval(poll, 1000);
     return () => { cancelled = true; window.clearInterval(iv); };
-  }, []);
+  }, [visible]);
 
   const ramPct = cpu?.ram_total_bytes ? Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100) : null;
   // Hardware-tailored grade colors — GPU temp + RAM pressure carry green/amber/red; utilization stays
