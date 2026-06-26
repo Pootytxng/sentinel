@@ -61,6 +61,22 @@ describe("Fix", () => {
     expect(screen.getByText(/1 worth a look · 0 active · 0 dismissed/)).toBeTruthy();
   });
 
+  it("A5 override-all: a 'Restore all' control appears only with 2+ dismissed and brings them ALL back", () => {
+    const recs = [rec("game-mode", false), rec("sysmain-disable", false)];
+    render(<Fix recs={recs} {...baseProps} />);
+    // One dismissed → no bulk control (a single per-row Restore is enough).
+    fireEvent.click(screen.getAllByRole("button", { name: "Not for me" })[0]);
+    fireEvent.click(screen.getByText("Dismissed"));
+    expect(screen.queryByRole("button", { name: /Restore all/ })).toBeNull();
+    // Dismiss the second → the bulk control surfaces.
+    fireEvent.click(screen.getByRole("button", { name: "Not for me" }));
+    expect(screen.getByText(/0 worth a look · 0 active · 2 dismissed/)).toBeTruthy();
+    const restoreAll = screen.getByRole("button", { name: /Restore all \(2\)/ });
+    fireEvent.click(restoreAll);
+    // Both came back; the Dismissed strip is empty again.
+    expect(screen.getByText(/2 worth a look · 0 active · 0 dismissed/)).toBeTruthy();
+  });
+
   it("ledger §2: Active-on-PC shows a deduped active change with a ghost rollback", () => {
     const onRollback = vi.fn();
     const now = new Date().toISOString();

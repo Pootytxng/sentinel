@@ -368,7 +368,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [~] exportable setup summary — report exists but no dedicated setup-summary card
 - [~] Re-Run Setup — re-run check exists; no explicit re-baseline flow
 - [x] **hardware-change detection** — wired into Check (Optimize→Fixes): advisory card names what changed + inline acknowledge/re-baseline (`acknowledge_hardware_changes`) so it never nags; live-verified 2026-06-24
-- [ ] override toggle (dismiss exists; no override-all)
+- [x] override toggle — "Restore all (N)" bulk control in the Dismissed strip (Fix.tsx, ≥2 dismissed, reversible, zero IPC)
 - [x] drift-watch integration — `drift.rs`, `Check.tsx:325`
 - [x] historical-ledger surfacing — `Fix.tsx:712`
 - [~] applicability check — eligibility filter exists; no override for ineligible

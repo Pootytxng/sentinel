@@ -770,6 +770,22 @@ export default function Fix({
           <p className="fix-refuse-intro">
             You set these aside. They're out of your active count — restore any one anytime.
           </p>
+          {/* A5 override-all: one control to undo every "Not for me" at once, so a user who
+              dismissed a pile while setting up isn't stuck tapping Restore row by row. Shown only
+              with 2+ dismissed (a single per-row Restore already covers one). Reversible. */}
+          {dismissedRecs.length >= 2 && (
+            <div className="fix-applyall-bar">
+              <button
+                className="fix-restore"
+                onClick={() => dismissedRecs.forEach((r) => restore(r.id))}
+              >
+                Restore all ({dismissedRecs.length})
+              </button>
+              <span className="fix-applyall-hint">
+                brings every dismissed item back into your active list
+              </span>
+            </div>
+          )}
           <ul className="fix-list">
             {dismissedRecs.map((r) => (
               <li key={r.id} className="fix-row">
