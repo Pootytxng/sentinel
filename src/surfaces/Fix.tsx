@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { AppliedChange, StartupEntry } from "../types";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
@@ -264,6 +265,63 @@ function CollapsibleSection({
       </button>
       {open && <div className="fix-group-body">{children}</div>}
     </section>
+  );
+}
+
+// The curated Microsoft CEIP / telemetry scheduled tasks Compy can disable (ARMED 2026-06-26).
+// Ids match the Rust `KnownBloatTask::from_id` allowlist — the backend re-enforces it, so nothing
+// off-list (never Defender / policy) can be passed. Disabling is reversible: the change lands in the
+// Trust Ledger and re-enables on rollback.
+const DEBLOAT_TASKS: { id: string; label: string; what: string }[] = [
+  { id: "compatibility-appraiser", label: "Compatibility Appraiser", what: "feeds Microsoft's compatibility telemetry (legacy; absent on newer Windows)" },
+  { id: "ceip-consolidator", label: "CEIP Consolidator", what: "sends Customer Experience Improvement Program data" },
+  { id: "ceip-usb", label: "CEIP USB telemetry", what: "reports USB device usage to the CEIP" },
+];
+
+// Self-contained: invokes the gated `disable_known_bloat_task` command directly; the applied change
+// shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
+function DebloatTasks() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [state, setState] = useState<Record<string, "done" | string>>({});
+  const disable = async (id: string) => {
+    setBusy(id);
+    try {
+      await invoke("disable_known_bloat_task", { taskId: id });
+      setState((s) => ({ ...s, [id]: "done" }));
+    } catch (e) {
+      setState((s) => ({ ...s, [id]: String(e) }));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <CollapsibleSection title="Telemetry tasks" count={DEBLOAT_TASKS.length}>
+      <p className="fix-refuse-intro">
+        Disable Microsoft telemetry scheduled tasks for this PC — reversible (re-enable from History).
+        Compy only ever touches this curated list; never Defender or anything that breaks Windows.
+      </p>
+      <ul className="fix-list">
+        {DEBLOAT_TASKS.map((t) => {
+          const st = state[t.id];
+          const done = st === "done";
+          const err = st && st !== "done" ? st : null;
+          return (
+            <li className="fix-row fix-row-advisory" key={t.id}>
+              <div className="fix-row-main">
+                <span className="fix-row-title fix-row-title-friendly">
+                  <span className="fix-row-headline">{t.label}</span>
+                  <span className="fix-row-tech">{t.what}</span>
+                </span>
+                {err && <p className="fix-row-reason">{err}</p>}
+              </div>
+              <button className="btn btn-small" disabled={busy === t.id || done} onClick={() => disable(t.id)}>
+                {done ? "Disabled · undo in History" : busy === t.id ? "Disabling…" : "Disable"}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </CollapsibleSection>
   );
 }
 
@@ -865,6 +923,9 @@ export default function Fix({
           </ul>
         </CollapsibleSection>
       )}
+
+      {/* Telemetry-task disable (Phase B, ARMED) — curated CEIP tasks; reversible via the Trust Ledger. */}
+      <DebloatTasks />
       </>
       )}
 
