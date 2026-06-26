@@ -131,8 +131,11 @@ export function Monitor(props: Props) {
           aria-label="Monitor sections"
         />
       </header>
-      <TuningPresets vendor={props.vendor} />
+      {/* The primary answer first (Sessions: last-game debrief · Live: the meters), THEN the advisory
+          Tuning-presets checklist below it — you open Monitor to see how the game went, not to pick a
+          preset. (Presets already start collapsed to just their chips.) */}
       <Play {...props} view={segment} />
+      <TuningPresets vendor={props.vendor} />
     </section>
   );
 }
