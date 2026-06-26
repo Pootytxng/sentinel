@@ -46,10 +46,16 @@
 - **Blast radius:** touches live Windows service state on the user's machine *during a session*. Worst case = a service doesn't restart → user confusion / instability until reboot. Contained by: typed snapshot before every stop, idempotent fail-loud restore, startup orphan-recovery, and a hard critical-services blocklist. **Outbound network: none. Kernel: none. Catalog: this is the one new mutation, owner-decided.**
 
 ## GO / NO-GO to arm service-suspend (say "arm service-suspend" to start)
-1. [ ] Welfare-check acknowledged (above).
-2. [ ] HQ builds the QA harness (DARK; gate stays false) — *careful, reviewed work on the `actions.rs` boundary, not an autonomous burst.*
-3. [ ] Owner runs the live QA (UAC-on machine) — the mutating step is yours.
-4. [ ] Owner signs off on the QA evidence (exact-restore + crash-recovery + UAC-cancel + critical-blocked all proven).
+1. [x] Welfare-check acknowledged (above).
+2. [~] QA harness (DARK; gate stays false) — **partially built + verified by HQ:**
+   - [x] **UAC-cancel = no partial mutation** — `qa_uac_cancel_leaves_service_untouched` (actions.rs): forced
+     elevation-failure → suspend errors, service EXACTLY unchanged. **HQ ran it, PASSED** (before==after, honest
+     decline message). Safe to run (no real mutation).
+   - [x] exact apply→resume restore — `qa_suspend_then_resume_restores_exact_state` (pre-existing, live #[ignore]).
+   - [x] critical/off-list services HARD-blocked + flood-bounded + gate-dark + session-file round-trip (existing tests).
+   - [ ] **owner-run live scenarios** (real service mutation — your step): orchestrator full-cycle restore + crash/orphan recovery.
+3. [ ] Owner runs the live #[ignore] scenarios (UAC-on machine): `cargo test ... -- --ignored --nocapture --test-threads=1`.
+4. [ ] Owner signs off on the QA evidence.
 5. [ ] HQ flips `service_suspend_gate()` → true, rebuilds, owner reinstalls.
 
 **HQ recommendation:** open exactly ONE gate — **Phase B service-suspend** — via this sequence. Say *"arm service-suspend"* and I'll do step 2 (the careful QA-harness build) and hand you a one-decision flip; I will not flip the gate without your sign-off on the QA. Phase C/D stay shut until you deliberately choose them.

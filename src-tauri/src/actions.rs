@@ -1567,6 +1567,30 @@ mod service_suspend_tests {
         let (restored, _) = service_info(svc.name()).expect("read post-resume");
         assert_eq!(restored, prior_state, "resume must restore the EXACT prior running state");
     }
+
+    // §7 UAC-cancel = NO PARTIAL MUTATION. With elevation forced to fail (a cancelled UAC prompt), the
+    // suspend must return Err and leave the service EXACTLY as it was — the elevated Stop-Service never
+    // runs (it's after the harmless non-elevated prior-read). SAFE to run: the forced failure means no
+    // real mutation, so this proves the cancel arm without ever stopping the service.
+    #[test]
+    #[ignore = "manual: reads live WMI; proves a cancelled suspend leaves the service untouched"]
+    fn qa_uac_cancel_leaves_service_untouched() {
+        let svc = KnownService::WSearch;
+        let (before, _) = service_info(svc.name()).expect("read prior state");
+        let err = {
+            let _cancel = ForceElevationError::begin();
+            match apply_service_suspend(svc.clone()) {
+                Ok(_) => panic!("a cancelled elevation must fail the suspend, not succeed"),
+                Err(e) => e,
+            }
+        };
+        let (after, _) = service_info(svc.name()).expect("read post-attempt state");
+        assert_eq!(
+            after, before,
+            "a cancelled suspend must leave the service EXACTLY unchanged (no partial mutation)"
+        );
+        eprintln!("[QA-SVC-CANCEL] before={before} after={after} err={err}");
+    }
 }
 
 #[cfg(test)]
