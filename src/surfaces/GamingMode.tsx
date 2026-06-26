@@ -4,6 +4,7 @@ import { Card, StatusPill } from "../design";
 import {
   summarizeChanges,
   statusLabel,
+  SUSPENDABLE_SERVICES,
   type GamingSessionFile,
   type StartOptions,
 } from "./gaming-mode";
@@ -30,6 +31,9 @@ export function GamingMode() {
   const [needConsent, setNeedConsent] = useState(false);
   const [advUsb, setAdvUsb] = useState(false);
   const [advPcie, setAdvPcie] = useState(false);
+  const [suspendSvcs, setSuspendSvcs] = useState<string[]>([]);
+  const toggleSvc = (name: string) =>
+    setSuspendSvcs((cur) => (cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name]));
 
   // On mount: an on-disk session that wasn't cleanly cleared = interrupted →
   // prompt to recover. Never auto-restores. Only THIS run's own active session
@@ -75,7 +79,11 @@ export function GamingMode() {
     setBusy(true);
     setError(null);
     try {
-      const opts: StartOptions = { advancedUsb: advUsb, advancedPcie: advPcie };
+      const opts: StartOptions = {
+        advancedUsb: advUsb,
+        advancedPcie: advPcie,
+        suspendServices: suspendSvcs,
+      };
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
@@ -135,7 +143,11 @@ export function GamingMode() {
     try {
       await invoke("recover_gaming_session", { confirm: true });
       setRecovery(null);
-      const opts: StartOptions = { advancedUsb: advUsb, advancedPcie: advPcie };
+      const opts: StartOptions = {
+        advancedUsb: advUsb,
+        advancedPcie: advPcie,
+        suspendServices: suspendSvcs,
+      };
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
@@ -257,6 +269,19 @@ export function GamingMode() {
                 />
                 PCIe ASPM off (AC)
               </label>
+              <div className="gaming-diff-title gaming-subgroup">
+                Suspend background services (optional · per session · adds a UAC prompt):
+              </div>
+              {SUSPENDABLE_SERVICES.map((s) => (
+                <label className="gaming-toggle" key={s.name}>
+                  <input
+                    type="checkbox"
+                    checked={suspendSvcs.includes(s.name)}
+                    onChange={() => toggleSvc(s.name)}
+                  />
+                  {s.label}
+                </label>
+              ))}
             </div>
           </div>
         )}
@@ -280,6 +305,11 @@ export function GamingMode() {
               ))}
               {advUsb && <li>USB selective suspend off (AC)</li>}
               {advPcie && <li>PCIe ASPM off (AC)</li>}
+              {suspendSvcs.map((n) => (
+                <li key={n}>
+                  Suspend {SUSPENDABLE_SERVICES.find((s) => s.name === n)?.label ?? n}
+                </li>
+              ))}
             </ul>
             <p className="gaming-guarantee">
               <strong>Guarantee:</strong> every change is snapshotted before it's made and

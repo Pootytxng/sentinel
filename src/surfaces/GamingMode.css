@@ -92,6 +92,11 @@
   border-top: 1px solid var(--border-strong);
 }
 
+/* separates the second opt-in group (service suspend) from USB/PCIe within the one Advanced block */
+.gaming-subgroup {
+  margin-top: 10px;
+}
+
 .gaming-toggle {
   display: flex;
   align-items: center;

@@ -115,7 +115,7 @@ impl KnownBloatTask {
 pub(crate) enum AppliedAction {
     DisableKnownService { service: KnownService },
     // Session-scoped SUSPEND (Stop only, startup-type untouched) — distinct from the permanent
-    // DisableKnownService. BUILT DARK behind service_suspend_gate() until its own UAC QA + owner sign-off.
+    // DisableKnownService. Behind service_suspend_gate() — ARMED 2026-06-25 after its UAC QA + owner sign-off.
     SuspendKnownService { service: KnownService },
     EnableGameMode,
     DisableMouseAcceleration,
@@ -1344,12 +1344,15 @@ pub(crate) fn service_suspend_gate() -> bool {
     if FORCE_SERVICE_SUSPEND_GATE.with(|f| *f.borrow()) {
         return true;
     }
-    false
+    // ARMED 2026-06-25: its own apply/rollback + crash-restore QA passed (running-service exact-restore,
+    // UAC-cancel = no-partial, critical-services hard-blocked) + explicit owner sign-off ("flip service-
+    // suspend"). Was `false` while BUILT-DARK; the #[cfg(test)] seam above is now vestigial.
+    true
 }
 
-// Test-only: opens `service_suspend_gate` on THIS thread so the in-session suspend wiring (and its
-// fail-safe undo) is testable WITHOUT shipping the gate open. Never compiled into the shipped binary;
-// the production gate stays `false` (pinned by `gate_is_dark_until_qa_and_owner_signoff`).
+// Test-only seam — historically opened the gate while it was BUILT-DARK. The production gate is now
+// ARMED (returns true), so this is vestigial, but kept because gaming_orchestrator's integration QA
+// still constructs the guard. Never compiled into the shipped binary.
 #[cfg(test)]
 thread_local! {
     static FORCE_SERVICE_SUSPEND_GATE: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
@@ -1544,20 +1547,19 @@ mod service_suspend_tests {
     use super::*;
 
     #[test]
-    fn gate_is_dark_until_qa_and_owner_signoff() {
-        assert!(!service_suspend_gate(), "session service-suspend must ship DARK");
+    fn gate_is_armed_after_qa_and_owner_signoff() {
+        // ARMED 2026-06-25: QA passed (running-service exact-restore + UAC-cancel=no-partial +
+        // critical-blocked) + explicit owner sign-off ("flip service-suspend"). Was DARK until then.
+        assert!(service_suspend_gate(), "service-suspend is armed after QA + owner sign-off");
     }
 
     #[test]
-    fn gate_bypass_seam_opens_only_while_armed_then_closes_on_drop() {
-        // The #[cfg(test)] seam (compiled OUT of shipped binaries) lets QA exercise the in-session
-        // wiring without flipping the real gate. Default + post-drop = dark; open only inside the guard.
-        assert!(!service_suspend_gate(), "default must be dark");
-        {
-            let _g = ForceServiceSuspendGate::begin();
-            assert!(service_suspend_gate(), "seam must open the gate while the guard is alive");
-        }
-        assert!(!service_suspend_gate(), "gate must return to dark after the guard drops");
+    fn seam_is_vestigial_now_that_the_gate_is_armed() {
+        // Post-arming the gate is on regardless; the #[cfg(test)] seam (still used by gaming_orchestrator
+        // QA) is a no-op here — the gate reads armed both with and without the guard.
+        assert!(service_suspend_gate(), "armed by default");
+        let _g = ForceServiceSuspendGate::begin();
+        assert!(service_suspend_gate(), "still armed with the seam (no-op)");
     }
 
     #[test]

@@ -28,7 +28,23 @@ export type GamingSessionFile = {
   started_monitoring: boolean;
 };
 
-export type StartOptions = { advancedUsb: boolean; advancedPcie: boolean };
+export type StartOptions = {
+  advancedUsb: boolean;
+  advancedPcie: boolean;
+  /** Allowlisted Windows service names to suspend for the session (restored exactly on stop).
+   *  The backend re-enforces the KnownService allowlist — off-list/critical names are dropped. */
+  suspendServices?: string[];
+};
+
+// Services Compy offers to suspend for a gaming session. Names MUST match the Rust KnownService
+// allowlist (actions.rs); the backend re-enforces it, so nothing off-list/critical can ever suspend.
+// (NvTelemetryContainer is allowlisted in Rust but not offered here — it's NVIDIA-only, and selecting a
+// service that doesn't exist on the rig would fail the session start.)
+export const SUSPENDABLE_SERVICES: { name: string; label: string }[] = [
+  { name: "SysMain", label: "SysMain (SuperFetch) — frees RAM during play" },
+  { name: "DiagTrack", label: "Diagnostics & telemetry — Windows usage reporting" },
+  { name: "WSearch", label: "Windows Search indexing — pauses background disk churn" },
+];
 
 export type ChangeSummary = {
   line: string;

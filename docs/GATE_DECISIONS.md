@@ -76,7 +76,10 @@
    SysMain Stopped(disabled) → enabled+started=Running → suspend=Stopped → **resume=Running (exact prior)** →
    cleanup restored to Disabled+Stopped (rig config untouched). With cancel=no-partial + typed round-trip +
    critical-blocked + gate-dark, **the §7 matrix is satisfied.** ⇒ **awaits OWNER SIGN-OFF on this evidence.**
-5. [ ] HQ flips `service_suspend_gate()` → true (+ rebuild, reinstall) — **on owner's explicit "flip service-suspend".**
-   Gate is still DARK; this is the one irreversible/outward step that stays your sign-off.
+5. [x] **ARMED 2026-06-25** (owner sign-off: "flip service-suspend"). `service_suspend_gate()` → `true`; built the
+   session **service-selection UI** (3 allowlisted services — SysMain/DiagTrack/WSearch — in `GamingMode.tsx`, wired
+   into `start_gaming_session` + shown in the consent modal); dark-contract tests → armed. cargo 636 / vitest 3958 /
+   build clean. **Remaining: rebuild the installer + reinstall** so the running app carries the armed binary (the
+   installed build is still the old dark one). NvTelemetryContainer stays allowlisted-but-unoffered (NVIDIA-only).
 
 **HQ recommendation:** open exactly ONE gate — **Phase B service-suspend** — via this sequence. Say *"arm service-suspend"* and I'll do step 2 (the careful QA-harness build) and hand you a one-decision flip; I will not flip the gate without your sign-off on the QA. Phase C/D stay shut until you deliberately choose them.
