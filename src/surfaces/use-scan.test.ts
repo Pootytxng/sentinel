@@ -1,10 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
 
 // use-scan pulls @tauri-apps/api/core at import — stub invoke so jsdom doesn't choke loading the module.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-import { deriveReverted, rowVerdict, type AppliedChangeLite } from "./use-scan";
+import { deriveReverted, rowVerdict, useScan, type AppliedChangeLite } from "./use-scan";
+import { invoke } from "@tauri-apps/api/core";
+import { invalidateProbe } from "../data/probe-cache";
 import type { ReadinessCheck } from "../types";
+
+const invokeMock = vi.mocked(invoke);
 
 const mk = (rec_id: string, opts: Partial<AppliedChangeLite> = {}): AppliedChangeLite => ({
   rec_id,
@@ -60,4 +65,48 @@ describe("rowVerdict", () => {
   it("advisory -> ok", () => expect(rowVerdict("advisory")).toBe("ok"));
   it("any other status -> unknown", () =>
     expect(rowVerdict("skip" as unknown as ReadinessCheck["status"])).toBe("unknown"));
+});
+
+// The Optimize/Fixes "gets stuck" fix: a cache:true caller must NOT replay the scan on re-mount.
+describe("useScan caching (Optimize/Fixes re-open is instant, not a re-scan)", () => {
+  afterEach(() => invalidateProbe()); // isolate the module-level scan cache between these tests
+
+  it("cache:true serves the cached verdict on re-mount — no second backend scan", async () => {
+    invokeMock.mockClear();
+    const first = renderHook(() => useScan({ cache: true }));
+    await waitFor(() => expect(first.result.current.running).toBe(false));
+    expect(invokeMock.mock.calls.length).toBeGreaterThan(0); // first visit scans
+    first.unmount();
+
+    invokeMock.mockClear();
+    const second = renderHook(() => useScan({ cache: true }));
+    // Instant: seeded straight to the verdict, no scanning phase, and crucially NO new IPC.
+    expect(second.result.current.running).toBe(false);
+    expect(second.result.current.phase).toBe("verdict");
+    expect(invokeMock.mock.calls.length).toBe(0);
+  });
+
+  it("no-cache callers (FirstCheck / Tour) re-scan on every mount", async () => {
+    invokeMock.mockClear();
+    const first = renderHook(() => useScan());
+    await waitFor(() => expect(first.result.current.running).toBe(false));
+    first.unmount();
+
+    invokeMock.mockClear();
+    const second = renderHook(() => useScan());
+    await waitFor(() => expect(second.result.current.running).toBe(false));
+    expect(invokeMock.mock.calls.length).toBeGreaterThan(0); // scanned again (animation preserved)
+  });
+
+  it("invalidating the cache (post-mutation) makes the next mount re-scan", async () => {
+    const first = renderHook(() => useScan({ cache: true }));
+    await waitFor(() => expect(first.result.current.running).toBe(false));
+    first.unmount();
+    invalidateProbe(); // App.refresh() does this after every apply/rollback
+
+    invokeMock.mockClear();
+    const second = renderHook(() => useScan({ cache: true }));
+    await waitFor(() => expect(second.result.current.running).toBe(false));
+    expect(invokeMock.mock.calls.length).toBeGreaterThan(0); // fresh scan after a change
+  });
 });

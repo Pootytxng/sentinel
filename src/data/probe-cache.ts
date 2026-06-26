@@ -32,6 +32,11 @@ export async function cachedProbe<T>(
   return value;
 }
 
+/** Store a directly-computed value (not invoke-wrapped) — e.g. a multi-call scan result. */
+export function putProbe<T>(key: string, value: T): void {
+  store.set(key, { value, at: Date.now() });
+}
+
 /** Drop one key, or the whole cache when called with no argument (after any mutation). */
 export function invalidateProbe(key?: string): void {
   if (key === undefined) store.clear();

@@ -118,7 +118,11 @@ export default function Check({
   // surface — so suppress the standalone "Check" tab-title to avoid stacked redundant headings.
   embedded?: boolean;
 }) {
-  const { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun } = useScan();
+  // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
+  // re-opening it serves the last verdict instantly instead of replaying the scan + 280ms/row reveal
+  // every visit. The cache clears on any apply/rollback; "Re-run check" still does a full fresh scan.
+  const { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun } =
+    useScan({ cache: true });
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [fineOpen, setFineOpen] = useState(false);
   const confirm = useConfirm();

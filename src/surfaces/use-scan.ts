@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
+import { peekProbe, putProbe } from "../data/probe-cache";
 
 // The readiness/priorities scan — the shared core behind FirstCheck (the first-run arc) and Check
 // (the permanent consolidation surface). One source of truth for the scan choreography: real
@@ -20,6 +21,17 @@ export type AppliedChangeLite = {
 
 const STAGGER_MS = 280; // legibility only (spec: ≤~350ms/row, never sleep for drama)
 
+// What we cache so a cached caller (Optimize/Fixes) re-opens INSTANTLY instead of re-running the scan
+// + replaying the row-by-row reveal. Cleared on any apply/rollback (App.refresh → invalidateProbe).
+type ScanResult = {
+  readiness: GameReadiness | null;
+  priorities: Priorities | null;
+  recs: ScanRecLite[];
+  reverted: RevertedChange[];
+  elapsed: number | null;
+};
+const SCAN_KEY = "readiness-scan";
+
 export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown" {
   if (s === "attention") return "fix";
   if (s === "ready" || s === "advisory") return "ok";
@@ -32,7 +44,7 @@ export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown
 // the core of the flag-class "name the drifted setting + fix it inline" behavior.
 export function deriveReverted(changes: AppliedChangeLite[]): RevertedChange[] {
   const newestByRec = new Map<string, AppliedChangeLite>();
-  for (const c of changes) newestByRec.set(c.rec_id, c); // later entries win
+  for (const c of changes ?? []) newestByRec.set(c.rec_id, c); // later entries win (null-safe)
   return [...newestByRec.values()]
     .filter((c) => c.status === "applied" && !c.is_still_active)
     .map((c) => ({ rec_id: c.rec_id, title: c.rec_title }));
@@ -51,15 +63,20 @@ export type ScanState = {
   rerun: () => Promise<void>;
 };
 
-export function useScan(): ScanState {
-  const [readiness, setReadiness] = useState<GameReadiness | null>(null);
-  const [priorities, setPriorities] = useState<Priorities | null>(null);
-  const [recs, setRecs] = useState<ScanRecLite[]>([]);
-  const [reverted, setReverted] = useState<RevertedChange[]>([]);
-  const [running, setRunning] = useState(true);
-  const [elapsed, setElapsed] = useState<number | null>(null);
-  const [shownRows, setShownRows] = useState(0);
-  const [phase, setPhase] = useState<"scan" | "verdict">("scan");
+export function useScan(opts?: { cache?: boolean }): ScanState {
+  const useCache = opts?.cache ?? false;
+  // Seed synchronously from the cache so a cached caller (Optimize/Fixes) paints the LAST verdict
+  // instantly — no re-fetch, no replayed row-by-row reveal — when re-opening the tab.
+  const seed = useCache ? peekProbe<ScanResult>(SCAN_KEY) : undefined;
+
+  const [readiness, setReadiness] = useState<GameReadiness | null>(seed?.readiness ?? null);
+  const [priorities, setPriorities] = useState<Priorities | null>(seed?.priorities ?? null);
+  const [recs, setRecs] = useState<ScanRecLite[]>(seed?.recs ?? []);
+  const [reverted, setReverted] = useState<RevertedChange[]>(seed?.reverted ?? []);
+  const [running, setRunning] = useState(!seed);
+  const [elapsed, setElapsed] = useState<number | null>(seed?.elapsed ?? null);
+  const [shownRows, setShownRows] = useState(seed?.readiness?.checks.length ?? 0);
+  const [phase, setPhase] = useState<"scan" | "verdict">(seed ? "verdict" : "scan");
 
   const rerun = useCallback(async () => {
     setRunning(true);
@@ -73,10 +90,21 @@ export function useScan(): ScanState {
         invoke<ScanRecLite[]>("get_recommendations"),
         invoke<AppliedChangeLite[]>("get_applied_changes"),
       ]);
+      const rev = deriveReverted(changes);
+      const took = (performance.now() - t0) / 1000;
       setReadiness(r);
       setPriorities(p);
       setRecs(rc);
-      setReverted(deriveReverted(changes));
+      setReverted(rev);
+      // Always cache the fresh result (even from FirstCheck/Tour) so the next cached caller paints
+      // instantly. The cache is cleared after every mutation, so it can't outlive a real state change.
+      putProbe<ScanResult>(SCAN_KEY, {
+        readiness: r,
+        priorities: p,
+        recs: rc,
+        reverted: rev,
+        elapsed: took,
+      });
     } catch {
       /* leave nulls — render guards downstream */
     } finally {
@@ -86,12 +114,18 @@ export function useScan(): ScanState {
   }, []);
 
   useEffect(() => {
+    // Skip the auto-scan when a cached caller already has scan data — re-opening the tab must NOT
+    // replay scan+stagger. The cache is cleared after any apply/rollback (App.refresh →
+    // invalidateProbe) and "Re-run check" (rerun) always does a fresh full scan, so this never serves
+    // a stale verdict past a real change. Non-cached callers (FirstCheck / SetupTour) always scan.
+    if (useCache && peekProbe(SCAN_KEY)) return;
     rerun();
-  }, [rerun]);
+  }, [rerun, useCache]);
 
-  // Stream the check rows in (legibility), then flip to the verdict/result.
+  // Stream the check rows in (legibility), then flip to the verdict/result. Skipped entirely when
+  // seeded from cache (phase already "verdict") so a re-visit shows the full result immediately.
   useEffect(() => {
-    if (running || !readiness) return;
+    if (running || !readiness || phase === "verdict") return;
     const n = readiness.checks.length;
     const timers: number[] = [];
     for (let i = 0; i < n; i++) {
@@ -101,6 +135,11 @@ export function useScan(): ScanState {
     }
     timers.push(window.setTimeout(() => setPhase("verdict"), n * STAGGER_MS + 220));
     return () => timers.forEach((t) => window.clearTimeout(t));
+    // deps are [running, readiness] (NOT phase): the `phase === "verdict"` guard above reads the
+    // closure value — on a cache seed the effect runs once on mount with phase already "verdict" and
+    // returns; during a real scan phase is "scan" when running flips, so the reveal proceeds. Adding
+    // `phase` to deps would re-fire the effect when it flips to "verdict" and the cleanup would clear
+    // the row timers mid-reveal.
   }, [running, readiness]);
 
   return { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun };
