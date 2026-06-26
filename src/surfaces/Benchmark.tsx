@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
+import { useProfile } from "../hooks/use-profile";
+import { PROFILE_META, USE_PROFILES } from "../data/profile-store";
 import {
   componentLabel,
   verdictLabel,
@@ -49,6 +51,10 @@ export function BenchmarkTab() {
   // live only on another page. Track it here + offer [Start monitoring] right on the card.
   const [fpsActive, setFpsActive] = useState<boolean | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
+  // A4 use-case profile — a LOCAL, advisory context tag (Gaming/Streaming/Creation/General). Picking
+  // one only frames what you're measuring; it changes NO Windows setting, applies no tweak, arms
+  // nothing. localStorage-only, reversible, on this PC. (See src/data/profile-store.ts.)
+  const { profile, setProfile } = useProfile();
 
   // Measurable tweaks = appliable recs not currently applied (so a trial can apply→measure→undo).
   useEffect(() => {
@@ -278,6 +284,30 @@ export function BenchmarkTab() {
           </p>
         </div>
       )}
+
+      <Card>
+        <SectionHeader title="What you mostly do" />
+        <p className="bench-muted">
+          Tell Compy your main use — it frames what these measurements mean for you. This is just a
+          label saved on this PC: it doesn’t change a single Windows setting, apply a tweak, or touch
+          any service.
+        </p>
+        <div className="bench-tweak-pick">
+          <select
+            className="bench-select"
+            aria-label="Use-case profile"
+            value={profile}
+            onChange={(e) => setProfile(e.target.value as (typeof USE_PROFILES)[number])}
+          >
+            {USE_PROFILES.map((p) => (
+              <option key={p} value={p}>
+                {PROFILE_META[p].label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="bench-fine">{PROFILE_META[profile].blurb}</p>
+      </Card>
 
       <div className="bench-actions">
         <button className="bench-btn bench-btn-primary" onClick={run} disabled={running}>
