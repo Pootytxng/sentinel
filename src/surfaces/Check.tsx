@@ -128,6 +128,9 @@ export default function Check({
   // Post-scan, the full per-check row list collapses behind a quiet toggle (the confidence chips carry
   // the summary; the actionable items render in the verdict below) — keeps the settled tab neat.
   const [showAllChecks, setShowAllChecks] = useState(false);
+  // "Not worth touching" (the refusal pile) is secondary noise — collapse it by default like the
+  // "measured fine" pile, so the settled tab leads with what's actionable.
+  const [notWorthOpen, setNotWorthOpen] = useState(false);
   const confirm = useConfirm();
 
   const linkedRec = (lim: PriorityItem) => {
@@ -701,7 +704,15 @@ export default function Check({
 
           {notWorth.length > 0 && (
             <div className="check-notworth">
-              <div className="check-section-label check-section-label-muted">Not worth touching</div>
+              <button
+                className="check-section-label check-section-label-muted check-collapse-head"
+                onClick={() => setNotWorthOpen((o) => !o)}
+                aria-expanded={notWorthOpen}
+              >
+                <span>{notWorth.length} not worth touching</span>
+                <span aria-hidden="true">{notWorthOpen ? "▾" : "▸"}</span>
+              </button>
+              {notWorthOpen && (
               <ul className="check-list">
                 {notWorth.map((i) => (
                   <li key={i.id} className="check-row check-row-info">
@@ -718,6 +729,7 @@ export default function Check({
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           )}
         </div>
