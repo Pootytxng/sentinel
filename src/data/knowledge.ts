@@ -191,6 +191,27 @@ const GRADING_ENTRY: TermEntry = {
   more: VERDICT_GLOSSARY.map((r) => `${r.chip}: ${r.definition}`).join("  "),
 };
 
+// FreeSync ↔ VRB exclusion (A4 Monitor content lane) — a read-only display-topic explainer for a
+// trap people hit live: on most gaming monitors a variable refresh rate (FreeSync / G-Sync) and the
+// strobing backlight that powers blur reduction (VRB / ULMB / MBR / DyAc) CANNOT run at the same
+// time — turning one on greys the other out in the monitor's OSD. Nothing here is appliable or
+// mutating; it just names the trade-off honestly and sits between the two features it spans. Lives in
+// code (like GRADING_ENTRY) so it ships without touching the frozen tweaks.json count pins. Aliases
+// are deliberately distinct from the vrr / gsync-freesync / backlight-strobing terms (same-type alias
+// collisions are a lint failure); single-word findability comes from the name + body via search.
+const FREESYNC_VRB_ENTRY: TermEntry = {
+  type: "term",
+  id: "freesync-vrb-exclusion",
+  name: "FreeSync vs blur reduction (you usually pick one)",
+  aliases: ["freesync vrb conflict", "vrr vs blur reduction", "freesync ulmb", "freesync greyed out"],
+  related: ["vrr", "gsync-freesync", "backlight-strobing", "vsync"],
+  topic: topicOf("freesync-vrb-exclusion"),
+  what:
+    "On most gaming monitors a variable refresh rate (FreeSync or G-Sync) and a blur-reduction strobing mode (VRB, ULMB, MBR, DyAc) can't run at the same time — switch one on and the other greys out in the monitor's menu.",
+  more:
+    "It isn't a bug and nothing is broken: the two work in opposite ways. VRR keeps the refresh rate matched to your frame rate to kill tearing and stutter; blur reduction strobes the backlight at a fixed rate to sharpen motion, which only works at that steady rate. You choose one or the other for how you play — VRR for variable-frame-rate single-player and most games, blur reduction for very high, locked frame rates in fast competitive titles. A few newer monitors can do both together; if yours can't, that's normal, not a problem to fix.",
+};
+
 // Tuning guides (spec 2026-06-08) are injected as derived `guide` entries from their single source
 // (tuning-guides.ts) — same pattern as GRADING_ENTRY — so the Learn library stays searchable/browsable
 // over them without duplicating the guide copy.
@@ -201,6 +222,7 @@ export const KNOWLEDGE: KnowledgeEntry[] = [
   ...GUIDES,
   ...TUNING_GUIDE_ENTRIES,
   GRADING_ENTRY,
+  FREESYNC_VRB_ENTRY,
 ].map(withApplicability);
 
 export const KNOWLEDGE_BY_ID: Map<string, KnowledgeEntry> = new Map(
