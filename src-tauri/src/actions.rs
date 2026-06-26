@@ -1776,7 +1776,9 @@ mod bloat_task_tests {
     #[test]
     #[ignore = "manual: real scheduled-task mutation on a UAC-on rig"]
     fn qa_disable_then_enable_restores_exact_state() {
-        let t = KnownBloatTask::CompatibilityAppraiser;
+        let _direct = ForceDirectElevation::begin(); // run elevated commands under cargo test (Wave-0 seam)
+        // CompatibilityAppraiser is absent on Win11 25H2; CeipConsolidator is present + Ready on the dev rig.
+        let t = KnownBloatTask::CeipConsolidator;
         let prior = scheduled_task_state(&t);
         let result = apply_disable_scheduled_task(t.clone()).expect("disable applies");
         assert_eq!(scheduled_task_state(&t), "Disabled", "disable should stop the task");
@@ -1784,6 +1786,28 @@ mod bloat_task_tests {
             rollback_enable_scheduled_task_typed(&t, prior_state).expect("enable rolls back");
         }
         assert_eq!(scheduled_task_state(&t), prior, "rollback must restore the EXACT prior state");
+    }
+
+    // §7 UAC-cancel = NO PARTIAL: with elevation forced to fail, the disable errors and the task is left
+    // EXACTLY unchanged (the elevated Disable-ScheduledTask never runs). SAFE to run — no real mutation.
+    #[test]
+    #[ignore = "manual: reads task state; proves a cancelled disable leaves the task untouched"]
+    fn qa_uac_cancel_leaves_task_untouched() {
+        let t = KnownBloatTask::CeipConsolidator;
+        let before = scheduled_task_state(&t);
+        let err = {
+            let _cancel = ForceElevationError::begin();
+            match apply_disable_scheduled_task(t.clone()) {
+                Ok(_) => panic!("a cancelled elevation must fail the disable, not succeed"),
+                Err(e) => e,
+            }
+        };
+        let after = scheduled_task_state(&t);
+        assert_eq!(
+            after, before,
+            "a cancelled disable must leave the task EXACTLY unchanged (no partial mutation)"
+        );
+        eprintln!("[QA-BLOAT-CANCEL] before={before} after={after} err={err}");
     }
 }
 
