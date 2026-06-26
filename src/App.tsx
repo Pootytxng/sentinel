@@ -649,43 +649,31 @@ function App() {
     // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
     // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).
     invalidateProbe();
-    try {
-      const [
-        info,
-        recommendations,
-        history,
-        startupEntries,
-        diagSections,
-        source,
-        gameReadiness,
-        sessionList,
-        prioritiesData,
-      ] = await Promise.all([
-        invoke<HardwareInfo>("get_hardware_info"),
-        invoke<Recommendation[]>("get_recommendations"),
-        invoke<AppliedChange[]>("get_applied_changes"),
-        invoke<StartupEntry[]>("get_startup_entries"),
-        invoke<DiagnosticSection[]>("get_diagnostics"),
-        invoke<string>("get_rules_source"),
-        invoke<GameReadiness>("get_game_readiness"),
-        invoke<SessionSummary[]>("get_session_summaries"),
-        invoke<Priorities>("get_priorities"),
-      ]);
-      setHw(info);
-      // Relay the monitor's refresh to the OVERLAY window (localStorage — the existing cross-window
-      // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
-      persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
-      setRecs(recommendations);
-      setChanges(history);
-      setStartup(startupEntries);
-      setDiagnostics(diagSections);
-      setRulesSource(source);
-      setReadiness(gameReadiness);
-      setSessions(sessionList);
-      setPriorities(prioritiesData);
-    } catch (e) {
-      setError(String(e));
-    }
+    // Paint each field AS ITS data arrives instead of awaiting all 9 together — the slowest probe
+    // (get_diagnostics' service-WMI + process scan, get_priorities) no longer gates the fast ones, so
+    // Home/hardware/recs appear immediately while diagnostics/priorities hydrate behind them. Each call
+    // sets its own state; a failure of one surfaces an error without blanking the rest. Still awaitable
+    // (callers apply/rollback await the whole settle) and the data set is byte-identical — only timing.
+    const run = <T,>(cmd: string, set: (v: T) => void) =>
+      invoke<T>(cmd)
+        .then(set)
+        .catch((e) => setError(String(e)));
+    await Promise.all([
+      run<HardwareInfo>("get_hardware_info", (info) => {
+        setHw(info);
+        // Relay the monitor's refresh to the OVERLAY window (localStorage — the existing cross-window
+        // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
+        persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
+      }),
+      run<Recommendation[]>("get_recommendations", setRecs),
+      run<AppliedChange[]>("get_applied_changes", setChanges),
+      run<StartupEntry[]>("get_startup_entries", setStartup),
+      run<string>("get_rules_source", setRulesSource),
+      run<DiagnosticSection[]>("get_diagnostics", setDiagnostics),
+      run<GameReadiness>("get_game_readiness", setReadiness),
+      run<SessionSummary[]>("get_session_summaries", setSessions),
+      run<Priorities>("get_priorities", setPriorities),
+    ]);
   };
 
   const toggleStartup = async (entry: StartupEntry) => {
