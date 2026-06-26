@@ -1649,9 +1649,22 @@ mod service_suspend_tests {
             s
         };
 
-        let original = read("original");
-        // Setup: ensure RUNNING so we exercise the running→suspend→restore path.
-        run_elevated_powershell(&format!("Start-Service -Name {name}")).expect("setup: start SysMain");
+        // Unconditional cleanup (runs even on panic via Drop): restore the service to its tuned ORIGINAL
+        // (Disabled + Stopped on this rig). We flip ONE service Disabled→Manual only to make it startable
+        // for the proof, then put the tuning back EXACTLY — the rig's deliberate config is never left changed.
+        struct Restore<'a>(&'a str);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                let _ = run_elevated_powershell(&format!("Stop-Service -Name {} -Force", self.0));
+                let _ = run_elevated_powershell(&format!("Set-Service -Name {} -StartupType Disabled", self.0));
+            }
+        }
+        let _restore = Restore(name);
+
+        let _original = read("original");
+        // Setup: enable + start so we exercise the running→suspend→restore path.
+        run_elevated_powershell(&format!("Set-Service -Name {name} -StartupType Manual")).expect("setup: enable");
+        run_elevated_powershell(&format!("Start-Service -Name {name}")).expect("setup: start");
         let running_before = read("after-start");
 
         // Suspend (captures the live prior), then resume from that snapshot.
@@ -1664,12 +1677,7 @@ mod service_suspend_tests {
         rollback_service_suspend_typed(&svc, &prior_snap).expect("resume rolls back");
         let restored = read("after-resume");
 
-        // CLEANUP before asserting: return SysMain to its ORIGINAL state.
-        if original != "Running" {
-            let _ = run_elevated_powershell(&format!("Stop-Service -Name {name} -Force"));
-        }
-        let _final = read("after-cleanup");
-
+        // _restore drops at end of scope (or on panic) → SysMain back to Disabled + Stopped.
         assert_eq!(running_before, "Running", "setup must leave SysMain RUNNING");
         assert_ne!(suspended, "Running", "suspend must stop the running service");
         assert_eq!(
