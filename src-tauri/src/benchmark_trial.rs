@@ -9,9 +9,10 @@
 //! frames AND surfaces the rig's run-to-run noise floor ("your rig varies ±X% between runs, so we
 //! can only trust changes bigger than that"). No tweak, no mutation, no UAC — the safe entry point.
 //!
-//! NEXT (not shipped): the tweak A-B trial applies a real change then rolls it back to measure it.
-//! That mutates the machine, so it gets its own careful build (a Drop-guard guaranteeing rollback
-//! on any exit/panic) + live validation — deliberately not shipped unverified here.
+//! Also shipped: the **tweak A-B trial** (`start_tweak_trial`) applies a real change then rolls it
+//! back to measure it. Because it mutates the machine it carries its own safety — a `RollbackGuard`
+//! Drop-guard that guarantees rollback on any exit/panic, reusing the audited `apply_recommendation`
+//! boundary (no new mutation primitive). Reachable from the Benchmark tab's "Measure this tweak".
 #![allow(dead_code)] // runner is integration; wired to commands + the Benchmark tab below.
 
 use crate::benchmark_verdict::{MetricWindow, Trial, Verdict, WindowCtx};

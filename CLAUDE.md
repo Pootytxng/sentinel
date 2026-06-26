@@ -6,6 +6,13 @@
 > fresh session: read this top-to-bottom, then `docs/RELEASE_QA.md` for the live QA pass.
 > Treat file/line claims as point-in-time — verify against current code before asserting.
 
+> **📍 LIVE GATE STATE → `docs/RELEASE_STATE.md` is authoritative.** That file is the single
+> current-truth matrix for every gate, artifact, and release blocker (each row carries a `file:line`).
+> **Where any older text in THIS file or other docs disagrees about *current* gate state, RELEASE_STATE.md
+> wins** — the deep legacy strata below (the `private-beta-001` history, e.g. "Gaming Mode remains/stays
+> gated") are point-in-time records; Gaming Mode is LIVE, service-suspend + debloat are ARMED. Created
+> 2026-06-26 in response to an external audit that named state/doc drift the project's #1 risk.
+
 > **RENAMED Sentinel → Compy (2026-06-04).** The app was renamed for brand/SEO collision reasons
 > (SentinelOne / MS Sentinel / Valorant). Identifier `gg.compy.app`, exe `compy.exe`, crate
 > `compy`/`compy_lib`, data dir `%APPDATA%\Compy`. **First launch COPY-migrates** the old
