@@ -1,4 +1,5 @@
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import Play from "./Play";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { Walkthrough } from "../design/Walkthrough";
@@ -112,6 +113,14 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
 
 export function Monitor(props: Props) {
   const [segment, setSegment] = useState<Segment>("sessions");
+  // Pre-warm the demand-gated sensor pollers the moment Monitor opens (while the user is still on the
+  // Sessions landing) so the Live segment shows real CPU/GPU numbers right away instead of cold-starting
+  // the ADLX init + the 2-sample CPU delta after the click. One-shot, read-only; the pollers idle as
+  // usual if Live is never opened. Reuses the existing sensor commands — zero new IPC.
+  useEffect(() => {
+    invoke("get_cpu_sensors").catch(() => {});
+    invoke("get_gpu_sensors").catch(() => {});
+  }, []);
   return (
     <section className="monitor-root">
       <header className="monitor-bar">
