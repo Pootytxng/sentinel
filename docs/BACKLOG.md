@@ -405,7 +405,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 ---
 
 ## PHASE B — Gated mutations 🪪 (LOCKED rule 6: owner product decision + per-feature QA + welfare-check)
-- [BUILT-DARK] session service-suspend — `actions.rs`, gated `service_suspend_gate()==false`
+- [ARMED 2026-06-25] session service-suspend — `service_suspend_gate()`==**true** (QA passed: running-service
+  exact-restore + UAC-cancel=no-partial + critical-blocked; owner sign-off) + selection UI in `GamingMode.tsx`.
+  Boundary re-verified clean (no new IPC/capability; production elevation untouched). ⏳ rebuild+reinstall pending (free RAM).
 - [BUILT-DARK] telemetry scheduled-task disable (debloat) — gated
 - [ ] GPU profile apply (AMD first) / import / rollback
 - [ ] bloat removal (user-UWP uninstall + `HKCU\Run` cleanup; NO Defender/Policy)
