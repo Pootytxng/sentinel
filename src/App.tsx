@@ -1864,10 +1864,9 @@ function CpuMonitorPanel({
         ))}
       </div>
       <div className="monitor-note">
-        No CPU temperature by design: reading it requires a kernel-level driver,
-        and Compy won't install one. GPU temperature comes from the vendor's
-        user-mode library, so it's safe to show — CPU temperature has no
-        equivalent without going to the kernel.
+        {cpuTemp
+          ? "CPU temperature here is read driver-free from a sensor tool you're already running — Compy installs no kernel driver of its own. GPU temperature comes straight from the vendor's user-mode library."
+          : "Compy won't install a kernel driver, so it doesn't read CPU temperature on its own — it shows only what a sensor app you run publishes, driver-free (see the row above). GPU temperature comes straight from the vendor's user-mode library, so it always shows."}
       </div>
     </div>
   );
