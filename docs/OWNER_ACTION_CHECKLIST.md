@@ -35,6 +35,18 @@ Full checklist: `docs/GAMING_MODE_QA.md`. The headline is **case #4**:
 
 ---
 
+## 2b. After the reinstall — eyeball the two newly-armed Phase-B features  ·  (ships in this rebuild)
+Both passed live QA already (mutate→exact-restore proven, cancel = no-partial); this is just a "looks right
+in the running app" glance after you reinstall:
+1. **Tune → Gaming Mode → Advanced** → the new **service-selection** checkboxes (SysMain / DiagTrack /
+   Windows Search). Pick one → Start → it suspends → Stop → it restores. *(Reversible; Trust Ledger logs it.)*
+2. **Fix → "Reduce background telemetry"** → the **debloat task** rows (Disable buttons). Disable one → it
+   shows done → undo from the **Trust Ledger** restores it. *(Reversible.)*
+
+**Result → tell Claude:** "Phase B looks good" — or describe anything off.
+
+---
+
 ## 3. Release gates — your calls (not reversible-by-Claude)
 These gate **public** release (not the local app you use day to day):
 - **Legal:** EULA license model + governing-law/jurisdiction (`docs/EULA.md`, `docs/PRIVACY.md` are drafts).

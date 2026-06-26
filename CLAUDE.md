@@ -197,6 +197,26 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 ## CURRENT STATE — Instrument reskin + Halfway Home + ONE RAIL + WAYFINDING (as of 2026-06-06)
 
+> **🪪 BOTH PHASE-B BUILT-DARK MUTATIONS ARMED + SHIPPED — 2026-06-26 (`main` @ `f9b6840`).** The two ready
+> BUILT-DARK Phase-B features were taken through the full gate sequence (welfare-check → QA harness → live
+> owner-approved QA → owner sign-off → flip + UI), then rebuilt into the installer:
+> - **service-suspend** — `service_suspend_gate()`==**true**; live running-service exact-restore PROVEN (SysMain
+>   Stopped→started→suspend→**resume=exact prior**) + UAC-cancel=no-partial + critical/off-list HARD-blocked;
+>   session **service-selection UI** (SysMain/DiagTrack/WSearch) in `GamingMode.tsx`. Owner sign-off "flip service-suspend".
+> - **debloat** — `bloat_removal_gate()`==**true**; live exact disable→enable restore (CeipConsolidator Ready→Disabled→Ready)
+>   + cancel=no-partial + off-list/Defender rejected; **Fix-surface UI** (`DebloatTasks`, 3 curated telemetry scheduled
+>   tasks, reversible via Trust Ledger). Owner sign-off "run all 3".
+> - Both use the existing audited `apply_*`/`dispatch_rollback` boundary — NO new IPC/capability, production elevation
+>   path BYTE-IDENTICAL (the `#[cfg(test)]` `ForceDirectElevation` seam compiles OUT of the shipped binary). Suites
+>   green: **cargo 636 · vitest 3958 · build clean**. Gate-decision trail: `docs/GATE_DECISIONS.md`.
+> - **✅ REBUILD (2026-06-26) from `f9b6840`** (`CODEGEN_UNITS=256`, 10.7 GB free, 41.6s): **NSIS
+>   `Compy_0.1.0_x64-setup.exe` SHA-256 `512DAFF324545D2E726AA70AA4F5B2365699E16CD96B9004849863838824A836`**
+>   (3,266,584 B) + MSI `305B2143E69959E4BC713D89B6C473FFD4CFD85513806684CE5F5B40669F3DBD` (4,726,784 B); staged to
+>   Desktop, source==copy hash-verified; **supersedes `9CE42CFB…`**. Frozen beta refs (`16069fa`) untouched.
+>   **⏳ owner REINSTALL pending** — the only step left to make both features live in the running app. Post-reinstall
+>   eyeball items in `docs/OWNER_ACTION_CHECKLIST.md` §2b. **Remaining Phase B (GPU apply · bloat removal · re-apply)
+>   each needs an owner product decision (catalog expansion, LOCKED rule 6) before building.**
+
 > **🔬 THREE-AUDIT 1.0 QUALITY SWEEP (autonomous, owner away→back) — 2026-06-23 (`main` @ `6ecb434`).**
 > Three adversarially-verified sub-agent audits (quality · cross-surface consistency · robustness/perf);
 > every fix-now triaged + fixed with full rigor (tsc/vite/vitest/cargo + /check + /security + live

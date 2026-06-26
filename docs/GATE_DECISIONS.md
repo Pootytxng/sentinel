@@ -79,7 +79,12 @@
 5. [x] **ARMED 2026-06-25** (owner sign-off: "flip service-suspend"). `service_suspend_gate()` → `true`; built the
    session **service-selection UI** (3 allowlisted services — SysMain/DiagTrack/WSearch — in `GamingMode.tsx`, wired
    into `start_gaming_session` + shown in the consent modal); dark-contract tests → armed. cargo 636 / vitest 3958 /
-   build clean. **Remaining: rebuild the installer + reinstall** so the running app carries the armed binary (the
-   installed build is still the old dark one). NvTelemetryContainer stays allowlisted-but-unoffered (NVIDIA-only).
+   build clean. NvTelemetryContainer stays allowlisted-but-unoffered (NVIDIA-only).
+6. [x] **REBUILT + STAGED 2026-06-26** — release build (`CODEGEN_UNITS=256`, 10.7 GB free, 41.6s) from `main` @ `f9b6840`
+   carries BOTH armed Phase-B features (service-suspend + debloat). **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
+   `512DAFF324545D2E726AA70AA4F5B2365699E16CD96B9004849863838824A836`** (3,266,584 B) + MSI
+   `305B2143E69959E4BC713D89B6C473FFD4CFD85513806684CE5F5B40669F3DBD` (4,726,784 B) — staged to Desktop, source==copy
+   hash-verified. Frozen beta refs (`16069fa`) untouched. **⏳ owner reinstall pending** = the only step left to make
+   both features usable in the running app.
 
 **HQ recommendation:** open exactly ONE gate — **Phase B service-suspend** — via this sequence. Say *"arm service-suspend"* and I'll do step 2 (the careful QA-harness build) and hand you a one-decision flip; I will not flip the gate without your sign-off on the QA. Phase C/D stay shut until you deliberately choose them.

@@ -407,10 +407,12 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 ## PHASE B — Gated mutations 🪪 (LOCKED rule 6: owner product decision + per-feature QA + welfare-check)
 - [ARMED 2026-06-25] session service-suspend — `service_suspend_gate()`==**true** (QA passed: running-service
   exact-restore + UAC-cancel=no-partial + critical-blocked; owner sign-off) + selection UI in `GamingMode.tsx`.
-  Boundary re-verified clean (no new IPC/capability; production elevation untouched). ⏳ rebuild+reinstall pending (free RAM).
+  Boundary re-verified clean (no new IPC/capability; production elevation untouched). ✅ shipped in the 2026-06-26 rebuild
+  (NSIS `512DAFF3…`, staged to Desktop) — ⏳ owner reinstall pending.
 - [ARMED 2026-06-26] telemetry scheduled-task disable (debloat) — `bloat_removal_gate()`==**true** (QA passed:
   exact disable→enable restore + UAC-cancel=no-partial + off-list/Defender rejected; owner curated list = all 3 +
-  sign-off "run all 3") + Fix-surface UI (`DebloatTasks`, reversible via Trust Ledger). ⏳ rebuild+reinstall pending (RAM).
+  sign-off "run all 3") + Fix-surface UI (`DebloatTasks`, reversible via Trust Ledger). ✅ shipped in the 2026-06-26 rebuild
+  (NSIS `512DAFF3…`, staged to Desktop) — ⏳ owner reinstall pending.
 - [ ] GPU profile apply (AMD first) / import / rollback
 - [ ] bloat removal (user-UWP uninstall + `HKCU\Run` cleanup; NO Defender/Policy)
 - [ ] one-click re-apply (limited to `APPLIABLE_REC_IDS`)
