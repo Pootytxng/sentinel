@@ -53,9 +53,21 @@
      decline message). Safe to run (no real mutation).
    - [x] exact apply→resume restore — `qa_suspend_then_resume_restores_exact_state` (pre-existing, live #[ignore]).
    - [x] critical/off-list services HARD-blocked + flood-bounded + gate-dark + session-file round-trip (existing tests).
-   - [ ] **owner-run live scenarios** (real service mutation — your step): orchestrator full-cycle restore + crash/orphan recovery.
-3. [ ] Owner runs the live #[ignore] scenarios (UAC-on machine): `cargo test ... -- --ignored --nocapture --test-threads=1`.
-4. [ ] Owner signs off on the QA evidence.
-5. [ ] HQ flips `service_suspend_gate()` → true, rebuilds, owner reinstalls.
+   - [ ] **live exact-restore of a RUNNING service** — ⛔ BLOCKED on this rig (see below).
+3. [⛔] Live exact-restore QA — **ATTEMPTED 2026-06-25, two blockers found (neither is a feature bug):**
+   - **(a) No running allowlisted service on this rig:** WSearch / SysMain / DiagTrack / NvTelemetryContainer are ALL
+     stopped (DPS runs but is correctly off-allowlist). So "suspend a *running* service → restore to running" can't be
+     exercised here — only a trivial stopped→stopped round-trip.
+   - **(b) cargo-test elevation harness broken since Wave 0:** `run_elevated_powershell` (actions.rs:718) elevates
+     `current_exe() --run-elevated`; under `cargo test` that's the *test binary*, which can't route `--run-elevated`
+     → exit 101 *before* the command runs (UAC approval itself works). **This breaks every elevated QA harness
+     (service-suspend AND `gaming_mode_qa`'s elevated arms) when run via `cargo test`.** Latent regression to fix.
+   - **What IS proven:** cancel=no-partial (HQ-verified) · typed-contract round-trip · critical/off-list blocked ·
+     gate-dark · UAC-approval path reaches the elevated child. **NOT proven live:** elevated suspend+restore of a running service.
+   - **Fix options (owner to direct — touches the elevation boundary, so not hot-patched autonomously):**
+     (i) add a `#[cfg(test)]` elevation seam so cargo-test QA elevates powershell directly (pre-Wave-0 path; reviewed change), OR
+     (ii) exercise the live QA through the real `compy.exe` (where `current_exe()` IS compy.exe) on a moment when an allowlisted service is running.
+4. [ ] Owner signs off on the QA evidence — **withheld: the live exact-restore is not yet provable (blockers above).**
+5. [ ] HQ flips `service_suspend_gate()` → true — **NOT YET: QA incomplete, gate stays DARK.**
 
 **HQ recommendation:** open exactly ONE gate — **Phase B service-suspend** — via this sequence. Say *"arm service-suspend"* and I'll do step 2 (the careful QA-harness build) and hand you a one-decision flip; I will not flip the gate without your sign-off on the QA. Phase C/D stay shut until you deliberately choose them.
