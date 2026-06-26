@@ -12,9 +12,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `2b42d0a` (branch `main`) |
+| Git HEAD | `af1d9dc` (branch `main`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `512DAFF324545D2E726AA70AA4F5B2365699E16CD96B9004849863838824A836` (built from `f9b6840`, 2026-06-26) — **owner REINSTALL pending** |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `9331984C2F551AF0DE07BAB089575FA5A4A9AA4C713186B32214972CC543A9DA` (3,268,021 B) + MSI `64F0A63F8B92E13BA5178818905C0CC0245FD2270C7A2CBABBA84927FACFE0BE` (built from `af1d9dc`, 2026-06-26; carries the CPU-temp honesty fix; supersedes `512DAFF…`) — staged to Desktop, **owner REINSTALL pending** |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | 2026-05-31 (frozen private-beta build). Current `main` adds live Gaming Mode + armed Phase-B mutations whose own live QA passed 2026-06-25/26, but `main` has **not** had a fresh full §6/§7 installed-build pass. |
 
