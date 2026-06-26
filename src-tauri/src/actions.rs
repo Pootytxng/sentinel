@@ -737,12 +737,20 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     // (the Wave-0 self-helper below re-launches the test binary → exit 101). #[cfg(test)] → never shipped.
     #[cfg(test)]
     if FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
-        return elevation_outcome(
+        // Write the command to a temp .ps1 and run it elevated via -File — sidesteps Windows
+        // command-line quoting for commands with spaces / quotes / backslashes (e.g. scheduled-task
+        // paths) that -Command mangles. Test-only; cleaned up after. (Production hex-encodes instead.)
+        let tmp = std::env::temp_dir().join(format!("compy-qa-{}.ps1", std::process::id()));
+        std::fs::write(&tmp, command).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
+        let tmp_s = tmp.to_string_lossy().to_string();
+        let out = elevation_outcome(
             runas::Command::new("powershell")
-                .args(&["-NoProfile", "-NonInteractive", "-Command", command])
+                .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", tmp_s.as_str()])
                 .show(false)
                 .status(),
         );
+        let _ = std::fs::remove_file(&tmp);
+        return out;
     }
     // Wave 0 — silence the elevated console: route the command through a WINDOWLESS compy.exe
     // self-helper instead of elevating powershell.exe directly. An elevated launch is recreated by
@@ -1411,7 +1419,9 @@ pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult
 // adding the gated mutation 2026-06-22, LOCKED-rule-6; the ARMING + the curated KnownBloatTask list
 // both ride that sign-off). Mirrors gaming_mode_gate / restore_gate / service_suspend.
 pub(crate) fn bloat_removal_gate() -> bool {
-    false
+    // ARMED 2026-06-26: own apply/rollback QA passed (exact disable→enable restore + UAC-cancel=no-partial
+    // + off-list/Defender rejected) + owner curated the task-list (all 3) + sign-off ("run all 3"). Was `false`.
+    true
 }
 
 /// Resolve the concrete TaskName at `path` whose name starts with `base`. Windows renames these tasks
@@ -1694,8 +1704,10 @@ mod bloat_task_tests {
     use super::*;
 
     #[test]
-    fn gate_is_dark() {
-        assert!(!bloat_removal_gate(), "bloat-task removal must ship DARK");
+    fn gate_is_armed() {
+        // ARMED 2026-06-26: QA passed (exact-restore + cancel=no-partial + off-list rejected) + owner
+        // curated the list (all 3) + sign-off ("run all 3"). Was DARK until then.
+        assert!(bloat_removal_gate(), "bloat-task removal is armed after QA + owner sign-off");
     }
 
     #[test]
