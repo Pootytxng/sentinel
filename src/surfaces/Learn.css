@@ -186,6 +186,35 @@
   color: var(--ix-accent-text);
 }
 
+/* "More filters" toggle — a quiet text button (not a pill) so it reads as a disclosure, not a 4th
+   filter axis. The count badge appears only when a hidden axis is active, so collapsing never silently
+   loses a filter. */
+.lx-morefilters {
+  align-self: flex-start;
+  padding: 4px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lx-morefilters:hover {
+  color: var(--ix-text-1);
+}
+.lx-morefilters-count {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--ix-accent);
+  color: var(--ix-accent-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 /* ── Cards ────────────────────────────────────────────────────────────────── */
 .lx-list {
   display: flex;

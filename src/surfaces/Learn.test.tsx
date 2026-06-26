@@ -109,6 +109,9 @@ describe("Learn surface (reskin)", () => {
 
   it("labels the verdict-filter row so it doesn't read as a second type filter", () => {
     open();
+    // Grade/Topic/Fits are power-user axes collapsed behind "More filters" by default — expand first.
+    expect(screen.queryByText("Grade:")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /More filters/ }));
     expect(screen.getByText("Grade:")).toBeInTheDocument();
   });
 

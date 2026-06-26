@@ -627,6 +627,11 @@ export default function Learn({
   const [verdict, setVerdict] = useState<TweakVerdict | "all">("all"); // §5 verdict chips
   const [topic, setTopic] = useState<Topic | "all">("all"); // A3 topic filter (what an entry is about)
   const [fits, setFits] = useState<Applicability | "all">("all"); // hardware applicability filter
+  // The Grade/Topic/Fits axes are power-user refinements — collapse them behind one toggle so a first
+  // browse meets the search box + type filters, not a four-row filter wall. Count shows when any is set.
+  const [moreFilters, setMoreFilters] = useState(false);
+  const activeSecondary =
+    (verdict !== "all" ? 1 : 0) + (topic !== "all" ? 1 : 0) + (fits !== "all" ? 1 : 0);
   const [openCats, setOpenCats] = useState<Set<KnowledgeType>>(new Set()); // §5 collapsed categories
   const [focused, setFocused] = useState<string | null>(focusId);
   const [phIdx, setPhIdx] = useState(0);
@@ -786,6 +791,19 @@ export default function Learn({
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                className="lx-morefilters"
+                aria-expanded={moreFilters}
+                onClick={() => setMoreFilters((o) => !o)}
+              >
+                {moreFilters ? "Fewer filters ▾" : "More filters ▸"}
+                {!moreFilters && activeSecondary > 0 && (
+                  <span className="lx-morefilters-count">{activeSecondary}</span>
+                )}
+              </button>
+              {moreFilters && (
+                <>
               {/* §5 verdict chips — narrow tweaks by our verdict, alongside the type filters. The
                   inline "Grade:" label names the axis so this row doesn't read as a second type filter. */}
               <div className="lx-filters lx-vfilters" role="group" aria-label="Filter tweaks by verdict">
@@ -855,6 +873,8 @@ export default function Learn({
                   </button>
                 ))}
               </div>
+                </>
+              )}
               {/* The visible "How we grade" key — gives the verdict filter chips above their meaning
                   (foam-pit law: on the page, not hover-only). Full on a reader's first browse, a quiet
                   re-openable toggle thereafter so it stops re-claiming a block every visit. */}
