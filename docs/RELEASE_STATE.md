@@ -12,9 +12,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `85f74a1` (branch `main`) |
+| Git HEAD | `e8438c6` (branch `main`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `D50E1D38C0EFD648709F25F7D7F92CDD04C21F3C01E2EF641AE837ED589473A1` (3,265,801 B; built from `85f74a1`, 2026-06-26; carries the CPU-temp fix + all Lane-1 perf fixes INCLUDING the Optimize/Fixes scan-cache "gets stuck" fix; supersedes `7C8D09B1…`) — staged to Desktop (NSIS only, exactly one installer), **owner REINSTALL pending (verifying Optimize/Fixes no longer sticks)** |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `5FB49E01DECE46B27D6AFDB934B7FA3B12785BA7E6BB7BEFB720A4106CAAA1E3` (3,267,414 B; built from `e8438c6`, 2026-06-26; CPU-temp fix + all Lane-1 perf + Optimize/Fixes scan-cache fix + post-scan checklist collapse; supersedes `D50E1D38…`) — staged to Desktop (NSIS only, exactly one installer), **owner REINSTALL pending (verifying post-scan neatness)** |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | 2026-05-31 (frozen private-beta build). Current `main` adds live Gaming Mode + armed Phase-B mutations whose own live QA passed 2026-06-25/26, but `main` has **not** had a fresh full §6/§7 installed-build pass. |
 
