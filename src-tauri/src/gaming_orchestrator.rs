@@ -64,16 +64,16 @@ pub(crate) struct StartOptions {
     pub(crate) advanced_usb: bool,
     #[serde(default)]
     pub(crate) advanced_pcie: bool,
-    /// Optional allowlisted services to SUSPEND for this session (BUILT DARK — gated by
-    /// `service_suspend_gate()`). Absent / empty for every current caller (serde default), so the
-    /// gaming session is unchanged until both the gate is armed AND a picker surfaces these.
+    /// Optional allowlisted services to SUSPEND for this session. ARMED 2026-06-25 (gate on; picker in
+    /// GamingMode.tsx). Empty when the user selects none (serde default) → session unchanged; selected
+    /// names are re-enforced against the `KnownService` allowlist before any suspend.
     #[serde(default)]
     pub(crate) suspend_services: Vec<String>,
 }
 
-/// PURE: the allowlisted services to suspend this session. Empty when the feature is gated off (dark)
-/// — so the gaming session is byte-identical to before — or when a requested name isn't on the
-/// `KnownService` allowlist (off-list / critical services can never reach the suspend primitive).
+/// PURE: the allowlisted services to suspend this session. Empty when the gate is closed (`gate_open`
+/// false) OR the user selected none — so the gaming session is unchanged — or when a requested name
+/// isn't on the `KnownService` allowlist (off-list / critical services can never reach the primitive).
 /// DEDUPLICATED: the result is bounded to the allowlist size (≤4) regardless of input length, so a
 /// compromised webview can't flood UAC / repeated elevations with a giant or duplicate-laden list.
 fn services_to_suspend(opts: &StartOptions, gate_open: bool) -> Vec<actions::KnownService> {
@@ -180,11 +180,11 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         apply_step!("PCIe ASPM off (AC)", apply_pcie_aspm_off());
     }
 
-    // Session service-suspend (BUILT DARK — gated by service_suspend_gate()). When the gate is closed
-    // `services_to_suspend` returns empty, so this loop never runs and the session is byte-identical to
-    // before. Each suspend rides the SAME session contract (Snapshot::Service + ResumeServiceFromSnapshot),
+    // Session service-suspend (ARMED 2026-06-25 — service_suspend_gate() true; picker in GamingMode.tsx).
+    // With nothing selected `services_to_suspend` returns empty, so this loop is a no-op and the session is
+    // unchanged. Each suspend rides the SAME session contract (Snapshot::Service + ResumeServiceFromSnapshot),
     // so resume happens automatically on stop / restore / crash-recovery — no new restore path. Only
-    // allowlisted services reach the primitive (the picker is an arming-time follow-up).
+    // allowlisted services reach the primitive.
     for svc in services_to_suspend(&opts, actions::service_suspend_gate()) {
         let label = format!("Suspend {} for this session", svc.name());
         apply_step!(&label, actions::apply_service_suspend(svc));

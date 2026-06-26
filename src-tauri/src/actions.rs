@@ -1333,12 +1333,12 @@ pub(crate) fn rollback_service_disable_typed(
     Ok(())
 }
 
-// ─── Session-scoped service SUSPEND (Services module, BUILT DARK) ─────────
+// ─── Session-scoped service SUSPEND (Services module, ARMED) ─────────
 //
-// GATE for session service suspension. DARK (false) until the feature's own apply/rollback QA on a
-// UAC-on rig + explicit owner sign-off — mirrors gaming_mode_gate / restore_gate. Expanding the
+// GATE for session service suspension. ARMED (true) 2026-06-25 after the feature's own apply/rollback +
+// crash-restore QA on a UAC-on rig + explicit owner sign-off — mirrors gaming_mode_gate. Expanding the
 // mutating catalog to add this was the owner's explicit decision (2026-06-22, LOCKED-rule-6); the
-// ARMING (flipping this true + wiring a session orchestrator/UI) still rides QA + sign-off.
+// ARMING (gate flipped true + session picker wired in GamingMode.tsx) is DONE (QA passed + sign-off).
 pub(crate) fn service_suspend_gate() -> bool {
     #[cfg(test)]
     if FORCE_SERVICE_SUSPEND_GATE.with(|f| *f.borrow()) {
@@ -1385,7 +1385,7 @@ impl Drop for ForceServiceSuspendGate {
 pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult, String> {
     ps_safe(service.name())?;
     // Same fail-safe as apply_service_disable: refuse if the prior state can't be snapshotted
-    // rather than guessing Running/Auto (gated dark today, but hardened before the gate flips).
+    // rather than guessing Running/Auto (hardened before the gate was armed; the snapshot must be true).
     let (prior_state, prior_start_mode) =
         require_service_prior(service.name(), service_info(service.name()), "suspend")?;
     run_elevated_powershell(&format!(
