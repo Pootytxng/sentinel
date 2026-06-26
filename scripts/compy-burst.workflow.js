@@ -47,6 +47,7 @@ const TRIAGE_SCHEMA = {
   },
 }
 const triage = await agent(
+  `${(args && args.focus) ? 'FOCUS this burst ONLY on: ' + args.focus + ' ' : ''}` +
   `Read docs/BACKLOG.md and docs/LANE_BUS.md (the section-5 claimable pool). Return up to ${fleet} of the ` +
   `HIGHEST-VALUE, non-gated, CLEANLY-BUILDABLE Phase-A items, each in a DISJOINT file domain (no two items touch ` +
   `the same file; at most ONE may touch src-tauri/src/lib.rs). EXCLUDE: gated items (Phase B mutation / C ` +
@@ -106,9 +107,13 @@ const VERIFY_SCHEMA = {
 }
 const verify = await agent(
   `On the main checkout: git fetch origin && git merge --ff-only origin/main. Then run ONE integration check: ` +
-  `cargo test --manifest-path src-tauri/Cargo.toml ; npm test ; npm run build. If exactly one test file fails, ` +
-  `RE-RUN it in isolation before calling it red (heavy tests flake under load). Report {green, cargo, vitest, ` +
-  `build, problem}. READ-ONLY: report only, do not fix.`,
+  `cargo test --manifest-path src-tauri/Cargo.toml ; npm test ; npm run build. FLAKE HANDLING (critical — the ` +
+  `build agents leave vitest/node workers running, which makes a fresh vitest collide): if MANY or ALL vitest ` +
+  `files fail identically — "globals undefined", "failed to find the current suite", or 0 tests collected — that ` +
+  `is a CONTENTION/leftover-worker artifact, NOT a code regression. Before reporting red: kill stray node/vitest ` +
+  `processes, wait ~15s, and re-run npm test ONCE clean. Likewise re-run a single heavy failing file in isolation. ` +
+  `Only report green:false if a CLEAN re-run still fails. Report {green, cargo, vitest, build, problem}. ` +
+  `READ-ONLY: report only, do not fix.`,
   { schema: VERIFY_SCHEMA, phase: 'Verify', effort: 'low' }
 )
 

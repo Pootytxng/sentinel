@@ -22,6 +22,20 @@
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-06-25f — SECOND compy-burst (A5 finishables, owner "+300k") — `main` @ `901e1a5`
+Burst (maxItems 2 + A5 focus; triage returned 3 disjoint): **3 shipped · 0 skipped · GREEN.**
+- ✅ A4 Monitor: FreeSync↔VRB exclusion **warning** (advisory, not strobe-detection — honest angle) (`49b03f3`).
+- ✅ A5: **override/restore-all toggle** (`1675995`) — correctly re-scoped to `dismissed.ts` + `Fix.tsx` this time
+  (the new `focus` arg fed the right files; the item the last burst honestly skipped is now built).
+- ✅ A4 Services: **use-case profile selector** (Gaming/Streaming/Creation/General, localStorage) (`901e1a5`).
+- **Verify — HQ clean re-run GREEN:** cargo **636** · vitest **643 files / 3958 tests** · build clean. The burst's
+  verify agent FALSE-REDDED ("globals undefined env-wide") — same leftover-worker contention flake as last burst;
+  build agents saw vitest 658/665 green mid-build, and my clean re-run passed. **Hardened the workflow verify phase**
+  to kill stray workers + re-run clean before reporting red, so the agent's verdict becomes trustworthy (stops the
+  recurring HQ re-verify cost).
+- **💰 Cost:** ~650k total / ~470k output for 3 items ≈ **~155k output / ~217k total per item** (in line with the
+  ~200k calibration). Two bursts this round delivered **5 features** total.
+
 ### Cycle 2026-06-25e — FIRST compy-burst run (cost-bounded workflow PROVEN) — `main` @ `a1fd03e`
 First real run of `scripts/compy-burst.workflow.js` (maxItems 3): **2 shipped · 1 honestly skipped · GREEN.**
 - ✅ 3-mode preset GUIDED checklists (`1daf03b`) · ✅ hardware-applicability tags on knowledge entries (`a1fd03e`).
