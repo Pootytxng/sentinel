@@ -564,6 +564,35 @@ impl Drop for ForceElevationError {
     }
 }
 
+// Test-only: makes `run_elevated_powershell` elevate powershell DIRECTLY (pre-Wave-0 path) instead of
+// re-launching `current_exe() --run-elevated`. Under `cargo test`, current_exe() is the TEST binary,
+// which has no main.rs `--run-elevated` routing → it exits 101 before the command runs, breaking every
+// elevated live-QA harness. This seam lets the live mutation-QA actually run the elevated command on a
+// dev rig. `#[cfg(test)]` → never compiled into shipped binaries; the production self-helper is UNCHANGED.
+#[cfg(test)]
+thread_local! {
+    static FORCE_DIRECT_ELEVATION: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
+}
+
+/// RAII guard enabling the direct-elevation test seam on this thread for its lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct ForceDirectElevation;
+
+#[cfg(test)]
+impl ForceDirectElevation {
+    pub(crate) fn begin() -> Self {
+        FORCE_DIRECT_ELEVATION.with(|f| *f.borrow_mut() = true);
+        ForceDirectElevation
+    }
+}
+
+#[cfg(test)]
+impl Drop for ForceDirectElevation {
+    fn drop(&mut self) {
+        FORCE_DIRECT_ELEVATION.with(|f| *f.borrow_mut() = false);
+    }
+}
+
 /// RAII guard for the deferral sink — the sink is disarmed when this drops (including on panic,
 /// so a poisoned command thread can never leak an armed sink into later invocations).
 pub(crate) struct ElevationDeferral {
@@ -703,6 +732,17 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     #[cfg(test)]
     if FORCE_ELEVATION_ERROR.with(|f| *f.borrow()) {
         return Err(ELEVATION_DECLINED_MSG.to_string());
+    }
+    // Test-only: elevate powershell DIRECTLY so live-QA elevated commands actually run under `cargo test`
+    // (the Wave-0 self-helper below re-launches the test binary → exit 101). #[cfg(test)] → never shipped.
+    #[cfg(test)]
+    if FORCE_DIRECT_ELEVATION.with(|f| *f.borrow()) {
+        return elevation_outcome(
+            runas::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", command])
+                .show(false)
+                .status(),
+        );
     }
     // Wave 0 — silence the elevated console: route the command through a WINDOWLESS compy.exe
     // self-helper instead of elevating powershell.exe directly. An elevated launch is recreated by
@@ -1590,6 +1630,52 @@ mod service_suspend_tests {
             "a cancelled suspend must leave the service EXACTLY unchanged (no partial mutation)"
         );
         eprintln!("[QA-SVC-CANCEL] before={before} after={after} err={err}");
+    }
+
+    // §7 LIVE exact-restore of a RUNNING service (manual, UAC-on rig — APPROVE EACH PROMPT, ~4 total).
+    // All allowlisted services are stopped on this rig, so we START SysMain, prove suspend→resume returns
+    // it to RUNNING (the real exact-restore path), then RE-STOP it to its original state. Cleanup runs
+    // BEFORE the asserts so a failed assert never strands SysMain running. Uses the #[cfg(test)] direct-
+    // elevation seam so the elevated commands actually run under `cargo test` (gate stays dark).
+    #[test]
+    #[ignore = "manual: real elevated service mutation on a UAC-on rig; approve each prompt (~4)"]
+    fn qa_running_service_suspend_then_resume_restores_to_running() {
+        let _direct = ForceDirectElevation::begin();
+        let svc = KnownService::SysMain;
+        let name = svc.name();
+        let read = |label: &str| {
+            let s = service_info(name).map(|(s, _)| s).unwrap_or_else(|| "<unreadable>".into());
+            eprintln!("[QA-RUN] {label}: {name}={s}");
+            s
+        };
+
+        let original = read("original");
+        // Setup: ensure RUNNING so we exercise the running→suspend→restore path.
+        run_elevated_powershell(&format!("Start-Service -Name {name}")).expect("setup: start SysMain");
+        let running_before = read("after-start");
+
+        // Suspend (captures the live prior), then resume from that snapshot.
+        let applied = apply_service_suspend(svc.clone()).expect("suspend applies");
+        let suspended = read("after-suspend");
+        let prior_snap = match &applied.snapshot {
+            Snapshot::Service { prior_state, .. } => prior_state.clone(),
+            other => panic!("expected Snapshot::Service, got {other:?}"),
+        };
+        rollback_service_suspend_typed(&svc, &prior_snap).expect("resume rolls back");
+        let restored = read("after-resume");
+
+        // CLEANUP before asserting: return SysMain to its ORIGINAL state.
+        if original != "Running" {
+            let _ = run_elevated_powershell(&format!("Stop-Service -Name {name} -Force"));
+        }
+        let _final = read("after-cleanup");
+
+        assert_eq!(running_before, "Running", "setup must leave SysMain RUNNING");
+        assert_ne!(suspended, "Running", "suspend must stop the running service");
+        assert_eq!(
+            restored, "Running",
+            "resume must restore the service to its EXACT prior RUNNING state"
+        );
     }
 }
 

@@ -58,10 +58,15 @@
    - **(a) No running allowlisted service on this rig:** WSearch / SysMain / DiagTrack / NvTelemetryContainer are ALL
      stopped (DPS runs but is correctly off-allowlist). So "suspend a *running* service → restore to running" can't be
      exercised here — only a trivial stopped→stopped round-trip.
-   - **(b) cargo-test elevation harness broken since Wave 0:** `run_elevated_powershell` (actions.rs:718) elevates
-     `current_exe() --run-elevated`; under `cargo test` that's the *test binary*, which can't route `--run-elevated`
-     → exit 101 *before* the command runs (UAC approval itself works). **This breaks every elevated QA harness
-     (service-suspend AND `gaming_mode_qa`'s elevated arms) when run via `cargo test`.** Latent regression to fix.
+   - **(b) cargo-test elevation harness broken since Wave 0 — ✅ FIXED 2026-06-25:** `run_elevated_powershell`
+     elevated `current_exe() --run-elevated` = the test binary → exit 101. Added a `#[cfg(test)]`-only
+     direct-elevation seam (`ForceDirectElevation`) so QA elevations actually run under `cargo test` (production
+     self-helper path BYTE-IDENTICAL, verified). The elevated path now runs live (you approved it). This un-breaks
+     every elevated QA harness, `gaming_mode_qa` included.
+   - **(c) NEW wall — every allowlisted service is DISABLED on this rig** (WSearch/SysMain/DiagTrack `start_type=4`).
+     A disabled service can't be started, so proving "suspend a RUNNING service → restore to running" requires
+     temporarily flipping its startup type Disabled→Manual→Disabled — a deeper change to your *tuned* config than
+     "briefly mutate a service" implied. Not done without your explicit OK.
    - **What IS proven:** cancel=no-partial (HQ-verified) · typed-contract round-trip · critical/off-list blocked ·
      gate-dark · UAC-approval path reaches the elevated child. **NOT proven live:** elevated suspend+restore of a running service.
    - **Fix options (owner to direct — touches the elevation boundary, so not hot-patched autonomously):**
