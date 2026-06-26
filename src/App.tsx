@@ -654,10 +654,33 @@ function App() {
     // Home/hardware/recs appear immediately while diagnostics/priorities hydrate behind them. Each call
     // sets its own state; a failure of one surfaces an error without blanking the rest. Still awaitable
     // (callers apply/rollback await the whole settle) and the data set is byte-identical — only timing.
-    const run = <T,>(cmd: string, set: (v: T) => void) =>
+    const run = <T,>(cmd: string, set: (v: T) => void): Promise<T | undefined> =>
       invoke<T>(cmd)
-        .then(set)
-        .catch((e) => setError(String(e)));
+        .then((v) => {
+          set(v);
+          return v;
+        })
+        .catch((e) => {
+          setError(String(e));
+          return undefined;
+        });
+    // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
+    // priorities from THEM via the pure priorities_from, instead of get_priorities which re-ran
+    // get_game_readiness + get_recommendations a second time (the heaviest, spawn-dominated work).
+    const recsP = run<Recommendation[]>("get_recommendations", setRecs);
+    const startupP = run<StartupEntry[]>("get_startup_entries", setStartup);
+    const readinessP = run<GameReadiness>("get_game_readiness", setReadiness);
+    const sessionsP = run<SessionSummary[]>("get_session_summaries", setSessions);
+    const prioritiesP = Promise.all([readinessP, recsP, startupP, sessionsP])
+      .then(([readiness, recommendations, startup, sessions]) =>
+        invoke<Priorities>("priorities_from", {
+          readiness,
+          recommendations,
+          startup,
+          sessions,
+        }).then(setPriorities),
+      )
+      .catch((e) => setError(String(e)));
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
         setHw(info);
@@ -665,14 +688,14 @@ function App() {
         // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
         persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
       }),
-      run<Recommendation[]>("get_recommendations", setRecs),
       run<AppliedChange[]>("get_applied_changes", setChanges),
-      run<StartupEntry[]>("get_startup_entries", setStartup),
       run<string>("get_rules_source", setRulesSource),
       run<DiagnosticSection[]>("get_diagnostics", setDiagnostics),
-      run<GameReadiness>("get_game_readiness", setReadiness),
-      run<SessionSummary[]>("get_session_summaries", setSessions),
-      run<Priorities>("get_priorities", setPriorities),
+      recsP,
+      startupP,
+      readinessP,
+      sessionsP,
+      prioritiesP,
     ]);
   };
 

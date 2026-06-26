@@ -949,6 +949,7 @@ pub fn run() {
             export_report,
             open_export_folder,
             get_priorities,
+            priorities_from,
             get_build_stamp,
             receipts::get_receipts_gate,
             receipts::preview_receipt_payload,

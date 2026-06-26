@@ -84,12 +84,23 @@ export function useScan(opts?: { cache?: boolean }): ScanState {
     setShownRows(0);
     const t0 = performance.now();
     try {
-      const [r, p, rc, changes] = await Promise.all([
+      const [r, rc, changes, startup, sessions] = await Promise.all([
         invoke<GameReadiness>("get_game_readiness"),
-        invoke<Priorities>("get_priorities"),
         invoke<ScanRecLite[]>("get_recommendations"),
         invoke<AppliedChangeLite[]>("get_applied_changes"),
+        invoke<unknown>("get_startup_entries"),
+        invoke<unknown>("get_session_summaries"),
       ]);
+      // Rank from the readiness + recs we JUST fetched (plus startup/sessions) instead of calling
+      // get_priorities, which re-ran get_game_readiness + get_recommendations a second time on the
+      // backend — the heaviest, spawn-dominated part of the scan. priorities_from is a pure
+      // pass-through, so this halves the scan's powercfg/sc work with the same result.
+      const p = await invoke<Priorities>("priorities_from", {
+        readiness: r,
+        recommendations: rc,
+        startup,
+        sessions,
+      });
       const rev = deriveReverted(changes);
       const took = (performance.now() - t0) / 1000;
       setReadiness(r);

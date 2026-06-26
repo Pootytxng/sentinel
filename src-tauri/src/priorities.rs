@@ -396,6 +396,21 @@ pub(crate) fn get_priorities() -> Priorities {
     build_priorities(&readiness, &recommendations, &startup, &sessions)
 }
 
+/// Same ranking as `get_priorities`, but computed from signals the CALLER already fetched — so the
+/// scan (and the dashboard refresh) don't re-run readiness + recommendations a second time just to
+/// rank them. Pure pass-through to `build_priorities`; reads NO live Windows state, mutates nothing.
+/// The frontend passes back the exact JSON it got from get_game_readiness / get_recommendations /
+/// get_startup_entries / get_session_summaries, so the shapes are identical to get_priorities'.
+#[tauri::command]
+pub(crate) fn priorities_from(
+    readiness: Value,
+    recommendations: Value,
+    startup: Value,
+    sessions: Value,
+) -> Priorities {
+    build_priorities(&readiness, &recommendations, &startup, &sessions)
+}
+
 #[cfg(test)]
 mod priority_tests {
     use super::*;

@@ -39,6 +39,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         drifts: [],
       });
     if (cmd === "get_priorities") return Promise.resolve(prioritiesMock.payload);
+    // useScan/refresh now rank via priorities_from (pure) instead of re-running get_priorities.
+    if (cmd === "priorities_from") return Promise.resolve(prioritiesMock.payload);
     if (cmd === "get_recommendations") return Promise.resolve([]);
     return Promise.resolve(null);
   }),
