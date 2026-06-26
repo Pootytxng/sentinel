@@ -478,7 +478,7 @@ export default function CommandCenter(props: Props) {
                 onToggle={onToggleLimiter}
                 onSeeInFix={onSeeInFix}
               />
-              <DashboardV2 hw={hw} sessions={sessions} />
+              <DashboardV2 hw={hw} sessions={sessions} onNavigate={onNavigate} />
             </>
           ) : (
             <>

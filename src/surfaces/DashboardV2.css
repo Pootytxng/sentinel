@@ -163,6 +163,26 @@
   margin-bottom: -4px;
 }
 
+/* "Last session" label row carries a quiet link to Monitor's full debrief (glance here, detail there). */
+.d2-lastsession-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.d2-debrief-link {
+  border: 0;
+  background: transparent;
+  color: var(--ix-accent-text, #7defcf);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.d2-debrief-link:hover {
+  text-decoration: underline;
+}
+
 .d2-empty {
   color: var(--ix-text-2, #b8bcc8);
   font-size: 13px;

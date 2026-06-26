@@ -59,7 +59,16 @@ function AreaChart({ values, max, id }: { values: number[]; max: number; id: str
   );
 }
 
-export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: SessionSummary[] }) {
+export function DashboardV2({
+  hw,
+  sessions,
+  onNavigate,
+}: {
+  hw: HardwareInfo;
+  sessions: SessionSummary[];
+  /** Jump to a room — used to send Home's last-session glance to Monitor's full debrief. */
+  onNavigate?: (tab: "Play") => void;
+}) {
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
   const cpuHist = useRef<number[]>([]);
@@ -162,9 +171,15 @@ export function DashboardV2({ hw, sessions }: { hw: HardwareInfo; sessions: Sess
         </section>
       </div>
 
-      {/* Last measured session — the headline numbers, monospace. Honest label; empty when no session. */}
-      <div className="d2-section-label">
-        Last session{last ? ` · ${(last.process_name || "").replace(/\.exe$/i, "")}` : ""}
+      {/* Last measured session — a GLANCE on Home; the full per-session debrief lives on Monitor, so
+          when there's a session we link there instead of restating the whole thing in two places. */}
+      <div className="d2-section-label d2-lastsession-head">
+        <span>Last session{last ? ` · ${(last.process_name || "").replace(/\.exe$/i, "")}` : ""}</span>
+        {last && onNavigate && (
+          <button type="button" className="d2-debrief-link" onClick={() => onNavigate("Play")}>
+            Full debrief →
+          </button>
+        )}
       </div>
       {last ? (
         <div className="d2-grid d2-grid-4">
