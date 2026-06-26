@@ -1,0 +1,74 @@
+name: CI
+
+# Minimal anti-drift CI: build + test + lint the Rust backend and the React/TS frontend,
+# plus an informational dependency audit. Added 2026-06-26 in response to an external audit
+# that flagged the absence of CI as a drift risk.
+#
+# Cost note (ZERO-BUDGET LAW): the Rust job runs on windows-latest (2x minute multiplier) because
+# the crate pulls Windows-only deps (windows / winreg / wmi / ferrisetw / runas / adlx) and will not
+# compile elsewhere. The frontend + audit jobs run on ubuntu-latest (1x) to keep minutes down.
+# Triggers are scoped to main + PRs only (not every branch push). Caches keep re-runs cheap.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (test + clippy)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: cargo clippy (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  frontend:
+    name: Frontend (test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: vitest
+        run: npm test
+      - name: type-check + build
+        run: npm run build
+
+  audit:
+    name: Dependency audit (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --file src-tauri/Cargo.lock
