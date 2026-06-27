@@ -44,6 +44,13 @@ export function GamingMode() {
   const toggleSvc = (name: string) =>
     setSuspendSvcs((cur) => (cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name]));
   const { openLibrary } = useLibrary();
+  // Friendly, severity-honest error copy for the flagship mutating feature — the raw error goes to the
+  // console (debuggable), never raw in the user's face. A failed STOP/restore must NOT be softened:
+  // the user has to know their settings may still be changed (LOCKED rollback-first rule).
+  const failGaming = (message: string, detail: unknown) => {
+    console.error("[compy gaming]", message, detail);
+    setError(message);
+  };
 
   // On mount: an on-disk session that wasn't cleanly cleared = interrupted →
   // prompt to recover. Never auto-restores. Only THIS run's own active session
@@ -97,7 +104,10 @@ export function GamingMode() {
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
-      setError(String(e));
+      failGaming(
+        "Couldn't start Gaming Mode — it may need an admin OK, or the prompt was cancelled. Try again.",
+        e,
+      );
     } finally {
       setBusy(false);
     }
@@ -124,7 +134,10 @@ export function GamingMode() {
       await invoke("stop_gaming_session");
       setSession(null);
     } catch (e) {
-      setError(String(e));
+      failGaming(
+        "Couldn't fully restore your settings — they may still be changed. Try Stop again; if it keeps failing, relaunch and use the recovery prompt.",
+        e,
+      );
     } finally {
       setBusy(false);
     }
@@ -138,7 +151,10 @@ export function GamingMode() {
       setRecovery(null);
       if (confirm) setSession(null);
     } catch (e) {
-      setError(String(e));
+      failGaming(
+        "Couldn't finish restoring your settings — try again. Your session is still tracked, so nothing is lost.",
+        e,
+      );
     } finally {
       setBusy(false);
     }
@@ -161,7 +177,7 @@ export function GamingMode() {
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
-      setError(String(e));
+      failGaming("Couldn't resume your session — try again, or Stop and start fresh.", e);
     } finally {
       setBusy(false);
     }
