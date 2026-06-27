@@ -4,8 +4,10 @@
 # exactly ONE (current) installer on the Desktop. The OWNER NEVER installs manually — he only verifies.
 # (Memory: "silent-reinstall-is-my-job"; CLAUDE.md standing rule. Run from anywhere.)
 #
-#   powershell -File scripts/ship-reinstall.ps1            # stop + clean Desktop + silent install + launch
-#   powershell -File scripts/ship-reinstall.ps1 -NoLaunch  # same, but don't launch the app at the end
+# INVOCATION: in the Claude Code Bash->PowerShell shell, `powershell -File <path>` parse-errors
+# ("Unexpected token") — a shell quirk, not a script bug. Use the call operator (or run the steps inline):
+#   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1'"            # install + launch
+#   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1' -NoLaunch"  # don't launch
 param([switch]$NoLaunch)
 $ErrorActionPreference = "Stop"
 
