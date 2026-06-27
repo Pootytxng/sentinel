@@ -12,9 +12,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `28812bd` (branch `main`) |
+| Git HEAD | `d8a122d` (branch `main`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `B9814D221290DF9E62D83646A63E1955B859B018EC4835461F123D9DC9D8A8D6` (built from `28812bd`, 2026-06-26; everything in `7EF55E18…` + Monitor defaults to Live + keep-Optimize-mounted + idle scan-cache pre-warm (first Optimize/Check open seeds the verdict instantly, no cold scan); supersedes `7EF55E18…`) — **installed by Claude via the silent-reinstall law** (`scripts/ship-reinstall.ps1`; Desktop holds exactly one installer); live-verified: build stamp `28812bd · release`, first Optimize open shows the full settled verdict with zero scanning animation |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `9944643C787E639A5673172617172742832BAE98DAB95ED97261E7B51C0A0D16` (built from `d8a122d`, 2026-06-26; everything in `B9814D22…` + a cross-link/disclosure intuitiveness pass: bare concepts across 10 surfaces now carry the existing Term/WhatsThis links — FPS/1%low/frametime/ETW/VRAM/BIOS/EXPO-XMP/MSI/polling/noise-floor/telemetry/SysMain/DiagTrack/Game-Mode + Learn superseded→clickable jump; supersedes `B9814D22…`) — **installed by Claude via the silent-reinstall law** (Desktop holds exactly one installer); live-verified: build stamp `d8a122d · release`, links render legibly + the in-label WhatsThis is click-safe (no toggle) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | 2026-05-31 (frozen private-beta build). Current `main` adds live Gaming Mode + armed Phase-B mutations whose own live QA passed 2026-06-25/26, but `main` has **not** had a fresh full §6/§7 installed-build pass. |
 
