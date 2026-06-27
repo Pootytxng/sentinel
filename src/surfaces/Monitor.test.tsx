@@ -46,21 +46,21 @@ const renderMonitor = () =>
   );
 
 describe("Monitor — segmented shell (restructure tab #2)", () => {
-  it("renders Sessions + Live segments and DEFAULTS to Sessions (the buried debrief surfaced)", () => {
+  it("renders Live + Sessions segments and DEFAULTS to Live (the primary live meters)", () => {
     renderMonitor();
-    expect(screen.getByRole("tab", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
-    // Default = Sessions: the hero + session list are on screen; the live cards are not.
-    expect(screen.getByText("avg FPS")).toBeInTheDocument();
-    expect(screen.getByText("Recent sessions")).toBeInTheDocument();
-    expect(screen.queryByText("Live monitor")).toBeNull();
-  });
-
-  it("clicking 'Live' swaps to the live monitor + overlay (and drops the sessions list)", () => {
-    renderMonitor();
-    fireEvent.click(screen.getByRole("tab", { name: "Live" }));
+    expect(screen.getByRole("tab", { name: "Sessions" })).toBeInTheDocument();
+    // Default = Live (owner 2026-06-26): the live monitor cards are on screen; the sessions list is not.
     expect(screen.getByText("Live monitor")).toBeInTheDocument();
     expect(screen.getByText("In-game overlay")).toBeInTheDocument();
     expect(screen.queryByText("Recent sessions")).toBeNull();
+  });
+
+  it("clicking 'Sessions' swaps to the last-game debrief (and drops the live cards)", () => {
+    renderMonitor();
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    expect(screen.getByText("avg FPS")).toBeInTheDocument();
+    expect(screen.getByText("Recent sessions")).toBeInTheDocument();
+    expect(screen.queryByText("Live monitor")).toBeNull();
   });
 });

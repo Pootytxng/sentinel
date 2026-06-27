@@ -8,8 +8,9 @@ import "./Monitor.css";
 
 // Monitor — the restructured live+sessions surface (spec 2026-06-21-monitor-restructure, tab #2 of the
 // app-wide restructure). A thin shell: it owns the Sessions/Live segmented control and composes the
-// existing <Play> surface via its `view` prop (Play renders sessions-only or live-only). Sessions is the
-// DEFAULT (owner pick) — you open Monitor to review the last game; the buried debrief is now the face.
+// existing <Play> surface via its `view` prop (Play renders sessions-only or live-only). Live is the
+// DEFAULT + first segment (owner 2026-06-26) — the live meters are this section's primary content;
+// Sessions (the last-game debrief) is the second segment.
 // Reuses the shared SegmentedControl (the gliding-indicator pattern from Optimize). No new IPC.
 //
 // 3-mode preset GUIDED checklists (Visual Fidelity / Smooth / Clarity) — a quiet, ADVISORY panel above
@@ -20,9 +21,11 @@ import "./Monitor.css";
 
 type Segment = "sessions" | "live";
 
+// Live first + default (owner 2026-06-26): the live meters are the primary content of this section, so
+// Monitor opens on Live; Sessions (the last-game debrief) is the second segment.
 const SEGMENTS: { id: Segment; label: string }[] = [
-  { id: "sessions", label: "Sessions" },
   { id: "live", label: "Live" },
+  { id: "sessions", label: "Sessions" },
 ];
 
 // Same props App passes to <Play>, minus `view` (the shell drives that from the segment).
@@ -112,7 +115,7 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
 }
 
 export function Monitor(props: Props) {
-  const [segment, setSegment] = useState<Segment>("sessions");
+  const [segment, setSegment] = useState<Segment>("live");
   // Pre-warm the demand-gated sensor pollers the moment Monitor opens (while the user is still on the
   // Sessions landing) so the Live segment shows real CPU/GPU numbers right away instead of cold-starting
   // the ADLX init + the 2-sample CPU delta after the click. One-shot, read-only; the pollers idle as
