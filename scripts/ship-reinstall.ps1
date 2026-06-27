@@ -1,0 +1,41 @@
+# ship-reinstall.ps1 — the post-rebuild ship law, codified.
+#
+# After `npm run tauri build`, run this so the LIVE running Compy becomes the just-built version, with
+# exactly ONE (current) installer on the Desktop. The OWNER NEVER installs manually — he only verifies.
+# (Memory: "silent-reinstall-is-my-job"; CLAUDE.md standing rule. Run from anywhere.)
+#
+#   powershell -File scripts/ship-reinstall.ps1            # stop + clean Desktop + silent install + launch
+#   powershell -File scripts/ship-reinstall.ps1 -NoLaunch  # same, but don't launch the app at the end
+param([switch]$NoLaunch)
+$ErrorActionPreference = "Stop"
+
+$nsis = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\bundle\nsis\Compy_0.1.0_x64-setup.exe"
+if (-not (Test-Path $nsis)) { throw "Built NSIS not found — run 'npm run tauri build' first: $nsis" }
+$desk = [Environment]::GetFolderPath("Desktop")
+
+# 1) Stop any running Compy so the install can replace the exe (single-instance + file lock).
+Get-Process compy -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 700
+
+# 2) Desktop hygiene: remove EVERY Compy installer, then stage ONLY the current NSIS (one file).
+Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -like "Compy*" -and ($_.Extension -eq ".exe" -or $_.Extension -eq ".msi") } |
+  Remove-Item -Force
+$dest = Join-Path $desk "Compy_0.1.0_x64-setup.exe"
+Copy-Item $nsis $dest -Force
+$sha = (Get-FileHash $dest -Algorithm SHA256).Hash
+
+# 3) Silent install (per-user → no UAC).
+$p = Start-Process -FilePath $dest -ArgumentList "/S" -PassThru -Wait
+if ($p.ExitCode -ne 0) { throw "Silent install failed: exit $($p.ExitCode)" }
+
+# 4) Launch so the running app IS the new build (unless -NoLaunch).
+$exe = Join-Path $env:LOCALAPPDATA "Compy\compy.exe"
+if (-not (Test-Path $exe)) { throw "Installed exe not found after install: $exe" }
+if (-not $NoLaunch) { Start-Process $exe }
+
+Write-Output "ship-reinstall OK"
+Write-Output ("installer SHA-256 : " + $sha)
+Write-Output ("live exe          : " + $exe + $(if ($NoLaunch) { " (not launched)" } else { " (launched)" }))
+Write-Output "Desktop now holds exactly one installer. VERIFY live==build via the build STAMP, not an exe hash:"
+Write-Output "  launch with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<port>, then invoke('get_build_stamp')."

@@ -159,6 +159,18 @@ to move each law OUT of memory INTO the toolchain (the chosen enforcement, 2026-
   `src/theme-contrast.test.ts`), else a `self-review` rubric item. Tiers: automated guard > forced
   rubric item > memory. Memories: [[always-self-review-visual-work]] · [[bug-becomes-guard]].
 
+### SILENT REINSTALL IS MINE, NOT THE OWNER'S — automatic after every rebuild (standing LAW, 2026-06-26)
+
+The owner must **NEVER** run an installer himself, and must **never** have more than the ONE current
+build on his Desktop. After **any** `npm run tauri build`, immediately run **`scripts/ship-reinstall.ps1`**
+(stop running compy → delete all Desktop installers, stage ONLY the new NSIS → silent `/S` install →
+launch). Then **verify live == build via the build STAMP** (`get_build_stamp` over a CDP port →
+`"<commit> · release"`), **not** an exe hash — the installed exe is not byte-identical to
+`target/release/compy.exe` (NSIS packaging). Present it as *"your live app is now `<commit>`, one
+installer on the Desktop, nothing for you to do."* The owner's ONLY job is the **verification** (does it
+feel/look right). This is the operational meaning of "keep the installer on his Desktop + reinstall" —
+**I** reinstall. Memory: [[silent-reinstall-is-my-job]].
+
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
