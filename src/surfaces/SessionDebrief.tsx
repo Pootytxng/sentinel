@@ -99,8 +99,8 @@ function ComparisonCard({
         <>
           <h2 className="cmp-headline cmp-bad">This made it worse here</h2>
           <p className="cmp-sub">
-            Your 1% low dropped past the <Term id="noise-floor">noise floor</Term> in {r.game}. No
-            spin — take it back.
+            Your <Term id="one-percent-lows">1% low</Term> dropped past the{" "}
+            <Term id="noise-floor">noise floor</Term> in {r.game}. No spin — take it back.
           </p>
         </>
       )}

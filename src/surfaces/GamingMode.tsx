@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill } from "../design";
+import { WhatsThis } from "../design/WhatsThis";
+import { useLibrary } from "./library-context";
 import {
   summarizeChanges,
   statusLabel,
@@ -15,12 +17,19 @@ const CONSENT_KEY = "compy_gaming_consent_v1";
 
 // Static description of what the CORE (UAC-free) bundle changes — shown idle
 // and in the first-use consent modal. The live post-apply list comes from the
-// backend session contract (summarizeChanges).
-const CORE_ITEMS = [
-  "Power plan → max performance (best existing high-perf plan)",
-  "Windows Game Mode on",
-  "Game Bar / DVR off",
+// backend session contract (summarizeChanges). `learnId` (where a Blackbook entry
+// exists) drives the quiet idle "What's this?" link; WhatsThis self-hides otherwise.
+const CORE_ITEMS: { label: string; learnId?: string }[] = [
+  { label: "Power plan → max performance (best existing high-perf plan)" },
+  { label: "Windows Game Mode on", learnId: "game-mode" },
+  { label: "Game Bar / DVR off" },
 ];
+
+// Suspendable-service → its Blackbook entry (idle "What's this?"); only where one exists.
+const SERVICE_LEARN: Record<string, string> = {
+  SysMain: "sysmain-superfetch",
+  DiagTrack: "diagtrack",
+};
 
 export function GamingMode() {
   const [session, setSession] = useState<GamingSessionFile | null>(null);
@@ -34,6 +43,7 @@ export function GamingMode() {
   const [suspendSvcs, setSuspendSvcs] = useState<string[]>([]);
   const toggleSvc = (name: string) =>
     setSuspendSvcs((cur) => (cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name]));
+  const { openLibrary } = useLibrary();
 
   // On mount: an on-disk session that wasn't cleanly cleared = interrupted →
   // prompt to recover. Never auto-restores. Only THIS run's own active session
@@ -248,7 +258,10 @@ export function GamingMode() {
             <div className="gaming-diff-title">What it changes (all restored on exit):</div>
             <ul className="gaming-diff">
               {CORE_ITEMS.map((it) => (
-                <li key={it}>{it}</li>
+                <li key={it.label}>
+                  {it.label}
+                  {it.learnId && <WhatsThis id={it.learnId} onOpen={openLibrary} />}
+                </li>
               ))}
             </ul>
             <div className="gaming-advanced">
@@ -280,6 +293,9 @@ export function GamingMode() {
                     onChange={() => toggleSvc(s.name)}
                   />
                   {s.label}
+                  {SERVICE_LEARN[s.name] && (
+                    <WhatsThis id={SERVICE_LEARN[s.name]} onOpen={openLibrary} />
+                  )}
                 </label>
               ))}
             </div>
@@ -301,7 +317,7 @@ export function GamingMode() {
             <p>For this session, Compy will change:</p>
             <ul className="gaming-diff">
               {CORE_ITEMS.map((it) => (
-                <li key={it}>{it}</li>
+                <li key={it.label}>{it.label}</li>
               ))}
               {advUsb && <li>USB selective suspend off (AC)</li>}
               {advPcie && <li>PCIe ASPM off (AC)</li>}

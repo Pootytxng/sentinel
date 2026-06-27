@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
+import { Term } from "../design/Term";
 import {
   msiStatus,
   usbStatus,
@@ -111,7 +112,7 @@ export function LatencyTab() {
 
       <Card>
         <SectionHeader
-          title="Interrupt mode (MSI)"
+          title={<>Interrupt mode (<Term id="interrupts">MSI</Term>)</>}
           right={<StatusPill status={msiStatus(msi_active)} />}
         />
         <p className="lat-stat">
@@ -226,7 +227,7 @@ export function LatencyTab() {
 
       <Card>
         <SectionHeader
-          title="Mouse polling rate"
+          title={<>Mouse <Term id="polling-rate">polling rate</Term></>}
           right={
             mouse ? (
               <StatusPill

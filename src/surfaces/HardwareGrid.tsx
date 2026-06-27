@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { HardwareInfo, GpuInfo } from "../App";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import { rigTierLine } from "../data/rig-tier";
+import { Term } from "../design/Term";
 
 // The detailed "Your hardware" card grid — the SINGLE source for both the classic Overview surface
 // and the CommandCenter Home, so the two can never drift (the regression this restores: the grid was
@@ -40,7 +41,7 @@ function Card({
   );
 }
 
-function Detail({ k, v }: { k: string; v: string | number }) {
+function Detail({ k, v }: { k: ReactNode; v: string | number }) {
   return (
     <div className="detail">
       <span className="detail-key">{k}</span>
@@ -109,8 +110,9 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
                     <Detail k={`Slot ${i + 1}`} v={`${cap}${desc ? ` ${desc}` : ""}${mfg}`} />
                     {belowRated && (
                       <div className="detail-flag">
-                        Running at {m.speed_mhz} of {m.rated_speed_mhz} MT/s — enable EXPO/XMP in
-                        BIOS to reach its rated speed.
+                        Running at {m.speed_mhz} of {m.rated_speed_mhz} MT/s — enable{" "}
+                        <Term id="xmp">EXPO/XMP</Term> in <Term id="uefi-bios">BIOS</Term> to reach
+                        its rated speed.
                       </div>
                     )}
                   </div>
@@ -130,7 +132,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
             hw.gpus.map((g, i) => (
               <div key={i} className="gpu-block">
                 {hw.gpus.length > 1 && <Detail k="Adapter" v={g.name} />}
-                <Detail k="VRAM" v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
+                <Detail k={<Term id="vram">VRAM</Term>} v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"} />
                 <Detail k="Driver" v={fmtDriver(g)} />
                 {g.current_refresh_rate_hz > 0 && (
                   <Detail k="Output" v={`${g.current_refresh_rate_hz} Hz`} />
@@ -175,7 +177,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           <Detail k="Hostname" v={hw.hostname} />
           {hw.bios_info && hw.bios_info.version && (
             <Detail
-              k="BIOS"
+              k={<Term id="uefi-bios">BIOS</Term>}
               v={`${hw.bios_info.version}${
                 hw.bios_info.release_date_age_days != null
                   ? ` · ${hw.bios_info.release_date_age_days} days old`

@@ -14,6 +14,7 @@ import { SessionDebrief } from "./SessionDebrief";
 import { SessionTrends } from "./SessionTrends";
 import { LiveCharts } from "./LiveCharts";
 import { prettyGameName } from "./game-name";
+import { Term } from "../design/Term";
 import { type GpuVendor } from "./walkthroughs";
 import {
   gradeFps,
@@ -232,15 +233,15 @@ export default function Play({
           <div className="play-hero-metrics">
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(gradeFps(latest.avg_fps, rig))}>{latest.avg_fps.toFixed(0)}</span>
-              <span className="play-hero-label">avg FPS</span>
+              <span className="play-hero-label"><Term id="hz-vs-fps">avg FPS</Term></span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(gradeLow1(latest.low1_fps_est, latest.avg_fps))}>{latest.low1_fps_est.toFixed(0)}</span>
-              <span className="play-hero-label">1% low · est</span>
+              <span className="play-hero-label"><Term id="one-percent-lows">1% low</Term> · est</span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(gradeFrametimeMs(latest.avg_frametime_ms, rig))}>{latest.avg_frametime_ms.toFixed(1)}</span>
-              <span className="play-hero-label">ms frametime</span>
+              <span className="play-hero-label">ms <Term id="frametime">frametime</Term></span>
             </div>
             <div className="play-hero-metric">
               <span className="play-hero-value" style={gradeStyle(tempGrade(latest.peak_gpu_temp_c))}>{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°C`}</span>
@@ -270,11 +271,11 @@ export default function Play({
           <div className="play-live">
             <div className="play-metric">
               <div className="play-metric-value" style={sample ? gradeStyle(gradeFps(sample.fps, rig)) : undefined}>{sample ? Math.round(sample.fps) : "—"}</div>
-              <div className="play-metric-label">FPS</div>
+              <div className="play-metric-label"><Term id="hz-vs-fps">FPS</Term></div>
             </div>
             <div className="play-metric">
               <div className="play-metric-value" style={sample ? gradeStyle(gradeLow1(sample.low1_fps, sample.fps)) : undefined}>{sample ? Math.round(sample.low1_fps) : "—"}</div>
-              <div className="play-metric-label">1% low · est</div>
+              <div className="play-metric-label"><Term id="one-percent-lows">1% low</Term> · est</div>
             </div>
             <div className="play-metric">
               <div className="play-metric-value" style={gradeStyle(tempGrade(gpu?.temperature_c ?? null))}>{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°C`}</div>
@@ -285,7 +286,7 @@ export default function Play({
               <div className="play-metric-label">CPU</div>
             </div>
           </div>
-          <p className="play-honest">ETW · external · anti-cheat safe — no injection, no kernel driver.</p>
+          <p className="play-honest"><Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.</p>
         </div>
 
         {/* Overlay card */}

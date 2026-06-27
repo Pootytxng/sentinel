@@ -175,7 +175,7 @@ function detectUrlPaste(text: string): "youtube" | "webpage" | null {
   return /(?:youtube\.com|youtu\.be)/i.test(urls.join(" ")) ? "youtube" : "webpage";
 }
 
-function EntryBody({ entry }: { entry: KnowledgeEntry }) {
+function EntryBody({ entry, onNavigate }: { entry: KnowledgeEntry; onNavigate: (id: string) => void }) {
   // The "How Compy grades things" entry renders the visible key as its body (same single source).
   if (entry.id === VERDICT_GLOSSARY_ENTRY_ID && entry.type === "term") {
     return (
@@ -191,7 +191,7 @@ function EntryBody({ entry }: { entry: KnowledgeEntry }) {
   if (tuning) return <TuningGuideBody guide={tuning} />;
   return (
     <>
-      {entry.status && <SupersededNote entry={entry} />}
+      {entry.status && <SupersededNote entry={entry} onNavigate={onNavigate} />}
       {entryTypeBody(entry)}
     </>
   );
@@ -199,7 +199,13 @@ function EntryBody({ entry }: { entry: KnowledgeEntry }) {
 
 // A3 lifecycle — an outdated entry stays findable but reads honestly as superseded/deprecated
 // (the corpus is publishable: an old debunk points to its replacement, never silently misleads).
-function SupersededNote({ entry }: { entry: KnowledgeEntry }) {
+function SupersededNote({
+  entry,
+  onNavigate,
+}: {
+  entry: KnowledgeEntry;
+  onNavigate: (id: string) => void;
+}) {
   const target =
     entry.status === "superseded" && entry.supersededBy
       ? KNOWLEDGE_BY_ID.get(entry.supersededBy)
@@ -210,7 +216,14 @@ function SupersededNote({ entry }: { entry: KnowledgeEntry }) {
         <>
           ⚠ Superseded{target ? (
             <>
-              {" "}— see <b>{target.name}</b>
+              {" "}— see{" "}
+              <button
+                type="button"
+                className="lx-superseded-link"
+                onClick={() => onNavigate(entry.supersededBy!)}
+              >
+                {target.name}
+              </button>
             </>
           ) : null}. Kept for reference; the current guidance has moved on.
         </>
@@ -317,7 +330,7 @@ function EntryCard({
       </button>
       {open && (
         <div className="lx-card-body">
-          <EntryBody entry={entry} />
+          <EntryBody entry={entry} onNavigate={onNavigate} />
           {walkthrough && (
             <details className="lx-walkthrough">
               <summary>Show me the way</summary>
@@ -435,7 +448,7 @@ function AutopsyResultView({
                 </button>
                 {open && entry && (
                   <div className="lx-hit-detail">
-                    <EntryBody entry={entry} />
+                    <EntryBody entry={entry} onNavigate={onNavigate} />
                     {/* Deliberate travel only — the quiet full-entry link, per the continuity law. */}
                     <button className="lx-howto" onClick={() => onNavigate(h.id)}>
                       Open full entry in Library →

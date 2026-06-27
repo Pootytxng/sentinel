@@ -9,7 +9,7 @@ export function Panel({ children, className = "" }: { children: ReactNode; class
   return <div className={`ds-panel ${className}`}>{children}</div>;
 }
 
-export function SectionHeader({ title, right }: { title: string; right?: ReactNode }) {
+export function SectionHeader({ title, right }: { title: ReactNode; right?: ReactNode }) {
   return (
     <div className="ds-section-head">
       <h3>{title}</h3>

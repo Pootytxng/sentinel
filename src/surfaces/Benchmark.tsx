@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
+import { Term } from "../design/Term";
+import { WhatsThis } from "../design/WhatsThis";
+import { useLibrary } from "./library-context";
 import { useProfile } from "../hooks/use-profile";
 import { PROFILE_META, USE_PROFILES } from "../data/profile-store";
 import {
@@ -36,6 +39,7 @@ export function BenchmarkTab() {
   const [trial, setTrial] = useState<TrialState | null>(null);
   const [tweaks, setTweaks] = useState<{ id: string; title: string }[]>([]);
   const [selectedTweak, setSelectedTweak] = useState<string>("");
+  const { openLibrary } = useLibrary();
   const [score, setScore] = useState<ScoreboardView | null>(null);
   const [arcade, setArcade] = useState<boolean>(
     () => localStorage.getItem("compy_score_face") === "arcade",
@@ -370,9 +374,10 @@ export function BenchmarkTab() {
           right={trial?.running ? <StatusPill status="scanning" label="Measuring" /> : undefined}
         />
         <p className="bench-muted">
-          With a game running and FPS monitoring on, calibrate — Compy measures your rig's run-to-run
-          noise from real frametimes (1% lows). That's the floor: a change smaller than it can't be
-          told apart from noise, so we won't claim it.
+          With a game running and FPS monitoring on, calibrate — Compy measures your rig's{" "}
+          <Term id="noise-floor">run-to-run noise</Term> from real frametimes (
+          <Term id="one-percent-lows">1% lows</Term>). That's the floor: a change smaller than it
+          can't be told apart from noise, so we won't claim it.
         </p>
         {/* Inline dependency (wayfinding §2) — start monitoring right here; no trip to another page. */}
         {fpsActive === false && (
@@ -419,6 +424,9 @@ export function BenchmarkTab() {
                 >
                   Measure this tweak
                 </button>
+                {/* Quiet "What's this?" for the picked tweak — opens its Blackbook entry; self-hides
+                    when the tweak has no entry (no dead links), same as Fix rows. */}
+                <WhatsThis id={selectedTweak} onOpen={openLibrary} />
               </div>
             )}
             <p className="bench-fine">

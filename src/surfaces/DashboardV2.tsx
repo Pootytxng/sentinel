@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Term } from "../design/Term";
 import type { HardwareInfo } from "../App";
 import type { SessionSummary } from "../types";
 import {
@@ -183,9 +184,9 @@ export function DashboardV2({
       </div>
       {last ? (
         <div className="d2-grid d2-grid-4">
-          <Metric label="Avg FPS" animate={last.avg_fps} fmt={(v) => v.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
-          <Metric label="1% low" animate={last.low1_fps_est} fmt={(v) => v.toFixed(0)} sub="estimate" grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
-          <Metric label="Frametime" animate={last.avg_frametime_ms} fmt={(v) => v.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
+          <Metric label={<Term id="hz-vs-fps">Avg FPS</Term>} animate={last.avg_fps} fmt={(v) => v.toFixed(0)} grade={gradeFps(last.avg_fps, rig)} />
+          <Metric label={<Term id="one-percent-lows">1% low</Term>} animate={last.low1_fps_est} fmt={(v) => v.toFixed(0)} sub="estimate" grade={gradeLow1(last.low1_fps_est, last.avg_fps)} />
+          <Metric label={<Term id="frametime">Frametime</Term>} animate={last.avg_frametime_ms} fmt={(v) => v.toFixed(1)} unit="ms" grade={gradeFrametimeMs(last.avg_frametime_ms, rig)} />
           <Metric label="Peak GPU" animate={last.peak_gpu_temp_c ?? undefined} value="—" fmt={(v) => v.toFixed(0)} unit="°C" grade={tempGrade(last.peak_gpu_temp_c)} />
         </div>
       ) : (
@@ -238,7 +239,7 @@ function Metric({
   animate,
   fmt,
 }: {
-  label: string;
+  label: ReactNode;
   value?: string;
   unit?: string;
   sub?: string;

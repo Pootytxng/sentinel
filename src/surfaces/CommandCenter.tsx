@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Term } from "../design/Term";
 import type { AppliedChange, GameReadiness, Priorities, PriorityItem, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { AmbientBackdrop } from "../design/AmbientBackdrop";
@@ -269,8 +270,8 @@ function LiveStrip({ sessions, progress }: { sessions: SessionSummary[]; progres
         <span className="cc-live-game">{strip.game}</span>
       </div>
       <div className="cc-live-metrics">
-        <LiveMetric value={`${countUp(strip.avgFps, progress)}`} label="Avg FPS" />
-        <LiveMetric value={`${countUp(strip.low1Est, progress)}`} label="1% low" note="est" />
+        <LiveMetric value={`${countUp(strip.avgFps, progress)}`} label={<Term id="hz-vs-fps">Avg FPS</Term>} />
+        <LiveMetric value={`${countUp(strip.low1Est, progress)}`} label={<Term id="one-percent-lows">1% low</Term>} note="est" />
         <LiveMetric
           value={strip.peakTempC == null ? "—" : `${countUp(strip.peakTempC, progress)}°C`}
           label="Peak temp"
@@ -280,7 +281,7 @@ function LiveStrip({ sessions, progress }: { sessions: SessionSummary[]; progres
   );
 }
 
-function LiveMetric({ value, label, note }: { value: string; label: string; note?: string }) {
+function LiveMetric({ value, label, note }: { value: string; label: ReactNode; note?: string }) {
   return (
     <div className="cc-metric">
       <div className="cc-metric-value">{value}</div>

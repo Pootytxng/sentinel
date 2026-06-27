@@ -280,7 +280,7 @@ const DEBLOAT_TASKS: { id: string; label: string; what: string }[] = [
 
 // Self-contained: invokes the gated `disable_known_bloat_task` command directly; the applied change
 // shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
-function DebloatTasks() {
+function DebloatTasks({ onWhatsThis }: { onWhatsThis: (id: string) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, "done" | string>>({});
   const disable = async (id: string) => {
@@ -298,7 +298,8 @@ function DebloatTasks() {
     <CollapsibleSection title="Telemetry tasks" count={DEBLOAT_TASKS.length}>
       <p className="fix-refuse-intro">
         Disable Microsoft telemetry scheduled tasks for this PC — reversible (re-enable from History).
-        Compy only ever touches this curated list; never Defender or anything that breaks Windows.
+        Compy only ever touches this curated list; never Defender or anything that breaks Windows.{" "}
+        <WhatsThis id="telemetry" onOpen={onWhatsThis} />
       </p>
       <ul className="fix-list">
         {DEBLOAT_TASKS.map((t) => {
@@ -332,10 +333,12 @@ function GuidedRow({
   rec,
   vendor,
   onDismiss,
+  onWhatsThis,
 }: {
   rec: Rec;
   vendor: GpuVendor;
   onDismiss: (id: string) => void;
+  onWhatsThis: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const guide = GUIDED_STEPS[rec.id];
@@ -345,6 +348,7 @@ function GuidedRow({
       <div className="fix-row-main">
         <div className="fix-row-head">
           <RecTitle id={rec.id} title={rec.title} />
+          <WhatsThis id={rec.id} onOpen={onWhatsThis} />
           <EvidenceChip p={rec.provenance} />
           <span className="fix-guided-tag">Guided</span>
         </div>
@@ -898,7 +902,7 @@ export default function Fix({
           </p>
           <ul className="fix-list">
             {advisory.map((rec) => (
-              <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} />
+              <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} onWhatsThis={onOpenLibrary} />
             ))}
           </ul>
         </CollapsibleSection>
@@ -925,7 +929,7 @@ export default function Fix({
       )}
 
       {/* Telemetry-task disable (Phase B, ARMED) — curated CEIP tasks; reversible via the Trust Ledger. */}
-      <DebloatTasks />
+      <DebloatTasks onWhatsThis={onOpenLibrary} />
       </>
       )}
 

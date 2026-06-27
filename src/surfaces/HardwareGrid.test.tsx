@@ -61,8 +61,18 @@ describe("HardwareGrid detection surfacing", () => {
         })}
       />
     );
-    expect(screen.getByText(/enable EXPO\/XMP in/i)).toBeTruthy();
+    // "EXPO/XMP" and "BIOS" are Term-wrapped links now (split text nodes), so assert on the flag
+    // container's full text rather than a single text node.
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.className === "detail-flag" &&
+          /enable\s+EXPO\/XMP\s+in\s+BIOS\s+to reach/i.test(el.textContent ?? ""),
+      ),
+    ).toBeTruthy();
     expect(screen.getByText(/4800 of 6000 MT\/s/i)).toBeTruthy();
+    // The actionable concepts are now in-place glossary links.
+    expect(screen.getByRole("button", { name: "EXPO/XMP" })).toBeTruthy();
   });
 
   it("makes NO XMP claim when RAM runs at its rated speed", () => {
