@@ -12,9 +12,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `3bffbea` (branch `main`) |
+| Git HEAD | `28812bd` (branch `main`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `7EF55E186E70BBB0FDA64323199FC258F7F5C204DCCE72CFD2C854A04821383E` (3,263,596 B; built from `3bffbea`, 2026-06-26; CPU-temp fix + all Lane-1 perf + Optimize scan-cache/stuck fix + post-scan checklist collapse + Lane-2 neatness (Monitor reorder, Blackbook filter collapse, not-worth collapse, Home debrief link) + P4 scan dedup; supersedes `5FB49E01…`) — staged to Desktop (NSIS only, exactly one installer), **owner REINSTALL pending (fair speed + Lane-2 visual verify)** |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `B9814D221290DF9E62D83646A63E1955B859B018EC4835461F123D9DC9D8A8D6` (built from `28812bd`, 2026-06-26; everything in `7EF55E18…` + Monitor defaults to Live + keep-Optimize-mounted + idle scan-cache pre-warm (first Optimize/Check open seeds the verdict instantly, no cold scan); supersedes `7EF55E18…`) — **installed by Claude via the silent-reinstall law** (`scripts/ship-reinstall.ps1`; Desktop holds exactly one installer); live-verified: build stamp `28812bd · release`, first Optimize open shows the full settled verdict with zero scanning animation |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | 2026-05-31 (frozen private-beta build). Current `main` adds live Gaming Mode + armed Phase-B mutations whose own live QA passed 2026-06-25/26, but `main` has **not** had a fresh full §6/§7 installed-build pass. |
 
