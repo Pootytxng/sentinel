@@ -63,6 +63,47 @@ export type ScanState = {
   rerun: () => Promise<void>;
 };
 
+// The scan's fetch+compute core — shared by the live rerun and the idle pre-warm so the cached
+// result is byte-identical to a real scan. Real read-only commands only (zero new IPC);
+// priorities_from is a pure pass-through, so it does NOT re-run the readiness+recs probes (P4).
+async function fetchScan(): Promise<ScanResult> {
+  const t0 = performance.now();
+  const [r, rc, changes, startup, sessions] = await Promise.all([
+    invoke<GameReadiness>("get_game_readiness"),
+    invoke<ScanRecLite[]>("get_recommendations"),
+    invoke<AppliedChangeLite[]>("get_applied_changes"),
+    invoke<unknown>("get_startup_entries"),
+    invoke<unknown>("get_session_summaries"),
+  ]);
+  const p = await invoke<Priorities>("priorities_from", {
+    readiness: r,
+    recommendations: rc,
+    startup,
+    sessions,
+  });
+  return {
+    readiness: r,
+    priorities: p,
+    recs: rc,
+    reverted: deriveReverted(changes),
+    elapsed: (performance.now() - t0) / 1000,
+  };
+}
+
+// Warm the scan cache during app idle so the FIRST open of Optimize/Fixes seeds the verdict
+// instantly (no cold scan, no replayed row-by-row reveal) instead of paying the full scan on the
+// click. No-op if a real scan already cached (or wins the race); best-effort — a failure just lets
+// the normal on-open scan run. App.tsx schedules this via requestIdleCallback after first paint.
+export async function prewarmScan(): Promise<void> {
+  if (peekProbe(SCAN_KEY)) return;
+  try {
+    const result = await fetchScan();
+    if (!peekProbe(SCAN_KEY)) putProbe<ScanResult>(SCAN_KEY, result);
+  } catch {
+    /* leave it — Optimize will scan on open as usual */
+  }
+}
+
 export function useScan(opts?: { cache?: boolean }): ScanState {
   const useCache = opts?.cache ?? false;
   // Seed synchronously from the cache so a cached caller (Optimize/Fixes) paints the LAST verdict
@@ -84,38 +125,14 @@ export function useScan(opts?: { cache?: boolean }): ScanState {
     setShownRows(0);
     const t0 = performance.now();
     try {
-      const [r, rc, changes, startup, sessions] = await Promise.all([
-        invoke<GameReadiness>("get_game_readiness"),
-        invoke<ScanRecLite[]>("get_recommendations"),
-        invoke<AppliedChangeLite[]>("get_applied_changes"),
-        invoke<unknown>("get_startup_entries"),
-        invoke<unknown>("get_session_summaries"),
-      ]);
-      // Rank from the readiness + recs we JUST fetched (plus startup/sessions) instead of calling
-      // get_priorities, which re-ran get_game_readiness + get_recommendations a second time on the
-      // backend — the heaviest, spawn-dominated part of the scan. priorities_from is a pure
-      // pass-through, so this halves the scan's powercfg/sc work with the same result.
-      const p = await invoke<Priorities>("priorities_from", {
-        readiness: r,
-        recommendations: rc,
-        startup,
-        sessions,
-      });
-      const rev = deriveReverted(changes);
-      const took = (performance.now() - t0) / 1000;
-      setReadiness(r);
-      setPriorities(p);
-      setRecs(rc);
-      setReverted(rev);
+      const result = await fetchScan();
+      setReadiness(result.readiness);
+      setPriorities(result.priorities);
+      setRecs(result.recs);
+      setReverted(result.reverted);
       // Always cache the fresh result (even from FirstCheck/Tour) so the next cached caller paints
       // instantly. The cache is cleared after every mutation, so it can't outlive a real state change.
-      putProbe<ScanResult>(SCAN_KEY, {
-        readiness: r,
-        priorities: p,
-        recs: rc,
-        reverted: rev,
-        elapsed: took,
-      });
+      putProbe<ScanResult>(SCAN_KEY, result);
     } catch {
       /* leave nulls — render guards downstream */
     } finally {

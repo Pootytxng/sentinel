@@ -20,6 +20,7 @@ import Check from "./surfaces/Check";
 // Aliased so the new merged shell never shadows the "Optimize" Tab string literal (which is the
 // INTERNAL name of today's Tune slot; the merged tab reuses that same slot — see the wiring below).
 import { Optimize as OptimizeShell } from "./surfaces/Optimize";
+import { prewarmScan } from "./surfaces/use-scan";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { prettyGameName } from "./surfaces/game-name";
 import { gpuVendor } from "./surfaces/walkthroughs";
@@ -930,6 +931,22 @@ function App() {
   // Check + ~16 rec rows. (Set during render; idempotent. It mounts on first visit, not at app start,
   // so the scan still only runs when the user actually opens Optimize.)
   const optimizeMountedRef = useRef(false);
+  // Warm the readiness scan cache during the first idle window after paint, so the user's FIRST
+  // open of Optimize/Check seeds the verdict instantly instead of cold-starting the scan (+ replaying
+  // the row stagger) on the click. Deferred to idle (requestIdleCallback) so it never competes with
+  // Home's first paint; no-op if a real scan already cached. Read-only, reversible, zero new IPC.
+  useEffect(() => {
+    const ric = (window as typeof window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    }).requestIdleCallback;
+    if (ric) {
+      const id = ric(() => void prewarmScan(), { timeout: 3000 });
+      return () => (window as typeof window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(() => void prewarmScan(), 1500);
+    return () => window.clearTimeout(t);
+  }, []);
   useEffect(() => {
     if (currentLocation === prevLocationRef.current) return;
     const prev = prevLocationRef.current;
