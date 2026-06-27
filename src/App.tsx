@@ -925,6 +925,11 @@ function App() {
   const [fwdHistory, setFwdHistory] = useState<string[]>([]);
   const prevLocationRef = useRef(currentLocation);
   const navKindRef = useRef<"normal" | "back" | "forward">("normal");
+  // Once Optimize has been opened, keep its (heavy) tree MOUNTED and just hide it with display:none on
+  // other tabs — so returning to Optimize is an instant CSS show, not a full re-mount/re-render of
+  // Check + ~16 rec rows. (Set during render; idempotent. It mounts on first visit, not at app start,
+  // so the scan still only runs when the user actually opens Optimize.)
+  const optimizeMountedRef = useRef(false);
   useEffect(() => {
     if (currentLocation === prevLocationRef.current) return;
     const prev = prevLocationRef.current;
@@ -1031,6 +1036,8 @@ function App() {
         { label: "OS", value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
       ]
     : [];
+
+  if (activeTab === "Optimize") optimizeMountedRef.current = true;
 
   return (
     <LibraryContext.Provider value={libraryApi}>
@@ -1231,8 +1238,9 @@ function App() {
                   gpus={hw?.gpus ?? []}
                 />
               )}
-              {activeTab === "Optimize" &&
-                (optimizeMerged ? (
+              {optimizeMountedRef.current && (
+                <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+                  {optimizeMerged ? (
                   // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
                   // persistent active-undo chip. Same props the standalone surfaces receive — pure
                   // composition, no new IPC, same audited apply/rollback handlers.
@@ -1285,7 +1293,9 @@ function App() {
                       vendor={detectedVendor}
                     />
                   </>
-                ))}
+                  )}
+                </div>
+              )}
               {activeTab === "Play" &&
                 (() => {
                   // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
