@@ -37,13 +37,21 @@ for (const p of pages) {
   const c = connect(p.webSocketDebuggerUrl);
   await c.ready;
   await c.send("Runtime.enable");
-  // Pick the MAIN window by WIDTH: the FPS overlay is a narrow (~230px) window, the main shell is wide
-  // (~800-1500px). innerWidth is robust even when the backgrounded main webview transiently reports
-  // rail-count 0 (which made the old rail*1000+buttons score lose to the overlay); rail+buttons only
-  // breaks ties between same-width pages.
-  const { result } = await c.send("Runtime.evaluate", { expression: "JSON.stringify({w:innerWidth, s:document.querySelectorAll('.cc-rail-item').length*1000 + document.querySelectorAll('button').length})", returnByValue: true });
-  const m = (() => { try { return JSON.parse(result.value); } catch { return { w: 0, s: 0 }; } })();
-  const area = m.w * 100000 + m.s;
+  // Pick the MAIN window by RAIL PRESENCE (the FPS overlay never has .cc-rail-item), retrying because
+  // a backgrounded/re-rendering main webview can transiently report rail-count 0. The rail DOM exists
+  // regardless of occlusion, so a short retry resolves it; width is only a tiebreak/fallback. (The old
+  // width-dominant score kept landing eval/clicks on the overlay → navigation silently no-op'd.)
+  let rail = 0;
+  let w = 0;
+  for (let i = 0; i < 5; i++) {
+    const { result } = await c.send("Runtime.evaluate", { expression: "JSON.stringify({rail:document.querySelectorAll('.cc-rail-item, .rail-item').length, w:innerWidth})", returnByValue: true });
+    const m = (() => { try { return JSON.parse(result.value); } catch { return { rail: 0, w: 0 }; } })();
+    rail = Math.max(rail, m.rail);
+    w = Math.max(w, m.w);
+    if (rail > 0) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  const area = rail * 10_000_000 + w;
   if (!best || area > best.area) { if (best) best.ws.close(); best = { ...c, area }; }
   else c.ws.close();
 }

@@ -13,9 +13,16 @@ $nsis = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\bundle\nsis\Compy_
 if (-not (Test-Path $nsis)) { throw "Built NSIS not found — run 'npm run tauri build' first: $nsis" }
 $desk = [Environment]::GetFolderPath("Desktop")
 
-# 1) Stop any running Compy so the install can replace the exe (single-instance + file lock).
+# 1) Stop any running Compy so the install can replace the exe (single-instance + file lock). Close
+#    GRACEFULLY first (CloseMainWindow → the app's §1 clean-exit path), so an active Gaming Mode session
+#    restores cleanly and the next launch doesn't show a spurious "session didn't end cleanly" recovery
+#    banner. Force-kill only the stragglers that ignore the close.
+foreach ($p in (Get-Process compy -ErrorAction SilentlyContinue)) {
+  if ($p.MainWindowHandle -ne 0) { $p.CloseMainWindow() | Out-Null }
+}
+Start-Sleep -Milliseconds 1500
 Get-Process compy -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Milliseconds 700
+Start-Sleep -Milliseconds 600
 
 # 2) Desktop hygiene: remove EVERY Compy installer, then stage ONLY the current NSIS (one file).
 Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
