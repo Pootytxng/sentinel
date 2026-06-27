@@ -133,7 +133,9 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
                       </button>
                     )
                   ) : (
-                    <span className="fc-chip fc-chip-muted">advisory — no one-click change</span>
+                    <span className="fc-chip fc-chip-muted">
+                      Hands-on fix — no switch to flip, but Compy shows you the steps
+                    </span>
                   )}
                 </div>
               </div>

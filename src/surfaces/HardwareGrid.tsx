@@ -127,7 +127,10 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
         >
           {hw.gpus.length === 0 ? (
-            <Detail k="Status" v="DXGI and WMI both returned no adapters" />
+            <Detail
+              k="Status"
+              v="Compy couldn't read a graphics card here. If this PC has one, its driver may not be installed — restart, or reinstall the GPU driver from the maker's site."
+            />
           ) : (
             hw.gpus.map((g, i) => (
               <div key={i} className="gpu-block">

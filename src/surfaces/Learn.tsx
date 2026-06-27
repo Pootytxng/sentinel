@@ -382,6 +382,9 @@ function AutopsyResultView({
           We didn't spot anything we recognize in that. Paste a guide that actually names tweaks or
           settings and we'll grade each one.
         </p>
+        <button className="lx-btn lx-btn-ghost" onClick={onClear}>
+          Clear &amp; paste another
+        </button>
       </div>
     );
   }

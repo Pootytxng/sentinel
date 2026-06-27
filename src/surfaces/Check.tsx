@@ -71,7 +71,11 @@ function driverFreshness(gpus: GpuDriverInfo[]):
   | { tone: "skip" | "pass"; message: string; url?: undefined }
   | { tone: "advisory"; message: string; url: string | null } {
   const gpu = gpus.find((g) => g.driver_age_days != null);
-  if (!gpu) return { tone: "skip", message: "Driver date unreadable — skip" };
+  if (!gpu)
+    return {
+      tone: "skip",
+      message: "We couldn't read your graphics driver's date this time — nothing to check here, and that's not a problem.",
+    };
   const age = gpu.driver_age_days as number;
   if (age <= 90) return { tone: "pass", message: `Driver is recent — ${age} days old.` };
   const v = VENDOR_SUPPORT[gpuVendor(gpu.name)];
@@ -268,12 +272,15 @@ export default function Check({
   // Read-only: checking changes nothing; v1 wires no restore.
   const [leftovers, setLeftovers] = useState<LeftoversReport | null>(null);
   const [leftoversBusy, setLeftoversBusy] = useState(false);
+  const [leftoversErr, setLeftoversErr] = useState<string | null>(null);
   const runLeftovers = async () => {
     setLeftoversBusy(true);
+    setLeftoversErr(null);
     try {
       setLeftovers(await invoke<LeftoversReport>("get_leftovers"));
     } catch {
-      /* surfaced as the still-empty section; the button stays available to retry */
+      // Tell the user it didn't finish (was silently swallowed → looked identical to not-yet-run).
+      setLeftoversErr("Couldn't finish the past-tweaks check just now — try again in a moment.");
     } finally {
       setLeftoversBusy(false);
     }
@@ -752,6 +759,11 @@ export default function Check({
         <button className="check-leftovers-run" disabled={leftoversBusy} onClick={runLeftovers}>
           {leftoversBusy ? "Checking…" : "Check for past tweaks"}
         </button>
+        {leftoversErr && (
+          <p className="check-leftovers-clean" role="status">
+            {leftoversErr}
+          </p>
+        )}
         {leftovers && leftovers.findings.length === 0 && (
           <p className="check-leftovers-clean" role="status">
             {leftovers.unavailable.length === 0

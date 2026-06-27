@@ -32,7 +32,7 @@ import "./Play.css";
 
 type GpuLite = { temperature_c: number | null; utilization_gpu_pct: number | null };
 type CpuLite = { usage_overall_pct: number };
-type FpsLite = { active: boolean; sample: { fps: number; low1_fps: number } | null };
+type FpsLite = { active: boolean; status: string; sample: { fps: number; low1_fps: number } | null };
 type ArmedLite = { game: string } | null;
 
 const CORNERS: [string, string][] = [
@@ -286,6 +286,16 @@ export default function Play({
               <div className="play-metric-label">CPU</div>
             </div>
           </div>
+          {fps?.status === "declined" && (
+            <p className="play-honest">
+              Administrator permission was declined — tap “Start FPS capture” to allow it.
+            </p>
+          )}
+          {fps?.active && !sample && fps?.status !== "declined" && (
+            <p className="play-honest">
+              Capturing… launch or focus a DX11/DX12 game to see frames (Vulkan/OpenGL aren't counted yet).
+            </p>
+          )}
           <p className="play-honest"><Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.</p>
         </div>
 

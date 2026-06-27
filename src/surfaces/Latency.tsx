@@ -92,7 +92,10 @@ export function LatencyTab() {
   if (!report) {
     return (
       <div className="lat-wrap">
-        <p className="lat-muted">Diagnostics unavailable on this machine.</p>
+        <p className="lat-muted">
+          Compy couldn't read latency diagnostics just now — this can happen right after launch.
+          Reopen Advanced in a moment to try again.
+        </p>
       </div>
     );
   }
@@ -119,7 +122,8 @@ export function LatencyTab() {
           {msi_active.active_on} of {msi.total} capable devices confirmed on MSI
           {msi_active.advertised_but_inactive > 0 &&
             ` · ${msi_active.advertised_but_inactive} advertise it but run on a line IRQ`}
-          {msi_active.unknown > 0 && ` · ${msi_active.unknown} undetermined`}
+          {msi_active.unknown > 0 &&
+            ` · ${msi_active.unknown} couldn't be read (not a problem — just not readable)`}
         </p>
         {report.msi_advisory && <p className="lat-advisory">{report.msi_advisory}</p>}
         {/* Name the guilty device: every VERIFIED line-IRQ device, worst-first — receipts the

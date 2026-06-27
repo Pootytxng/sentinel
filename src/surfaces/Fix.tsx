@@ -288,8 +288,12 @@ function DebloatTasks({ onWhatsThis }: { onWhatsThis: (id: string) => void }) {
     try {
       await invoke("disable_known_bloat_task", { taskId: id });
       setState((s) => ({ ...s, [id]: "done" }));
-    } catch (e) {
-      setState((s) => ({ ...s, [id]: String(e) }));
+    } catch {
+      // Plain-English, not the raw Rust string: this is an ARMED mutation, so make clear nothing changed.
+      setState((s) => ({
+        ...s,
+        [id]: "Couldn't turn that off — it may need an admin OK, or the prompt was cancelled. Nothing changed; try again.",
+      }));
     } finally {
       setBusy(null);
     }

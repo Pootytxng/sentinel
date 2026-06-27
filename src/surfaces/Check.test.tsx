@@ -190,7 +190,7 @@ describe("Check", () => {
     const { rerender } = render(checkWith(null));
     expect(await screen.findByText("Biggest limiters")).toBeInTheDocument();
     // Missing data is a skip, not an alarm — no age, no nudge, no URL.
-    expect(screen.getByText(/Driver date unreadable — skip/)).toBeInTheDocument();
+    expect(screen.getByText(/couldn't read your graphics driver's date/i)).toBeInTheDocument();
     expect(screen.queryByText(/days old/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy link/ })).not.toBeInTheDocument();
     rerender(checkWith(20));

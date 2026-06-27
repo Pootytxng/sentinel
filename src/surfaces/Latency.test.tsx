@@ -58,7 +58,9 @@ describe("LatencyTab (audit M1)", () => {
   it("degrades honestly when diagnostics can't be read", async () => {
     mocks.report = null;
     render(<LatencyTab />);
-    expect(await screen.findByText("Diagnostics unavailable on this machine.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/couldn't read latency diagnostics just now/i),
+    ).toBeInTheDocument();
   });
 
   it("renders the read-only promise and receipt-style MSI counts", async () => {
@@ -68,7 +70,7 @@ describe("LatencyTab (audit M1)", () => {
     expect(await screen.findByText(/Nothing here\s+changes a setting/)).toBeInTheDocument();
     // Receipts: exact counts, incl. the advertised-but-inactive honesty split.
     expect(
-      screen.getByText(/4 of 6 capable devices confirmed on MSI.*1 advertise it but run on a line IRQ.*1 undetermined/),
+      screen.getByText(/4 of 6 capable devices confirmed on MSI.*1 advertise it but run on a line IRQ.*1 couldn't be read/),
     ).toBeInTheDocument();
     expect(screen.getByText(fullReport.msi_advisory!)).toBeInTheDocument();
     // "Name the guilty device": the verified line-IRQ offender is NAMED with its state.

@@ -265,11 +265,37 @@ html, body, #root {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 12px 16px;
   background: rgba(248, 113, 113, 0.1);
   border: 1px solid var(--danger);
   border-radius: 8px;
   color: var(--danger);
+}
+.error-msg {
+  flex: 1;
+  min-width: 0;
+}
+.error-dismiss {
+  flex: none;
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--danger);
+  cursor: pointer;
+  opacity: 0.8;
+}
+.error-dismiss:hover,
+.error-dismiss:focus-visible {
+  opacity: 1;
+}
+.app-booting-retry {
+  margin-top: 14px;
 }
 
 /* Count-agnostic hardware glance (elastic §6): flex-grow so each row fills its width and an orphan

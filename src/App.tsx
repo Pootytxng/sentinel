@@ -511,6 +511,13 @@ function App() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticSection[]>([]);
   const [rulesSource, setRulesSource] = useState<string>("embedded");
   const [error, setError] = useState<string | null>(null);
+  // One place to turn a raw backend/Rust error into a calm, plain-English banner line for a
+  // non-technical user. The technical detail goes to the console for diagnosis (retrievable over the
+  // debug port), never shown raw to the user — the owner's "no String(e) in the face" law.
+  const fail = useCallback((message: string, detail?: unknown) => {
+    if (detail !== undefined) console.error("[compy]", message, detail);
+    setError(message);
+  }, []);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   // Living Instrument "simplified rail" (2026-06-15): when the preview skin is on, the shell rail
@@ -628,7 +635,8 @@ function App() {
       await invoke("recover_gaming_session", { confirm: true });
       setGamingRecovery(null); // cleared only once restore confirms
     } catch (e) {
-      setError(String(e)); // leave the banner up so the user can retry / Review
+      // leave the banner up so the user can retry / Review
+      fail("Couldn't finish restoring your settings just now — try again, or use Review.", e);
     }
   };
 
@@ -639,7 +647,7 @@ function App() {
       setReport(await invoke<ExportResult>("export_report", { feedback: null }));
       bumpLocalStat("reportsExported"); // R3 Lane D — local-only counter, best-effort
     } catch (e) {
-      setError(String(e));
+      fail("Couldn't build the report just now — try again in a moment.", e);
     } finally {
       setExporting(false);
     }
@@ -662,7 +670,7 @@ function App() {
           return v;
         })
         .catch((e) => {
-          setError(String(e));
+          fail("Couldn't read some of your system info just now — try again in a moment.", e);
           return undefined;
         });
     // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
@@ -681,7 +689,7 @@ function App() {
           sessions,
         }).then(setPriorities),
       )
-      .catch((e) => setError(String(e)));
+      .catch((e) => fail("Couldn't rank your priorities just now — try again in a moment.", e));
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
         setHw(info);
@@ -712,7 +720,7 @@ function App() {
         prev.map((e) => (e.name === entry.name ? { ...e, enabled: !e.enabled } : e))
       );
     } catch (e) {
-      setError(`Toggle failed: ${e}`);
+      fail("Couldn't change that startup item just now — try again.", e);
     } finally {
       setBusyId(null);
     }
@@ -737,7 +745,10 @@ function App() {
       });
       await refresh();
     } catch (e) {
-      setError(`Apply failed: ${e}`);
+      fail(
+        "Couldn't apply that change — it may need an admin OK, or the prompt was cancelled. Nothing was changed; try again.",
+        e,
+      );
     } finally {
       setBusyId(null);
     }
@@ -786,7 +797,7 @@ function App() {
       await invoke("rollback_change", { changeId: change.id });
       await refresh();
     } catch (e) {
-      setError(`Rollback failed: ${e}`);
+      fail("Couldn't undo that change just now — try again, or undo it from the Trust Ledger.", e);
     } finally {
       setBusyId(null);
     }
@@ -1097,7 +1108,7 @@ function App() {
           report={report}
           onClose={() => setReport(null)}
           onOpenFolder={() => {
-            invoke("open_export_folder").catch((e) => setError(String(e)));
+            invoke("open_export_folder").catch((e) => fail("Couldn't open the exports folder.", e));
           }}
           onReexport={async (feedback) => {
             setReport(await invoke<ExportResult>("export_report", { feedback }));
@@ -1124,7 +1135,22 @@ function App() {
         </header>
       )}
 
-      {error && <div className="error">Error: {error}</div>}
+      {/* Once the app is loaded, action errors (apply/rollback/export/…) show here as a calm,
+          dismissable banner. While hw is still null the failed-hardware retry below owns the message,
+          so we don't double up. */}
+      {error && hw && (
+        <div className="error" role="alert">
+          <span className="error-msg">{error}</span>
+          <button
+            type="button"
+            className="error-dismiss"
+            onClick={() => setError(null)}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {gamingRecovery && (
         <div className="gaming-recovery-banner" role="alert">
@@ -1357,9 +1383,19 @@ function App() {
           </div>
       ) : (
         // hw still null — detection in flight (or slow WMI). A calm placeholder, never a blank window.
+        // If the read actually FAILED (error set), don't spin forever — say so and offer a retry.
         <div className="app-booting" role="status" aria-live="polite">
           <Wordmark size={30} />
-          <p className="app-booting-line">Reading your hardware…</p>
+          {error ? (
+            <>
+              <p className="app-booting-line">Couldn't read your hardware just now.</p>
+              <button className="btn btn-primary app-booting-retry" onClick={() => void refresh()}>
+                Try again
+              </button>
+            </>
+          ) : (
+            <p className="app-booting-line">Reading your hardware…</p>
+          )}
         </div>
       )}
 
