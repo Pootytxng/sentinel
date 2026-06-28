@@ -37,6 +37,12 @@ On waking, and **again immediately after finishing each item** (do NOT stop to a
 
 ## ② HOW TO RUN A LANE (one-time, per tab — this is the activation step)
 
+> **⚠️ ENGINE CHOICE — defer to `LANE_WORKFLOW.md` (the current cost-control model, v2).** Per
+> LANE_WORKFLOW + the `token-awareness-governance` learning, **perpetual `/loop`s are DEPRECATED** (the
+> perpetual-loop fleet burned ~10× the budget). Prefer the **bounded `compy-burst`**; the `/loop` below
+> and `lane-runner.ps1` (§⑨) are the hard-capped FALLBACK only. **Stop when your queue is genuinely dry —
+> never idle-spin.** (Also: `PARALLEL_WORKTREE_OPS.md` is superseded — lanes push to `main` per §① here.)
+
 Paste this `/loop` into each lane tab (fill `<LANE>` with the lane name from §④). The loop re-feeds the prompt
 after every stop, so the lane keeps pulling its next task — that IS "prompting itself to continue":
 

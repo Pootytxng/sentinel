@@ -36,6 +36,12 @@
 
 - Advises, never rules: doctrine laws, LOCKED gates, zero-budget law, and owner territory
   (money/taste/people/irreversible) outrank any seat.
+- **Scope of "reversible PROCESS gate" the council may advise overriding (reconciles the COWORK_HANDOFF
+  mandate-expansion):** internal/reversible process conventions only. **"Reversible" NEVER licenses
+  crossing an outbound-network or security boundary.** The council may NOT self-authorize: arming
+  Receipts telemetry / remote-fetch / the updater, any security/system-setting flip, anything
+  irreversible to other people's machines, secrets entering the repo, or moving the frozen beta refs —
+  those stay owner-only regardless of how clean the rollback looks. The window itself is the risk.
 - Contrarian red flags are never buried mid-report — they open it.
 - Seat verdicts must be SPECIFIC to the train under review (generic wisdom = seat left empty).
 - Disagreement between seats is content, not noise — surface it, don't smooth it.

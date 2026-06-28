@@ -1,5 +1,11 @@
 # Parallel Worktree Operations — HQ / Air-Traffic-Control model
 
+> **⚠️ SUPERSEDED (2026-06-27) — HISTORICAL.** This 2026-06-01 model ("only HQ writes `main`"; lanes
+> Design/Backend-spike/Benchmark at `code\compy-*` paths that no longer exist) has been replaced by
+> **`docs/LANE_BUS.md` + `docs/LANE_WORKFLOW.md`** (lanes rebase + push `HEAD:main` themselves; bounded
+> `compy-burst`, no perpetual loops). Use those for the current model. Kept only as a record of how the
+> HQ/air-traffic-control approach worked. Current live state always lives in `docs/RELEASE_STATE.md`.
+
 **Set 2026-06-01.** Compy is worked by multiple Claude sessions ("lanes") at once. This is the
 rule of the road. **HQ owns this doc.** Any lane: read this before touching the repo.
 
