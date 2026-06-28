@@ -1,7 +1,13 @@
 # Compy — Gaming Mode (F1) Plan
 
-**PLANNING ONLY. No code.** This is the design + QA contract for Gaming Mode, the only planned
-feature that introduces **mutation**. It must be built deliberately, behind its own QA gate.
+> **⚠️ STATUS (2026-06-27): Gaming Mode is now LIVE, not planned.** `gaming_mode_gate()` (`lib.rs:499`)
+> returns `true` — the gate was flipped on 2026-06-18 with owner sign-off after the §7 QA harness passed
+> 6/6 scenarios. Only the live reboot-while-active QA remains owner-pending (see `docs/GAMING_MODE_QA.md`
+> and `docs/RELEASE_STATE.md`). Read the sections below as the standing **design + QA contract for the
+> shipped feature**, not as "a feature still to be built."
+
+This is the design + QA contract for Gaming Mode, the only feature that introduces **mutation**. It was
+built deliberately, behind its own QA gate.
 
 > **Gaming Mode is NOT a new tweak pack.** It is a *temporary, session-scoped wrapper* around
 > already-audited settings. It applies safe gaming settings while a game runs and restores the

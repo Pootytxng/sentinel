@@ -159,7 +159,7 @@ Adding a new variant is fine. Renaming or removing existing ones permanently bre
 
 #### Bundle identifier
 
-Currently `com.compy.app`. Confirmable pre-launch; immutable once shipped to users. See pre-launch checklist.
+Currently `gg.compy.app` (set at the 2026-06-04 Sentinel→Compy rename; matches `src-tauri/tauri.conf.json`). Immutable once shipped to users — changing it breaks already-installed users' rollback/data paths.
 
 #### AppData directory `%APPDATA%\Compy`
 
@@ -272,7 +272,7 @@ If any of the above is later added to Compy, it must be:
 
 Tracked here so the right decisions are made at the right time, not skipped:
 
-- [ ] Trademark check on the public name (currently "Compy" is a code name; CompyOne is an established holder in adjacent space)
+- [ ] Trademark check on the public name (the Sentinel→Compy rename was executed 2026-06-04 — name committed at app level; CompyOne is an established holder in adjacent space, so clearance is still open)
 - [ ] Final bundle identifier confirmed
 - [ ] Final public product name confirmed
 - [ ] EV code-signing certificate purchased and integrated into the build pipeline

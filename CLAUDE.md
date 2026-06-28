@@ -191,7 +191,7 @@ feel/look right). This is the operational meaning of "keep the installer on his 
 
 ### Rust module map (post-refactor — `lib.rs` carved into safety-boundary modules)
 
-- `lib.rs` (~496 lines) — `run()` wiring + command registration, 13 state probes, `compy_data_dir`, startup-apps, `safety_tests`.
+- `lib.rs` (~1270 lines) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:499`), `safety_tests`.
 - `actions.rs` — the ONLY Windows-mutation + rollback boundary: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
 - `history.rs` — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history alone.
 - `recommendations.rs`, `hardware.rs`, `monitoring.rs`, `diagnostics.rs`, `fps.rs`, `remote_rules.rs`.

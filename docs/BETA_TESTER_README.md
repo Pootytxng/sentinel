@@ -162,7 +162,7 @@ Premium or plain: premium/plain
 Did it reduce the urge to look up random tweak guides: yes/no
 "No measurable change" verdict — honest or annoying: honest/annoying/didn't see it
 Did you find the Library (the Learn tab)? yes/no — what did you search for:
-Which theme did you keep (Settings → Appearance): Halfway / Midnight / Hearth:
+Which theme did you keep (Settings → Appearance): Midnight / Violet / Crimson / Emerald / Hearth:
 What would make this the only PC-readiness tool you need:
 Other notes:
 ```

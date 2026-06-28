@@ -8,10 +8,15 @@
 > gate** so you can say e.g. *"arm service-suspend"* with eyes open. The flip itself stays your sign-off — that line
 > is immovable; everything *up to* it I'll do for you.
 
-## Current gate states (verified 2026-06-25, `main` @ cc04d0f)
+## Current gate states (verified 2026-06-27, `main` @ `9463c10`)
+
+> **`docs/RELEASE_STATE.md` is the authoritative gate matrix — if this table and it ever disagree, RELEASE_STATE wins.** This table is a quick reference for the arming PROCESS below; keep it in sync or defer to RELEASE_STATE.
+
 | Gate | State | File |
 |---|---|---|
-| service-suspend (Phase B) | **DARK** (`false`; `#[cfg(test)]` seam only) | `actions.rs:1302` |
+| service-suspend (Phase B) | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1350` |
+| debloat / telemetry-task disable (Phase B) | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1421` |
+| Gaming Mode (F1) | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:499` |
 | leftovers restore (Phase B) | **DARK** (`false`) | `leftovers.rs:727` |
 | remote-fetch rules | **DARK** (`false`, placeholder pubkey, no CDN) | `remote_rules.rs:96` |
 | Receipts telemetry (Phase C) | **BUILT-DARK** (off) | `receipts.rs` |
@@ -84,7 +89,8 @@
    carries BOTH armed Phase-B features (service-suspend + debloat). **NSIS `Compy_0.1.0_x64-setup.exe` SHA-256
    `512DAFF324545D2E726AA70AA4F5B2365699E16CD96B9004849863838824A836`** (3,266,584 B) + MSI
    `305B2143E69959E4BC713D89B6C473FFD4CFD85513806684CE5F5B40669F3DBD` (4,726,784 B) — staged to Desktop, source==copy
-   hash-verified. Frozen beta refs (`16069fa`) untouched. **⏳ owner reinstall pending** = the only step left to make
-   both features usable in the running app.
+   hash-verified. Frozen beta refs (`16069fa`) untouched. NOTE (2026-06-27): this `512DAFF3…` installer has since been
+   superseded several times; reinstall is **Claude's job** per the silent-reinstall law, NOT an owner action. Current
+   installer + live state: see `docs/RELEASE_STATE.md`.
 
 **HQ recommendation:** open exactly ONE gate — **Phase B service-suspend** — via this sequence. Say *"arm service-suspend"* and I'll do step 2 (the careful QA-harness build) and hand you a one-decision flip; I will not flip the gate without your sign-off on the QA. Phase C/D stay shut until you deliberately choose them.

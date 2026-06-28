@@ -12,24 +12,24 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `f3c6c13` (branch `main`) |
+| Git HEAD | `9463c10` (branch `main`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
 | Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `1631772827FDD8F5599ECE5296177FC324E7C8A9CFF025AA95DF49400CB4BD86` (built from `f3c6c13`, 2026-06-27; everything in `944705B4…` + GamingMode's 4 raw-error sites → friendly, severity-honest copy (completeness-grep catch — the flagship mutation was dumping raw Rust strings); supersedes `944705B4…`. Prior `944705B4…` built from `61bd9bd`, 2026-06-27; everything in `9944643C…` + a finished-states pass: friendly plain-English global error banner + Dismiss (raw error → console, never in the user's face) · failed-hardware-read shows a Try-again instead of an eternal "Reading your hardware…" · friendly debloat/telemetry-disable error · plain "No GPU detected"/driver-date/diagnostics copy · Monitor declined-UAC + launch-a-game guidance · autopsy Clear button · FirstCheck dead-chip reworded; supersedes `9944643C…`) — **installed by Claude via the silent-reinstall law** (Desktop holds exactly one installer); live-verified: build stamp `61bd9bd · release`, normal load clean (no spurious error/booting), Settings/autopsy flows intact |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | 2026-05-31 (frozen private-beta build). Current `main` adds live Gaming Mode + armed Phase-B mutations whose own live QA passed 2026-06-25/26, but `main` has **not** had a fresh full §6/§7 installed-build pass. |
 
-## Gate matrix (verified at HEAD `2b42d0a`)
+## Gate matrix (verified at HEAD `9463c10`)
 
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
-| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:500` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **live reboot-while-active QA still owner-pending.** |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1358` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1424` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:174` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). **Module comment still says "NEXT / not shipped" — stale.** |
+| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:499` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **live reboot-while-active QA still owner-pending.** |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1350` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1421` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:174` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Leftovers restore** | **DARK** (`false`) | `restore_gate()` — `leftovers.rs:728` | Double-dark; detector is read-only, restore path refused + `#[cfg(test)]` bypass only. |
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:19` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:41` (all-zeros key `license.rs:31`); FE `pro.ts:14`, `entitlements.ts:14` | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
-| **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:101`; all-zeros pubkey `remote_rules.rs:84` | Double-gated: `verify_chain` ALSO hard-fails on the placeholder key (`remote_rules.rs:235`). Ed25519 verify is real but never runs in shipped builds. |
+| **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:96`; all-zeros pubkey `remote_rules.rs:84` | Double-gated: `verify_chain` ALSO hard-fails on the placeholder key (`remote_rules.rs:235`). Ed25519 verify is real but never runs in shipped builds. |
 | **Auto-updater** | **OFF / absent** | no `plugins`/`updater` block in `tauri.conf.json`; no updater dep in `Cargo.toml` | — |
 | **Outbound network** | **NONE** | no `reqwest`/`ureq`/`hyper`/HTTP client in `Cargo.toml`; CSP `connect-src 'self' ipc:` | Verified-zero-outbound property holds while Receipts + remote-fetch stay dark. |
 

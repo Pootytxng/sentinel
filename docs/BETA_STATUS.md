@@ -39,14 +39,15 @@ Since the `16069fa` snapshot the picture **changed from the earlier note**: the 
 - the **honest command-center UI** (Experience Pass merged) — SystemPosture hero, design-system, curated
   themes, Guided advisory deep-links (scoped `ms-settings:` opener allowlist) — **no gamification**;
 - a **hardened production CSP** (runtime-verified, `a9619ec`);
-- **F1 Gaming Mode built but DARK** behind `gaming_mode_gate()` (tab hidden, commands refuse) — its own
-  QA (`docs/GAMING_MODE_QA.md`) gates flipping it on;
+- **F1 Gaming Mode** — was built DARK; **now LIVE on `main`** (`gaming_mode_gate()` returns `true`, flipped
+  2026-06-18 w/ owner sign-off; only the live reboot-while-active QA remains owner-pending). Service-suspend +
+  debloat are also ARMED on `main`. See `docs/RELEASE_STATE.md`;
 - zero clippy warnings; EULA Black-Book advisory clause.
 
 None of this is in `private-beta-001`. **A `private-beta-002` cut from current `main` would showcase the
 new command-center UI** (which the tester feedback template already targets) but must first pass its own
-installed-build smoke (re-run §6/§7 of `PACKAGING_SIGNING_PLAN.md`). Gaming Mode stays gated even in
-beta-002 until `GAMING_MODE_QA.md` passes.
+installed-build smoke (re-run §6/§7 of `PACKAGING_SIGNING_PLAN.md`). (NOTE 2026-06-27: Gaming Mode is now
+LIVE on `main` — the "stays gated" line below reflected the pre-2026-06-18 state.)
 
 **CHECKPOINT (owner) — closed beta:** (1) ship the frozen **beta-001** (known-good, older UI) **or** cut
 **beta-002** from current `main` (new UI + CSP; needs a re-smoke I can run); (2) host / share the

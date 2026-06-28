@@ -1,7 +1,9 @@
 # Benchmark — Integration Plan (HQ merge contract)
 
-**Status: MERGED DARK (2026-06-03).** The benchmark engine merged into `main` on 2026-06-03 — compiled
-but **unwired** (`mod benchmark;` only, no IPC command, no tab; nothing user-facing changed). This doc is
+**Status: SHIPPED (update 2026-06-27).** Originally MERGED DARK (2026-06-03) — compiled but unwired. It is now
+LIVE/UI-reachable: the benchmark tweak A/B trial (`start_tweak_trial`) is wired into `Benchmark.tsx` and runs a
+real mutation through the audited `apply_recommendation` path under a `RollbackGuard` (see `docs/RELEASE_STATE.md`).
+The contract below remains the design reference. This doc is
 the contract HQ and the benchmark lane both build against so that, when the benchmark is wired up, it does
 so **cleanly and without betraying Compy's identity.** No code here — this is the seam + the rules.
 

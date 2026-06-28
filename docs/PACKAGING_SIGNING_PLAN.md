@@ -3,7 +3,7 @@
 **Planning / config-audit only. No public release artifact yet.** This is the path to a
 **private-beta** installer and, later, a properly-signed public release. The product surface
 (Readiness, Sessions, Export, Priorities, Monitoring, Trust Ledger, verified apply/rollback) is
-already beta-worthy; packaging is now the safer critical path. Gaming Mode (F1) stays gated.
+already beta-worthy; packaging is now the safer critical path. (NOTE 2026-06-27: Gaming Mode F1 is now LIVE on `main`, and service-suspend + debloat are ARMED — see `docs/RELEASE_STATE.md`. The remaining mutation discipline is LOCKED-rule-6 catalog freeze, not "no Gaming Mode.")
 
 ---
 
@@ -194,12 +194,12 @@ enable, apply/rollback) were performed by the owner and the resulting on-disk ev
 
 ⇒ **Post-polish installed-build smoke = PASS.** The **private beta is READY for invite-only, unsigned,
 direct-download / local-share distribution.** PUBLIC release stays gated on **code signing + legal**
-(license model + jurisdiction). **Gaming Mode (F1) stays gated** (its own QA). Remote fetch + updater stay off.
+(license model + jurisdiction). Remote fetch + updater stay off. (NOTE 2026-06-27: this PASS block reflects the frozen private-beta build; on current `main`, Gaming Mode F1 is now LIVE and service-suspend + debloat are ARMED — see `docs/RELEASE_STATE.md`.)
 
 ## 8. Explicit non-goals
 
 - Do **not** enable remote fetch. Do **not** enable the updater.
-- Do **not** build Gaming Mode (F1). Do **not** add recommendations.
+- Do **not** expand the frozen ~29-rec tweak catalog (LOCKED rule 6) — no new risky tweaks/recommendations. (Gaming Mode F1, service-suspend, and debloat are already SHIPPED/ARMED on `main` and are NOT new catalog entries — they ride the existing audited apply/rollback boundary.)
 - Do **not** relax the privacy / no-telemetry stance.
 - Do **not** ship a public release without code signing + legal review.
 

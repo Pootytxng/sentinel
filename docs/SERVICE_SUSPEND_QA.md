@@ -1,7 +1,11 @@
 # Service-Suspend (Phase-B, BUILT-DARK) — Mutation-QA Sign-off Report
 
-> **Status: gate STAYS DARK.** `actions::service_suspend_gate()` returns `false` throughout. Nothing in
-> this QA flips it, ships it, or modifies the mutation boundary. Arming (flipping the gate + wiring a
+> **UPDATE (2026-06-25): gate now ARMED.** After this owner-present live QA passed, `service_suspend_gate()`
+> (`actions.rs:1350`) was flipped to `true` with owner sign-off — service-suspend is ARMED on `main` (see
+> `docs/RELEASE_STATE.md`). The "STAYS DARK" status below is the point-in-time framing as of the QA run.
+>
+> **Status (at QA time): gate STAYS DARK.** `actions::service_suspend_gate()` returned `false` throughout. Nothing in
+> this QA flipped it, shipped it, or modified the mutation boundary. Arming (flipping the gate + wiring a
 > picker/UI) remains the owner's explicit decision (LOCKED-rule-6, owner greenlit *adding* the gated
 > mutation 2026-06-22; the *arming* still rides this QA + sign-off).
 >
