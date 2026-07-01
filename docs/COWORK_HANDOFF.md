@@ -152,6 +152,16 @@ paid surface via Azure Trusted Signing ~$10/mo · entity+Paddle ← Pro launch �
 before 1.0**). Organic-first: friends + the owner's Discord community = the named seed channel.
 Never tee up a spend without the free alternative it beats.
 
+## Token-routing protocol (standing, 2026-07-01)
+
+Full table: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Cowork lane summary:
+**all spec/audit/design/research/status work runs HERE; CC's Fable turns are reserved for build
+trains only** (Fable ≈ the right tool for ~5–15% of tasks — ours are the builds). Audit by
+reading git directly — never ask CC to re-narrate (Fable output tokens), and never put "explain
+your reasoning" in a CC prompt (can silently route to Opus 4.8). Promo windows: Cowork 5-hr cap
+2× to Jul 5 (weekly pool UNCHANGED — 2× buys longer sessions, not free tokens); Fable on-plan to
+Jul 7, then owner-gated API spend, default no → CC falls back to Opus 4.8.
+
 ## Current board / session log → archived
 
 The reverse-chronological board log + resume points were moved to

@@ -150,6 +150,22 @@ commit hash(es) · 1–2 line what-changed · one verification line (cargo/npm/c
 message + spec, NOT the chat. Don't re-explain known context or restate the board. **Rigor unchanged**
 — tests/audits/verification never skipped, only reported concisely. Mirrored in `docs/COWORK_HANDOFF.md`.
 
+### FABLE 5 PROMPTING DEFAULTS (standing rule, 2026-07-01)
+
+Full protocol: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. The CC-facing core:
+- **Fable turns are for builds.** Specs/docs/audits/research live in the Cowork lane. Fable is
+  on-plan only to ~Jul 7 (50% of weekly limits); after that CC runs Opus 4.8 — paid Fable API
+  credits are an owner-gated spend (zero-budget law), default no.
+- **Effort matching:** default high; x-high only for correctness-critical work at the
+  mutation/rollback boundary; medium/low for routine edits.
+- **Never ask Fable to show its reasoning** (standing "explain your reasoning" lines can refuse
+  or silently route to Opus 4.8). Proof lives in commits/diffs/tests, not narration. The
+  auto-switch-as-STOP-signal rule above stands.
+- **Prove it, tersely:** point to the result that proves it; only report what you can show;
+  unverified = say so plainly. Report stays `hash · what · one verify line · flags`.
+- Hard-lines blocks in prompts are deliberate negative prompting — keep them; don't restate
+  doctrine per prompt (it's here and in the specs).
+
 ### SELF-REVIEW + BUG→GUARD — vigilance lives in the toolchain (standing rule, 2026-06-20)
 
 Owner asked to be made "more precise and vigilant" of the laws after I shipped a muted-on-accent button

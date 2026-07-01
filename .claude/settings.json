@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-continue.mjs\"",
+            "timeout": 20,
+            "statusMessage": "autopilot: checking task queue"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/self-review-reminder.mjs\"",
+            "timeout": 10,
+            "statusMessage": "self-review reminder"
+          }
+        ]
+      }
+    ]
+  }
+}
