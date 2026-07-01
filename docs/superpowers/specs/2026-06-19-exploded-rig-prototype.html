@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en" data-itheme="violet" data-motion="cinematic" data-session="idle">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Exploded Rig (concept prototype)</title>
+<!--
+  CONCEPT PROTOTYPE — 2026-06-19 — "Your rig, exploded."
+  An interactive 3D model of the user's PC that spreads apart piece by piece, each component
+  floating with its REAL detected spec + a plain-language tooltip. Drag the EXPLODE slider,
+  hover a part to highlight it, move the mouse to orbit. Real --ix-* tokens. NOT app code.
+  This is the LIGHT (CSS-3D) form of the idea — see the note at the bottom re: the photoreal
+  WebGL path. Honesty: the model is a STYLISED representative rig; the SPECS on it are read
+  from the real machine. Continuous motion PARKS during a measured game session.
+-->
+<style>
+  :root{
+    --bg:#07080b;--panel:#12151d;--panel-2:#181c26;--panel-3:#1f242f;
+    --border:#242b39;--border-strong:#313b4e;--hairline:rgba(255,255,255,.06);
+    --fg:#eef1f7;--fg-2:#c4ccda;--muted:#8b95a8;--faint:#5d6679;
+    --ready:#46d98a;--attention:#f5b740;--danger:#f3716f;
+    --r:10px;--r-lg:14px;--r-pill:999px;--ease:cubic-bezier(.4,.12,.18,1);
+    --font-ui:"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono:"Cascadia Code","JetBrains Mono",Consolas,monospace;
+    --ix-base:#090b12;--ix-text-1:#eef1f8;--ix-text-2:#b8bcc8;--ix-text-3:#828896;
+    --ix-accent:#2ee6c0;--ix-accent-text:#7defcf;--ix-accent-ink:#06231c;--ix-accent-2:#7c9cff;
+    --ix-streak-1:#7c9cff;--ix-streak-2:#2ee6c0;--ix-streak-3:#a5b4ff;
+    --ix-glass-fill:rgba(18,21,30,.73);--ix-glass-border:rgba(255,255,255,.08);--ix-glass-top:rgba(255,255,255,.12);
+    --accent:#2ee6c0;--accent-glow:rgba(124,156,255,.4);
+    --rx:0deg;--ry:0deg;
+  }
+  :root[data-itheme="violet"]{--ix-accent:#b366ff;--ix-accent-text:#d9b8ff;--ix-accent-ink:#1a0a2e;--ix-accent-2:#ff77c8;--ix-streak-1:#b366ff;--ix-streak-2:#ff77c8;--ix-streak-3:#9d7bff;--ix-base:#0c0a14;--ix-text-1:#f3f1f8;--accent:#b366ff;--accent-glow:rgba(179,102,255,.45)}
+  :root[data-itheme="crimson"]{--ix-accent:#fb3b53;--ix-accent-text:#ffadb8;--ix-accent-ink:#2a0610;--ix-accent-2:#ff6b81;--ix-streak-1:#fb3b53;--ix-streak-2:#ff6b81;--ix-streak-3:#e23b6d;--ix-base:#120a0c;--ix-text-1:#f8f1f2;--accent:#fb3b53;--accent-glow:rgba(251,59,83,.46)}
+  :root[data-itheme="emerald"]{--ix-accent:#27e08a;--ix-accent-text:#8af0b5;--ix-accent-ink:#042012;--ix-accent-2:#a8e85a;--ix-streak-1:#27e08a;--ix-streak-2:#a8e85a;--ix-streak-3:#34e6a0;--ix-base:#080f0b;--ix-text-1:#eef7f1;--accent:#27e08a;--accent-glow:rgba(39,224,138,.42)}
+  :root[data-itheme="midnight"]{--ix-accent:#2ee6c0;--ix-accent-text:#7defcf;--ix-accent-ink:#06231c;--ix-accent-2:#7c9cff;--ix-streak-1:#7c9cff;--ix-streak-2:#2ee6c0;--ix-streak-3:#a5b4ff;--ix-base:#090b12;--ix-text-1:#eef1f8;--accent:#2ee6c0;--accent-glow:rgba(124,156,255,.4)}
+  :root[data-itheme="hearth"]{--ix-accent:#f0b878;--ix-accent-text:#ffe0b4;--ix-accent-ink:#2a1304;--ix-accent-2:#b65f54;--ix-streak-1:#edaa5e;--ix-streak-2:#b65f54;--ix-streak-3:#f0c585;--ix-base:#15100a;--ix-text-1:#f5ede2;--ix-text-2:#c0b0a0;--ix-text-3:#8a7866;--accent:#f0b878;--accent-glow:rgba(240,184,120,.42)}
+
+  @property --ex{syntax:"<number>";inherits:true;initial-value:0}
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{background:radial-gradient(120% 90% at 50% 16%,color-mix(in srgb,var(--ix-streak-1) 8%,var(--ix-base)),var(--ix-base) 70%);
+    color:var(--ix-text-1);font-family:var(--font-ui);font-size:14px;-webkit-font-smoothing:antialiased}
+
+  /* controls */
+  .demobar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:9px 16px;background:rgba(0,0,0,.42);border-bottom:1px dashed var(--ix-glass-border);backdrop-filter:blur(8px)}
+  .demobar .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .swatches{display:flex;gap:7px}
+  .swatch{width:20px;height:20px;border-radius:50%;border:1px solid var(--ix-glass-border);cursor:pointer;transition:transform .12s var(--ease)}
+  .swatch:hover{transform:scale(1.15)}
+  .swatch.on{box-shadow:0 0 0 2px var(--ix-base),0 0 0 4px var(--ix-accent)}
+  .exrow{display:flex;align-items:center;gap:9px}
+  .exrow input[type=range]{width:170px;accent-color:var(--ix-accent)}
+  .toggle{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ix-text-2);cursor:pointer;user-select:none}
+  .toggle input{appearance:none;width:34px;height:19px;border-radius:999px;background:var(--panel-3);position:relative;cursor:pointer;transition:background .16s}
+  .toggle input::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .toggle input:checked{background:color-mix(in srgb,var(--ix-accent) 50%,transparent)}
+  .toggle input:checked::after{transform:translateX(15px);background:var(--ix-accent)}
+
+  .head{position:fixed;top:54px;left:0;right:0;z-index:20;text-align:center;pointer-events:none}
+  .head h1{margin:0;font-size:clamp(22px,3vw,34px);letter-spacing:-.025em}
+  .head h1 b{color:var(--ix-accent-text)}
+  .head p{margin:5px 0 0;color:var(--fg-2);font-size:13px}
+  .sessionbar{display:none;margin:9px auto 0;width:max-content;align-items:center;gap:9px;padding:6px 13px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--ix-accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--ix-accent) 28%,transparent);color:var(--ix-accent-text);font-size:12px}
+  html[data-session="active"] .sessionbar{display:flex}
+  .sessionbar .pulse{width:8px;height:8px;border-radius:50%;background:var(--ix-accent);box-shadow:0 0 8px var(--ix-accent)}
+
+  /* 3D scene */
+  .scene{position:absolute;inset:0;perspective:1500px;perspective-origin:50% 46%;display:flex;align-items:center;justify-content:center}
+  .rig{position:relative;width:520px;height:420px;transform-style:preserve-3d;transform:rotateX(var(--ry)) rotateY(var(--rx));transition:transform .2s var(--ease);will-change:transform}
+  .rig:hover .part:not(:hover){opacity:.45}
+
+  .part{position:absolute;left:50%;top:50%;transform-style:preserve-3d;cursor:pointer;transition:opacity .25s var(--ease);
+    transform:
+      translate(-50%,-50%)
+      translate3d(
+        calc((var(--bx,0) + var(--ex-x,0) * var(--ex)) * 1px),
+        calc((var(--by,0) + var(--ex-y,0) * var(--ex)) * 1px),
+        calc((var(--bz,0) + var(--ex-z,0) * var(--ex)) * 1px)
+      );}
+  .body{position:relative;border-radius:9px;border:1px solid var(--border-strong);box-shadow:0 14px 30px -16px rgba(0,0,0,.85),inset 0 1px 0 var(--ix-glass-top);transition:box-shadow .2s,border-color .2s,transform .2s}
+  .part:hover .body{border-color:var(--ix-accent);box-shadow:0 0 0 1px var(--ix-accent),0 0 34px -4px var(--accent-glow),0 18px 36px -16px rgba(0,0,0,.85);transform:translateZ(26px)}
+
+  /* component looks (stylised) */
+  .mobo .body{width:300px;height:340px;background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 2px,transparent 2px 26px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 2px,transparent 2px 26px),
+    linear-gradient(160deg,#171b25,#0e1118);}
+  .mobo .body::after{content:"";position:absolute;inset:14px;border:1px solid color-mix(in srgb,var(--ix-accent) 16%,transparent);border-radius:6px}
+  .gpu .body{width:300px;height:96px;background:linear-gradient(160deg,color-mix(in srgb,var(--ix-accent) 16%,#171b25),#0f1219);overflow:hidden}
+  .gpu .body::before{content:"";position:absolute;right:18px;top:50%;width:64px;height:64px;transform:translateY(-50%);border-radius:50%;
+    background:conic-gradient(from 0deg,color-mix(in srgb,var(--ix-accent) 50%,transparent),transparent 25%,color-mix(in srgb,var(--ix-accent) 50%,transparent) 50%,transparent 75%,color-mix(in srgb,var(--ix-accent) 50%,transparent));
+    box-shadow:inset 0 0 0 6px rgba(0,0,0,.4);animation:fan 3s linear infinite;opacity:.8}
+  .gpu .body::after{content:"";position:absolute;left:18px;top:50%;width:44px;height:44px;transform:translateY(-50%);border-radius:50%;background:conic-gradient(from 90deg,color-mix(in srgb,var(--ix-accent) 45%,transparent),transparent 30%,color-mix(in srgb,var(--ix-accent) 45%,transparent) 60%,transparent 90%);animation:fan 3.4s linear infinite}
+  .cpu .body{width:78px;height:78px;background:linear-gradient(135deg,#222734,#12151d);}
+  .cpu .body::after{content:"";position:absolute;inset:16px;border-radius:4px;background:linear-gradient(135deg,#2b313f,#1a1e29);box-shadow:inset 0 0 8px rgba(0,0,0,.6)}
+  .ram .body{width:26px;height:150px;background:linear-gradient(180deg,#1c212c,#10131b);}
+  .ram .body::after{content:"";position:absolute;left:5px;right:5px;top:16px;bottom:30px;border-radius:2px;background:repeating-linear-gradient(0deg,color-mix(in srgb,var(--ix-accent) 22%,transparent) 0 5px,transparent 5px 12px)}
+  .ssd .body{width:120px;height:30px;background:linear-gradient(160deg,#1c212c,#10131b)}
+  .ssd .body::after{content:"";position:absolute;right:8px;top:7px;bottom:7px;width:34px;border-radius:3px;background:color-mix(in srgb,var(--ix-accent) 18%,#0c0f15)}
+  .psu .body{width:150px;height:96px;background:linear-gradient(160deg,#181c26,#0c0f15)}
+  .psu .body::after{content:"";position:absolute;left:50%;top:50%;width:60px;height:60px;transform:translate(-50%,-50%);border-radius:50%;background:conic-gradient(from 0deg,rgba(255,255,255,.08),transparent 25%,rgba(255,255,255,.08) 50%,transparent 75%,rgba(255,255,255,.08));animation:fan 5s linear infinite}
+  @keyframes fan{to{transform:translateY(-50%) rotate(360deg)}}
+  .psu .body::after{animation-name:fanc}
+  @keyframes fanc{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+  /* floating spec tooltips — fade in as the rig explodes */
+  .tip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) translateZ(70px);opacity:var(--ex);pointer-events:none;
+    min-width:128px;padding:8px 11px;border-radius:10px;background:var(--ix-glass-fill);border:1px solid color-mix(in srgb,var(--ix-accent) 30%,var(--ix-glass-border));
+    box-shadow:0 10px 28px -12px rgba(0,0,0,.8);backdrop-filter:blur(6px)}
+  .part:hover .tip{border-color:var(--ix-accent);box-shadow:0 0 24px -6px var(--accent-glow)}
+  .tip .t{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ix-text-3)}
+  .tip .n{font-size:14px;font-weight:700;color:var(--ix-accent-text);margin-top:1px}
+  .tip .d{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.35}
+
+  .hint{position:fixed;left:50%;bottom:9px;transform:translateX(-50%);z-index:40;font-size:12px;color:var(--faint);text-align:center;pointer-events:none;max-width:90vw}
+
+  /* THE LAW: park continuous motion while measuring / calm / reduced */
+  html[data-session="active"] .gpu .body::before,html[data-session="active"] .gpu .body::after,html[data-session="active"] .psu .body::after,
+  html[data-motion="calm"] .gpu .body::before,html[data-motion="calm"] .gpu .body::after,html[data-motion="calm"] .psu .body::after,
+  html.rm .gpu .body::before,html.rm .gpu .body::after,html.rm .psu .body::after{animation:none!important}
+  html[data-session="active"] .rig,html.rm .rig{transform:rotateX(0) rotateY(0)!important}
+  html.rm *,html.rm *::before,html.rm *::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}.rig{transform:none!important}}
+</style>
+</head>
+<body>
+  <div class="demobar">
+    <span class="lbl">Concept · drag EXPLODE, hover a part, move mouse to orbit</span>
+    <div class="swatches" id="themes">
+      <div class="swatch" data-t="midnight" style="background:#2ee6c0"></div>
+      <div class="swatch on" data-t="violet" style="background:#b366ff"></div>
+      <div class="swatch" data-t="crimson" style="background:#fb3b53"></div>
+      <div class="swatch" data-t="emerald" style="background:#27e08a"></div>
+      <div class="swatch" data-t="hearth" style="background:#f0b878"></div>
+    </div>
+    <div class="exrow"><span class="lbl">Explode</span><input type="range" id="ex" min="0" max="100" value="100"></div>
+    <label class="toggle"><input type="checkbox" id="session"> 🎮 Game session</label>
+    <label class="toggle"><input type="checkbox" id="reduced"> Reduced motion</label>
+  </div>
+
+  <div class="head">
+    <h1>This is <b>your</b> rig.</h1>
+    <p>Every part, read from your actual machine — pull it apart and look.</p>
+    <div class="sessionbar"><span class="pulse"></span> Measuring your game — model parked so Compy never costs you a frame</div>
+  </div>
+
+  <div class="scene">
+    <div class="rig" id="rig">
+      <!-- bx/by = assembled position; ex-x/ex-y/ex-z = how far it flies out at full explode -->
+      <div class="part mobo" style="--bx:0;--by:0;--bz:-40;--ex-x:0;--ex-y:0;--ex-z:-120">
+        <div class="body"></div>
+        <div class="tip" style="--ex-x:0;--ex-y:0;--ex-z:-120"><div class="t">Motherboard</div><div class="n">B650 chipset</div><div class="d">Where every part plugs in. PCIe 4.0 — no bottleneck for your GPU.</div></div>
+      </div>
+      <div class="part gpu" style="--bx:0;--by:40;--bz:30;--ex-x:-20;--ex-y:150;--ex-z:170">
+        <div class="body"></div>
+        <div class="tip" style="--ex-x:-20;--ex-y:150;--ex-z:170"><div class="t">Graphics · 67°C</div><div class="n">RX 9070 XT</div><div class="d">Draws your frames. RDNA4, running cool — lots of headroom.</div></div>
+      </div>
+      <div class="part cpu" style="--bx:-40;--by:-70;--bz:20;--ex-x:30;--ex-y:-180;--ex-z:140">
+        <div class="body"></div>
+        <div class="tip" style="--ex-x:30;--ex-y:-180;--ex-z:140"><div class="t">Processor</div><div class="n">Ryzen X3D</div><div class="d">16 cores near 5.1 GHz. The 3D cache is gold for games.</div></div>
+      </div>
+      <div class="part ram" style="--bx:70;--by:-60;--bz:25;--ex-x:230;--ex-y:-90;--ex-z:110">
+        <div class="body"></div>
+        <div class="tip" style="--ex-x:230;--ex-y:-90;--ex-z:110"><div class="t">Memory</div><div class="n">29.4 GB</div><div class="d">Comfortable for modern titles — no swapping to disk mid-game.</div></div>
+      </div>
+      <div class="part ssd" style="--bx:-70;--by:110;--bz:25;--ex-x:-240;--ex-y:70;--ex-z:120">
+        <div class="body"></div>
+        <div class="tip" style="--ex-x:-240;--ex-y:70;--ex-z:120"><div class="t">Storage</div><div class="n">NVMe SSD</div><div class="d">Fast-lane drive. TRIM on, 41% free — quick load times.</div></div>
+      </div>
+      <div class="part psu" style="--bx:30;--by:130;--bz:10;--ex-x:170;--ex-y:160;--ex-z:80">
+        <div class="body"></div>
+        <div class="tip" style="--ex-x:170;--ex-y:160;--ex-z:80"><div class="t">Power</div><div class="n">PSU</div><div class="d">Feeds the whole rig. Stable headroom under full load.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">Drag <b>Explode</b> to spread it apart · hover any part to highlight it + read the spec · flip 🎮 to watch it park while a game is measured · stylised model, real specs</div>
+
+<script>
+  const root=document.documentElement;
+  // explode slider drives --ex (0..1)
+  const ex=document.getElementById("ex");
+  const setEx=()=>root.style.setProperty("--ex",(ex.value/100).toFixed(3));
+  ex.addEventListener("input",setEx); setEx();
+
+  // orbit (pointer + gyro) with rAF lerp
+  let tX=-12,tY=6,cX=-12,cY=6, froze=()=>document.getElementById("session").checked||root.getAttribute("data-motion")==="calm"||root.classList.contains("rm");
+  addEventListener("pointermove",e=>{const cx=innerWidth/2,cy=innerHeight/2;tX=((e.clientX-cx)/cx)*22;tY=-((e.clientY-cy)/cy)*14;});
+  addEventListener("deviceorientation",e=>{if(e.gamma==null)return;tX=Math.max(-26,Math.min(26,e.gamma/2));tY=Math.max(-16,Math.min(16,(e.beta-40)/-3));},true);
+  (function loop(){const t=froze();const gx=t?0:tX,gy=t?0:tY;cX+=(gx-cX)*.07;cY+=(gy-cY)*.07;root.style.setProperty("--rx",cX.toFixed(2)+"deg");root.style.setProperty("--ry",cY.toFixed(2)+"deg");requestAnimationFrame(loop);})();
+
+  document.getElementById("themes").addEventListener("click",e=>{const s=e.target.closest(".swatch");if(!s)return;root.setAttribute("data-itheme",s.dataset.t);document.querySelectorAll(".swatch").forEach(x=>x.classList.toggle("on",x===s));});
+  document.getElementById("session").addEventListener("change",e=>root.setAttribute("data-session",e.target.checked?"active":"idle"));
+  document.getElementById("reduced").addEventListener("change",e=>root.classList.toggle("rm",e.target.checked));
+</script>
+</body>
+</html>

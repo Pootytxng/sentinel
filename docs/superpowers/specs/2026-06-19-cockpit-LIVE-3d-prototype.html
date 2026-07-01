@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en" data-itheme="violet" data-motion="cinematic" data-session="idle">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — LIVE 3D Cockpit (bold taste prototype v2)</title>
+<!--
+  BOLD TASTE PROTOTYPE v2 — 2026-06-19. The "alive, interactable" read of the owner's ask:
+  pointer-parallax depth · a 3D tilt cockpit (the whole scene leans toward your cursor) ·
+  an auto-rotating 3D cube · device-gyro reactivity (tilt a laptop/phone and it leans) ·
+  magnetic hover · 3D card tilt with a moving glare. Real --ix-* tokens. NOT app code.
+  All motion = GPU-composited transforms; a rAF lerp gives the "alive" weight.
+  THE LAW still holds: flip 🎮 Game session and every continuous motion PARKS (zero per-frame
+  cost while Compy measures your frames). Reduced motion kills movement, keeps the depth.
+-->
+<style>
+  :root{
+    --bg:#07080b;--panel:#12151d;--panel-2:#181c26;--panel-3:#1f242f;
+    --border:#242b39;--border-strong:#313b4e;--hairline:rgba(255,255,255,.06);
+    --fg:#eef1f7;--fg-2:#c4ccda;--muted:#8b95a8;--faint:#5d6679;
+    --ready:#46d98a;--attention:#f5b740;--danger:#f3716f;
+    --r:10px;--r-lg:14px;--r-pill:999px;--ease:cubic-bezier(.4,.12,.18,1);
+    --font-ui:"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono:"Cascadia Code","JetBrains Mono",Consolas,monospace;
+    --ix-base:#090b12;--ix-text-1:#eef1f8;--ix-text-2:#b8bcc8;--ix-text-3:#828896;
+    --ix-accent:#2ee6c0;--ix-accent-text:#7defcf;--ix-accent-ink:#06231c;--ix-accent-2:#7c9cff;
+    --ix-streak-1:#7c9cff;--ix-streak-2:#2ee6c0;--ix-streak-3:#a5b4ff;
+    --ix-glass-fill:rgba(18,21,30,.73);--ix-glass-border:rgba(255,255,255,.08);--ix-glass-top:rgba(255,255,255,.12);
+    --accent:#2ee6c0;--accent-glow:rgba(124,156,255,.36);
+    --rx:0deg;--ry:0deg;            /* world tilt, driven by pointer / gyro */
+  }
+  :root[data-itheme="violet"]{--ix-accent:#b366ff;--ix-accent-text:#d9b8ff;--ix-accent-ink:#1a0a2e;--ix-accent-2:#ff77c8;--ix-streak-1:#b366ff;--ix-streak-2:#ff77c8;--ix-streak-3:#9d7bff;--ix-base:#0c0a14;--ix-text-1:#f3f1f8;--accent:#b366ff;--accent-glow:rgba(179,102,255,.45)}
+  :root[data-itheme="crimson"]{--ix-accent:#fb3b53;--ix-accent-text:#ffadb8;--ix-accent-ink:#2a0610;--ix-accent-2:#ff6b81;--ix-streak-1:#fb3b53;--ix-streak-2:#ff6b81;--ix-streak-3:#e23b6d;--ix-base:#120a0c;--ix-text-1:#f8f1f2;--accent:#fb3b53;--accent-glow:rgba(251,59,83,.46)}
+  :root[data-itheme="emerald"]{--ix-accent:#27e08a;--ix-accent-text:#8af0b5;--ix-accent-ink:#042012;--ix-accent-2:#a8e85a;--ix-streak-1:#27e08a;--ix-streak-2:#a8e85a;--ix-streak-3:#34e6a0;--ix-base:#080f0b;--ix-text-1:#eef7f1;--accent:#27e08a;--accent-glow:rgba(39,224,138,.42)}
+  :root[data-itheme="midnight"]{--ix-accent:#2ee6c0;--ix-accent-text:#7defcf;--ix-accent-ink:#06231c;--ix-accent-2:#7c9cff;--ix-streak-1:#7c9cff;--ix-streak-2:#2ee6c0;--ix-streak-3:#a5b4ff;--ix-base:#090b12;--ix-text-1:#eef1f8;--accent:#2ee6c0;--accent-glow:rgba(124,156,255,.4)}
+  :root[data-itheme="hearth"]{--ix-accent:#f0b878;--ix-accent-text:#ffe0b4;--ix-accent-ink:#2a1304;--ix-accent-2:#b65f54;--ix-streak-1:#edaa5e;--ix-streak-2:#b65f54;--ix-streak-3:#f0c585;--ix-base:#15100a;--ix-text-1:#f5ede2;--ix-text-2:#c0b0a0;--ix-text-3:#8a7866;--accent:#f0b878;--accent-glow:rgba(240,184,120,.42)}
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{background:var(--ix-base);color:var(--ix-text-1);font-family:var(--font-ui);font-size:14px;-webkit-font-smoothing:antialiased}
+
+  /* demo controls */
+  .demobar{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:9px 16px;background:rgba(0,0,0,.42);border-bottom:1px dashed var(--ix-glass-border);backdrop-filter:blur(8px)}
+  .demobar .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .swatches{display:flex;gap:7px}
+  .swatch{width:20px;height:20px;border-radius:50%;border:1px solid var(--ix-glass-border);cursor:pointer;transition:transform .12s var(--ease)}
+  .swatch:hover{transform:scale(1.15)}
+  .swatch.on{box-shadow:0 0 0 2px var(--ix-base),0 0 0 4px var(--ix-accent)}
+  .seg{display:inline-flex;border:1px solid var(--ix-glass-border);border-radius:var(--r-pill);overflow:hidden}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--ix-text-2);font:inherit;font-size:12px;padding:5px 12px;cursor:pointer}
+  .seg button.on{background:var(--ix-accent);color:var(--ix-accent-ink);font-weight:600}
+  .toggle{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ix-text-2);cursor:pointer;user-select:none}
+  .toggle input{appearance:none;width:34px;height:19px;border-radius:999px;background:var(--panel-3);position:relative;cursor:pointer;transition:background .16s}
+  .toggle input::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--muted);transition:transform .16s,background .16s}
+  .toggle input:checked{background:color-mix(in srgb,var(--ix-accent) 50%,transparent)}
+  .toggle input:checked::after{transform:translateX(15px);background:var(--ix-accent)}
+
+  /* STAGE = the perspective viewport; WORLD = the thing that tilts */
+  .stage{position:absolute;inset:0;perspective:1400px;perspective-origin:50% 42%;display:flex;align-items:center;justify-content:center}
+  .world{position:relative;width:min(1180px,94vw);height:100%;transform-style:preserve-3d;
+    transform:rotateX(var(--ry)) rotateY(var(--rx));transition:transform .25s var(--ease);will-change:transform}
+
+  /* parallax depth layers (different translateZ → move at different rates as the world tilts) */
+  .layer{position:absolute;inset:0;transform-style:preserve-3d}
+  .l-bg{transform:translateZ(-260px) scale(1.35)}
+  .l-mid{transform:translateZ(-60px)}
+  .l-front{transform:translateZ(40px)}
+
+  /* ambient aurora, deep in the scene */
+  .blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.6}
+  .blob.a{width:60%;height:60%;left:8%;top:6%;background:radial-gradient(circle,color-mix(in srgb,var(--ix-streak-1) 40%,transparent),transparent 70%);animation:float1 22s var(--ease) infinite alternate}
+  .blob.b{width:55%;height:55%;right:6%;bottom:4%;background:radial-gradient(circle,color-mix(in srgb,var(--ix-streak-2) 38%,transparent),transparent 70%);animation:float2 27s var(--ease) infinite alternate}
+  @keyframes float1{to{transform:translate(6%,5%) scale(1.15)}}
+  @keyframes float2{to{transform:translate(-6%,-4%) scale(1.1)}}
+
+  .grid-floor{position:absolute;inset:-20%;background:
+    linear-gradient(color-mix(in srgb,var(--ix-accent) 8%,transparent) 1px,transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg,color-mix(in srgb,var(--ix-accent) 8%,transparent) 1px,transparent 1px) 0 0/44px 44px;
+    mask:radial-gradient(70% 60% at 50% 45%,#000,transparent 75%);opacity:.5}
+
+  /* layout */
+  .hud{position:absolute;inset:0;display:grid;grid-template-rows:auto 1fr;padding:64px clamp(20px,4vw,60px) 30px;gap:18px}
+  .topline{display:flex;align-items:center;gap:10px}
+  .wordmark{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:-.01em;font-size:16px}
+  .heart{width:9px;height:9px;border-radius:50%;background:var(--ix-accent);box-shadow:0 0 12px var(--ix-accent);animation:beat 2.4s ease-in-out infinite}
+  @keyframes beat{0%,100%{transform:scale(1)}14%{transform:scale(1.5)}28%{transform:scale(1)}42%{transform:scale(1.35)}}
+  .sessionbar{margin-left:auto;display:none;align-items:center;gap:9px;padding:7px 13px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--ix-accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--ix-accent) 28%,transparent);color:var(--ix-accent-text);font-size:12px}
+  html[data-session="active"] .sessionbar{display:flex}
+  .sessionbar .pulse{width:8px;height:8px;border-radius:50%;background:var(--ix-accent);box-shadow:0 0 8px var(--ix-accent)}
+
+  .main{display:grid;grid-template-columns:1.1fr .9fr;gap:30px;align-items:center}
+
+  .hero-copy h1{margin:0 0 10px;font-size:clamp(30px,4vw,46px);line-height:1.06;letter-spacing:-.025em}
+  .hero-copy h1 b{color:var(--ix-accent-text)}
+  .hero-copy p{margin:0 0 22px;color:var(--fg-2);max-width:44ch;font-size:15px}
+  .cta{display:inline-flex;align-items:center;gap:9px;border:0;border-radius:var(--r-pill);padding:13px 26px;background:var(--ix-accent);color:var(--ix-accent-ink);font:inherit;font-weight:700;cursor:pointer;box-shadow:0 12px 34px -10px var(--ix-accent);transition:transform .12s var(--ease),box-shadow .12s var(--ease)}
+  .cta:active{transform:translateY(2px) scale(.98)}
+
+  /* THE 3D CUBE — auto-rotates, parked on session/calm/reduced */
+  .cube-stage{display:flex;align-items:center;justify-content:center;perspective:900px}
+  .cube{position:relative;width:200px;height:200px;transform-style:preserve-3d;animation:spin 20s linear infinite}
+  @keyframes spin{from{transform:rotateX(-18deg) rotateY(0)}to{transform:rotateX(-18deg) rotateY(360deg)}}
+  .face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    border:1px solid color-mix(in srgb,var(--ix-accent) 35%,var(--border-strong));border-radius:16px;
+    background:linear-gradient(160deg,color-mix(in srgb,var(--ix-accent) 12%,rgba(18,21,30,.86)),rgba(10,12,18,.92));
+    box-shadow:inset 0 1px 0 var(--ix-glass-top),0 0 30px -6px var(--accent-glow);backface-visibility:visible}
+  .face .cap{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ix-text-3)}
+  .face .big{font-size:40px;font-weight:800;letter-spacing:-.02em;color:var(--ix-accent-text);font-variant-numeric:tabular-nums}
+  .face .sub{font-size:11px;color:var(--muted)}
+  .face .logo{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .f1{transform:rotateY(0) translateZ(100px)}
+  .f2{transform:rotateY(90deg) translateZ(100px)}
+  .f3{transform:rotateY(180deg) translateZ(100px)}
+  .f4{transform:rotateY(270deg) translateZ(100px)}
+  .f5{transform:rotateX(90deg) translateZ(100px)}
+  .f6{transform:rotateX(-90deg) translateZ(100px)}
+
+  /* hardware strip — 3D tilt-on-hover glass cards with a moving glare */
+  .strip{position:absolute;left:clamp(20px,4vw,60px);right:clamp(20px,4vw,60px);bottom:30px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:13px}
+  .card{position:relative;border-radius:var(--r-lg);padding:15px 16px;transform-style:preserve-3d;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 46%),color-mix(in srgb,var(--panel) 84%,transparent);
+    border:1px solid color-mix(in srgb,var(--ix-accent) 16%,var(--border-strong));
+    box-shadow:inset 0 1px 0 var(--ix-glass-top),0 10px 26px -14px rgba(0,0,0,.75);
+    backdrop-filter:blur(7px) saturate(1.2);transition:transform .18s var(--ease),box-shadow .18s var(--ease),border-color .18s;will-change:transform;overflow:hidden}
+  .card .glare{position:absolute;inset:0;border-radius:inherit;opacity:0;pointer-events:none;
+    background:radial-gradient(220px 180px at var(--gx,50%) var(--gy,0%),color-mix(in srgb,var(--ix-streak-3) 40%,transparent),transparent 60%);transition:opacity .2s}
+  .card:hover{border-color:color-mix(in srgb,var(--ix-accent) 45%,var(--border-strong));box-shadow:inset 0 1px 0 var(--ix-glass-top),0 26px 56px -18px rgba(0,0,0,.85),0 0 26px -8px var(--accent-glow)}
+  .card:hover .glare{opacity:1}
+  .card .k{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ix-text-3)}
+  .card .v{font-size:19px;font-weight:700;margin-top:4px;transform:translateZ(28px)}
+  .card.live .v{color:var(--ix-accent-text)}
+  .card .s{font-size:11px;color:var(--muted);margin-top:2px}
+  .card .dot{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%;background:var(--ready);box-shadow:0 0 9px var(--ready);animation:livepulse 2.2s ease-in-out infinite}
+  @keyframes livepulse{0%,100%{opacity:.55}50%{opacity:1}}
+
+  .hint{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:40;font-size:12px;color:var(--faint);text-align:center;pointer-events:none}
+
+  /* ════ THE LAW: park ALL continuous motion while measuring / on calm / reduced ════ */
+  html[data-session="active"] .cube,html[data-motion="calm"] .cube,html.rm .cube{animation:none!important;transform:rotateX(-18deg) rotateY(-28deg)}
+  html[data-session="active"] .blob,html[data-motion="calm"] .blob,html.rm .blob,
+  html[data-session="active"] .heart,html[data-session="active"] .card .dot{animation:none!important}
+  html[data-session="active"] .world,html.rm .world{transform:rotateX(0) rotateY(0)!important}  /* stop pointer tilt */
+  html.rm *,html.rm *::before,html.rm *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}.cube{animation:none!important}.world{transform:none!important}}
+</style>
+</head>
+<body>
+  <div class="demobar">
+    <span class="lbl">Prototype v2 · move your mouse</span>
+    <div class="swatches" id="themes">
+      <div class="swatch" data-t="midnight" style="background:#2ee6c0" title="Midnight"></div>
+      <div class="swatch on" data-t="violet" style="background:#b366ff" title="Violet"></div>
+      <div class="swatch" data-t="crimson" style="background:#fb3b53" title="Crimson"></div>
+      <div class="swatch" data-t="emerald" style="background:#27e08a" title="Emerald"></div>
+      <div class="swatch" data-t="hearth" style="background:#f0b878" title="Hearth"></div>
+    </div>
+    <div class="seg" id="motion"><button data-m="cinematic" class="on">Motion: Cinematic</button><button data-m="calm">Calm</button></div>
+    <label class="toggle"><input type="checkbox" id="session"> 🎮 Game session</label>
+    <label class="toggle"><input type="checkbox" id="reduced"> Reduced motion</label>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="world" id="world">
+      <div class="layer l-bg">
+        <div class="blob a"></div><div class="blob b"></div>
+        <div class="grid-floor"></div>
+      </div>
+
+      <div class="layer l-mid">
+        <div class="hud">
+          <div class="topline">
+            <div class="wordmark"><span class="heart"></span> Compy</div>
+            <div class="sessionbar"><span class="pulse"></span> Measuring — motion parked so Compy never steals a frame</div>
+          </div>
+          <div class="main">
+            <div class="hero-copy l-front" style="transform:translateZ(50px)">
+              <h1>Your rig, <b>alive</b>.<br>Running clean at 94.</h1>
+              <p>Tilt your view — the cockpit leans with you. Three measured, reversible tweaks are ready for your Radeon RX 9070 XT.</p>
+              <button class="cta" id="cta">Run a quick scan</button>
+            </div>
+            <div class="cube-stage">
+              <div class="cube" id="cube">
+                <div class="face f1"><span class="cap">Posture</span><span class="big">94</span><span class="sub">running clean</span></div>
+                <div class="face f2"><span class="cap">GPU</span><span class="big">67°</span><span class="sub">RX 9070 XT</span></div>
+                <div class="face f3"><span class="cap">FPS</span><span class="big">187</span><span class="sub">last 60 s</span></div>
+                <div class="face f4"><span class="cap">1% low</span><span class="big">142</span><span class="sub">smooth</span></div>
+                <div class="face f5"><span class="logo">Compy</span></div>
+                <div class="face f6"><span class="cap">RAM</span><span class="big">29</span><span class="sub">GB · healthy</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layer l-front">
+        <div class="strip" id="strip">
+          <div class="card live" data-tilt><span class="glare"></span><span class="dot"></span><div class="k">GPU</div><div class="v">RX 9070 XT</div><div class="s">RDNA4 · 67°C</div></div>
+          <div class="card" data-tilt><span class="glare"></span><div class="k">CPU</div><div class="v">Ryzen X3D</div><div class="s">16 cores · 5.1 GHz</div></div>
+          <div class="card live" data-tilt><span class="glare"></span><span class="dot"></span><div class="k">FPS</div><div class="v">187</div><div class="s">1% low 142</div></div>
+          <div class="card" data-tilt><span class="glare"></span><div class="k">Memory</div><div class="v">29.4 GB</div><div class="s">headroom: healthy</div></div>
+          <div class="card" data-tilt><span class="glare"></span><div class="k">Last session</div><div class="v">Apex</div><div class="s">avg 187 · 67° peak</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">Move the mouse to tilt · hover a card · tilt a laptop/phone for gyro · flip 🎮 to watch it all park</div>
+
+<script>
+  const root=document.documentElement;
+  let frozen=false, calm=false;
+  const refreeze=()=>{frozen=document.getElementById("session").checked; calm=root.getAttribute("data-motion")==="calm";};
+
+  // smooth pointer/gyro tilt via rAF lerp (the "alive" weight)
+  let tX=0,tY=0,cX=0,cY=0;
+  addEventListener("pointermove",e=>{
+    const cx=innerWidth/2,cy=innerHeight/2;
+    tX=((e.clientX-cx)/cx)*7; tY=-((e.clientY-cy)/cy)*7;
+  });
+  // GYRO: tilt a device and the world leans (gamma=L/R, beta=F/B)
+  addEventListener("deviceorientation",e=>{
+    if(e.gamma==null) return;
+    tX=Math.max(-9,Math.min(9,e.gamma/5));
+    tY=Math.max(-9,Math.min(9,(e.beta-40)/-5));
+  },true);
+  function loop(){
+    if(frozen||calm||root.classList.contains("rm")){cX+=(0-cX)*.1;cY+=(0-cY)*.1;}
+    else{cX+=(tX-cX)*.08;cY+=(tY-cY)*.08;}
+    root.style.setProperty("--rx",cX.toFixed(2)+"deg");
+    root.style.setProperty("--ry",cY.toFixed(2)+"deg");
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  // per-card 3D tilt toward cursor + moving glare
+  document.querySelectorAll("[data-tilt]").forEach(card=>{
+    card.addEventListener("pointermove",e=>{
+      if(frozen||calm||root.classList.contains("rm"))return;
+      const r=card.getBoundingClientRect();
+      const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+      card.style.transform=`rotateY(${(px-.5)*16}deg) rotateX(${(.5-py)*16}deg) translateZ(14px)`;
+      card.style.setProperty("--gx",px*100+"%"); card.style.setProperty("--gy",py*100+"%");
+    });
+    card.addEventListener("pointerleave",()=>{card.style.transform="";});
+  });
+
+  // controls
+  document.getElementById("themes").addEventListener("click",e=>{const s=e.target.closest(".swatch");if(!s)return;root.setAttribute("data-itheme",s.dataset.t);document.querySelectorAll(".swatch").forEach(x=>x.classList.toggle("on",x===s));});
+  document.getElementById("motion").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;root.setAttribute("data-motion",b.dataset.m);document.querySelectorAll("#motion button").forEach(x=>x.classList.toggle("on",x===b));refreeze();});
+  document.getElementById("session").addEventListener("change",e=>{root.setAttribute("data-session",e.target.checked?"active":"idle");refreeze();});
+  document.getElementById("reduced").addEventListener("change",e=>{root.classList.toggle("rm",e.target.checked);});
+  document.getElementById("cta").addEventListener("click",()=>{const c=document.getElementById("cube");c.style.transition="transform .6s var(--ease)";c.style.transform="rotateX(-18deg) rotateY(720deg) scale(1.08)";setTimeout(()=>{c.style.transition="";c.style.transform="";},650);});
+</script>
+</body>
+</html>

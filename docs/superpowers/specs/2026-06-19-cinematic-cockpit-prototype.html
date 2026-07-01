@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en" data-itheme="midnight" data-motion="cinematic">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — Cinematic Cockpit (taste prototype)</title>
+<!--
+  TASTE PROTOTYPE — 2026-06-19 — "Cinematic Cockpit" direction (Living Instrument II).
+  NOT app code. A throwaway, self-contained mock so the owner can FEEL the bolder
+  direction before CC builds anything. Uses the REAL --ix-* tokens from instrument.css.
+  Every motion here is compositor-cheap (transform/opacity only) and FREEZES during a
+  measured game session + under reduced motion — the core law made tangible.
+-->
+<style>
+  /* ───────────────────────── REAL TOKENS (from src/design/instrument.css) ───────────────────────── */
+  :root{
+    --bg:#07080b; --panel:#12151d; --panel-2:#181c26; --panel-3:#1f242f;
+    --border:#242b39; --border-strong:#313b4e; --hairline:rgba(255,255,255,.06);
+    --fg:#eef1f7; --fg-2:#c4ccda; --muted:#8b95a8; --faint:#5d6679;
+    --ready:#46d98a; --attention:#f5b740; --danger:#f3716f;
+    --r:10px; --r-lg:14px; --r-pill:999px;
+    --ease:cubic-bezier(.4,.12,.18,1);
+    --font-ui:"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono:"Cascadia Code","JetBrains Mono",Consolas,monospace;
+    /* Midnight defaults (overridden per theme below) */
+    --ix-base:#090b12; --ix-text-1:#eef1f8; --ix-text-2:#b8bcc8; --ix-text-3:#828896;
+    --ix-accent:#2ee6c0; --ix-accent-text:#7defcf; --ix-accent-ink:#06231c; --ix-accent-2:#7c9cff;
+    --ix-streak-1:#7c9cff; --ix-streak-2:#2ee6c0; --ix-streak-3:#a5b4ff;
+    --ix-glass-fill:rgba(18,21,30,.73); --ix-glass-border:rgba(255,255,255,.08); --ix-glass-top:rgba(255,255,255,.12);
+    --accent:#2ee6c0; --accent-glow:rgba(124,156,255,.36);
+  }
+  :root[data-itheme="violet"]{--ix-accent:#b366ff;--ix-accent-text:#d9b8ff;--ix-accent-ink:#1a0a2e;--ix-accent-2:#ff77c8;--ix-streak-1:#b366ff;--ix-streak-2:#ff77c8;--ix-streak-3:#9d7bff;--ix-base:#0c0a14;--ix-text-1:#f3f1f8;--accent:#b366ff;--accent-glow:rgba(179,102,255,.4)}
+  :root[data-itheme="crimson"]{--ix-accent:#fb3b53;--ix-accent-text:#ffadb8;--ix-accent-ink:#2a0610;--ix-accent-2:#ff6b81;--ix-streak-1:#fb3b53;--ix-streak-2:#ff6b81;--ix-streak-3:#e23b6d;--ix-base:#120a0c;--ix-text-1:#f8f1f2;--accent:#fb3b53;--accent-glow:rgba(251,59,83,.42)}
+  :root[data-itheme="emerald"]{--ix-accent:#27e08a;--ix-accent-text:#8af0b5;--ix-accent-ink:#042012;--ix-accent-2:#a8e85a;--ix-streak-1:#27e08a;--ix-streak-2:#a8e85a;--ix-streak-3:#34e6a0;--ix-base:#080f0b;--ix-text-1:#eef7f1;--accent:#27e08a;--accent-glow:rgba(39,224,138,.38)}
+  :root[data-itheme="midnight"]{--ix-accent:#2ee6c0;--ix-accent-text:#7defcf;--ix-accent-ink:#06231c;--ix-accent-2:#7c9cff;--ix-streak-1:#7c9cff;--ix-streak-2:#2ee6c0;--ix-streak-3:#a5b4ff;--ix-base:#090b12;--ix-text-1:#eef1f8;--ix-glass-fill:rgba(18,21,30,.73);--accent:#2ee6c0;--accent-glow:rgba(124,156,255,.36)}
+  :root[data-itheme="hearth"]{--ix-accent:#f0b878;--ix-accent-text:#ffe0b4;--ix-accent-ink:#2a1304;--ix-accent-2:#b65f54;--ix-streak-1:#edaa5e;--ix-streak-2:#b65f54;--ix-streak-3:#f0c585;--ix-base:#15100a;--ix-text-1:#f5ede2;--ix-text-2:#c0b0a0;--ix-text-3:#8a7866;--ix-glass-fill:rgba(24,17,11,.75);--accent:#f0b878;--accent-glow:rgba(240,184,120,.36)}
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--ix-base); color:var(--ix-text-1); font-family:var(--font-ui);
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+
+  /* ───────────────────────── AMBIENT (compositor-only: transform/opacity) ───────────────────────── */
+  .aurora{position:fixed;inset:-12%;z-index:0;pointer-events:none;filter:blur(80px);will-change:transform}
+  .aurora-a{background:radial-gradient(40% 40% at 34% 30%,color-mix(in srgb,var(--ix-streak-1) 13%,transparent),transparent 70%);animation:drift-a 38s var(--ease) infinite alternate}
+  .aurora-b{background:radial-gradient(42% 42% at 70% 66%,color-mix(in srgb,var(--ix-streak-2) 13%,transparent),transparent 70%);animation:drift-b 47s var(--ease) infinite alternate}
+  @keyframes drift-a{from{transform:translate(-4%,-3%) scale(1)}to{transform:translate(5%,4%) scale(1.12)}}
+  @keyframes drift-b{from{transform:translate(3%,4%) scale(1.08)}to{transform:translate(-5%,-3%) scale(1)}}
+  .vignette{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(115% 85% at 50% 36%,rgba(6,7,11,.45),rgba(6,7,11,.18) 50%,rgba(6,7,11,0) 82%)}
+
+  /* ───────────────────────── DEMO CONTROL STRIP (prototype only, not the app) ───────────────────────── */
+  .demobar{position:relative;z-index:5;display:flex;gap:18px;flex-wrap:wrap;align-items:center;
+    padding:10px 16px;background:rgba(0,0,0,.34);border-bottom:1px dashed var(--ix-glass-border);backdrop-filter:blur(6px)}
+  .demobar .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .swatches{display:flex;gap:7px}
+  .swatch{width:20px;height:20px;border-radius:50%;border:1px solid var(--ix-glass-border);cursor:pointer;transition:transform .12s var(--ease),box-shadow .12s var(--ease)}
+  .swatch:hover{transform:scale(1.15)}
+  .swatch.on{box-shadow:0 0 0 2px var(--ix-base),0 0 0 4px var(--ix-accent)}
+  .seg{display:inline-flex;border:1px solid var(--ix-glass-border);border-radius:var(--r-pill);overflow:hidden}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--ix-text-2);font:inherit;font-size:12px;padding:5px 12px;cursor:pointer}
+  .seg button.on{background:var(--ix-accent);color:var(--ix-accent-ink);font-weight:600}
+  .toggle{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ix-text-2);cursor:pointer;user-select:none}
+  .toggle input{appearance:none;width:34px;height:19px;border-radius:999px;background:var(--panel-3);position:relative;cursor:pointer;transition:background .16s var(--ease)}
+  .toggle input::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--muted);transition:transform .16s var(--ease),background .16s var(--ease)}
+  .toggle input:checked{background:color-mix(in srgb,var(--ix-accent) 50%,transparent)}
+  .toggle input:checked::after{transform:translateX(15px);background:var(--ix-accent)}
+
+  /* ───────────────────────── WINDOW CHROME + SHELL ───────────────────────── */
+  .titlebar{position:relative;z-index:4;display:flex;align-items:center;gap:12px;height:42px;padding:0 14px;border-bottom:1px solid var(--hairline)}
+  .wordmark{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:-.01em}
+  .heart{width:9px;height:9px;border-radius:50%;background:var(--ix-accent);box-shadow:0 0 10px var(--ix-accent);animation:beat 2.4s ease-in-out infinite}
+  @keyframes beat{0%,100%{transform:scale(1);opacity:.9}14%{transform:scale(1.5);opacity:1}28%{transform:scale(1)}42%{transform:scale(1.35)}}
+  .tb-title{margin-left:auto;font-size:12px;color:var(--faint)}
+  .tb-dots{display:flex;gap:8px;margin-left:14px}
+  .tb-dots i{width:11px;height:11px;border-radius:50%;background:var(--panel-3);display:block}
+
+  .shell{position:relative;z-index:2;display:grid;grid-template-columns:74px 1fr;min-height:calc(100vh - 84px)}
+  .rail{display:flex;flex-direction:column;align-items:center;gap:5px;padding:16px 0;border-right:1px solid var(--hairline)}
+  .rail a{display:flex;flex-direction:column;align-items:center;gap:4px;width:60px;padding:9px 0;border-radius:var(--r);color:var(--muted);text-decoration:none;font-size:10.5px;cursor:pointer;transition:color .14s var(--ease),background .14s var(--ease)}
+  .rail a .g{width:20px;height:20px;border-radius:6px;border:1.5px solid currentColor;opacity:.85}
+  .rail a:hover{color:var(--ix-text-2);background:rgba(255,255,255,.03)}
+  .rail a.on{color:var(--ix-accent)}
+  .rail a.on .g{box-shadow:0 0 12px var(--accent-glow);border-color:var(--ix-accent)}
+  .rail .spacer{flex:1}
+
+  main{padding:26px clamp(20px,3.4vw,46px) 48px;max-width:1280px}
+
+  /* session banner */
+  .sessionbar{display:none;align-items:center;gap:10px;margin-bottom:18px;padding:11px 16px;border-radius:var(--r);
+    background:color-mix(in srgb,var(--ix-accent) 9%,transparent);border:1px solid color-mix(in srgb,var(--ix-accent) 26%,transparent);color:var(--ix-accent-text);font-size:13px}
+  html[data-session="active"] .sessionbar{display:flex}
+  .sessionbar .pulse{width:8px;height:8px;border-radius:50%;background:var(--ix-accent);box-shadow:0 0 8px var(--ix-accent)}
+
+  /* ───────────────────────── HERO ───────────────────────── */
+  .hero{display:grid;grid-template-columns:240px 1fr;gap:30px;align-items:center;margin-bottom:30px}
+  .ring-wrap{position:relative;width:220px;height:220px;justify-self:center;animation:breathe 6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.018)}}
+  .ring-wrap svg{display:block;transform:rotate(-90deg)}
+  .ring-bg{fill:none;stroke:var(--panel-3);stroke-width:10}
+  .ring-fg{fill:none;stroke:var(--ix-accent);stroke-width:10;stroke-linecap:round;
+    filter:drop-shadow(0 0 10px var(--accent-glow));stroke-dasharray:597;stroke-dashoffset:597;animation:sweep 1.4s var(--ease) .25s forwards}
+  @keyframes sweep{to{stroke-dashoffset:78}} /* ~87% — holds the real reading after the sweep */
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  .ring-center .score{font-size:46px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .ring-center .score small{font-size:18px;color:var(--faint)}
+  .ring-center .cap{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ix-accent-text)}
+  .hero-copy h1{margin:0 0 8px;font-size:30px;line-height:1.12;letter-spacing:-.02em;text-wrap:balance}
+  .hero-copy p{margin:0 0 18px;color:var(--fg-2);max-width:46ch}
+  .cta{display:inline-flex;align-items:center;gap:9px;border:0;border-radius:var(--r-pill);padding:11px 22px;
+    background:var(--ix-accent);color:var(--ix-accent-ink);font:inherit;font-weight:600;cursor:pointer;
+    box-shadow:0 8px 24px -10px var(--ix-accent);transition:transform .12s var(--ease),box-shadow .12s var(--ease)}
+  .cta:hover{transform:translateY(-2px);box-shadow:0 14px 30px -10px var(--ix-accent)}
+  .cta:active{transform:translateY(1px)}
+  .scan-chip{display:none;margin-left:14px;font-size:12.5px;color:var(--ready);vertical-align:middle}
+  .scan-chip.show{display:inline-flex;animation:rise .5s var(--ease) both}
+
+  /* the SANCTIONED win-moment streak — fires once on scan, sweeps the hero, then gone */
+  .streak{position:absolute;inset:0;overflow:hidden;border-radius:18px;pointer-events:none;opacity:0}
+  .streak::before{content:"";position:absolute;top:0;bottom:0;width:40%;left:-45%;
+    background:linear-gradient(100deg,transparent,color-mix(in srgb,var(--ix-streak-3) 55%,transparent),transparent);
+    filter:blur(6px)}
+  .hero.scanning .streak{opacity:1}
+  .hero.scanning .streak::before{animation:streak 1.05s var(--ease) forwards}
+  @keyframes streak{from{left:-45%}to{left:115%}}
+
+  /* ───────────────────────── CARDS / GRID ───────────────────────── */
+  .sec-head{display:flex;align-items:baseline;gap:10px;margin:26px 0 13px}
+  .sec-head h3{margin:0;font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .sec-head span{font-size:12px;color:var(--faint)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+  .card{position:relative;border-radius:var(--r-lg);padding:17px 18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 46%),color-mix(in srgb,var(--panel) 86%,transparent);
+    border:1px solid color-mix(in srgb,var(--ix-accent) 18%,var(--border-strong));
+    box-shadow:inset 0 1px 0 var(--ix-glass-top),0 1px 2px rgba(0,0,0,.55),0 12px 30px -14px rgba(0,0,0,.7);
+    backdrop-filter:blur(8px) saturate(1.25);
+    animation:rise .5s var(--ease) both;transition:transform .14s var(--ease),box-shadow .14s var(--ease),border-color .14s var(--ease)}
+  .card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--ix-accent) 42%,var(--border-strong));
+    box-shadow:inset 0 1px 0 var(--ix-glass-top),0 3px 8px rgba(0,0,0,.55),0 26px 56px -18px rgba(0,0,0,.8)}
+  .grid .card:nth-child(2){animation-delay:.05s}
+  .grid .card:nth-child(3){animation-delay:.1s}
+  .grid .card:nth-child(4){animation-delay:.15s}
+  .grid .card:nth-child(5){animation-delay:.2s}
+  @keyframes rise{from{opacity:0;transform:translateY(11px) scale(.99)}to{opacity:1;transform:none}}
+  .card .k{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ix-text-3)}
+  .card .v{font-size:21px;font-weight:700;margin-top:5px;letter-spacing:-.01em}
+  .card .s{font-size:12px;color:var(--muted);margin-top:3px}
+  .card .ico{position:absolute;top:15px;right:15px;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--faint);opacity:.7}
+
+  /* LIVE surfaces glow; static numbers do NOT (honesty law made visible) */
+  .live{border-color:color-mix(in srgb,var(--ix-accent) 30%,var(--border-strong))}
+  .live .v{color:var(--ix-accent-text)}
+  .live .dot{position:absolute;top:17px;right:16px;width:8px;height:8px;border-radius:50%;background:var(--ready);box-shadow:0 0 9px var(--ready),0 0 3px var(--ready);animation:livepulse 2.2s ease-in-out infinite}
+  @keyframes livepulse{0%,100%{opacity:.55}50%{opacity:1}}
+  .spark{margin-top:10px;width:100%;height:34px;display:block;overflow:visible}
+  .spark polyline{fill:none;stroke:var(--ix-accent);stroke-width:1.6;filter:drop-shadow(0 0 6px var(--accent-glow));
+    stroke-dasharray:260;stroke-dashoffset:260;animation:draw 1.3s var(--ease) .3s forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .dial{margin-top:8px}
+  .dial .arc-fg{fill:none;stroke:var(--ix-accent);stroke-width:7;stroke-linecap:round;filter:drop-shadow(0 0 7px var(--accent-glow));
+    stroke-dasharray:236;stroke-dashoffset:236;animation:dialsweep 1.3s var(--ease) .3s forwards}
+  .dial .arc-bg{fill:none;stroke:var(--panel-3);stroke-width:7;stroke-linecap:round}
+  @keyframes dialsweep{to{stroke-dashoffset:104}} /* ~56% → 67°C of a 0–100 range */
+
+  .note{margin-top:30px;font-size:12px;color:var(--faint);max-width:70ch;line-height:1.6}
+  .note b{color:var(--ix-text-2);font-weight:600}
+
+  /* ═════════ THE CORE LAW: freeze continuous motion during a measured session / reduced motion ═════════ */
+  html[data-session="active"] .aurora-a,
+  html[data-session="active"] .aurora-b,
+  html[data-session="active"] .ring-wrap,
+  html[data-session="active"] .heart,
+  html[data-session="active"] .live .dot{animation:none!important}
+  html[data-motion="calm"] .aurora-a,
+  html[data-motion="calm"] .aurora-b,
+  html[data-motion="calm"] .ring-wrap{animation:none!important}
+
+  /* honest a11y: real reduced-motion + the demo toggle both kill movement, keep depth+glow */
+  html.rm *, html.rm *::before, html.rm *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  }
+</style>
+</head>
+<body>
+  <div class="aurora aurora-a"></div>
+  <div class="aurora aurora-b"></div>
+  <div class="vignette"></div>
+
+  <!-- PROTOTYPE CONTROLS (not part of the app) -->
+  <div class="demobar">
+    <span class="lbl">Prototype controls</span>
+    <div class="swatches" id="themes">
+      <div class="swatch on" data-t="midnight" style="background:#2ee6c0" title="Midnight"></div>
+      <div class="swatch" data-t="violet" style="background:#b366ff" title="Violet"></div>
+      <div class="swatch" data-t="crimson" style="background:#fb3b53" title="Crimson"></div>
+      <div class="swatch" data-t="emerald" style="background:#27e08a" title="Emerald"></div>
+      <div class="swatch" data-t="hearth" style="background:#f0b878" title="Hearth"></div>
+    </div>
+    <div class="seg" id="motion">
+      <button data-m="cinematic" class="on">Motion: Cinematic</button>
+      <button data-m="calm">Calm</button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="session"> 🎮 Game session</label>
+    <label class="toggle"><input type="checkbox" id="reduced"> Reduced motion</label>
+  </div>
+
+  <!-- WINDOW CHROME -->
+  <div class="titlebar">
+    <div class="wordmark"><span class="heart"></span> Compy</div>
+    <div class="tb-title">Home</div>
+    <div class="tb-dots"><i></i><i></i><i></i></div>
+  </div>
+
+  <div class="shell">
+    <nav class="rail">
+      <a class="on"><span class="g"></span>Home</a>
+      <a><span class="g"></span>Check</a>
+      <a><span class="g"></span>Play</a>
+      <a><span class="g"></span>Fix</a>
+      <a><span class="g"></span>Learn</a>
+      <a><span class="g"></span>Lab</a>
+      <span class="spacer"></span>
+      <a><span class="g"></span>Settings</a>
+    </nav>
+
+    <main>
+      <div class="sessionbar"><span class="pulse"></span> Measuring your game — Compy paused its own motion so it never steals a frame from you.</div>
+
+      <section class="hero" id="hero">
+        <div class="streak"></div>
+        <div class="ring-wrap">
+          <svg width="220" height="220" viewBox="0 0 220 220">
+            <circle class="ring-bg" cx="110" cy="110" r="95"></circle>
+            <circle class="ring-fg" cx="110" cy="110" r="95"></circle>
+          </svg>
+          <div class="ring-center">
+            <div class="cap">Posture</div>
+            <div class="score">94<small>/100</small></div>
+          </div>
+        </div>
+        <div class="hero-copy">
+          <h1>Your rig is running clean.</h1>
+          <p>Nothing needs your attention right now. There are <b style="color:var(--ix-accent-text)">3 safe tweaks</b> available for your Radeon RX 9070 XT — each one measured, each one reversible.</p>
+          <button class="cta" id="scanBtn">Run a quick scan</button>
+          <span class="scan-chip" id="scanChip">✓ Scan complete · 3 safe tweaks found</span>
+        </div>
+      </section>
+
+      <div class="sec-head"><h3>Your hardware</h3><span>tailored to this exact rig</span></div>
+      <div class="grid">
+        <div class="card live">
+          <span class="dot"></span>
+          <div class="k">GPU</div>
+          <div class="v">RX 9070 XT</div>
+          <div class="s">RDNA4 · 67°C</div>
+          <svg class="dial" width="100%" height="46" viewBox="0 0 150 46" preserveAspectRatio="xMidYMid meet">
+            <path class="arc-bg" d="M12 42 A 63 63 0 0 1 138 42"></path>
+            <path class="arc-fg" d="M12 42 A 63 63 0 0 1 138 42"></path>
+          </svg>
+        </div>
+        <div class="card"><span class="ico"></span><div class="k">CPU</div><div class="v">Ryzen X3D</div><div class="s">16 cores · ~5.1 GHz</div></div>
+        <div class="card"><span class="ico"></span><div class="k">Memory</div><div class="v">29.4 GB</div><div class="s">headroom: healthy</div></div>
+        <div class="card"><span class="ico"></span><div class="k">Storage</div><div class="v">NVMe SSD</div><div class="s">TRIM on · 41% free</div></div>
+        <div class="card"><span class="ico"></span><div class="k">Network</div><div class="v">2.5 GbE</div><div class="s">driver: current</div></div>
+      </div>
+
+      <div class="sec-head"><h3>Live telemetry</h3><span>glows because it's live — plain numbers never do</span></div>
+      <div class="grid">
+        <div class="card live">
+          <span class="dot"></span><div class="k">Frames per second</div><div class="v">187</div><div class="s">last 60 s</div>
+          <svg class="spark" viewBox="0 0 150 34" preserveAspectRatio="none">
+            <polyline points="0,24 15,20 30,22 45,14 60,17 75,9 90,12 105,7 120,11 135,6 150,8"></polyline>
+          </svg>
+        </div>
+        <div class="card live"><span class="dot"></span><div class="k">Frametime</div><div class="v">5.3 ms</div><div class="s">stable · no spikes</div></div>
+        <div class="card live"><span class="dot"></span><div class="k">1% low</div><div class="v">142</div><div class="s">smoothness: strong</div></div>
+        <div class="card"><span class="ico"></span><div class="k">Last session</div><div class="v">Apex Legends</div><div class="s">avg 187 · 1% low 142 · 67°C peak</div></div>
+      </div>
+
+      <p class="note">
+        <b>What you're feeling:</b> material depth, an accent that glows only on <b>live</b> instruments (never on a static number),
+        a posture ring that sweeps to its real reading then holds the truth, and a slow ambient drift — all of it built from
+        transform + opacity, so it rides the GPU compositor at near-zero cost. Flip <b>🎮 Game session</b> on and watch every
+        continuous motion freeze: that's the law — <b>Compy goes still while it measures, so the optimizer never becomes the thing
+        it diagnoses.</b> Switch themes or drop to Reduced motion to see the depth + glow survive with zero movement.
+      </p>
+    </main>
+  </div>
+
+<script>
+  const root=document.documentElement;
+  document.getElementById("themes").addEventListener("click",e=>{
+    const s=e.target.closest(".swatch"); if(!s)return;
+    root.setAttribute("data-itheme",s.dataset.t);
+    document.querySelectorAll(".swatch").forEach(x=>x.classList.toggle("on",x===s));
+  });
+  document.getElementById("motion").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b)return;
+    root.setAttribute("data-motion",b.dataset.m);
+    document.querySelectorAll("#motion button").forEach(x=>x.classList.toggle("on",x===b));
+  });
+  document.getElementById("session").addEventListener("change",e=>{
+    root.setAttribute("data-session",e.target.checked?"active":"idle");
+  });
+  document.getElementById("reduced").addEventListener("change",e=>{
+    root.classList.toggle("rm",e.target.checked);
+  });
+  document.getElementById("scanBtn").addEventListener("click",()=>{
+    const hero=document.getElementById("hero"), chip=document.getElementById("scanChip");
+    chip.classList.remove("show"); hero.classList.remove("scanning");
+    void hero.offsetWidth;                       // restart the one sanctioned sweep
+    hero.classList.add("scanning");
+    setTimeout(()=>{hero.classList.remove("scanning"); chip.classList.add("show");},1100);
+  });
+</script>
+</body>
+</html>
