@@ -87,7 +87,7 @@ applied changes + rollback status, monitoring capability, driver dates, and the 
 report. Useful for support, Discord, Reddit, before/after comparisons.
 - **Reuses:** hardware, recommendations, Trust Ledger, monitoring results, F2.
 - **Gate:** none — read-only aggregation. (Keep it local; "export" = write a file / copy to
-  clipboard, never auto-upload — consistent with the zero-telemetry privacy policy.)
+  clipboard, never auto-upload — consistent with the local-by-default privacy policy.)
 
 ### F6 — Proof / benchmark layer  *(later)*
 Start with **configuration proof** + session metrics + frametime history + before/after
@@ -192,8 +192,9 @@ to know their PC is truly ready."**
 ## Locks reaffirmed
 
 - **Tweak catalog stays frozen** (~29 recs; no new risky tweaks; the blocklist above is hard).
-- **Safety model is locked**: no kernel driver, no game injection, rollback-first, local-only /
-  zero telemetry, signed-rules-off, GPU vendor honesty.
+- **Safety model is locked**: no kernel driver, no game injection, rollback-first, local-only
+  **by default** (outbound only via opt-in, default-OFF, owner-sign-off-gated Receipts telemetry —
+  RECEIPTS_DOCTRINE §2 RETIRED the no-telemetry absolutism), signed-rules-off, GPU vendor honesty.
 - **Any new feature must be READ-ONLY, REVERSIBLE, SESSION-SCOPED, or ADVISORY until proven
   safe.** Mutating features (only F1 so far) ride the manual-mutation QA gate and the full
   rollback contract.

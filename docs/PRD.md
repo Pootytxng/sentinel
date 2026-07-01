@@ -5,6 +5,11 @@
 **Owner:** Kuya
 **Last updated:** 2026-05-28
 
+> **⚠️ HISTORICAL BASELINE (2026-05-28 — predates the Receipts Doctrine).** Current direction/positioning →
+> `docs/RECEIPTS_DOCTRINE.md` (money-first identity; RETIRED the "vow of silence / FPS-booster-is-scam" framing
+> in favor of amplifying *measured* wins). Live gate/build state → `docs/RELEASE_STATE.md`. The stack is
+> DECIDED (Tauri 2, per CLAUDE.md), not "in flight." Kept as the original scoping record.
+
 > Compy is not an optimizer that happens to have rollback. Compy is a rollback-first Windows configuration safety layer that happens to optimize.
 
 ---

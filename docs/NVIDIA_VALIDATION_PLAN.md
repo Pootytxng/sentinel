@@ -75,9 +75,9 @@ GPU stress (so values aren't all idle), and check both idle and under-load.
 When every per-metric check passes within tolerance on **at least one modern NVIDIA desktop
 GPU** (ideally also one laptop/Optimus), and the absent-driver case is graceful:
 
-1. Update the coverage label at `src/App.tsx` (~lines 833–834):
+1. Update the coverage label in `src/App.tsx` (grep `className="coverage-note"`; currently ~L1605–1607):
    `NVIDIA — implemented, not yet hardware-verified` → `NVIDIA — verified`.
-2. Remove/adjust the per-card **"unverified"** pill + tooltip at `src/App.tsx` (~lines 1150–1153).
+2. Remove/adjust the per-card **"unverified"** pill + tooltip in `src/App.tsx` (grep `className="gpu-unverified"`; currently ~L1989–1992).
 3. Record in `CLAUDE.md` which NVIDIA hardware + driver version it was verified on (so the
    "verified" claim is auditable, mirroring how AMD was verified on the RX 9070 XT).
 

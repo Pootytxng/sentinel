@@ -24,10 +24,10 @@ Everything else (the licensing tech) I can build once these are set — see §5.
 | **Free** | Perfectly | Max adoption, reputation, zero billing surface | $0; monetize later/never | Fine if the goal is portfolio/reach. |
 | **One-time purchase** | **Excellent** — pairs with **offline license keys** (no phone-home) | "Own your tool," no sub fatigue, privacy-preserving, simple | No recurring revenue; major versions may need paid upgrades | **Recommended** if charging. |
 | **Freemium (free core + one-time Pro unlock)** | **Excellent** | Adoption *and* revenue; Pro = power-user value (e.g. the Advanced Black Book, multi-rig profiles, future F6 benchmark proofs) | Must draw a fair free/Pro line that doesn't feel crippled | **Recommended** sweet spot. |
-| **Subscription** | **Poor** — recurring billing wants an account + online validation, which **fights the no-account/local ethos** | Predictable revenue | Sub fatigue for a *utility*; needs server validation = erodes the privacy story; higher refund/chargeback churn | **Avoid** unless there's a genuine ongoing service (there isn't — it's local). |
+| **Subscription** | **Poor** — recurring billing wants an account + online validation, which **fights the no-account/local ethos** | Predictable revenue | Sub fatigue for a *utility*; needs server validation = erodes the privacy story; higher refund/chargeback churn | **⚠️ SUPERSEDED** — RECEIPTS_DOCTRINE §3 now ADOPTS a Compy Pro subscription (monitoring/history/multi-rig, built-dark) — that IS the "ongoing service" this row assumed didn't exist. The "avoid" verdict is retired. |
 
 **Recommendation:** **Freemium with a one-time "Pro" unlock** (or plain one-time purchase). Both preserve
-the offline/no-account identity via signed license keys. **Subscription is off-brand** for a local tool.
+the offline/no-account identity via signed license keys. ~~**Subscription is off-brand** for a local tool.~~ **(SUPERSEDED 2026-06-12 — RECEIPTS_DOCTRINE §3 adopts a Compy Pro subscription; the offline-license notes below remain accurate for the one-time/Pro-unlock tier.)**
 Napkin price: one-time **$15–30**, or free core + Pro **$10–20 one-time**. (Your call.)
 
 ## 3. If freemium — candidate free/Pro split (illustrative, your call)
