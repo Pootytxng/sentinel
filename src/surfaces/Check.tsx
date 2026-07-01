@@ -9,7 +9,7 @@ import { walkthroughForKey, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
-import { useScan } from "./use-scan";
+import { useScan, buildSetupSummary } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./Check.css";
 
@@ -325,6 +325,21 @@ export default function Check({
 
   const livingPreview =
     typeof document !== "undefined" && document.documentElement.dataset.living === "on";
+
+  // Exportable setup summary (A5) — a plain-English, paste-ready restatement of what this scan
+  // measured, so the user can share their setup with a friend/forum. Read-only: it's clipboard-copy
+  // of already-measured facts (no IPC, no launch, no mutation); buildSetupSummary never fabricates.
+  const setupSummary = buildSetupSummary(readiness, priorities);
+  const [copiedSummary, setCopiedSummary] = useState(false);
+  const copySetupSummary = async () => {
+    try {
+      await navigator.clipboard.writeText(setupSummary);
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 1500);
+    } catch {
+      /* clipboard blocked — the summary text stays on screen to select manually */
+    }
+  };
 
   return (
     <section className="check-root">
@@ -717,6 +732,62 @@ export default function Check({
                 ))}
               </ul>
               )}
+            </div>
+          )}
+
+          {/* Exportable setup summary (A5) — a dedicated card that restates the settled scan in
+              plain English, ready to copy and share. Read-only: copies measured facts to the
+              clipboard, no launch/URL, no mutation. The text stays on screen so it can be selected
+              manually if the clipboard is blocked. */}
+          {setupSummary && (
+            <div
+              className="check-summary"
+              style={{
+                border: "1px solid var(--accent-line, rgba(46, 230, 192, 0.28))",
+                background: "var(--accent-soft, rgba(46, 230, 192, 0.05))",
+                borderRadius: "var(--ix-radius)",
+                padding: "12px 16px 14px",
+                marginTop: 12,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span className="check-section-label" style={{ margin: 0 }}>
+                  Setup summary
+                </span>
+                <button type="button" className="btn btn-small" onClick={copySetupSummary}>
+                  {copiedSummary ? "Copied ✓" : "Copy summary"}
+                </button>
+              </div>
+              <p
+                className="check-row-reason"
+                style={{ margin: "6px 0 10px", color: "var(--ix-text-2)" }}
+              >
+                A plain-English recap of what this check measured — copy it to share your setup.
+              </p>
+              <pre
+                aria-label="Setup summary text"
+                style={{
+                  margin: 0,
+                  padding: "10px 12px",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "inherit",
+                  fontSize: "12.5px",
+                  lineHeight: 1.5,
+                  color: "var(--ix-text-2)",
+                  background: "var(--ix-surface-2, rgba(0, 0, 0, 0.18))",
+                  borderRadius: "calc(var(--ix-radius) - 4px)",
+                }}
+              >
+                {setupSummary}
+              </pre>
             </div>
           )}
         </div>

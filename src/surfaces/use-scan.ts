@@ -3,6 +3,51 @@ import { invoke } from "@tauri-apps/api/core";
 import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
 import { peekProbe, putProbe } from "../data/probe-cache";
 
+// buildSetupSummary (A5): turn the settled scan into a plain-English, paste-ready block the user can
+// copy anywhere (a friend, a forum, a build note). PURE + read-only — it only restates what Compy
+// already measured, never a new claim, never a promise ("advisory only · measured on this rig"), and
+// never fabricates a limiter on a clean rig. Zero IPC; the caller copies the string to the clipboard.
+export function buildSetupSummary(
+  readiness: GameReadiness | null,
+  priorities: Priorities | null,
+): string {
+  if (!readiness) return "";
+  const lines: string[] = ["Compy setup summary", ""];
+
+  // Readiness breakdown — only the non-zero buckets, so a clean rig reads "N checks · N ready".
+  const total = readiness.checks.length;
+  const parts: string[] = [];
+  if (readiness.ready_count > 0) parts.push(`${readiness.ready_count} ready`);
+  if (readiness.attention_count > 0) parts.push(`${readiness.attention_count} need attention`);
+  if (readiness.advisory_count > 0) parts.push(`${readiness.advisory_count} advisory`);
+  if (readiness.unknown_count > 0) parts.push(`${readiness.unknown_count} unknown`);
+  lines.push(
+    parts.length > 0
+      ? `${total} check${total === 1 ? "" : "s"} · ${parts.join(", ")}`
+      : `${total} check${total === 1 ? "" : "s"}`,
+  );
+  lines.push("");
+
+  // What's worth a look — the ranked limiters, named. Never invented: a clean rig says so plainly.
+  const limiters = priorities?.limiters ?? [];
+  if (limiters.length > 0) {
+    lines.push("Worth a look:");
+    for (const l of limiters) lines.push(`- ${l.title}`);
+  } else {
+    lines.push("Nothing worth changing today — measured clean on this rig.");
+  }
+
+  const fine = priorities?.already_fine ?? [];
+  if (fine.length > 0) {
+    lines.push("");
+    lines.push(`${fine.length} check${fine.length === 1 ? "" : "s"} measured fine already.`);
+  }
+
+  lines.push("");
+  lines.push("Advisory only · measured on this rig by Compy — no performance promised.");
+  return lines.join("\n");
+}
+
 // The readiness/priorities scan — the shared core behind FirstCheck (the first-run arc) and Check
 // (the permanent consolidation surface). One source of truth for the scan choreography: real
 // commands only (zero new IPC), honest elapsed, display-stagger streaming (never a fake sleep).

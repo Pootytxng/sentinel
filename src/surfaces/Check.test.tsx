@@ -369,6 +369,37 @@ describe("Check", () => {
     expect(document.querySelector(".check-upgrade a")).toBeNull();
   });
 
+  // ── Exportable setup summary (A5) ──
+
+  it("renders a dedicated setup-summary card once the scan settles, with a copy button", async () => {
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    // The card only appears in the settled verdict phase (needs measured data to summarize).
+    expect(await screen.findByText("Setup summary")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Copy summary/ })).toBeInTheDocument();
+  });
+
+  it("copy button writes the plain-text summary to the clipboard and confirms", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    const btn = await screen.findByRole("button", { name: /Copy summary/ });
+    fireEvent.click(btn);
+    await screen.findByRole("button", { name: /Copied/ });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    // Read-only: what's copied is the measured summary text, not a launch/URL.
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toMatch(/^Compy setup summary/);
+    expect(copied).toMatch(/measured on this rig/i);
+  });
+
   it("renders NO upgrade-path block when no verdict names hardware", async () => {
     render(
       <ConfirmProvider>

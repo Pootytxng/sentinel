@@ -4,10 +4,10 @@ import { renderHook, waitFor } from "@testing-library/react";
 // use-scan pulls @tauri-apps/api/core at import — stub invoke so jsdom doesn't choke loading the module.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
-import { deriveReverted, rowVerdict, useScan, type AppliedChangeLite } from "./use-scan";
+import { buildSetupSummary, deriveReverted, rowVerdict, useScan, type AppliedChangeLite } from "./use-scan";
 import { invoke } from "@tauri-apps/api/core";
 import { invalidateProbe } from "../data/probe-cache";
-import type { ReadinessCheck } from "../types";
+import type { GameReadiness, PriorityItem, Priorities, ReadinessCheck } from "../types";
 
 const invokeMock = vi.mocked(invoke);
 
@@ -56,6 +56,95 @@ describe("deriveReverted (the flag-class drift core)", () => {
       { rec_id: "a", title: "Alpha" },
       { rec_id: "b", title: "Beta" },
     ]);
+  });
+});
+
+describe("buildSetupSummary (A5 — exportable, read-only, plain-English)", () => {
+  const readiness = (over: Partial<GameReadiness> = {}): GameReadiness => ({
+    checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+    ready_count: 5,
+    attention_count: 0,
+    unknown_count: 0,
+    advisory_count: 0,
+    advisory: "",
+    dismissed_ids: [],
+    drifts: [],
+    ...over,
+  });
+  const lim = (id: string, title: string): PriorityItem => ({
+    id,
+    title,
+    reason: `${title} reason`,
+    linked: null,
+    confidence: "high",
+    status: "attention",
+  });
+  const priorities = (over: Partial<Priorities> = {}): Priorities => ({
+    limiters: [],
+    already_fine: [],
+    not_worth_touching: [],
+    session_hint: null,
+    upgrade_path: null,
+    ...over,
+  });
+
+  it("no scan data -> empty string (nothing to export yet)", () => {
+    expect(buildSetupSummary(null, null)).toBe("");
+    expect(buildSetupSummary(null, priorities())).toBe("");
+  });
+
+  it("leads with a Compy title and a dated line (advisory, not a promise)", () => {
+    const out = buildSetupSummary(readiness(), priorities());
+    expect(out).toMatch(/^Compy setup summary/);
+    // Honest framing: measured on this rig, advisory only — never a performance claim.
+    expect(out).toMatch(/measured on this rig/i);
+  });
+
+  it("summarizes the readiness breakdown, mentioning only the non-zero buckets", () => {
+    const out = buildSetupSummary(
+      readiness({ ready_count: 5, attention_count: 2, advisory_count: 1, unknown_count: 0 }),
+      priorities(),
+    );
+    expect(out).toMatch(/5 ready/);
+    expect(out).toMatch(/2 need attention/);
+    expect(out).toMatch(/1 advisory/);
+    // A zero bucket is never listed (no "0 unknown" noise).
+    expect(out).not.toMatch(/0 (ready|advisory|unknown|need attention)/);
+    expect(out).not.toMatch(/unknown/);
+  });
+
+  it("names each limiter Compy found, in order", () => {
+    const out = buildSetupSummary(
+      readiness({ attention_count: 2 }),
+      priorities({ limiters: [lim("startup-load", "Too many startup apps"), lim("hags", "HAGS is off")] }),
+    );
+    const iA = out.indexOf("Too many startup apps");
+    const iB = out.indexOf("HAGS is off");
+    expect(iA).toBeGreaterThan(-1);
+    expect(iB).toBeGreaterThan(-1);
+    expect(iA).toBeLessThan(iB); // preserves ranked order
+  });
+
+  it("a clean rig says nothing worth changing — never fabricates a limiter", () => {
+    const out = buildSetupSummary(readiness({ ready_count: 5 }), priorities({ limiters: [] }));
+    expect(out).toMatch(/[Nn]othing worth changing/);
+  });
+
+  it("reports how many checks measured fine when any did", () => {
+    const out = buildSetupSummary(
+      readiness(),
+      priorities({ already_fine: [lim("x", "X"), lim("y", "Y")] }),
+    );
+    expect(out).toMatch(/2 (checks|settings) measured fine/i);
+  });
+
+  it("is plain text with real line breaks (paste-ready), no HTML", () => {
+    const out = buildSetupSummary(
+      readiness({ attention_count: 1 }),
+      priorities({ limiters: [lim("hags", "HAGS is off")] }),
+    );
+    expect(out).toContain("\n");
+    expect(out).not.toMatch(/<[a-z]/i);
   });
 });
 
