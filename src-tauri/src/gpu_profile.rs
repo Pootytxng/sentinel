@@ -208,6 +208,64 @@ pub(crate) fn delta_summary(deltas: &[FieldDelta]) -> String {
     format!("{}.", parts.join(" · "))
 }
 
+/// Schema version for the exported JSON document. Bump only on a breaking shape change so an old
+/// import can refuse a newer file instead of silently mis-reading it.
+pub(crate) const EXPORT_SCHEMA_VERSION: u32 = 1;
+
+/// A self-contained, human-shareable export of a GPU profile comparison — READ-ONLY. It bundles the
+/// two snapshots (either may be absent) with the pre-computed field deltas and one honest summary
+/// line, so a report/receipt or a saved `.json` carries everything the delta card showed. Producing
+/// this performs NO mutation, elevation, IPC, or network — it only serializes records already held.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct GpuProfileExport {
+    /// Discriminator so a reader can sanity-check the file is a Compy GPU-profile export.
+    pub kind: String,
+    pub schema_version: u32,
+    /// Before snapshot (baseline). `None` when only one profile was captured.
+    #[serde(default)]
+    pub before: Option<GpuProfileSnapshot>,
+    /// After snapshot (current). `None` when only a baseline exists.
+    #[serde(default)]
+    pub after: Option<GpuProfileSnapshot>,
+    /// Field-by-field diff (same/changed/unknown), matching `compute_delta`.
+    pub deltas: Vec<FieldDelta>,
+    /// Honest one-line summary (never claims FPS/performance).
+    pub summary: String,
+    /// True when at least one field genuinely moved (both sides read + differ).
+    pub any_change: bool,
+}
+
+/// Build the export document from two (optional) snapshots. Pure: recomputes the deltas + summary so
+/// the exported payload can never drift from the live delta logic. Honesty invariants ride along
+/// unchanged — an unread field stays `unknown`, never a fabricated change.
+pub(crate) fn build_export(
+    before: Option<&GpuProfileSnapshot>,
+    after: Option<&GpuProfileSnapshot>,
+) -> GpuProfileExport {
+    let deltas = compute_delta(before, after);
+    let summary = delta_summary(&deltas);
+    let any_change = has_any_change(&deltas);
+    GpuProfileExport {
+        kind: "compy.gpu-profile-export".into(),
+        schema_version: EXPORT_SCHEMA_VERSION,
+        before: before.cloned(),
+        after: after.cloned(),
+        deltas,
+        summary,
+        any_change,
+    }
+}
+
+/// Serialize the export to a pretty-printed JSON string (the shareable `.json` payload). Infallible
+/// in practice — every field is a plain serde-derive type with no map-with-non-string-key — but the
+/// `Result` is surfaced rather than unwrapped so a future non-trivial field can't panic here.
+pub(crate) fn export_json(
+    before: Option<&GpuProfileSnapshot>,
+    after: Option<&GpuProfileSnapshot>,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(&build_export(before, after))
+}
+
 #[cfg(test)]
 mod gpu_profile_tests {
     use super::*;
@@ -340,6 +398,74 @@ mod gpu_profile_tests {
             delta_summary(&compute_delta(None, Some(&snap()))),
             "No changes between these two snapshots."
         );
+    }
+
+    #[test]
+    fn export_bundles_snapshots_deltas_and_matches_live_logic() {
+        let before = snap();
+        let mut after = snap();
+        after.driver_version = Some("24.7.1".into());
+        after.peak_temp_c = Some(65);
+        let exp = build_export(Some(&before), Some(&after));
+        assert_eq!(exp.kind, "compy.gpu-profile-export");
+        assert_eq!(exp.schema_version, EXPORT_SCHEMA_VERSION);
+        assert_eq!(exp.before.as_ref(), Some(&before));
+        assert_eq!(exp.after.as_ref(), Some(&after));
+        // Deltas + summary + any_change must equal the live functions (never drift).
+        let live = compute_delta(Some(&before), Some(&after));
+        assert_eq!(exp.deltas, live);
+        assert_eq!(exp.summary, delta_summary(&live));
+        assert_eq!(exp.any_change, has_any_change(&live));
+        assert!(exp.any_change);
+    }
+
+    #[test]
+    fn export_json_round_trips_and_is_pretty() {
+        let before = snap();
+        let mut after = snap();
+        after.peak_temp_c = Some(60);
+        let json = export_json(Some(&before), Some(&after)).unwrap();
+        // Pretty output is multi-line and carries the discriminator.
+        assert!(json.contains('\n'));
+        assert!(json.contains("compy.gpu-profile-export"));
+        let parsed: GpuProfileExport = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, build_export(Some(&before), Some(&after)));
+    }
+
+    #[test]
+    fn export_handles_a_missing_side_without_fabricating_a_change() {
+        // Only a baseline exists: every field unknown, no change, absent `after`.
+        let exp = build_export(Some(&snap()), None);
+        assert_eq!(exp.after, None);
+        assert!(exp.before.is_some());
+        assert!(!exp.any_change);
+        assert!(exp.deltas.iter().all(|d| d.status == DeltaStatus::Unknown));
+        assert_eq!(exp.summary, "No changes between these two snapshots.");
+        // Serializes fine with a None side.
+        assert!(export_json(Some(&snap()), None).is_ok());
+    }
+
+    #[test]
+    fn export_of_two_absent_snapshots_is_all_unknown() {
+        let exp = build_export(None, None);
+        assert_eq!(exp.before, None);
+        assert_eq!(exp.after, None);
+        assert!(!exp.any_change);
+        assert!(exp.deltas.iter().all(|d| d.status == DeltaStatus::Unknown));
+    }
+
+    #[test]
+    fn export_summary_never_makes_a_performance_claim() {
+        let mut b = snap();
+        b.peak_temp_c = Some(85);
+        let mut a = snap();
+        a.peak_temp_c = Some(70);
+        let json = export_json(Some(&b), Some(&a)).unwrap().to_lowercase();
+        assert!(!json.contains("fps"));
+        assert!(!json.contains("faster"));
+        assert!(!json.contains("performance boost"));
+        // But the honest cooler phrasing IS present.
+        assert!(json.contains("cooler"));
     }
 
     #[test]
