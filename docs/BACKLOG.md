@@ -413,9 +413,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   exact disable→enable restore + UAC-cancel=no-partial + off-list/Defender rejected; owner curated list = all 3 +
   sign-off "run all 3") + Fix-surface UI (`DebloatTasks`, reversible via Trust Ledger). ✅ shipped in the 2026-06-26 rebuild
   (NSIS `512DAFF3…`) — NOTE (2026-06-27): installer superseded since; reinstall is Claude's job (silent-reinstall law), not an owner action. Current installer + live state → `docs/RELEASE_STATE.md`.
-- [ ] GPU profile apply (AMD first) / import / rollback
-- [ ] bloat removal (user-UWP uninstall + `HKCU\Run` cleanup; NO Defender/Policy)
-- [ ] one-click re-apply (limited to `APPLIABLE_REC_IDS`)
+- [⛔ WALLED 2026-07-01] GPU profile apply (AMD) — **blocked by rollback-first (LOCKED rule 3).** AMD GPU
+  profile state (Anti-Lag/Enhanced-Sync/Tessellation/Sharpening) is NOT user-mode readable (lives in
+  Adrenalin's private store; registry exposes only `*_component_na` capability flags — see
+  [[detection-feasibility-walls-usermode]]). `amd_freesync.rs` ADLX FFI is read-only (FreeSync), no write path.
+  Can't snapshot the true prior → must REFUSE per [[mutation-snapshot-failsafe-idiom]], not apply. Only `KMD_Chill*`
+  is readable (low-value, driver-fragile). Excluded unless a full vendor-SDK write+read path is built (big project).
+- [ ] bloat removal (user-UWP uninstall + `HKCU\Run` cleanup; NO Defender/Policy) — **the ONLY genuinely-buildable
+  remaining Phase-B item; owner-nod-gated + highest blast radius** (uninstalls apps + edits Run keys). Not started.
+- [~] one-click re-apply (`APPLIABLE_REC_IDS`) — **covered:** `apply_recommendations_batch` (`history.rs:528`,
+  validates `APPLIABLE_REC_IDS`, single-consent + ONE UAC) wired at `App.tsx:772` on the QA-closed apply path.
+  A dedicated "re-apply everything that drifted off in one click" button would be a small UI add on top if wanted.
 - Gaming Mode (F1) — built, **gate still false**; needs physical-reboot QA + owner sign-off.
 
 ## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
