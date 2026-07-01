@@ -17,6 +17,7 @@ mod fps;
 mod game_mode_persist; // Game Mode persistence keeper — option 1(b) mechanism C, DARK behind keep_game_mode_gate().
 mod gaming_orchestrator;
 mod gaming_session;
+mod gpu_profile; // Read-only GPU profile before/after delta core (advisory; NOT the gated apply/rollback). Wired to a command + the GpuProfile surface later.
 mod hardware;
 mod history;
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
