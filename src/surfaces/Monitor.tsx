@@ -36,6 +36,18 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
   const [openPreset, setOpenPreset] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
   const v = vendor ?? "any";
+  // Name the brand path for variable refresh so the vendor-awareness is visible even before a
+  // walkthrough is expanded (AMD = FreeSync, NVIDIA = G-SYNC, Intel = Adaptive-Sync). Read-only copy
+  // derived from the already-detected GPU vendor; empty for "any" so we never claim a brand we can't
+  // see. The full per-brand VRR/HDR/refresh guidance lives in the Learn "Monitor settings by brand" card.
+  const vendorHint =
+    v === "amd"
+      ? " — FreeSync on your AMD card"
+      : v === "nvidia"
+        ? " — G-SYNC on your NVIDIA card"
+        : v === "intel"
+          ? " — Adaptive-Sync on your Intel graphics"
+          : "";
 
   return (
     <section
@@ -46,8 +58,9 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
         Tuning presets
       </h2>
       <p className="section-help" style={{ marginTop: 0 }}>
-        Pick the result you want — each is a short, by-hand checklist of guided steps. Advisory only:
-        Compy never changes these for you; it just shows the way.
+        Pick the result you want — each is a short, by-hand checklist of guided steps. The steps adapt
+        to your graphics card by name{vendorHint}. Advisory only: Compy never changes these for you; it
+        just shows the way.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {TUNING_PRESETS.map((preset: TuningPreset) => {

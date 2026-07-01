@@ -272,6 +272,30 @@ const FREESYNC_VRB_ENTRY: TermEntry = {
     "It isn't a bug and nothing is broken: the two work in opposite ways. VRR keeps the refresh rate matched to your frame rate to kill tearing and stutter; blur reduction strobes the backlight at a fixed rate to sharpen motion, which only works at that steady rate. You choose one or the other for how you play — VRR for variable-frame-rate single-player and most games, blur reduction for very high, locked frame rates in fast competitive titles. A few newer monitors can do both together; if yours can't, that's normal, not a problem to fix.",
 };
 
+// Vendor-aware monitor tuning (A4 Monitor content lane) — the generic VRR/HDR/refresh walkthroughs
+// already exist, but people get stuck because the SAME feature has a different brand name and lives in
+// a different app per GPU: AMD calls variable refresh "FreeSync" (set in Radeon/Adrenalin), NVIDIA
+// calls it "G-SYNC" (NVIDIA App / Control Panel), and Intel Arc has its own control panel. This
+// read-only display-topic term names the per-brand path for the three things that actually matter on a
+// monitor — variable refresh, HDR, and the refresh rate — so a reader on ANY rig knows what the setting
+// is called and where it lives. Nothing here reads/writes a setting, adds a capability, or claims an
+// unmeasured/per-SKU number; it's the honest, feasible form of "vendor-aware monitor walkthroughs".
+// Lives in code (like GRADING_ENTRY / FREESYNC_VRB_ENTRY) so it ships without touching the frozen
+// tweaks.json count pins. Aliases stay distinct from vrr / gsync-freesync / set-refresh-rate (same-type
+// alias collisions are a lint failure); single-word findability comes from the name + body via search.
+const VENDOR_MONITOR_ENTRY: TermEntry = {
+  type: "term",
+  id: "vendor-monitor-tuning",
+  name: "Monitor settings by brand (FreeSync, G-SYNC, HDR)",
+  aliases: ["monitor settings by gpu", "freesync vs g-sync setup", "vendor monitor tuning", "where is freesync"],
+  related: ["vrr", "gsync-freesync", "set-refresh-rate", "auto-hdr", "freesync-vrb-exclusion", "native-resolution"],
+  topic: topicOf("vendor-monitor-tuning"),
+  what:
+    "The three settings that get the most out of any monitor — variable refresh, HDR, and its rated refresh rate — go by different brand names and live in a different app depending on your GPU: AMD calls variable refresh FreeSync, NVIDIA calls it G-SYNC, and Intel Arc has its own panel.",
+  more:
+    "Variable refresh (matches the monitor's refresh to your frame rate to kill tearing): on an AMD card turn on FreeSync in the monitor's on-screen menu, then enable it in Radeon Software (AMD Software: Adrenalin). On NVIDIA, enable G-SYNC (or 'G-SYNC Compatible' for a FreeSync panel) in the NVIDIA App or NVIDIA Control Panel. On Intel Arc, enable the panel's Adaptive-Sync / VRR in its control panel. HDR is a Windows setting, not a GPU-brand one — turn on 'Use HDR' (and Auto HDR for older games) in Windows Display settings, and only if your monitor advertises real HDR. The refresh rate is also set in Windows: pick the monitor's maximum advertised rate under Advanced display, since Windows often defaults a high-refresh panel to 60 Hz. One heads-up on most gaming monitors: variable refresh and a blur-reduction strobing mode usually can't run at once, so you pick one. Compy reads which GPU you have but never flips any of these for you — it just points you at the right name and place.",
+};
+
 // Monitor model-hint cards (A4 Monitor content lane) — when Compy has read the attached panel's real
 // model over EDID (read-only WmiMonitorID probe; `hardware.rs`), we point the owner at the EXISTING
 // display knowledge that actually matters for THAT panel instead of leaving the detected model a dead
@@ -339,6 +363,7 @@ export const KNOWLEDGE: KnowledgeEntry[] = [
   ...TUNING_GUIDE_ENTRIES,
   GRADING_ENTRY,
   FREESYNC_VRB_ENTRY,
+  VENDOR_MONITOR_ENTRY,
   ACER_XFA253Q_HINT_ENTRY,
 ].map(withApplicability).map(withDates);
 
