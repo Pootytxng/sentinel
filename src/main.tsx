@@ -64,6 +64,17 @@ try {
   document.documentElement.dataset.dashV2 = "on"; // default ON even if localStorage is unavailable
 }
 
+// Slim rows (P1 UI slim-down, 2026-07-01) — master-detail rec rows on Optimize's Fixes segment.
+// DEFAULT OFF (preview): applied before first paint only when the user opted in via Settings.
+// Flag off ⇒ this block is a no-op and today's UI renders byte-identical.
+try {
+  if (localStorage.getItem("compy_slim_rows") === "1") {
+    document.documentElement.dataset.slimRows = "on";
+  }
+} catch {
+  /* default OFF — nothing to apply */
+}
+
 // Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and
 // overrides the OS "reduce motion" setting (opt-out in Settings → Motion). Resolved onto
 // <html data-motion="full|reduced"> before first paint so CSS + JS read one source of truth.

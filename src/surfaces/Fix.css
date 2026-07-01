@@ -633,6 +633,24 @@
   font-size: 11.5px;
   color: var(--ix-text-3);
 }
+/* §8c (slim rows): the pre-selected Recommended tick — one-tap deselect inside the consent sheet. */
+.fix-applyall-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.fix-applyall-pick input[type="checkbox"] {
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  flex: none;
+}
+.fix-applyall-pick-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 .fix-applyall-actions {
   display: flex;
   justify-content: flex-end;

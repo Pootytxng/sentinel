@@ -268,6 +268,37 @@ export function applyDashV2(on: boolean): void {
   }
 }
 
+// Slim rows (P1 of the UI slim-down, spec 2026-07-01-p1-slimrows-optimize) — master-detail rec rows
+// on Optimize's Fixes segment: 8 visible controls collapse to 3 (dot · title+proof · badge · switch ·
+// chevron), everything else in a detail panel that expands in place. DEFAULT OFF behind
+// `compy_slim_rows` — flag off, today's UI renders byte-identical. Honesty guardrail (council 🔴):
+// the collapsed row ALWAYS shows one measured proof line — layout changes, evidence never hides.
+const SLIM_ROWS_KEY = "compy_slim_rows";
+
+export function readSlimRows(): boolean {
+  try {
+    return localStorage.getItem(SLIM_ROWS_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applySlimRows(on: boolean): void {
+  if (on) document.documentElement.dataset.slimRows = "on";
+  else delete document.documentElement.dataset.slimRows;
+  try {
+    localStorage.setItem(SLIM_ROWS_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:slimrows-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.

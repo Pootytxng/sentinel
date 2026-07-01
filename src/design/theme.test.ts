@@ -4,11 +4,14 @@ import {
   applyInstrumentTheme,
   readAmbiance,
   persistAmbiance,
+  readSlimRows,
+  applySlimRows,
 } from "./theme";
 
 afterEach(() => {
   localStorage.clear();
   delete document.documentElement.dataset.itheme;
+  delete document.documentElement.dataset.slimRows;
 });
 
 describe("instrument theme", () => {
@@ -26,6 +29,28 @@ describe("instrument theme", () => {
   it("falls back to violet on a junk stored value", () => {
     localStorage.setItem("compy_theme", "ludicrous");
     expect(readInstrumentTheme()).toBe("violet");
+  });
+});
+
+describe("slim rows (P1 UI slim-down — HARD LINE: default OFF)", () => {
+  it("defaults OFF when unset", () => {
+    expect(readSlimRows()).toBe(false);
+  });
+
+  it('returns true ONLY on the exact "1" opt-in', () => {
+    localStorage.setItem("compy_slim_rows", "on"); // junk value ≠ opt-in
+    expect(readSlimRows()).toBe(false);
+    localStorage.setItem("compy_slim_rows", "1");
+    expect(readSlimRows()).toBe(true);
+  });
+
+  it("applySlimRows sets/clears data-slim-rows on <html> and persists", () => {
+    applySlimRows(true);
+    expect(document.documentElement.dataset.slimRows).toBe("on");
+    expect(readSlimRows()).toBe(true);
+    applySlimRows(false);
+    expect(document.documentElement.dataset.slimRows).toBeUndefined();
+    expect(readSlimRows()).toBe(false);
   });
 });
 

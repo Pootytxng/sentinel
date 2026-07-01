@@ -10,6 +10,8 @@ import {
   persistAmbiance,
   readLivingInstrument,
   applyLivingInstrument,
+  readSlimRows,
+  applySlimRows,
   readStepAsideGame,
   persistStepAsideGame,
   readCloseToTray,
@@ -121,6 +123,7 @@ export default function Settings({
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
+  const [slimRows, setSlimRows] = useState<boolean>(readSlimRows);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -156,6 +159,12 @@ export default function Settings({
   const changeLiving = (v: boolean) => {
     setLiving(v);
     applyLivingInstrument(v);
+  };
+  // Slim rows preview (P1 UI slim-down) — toggles the [data-slim-rows] attribute live. Layout only:
+  // the same fixes, switches, and rollback flow; DEFAULT OFF until the look is owner-approved.
+  const changeSlimRows = (v: boolean) => {
+    setSlimRows(v);
+    applySlimRows(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -246,6 +255,17 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={living} onChange={changeLiving} ariaLabel="Living Instrument preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Slim rows (preview)</div>
+                  <div className="set-row-sub">
+                    Calmer fix rows on Optimize — one line of proof stays visible, the full detail
+                    opens on tap. Same fixes, same switches, same one-tap undo.
+                  </div>
+                </div>
+                <Toggle on={slimRows} onChange={changeSlimRows} ariaLabel="Slim rows preview" />
               </div>
             </div>
             <LivePreview ambiance={ambiance} />

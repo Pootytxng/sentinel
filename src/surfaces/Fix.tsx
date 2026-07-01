@@ -9,7 +9,10 @@ import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
-import { PROVENANCE_LABEL } from "../data/provenance";
+import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
+import { recMutation } from "../data/rec-mutations";
+import { slimProofLine } from "../data/slim-proof";
+import { SlimRecRow, SlimDetailRow } from "../design/SlimRecRow";
 import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
 import { gameModeRevertedExternally } from "./dashboard-data";
 import "./Fix.css";
@@ -23,6 +26,11 @@ function livingOn(): boolean {
 // a tweak touches). DOM-read; the surface re-renders fresh on navigation.
 function dashOn(): boolean {
   return typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on";
+}
+// Slim rows (P1 UI slim-down, DEFAULT OFF) — master-detail rec rows on the Fixes segment. DOM-read
+// like the flags above; flag off ⇒ the classic FixRow path renders byte-identical.
+function slimOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.slimRows === "on";
 }
 
 // A rec's title. Under the Living Instrument preview, jargon recs lead with a plain-language headline
@@ -177,6 +185,41 @@ function EvidenceChip({ p }: { p: Rec["provenance"] }) {
   return <span className={`fix-evidence fix-evidence-${e.cls}`}>{e.label}</span>;
 }
 
+// Honest Game Mode heads-up (one copy source — classic FixRow + the slim detail both render it).
+// If we can SEE it reverted (applied before, now off), say so pointedly so the user knows
+// re-applying won't hold — instead of silently re-offering it. Otherwise, on AMD, give the
+// proactive warning (Radeon resets it on login).
+function GameModeNote({
+  id,
+  vendor,
+  reverted,
+}: {
+  id: string;
+  vendor?: GpuVendor;
+  reverted?: boolean;
+}) {
+  if (id !== "game-mode") return null;
+  if (reverted) {
+    return (
+      <p className="fix-amd-note">
+        You applied this before, but Windows switched Game Mode back off. That's your GPU's
+        recording software (AMD Adrenalin / NVIDIA ShadowPlay) resetting it at login — not Compy.
+        Re-applying works, but it'll reset again after the next restart.
+      </p>
+    );
+  }
+  if (vendor === "amd") {
+    return (
+      <p className="fix-amd-note">
+        Heads up: on AMD systems, Radeon Adrenalin tends to switch Windows Game Mode back off
+        after you log in (a known Windows/AMD Game Bar conflict). Compy can turn it on, but it
+        may not stay on across reboots — that's the system resetting it, not a Compy bug.
+      </p>
+    );
+  }
+  return null;
+}
+
 // A row for an appliable rec — title, evidence, reason, and the trust-switch (right-aligned). When
 // applied, the row carries the named-prior snapshot line in its main column.
 function FixRow({
@@ -216,25 +259,7 @@ function FixRow({
           )}
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
-        {/* Honest Game Mode heads-up. If we can SEE it reverted (applied before, now off), say so
-            pointedly so the user knows re-applying won't hold — instead of silently re-offering it.
-            Otherwise, on AMD, give the proactive warning (Radeon resets it on login). */}
-        {rec.id === "game-mode" && gameModeReverted ? (
-          <p className="fix-amd-note">
-            You applied this before, but Windows switched Game Mode back off. That's your GPU's
-            recording software (AMD Adrenalin / NVIDIA ShadowPlay) resetting it at login — not Compy.
-            Re-applying works, but it'll reset again after the next restart.
-          </p>
-        ) : (
-          rec.id === "game-mode" &&
-          vendor === "amd" && (
-            <p className="fix-amd-note">
-              Heads up: on AMD systems, Radeon Adrenalin tends to switch Windows Game Mode back off
-              after you log in (a known Windows/AMD Game Bar conflict). Compy can turn it on, but it
-              may not stay on across reboots — that's the system resetting it, not a Compy bug.
-            </p>
-          )
-        )}
+        <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
         {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
         {!applied && (
@@ -250,6 +275,98 @@ function FixRow({
         ariaLabel={`${applied ? "Roll back" : "Apply"} ${rec.title}`}
       />
     </li>
+  );
+}
+
+// The slim master-detail rec row (P1 UI slim-down, behind compy_slim_rows — flag off, FixRow above
+// renders byte-identical). LAYOUT ONLY: the TrustSwitch is the same component on the same audited
+// onToggle path, the proof line is the rec's real evidence/reason (slimProofLine — never fabricated,
+// never hidden), and everything else moves into the in-place detail panel, reusing the existing
+// subcomponents (EvidenceChip / GameModeNote / TrustSnapshotLine / Walkthrough / WhatsThis / dismiss).
+// Exported for slim-row-proof-guard.test.tsx (applied rows can't render via worthFixing in P1).
+export function SlimFixRow({
+  rec,
+  applied,
+  activeChange,
+  busy,
+  onToggle,
+  onWhatsThis,
+  onDismiss,
+  vendor,
+  gameModeReverted,
+}: {
+  rec: Rec;
+  applied: boolean;
+  activeChange: AppliedChange | undefined;
+  busy: boolean;
+  onToggle: () => void;
+  onWhatsThis: (id: string) => void;
+  onDismiss: (id: string) => void;
+  vendor?: GpuVendor;
+  gameModeReverted?: boolean;
+}) {
+  const mut = recMutation(rec.id);
+  const walkthrough = walkthroughForKey(rec.id);
+  const why = rec.description || rec.impact;
+  return (
+    <SlimRecRow
+      title={<RecTitle id={rec.id} title={rec.title} />}
+      proof={slimProofLine(rec)}
+      badge={rec.severity === "safe" ? "recommended" : "optional"}
+      status={applied ? "ready" : rec.severity === "safe" ? "attention" : "neutral"}
+      control={
+        <TrustSwitch
+          applied={applied}
+          busy={busy}
+          onToggle={onToggle}
+          ariaLabel={`${applied ? "Roll back" : "Apply"} ${rec.title}`}
+        />
+      }
+    >
+      {why && <SlimDetailRow k="Why it matters" v={why} />}
+      <SlimDetailRow
+        k="Evidence"
+        v={
+          <>
+            <EvidenceChip p={rec.provenance} /> {PROVENANCE_NOTE[rec.provenance]}
+          </>
+        }
+      />
+      <SlimDetailRow
+        k="What changes"
+        v={
+          mut
+            ? `${mut.changes}${mut.elevated ? " Needs one admin OK." : ""}${
+                mut.restart ? " Takes effect after restart." : ""
+              }`
+            : "A single, scoped Windows setting — Compy snapshots its exact prior value before touching it."
+        }
+      />
+      <SlimDetailRow
+        k="Undo"
+        v={
+          mut?.reverts ??
+          "Compy captures the exact prior state before changing anything, and restores it on rollback."
+        }
+      />
+      <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
+      {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
+      <div className="slimrow-acts">
+        {walkthrough && (
+          <details className="fix-walkthrough">
+            <summary>Show me the way</summary>
+            <Walkthrough walkthrough={walkthrough} vendor={vendor ?? "any"} />
+          </details>
+        )}
+        <WhatsThis id={rec.id} onOpen={onWhatsThis} />
+        {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
+        {!applied && (
+          <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
+            Not for me
+          </button>
+        )}
+      </div>
+    </SlimRecRow>
   );
 }
 
@@ -594,6 +711,24 @@ export default function Fix({
   const safeBatch = worthFixing.filter((r) => r.severity === "safe");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [batching, setBatching] = useState(false);
+  // Slim rows (P1, compy_slim_rows — DEFAULT OFF): master-detail rows on the Fixes segment only.
+  // Flag off ⇒ every branch below takes the classic path byte-identical.
+  const slim = slimOn() && view === "fixes";
+  // §8c (owner decision 2026-07-01, slim mode only): the batch consent sheet arrives with every
+  // Recommended (safe-tier) row SELECTED — one-tap deselect; the ticked list IS exactly what will
+  // change. Selection ≠ application: Apply stays the explicit act. NO auto-apply on render, ever.
+  const [sheetSelected, setSheetSelected] = useState<Set<string>>(new Set());
+  const openSheet = () => {
+    if (slim) setSheetSelected(new Set(safeBatch.map((r) => r.id)));
+    setSheetOpen(true);
+  };
+  const toggleSheetItem = (id: string) =>
+    setSheetSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   // Esc closes the consent sheet (parity with the other modals) — but never mid-apply, mirroring
   // the backdrop's own guard so a keypress can't dismiss the sheet while a batch is running.
   useEffect(() => {
@@ -610,7 +745,9 @@ export default function Fix({
   } | null>(null);
   const runApplyAll = async () => {
     setBatching(true);
-    const res = await onApplyBatch(safeBatch.map((r) => r.id));
+    // Slim (§8c): apply EXACTLY the ticked set. Classic: the whole safe batch, unchanged.
+    const ids = (slim ? safeBatch.filter((r) => sheetSelected.has(r.id)) : safeBatch).map((r) => r.id);
+    const res = await onApplyBatch(ids);
     setBatching(false);
     setSheetOpen(false);
     setBatchSummary(res);
@@ -682,8 +819,8 @@ export default function Fix({
       <div className="fix-section-label">Worth making for your rig</div>
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
-          <button className="fix-applyall" onClick={() => setSheetOpen(true)}>
-            Apply all safe fixes ({safeBatch.length})
+          <button className="fix-applyall" onClick={openSheet}>
+            {slim ? `Apply reviewed (${safeBatch.length})` : `Apply all safe fixes (${safeBatch.length})`}
           </button>
           <span className="fix-applyall-hint">reversible · one undo each · cleaner setup, not a magic boost</span>
         </div>
@@ -702,30 +839,47 @@ export default function Fix({
         <p className="fix-empty">Your rig's already dialed in — nothing here needs a change right now.</p>
       ) : (
         <ul className="fix-list">
-          {worthFixing.map((rec) => (
-            <FixRow
-              key={rec.id}
-              rec={rec}
-              vendor={vendor}
-              gameModeReverted={gameModeReverted}
-              applied={false}
-              activeChange={undefined}
-              busy={rowBusy(rec)}
-              onToggle={() => onToggleRec(rec.id)}
-              onWhatsThis={onOpenLibrary}
-              onDismiss={dismiss}
-              onOpenDrawer={
-                dashV2
-                  ? () =>
-                      setDrawer({
-                        rec: { id: rec.id, title: rec.title, description: rec.description, impact: rec.impact, provenance: rec.provenance },
-                        applied: false,
-                        primary: () => onToggleRec(rec.id),
-                      })
-                  : undefined
-              }
-            />
-          ))}
+          {worthFixing.map((rec) =>
+            slim ? (
+              // Slim master-detail row (P1): 8 → 3 visible affordances; same TrustSwitch, same
+              // audited onToggleRec path; everything else in the in-place detail panel.
+              <SlimFixRow
+                key={rec.id}
+                rec={rec}
+                vendor={vendor}
+                gameModeReverted={gameModeReverted}
+                applied={false}
+                activeChange={undefined}
+                busy={rowBusy(rec)}
+                onToggle={() => onToggleRec(rec.id)}
+                onWhatsThis={onOpenLibrary}
+                onDismiss={dismiss}
+              />
+            ) : (
+              <FixRow
+                key={rec.id}
+                rec={rec}
+                vendor={vendor}
+                gameModeReverted={gameModeReverted}
+                applied={false}
+                activeChange={undefined}
+                busy={rowBusy(rec)}
+                onToggle={() => onToggleRec(rec.id)}
+                onWhatsThis={onOpenLibrary}
+                onDismiss={dismiss}
+                onOpenDrawer={
+                  dashV2
+                    ? () =>
+                        setDrawer({
+                          rec: { id: rec.id, title: rec.title, description: rec.description, impact: rec.impact, provenance: rec.provenance },
+                          applied: false,
+                          primary: () => onToggleRec(rec.id),
+                        })
+                    : undefined
+                }
+              />
+            ),
+          )}
         </ul>
       )}
 
@@ -747,19 +901,41 @@ export default function Fix({
             aria-labelledby="fix-applyall-h"
           >
             <h3 id="fix-applyall-h" className="fix-applyall-h">
-              Apply these {safeBatch.length} changes to your rig?
+              Apply these {slim ? sheetSelected.size : safeBatch.length} changes to your rig?
             </h3>
             <p className="fix-applyall-note">
               Each is reversible — Compy snapshots the prior state and writes a separate undo for every
               one. These tidy up how your rig is set up for you — not a performance boost.
+              {slim &&
+                " Recommended arrive ticked — untick anything you don't want; only what's ticked changes."}
             </p>
             <ul className="fix-applyall-list">
-              {safeBatch.map((r) => (
-                <li key={r.id} className="fix-applyall-item">
-                  <span className="fix-applyall-item-title">{r.title}</span>
-                  <span className="fix-applyall-item-what">{r.impact}</span>
-                </li>
-              ))}
+              {safeBatch.map((r) =>
+                slim ? (
+                  // §8c: pre-selected Recommended with one-tap deselect — the ticked list IS the
+                  // consent screen. Apply below stays the explicit act (selection ≠ application).
+                  <li key={r.id} className="fix-applyall-item">
+                    <label className="fix-applyall-pick">
+                      <input
+                        type="checkbox"
+                        checked={sheetSelected.has(r.id)}
+                        disabled={batching}
+                        onChange={() => toggleSheetItem(r.id)}
+                        aria-label={`Include ${r.title}`}
+                      />
+                      <span className="fix-applyall-pick-text">
+                        <span className="fix-applyall-item-title">{r.title}</span>
+                        <span className="fix-applyall-item-what">{r.impact}</span>
+                      </span>
+                    </label>
+                  </li>
+                ) : (
+                  <li key={r.id} className="fix-applyall-item">
+                    <span className="fix-applyall-item-title">{r.title}</span>
+                    <span className="fix-applyall-item-what">{r.impact}</span>
+                  </li>
+                ),
+              )}
             </ul>
             <div className="fix-applyall-actions">
               <button
@@ -769,8 +945,16 @@ export default function Fix({
               >
                 Cancel
               </button>
-              <button className="fix-applyall-go" disabled={batching} onClick={runApplyAll}>
-                {batching ? "Applying…" : `Apply all (${safeBatch.length})`}
+              <button
+                className="fix-applyall-go"
+                disabled={batching || (slim && sheetSelected.size === 0)}
+                onClick={runApplyAll}
+              >
+                {batching
+                  ? "Applying…"
+                  : slim
+                    ? `Apply selected (${sheetSelected.size})`
+                    : `Apply all (${safeBatch.length})`}
               </button>
             </div>
           </div>

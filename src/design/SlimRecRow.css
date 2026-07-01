@@ -1,0 +1,131 @@
+/* SlimRecRow — master-detail rec row (P1 UI slim-down). Tokens only; no side-stripes; the toggle
+   is a real <button> wearing the .cmp-door grammar (doorknob.css supplies knob + focus + hover). */
+
+.slimrow {
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: border-color var(--dur) var(--ease);
+}
+.slimrow:hover {
+  border-color: var(--border-strong);
+}
+
+.slimrow-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 14px;
+}
+
+/* The whole-row toggle: covers dot + title/proof + badge + chevron; the control sits outside it. */
+.slimrow-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  padding: 13px 2px 13px 16px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.slimrow-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.slimrow-dot-attention {
+  background: var(--status-attention);
+}
+.slimrow-dot-ready {
+  background: var(--status-ready);
+}
+.slimrow-dot-neutral {
+  background: var(--faint);
+}
+
+.slimrow-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.slimrow-title {
+  font-weight: 620;
+  font-size: 14.5px;
+  color: var(--fg);
+}
+/* The ONE always-visible measured proof line (honesty guardrail — never hidden, never empty). */
+.slimrow-proof {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.slimrow-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  flex: none;
+}
+.slimrow-badge-recommended {
+  background: var(--status-ready-soft);
+  color: var(--status-ready);
+  border: 1px solid var(--status-ready-line);
+}
+.slimrow-badge-optional {
+  background: var(--panel-3);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.slimrow-control {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Detail panel — expands in place under the head; inset to the title's left edge. */
+.slimrow-detail {
+  padding: 8px 16px 14px 38px;
+  border-top: 1px solid var(--hairline);
+  background: rgba(0, 0, 0, 0.14);
+}
+.slimrow-drow {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.slimrow-drow:last-of-type {
+  border-bottom: 0;
+}
+.slimrow-dk {
+  color: var(--muted);
+  width: 110px;
+  flex: none;
+}
+.slimrow-dv {
+  color: var(--fg-2);
+  min-width: 0;
+}
+.slimrow-acts {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}

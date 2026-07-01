@@ -5,6 +5,8 @@ export { Stat } from "./Stat";
 export { Gauge } from "./Gauge";
 export { Sparkline } from "./Sparkline";
 export { TrustCue } from "./TrustCue";
+export { SlimRecRow, SlimDetailRow } from "./SlimRecRow";
+export type { SlimRowStatus, SlimRowBadge } from "./SlimRecRow";
 export { EmptyState } from "./EmptyState";
 export { statusMeta } from "./status";
 export type { Status, StatusMeta } from "./status";
