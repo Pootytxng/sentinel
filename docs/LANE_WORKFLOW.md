@@ -5,6 +5,11 @@
 > **bounded and predictable**. Primary engine: **`scripts/compy-burst.workflow.js`** (run via the Workflow tool).
 > The old perpetual runner is retained only as a hard-capped fallback.
 
+> **⚠️ DORMANT (2026-06-28).** The lane fleet this governs is **not currently active** (single-session
+> working mode; all lane worktrees removed). Retained as the cost-bounded design IF the fleet is ever
+> revived — the bounded `compy-burst` remains the correct engine — but **don't start a fleet without an
+> explicit owner decision.**
+
 ## 1. Where v1's tokens went (so we never repeat it)
 | Driver | v1 | v2 fix |
 |---|---|---|

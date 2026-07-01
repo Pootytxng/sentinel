@@ -4,6 +4,12 @@
 > **coordinate with the other lanes** — hand off, signal dependencies, request a refill — all without a human
 > relaying messages by hand. This is the live work-distribution + message channel; `docs/BACKLOG.md` stays the
 > canonical *status* ledger and the HQ STEERING LOG keeps the integrate-verify history.
+
+> **⚠️ DORMANT (2026-06-28).** The multi-lane fleet is **not currently active** — Compy is worked
+> single-session, all lane worktrees are removed, and [[token-awareness-governance]] + the
+> product-perfection focus point away from the fleet (its perpetual loops burned ~10× budget). Kept as
+> the *design* of the system if it's ever revived. **Do not spin up lanes / perpetual loops without an
+> explicit owner decision.** Current work → `docs/BACKLOG.md`.
 >
 > **How lanes talk (the honest mechanism).** Each lane is a *separate* Claude session in its own git worktree.
 > Separate sessions can't directly wake each other — so the channel is **this file, synced via git** (pull → read
