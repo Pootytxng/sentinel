@@ -78,6 +78,7 @@ export const TOPIC_BY_ID: Record<string, Topic> = {
   "vrr-sync-stack-guide": "display",
   "fps-caps-guide": "display",
   "freesync-vrb-exclusion": "display",
+  "monitor-hint-acer-xfa253q": "display",
 
   // Mouse & keyboard
   "msi-mode": "input",

@@ -212,6 +212,62 @@ const FREESYNC_VRB_ENTRY: TermEntry = {
     "It isn't a bug and nothing is broken: the two work in opposite ways. VRR keeps the refresh rate matched to your frame rate to kill tearing and stutter; blur reduction strobes the backlight at a fixed rate to sharpen motion, which only works at that steady rate. You choose one or the other for how you play — VRR for variable-frame-rate single-player and most games, blur reduction for very high, locked frame rates in fast competitive titles. A few newer monitors can do both together; if yours can't, that's normal, not a problem to fix.",
 };
 
+// Monitor model-hint cards (A4 Monitor content lane) — when Compy has read the attached panel's real
+// model over EDID (read-only WmiMonitorID probe; `hardware.rs`), we point the owner at the EXISTING
+// display knowledge that actually matters for THAT panel instead of leaving the detected model a dead
+// string. Pure content + a tolerant model matcher: nothing here reads/writes a setting, adds a
+// capability, or claims an unmeasured/per-SKU number. The card is a code-injected `term` (like
+// GRADING_ENTRY / FREESYNC_VRB_ENTRY, so the frozen tweaks.json count pins stay untouched) that
+// cross-links the real Learn entries the panel benefits from.
+//
+// Each row: `entryId` = the injected card's id · `match` = lowercased substring tokens tested against
+// the EDID-decoded model (folded to alnum, so "Acer XFA253Q Z" and "XFA253QZ" both hit "xfa253q").
+export interface MonitorModelHint {
+  entryId: string;
+  /** Lowercased alphanumeric tokens; a model matches the row if it CONTAINS any token. */
+  match: string[];
+}
+
+export const MONITOR_MODEL_HINTS: MonitorModelHint[] = [
+  // Acer Nitro XFA253Q / XFA253QZ family — 24.5" 1080p IPS FreeSync gaming monitors (the dev rig's
+  // own panel decodes as "Acer XFA253Q Z"). Deliberately matches the shared "xfa253q" stem so the
+  // whole family (spacing/suffix variants) hits one card.
+  { entryId: "monitor-hint-acer-xfa253q", match: ["xfa253q"] },
+];
+
+/** Fold a raw model string to lowercase alphanumerics only (drops spaces/punctuation) for matching. */
+function foldModel(model: string): string {
+  return String(model).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Look up the model-hint row for a detected monitor model string (read-only, advisory). Returns the
+ * matching row (whose `entryId` resolves to a browsable Learn card) or undefined when no family
+ * matches — including empty / "Generic PnP Monitor" strings. First-match-wins; tokens are ORed.
+ */
+export function monitorHintsFor(model: string | null | undefined): MonitorModelHint | undefined {
+  if (!model) return undefined;
+  const folded = foldModel(model);
+  if (folded.length === 0) return undefined;
+  return MONITOR_MODEL_HINTS.find((h) => h.match.some((t) => folded.includes(t)));
+}
+
+/** Ids of every injected model-hint card, for guards/UI that want the full set. */
+export const MONITOR_HINT_ENTRY_IDS: string[] = MONITOR_MODEL_HINTS.map((h) => h.entryId);
+
+const ACER_XFA253Q_HINT_ENTRY: TermEntry = {
+  type: "term",
+  id: "monitor-hint-acer-xfa253q",
+  name: "Your monitor: Acer XFA253Q / XFA253QZ (Nitro)",
+  aliases: ["acer xfa253q", "xfa253qz", "acer nitro monitor", "xfa253q hints"],
+  related: ["set-refresh-rate", "vrr", "gsync-freesync", "freesync-vrb-exclusion", "native-resolution"],
+  topic: topicOf("monitor-hint-acer-xfa253q"),
+  what:
+    "This is a 24.5-inch 1080p IPS gaming monitor with a high refresh rate and AMD FreeSync — so the two free wins are making Windows actually use its rated refresh rate and turning FreeSync on.",
+  more:
+    "Two quick checks get the most out of this panel, and neither costs performance. First, set the refresh rate: Windows often defaults a high-refresh monitor to 60 Hz, so open Settings and pick its maximum advertised rate — that alone makes everything feel smoother (see 'Set your refresh rate'). Second, turn on FreeSync in the monitor's on-screen menu and match it in your GPU driver, which removes tearing without the input lag of plain V-Sync (see 'Variable refresh rate' / 'FreeSync & G-Sync'). One heads-up: on this class of monitor FreeSync and the blur-reduction/strobing mode usually can't run at the same time — you pick one (see 'FreeSync vs blur reduction'). Run it at its native 1920x1080 for the sharpest image. We read the model from your monitor's EDID; nothing here changes a setting for you.",
+};
+
 // Tuning guides (spec 2026-06-08) are injected as derived `guide` entries from their single source
 // (tuning-guides.ts) — same pattern as GRADING_ENTRY — so the Learn library stays searchable/browsable
 // over them without duplicating the guide copy.
@@ -223,6 +279,7 @@ export const KNOWLEDGE: KnowledgeEntry[] = [
   ...TUNING_GUIDE_ENTRIES,
   GRADING_ENTRY,
   FREESYNC_VRB_ENTRY,
+  ACER_XFA253Q_HINT_ENTRY,
 ].map(withApplicability);
 
 export const KNOWLEDGE_BY_ID: Map<string, KnowledgeEntry> = new Map(
