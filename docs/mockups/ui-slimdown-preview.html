@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — UI slim-down preview</title>
+<style>
+  /* ---- Real Compy tokens (from the code audit) ---- */
+  :root{
+    --bg:#07080b; --bg-2:#0b0d12;
+    --panel:#12151d; --panel-2:#181c26; --panel-3:#1f242f;
+    --border:#242b39; --border-strong:#313a4d; --hairline:#1a1f2a;
+    --fg:#eef1f7; --fg-2:#cdd4e0; --muted:#8b95a8; --faint:#5b6577;
+    --ready:#46d98a; --attention:#f5b740; --danger:#f3716f;
+    --ready-soft:rgba(70,217,138,.12); --attention-soft:rgba(245,183,64,.12);
+    --accent:#2ee6c0; --accent-2:#19b7d6; --accent-ink:#04211b;
+    --r-sm:7px; --r:10px; --r-lg:14px; --r-pill:999px;
+    --font-ui:"Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    --ease:cubic-bezier(.4,.12,.18,1); --dur:160ms;
+    --shadow-2:0 8px 30px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+      radial-gradient(1200px 700px at 78% -12%, rgba(46,230,192,.06), transparent 60%),
+      var(--bg);
+    color:var(--fg);font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+  .wrap{max-width:1200px;margin:26px auto 60px;padding:0 20px}
+  .caption{color:var(--muted);font-size:12.5px;margin:0 2px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .caption b{color:var(--fg-2);font-weight:600}
+  .tagpill{border:1px solid var(--border);border-radius:var(--r-pill);padding:2px 9px;color:var(--muted);font-size:11.5px}
+
+  /* ---- App window shell ---- */
+  .app{background:linear-gradient(180deg,var(--bg-2),var(--bg));
+    border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-2)}
+  .titlebar{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--hairline);
+    background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
+  .wordmark{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:.2px}
+  .logo{width:20px;height:20px;border-radius:6px;background:conic-gradient(from 210deg,var(--accent),var(--accent-2),var(--accent));
+    box-shadow:0 0 0 1px rgba(46,230,192,.35), 0 0 16px rgba(46,230,192,.25)}
+  .spacer{flex:1}
+  /* Basic/Advanced global switch */
+  .mode{display:inline-flex;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-pill);padding:3px}
+  .mode button{all:unset;cursor:pointer;padding:5px 13px;border-radius:var(--r-pill);color:var(--muted);font-size:12.5px;font-weight:600;transition:var(--dur)}
+  .mode button[aria-pressed="true"]{background:var(--panel-3);color:var(--fg)}
+  .gear{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    display:grid;place-items:center;color:var(--muted);cursor:pointer}
+
+  .body{display:grid;grid-template-columns:150px 1fr;min-height:620px}
+  /* ---- Rail ---- */
+  .rail{border-right:1px solid var(--hairline);padding:14px 10px;display:flex;flex-direction:column;gap:3px;background:rgba(255,255,255,.008)}
+  .rail button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r);color:var(--muted);font-weight:600;font-size:13.5px;transition:var(--dur)}
+  .rail button .ic{width:17px;height:17px;opacity:.85;flex:none}
+  .rail button:hover{background:var(--panel);color:var(--fg-2)}
+  .rail button[aria-current="true"]{background:var(--panel-2);color:var(--fg)}
+  .rail button[aria-current="true"] .ic{opacity:1;color:var(--accent)}
+  .rail .sep{height:1px;background:var(--hairline);margin:8px 6px}
+  .rail .lab{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.12em;padding:4px 11px 2px}
+
+  /* ---- Content ---- */
+  .content{padding:26px 30px;min-width:0}
+  .screen{display:none;animation:fade var(--dur) var(--ease)}
+  .screen.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .eyebrow{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px}
+  .rowbar{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  h1.q{font-size:22px;font-weight:680;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin-top:3px}
+
+  /* Buttons */
+  .btn{all:unset;cursor:pointer;font-weight:650;font-size:13px;padding:9px 16px;border-radius:var(--r);transition:var(--dur);text-align:center}
+  .btn.primary{background:linear-gradient(180deg,var(--accent),#22cbaa);color:var(--accent-ink);box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 6px 16px rgba(46,230,192,.18)}
+  .btn.primary:hover{filter:brightness(1.05)}
+  .btn.ghost{border:1px solid var(--border);color:var(--fg-2);background:var(--panel)}
+  .btn.ghost:hover{border-color:var(--border-strong);color:var(--fg)}
+  .btn.sm{padding:6px 12px;font-size:12.5px}
+
+  /* Answer hero */
+  .hero{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center;
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:var(--r-lg);padding:22px 24px;margin-bottom:16px}
+  .verdict{display:flex;align-items:center;gap:12px}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none}
+  .dot.ready{background:var(--ready);box-shadow:0 0 0 4px var(--ready-soft)}
+  .dot.attn{background:var(--attention);box-shadow:0 0 0 4px var(--attention-soft)}
+  .verdict h2{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .verdict .why{color:var(--muted);font-size:13.5px;margin-top:4px}
+  /* ring */
+  .ring{width:104px;height:104px;position:relative;display:grid;place-items:center}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .val{position:absolute;text-align:center}
+  .ring .val b{font-size:26px;font-weight:720;font-family:var(--font-mono)}
+  .ring .val span{display:block;color:var(--muted);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+
+  /* glance tiles */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  .tile{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 16px 14px}
+  .tile .k{color:var(--muted);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+  .tile .v{font-family:var(--font-mono);font-size:28px;font-weight:680;margin-top:8px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .tile .v small{font-size:14px;color:var(--muted);font-weight:600}
+  .tile .m{color:var(--fg-2);font-size:12.5px;margin-top:3px}
+  .tile.big .v{font-size:34px}
+
+  /* limiter / rec rows */
+  .section-h{display:flex;align-items:center;justify-content:space-between;margin:22px 2px 10px}
+  .section-h .n{font-weight:660;font-size:15px}
+  .section-h .n b{color:var(--accent)}
+  .list{display:flex;flex-direction:column;gap:9px}
+  .rrow{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;transition:var(--dur)}
+  .rrow:hover{border-color:var(--border-strong)}
+  .rrow .head{display:grid;grid-template-columns:auto 1fr auto auto;gap:13px;align-items:center;padding:14px 16px;cursor:pointer}
+  .rrow .title{font-weight:620;font-size:14.5px}
+  .rrow .proof{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .rrow .proof .mono{font-family:var(--font-mono);color:var(--fg-2)}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:var(--r-pill);white-space:nowrap}
+  .badge.rec{background:var(--ready-soft);color:var(--ready);border:1px solid rgba(70,217,138,.32)}
+  .badge.opt{background:var(--panel-3);color:var(--muted);border:1px solid var(--border)}
+  /* toggle */
+  .sw{width:42px;height:24px;border-radius:var(--r-pill);background:var(--panel-3);border:1px solid var(--border);position:relative;cursor:pointer;flex:none;transition:var(--dur)}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--faint);transition:var(--dur)}
+  .sw.on{background:linear-gradient(180deg,var(--accent),#22cbaa);border-color:transparent}
+  .sw.on::after{left:20px;background:var(--accent-ink)}
+  .chev{color:var(--faint);transition:var(--dur)}
+  .rrow.open .chev{transform:rotate(180deg);color:var(--muted)}
+  .rrow .detail{display:none;padding:2px 16px 16px 43px;border-top:1px solid var(--hairline);background:rgba(0,0,0,.14)}
+  .rrow.open .detail{display:block;animation:fade var(--dur)}
+  .detail .drow{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--hairline);font-size:13px}
+  .detail .drow:last-child{border-bottom:0}
+  .detail .drow .dk{color:var(--muted);width:120px;flex:none}
+  .detail .drow .dv{color:var(--fg-2)}
+  .detail .mono{font-family:var(--font-mono)}
+  .detail .acts{display:flex;gap:9px;margin-top:14px}
+
+  .quiet{margin-top:12px}
+  .quiet button{all:unset;cursor:pointer;display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:560;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);width:100%}
+  .quiet button:hover{color:var(--fg-2);border-color:var(--border-strong)}
+  .quiet .body-x{display:none;padding:6px 4px 2px;color:var(--faint);font-size:12.5px}
+  .quiet.open .body-x{display:block}
+
+  /* advanced-only blocks */
+  .adv-only{display:none}
+  body[data-mode="advanced"] .adv-only{display:block}
+  .adv-note{display:none;margin:16px 0 4px;padding:10px 14px;border-radius:var(--r);border:1px solid var(--attention-soft);background:var(--attention-soft);color:var(--attention);font-size:12.5px}
+  body[data-mode="advanced"] .adv-note{display:block}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;margin-top:12px}
+  .panel h3{margin:0 0 12px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:640}
+  .metricrow{display:grid;grid-template-columns:120px 66px 1fr;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--hairline);font-size:13px}
+  .metricrow:last-child{border-bottom:0}
+  .metricrow .ml{color:var(--fg-2)} .metricrow .mv{font-family:var(--font-mono);color:var(--fg);text-align:right;font-variant-numeric:tabular-nums}
+  .spark{height:22px;border-radius:5px;background:linear-gradient(90deg,rgba(46,230,192,.05),rgba(46,230,192,.16));position:relative;overflow:hidden}
+  .spark svg{position:absolute;inset:0}
+  .cores{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+  .core{height:34px;border-radius:5px;background:var(--panel-3);position:relative;overflow:hidden;border:1px solid var(--hairline)}
+  .core i{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,var(--accent),#1c9a86);display:block}
+  .core b{position:absolute;top:2px;left:0;right:0;text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--fg-2)}
+
+  /* before/after toggle on Optimize */
+  .ba{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:var(--r-pill);overflow:hidden;background:var(--panel)}
+  .ba button{all:unset;cursor:pointer;padding:5px 13px;font-size:12px;font-weight:650;color:var(--muted)}
+  .ba button.on{background:var(--panel-3);color:var(--fg)}
+  .before{display:none}
+  .optimize.showbefore .before{display:flex}
+  .optimize.showbefore .after{display:none}
+  /* busy "before" row */
+  .busy{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 15px}
+  .busy .t{font-weight:620;font-size:14px;margin-bottom:7px}
+  .busy .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{font-size:11px;padding:3px 8px;border-radius:var(--r-pill);border:1px solid var(--border);color:var(--muted);background:var(--panel-2)}
+  .chip.ev{color:var(--ready);border-color:rgba(70,217,138,.3)}
+  .chip.warn{color:var(--attention);border-color:rgba(245,183,64,.3)}
+  .busy .meta{color:var(--faint);font-size:11.5px;margin-top:8px;line-height:1.7}
+  .busy .foot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .mini{font-size:11.5px;padding:4px 10px;border-radius:var(--r-sm);border:1px solid var(--border);color:var(--fg-2);background:var(--panel-2)}
+  .callout{margin-top:12px;font-size:12.5px;color:var(--muted)}
+  .callout b{color:var(--danger)}
+  .after .callout b{color:var(--ready)}
+</style>
+</head>
+<body data-mode="basic">
+<div class="wrap">
+  <div class="caption">
+    <b>Compy UI slim-down — interactive mockup.</b>
+    <span class="tagpill">reuses real tokens</span>
+    <span class="tagpill">click the rail</span>
+    <span class="tagpill">toggle Basic / Advanced</span>
+    <span class="tagpill">Optimize has a “show before” switch</span>
+  </div>
+
+  <div class="app">
+    <!-- Title bar -->
+    <div class="titlebar">
+      <div class="wordmark"><span class="logo"></span> Compy</div>
+      <div class="spacer"></div>
+      <div class="mode" role="group" aria-label="Detail level">
+        <button data-mode="basic" aria-pressed="true">Basic</button>
+        <button data-mode="advanced" aria-pressed="false">Advanced</button>
+      </div>
+      <div class="gear" title="Settings">⚙</div>
+    </div>
+
+    <div class="body">
+      <!-- Rail -->
+      <nav class="rail">
+        <button data-go="home" aria-current="true"><span class="ic">◎</span> Home</button>
+        <button data-go="optimize"><span class="ic">▲</span> Optimize</button>
+        <button data-go="monitor"><span class="ic">◷</span> Monitor</button>
+        <button data-go="learn"><span class="ic">◇</span> Learn</button>
+        <div class="sep"></div>
+        <div class="lab">Advanced</div>
+        <button data-go="lab"><span class="ic">⌘</span> Lab</button>
+      </nav>
+
+      <!-- Content -->
+      <div class="content">
+
+        <!-- ============ HOME ============ -->
+        <section class="screen on" id="home">
+          <p class="eyebrow">Home</p>
+          <div class="hero">
+            <div>
+              <div class="verdict">
+                <span class="dot attn"></span>
+                <div>
+                  <h2>One thing worth fixing</h2>
+                  <div class="why">Your rig is healthy. A quick change gets you a faster boot.</div>
+                </div>
+              </div>
+            </div>
+            <div class="ring" title="Readiness">
+              <svg width="104" height="104" viewBox="0 0 104 104">
+                <circle cx="52" cy="52" r="44" fill="none" stroke="#1f242f" stroke-width="9"/>
+                <circle cx="52" cy="52" r="44" fill="none" stroke="url(#g)" stroke-width="9"
+                  stroke-linecap="round" stroke-dasharray="276" stroke-dashoffset="41"/>
+                <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#2ee6c0"/><stop offset="1" stop-color="#19b7d6"/>
+                </linearGradient></defs>
+              </svg>
+              <div class="val"><b>85</b><span>ready</span></div>
+            </div>
+          </div>
+
+          <!-- the one primary action, as a master-detail row -->
+          <div class="list">
+            <div class="rrow" data-row>
+              <div class="head" data-toggle>
+                <span class="dot attn" style="width:9px;height:9px"></span>
+                <div>
+                  <div class="title">Disable 3 startup apps slowing your boot</div>
+                  <div class="proof">Measured: <span class="mono">+7.2s</span> to desktop · fully reversible</div>
+                </div>
+                <span class="badge rec">Recommended</span>
+                <button class="btn primary sm">Fix it</button>
+              </div>
+              <div class="detail">
+                <div class="drow"><span class="dk">Why it matters</span><span class="dv">These three apps launch with Windows and delay when your desktop is usable.</span></div>
+                <div class="drow"><span class="dk">Evidence</span><span class="dv mono">boot delta 7.2s · 3 auto-start entries</span></div>
+                <div class="drow"><span class="dk">What changes</span><span class="dv">Corsair iCUE, Epic Launcher, Discord set to “manual start”. Games unaffected.</span></div>
+                <div class="drow"><span class="dk">Undo</span><span class="dv">One click restores all three. Snapshot saved to your Trust Ledger.</span></div>
+                <div class="acts"><button class="btn primary sm">Apply</button><button class="btn ghost sm">Learn more</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- three glance tiles -->
+          <div class="tiles" style="margin-top:16px">
+            <div class="tile"><div class="k">GPU temp</div><div class="v">61<small>°C</small></div><div class="m" style="color:var(--ready)">Cool · idle</div></div>
+            <div class="tile"><div class="k">Last session</div><div class="v">142<small> fps</small></div><div class="m">Marvel Rivals · 1h ago</div></div>
+            <div class="tile"><div class="k">Your rig</div><div class="v" style="font-size:16px;padding-top:6px">RX 9070 XT</div><div class="m">Ryzen X3D · 32 GB</div></div>
+          </div>
+
+          <div class="quiet" data-quiet>
+            <button data-quiet-toggle><span>✓ Everything else looks good — 24 checks passed</span><span style="margin-left:auto;color:var(--faint)">▾</span></button>
+            <div class="body-x">Drivers current · temps normal · no drift since last session · storage healthy · network stable. Nothing here needs your attention.</div>
+          </div>
+        </section>
+
+        <!-- ============ OPTIMIZE ============ -->
+        <section class="screen optimize after-mode" id="optimize">
+          <div class="rowbar">
+            <div style="flex:1">
+              <p class="eyebrow">Optimize</p>
+              <h1 class="q">3 fixes recommended for your rig</h1>
+              <div class="sub">Review each one, then apply. Everything is reversible.</div>
+            </div>
+            <div class="ba" role="group" aria-label="Compare">
+              <button class="on" data-ba="after">After</button>
+              <button data-ba="before">Show before</button>
+            </div>
+            <button class="btn primary">Apply reviewed (2)</button>
+          </div>
+
+          <!-- AFTER: slim master-detail rows -->
+          <div class="after">
+            <div class="list" style="width:100%">
+              <div class="rrow open" data-row>
+                <div class="head" data-toggle>
+                  <span class="dot attn" style="width:9px;height:9px"></span>
+                  <div>
+                    <div class="title">Disable 3 startup apps slowing your boot</div>
+                    <div class="proof">Measured: <span class="mono">+7.2s</span> to desktop · reversible</div>
+                  </div>
+                  <span class="badge rec">Recommended</span>
+                  <div class="sw on" data-sw></div>
+                </div>
+                <div class="detail">
+                  <div class="drow"><span class="dk">Evidence</span><span class="dv mono">boot delta 7.2s · 3 auto-start entries</span></div>
+                  <div class="drow"><span class="dk">What changes</span><span class="dv">iCUE, Epic, Discord → manual start. Games unaffected.</span></div>
+                  <div class="drow"><span class="dk">Undo</span><span class="dv">One click. Snapshot in your Trust Ledger.</span></div>
+                  <div class="acts"><button class="btn ghost sm">Walkthrough</button><button class="btn ghost sm">Learn more</button></div>
+                </div>
+              </div>
+
+              <div class="rrow" data-row>
+                <div class="head" data-toggle>
+                  <span class="dot attn" style="width:9px;height:9px"></span>
+                  <div>
+                    <div class="title">Turn on Hardware-Accelerated GPU Scheduling</div>
+                    <div class="proof">For your RX 9070 XT · lower latency in most games · reversible</div>
+                  </div>
+                  <span class="badge rec">Recommended</span>
+                  <div class="sw on" data-sw></div>
+                </div>
+                <div class="detail">
+                  <div class="drow"><span class="dk">Why it matters</span><span class="dv">Lets your GPU manage its own memory — small, measured latency win on RDNA4.</span></div>
+                  <div class="drow"><span class="dk">Undo</span><span class="dv">Reverts with one click; needs a restart to apply.</span></div>
+                  <div class="acts"><button class="btn ghost sm">Learn more</button></div>
+                </div>
+              </div>
+
+              <div class="rrow" data-row>
+                <div class="head" data-toggle>
+                  <span class="dot" style="width:9px;height:9px;background:var(--faint)"></span>
+                  <div>
+                    <div class="title">Clear 4.2 GB of shader cache</div>
+                    <div class="proof">Optional · frees space · rebuilds on next launch</div>
+                  </div>
+                  <span class="badge opt">Optional</span>
+                  <div class="sw" data-sw></div>
+                </div>
+                <div class="detail">
+                  <div class="drow"><span class="dk">Trade-off</span><span class="dv">First launch of each game is slightly slower while the cache rebuilds.</span></div>
+                  <div class="acts"><button class="btn ghost sm">Learn more</button></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="quiet" data-quiet>
+              <button data-quiet-toggle><span>Nothing else needs attention — 21 items measured fine or not worth touching</span><span style="margin-left:auto;color:var(--faint)">▾</span></button>
+              <div class="body-x">14 settings measured fine · 5 not worth touching on your hardware · 2 you dismissed. Open only if you want the full ledger.</div>
+            </div>
+            <div class="callout after"><b>After:</b> 3 visible controls per row, one proof line, detail on tap. The side-piles collapse into one quiet line.</div>
+          </div>
+
+          <!-- BEFORE: busy multi-affordance rows (today) -->
+          <div class="before" style="flex-direction:column;gap:9px;width:100%">
+            <div class="busy">
+              <div class="t">Disable 3 startup apps slowing your boot</div>
+              <div class="chips">
+                <span class="chip ev">✓ evidence: boot +7.2s</span>
+                <span class="chip">confidence: high</span>
+                <span class="chip warn">AMD note</span>
+                <span class="chip">reversible</span>
+                <span class="chip">snapshot ready</span>
+              </div>
+              <div class="meta">Why this matters: these three apps launch with Windows and delay when your desktop is usable, which can also cost you a few seconds getting into your first game of the session…<br>Rollback: a full snapshot is captured at apply time and stored in history.json so this can always be undone even if the recommendation is later removed…</div>
+              <div class="foot">
+                <span class="mini">What's this?</span><span class="mini">Details ▾</span>
+                <span class="mini">Walkthrough</span><span class="mini">Dismiss</span>
+                <span class="mini">Apply</span><span class="mini">◻ Trust switch</span>
+              </div>
+            </div>
+            <div class="busy">
+              <div class="t">Turn on Hardware-Accelerated GPU Scheduling</div>
+              <div class="chips">
+                <span class="chip ev">✓ evidence</span><span class="chip">confidence: high</span>
+                <span class="chip warn">AMD-specific</span><span class="chip">needs restart</span><span class="chip">reversible</span>
+              </div>
+              <div class="meta">Why this matters: lets the GPU manage its own memory scheduling; on RDNA4 this is a small measured latency improvement in most titles…<br>Rollback: reverts with one click; snapshot captured…</div>
+              <div class="foot"><span class="mini">What's this?</span><span class="mini">Details ▾</span><span class="mini">Walkthrough</span><span class="mini">Dismiss</span><span class="mini">Apply</span><span class="mini">◻ Trust switch</span></div>
+            </div>
+            <div class="callout before"><b>Before:</b> ~8 affordances per row × every row, two paragraphs of text each, five near-synonyms for "reversible." This is the sensory overload.</div>
+          </div>
+        </section>
+
+        <!-- ============ MONITOR ============ -->
+        <section class="screen" id="monitor">
+          <div class="rowbar">
+            <div style="flex:1">
+              <p class="eyebrow">Monitor</p>
+              <h1 class="q">How it's running</h1>
+              <div class="sub">Live now · last session summarized below</div>
+            </div>
+            <button class="btn ghost">Overlay</button>
+          </div>
+
+          <!-- Basic: 4 big glance tiles (always visible) -->
+          <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+            <div class="tile big"><div class="k">Frame rate</div><div class="v">142<small> fps</small></div><div class="m" style="color:var(--ready)">Smooth · 6.9ms</div></div>
+            <div class="tile big"><div class="k">GPU temp</div><div class="v">61<small>°C</small></div><div class="m" style="color:var(--ready)">Cool</div></div>
+            <div class="tile big"><div class="k">CPU</div><div class="v">54<small>°C</small></div><div class="m">31% load</div></div>
+            <div class="tile big"><div class="k">Memory</div><div class="v">46<small>%</small></div><div class="m">14.7 / 32 GB</div></div>
+          </div>
+
+          <div class="panel" style="margin-top:16px">
+            <h3>Last session · Marvel Rivals · 48 min</h3>
+            <div style="display:flex;gap:26px;flex-wrap:wrap">
+              <div><div class="tile-mini" style="color:var(--muted);font-size:12px">Avg FPS</div><div style="font-family:var(--font-mono);font-size:20px">138</div></div>
+              <div><div style="color:var(--muted);font-size:12px">1% low</div><div style="font-family:var(--font-mono);font-size:20px">96</div></div>
+              <div><div style="color:var(--muted);font-size:12px">Peak GPU</div><div style="font-family:var(--font-mono);font-size:20px">71°C</div></div>
+              <div><div style="color:var(--muted);font-size:12px">Stutters</div><div style="font-family:var(--font-mono);font-size:20px;color:var(--ready)">0</div></div>
+            </div>
+          </div>
+
+          <!-- Advanced note + panels (revealed by the global switch) -->
+          <div class="adv-note">Advanced view — sensors, per-core load, and the frametime graph are hidden in Basic so a new user never has to parse them.</div>
+
+          <div class="adv-only">
+            <div class="panel">
+              <h3>Frametime · last 60s</h3>
+              <div class="spark" style="height:70px">
+                <svg viewBox="0 0 600 70" preserveAspectRatio="none"><polyline fill="none" stroke="#2ee6c0" stroke-width="1.5"
+                  points="0,44 40,42 80,46 120,40 160,43 200,38 240,50 280,41 320,44 360,39 400,42 440,55 480,40 520,43 560,41 600,44"/></svg>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>GPU · Radeon RX 9070 XT</h3>
+              <div class="metricrow"><span class="ml">Core temp</span><span class="mv">61 °C</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Hotspot</span><span class="mv">74 °C</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Utilisation</span><span class="mv">38 %</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">VRAM</span><span class="mv">6.1 GB</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Board power</span><span class="mv">124 W</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Core clock</span><span class="mv">2810 MHz</span><div class="spark"></div></div>
+            </div>
+            <div class="panel">
+              <h3>CPU · 16 cores</h3>
+              <div class="cores" id="cores"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ LEARN ============ -->
+        <section class="screen" id="learn">
+          <p class="eyebrow">Learn</p>
+          <h1 class="q">Blackbook</h1>
+          <div class="sub" style="margin-bottom:16px">Plain-English answers, kept where you need them — and demoted so it never competes with “what do I do.”</div>
+          <div class="tiles"><div class="tile"><div class="k">Popular</div><div class="m" style="margin-top:8px;color:var(--fg-2)">What is HAGS?</div></div>
+            <div class="tile"><div class="k">For your rig</div><div class="m" style="margin-top:8px;color:var(--fg-2)">RDNA4 undervolt basics</div></div>
+            <div class="tile"><div class="k">Myths</div><div class="m" style="margin-top:8px;color:var(--fg-2)">Does more Hz = smoother?</div></div></div>
+        </section>
+
+        <!-- ============ LAB ============ -->
+        <section class="screen" id="lab">
+          <p class="eyebrow">Advanced</p>
+          <h1 class="q">Lab</h1>
+          <div class="sub" style="margin-bottom:16px">Expert instruments, one deliberate click from the rest of the app. Already the cleanest screen — the model everything else copies.</div>
+          <div class="list">
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Benchmark</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Black Box</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Latency</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Tuning</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Diagnostics</div><span></span><span class="chev">▾</span></div></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="caption" style="margin-top:14px">
+    <span class="tagpill">◎ answer-first Home</span>
+    <span class="tagpill">▲ master-detail Optimize</span>
+    <span class="tagpill">◷ Basic/Advanced Monitor</span>
+    <span class="tagpill">plan → docs/UI_SLIMDOWN_PLAN.md</span>
+  </div>
+</div>
+
+<script>
+  // rail nav
+  document.querySelectorAll('.rail button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.rail button').forEach(x=>x.setAttribute('aria-current','false'));
+    b.setAttribute('aria-current','true');
+    const id=b.dataset.go;
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  }));
+  // basic/advanced global
+  document.querySelectorAll('.mode button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.mode button').forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    document.body.dataset.mode=b.dataset.mode;
+  }));
+  // row expand (master-detail, in place)
+  document.querySelectorAll('[data-toggle]').forEach(h=>h.addEventListener('click',e=>{
+    if(e.target.closest('[data-sw]')||e.target.closest('.btn'))return;
+    h.closest('.rrow').classList.toggle('open');
+  }));
+  // toggles
+  document.querySelectorAll('[data-sw]').forEach(s=>s.addEventListener('click',e=>{e.stopPropagation();s.classList.toggle('on');}));
+  // quiet expanders
+  document.querySelectorAll('[data-quiet-toggle]').forEach(b=>b.addEventListener('click',()=>b.closest('[data-quiet]').classList.toggle('open')));
+  // before/after
+  document.querySelectorAll('[data-ba]').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('[data-ba]').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('optimize').classList.toggle('showbefore',b.dataset.ba==='before');
+  }));
+  // build 16 core bars
+  const cores=document.getElementById('cores');
+  if(cores){for(let i=0;i<16;i++){const load=15+Math.round(Math.random()*70);
+    const d=document.createElement('div');d.className='core';
+    d.innerHTML='<i style="height:'+load+'%"></i><b>'+load+'</b>';cores.appendChild(d);}}
+</script>
+</body>
+</html>

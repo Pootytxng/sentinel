@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compy — UI slim-down preview v2 (hologram hero restored)</title>
+<style>
+  /* ---- Real Compy tokens (from the code audit) ---- */
+  :root{
+    --bg:#07080b; --bg-2:#0b0d12;
+    --panel:#12151d; --panel-2:#181c26; --panel-3:#1f242f;
+    --border:#242b39; --border-strong:#313a4d; --hairline:#1a1f2a;
+    --fg:#eef1f7; --fg-2:#cdd4e0; --muted:#8b95a8; --faint:#5b6577;
+    --ready:#46d98a; --attention:#f5b740; --danger:#f3716f;
+    --ready-soft:rgba(70,217,138,.12); --attention-soft:rgba(245,183,64,.12);
+    --accent:#2ee6c0; --accent-2:#19b7d6; --accent-3:#6fb2ff; --accent-ink:#04211b;
+    --r-sm:7px; --r:10px; --r-lg:14px; --r-pill:999px;
+    --font-ui:"Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+    --font-mono:"Cascadia Code","JetBrains Mono",ui-monospace,Consolas,monospace;
+    --ease:cubic-bezier(.4,.12,.18,1); --dur:160ms;
+    --shadow-2:0 8px 30px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+      radial-gradient(1200px 700px at 78% -12%, rgba(46,230,192,.06), transparent 60%),
+      var(--bg);
+    color:var(--fg);font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+  .wrap{max-width:1200px;margin:26px auto 60px;padding:0 20px}
+  .caption{color:var(--muted);font-size:12.5px;margin:0 2px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .caption b{color:var(--fg-2);font-weight:600}
+  .tagpill{border:1px solid var(--border);border-radius:var(--r-pill);padding:2px 9px;color:var(--muted);font-size:11.5px}
+  .tagpill.v2{color:var(--accent);border-color:rgba(46,230,192,.4)}
+
+  /* ---- App window shell ---- */
+  .app{background:linear-gradient(180deg,var(--bg-2),var(--bg));
+    border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-2)}
+  .titlebar{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--hairline);
+    background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
+  .wordmark{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:.2px}
+  .logo{width:20px;height:20px;border-radius:6px;background:conic-gradient(from 210deg,var(--accent),var(--accent-2),var(--accent));
+    box-shadow:0 0 0 1px rgba(46,230,192,.35), 0 0 16px rgba(46,230,192,.25)}
+  .spacer{flex:1}
+  .mode{display:inline-flex;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-pill);padding:3px}
+  .mode button{all:unset;cursor:pointer;padding:5px 13px;border-radius:var(--r-pill);color:var(--muted);font-size:12.5px;font-weight:600;transition:var(--dur)}
+  .mode button[aria-pressed="true"]{background:var(--panel-3);color:var(--fg)}
+  .gear{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    display:grid;place-items:center;color:var(--muted);cursor:pointer}
+
+  .body{display:grid;grid-template-columns:150px 1fr;min-height:660px}
+  /* ---- Rail ---- */
+  .rail{border-right:1px solid var(--hairline);padding:14px 10px;display:flex;flex-direction:column;gap:3px;background:rgba(255,255,255,.008)}
+  .rail button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r);color:var(--muted);font-weight:600;font-size:13.5px;transition:var(--dur)}
+  .rail button .ic{width:17px;height:17px;opacity:.85;flex:none}
+  .rail button:hover{background:var(--panel);color:var(--fg-2)}
+  .rail button[aria-current="true"]{background:var(--panel-2);color:var(--fg)}
+  .rail button[aria-current="true"] .ic{opacity:1;color:var(--accent)}
+  .rail .sep{height:1px;background:var(--hairline);margin:8px 6px}
+  .rail .lab{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.12em;padding:4px 11px 2px}
+  /* §8 decision (a): Blackbook stays on the rail, visually demoted — quieter ink, smaller, below a sep */
+  .rail button.demoted{color:var(--faint);font-size:12.5px;font-weight:560;padding:7px 11px}
+  .rail button.demoted:hover{color:var(--muted)}
+  .rail button.demoted[aria-current="true"]{color:var(--fg-2)}
+
+  /* ---- Content ---- */
+  .content{padding:26px 30px;min-width:0;position:relative}
+  .screen{display:none;animation:fade var(--dur) var(--ease)}
+  .screen.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .eyebrow{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 6px}
+  .rowbar{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  h1.q{font-size:22px;font-weight:680;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin-top:3px}
+
+  /* Buttons */
+  .btn{all:unset;cursor:pointer;font-weight:650;font-size:13px;padding:9px 16px;border-radius:var(--r);transition:var(--dur);text-align:center}
+  .btn.primary{background:linear-gradient(180deg,var(--accent),#22cbaa);color:var(--accent-ink);box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 6px 16px rgba(46,230,192,.18)}
+  .btn.primary:hover{filter:brightness(1.05)}
+  .btn.ghost{border:1px solid var(--border);color:var(--fg-2);background:var(--panel)}
+  .btn.ghost:hover{border-color:var(--border-strong);color:var(--fg)}
+  .btn.sm{padding:6px 12px;font-size:12.5px}
+
+  /* ===== §8 decision (b): ambient backdrop — barely-there drift, Home only, off in Advanced ===== */
+  .ambient{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+  .ambient i{position:absolute;width:520px;height:340px;border-radius:50%;filter:blur(70px);opacity:.055}
+  .ambient i:nth-child(1){background:var(--accent);top:-10%;left:8%;animation:drift1 52s var(--ease) infinite alternate}
+  .ambient i:nth-child(2){background:var(--accent-2);bottom:-16%;right:4%;animation:drift2 64s var(--ease) infinite alternate}
+  @keyframes drift1{from{transform:translate(0,0)}to{transform:translate(90px,40px)}}
+  @keyframes drift2{from{transform:translate(0,0)}to{transform:translate(-80px,-30px)}}
+  body[data-mode="advanced"] .ambient{display:none}
+  #home>*:not(.ambient){position:relative;z-index:1}
+
+  /* ===== The hero: 3D rig hologram — the Home centerpiece (the v1 over-correction, fixed) ===== */
+  .holo-hero{position:relative;height:470px;border:1px solid var(--border);border-radius:var(--r-lg);
+    margin-bottom:14px;overflow:hidden;
+    background:
+      radial-gradient(90% 120% at 50% 118%, rgba(46,230,192,.10), transparent 55%),
+      linear-gradient(180deg,var(--panel),#0d1017 68%,#0a0d13)}
+  .holo-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  .holo-canvas.dragging{cursor:grabbing}
+  .holo-hero[data-view="cards"] .holo-canvas,
+  .holo-hero[data-view="cards"] .holo-hint,
+  .holo-hero[data-view="cards"] .holo-spec{display:none}
+  /* verdict overlay (top-left) */
+  .holo-verdict{position:absolute;top:18px;left:20px;max-width:330px}
+  .verdict{display:flex;align-items:flex-start;gap:11px}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none;margin-top:7px}
+  .dot.ready{background:var(--ready);box-shadow:0 0 0 4px var(--ready-soft)}
+  .dot.attn{background:var(--attention);box-shadow:0 0 0 4px var(--attention-soft)}
+  .verdict h2{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em;text-shadow:0 2px 18px rgba(0,0,0,.6)}
+  .verdict .why{color:var(--muted);font-size:13px;margin-top:4px}
+  /* readiness ring (top-right) */
+  .holo-ring{position:absolute;top:16px;right:18px}
+  .ring{width:92px;height:92px;position:relative;display:grid;place-items:center}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .arc{animation:ringsweep 900ms var(--ease) 1 both}
+  @keyframes ringsweep{from{stroke-dashoffset:276}to{stroke-dashoffset:41}}
+  .ring .val{position:absolute;text-align:center}
+  .ring .val b{font-size:23px;font-weight:720;font-family:var(--font-mono)}
+  .ring .val span{display:block;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  /* hologram controls (bottom-left) + honest hint + hovered-part spec line */
+  .holo-controls{position:absolute;left:16px;bottom:14px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .hbtn{all:unset;cursor:pointer;font-size:11.5px;font-weight:640;padding:5px 11px;border-radius:var(--r-pill);
+    border:1px solid var(--border);color:var(--muted);background:rgba(10,13,19,.72);backdrop-filter:blur(4px);transition:var(--dur)}
+  .hbtn:hover{color:var(--fg-2);border-color:var(--border-strong)}
+  .hbtn.on{color:var(--accent);border-color:rgba(46,230,192,.45)}
+  .holo-hint{position:absolute;right:18px;bottom:14px;color:var(--faint);font-size:11.5px;text-align:right}
+  .holo-spec{position:absolute;left:16px;bottom:46px;color:var(--fg-2);font-size:12px;font-family:var(--font-mono);
+    background:rgba(10,13,19,.72);border:1px solid var(--hairline);border-radius:var(--r-sm);padding:4px 9px;
+    opacity:0;transition:opacity var(--dur);pointer-events:none;max-width:70%}
+  .holo-spec.show{opacity:1}
+  .holo-tip{position:absolute;pointer-events:none;background:rgba(13,17,25,.92);border:1px solid var(--border-strong);
+    border-radius:var(--r-sm);padding:6px 10px;font-size:12px;opacity:0;transition:opacity 90ms;z-index:5;white-space:nowrap}
+  .holo-tip b{display:block;font-size:12.5px}
+  .holo-tip span{color:var(--muted);font-size:11.5px}
+  .holo-tip.show{opacity:1}
+  /* Cards view — the lighter alternative, one tap away (kept from the correction brief) */
+  .rig-cards{position:absolute;inset:54px 18px 18px;display:none;grid-template-columns:repeat(3,1fr);gap:10px;align-content:center}
+  .holo-hero[data-view="cards"] .rig-cards{display:grid}
+  .rig-card{background:rgba(18,21,29,.85);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+  .rig-card .k{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .rig-card .n{font-weight:640;font-size:13.5px;margin-top:4px}
+  .rig-card .s{color:var(--muted);font-size:12px;font-family:var(--font-mono);margin-top:2px}
+  .rig-card.ghost{opacity:.55;border-style:dashed}
+
+  /* glance tiles — with the dash-v2 signature accent hover-glow (liveliness kept) */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  .tile{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 16px 14px;transition:var(--dur)}
+  .tile:hover{border-color:rgba(46,230,192,.38);box-shadow:0 0 0 1px rgba(46,230,192,.12),0 8px 24px rgba(46,230,192,.07);transform:translateY(-2px)}
+  .tile .k{color:var(--muted);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+  .tile .v{font-family:var(--font-mono);font-size:28px;font-weight:680;margin-top:8px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .tile .v small{font-size:14px;color:var(--muted);font-weight:600}
+  .tile .m{color:var(--fg-2);font-size:12.5px;margin-top:3px}
+  .tile.big .v{font-size:34px}
+
+  /* limiter / rec rows */
+  .section-h{display:flex;align-items:center;justify-content:space-between;margin:22px 2px 10px}
+  .section-h .n{font-weight:660;font-size:15px}
+  .list{display:flex;flex-direction:column;gap:9px}
+  .rrow{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;transition:var(--dur)}
+  .rrow:hover{border-color:var(--border-strong)}
+  .rrow .head{display:grid;grid-template-columns:auto 1fr auto auto;gap:13px;align-items:center;padding:14px 16px;cursor:pointer}
+  .rrow .title{font-weight:620;font-size:14.5px}
+  .rrow .proof{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .rrow .proof .mono{font-family:var(--font-mono);color:var(--fg-2)}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:var(--r-pill);white-space:nowrap}
+  .badge.rec{background:var(--ready-soft);color:var(--ready);border:1px solid rgba(70,217,138,.32)}
+  .badge.opt{background:var(--panel-3);color:var(--muted);border:1px solid var(--border)}
+  .sw{width:42px;height:24px;border-radius:var(--r-pill);background:var(--panel-3);border:1px solid var(--border);position:relative;cursor:pointer;flex:none;transition:var(--dur)}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--faint);transition:var(--dur)}
+  .sw.on{background:linear-gradient(180deg,var(--accent),#22cbaa);border-color:transparent}
+  .sw.on::after{left:20px;background:var(--accent-ink)}
+  .chev{color:var(--faint);transition:var(--dur)}
+  .rrow.open .chev{transform:rotate(180deg);color:var(--muted)}
+  .rrow .detail{display:none;padding:2px 16px 16px 43px;border-top:1px solid var(--hairline);background:rgba(0,0,0,.14)}
+  .rrow.open .detail{display:block;animation:fade var(--dur)}
+  .detail .drow{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--hairline);font-size:13px}
+  .detail .drow:last-child{border-bottom:0}
+  .detail .drow .dk{color:var(--muted);width:120px;flex:none}
+  .detail .drow .dv{color:var(--fg-2)}
+  .detail .mono{font-family:var(--font-mono)}
+  .detail .acts{display:flex;gap:9px;margin-top:14px}
+
+  .quiet{margin-top:12px}
+  .quiet button{all:unset;cursor:pointer;display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:560;padding:11px 14px;border:1px dashed var(--border);border-radius:var(--r);width:100%}
+  .quiet button:hover{color:var(--fg-2);border-color:var(--border-strong)}
+  .quiet .body-x{display:none;padding:6px 4px 2px;color:var(--faint);font-size:12.5px}
+  .quiet.open .body-x{display:block}
+
+  /* advanced-only blocks */
+  .adv-only{display:none}
+  body[data-mode="advanced"] .adv-only{display:block}
+  .adv-note{display:none;margin:16px 0 4px;padding:10px 14px;border-radius:var(--r);border:1px solid var(--attention-soft);background:var(--attention-soft);color:var(--attention);font-size:12.5px}
+  body[data-mode="advanced"] .adv-note{display:block}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px;margin-top:12px}
+  .panel h3{margin:0 0 12px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:640}
+  .metricrow{display:grid;grid-template-columns:120px 66px 1fr;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid var(--hairline);font-size:13px}
+  .metricrow:last-child{border-bottom:0}
+  .metricrow .ml{color:var(--fg-2)} .metricrow .mv{font-family:var(--font-mono);color:var(--fg);text-align:right;font-variant-numeric:tabular-nums}
+  .spark{height:22px;border-radius:5px;background:linear-gradient(90deg,rgba(46,230,192,.05),rgba(46,230,192,.16));position:relative;overflow:hidden}
+  .spark svg{position:absolute;inset:0}
+  .cores{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+  .core{height:34px;border-radius:5px;background:var(--panel-3);position:relative;overflow:hidden;border:1px solid var(--hairline)}
+  .core i{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,var(--accent),#1c9a86);display:block}
+  .core b{position:absolute;top:2px;left:0;right:0;text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--fg-2)}
+
+  /* before/after toggle on Optimize */
+  .ba{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:var(--r-pill);overflow:hidden;background:var(--panel)}
+  .ba button{all:unset;cursor:pointer;padding:5px 13px;font-size:12px;font-weight:650;color:var(--muted)}
+  .ba button.on{background:var(--panel-3);color:var(--fg)}
+  .before{display:none}
+  .optimize.showbefore .before{display:flex}
+  .optimize.showbefore .after{display:none}
+  .busy{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 15px}
+  .busy .t{font-weight:620;font-size:14px;margin-bottom:7px}
+  .busy .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{font-size:11px;padding:3px 8px;border-radius:var(--r-pill);border:1px solid var(--border);color:var(--muted);background:var(--panel-2)}
+  .chip.ev{color:var(--ready);border-color:rgba(70,217,138,.3)}
+  .chip.warn{color:var(--attention);border-color:rgba(245,183,64,.3)}
+  .busy .meta{color:var(--faint);font-size:11.5px;margin-top:8px;line-height:1.7}
+  .busy .foot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .mini{font-size:11.5px;padding:4px 10px;border-radius:var(--r-sm);border:1px solid var(--border);color:var(--fg-2);background:var(--panel-2)}
+  .callout{margin-top:12px;font-size:12.5px;color:var(--muted)}
+  .callout b{color:var(--danger)}
+  .after .callout b{color:var(--ready)}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  }
+</style>
+</head>
+<body data-mode="basic">
+<div class="wrap">
+  <div class="caption">
+    <b>Compy UI slim-down — mockup v2.</b>
+    <span class="tagpill v2">3D rig hologram restored as the Home hero</span>
+    <span class="tagpill">drag it · hover parts · Exploded</span>
+    <span class="tagpill">toggle Basic / Advanced</span>
+    <span class="tagpill">Optimize keeps “show before”</span>
+  </div>
+
+  <div class="app">
+    <!-- Title bar -->
+    <div class="titlebar">
+      <div class="wordmark"><span class="logo"></span> Compy</div>
+      <div class="spacer"></div>
+      <div class="mode" role="group" aria-label="Detail level">
+        <button data-mode="basic" aria-pressed="true">Basic</button>
+        <button data-mode="advanced" aria-pressed="false">Advanced</button>
+      </div>
+      <div class="gear" title="Settings">⚙</div>
+    </div>
+
+    <div class="body">
+      <!-- Rail — Blackbook kept top-level, visually demoted (§8a) -->
+      <nav class="rail">
+        <button data-go="home" aria-current="true"><span class="ic">◎</span> Home</button>
+        <button data-go="optimize"><span class="ic">▲</span> Optimize</button>
+        <button data-go="monitor"><span class="ic">◷</span> Monitor</button>
+        <div class="sep"></div>
+        <button data-go="learn" class="demoted"><span class="ic">◇</span> Learn</button>
+        <div class="lab">Advanced</div>
+        <button data-go="lab"><span class="ic">⌘</span> Lab</button>
+      </nav>
+
+      <!-- Content -->
+      <div class="content">
+
+        <!-- ============ HOME ============ -->
+        <section class="screen on" id="home">
+          <!-- §8b: barely-there ambient drift — display:none in Advanced -->
+          <div class="ambient" aria-hidden="true"><i></i><i></i></div>
+
+          <p class="eyebrow">Home</p>
+
+          <!-- THE HERO: your real rig as a living hologram. Clean IA *with* alive. -->
+          <div class="holo-hero" id="holoHero" data-view="holo">
+            <canvas class="holo-canvas" id="holoCanvas"></canvas>
+
+            <div class="holo-verdict">
+              <div class="verdict">
+                <span class="dot attn"></span>
+                <div>
+                  <h2>One thing worth fixing</h2>
+                  <div class="why">Your rig is healthy. A quick change gets you a faster boot.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="holo-ring" title="Readiness">
+              <div class="ring">
+                <svg width="92" height="92" viewBox="0 0 104 104">
+                  <circle cx="52" cy="52" r="44" fill="none" stroke="#1f242f" stroke-width="9"/>
+                  <circle class="arc" cx="52" cy="52" r="44" fill="none" stroke="url(#g)" stroke-width="9"
+                    stroke-linecap="round" stroke-dasharray="276" stroke-dashoffset="41"/>
+                  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#2ee6c0"/><stop offset="1" stop-color="#19b7d6"/>
+                  </linearGradient></defs>
+                </svg>
+                <div class="val"><b>85</b><span>ready</span></div>
+              </div>
+            </div>
+
+            <div class="holo-spec" id="holoSpec"></div>
+            <div class="holo-tip" id="holoTip"></div>
+
+            <div class="holo-controls">
+              <button class="hbtn" id="btnExplode">Exploded view</button>
+              <button class="hbtn on" id="btnOrbit" aria-pressed="true">Orbit</button>
+              <button class="hbtn" id="btnView">Cards view</button>
+            </div>
+            <div class="holo-hint">Drag to orbit · hover a part for its live specs<br>Ghost parts aren’t software-readable — never guessed.</div>
+
+            <!-- the lighter Cards alternative, one tap away -->
+            <div class="rig-cards">
+              <div class="rig-card"><div class="k">Graphics</div><div class="n">Radeon RX 9070 XT</div><div class="s">16 GB VRAM · RDNA4</div></div>
+              <div class="rig-card"><div class="k">Processor</div><div class="n">Ryzen 7 X3D</div><div class="s">8C / 16T · 5.1 GHz</div></div>
+              <div class="rig-card"><div class="k">Memory</div><div class="n">2 × 16 GB DDR5</div><div class="s">6000 MHz</div></div>
+              <div class="rig-card"><div class="k">Storage</div><div class="n">NVMe SSD ×2</div><div class="s">2 TB + 1 TB</div></div>
+              <div class="rig-card"><div class="k">Platform</div><div class="n">Windows 11 Pro</div><div class="s">Build 26100</div></div>
+              <div class="rig-card ghost"><div class="k">Power / Cooling</div><div class="n">Not software-readable</div><div class="s">ghosts, never guesses</div></div>
+            </div>
+          </div>
+
+          <!-- the one primary action, as a master-detail row -->
+          <div class="list">
+            <div class="rrow" data-row>
+              <div class="head" data-toggle>
+                <span class="dot attn" style="width:9px;height:9px"></span>
+                <div>
+                  <div class="title">Disable 3 startup apps slowing your boot</div>
+                  <div class="proof">Measured: <span class="mono">+7.2s</span> to desktop · fully reversible</div>
+                </div>
+                <span class="badge rec">Recommended</span>
+                <button class="btn primary sm">Fix it</button>
+              </div>
+              <div class="detail">
+                <div class="drow"><span class="dk">Why it matters</span><span class="dv">These three apps launch with Windows and delay when your desktop is usable.</span></div>
+                <div class="drow"><span class="dk">Evidence</span><span class="dv mono">boot delta 7.2s · 3 auto-start entries</span></div>
+                <div class="drow"><span class="dk">What changes</span><span class="dv">Corsair iCUE, Epic Launcher, Discord set to “manual start”. Games unaffected.</span></div>
+                <div class="drow"><span class="dk">Undo</span><span class="dv">One click restores all three. Snapshot saved to your Trust Ledger.</span></div>
+                <div class="acts"><button class="btn primary sm">Apply</button><button class="btn ghost sm">Learn more</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- three glance tiles -->
+          <div class="tiles" style="margin-top:16px">
+            <div class="tile"><div class="k">GPU temp</div><div class="v"><span id="gpuTick">61</span><small>°C</small></div><div class="m" style="color:var(--ready)">Cool · idle</div></div>
+            <div class="tile"><div class="k">Last session</div><div class="v">142<small> fps</small></div><div class="m">Marvel Rivals · 1h ago</div></div>
+            <div class="tile"><div class="k">Boot time</div><div class="v">31<small>s</small></div><div class="m" style="color:var(--attention)">7.2s recoverable</div></div>
+          </div>
+
+          <div class="quiet" data-quiet>
+            <button data-quiet-toggle><span>✓ Everything else looks good — 24 checks passed</span><span style="margin-left:auto;color:var(--faint)">▾</span></button>
+            <div class="body-x">Drivers current · temps normal · no drift since last session · storage healthy · network stable. Nothing here needs your attention.</div>
+          </div>
+        </section>
+
+        <!-- ============ OPTIMIZE ============ -->
+        <section class="screen optimize after-mode" id="optimize">
+          <div class="rowbar">
+            <div style="flex:1">
+              <p class="eyebrow">Optimize</p>
+              <h1 class="q">3 fixes recommended for your rig</h1>
+              <div class="sub">Recommended arrive selected — review the list, deselect anything, then apply. Everything is reversible.</div>
+            </div>
+            <div class="ba" role="group" aria-label="Compare">
+              <button class="on" data-ba="after">After</button>
+              <button data-ba="before">Show before</button>
+            </div>
+            <button class="btn primary">Apply reviewed (2)</button>
+          </div>
+
+          <!-- AFTER: slim master-detail rows. §8c: Recommended pre-selected; Apply stays explicit. -->
+          <div class="after">
+            <div class="list" style="width:100%">
+              <div class="rrow open" data-row>
+                <div class="head" data-toggle>
+                  <span class="dot attn" style="width:9px;height:9px"></span>
+                  <div>
+                    <div class="title">Disable 3 startup apps slowing your boot</div>
+                    <div class="proof">Measured: <span class="mono">+7.2s</span> to desktop · reversible</div>
+                  </div>
+                  <span class="badge rec">Recommended</span>
+                  <div class="sw on" data-sw></div>
+                </div>
+                <div class="detail">
+                  <div class="drow"><span class="dk">Evidence</span><span class="dv mono">boot delta 7.2s · 3 auto-start entries</span></div>
+                  <div class="drow"><span class="dk">What changes</span><span class="dv">iCUE, Epic, Discord → manual start. Games unaffected.</span></div>
+                  <div class="drow"><span class="dk">Undo</span><span class="dv">One click. Snapshot in your Trust Ledger.</span></div>
+                  <div class="acts"><button class="btn ghost sm">Walkthrough</button><button class="btn ghost sm">Learn more</button></div>
+                </div>
+              </div>
+
+              <div class="rrow" data-row>
+                <div class="head" data-toggle>
+                  <span class="dot attn" style="width:9px;height:9px"></span>
+                  <div>
+                    <div class="title">Turn on Hardware-Accelerated GPU Scheduling</div>
+                    <div class="proof">For your RX 9070 XT · lower latency in most games · reversible</div>
+                  </div>
+                  <span class="badge rec">Recommended</span>
+                  <div class="sw on" data-sw></div>
+                </div>
+                <div class="detail">
+                  <div class="drow"><span class="dk">Why it matters</span><span class="dv">Lets your GPU manage its own memory — small, measured latency win on RDNA4.</span></div>
+                  <div class="drow"><span class="dk">Undo</span><span class="dv">Reverts with one click; needs a restart to apply.</span></div>
+                  <div class="acts"><button class="btn ghost sm">Learn more</button></div>
+                </div>
+              </div>
+
+              <div class="rrow" data-row>
+                <div class="head" data-toggle>
+                  <span class="dot" style="width:9px;height:9px;background:var(--faint)"></span>
+                  <div>
+                    <div class="title">Clear 4.2 GB of shader cache</div>
+                    <div class="proof">Optional · frees space · rebuilds on next launch</div>
+                  </div>
+                  <span class="badge opt">Optional</span>
+                  <div class="sw" data-sw></div>
+                </div>
+                <div class="detail">
+                  <div class="drow"><span class="dk">Trade-off</span><span class="dv">First launch of each game is slightly slower while the cache rebuilds.</span></div>
+                  <div class="acts"><button class="btn ghost sm">Learn more</button></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="quiet" data-quiet>
+              <button data-quiet-toggle><span>Nothing else needs attention — 21 items measured fine or not worth touching</span><span style="margin-left:auto;color:var(--faint)">▾</span></button>
+              <div class="body-x">14 settings measured fine · 5 not worth touching on your hardware · 2 you dismissed. Open only if you want the full ledger.</div>
+            </div>
+            <div class="callout after"><b>After:</b> 3 visible controls per row, one proof line always visible, detail on tap. Recommended arrive pre-selected (§8c) — the list is the consent screen; Apply is still the explicit act.</div>
+          </div>
+
+          <!-- BEFORE: busy multi-affordance rows (today) -->
+          <div class="before" style="flex-direction:column;gap:9px;width:100%">
+            <div class="busy">
+              <div class="t">Disable 3 startup apps slowing your boot</div>
+              <div class="chips">
+                <span class="chip ev">✓ evidence: boot +7.2s</span>
+                <span class="chip">confidence: high</span>
+                <span class="chip warn">AMD note</span>
+                <span class="chip">reversible</span>
+                <span class="chip">snapshot ready</span>
+              </div>
+              <div class="meta">Why this matters: these three apps launch with Windows and delay when your desktop is usable, which can also cost you a few seconds getting into your first game of the session…<br>Rollback: a full snapshot is captured at apply time and stored in history.json so this can always be undone even if the recommendation is later removed…</div>
+              <div class="foot">
+                <span class="mini">What's this?</span><span class="mini">Details ▾</span>
+                <span class="mini">Walkthrough</span><span class="mini">Dismiss</span>
+                <span class="mini">Apply</span><span class="mini">◻ Trust switch</span>
+              </div>
+            </div>
+            <div class="busy">
+              <div class="t">Turn on Hardware-Accelerated GPU Scheduling</div>
+              <div class="chips">
+                <span class="chip ev">✓ evidence</span><span class="chip">confidence: high</span>
+                <span class="chip warn">AMD-specific</span><span class="chip">needs restart</span><span class="chip">reversible</span>
+              </div>
+              <div class="meta">Why this matters: lets the GPU manage its own memory scheduling; on RDNA4 this is a small measured latency improvement in most titles…<br>Rollback: reverts with one click; snapshot captured…</div>
+              <div class="foot"><span class="mini">What's this?</span><span class="mini">Details ▾</span><span class="mini">Walkthrough</span><span class="mini">Dismiss</span><span class="mini">Apply</span><span class="mini">◻ Trust switch</span></div>
+            </div>
+            <div class="callout before"><b>Before:</b> ~8 affordances per row × every row, two paragraphs of text each, five near-synonyms for "reversible." This is the sensory overload.</div>
+          </div>
+        </section>
+
+        <!-- ============ MONITOR ============ -->
+        <section class="screen" id="monitor">
+          <div class="rowbar">
+            <div style="flex:1">
+              <p class="eyebrow">Monitor</p>
+              <h1 class="q">How it's running</h1>
+              <div class="sub">Live now · last session summarized below</div>
+            </div>
+            <button class="btn ghost">Overlay</button>
+          </div>
+
+          <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+            <div class="tile big"><div class="k">Frame rate</div><div class="v">142<small> fps</small></div><div class="m" style="color:var(--ready)">Smooth · 6.9ms</div></div>
+            <div class="tile big"><div class="k">GPU temp</div><div class="v">61<small>°C</small></div><div class="m" style="color:var(--ready)">Cool</div></div>
+            <div class="tile big"><div class="k">CPU</div><div class="v">54<small>°C</small></div><div class="m">31% load</div></div>
+            <div class="tile big"><div class="k">Memory</div><div class="v">46<small>%</small></div><div class="m">14.7 / 32 GB</div></div>
+          </div>
+
+          <div class="panel" style="margin-top:16px">
+            <h3>Last session · Marvel Rivals · 48 min</h3>
+            <div style="display:flex;gap:26px;flex-wrap:wrap">
+              <div><div style="color:var(--muted);font-size:12px">Avg FPS</div><div style="font-family:var(--font-mono);font-size:20px">138</div></div>
+              <div><div style="color:var(--muted);font-size:12px">1% low</div><div style="font-family:var(--font-mono);font-size:20px">96</div></div>
+              <div><div style="color:var(--muted);font-size:12px">Peak GPU</div><div style="font-family:var(--font-mono);font-size:20px">71°C</div></div>
+              <div><div style="color:var(--muted);font-size:12px">Stutters</div><div style="font-family:var(--font-mono);font-size:20px;color:var(--ready)">0</div></div>
+            </div>
+          </div>
+
+          <div class="adv-note">Advanced view — sensors, per-core load, and the frametime graph are hidden in Basic so a new user never has to parse them.</div>
+
+          <div class="adv-only">
+            <div class="panel">
+              <h3>Frametime · last 60s</h3>
+              <div class="spark" style="height:70px">
+                <svg viewBox="0 0 600 70" preserveAspectRatio="none"><polyline fill="none" stroke="#2ee6c0" stroke-width="1.5"
+                  points="0,44 40,42 80,46 120,40 160,43 200,38 240,50 280,41 320,44 360,39 400,42 440,55 480,40 520,43 560,41 600,44"/></svg>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>GPU · Radeon RX 9070 XT</h3>
+              <div class="metricrow"><span class="ml">Core temp</span><span class="mv">61 °C</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Hotspot</span><span class="mv">74 °C</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Utilisation</span><span class="mv">38 %</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">VRAM</span><span class="mv">6.1 GB</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Board power</span><span class="mv">124 W</span><div class="spark"></div></div>
+              <div class="metricrow"><span class="ml">Core clock</span><span class="mv">2810 MHz</span><div class="spark"></div></div>
+            </div>
+            <div class="panel">
+              <h3>CPU · 16 cores</h3>
+              <div class="cores" id="cores"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ LEARN ============ -->
+        <section class="screen" id="learn">
+          <p class="eyebrow">Learn</p>
+          <h1 class="q">Blackbook</h1>
+          <div class="sub" style="margin-bottom:16px">Kept top-level (it's the content engine) but visually demoted on the rail — it never competes with “what do I do.” (§8a)</div>
+          <div class="tiles"><div class="tile"><div class="k">Popular</div><div class="m" style="margin-top:8px;color:var(--fg-2)">What is HAGS?</div></div>
+            <div class="tile"><div class="k">For your rig</div><div class="m" style="margin-top:8px;color:var(--fg-2)">RDNA4 undervolt basics</div></div>
+            <div class="tile"><div class="k">Myths</div><div class="m" style="margin-top:8px;color:var(--fg-2)">Does more Hz = smoother?</div></div></div>
+        </section>
+
+        <!-- ============ LAB ============ -->
+        <section class="screen" id="lab">
+          <p class="eyebrow">Advanced</p>
+          <h1 class="q">Lab</h1>
+          <div class="sub" style="margin-bottom:16px">Expert instruments, one deliberate click from the rest of the app. Already the cleanest screen — the model everything else copies.</div>
+          <div class="list">
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Benchmark</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Black Box</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Latency</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Tuning</div><span></span><span class="chev">▾</span></div></div>
+            <div class="rrow"><div class="head" data-toggle><span class="ic" style="color:var(--accent)">▸</span><div class="title">Diagnostics</div><span></span><span class="chev">▾</span></div></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="caption" style="margin-top:14px">
+    <span class="tagpill v2">◎ hologram-hero Home (v2 fix)</span>
+    <span class="tagpill">▲ master-detail Optimize · pre-selected Recommended</span>
+    <span class="tagpill">◷ Basic/Advanced Monitor</span>
+    <span class="tagpill">◇ Learn demoted, kept</span>
+    <span class="tagpill">plan → docs/UI_SLIMDOWN_PLAN.md §8 decided</span>
+  </div>
+</div>
+
+<script>
+/* ================= shared mockup wiring (from v1) ================= */
+document.querySelectorAll('.rail button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.rail button').forEach(x=>x.setAttribute('aria-current','false'));
+  b.setAttribute('aria-current','true');
+  const id=b.dataset.go;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+}));
+document.querySelectorAll('.mode button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.mode button').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');
+  document.body.dataset.mode=b.dataset.mode;
+}));
+document.querySelectorAll('[data-toggle]').forEach(h=>h.addEventListener('click',e=>{
+  if(e.target.closest('[data-sw]')||e.target.closest('.btn'))return;
+  h.closest('.rrow').classList.toggle('open');
+}));
+document.querySelectorAll('[data-sw]').forEach(s=>s.addEventListener('click',e=>{e.stopPropagation();s.classList.toggle('on');}));
+document.querySelectorAll('[data-quiet-toggle]').forEach(b=>b.addEventListener('click',()=>b.closest('[data-quiet]').classList.toggle('open')));
+document.querySelectorAll('[data-ba]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-ba]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  document.getElementById('optimize').classList.toggle('showbefore',b.dataset.ba==='before');
+}));
+const cores=document.getElementById('cores');
+if(cores){for(let i=0;i<16;i++){const load=15+Math.round(Math.random()*70);
+  const d=document.createElement('div');d.className='core';
+  d.innerHTML='<i style="height:'+load+'%"></i><b>'+load+'</b>';cores.appendChild(d);}}
+
+/* live GPU-temp tick on the Home tile — motion conveys live state, sample data */
+const tickEl=document.getElementById('gpuTick');
+let tickV=61;
+setInterval(()=>{ if(!document.getElementById('home').classList.contains('on'))return;
+  tickV=Math.max(59,Math.min(63,tickV+(Math.random()<.5?-1:1))); tickEl.textContent=tickV; },2600);
+
+/* ================= THE HOLOGRAM =================
+   A tiny self-contained 3D wireframe projector standing in for the real WebGL rig
+   (src/surfaces/rig/RigHologram.tsx). Faithful to it on purpose:
+   — part positions/exploded offsets lifted from rig-parts.ts (real coordinates)
+   — theme palette cycling for detected parts; faint dashed ghosts for cooler/PSU (honesty)
+   — accent ring + fading floor grid + fog, slow auto-orbit, drag to orbit, exploded view
+   — respects prefers-reduced-motion (no idle animation), pauses when Home is hidden      */
+(function(){
+  const canvas=document.getElementById('holoCanvas');
+  const ctx=canvas.getContext('2d');
+  const hero=document.getElementById('holoHero');
+  const tip=document.getElementById('holoTip');
+  const specLine=document.getElementById('holoSpec');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const css=getComputedStyle(document.documentElement);
+  const ACCENT=css.getPropertyValue('--accent').trim()||'#2ee6c0';
+  const PAL=[ACCENT,css.getPropertyValue('--accent-2').trim()||'#19b7d6',css.getPropertyValue('--accent-3').trim()||'#6fb2ff'];
+  const GHOST=css.getPropertyValue('--faint').trim()||'#5b6577';
+
+  // Parts — positions from rig-parts.ts buildRigParts() (assembled / exploded), sizes approximated.
+  const PARTS=[
+    {id:'board',n:'Mainboard',tag:'Windows 11 Pro · Build 26100',p:[0.1,0.2,-0.72],e:[-2.9,0.35,-1.1],s:[2.1,3.1,0.12],det:true,
+     specs:'Platform: Windows 11 Pro · board model isn’t software-readable'},
+    {id:'cpu',n:'Ryzen 7 X3D',tag:'8C / 16T',p:[0.05,1.15,-0.58],e:[-2.4,2.5,0.5],s:[0.55,0.55,0.18],det:true,
+     specs:'8C / 16T · base 4.2 GHz · boost ~5.1 GHz'},
+    {id:'ram0',n:'Memory · Slot 1',tag:'16 GB DDR5',p:[0.78,1.05,-0.58],e:[2.4,2.2,0.3],s:[0.16,1.1,0.1],det:true,
+     specs:'16 GB DDR5 · 6000 MHz'},
+    {id:'ram1',n:'Memory · Slot 2',tag:'16 GB DDR5',p:[1.04,1.05,-0.58],e:[2.74,2.38,0.3],s:[0.16,1.1,0.1],det:true,
+     specs:'16 GB DDR5 · 6000 MHz'},
+    {id:'gpu',n:'Radeon RX 9070 XT',tag:'16 GB VRAM',p:[0.1,-0.15,-0.18],e:[0.2,-0.5,2.7],s:[2.2,0.5,0.95],det:true,
+     specs:'16 GB VRAM · RDNA4 · driver 25.6.1 · 165 Hz out'},
+    {id:'ssd0',n:'NVMe SSD',tag:'2 TB',p:[-0.55,-0.4,-0.6],e:[-3.1,-0.5,0.9],s:[0.7,0.12,0.5],det:true,
+     specs:'2 TB · NVMe · system drive'},
+    {id:'ssd1',n:'NVMe SSD',tag:'1 TB',p:[-0.55,-0.62,-0.6],e:[-3.35,-0.75,0.9],s:[0.7,0.12,0.5],det:true,
+     specs:'1 TB · NVMe · games'},
+    {id:'cooler',n:'CPU Cooler',tag:'Not software-detectable',p:[0.05,1.15,-0.16],e:[0.3,3.3,0.7],s:[0.6,0.6,0.5],det:false,
+     specs:'Coolers expose no software identity — shown as an honest ghost'},
+    {id:'psu',n:'Power Supply',tag:'Not software-detectable',p:[0.1,-1.85,-0.25],e:[0.4,-3.1,0.7],s:[1.3,0.75,1.1],det:false,
+     specs:'PSUs expose no software identity — shown as an honest ghost'},
+  ];
+  // Fans — placements from RigHologram.tsx fanPlacements (sample RPMs = "monitor running" state).
+  const FANS=[
+    {n:'CPU fan',rpm:1240,p:[0.05,1.15,0.08],e:[0.3,3.3,0.7],r:0.34,det:true},
+    {n:'Front intake',rpm:890,p:[-1.36,0.85,0.85],e:[3.4,1.1,0.9],r:0.42,det:true},
+    {n:'Front intake',rpm:905,p:[-1.36,-0.15,0.85],e:[3.4,0.1,0.9],r:0.42,det:true},
+    {n:'Rear exhaust',rpm:940,p:[1.36,0.55,0.85],e:[-3.4,0.55,0.9],r:0.42,det:true},
+  ];
+  const CASE={c:[0,-0.05,0],s:[2.95,4.5,2.45]};
+
+  let az=0.7, pitch=0.34, dist=10.2;
+  let explodeT=0, explodeOn=false, orbitOn=!reduced;
+  let dragging=false,lx=0,ly=0, hovered=null, fanA=0, scanY=-1, scanT=0, ringPulse=0;
+  let W=0,H=0,DPR=1;
+
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    W=hero.clientWidth; H=hero.clientHeight;
+    canvas.width=W*DPR; canvas.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  resize(); new ResizeObserver(resize).observe(hero);
+
+  const TGT=[0,0.15,0];
+  function proj(x,y,z){
+    x-=TGT[0]; y-=TGT[1]; z-=TGT[2];
+    const ca=Math.cos(az),sa=Math.sin(az);
+    let x1=x*ca-z*sa, z1=x*sa+z*ca;
+    const cp=Math.cos(pitch),sp=Math.sin(pitch);
+    let y1=y*cp-z1*sp, z2=y*sp+z1*cp;
+    const zc=z2+dist;
+    const F=H*1.28;
+    return {x:W/2+x1*F/zc, y:H/2+34-y1*F/zc, zc};
+  }
+  const fog=zc=>Math.max(.16,Math.min(1,1.34-(zc-(dist-3.4))*.085));
+  function rgba(hex,a){
+    const h=hex.replace('#','');
+    const v=h.length===3?h.split('').map(c=>c+c).join(''):h;
+    const n=parseInt(v,16);
+    return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;
+  }
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const pos3=(o,t)=>[lerp(o.p[0],o.e[0],t),lerp(o.p[1],o.e[1],t),lerp(o.p[2],o.e[2],t)];
+
+  const EDGES=[[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
+  function boxCorners(c,s){
+    const out=[];
+    for(let i=0;i<8;i++) out.push([ c[0]+(i&1?s[0]:-s[0])/2, c[1]+(i&2?s[1]:-s[1])/2, c[2]+(i&4?s[2]:-s[2])/2 ]);
+    return out;
+  }
+  function drawBox(c,s,color,alpha,dashed,glow){
+    const pts=boxCorners(c,s).map(p=>proj(p[0],p[1],p[2]));
+    const zc=proj(c[0],c[1],c[2]).zc, a=fog(zc)*alpha;
+    if(glow){
+      const ctr=proj(c[0],c[1],c[2]);
+      const r=Math.max(s[0],s[1],s[2])*H*1.28/zc*0.72;
+      const g=ctx.createRadialGradient(ctr.x,ctr.y,0,ctr.x,ctr.y,r);
+      g.addColorStop(0,rgba(color,.13*a)); g.addColorStop(1,rgba(color,0));
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(ctr.x,ctr.y,r,0,7); ctx.fill();
+    }
+    ctx.strokeStyle=rgba(color,a); ctx.lineWidth=1.1;
+    ctx.setLineDash(dashed?[3,4]:[]);
+    ctx.beginPath();
+    for(const [i,j] of EDGES){ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);}
+    ctx.stroke(); ctx.setLineDash([]);
+    return zc;
+  }
+  function drawFan(f,t){
+    const c=pos3(f,t), ctr=proj(c[0],c[1],c[2]);
+    const edge=proj(c[0]+f.r,c[1],c[2]);
+    const r=Math.hypot(edge.x-ctr.x,edge.y-ctr.y), a=fog(ctr.zc);
+    const col=f.det?PAL[2]:GHOST;
+    ctx.strokeStyle=rgba(col,.8*a); ctx.lineWidth=1.1;
+    ctx.beginPath(); ctx.arc(ctr.x,ctr.y,r,0,7); ctx.stroke();
+    const spin=f.det&&!reduced?fanA*(f.rpm/900):0;
+    for(let k=0;k<3;k++){
+      const th=spin+k*2.094;
+      ctx.beginPath(); ctx.moveTo(ctr.x,ctr.y);
+      ctx.arc(ctr.x,ctr.y,r*.82,th,th+.7); ctx.closePath();
+      ctx.fillStyle=rgba(col,.16*a); ctx.fill();
+    }
+    return {zc:ctr.zc,scr:ctr,r};
+  }
+  function drawFloor(){
+    ctx.save();
+    for(let i=-8;i<=8;i++){
+      const t=i*.6;
+      const a1=proj(t,-2.78,-4.8),a2=proj(t,-2.78,4.8);
+      const b1=proj(-4.8,-2.78,t),b2=proj(4.8,-2.78,t);
+      const fade=Math.max(0,.14-Math.abs(i)*.013);
+      ctx.strokeStyle=rgba(PAL[0],fade); ctx.lineWidth=i%5===0?1:.6;
+      ctx.beginPath();ctx.moveTo(a1.x,a1.y);ctx.lineTo(a2.x,a2.y);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b1.x,b1.y);ctx.lineTo(b2.x,b2.y);ctx.stroke();
+    }
+    // the accent ring under the rig (ringGeometry 2.4–2.7 in the real scene)
+    ctx.beginPath();
+    for(let k=0;k<=64;k++){
+      const th=k/64*Math.PI*2, p=proj(Math.cos(th)*2.55,-2.75,Math.sin(th)*2.55);
+      k?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
+    }
+    ctx.strokeStyle=rgba(ACCENT,.42+(reduced?0:Math.sin(ringPulse)*.1));
+    ctx.lineWidth=2.4; ctx.stroke();
+    ctx.restore();
+  }
+
+  let hitZones=[];
+  function frame(dt){
+    ctx.clearRect(0,0,W,H);
+    drawFloor();
+    const t=explodeT;
+    const items=[];
+    items.push({zc:proj(CASE.c[0],CASE.c[1],CASE.c[2]).zc+2.2,draw:()=>drawBox(CASE.c,CASE.s,ACCENT,.30+(explodeOn?-.12:0),false,false)});
+    let di=0;
+    hitZones=[];
+    for(const p of PARTS){
+      const c=pos3(p,t);
+      const col=p.det?PAL[di%PAL.length]:GHOST;
+      if(p.det)di++;
+      const scr=proj(c[0],c[1],c[2]);
+      const hovering=hovered===p;
+      items.push({zc:scr.zc,draw:()=>drawBox(c,p.s,col,(p.det?.95:.5)+(hovering?.25:0),!p.det,p.det)});
+      hitZones.push({x:scr.x,y:scr.y,zc:scr.zc,obj:p});
+    }
+    for(const f of FANS){
+      const c=pos3(f,t), scr=proj(c[0],c[1],c[2]);
+      items.push({zc:scr.zc,draw:()=>drawFan(f,t)});
+      hitZones.push({x:scr.x,y:scr.y,zc:scr.zc,obj:f,fan:true});
+    }
+    items.sort((a,b)=>b.zc-a.zc).forEach(it=>it.draw());
+
+    // holo scan sweep — one quiet line, every ~7s
+    if(!reduced){
+      scanT+=dt;
+      if(scanT>7){scanT=0;scanY=0;}
+      if(scanY>=0){
+        scanY+=dt*.55;
+        const y=scanY*H;
+        const g=ctx.createLinearGradient(0,y-14,0,y+14);
+        g.addColorStop(0,rgba(ACCENT,0));g.addColorStop(.5,rgba(ACCENT,.05));g.addColorStop(1,rgba(ACCENT,0));
+        ctx.fillStyle=g;ctx.fillRect(0,y-14,W,28);
+        if(scanY>1)scanY=-1;
+      }
+    }
+  }
+
+  canvas.addEventListener('mousedown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;canvas.classList.add('dragging');});
+  window.addEventListener('mouseup',()=>{dragging=false;canvas.classList.remove('dragging');});
+  window.addEventListener('mousemove',e=>{
+    if(dragging){
+      az+=(e.clientX-lx)*.006; pitch=Math.max(.06,Math.min(1.15,pitch+(e.clientY-ly)*.004));
+      lx=e.clientX; ly=e.clientY;
+    }
+  });
+  canvas.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(6.5,Math.min(16,dist+e.deltaY*.008));},{passive:false});
+  canvas.addEventListener('mousemove',e=>{
+    const r=canvas.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    let best=null,bd=42;
+    for(const z of hitZones){const d=Math.hypot(z.x-mx,z.y-my);if(d<bd){bd=d;best=z;}}
+    hovered=best?best.obj:null;
+    canvas.style.cursor=dragging?'grabbing':(hovered?'pointer':'grab');
+    if(hovered){
+      tip.innerHTML='<b>'+hovered.n+'</b><span>'+(hovered.tag||(hovered.rpm?hovered.rpm+' rpm · live':'') )+'</span>';
+      tip.style.left=Math.min(W-170,mx+14)+'px'; tip.style.top=Math.max(6,my-12)+'px';
+      tip.classList.add('show');
+      specLine.textContent=hovered.specs||(hovered.rpm?hovered.n+' · '+hovered.rpm+' rpm (live via your monitor)':'');
+      specLine.classList.toggle('show',!!specLine.textContent);
+    }else{tip.classList.remove('show');specLine.classList.remove('show');}
+  });
+  canvas.addEventListener('mouseleave',()=>{tip.classList.remove('show');specLine.classList.remove('show');hovered=null;});
+
+  const btnE=document.getElementById('btnExplode'), btnO=document.getElementById('btnOrbit'), btnV=document.getElementById('btnView');
+  btnE.addEventListener('click',()=>{explodeOn=!explodeOn;btnE.classList.toggle('on',explodeOn);
+    btnE.textContent=explodeOn?'Reassemble':'Exploded view'; if(reduced)explodeT=explodeOn?1:0;});
+  btnO.addEventListener('click',()=>{orbitOn=!orbitOn;btnO.classList.toggle('on',orbitOn);btnO.setAttribute('aria-pressed',String(orbitOn));});
+  btnV.addEventListener('click',()=>{
+    const cards=hero.dataset.view==='holo';
+    hero.dataset.view=cards?'cards':'holo';
+    btnV.textContent=cards?'Hologram view':'Cards view';
+    btnV.classList.toggle('on',cards);
+  });
+
+  let last=performance.now();
+  function loop(now){
+    const dt=Math.min(.05,(now-last)/1000); last=now;
+    const homeOn=document.getElementById('home').classList.contains('on');
+    const holoOn=hero.dataset.view==='holo';
+    if(homeOn&&holoOn&&!document.hidden){
+      if(orbitOn&&!dragging&&!reduced) az+=dt*.14;
+      if(!reduced){fanA+=dt*6; ringPulse+=dt*1.6;}
+      explodeT+=( (explodeOn?1:0)-explodeT )*Math.min(1,dt*(reduced?60:4.2));
+      frame(dt);
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
