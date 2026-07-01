@@ -404,6 +404,20 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 ---
 
+## UI SLIM-DOWN TRAIN — "answer first, detail on tap" (plan: `docs/UI_SLIMDOWN_PLAN.md` §5, council-approved 2026-07-01)
+
+- [x] **P1 slimRows (Optimize)** — `5bb13f4` (2026-07-01): `SlimRecRow` master-detail primitive + Fixes-segment
+  render path behind `compy_slim_rows` (**DEFAULT OFF**, Settings → Appearance preview toggle). One measured
+  proof line always visible (honesty guardrail, CI-enforced by `src/slim-row-proof-guard.test.tsx`); §8c
+  pre-selected Recommended in the consent sheet (selection ≠ application); TrustSwitch untouched; zero Rust.
+  Verified tsc clean + vitest 788/788. **Default-ON flip is an owner taste call after he reviews the look.**
+- [ ] P2 Monitor Basic/Advanced split — behind `basicAdvanced` (plan §5.2)
+- [ ] P3 Home answer-first (verdict + hero limiter + 3 tiles; KEEP the 3D rig hologram hero — plan §6 correction) — behind `homeV3`
+- [ ] P4 dedup: delete classic/losing render paths — ONLY after P1–P3 proven + owner default-ON; guards green
+- [ ] P5 side-pile collapse + chrome/motion pass
+
+---
+
 ## PHASE B — Gated mutations 🪪 (LOCKED rule 6: owner product decision + per-feature QA + welfare-check)
 - [ARMED 2026-06-25] session service-suspend — `service_suspend_gate()`==**true** (QA passed: running-service
   exact-restore + UAC-cancel=no-partial + critical-blocked; owner sign-off) + selection UI in `GamingMode.tsx`.
