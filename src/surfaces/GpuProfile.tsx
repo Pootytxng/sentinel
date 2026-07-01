@@ -11,6 +11,7 @@ import {
   hasAnyChange,
   deltaSummary,
 } from "../data/gpu-profile-store";
+import { type InsightTone, vendorProfileInsights } from "../data/gpu-sensor";
 
 // GPU profile surface — two READ-ONLY, advisory, LOCAL-only tools that change NOTHING on the PC:
 //   1. Scope picker (measurement, UI-only): frame the GPU view "Global" (whole-PC) or "Per-game".
@@ -263,15 +264,78 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
   );
 }
 
+// Tone → the border/dot color token for an advisory badge. Text stays --ix-text for legibility on any
+// theme (we tint only the accent border + dot, never the body copy — a bug→guard legibility rule).
+const toneColor: Record<InsightTone, string> = {
+  good: "var(--ready, #46d98a)",
+  caution: "var(--attention, #f5b740)",
+  info: "var(--ix-accent, #7c8cff)",
+};
+
 /**
- * The GPU profile surface: the scope picker (which slice you look at) plus the read-only before/after
- * delta (what moved when you changed something in your driver tool). Both are local, advisory, and
- * change nothing on the PC. `currentSnapshot` is the parent-supplied live GPU read for the delta card.
+ * READ-ONLY vendor-aware advisory badges (A4). Renders only when the live snapshot resolves to a
+ * vendor Compy has honest advice for (AMD today) — otherwise nothing, so we never mis-advise another
+ * vendor. Pure derive from `vendorProfileInsights`; changes nothing, promises no FPS/perf.
+ */
+function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSnapshot | null }) {
+  if (!currentSnapshot) return null;
+  const insights = vendorProfileInsights(currentSnapshot);
+  if (insights.length === 0) return null;
+
+  return (
+    <section aria-label="Vendor advisory insights" style={panelStyle}>
+      <div style={headingStyle}>For your Radeon GPU</div>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--ix-text-3, var(--ix-text-2))" }}>
+        Plain-English notes tailored to your GPU, read from settings Compy already sees. Advisory only
+        — Compy changes nothing here.
+      </p>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        {insights.map((i) => (
+          <li
+            key={i.key}
+            style={{
+              display: "flex",
+              gap: 9,
+              alignItems: "flex-start",
+              border: `1px solid color-mix(in srgb, ${toneColor[i.tone]} 45%, var(--ix-border))`,
+              borderRadius: "var(--ix-radius, 8px)",
+              background: `color-mix(in srgb, ${toneColor[i.tone]} 7%, transparent)`,
+              padding: "9px 11px",
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                marginTop: 5,
+                flex: "0 0 auto",
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: toneColor[i.tone],
+              }}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ix-text)" }}>{i.title}</span>
+              <span style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ix-text-2)" }}>{i.detail}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * The GPU profile surface: the scope picker (which slice you look at), the vendor-aware advisory
+ * badges (plain-English notes for YOUR GPU), and the read-only before/after delta (what moved when
+ * you changed something in your driver tool). All are local, advisory, and change nothing on the PC.
+ * `currentSnapshot` is the parent-supplied live GPU read for the badges + delta card.
  */
 export function GpuProfile({ currentSnapshot }: { currentSnapshot?: GpuProfileSnapshot | null }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <GpuProfileScopePicker />
+      <GpuVendorInsights currentSnapshot={currentSnapshot} />
       <GpuProfileDelta currentSnapshot={currentSnapshot} />
     </div>
   );

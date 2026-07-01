@@ -148,3 +148,25 @@ describe("GpuProfile before/after delta", () => {
     expect(screen.getByText(/Capture a before snapshot to begin/i)).toBeTruthy();
   });
 });
+
+// ── A4: vendor-aware advisory badges (read-only) ─────────────────────────────────────────────────
+describe("GpuProfile vendor advisory badges", () => {
+  it("renders AMD advisory badges from the live snapshot (vendor-aware insights)", () => {
+    render(<GpuProfile currentSnapshot={snap({ vendor: "AMD", hagsEnabled: false })} />);
+    const region = screen.getByRole("region", { name: /vendor.*(insight|advisor)/i });
+    // Named to the AMD tool so it's actionable on THIS rig.
+    expect(within(region).getAllByText(/adrenalin/i).length).toBeGreaterThan(0);
+    // Honesty: no fabricated FPS/perf promise in the advisory copy.
+    expect(region.textContent).not.toMatch(/\bfps\b|faster|guaranteed/i);
+  });
+
+  it("shows NO advisory panel for an NVIDIA GPU (vendor-honest — no mis-vendored AMD advice)", () => {
+    render(<GpuProfile currentSnapshot={snap({ vendor: "NVIDIA GeForce RTX 4090" })} />);
+    expect(screen.queryByRole("region", { name: /vendor.*(insight|advisor)/i })).toBeNull();
+  });
+
+  it("shows no advisory panel when there is no live snapshot", () => {
+    render(<GpuProfile currentSnapshot={null} />);
+    expect(screen.queryByRole("region", { name: /vendor.*(insight|advisor)/i })).toBeNull();
+  });
+});
