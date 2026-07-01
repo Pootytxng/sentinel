@@ -6,7 +6,7 @@ import rawTweaks from "./tweaks.json";
 import rawTerms from "./terms.json";
 import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
-import { KNOWLEDGE, KNOWLEDGE_BY_ID, APPLIES_BY_ID } from "./knowledge";
+import { KNOWLEDGE, KNOWLEDGE_BY_ID, APPLIES_BY_ID, DATES_BY_ID, formatEntryDate } from "./knowledge";
 import { TOPIC_BY_ID, TOPICS } from "./knowledge-topics";
 import { APPLICABILITY, type Applicability } from "./knowledge-topics";
 
@@ -224,6 +224,58 @@ describe("knowledge dataset lint", () => {
     expect(tagsOf("laptop-plugged-in-fps")).toContain("laptop");
     // A universal entry (no map row) carries no applies — it fits every rig.
     expect(tagsOf("fps-cap")).toBeUndefined();
+  });
+
+  it("date metadata: DATES_BY_ID maps only real ids to well-formed ISO dates (A3)", () => {
+    // Date-added / last-updated is OPTIONAL, central, owner-reviewable metadata — an entry with no
+    // map row simply shows no date (never a fabricated one). This guard keeps the map honest: no
+    // orphan ids, every `added` a valid YYYY-MM-DD, `updated` (when present) also valid and never
+    // BEFORE `added`. Pure organizational metadata; never a verdict.
+    const ISO = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+    const realIds = new Set(KNOWLEDGE.map((e) => e.id));
+    const orphans = Object.keys(DATES_BY_ID).filter((id) => !realIds.has(id));
+    expect(orphans, `DATES_BY_ID has ids no entry uses: ${orphans.join(", ")}`).toEqual([]);
+    const problems: string[] = [];
+    for (const [id, d] of Object.entries(DATES_BY_ID)) {
+      if (!isStr(d.added) || !ISO.test(d.added)) {
+        problems.push(`${id}: 'added' must be a YYYY-MM-DD string (got ${JSON.stringify(d.added)})`);
+        continue;
+      }
+      // A real calendar date (rejects e.g. 2026-02-31 that passes the regex).
+      if (Number.isNaN(Date.parse(`${d.added}T00:00:00Z`))) problems.push(`${id}: 'added' is not a real date`);
+      if (d.updated !== undefined) {
+        if (!isStr(d.updated) || !ISO.test(d.updated)) {
+          problems.push(`${id}: 'updated' must be a YYYY-MM-DD string when present`);
+        } else if (d.updated < d.added) {
+          problems.push(`${id}: 'updated' (${d.updated}) is before 'added' (${d.added})`);
+        }
+      }
+    }
+    expect(problems, `date metadata problems:\n${problems.join("\n")}`).toEqual([]);
+  });
+
+  it("date metadata: entries carry the mapped dates (absent = no date shown)", () => {
+    for (const e of KNOWLEDGE) {
+      const mapped = DATES_BY_ID[e.id];
+      if (mapped) {
+        expect(e.added, `${e.id} should carry its mapped 'added'`).toBe(mapped.added);
+        expect(e.updated, `${e.id} should carry its mapped 'updated'`).toBe(mapped.updated);
+      } else {
+        expect(e.added, `${e.id} has no date row → added should be undefined`).toBeUndefined();
+        expect(e.updated, `${e.id} has no date row → updated should be undefined`).toBeUndefined();
+      }
+    }
+  });
+
+  it("date metadata: formatEntryDate renders a stable human month-year, tolerates junk", () => {
+    // Deterministic, timezone-safe (parsed as UTC) so the same ISO always reads the same month/year.
+    expect(formatEntryDate("2026-06-14")).toBe("Jun 2026");
+    expect(formatEntryDate("2026-01-01")).toBe("Jan 2026");
+    expect(formatEntryDate("2025-12-31")).toBe("Dec 2025");
+    // Junk / empty degrades to null rather than "Invalid Date".
+    expect(formatEntryDate("")).toBeNull();
+    expect(formatEntryDate("not-a-date")).toBeNull();
+    expect(formatEntryDate(undefined)).toBeNull();
   });
 
   it("ships the expected dataset volume (sanity floor)", () => {

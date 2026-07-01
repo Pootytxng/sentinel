@@ -45,6 +45,54 @@ export const APPLIES_BY_ID: Record<string, Applicability[]> = {
 /** The entry's hardware applicability from the central map; undefined (universal) when unmapped. */
 const appliesOf = (id: unknown): Applicability[] | undefined => APPLIES_BY_ID[String(id)];
 
+// Date-added / last-updated (A3) — OPTIONAL, central, owner-reviewable metadata: a plain
+// `YYYY-MM-DD` "added" (when the entry first entered the library) and an optional "updated" (last
+// meaningful revision). An id ABSENT here shows NO date — we never fabricate a date, so freshness is
+// only ever shown when it's real. Kept in code (not the frozen JSON seeds) so the tweaks.json count
+// pins stay untouched, and centrally like TOPIC_BY_ID / APPLIES_BY_ID for one-glance owner review.
+// Organizational metadata only, never a verdict. The lint validates real ids + well-formed dates +
+// updated-not-before-added. Dates are sourced from the curation history in knowledge.lint.test.ts.
+export interface EntryDates {
+  /** ISO YYYY-MM-DD the entry first shipped. */
+  added: string;
+  /** ISO YYYY-MM-DD of the last meaningful revision; omit if never revised since `added`. */
+  updated?: string;
+}
+export const DATES_BY_ID: Record<string, EntryDates> = {
+  // Original frozen seed corpus (42 entries) shipped together on the library's first cut.
+  "fullscreen-optimizations": { added: "2026-06-04" },
+  "hags": { added: "2026-06-04" },
+  "game-mode": { added: "2026-06-04" },
+  // A few dated exemplars from the documented curation batches (knowledge.lint.test.ts). The map is
+  // intentionally sparse — only entries with a known, real date carry one; everything else shows none.
+  "aim-tweaks": { added: "2026-06-08" },
+  "set-refresh-rate": { added: "2026-06-14", updated: "2026-06-14" },
+  "freesync-vrb-exclusion": { added: "2026-06-19" },
+  "monitor-hint-acer-xfa253q": { added: "2026-06-19" },
+};
+
+/** The entry's date metadata from the central map; undefined (no date shown) when unmapped. */
+const datesOf = (id: unknown): EntryDates | undefined => DATES_BY_ID[String(id)];
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Render an ISO `YYYY-MM-DD` date as a stable, timezone-safe "Mon YYYY" (e.g. "Jun 2026") for the
+ * quiet Learn freshness line. Parses the date parts directly (no `new Date(str)` locale/TZ drift), so
+ * the same ISO always reads the same month/year everywhere. Returns null for empty/malformed input so
+ * a bad value degrades to "no date" rather than surfacing "Invalid Date".
+ */
+export function formatEntryDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${MONTHS[month - 1]} ${year}`;
+}
+
 // Version field on the dataset root, for future migrations. Bump + migrate when a shape changes.
 export const KNOWLEDGE_VERSION = 1;
 
@@ -73,6 +121,10 @@ interface BaseEntry {
   // from the central APPLIES_BY_ID map. Absent = universal (applies to every rig). Organizational
   // metadata only, never a verdict; drives Learn's "fits my rig" filter.
   applies?: Applicability[];
+  // Date metadata (A3) — ISO YYYY-MM-DD "added" / optional "updated", from the central DATES_BY_ID
+  // map. Absent = no date shown (we never fabricate one). Organizational metadata only, never a verdict.
+  added?: string;
+  updated?: string;
 }
 export interface TweakEntry extends BaseEntry {
   type: "tweak";
@@ -119,6 +171,14 @@ export function lifecycle(t: Raw): { status?: "deprecated" | "superseded"; super
 function withApplicability<T extends KnowledgeEntry>(e: T): T {
   const a = appliesOf(e.id);
   return a ? { ...e, applies: a } : e;
+}
+
+// Apply the central date map to a fully-built entry — adds `added`/`updated` ONLY when this id has a
+// date row, so an undated entry keeps both undefined (Learn then shows no freshness line) rather than
+// an invented date. Same one-pass-over-the-assembled-corpus shape as withApplicability.
+function withDates<T extends KnowledgeEntry>(e: T): T {
+  const d = datesOf(e.id);
+  return d ? { ...e, added: d.added, ...(d.updated ? { updated: d.updated } : {}) } : e;
 }
 
 const TWEAKS: TweakEntry[] = (rawTweaks as Raw[]).map((t) => ({
@@ -280,7 +340,7 @@ export const KNOWLEDGE: KnowledgeEntry[] = [
   GRADING_ENTRY,
   FREESYNC_VRB_ENTRY,
   ACER_XFA253Q_HINT_ENTRY,
-].map(withApplicability);
+].map(withApplicability).map(withDates);
 
 export const KNOWLEDGE_BY_ID: Map<string, KnowledgeEntry> = new Map(
   KNOWLEDGE.map((e) => [e.id, e]),

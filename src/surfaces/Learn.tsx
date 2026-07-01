@@ -3,6 +3,7 @@ import {
   KNOWLEDGE,
   KNOWLEDGE_BY_ID,
   relatedIds,
+  formatEntryDate,
   type KnowledgeEntry,
   type KnowledgeType,
   type TweakVerdict,
@@ -347,9 +348,30 @@ function EntryCard({
               ))}
             </div>
           )}
+          <EntryDateNote entry={entry} />
         </div>
       )}
     </div>
+  );
+}
+
+// A3 freshness line — quiet, honest "Added / Updated" metadata at the foot of an expanded card. Only
+// renders when the entry actually carries a real date (DATES_BY_ID); an undated entry shows nothing
+// rather than a fabricated date. "Updated" is only shown when it differs from "Added" (no redundant
+// "Added Jun 2026 · Updated Jun 2026"). Read-only organizational metadata; never a verdict.
+function EntryDateNote({ entry }: { entry: KnowledgeEntry }) {
+  const added = formatEntryDate(entry.added);
+  if (!added) return null;
+  const updated = entry.updated && entry.updated !== entry.added ? formatEntryDate(entry.updated) : null;
+  return (
+    <p
+      className="lx-datenote"
+      role="note"
+      style={{ margin: "10px 0 0", fontSize: "11px", color: "var(--ix-text-3)" }}
+    >
+      Added {added}
+      {updated ? <> · Updated {updated}</> : null}
+    </p>
   );
 }
 
