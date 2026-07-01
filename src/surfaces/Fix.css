@@ -120,6 +120,34 @@
   color: var(--ix-text-2);
   line-height: 1.5;
 }
+/* A5 payoff meter — a quiet advisory chip naming the KIND of gain a change targets (never a
+   fabricated number). Deliberately muted/outline, NOT an accent fill: it's advisory, not a CTA. */
+.fix-payoff {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ix-text-2);
+  background: color-mix(in srgb, var(--ix-accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 22%, transparent);
+  border-radius: 999px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.fix-payoff-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ix-accent);
+  flex: none;
+}
+/* Inside the history detail row it sits inline after the "Measured payoff:" lead — no top margin. */
+.fix-hist-detail .fix-payoff {
+  margin-top: 0;
+}
 
 /* Evidence chip — never upgraded; expected is the most muted. */
 .fix-evidence {

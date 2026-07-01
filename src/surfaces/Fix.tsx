@@ -47,6 +47,20 @@ function RecReason({ id, text }: { id: string; text: string }) {
   return <p className="fix-row-reason">{text}</p>;
 }
 
+// A5 measured-payoff linkage — the honest per-tweak payoff meter. Renders ONLY the backend-derived
+// category label (e.g. "Input latency", "Background CPU & RAM"): the KIND of gain a change targets,
+// never a fabricated FPS/latency number (honest-measurement law). Absent → renders nothing, so a
+// legacy entry or a restore-to-stock leftover shows no meter rather than an invented one.
+function PayoffMeter({ label }: { label?: string | null }) {
+  if (!label) return null;
+  return (
+    <span className="fix-payoff" title="What this change is measured to help with — not a promised number">
+      <span className="fix-payoff-dot" aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
 // Second live Instrument surface (spec 2026-06-05-fix-surface). Reskins the recommendations list:
 // worth-fixing trust-switches → already-applied (collapsed, named priors) → the refuse-pile (what
 // Compy won't touch, with a Library link) → guided/advisory recs (no switch). Reuses the EXISTING
@@ -480,6 +494,7 @@ function ActiveChangeCard({
               ? ` · rolls back to ${change.restores_label}`
               : ""}
         </p>
+        <PayoffMeter label={change.payoff_label} />
       </div>
       <button className="fix-ghost-rollback" disabled={busy} onClick={onRollback}>
         {busy ? "Rolling back…" : "Roll back"}
@@ -523,6 +538,11 @@ function HistoryRow({ change }: { change: AppliedChange }) {
             Applied {humanizeWhen(change.applied_at)}
             {change.elevation_used ? " · elevated" : ""}
           </div>
+          {change.payoff_label && (
+            <div>
+              Measured payoff: <PayoffMeter label={change.payoff_label} />
+            </div>
+          )}
           <div className="fix-hist-id">{change.rec_id}</div>
         </div>
       )}

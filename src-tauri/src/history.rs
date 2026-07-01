@@ -105,6 +105,12 @@ pub(crate) struct AppliedChangeView {
     // from the typed AppliedAction. Read-only, computed-at-read, never persisted. None for legacy
     // entries with no captured action → the UI shows just the prior ("before").
     applied_label: Option<String>,
+    // A5 measured-payoff linkage — the honest per-tweak payoff meter. Read-only, computed-at-read,
+    // never persisted. Names the KIND of gain a tweak targets (e.g. "Input latency", "Background
+    // CPU & RAM"), NOT a fabricated FPS/latency number (honest-measurement law). Derived only from
+    // the typed AppliedAction; None for legacy entries and for restore-to-stock leftovers (undoing
+    // a bad past tweak is not a forward gain) → the UI shows no meter rather than an invented one.
+    payoff_label: Option<String>,
 }
 
 impl AppliedChangeView {
@@ -165,6 +171,46 @@ fn applied_label_from_action(action: &Option<AppliedAction>) -> Option<String> {
     Some(label.to_string())
 }
 
+/// A5 measured-payoff linkage — read-only enrichment (computed-at-read, never persisted): the honest
+/// per-tweak payoff meter. Names the KIND of measurable gain a change targets so the ledger can show
+/// "what did this buy me?" WITHOUT ever fabricating an FPS or millisecond figure (honest-measurement
+/// law: never claim an unmeasured number). Derived ONLY from the typed `AppliedAction` so it can't
+/// drift from what was actually applied. `None` for a legacy entry with no captured action, and for
+/// every restore-to-stock leftover (undoing a rotted past tweak is not a forward gain to advertise) →
+/// the UI shows no meter rather than an invented one. The match is exhaustive on purpose: a new
+/// catalog action won't compile until its payoff category is set, so the meter can never silently
+/// mislabel or omit a change.
+fn payoff_label_from_action(action: &Option<AppliedAction>) -> Option<&'static str> {
+    use AppliedAction::*;
+    let label = match action.as_ref()? {
+        // Input path — these trim the click-to-photon chain (accel curve, GPU scheduling).
+        DisableMouseAcceleration | EnableHardwareGpuScheduling => "Input latency",
+        // Network path — lower per-packet delay / jitter on the wire.
+        DisableNagleOnActiveNics | DisableEnergyEfficientEthernet => "Network responsiveness",
+        // Reclaim background CPU/RAM from services + telemetry tasks so games keep more of the rig.
+        DisableKnownService { .. } | SuspendKnownService { .. } | DisableScheduledTask { .. } => {
+            "Background CPU & RAM"
+        }
+        // Compositor / overlay / desktop-effect load off the frame path.
+        SetVisualEffectsBestPerformance => "UI smoothness",
+        EnableGameMode | DisableGameBarAndDvr => "Fewer background interrupts",
+        // Power / thermal delivery headroom (clocks not parked/throttled on AC).
+        SetUltimatePerformancePlan | DisableUsbSelectiveSuspendOnAc | DisablePcieAspmOnAc => {
+            "Power & thermal headroom"
+        }
+        // Disk headroom reclaimed on the boot volume.
+        DisableReservedStorage => "Disk headroom",
+        // Not a frame/latency gain — a reliability one: a clean cold boot each time.
+        DisableFastStartup => "Clean-boot reliability",
+        // Restore-to-stock leftovers carry NO forward payoff claim (undoing a bad past tweak is not
+        // a measured gain) — the meter stays hidden rather than inventing one.
+        RestoreMemoryCompressionDefault | RestoreMmcssDefaults | RestorePrioritySeparationDefault
+        | RestoreMpoDefault | RestoreCoreParkingDefault | RestoreTcpAutotuningDefault
+        | RestorePagefileAutomatic => return None,
+    };
+    Some(label)
+}
+
 fn into_view(c: AppliedChange) -> AppliedChangeView {
     let is_still_active = if c.status == "applied" {
         check_change_active(&c)
@@ -173,6 +219,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
     };
     let restores_label = restores_label_from_snapshot(&c.snapshot);
     let applied_label = applied_label_from_action(&c.applied_action);
+    let payoff_label = payoff_label_from_action(&c.applied_action).map(str::to_string);
     AppliedChangeView {
         id: c.id,
         rec_id: c.rec_id,
@@ -188,6 +235,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         elevation_used: c.elevation_used,
         restores_label,
         applied_label,
+        payoff_label,
     }
 }
 
@@ -1630,6 +1678,93 @@ mod history_tests {
         assert_eq!(applied_label_from_action(&None), None);
         let v = into_view(record("game-mode", "applied"));
         assert_eq!(v.applied_label, None, "legacy entry has no after-label");
+    }
+
+    // A5 measured-payoff linkage: the honest per-tweak payoff meter. It names the KIND of gain a
+    // tweak targets (input latency, background CPU/RAM, load stutter, network responsiveness, power/
+    // thermal headroom) — never a fabricated FPS number, per the honest-measurement law.
+    #[test]
+    fn payoff_label_names_the_honest_gain_category_per_action() {
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::DisableMouseAcceleration)),
+            Some("Input latency")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::EnableHardwareGpuScheduling)),
+            Some("Input latency")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::DisableNagleOnActiveNics)),
+            Some("Network responsiveness")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::DisableKnownService {
+                service: KnownService::SysMain
+            })),
+            Some("Background CPU & RAM")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::SuspendKnownService {
+                service: KnownService::WSearch
+            })),
+            Some("Background CPU & RAM")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::SetVisualEffectsBestPerformance)),
+            Some("UI smoothness")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::SetUltimatePerformancePlan)),
+            Some("Power & thermal headroom")
+        );
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::DisableFastStartup)),
+            Some("Clean-boot reliability")
+        );
+    }
+
+    // Honesty law: the payoff meter must NEVER surface a fabricated numeric FPS/latency figure —
+    // every category is a plain word-label, no digits.
+    #[test]
+    fn payoff_labels_are_categories_never_fabricated_numbers() {
+        use AppliedAction::*;
+        for a in [
+            EnableGameMode,
+            DisableMouseAcceleration,
+            DisableGameBarAndDvr,
+            SetVisualEffectsBestPerformance,
+            EnableHardwareGpuScheduling,
+            SetUltimatePerformancePlan,
+            DisableNagleOnActiveNics,
+            DisableFastStartup,
+            DisableReservedStorage,
+            DisableUsbSelectiveSuspendOnAc,
+            DisablePcieAspmOnAc,
+            DisableEnergyEfficientEthernet,
+            DisableKnownService { service: KnownService::DiagTrack },
+            SuspendKnownService { service: KnownService::SysMain },
+            DisableScheduledTask { task: KnownBloatTask::CompatibilityAppraiser },
+        ] {
+            let label = payoff_label_from_action(&Some(a)).expect("catalog action has a payoff");
+            assert!(
+                !label.chars().any(|c| c.is_ascii_digit()),
+                "payoff label must be a category, never a fabricated number: {label:?}"
+            );
+        }
+    }
+
+    // Restore-to-stock leftovers (Leftovers v2) carry no forward payoff claim — undoing a bad past
+    // tweak isn't a measured gain, so it stays None (the UI shows no meter rather than an invented one).
+    #[test]
+    fn payoff_label_is_none_for_restores_and_legacy_entries() {
+        assert_eq!(payoff_label_from_action(&None), None, "legacy entry: no payoff");
+        assert_eq!(
+            payoff_label_from_action(&Some(AppliedAction::RestoreMpoDefault)),
+            None,
+            "restore-to-stock has no forward payoff claim"
+        );
+        let v = into_view(record("game-mode", "applied"));
+        assert_eq!(v.payoff_label, None, "legacy entry surfaces None through into_view");
     }
 
     #[test]

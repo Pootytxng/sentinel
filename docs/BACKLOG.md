@@ -391,7 +391,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [~] "last seen working on" hardware tag — backend names prior state; no UI card
 - [x] per-tweak audit trail — `Fix.tsx:423`
 - [~] ledger filter "this rig only" — no UI toggle
-- [~] measured-payoff linkage — linked to some advisories; no per-tweak payoff meter
+- [x] measured-payoff linkage — per-tweak honest payoff meter: `payoff_label_from_action` (history.rs) names the KIND of gain (input latency / background CPU&RAM / network / power&thermal / …), never a fabricated number; rendered as a quiet advisory chip on active + history ledger rows (Fix.tsx)
 
 ### A6 · UPGRADE-PATH advisory — **complete** (affiliate tags = Phase D)
 - [x] hardware-limited verdict detection (GPU≥95% / HDD install drive) — `priorities.rs:95`
