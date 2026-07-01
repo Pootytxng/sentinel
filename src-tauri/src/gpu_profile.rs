@@ -266,6 +266,44 @@ pub(crate) fn export_json(
     serde_json::to_string_pretty(&build_export(before, after))
 }
 
+/// A version-pinned mismatch warning. Raised when the graphics driver version DIFFERS between the
+/// two snapshots while a measurable field (peak temp) also moved — meaning the before/after wasn't
+/// pinned to the same driver, so any measured difference can't be attributed to the one setting the
+/// user changed. Pure, read-only, advisory: it never blocks anything and makes no perf/FPS claim.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct VersionMismatch {
+    pub before_version: String,
+    pub after_version: String,
+    pub message: String,
+}
+
+/// Detect a version-pinned mismatch from a computed delta. Returns `Some` only when BOTH driver
+/// versions were read and differ (a `Changed` driver row — never an `Unknown`/fabricated one) AND
+/// there is a real measurement to confound (the peak-temp field genuinely moved). Otherwise `None`:
+/// an unchanged driver is a clean comparison, a missing read is never inflated into a mismatch, and a
+/// driver bump with nothing measured is not worth warning about.
+pub(crate) fn version_mismatch(deltas: &[FieldDelta]) -> Option<VersionMismatch> {
+    let driver = deltas
+        .iter()
+        .find(|d| d.key == "driverVersion" && d.status == DeltaStatus::Changed)?;
+    // Only warn when a measurement is actually at stake (peak temp genuinely moved between snaps).
+    let temp_moved = deltas
+        .iter()
+        .any(|d| d.key == "peakTempC" && d.status == DeltaStatus::Changed);
+    if !temp_moved {
+        return None;
+    }
+    Some(VersionMismatch {
+        before_version: driver.before_text.clone(),
+        after_version: driver.after_text.clone(),
+        message: format!(
+            "Your driver changed too ({} → {}), so this temperature difference isn't a clean \
+             before/after of just your setting — re-capture both on the same driver to compare fairly.",
+            driver.before_text, driver.after_text
+        ),
+    })
+}
+
 #[cfg(test)]
 mod gpu_profile_tests {
     use super::*;
@@ -466,6 +504,74 @@ mod gpu_profile_tests {
         assert!(!json.contains("performance boost"));
         // But the honest cooler phrasing IS present.
         assert!(json.contains("cooler"));
+    }
+
+    #[test]
+    fn version_mismatch_flags_a_confounded_comparison_when_the_driver_moved() {
+        let mut b = snap();
+        b.driver_version = Some("24.6.1".into());
+        b.peak_temp_c = Some(80);
+        let mut a = snap();
+        a.driver_version = Some("24.7.1".into());
+        a.peak_temp_c = Some(68);
+        let d = compute_delta(Some(&b), Some(&a));
+        let mm = version_mismatch(&d).expect("driver moved → a mismatch warning");
+        assert_eq!(mm.before_version, "24.6.1");
+        assert_eq!(mm.after_version, "24.7.1");
+        // The warning must name the confound (driver) and refuse to pin the temp move to the setting.
+        let low = mm.message.to_lowercase();
+        assert!(low.contains("driver"), "got: {}", mm.message);
+        // Honesty: no FPS / faster / performance claim ever rides on this warning.
+        assert!(!low.contains("fps") && !low.contains("faster") && !low.contains("performance"));
+    }
+
+    #[test]
+    fn version_mismatch_is_none_when_the_driver_is_unchanged() {
+        // Same driver on both sides, only temp moved → clean, apples-to-apples comparison.
+        let mut b = snap();
+        b.peak_temp_c = Some(80);
+        let mut a = snap();
+        a.peak_temp_c = Some(68);
+        let d = compute_delta(Some(&b), Some(&a));
+        assert!(version_mismatch(&d).is_none());
+    }
+
+    #[test]
+    fn version_mismatch_is_none_when_a_driver_read_is_missing() {
+        // One side unread → the driver row is Unknown, never a "change"; we must NOT warn on
+        // fabricated data (honesty law): a missing read is not a mismatch.
+        let mut b = snap();
+        b.driver_version = Some("24.6.1".into());
+        let mut a = snap();
+        a.driver_version = None;
+        let d = compute_delta(Some(&b), Some(&a));
+        assert!(version_mismatch(&d).is_none());
+    }
+
+    #[test]
+    fn version_mismatch_only_warns_when_a_measurement_is_actually_confounded() {
+        // Driver moved but nothing measurable (no temp read either side) → there's no measurement to
+        // confound, so no warning is raised (the warning is about protecting a comparison, not nagging).
+        let mut b = snap();
+        b.driver_version = Some("24.6.1".into());
+        b.peak_temp_c = None;
+        let mut a = snap();
+        a.driver_version = Some("24.7.1".into());
+        a.peak_temp_c = None;
+        let d = compute_delta(Some(&b), Some(&a));
+        assert!(version_mismatch(&d).is_none());
+    }
+
+    #[test]
+    fn version_mismatch_serde_round_trips() {
+        let w = VersionMismatch {
+            before_version: "24.6.1".into(),
+            after_version: "24.7.1".into(),
+            message: "hi".into(),
+        };
+        let json = serde_json::to_string(&w).unwrap();
+        let back: VersionMismatch = serde_json::from_str(&json).unwrap();
+        assert_eq!(w, back);
     }
 
     #[test]

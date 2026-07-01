@@ -110,6 +110,37 @@ describe("GpuProfile before/after delta", () => {
     expect(driverRow.textContent).toContain("—");
   });
 
+  it("warns of a version-pinned mismatch when the driver changed alongside the temp", () => {
+    const { rerender } = render(<GpuProfile currentSnapshot={snap({ peakTempC: 80, driverVersion: "24.6.1" })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture before/i }));
+    // User changed a setting AND their driver moved between snapshots → confounded comparison.
+    rerender(<GpuProfile currentSnapshot={snap({ peakTempC: 68, driverVersion: "24.7.1" })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture after/i }));
+
+    const warn = screen.getByRole("status");
+    expect(warn.textContent).toMatch(/driver changed/i);
+    expect(warn.textContent).toMatch(/24\.6\.1/);
+    expect(warn.textContent).toMatch(/24\.7\.1/);
+    // Honesty: the warning never rides an FPS/perf claim.
+    expect(warn.textContent).not.toMatch(/fps|faster|performance/i);
+  });
+
+  it("does NOT warn of a mismatch when the driver is unchanged (clean comparison)", () => {
+    const { rerender } = render(<GpuProfile currentSnapshot={snap({ peakTempC: 80 })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture before/i }));
+    rerender(<GpuProfile currentSnapshot={snap({ peakTempC: 68 })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture after/i }));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("does NOT warn of a mismatch when a driver read is missing (never fabricates)", () => {
+    const { rerender } = render(<GpuProfile currentSnapshot={snap({ peakTempC: 80, driverVersion: "24.6.1" })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture before/i }));
+    rerender(<GpuProfile currentSnapshot={snap({ peakTempC: 68, driverVersion: null })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture after/i }));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("clear wipes captured snapshots back to the empty prompt", () => {
     render(<GpuProfile currentSnapshot={snap()} />);
     fireEvent.click(screen.getByRole("button", { name: /Capture before/i }));

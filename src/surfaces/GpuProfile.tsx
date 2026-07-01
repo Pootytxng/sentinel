@@ -98,6 +98,21 @@ const btnStyle = (quiet = false): React.CSSProperties => ({
   color: quiet ? "var(--ix-text-3, var(--ix-text-2))" : "var(--ix-text-2)",
 });
 
+/**
+ * Version-pinned mismatch: pure derive from the computed deltas. Returns a warning ONLY when the
+ * driver version genuinely changed between the two snapshots (a "changed" driver row — never an
+ * "unknown"/unread one) AND a measurement (peak temp) also moved, so the comparison is confounded.
+ * A clean (same-driver) comparison, an unread driver, or a driver bump with nothing measured → null.
+ * Read-only/advisory, no perf/FPS claim — it protects an honest before/after, never nags.
+ */
+function versionMismatch(deltas: FieldDelta[]): { before: string; after: string } | null {
+  const driver = deltas.find((d) => d.key === "driverVersion" && d.status === "changed");
+  if (!driver) return null;
+  const tempMoved = deltas.some((d) => d.key === "peakTempC" && d.status === "changed");
+  if (!tempMoved) return null;
+  return { before: driver.beforeText, after: driver.afterText };
+}
+
 function DeltaRow({ d }: { d: FieldDelta }) {
   // Temp down = cooler = the good direction; up = warmer. Text/boolean changes are neutral (a driver
   // bump or a mode switch isn't "good" or "bad" on its own — we don't editorialise).
@@ -150,6 +165,7 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
   const deltas = computeGpuProfileDelta(pair.before, pair.after);
   const bothCaptured = pair.before != null && pair.after != null;
   const changed = hasAnyChange(deltas);
+  const mismatch = versionMismatch(deltas);
   const muted: React.CSSProperties = { margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--ix-text-2)" };
 
   return (
@@ -191,6 +207,29 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
           <p style={{ ...muted, fontWeight: changed ? 600 : 400, color: "var(--ix-text)" }}>
             {deltaSummary(deltas)}
           </p>
+          {mismatch && (
+            <div
+              role="status"
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "flex-start",
+                border: "1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 55%, transparent)",
+                borderRadius: "var(--ix-radius, 8px)",
+                background: "color-mix(in srgb, var(--ix-amber, #fbbf3c) 10%, transparent)",
+                padding: "9px 11px",
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ix-amber, #fbbf3c)" }}>
+                ⚠
+              </span>
+              <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: "var(--ix-text-1, #f2f3f7)" }}>
+                Your driver changed too ({mismatch.before} → {mismatch.after}), so this isn&apos;t a
+                clean before/after of just your setting. Re-capture both on the same driver to compare
+                fairly.
+              </p>
+            </div>
+          )}
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
               <tr style={{ color: "var(--ix-text-3, var(--ix-text-2))", fontSize: 11.5 }}>
