@@ -380,7 +380,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] post-apply verification gate (re-run probes) — `use-scan.ts`, `Check.tsx:293`
 - [x] green/yellow/red confidence chips (color-coded) — `Check.tsx:298`
 - [~] exportable setup summary — report exists but no dedicated setup-summary card
-- [~] Re-Run Setup — re-run check exists; no explicit re-baseline flow
+- [x] Re-Run Setup / re-baseline flow + overflow handling — `useHardwareChange` hook owns detect→acknowledge ("this is my rig now"); `summarizeHardwareChanges` caps change lines to "and N more" so a big multi-part swap never floods the card (`use-hardware-change.ts`, `Check.tsx`)
 - [x] **hardware-change detection** — wired into Check (Optimize→Fixes): advisory card names what changed + inline acknowledge/re-baseline (`acknowledge_hardware_changes`) so it never nags; live-verified 2026-06-24
 - [x] override toggle — "Restore all (N)" bulk control in the Dismissed strip (Fix.tsx, ≥2 dismissed, reversible, zero IPC)
 - [x] drift-watch integration — `drift.rs`, `Check.tsx:325`

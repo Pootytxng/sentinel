@@ -8,7 +8,7 @@ import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
-import { peekProbe, cachedProbe } from "../data/probe-cache";
+import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import "./Check.css";
@@ -52,9 +52,6 @@ const VENDOR_SUPPORT: Partial<Record<GpuVendor, { label: string; url: string }>>
   nvidia: { label: "NVIDIA", url: "https://www.nvidia.com/Download/index.aspx" },
   intel: { label: "Intel", url: "https://www.intel.com/content/www/us/en/download-center/home.html" },
 };
-
-// Hardware-change detection (A5) — mirrors the Rust HardwareChangeReport shape.
-type HardwareChangeReport = { changed: boolean; changes: string[]; baseline_recorded: boolean };
 
 // NIC driver freshness (R2 driver win-source v1) — mirrors the Rust NicDriverInfo shape.
 type NicDriverInfo = { name: string; driver_date: string; driver_age_days: number | null; vendor: string };
@@ -320,30 +317,11 @@ export default function Check({
   // changed since last setup. Built but previously UNWIRED — surfaced here as an advisory card that
   // names exactly what changed, with an inline "this is my rig now" that re-baselines so it can
   // never nag forever (the no-dead-end-flags law).
-  const [hwChange, setHwChange] = useState<HardwareChangeReport | null>(
-    () => peekProbe("hardware-changes") ?? null,
-  );
-  const [ackingHw, setAckingHw] = useState(false);
-  useEffect(() => {
-    let live = true;
-    cachedProbe("hardware-changes", () => invoke<HardwareChangeReport>("get_hardware_changes"), 60_000)
-      .then((r) => live && setHwChange(r))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
-  const acknowledgeHwChange = async () => {
-    setAckingHw(true);
-    try {
-      await invoke("acknowledge_hardware_changes");
-      setHwChange((p) => (p ? { ...p, changed: false, changes: [] } : p));
-    } catch {
-      /* leave the card up; the user can retry or just re-check */
-    } finally {
-      setAckingHw(false);
-    }
-  };
+  const { report: hwChange, acknowledging: ackingHw, acknowledge: acknowledgeHwChange } =
+    useHardwareChange();
+  // Overflow handling: on a big multi-part swap the change list can be long — cap what we render
+  // and collapse the remainder to "and N more change(s)" so the advisory never floods the card.
+  const hwSummary = summarizeHardwareChanges(hwChange?.changes ?? []);
 
   const livingPreview =
     typeof document !== "undefined" && document.documentElement.dataset.living === "on";
@@ -431,8 +409,10 @@ export default function Check({
                 <span className="check-drift-label">Your hardware changed since last setup</span>
               </div>
               <p className="check-drift-detail">
-                {hwChange.changes.join(" · ")} — new parts can want different settings, so it's worth
-                re-checking your setup.
+                {[...hwSummary.visible, ...(hwSummary.overflowLabel ? [hwSummary.overflowLabel] : [])].join(
+                  " · ",
+                )}{" "}
+                — new parts can want different settings, so it's worth re-checking your setup.
               </p>
               <div className="check-drift-actions">
                 <button className="btn btn-small" disabled={running} onClick={() => rerun()}>
