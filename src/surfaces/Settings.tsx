@@ -14,6 +14,8 @@ import {
   applySlimRows,
   readBasicAdvanced,
   applyBasicAdvanced,
+  readHomeV3,
+  applyHomeV3,
   readViewMode,
   applyViewMode,
   readStepAsideGame,
@@ -129,6 +131,7 @@ export default function Settings({
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [slimRows, setSlimRows] = useState<boolean>(readSlimRows);
   const [basicAdvanced, setBasicAdvanced] = useState<boolean>(readBasicAdvanced);
+  const [homeV3, setHomeV3] = useState<boolean>(readHomeV3);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -177,6 +180,12 @@ export default function Settings({
     setBasicAdvanced(v);
     applyBasicAdvanced(v);
     if (v) applyViewMode(readViewMode()); // mirror the persisted mode onto <html> when arming
+  };
+  // Answer-first Home (P3) — Home leads with the verdict + #1 limiter + 3 tiles; the 3D rig hologram
+  // stays the centerpiece. Layout only, same audited flows; DEFAULT OFF until owner-approved.
+  const changeHomeV3 = (v: boolean) => {
+    setHomeV3(v);
+    applyHomeV3(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -293,6 +302,17 @@ export default function Settings({
                   onChange={changeBasicAdvanced}
                   ariaLabel="Basic/Advanced mode preview"
                 />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Answer-first Home (preview)</div>
+                  <div className="set-row-sub">
+                    Home leads with the verdict, your #1 limiter, and three glanceable tiles — the
+                    3D rig stays the centerpiece, with the full hardware cards one tap away.
+                  </div>
+                </div>
+                <Toggle on={homeV3} onChange={changeHomeV3} ariaLabel="Answer-first Home preview" />
               </div>
             </div>
             <LivePreview ambiance={ambiance} />

@@ -4,12 +4,15 @@ import {
   applyInstrumentTheme,
   readAmbiance,
   persistAmbiance,
+  readAmbianceChoice,
   readSlimRows,
   applySlimRows,
   readBasicAdvanced,
   applyBasicAdvanced,
   readViewMode,
   applyViewMode,
+  readHomeV3,
+  applyHomeV3,
 } from "./theme";
 
 afterEach(() => {
@@ -18,6 +21,7 @@ afterEach(() => {
   delete document.documentElement.dataset.slimRows;
   delete document.documentElement.dataset.basicAdvanced;
   delete document.documentElement.dataset.viewMode;
+  delete document.documentElement.dataset.homeV3;
 });
 
 describe("instrument theme", () => {
@@ -103,5 +107,32 @@ describe("ambiance", () => {
   it("falls back to full on a junk stored value", () => {
     localStorage.setItem("compy_ambiance", "ludicrous");
     expect(readAmbiance()).toBe("full");
+  });
+
+  it("readAmbianceChoice distinguishes an explicit pick from the default", () => {
+    expect(readAmbianceChoice()).toBeNull(); // never chose → null (lets P3 re-default to calm)
+    localStorage.setItem("compy_ambiance", "ludicrous"); // junk ≠ a choice
+    expect(readAmbianceChoice()).toBeNull();
+    persistAmbiance("off");
+    expect(readAmbianceChoice()).toBe("off"); // explicit choice always wins
+  });
+});
+
+describe("answer-first Home (P3 UI slim-down — HARD LINE: default OFF)", () => {
+  it('defaults OFF when unset; true ONLY on the exact "1" opt-in', () => {
+    expect(readHomeV3()).toBe(false);
+    localStorage.setItem("compy_home_v3", "on"); // junk value ≠ opt-in
+    expect(readHomeV3()).toBe(false);
+    localStorage.setItem("compy_home_v3", "1");
+    expect(readHomeV3()).toBe(true);
+  });
+
+  it("applyHomeV3 sets/clears data-home-v3 on <html> and persists", () => {
+    applyHomeV3(true);
+    expect(document.documentElement.dataset.homeV3).toBe("on");
+    expect(readHomeV3()).toBe(true);
+    applyHomeV3(false);
+    expect(document.documentElement.dataset.homeV3).toBeUndefined();
+    expect(readHomeV3()).toBe(false);
   });
 });

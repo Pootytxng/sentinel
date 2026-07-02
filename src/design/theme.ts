@@ -68,6 +68,19 @@ export function readAmbiance(): Ambiance {
   return "full"; // default Full so the backdrop is felt in dev
 }
 
+// The user's EXPLICIT ambiance choice, or null when they never picked one. Lets a flag-gated surface
+// re-default (P3 answer-first Home defaults to "calm" — owner §8b) WITHOUT overriding a real Settings
+// choice: an explicit Off/Full always wins. `readAmbiance()` above keeps the classic "full" default.
+export function readAmbianceChoice(): Ambiance | null {
+  try {
+    const v = localStorage.getItem(AMBIANCE_KEY);
+    if (isAmbiance(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export function persistAmbiance(a: Ambiance): void {
   try {
     localStorage.setItem(AMBIANCE_KEY, a);
@@ -355,6 +368,37 @@ export function applyViewMode(m: ViewMode): void {
     window.dispatchEvent(new Event("compy:viewmode-changed"));
   } catch {
     /* ignore */
+  }
+}
+
+// Answer-first Home (P3 of the UI slim-down, plan §5.3) — Home leads with the posture verdict, the
+// #1 limiter as the single hero action, and 3 glanceable last-session tiles; the 3D rig hologram
+// STAYS the centerpiece (owner correction §6 — minimalism ≠ sterile) with the full hardware cards one
+// tap away. Supersedes the dashV2 Home layout when on. DEFAULT OFF behind `compy_home_v3`; flag off ⇒
+// today's Home renders byte-identical. Honesty unchanged: every number is real or an honest empty state.
+const HOME_V3_KEY = "compy_home_v3";
+
+export function readHomeV3(): boolean {
+  try {
+    return localStorage.getItem(HOME_V3_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyHomeV3(on: boolean): void {
+  if (on) document.documentElement.dataset.homeV3 = "on";
+  else delete document.documentElement.dataset.homeV3;
+  try {
+    localStorage.setItem(HOME_V3_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:homev3-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
   }
 }
 

@@ -419,7 +419,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   tsc clean + vitest 796/796 + live self-review (shots `docs/ui-sweep/shots/p2-*.png`). **Default-ON flip is
   an owner taste call.** Open taste notes: "Advanced" now names both the rail Lab surface AND the mode; Basic
   leaves the lower half of a tall window empty (answer-first minimalism) — both his call at review.
-- [ ] P3 Home answer-first (verdict + hero limiter + 3 tiles; KEEP the 3D rig hologram hero — plan §6 correction) — behind `homeV3`
+- [x] **P3 Home answer-first** — (2026-07-02): `HomeV3` surface behind `compy_home_v3` (**DEFAULT OFF**,
+  Settings → Appearance preview toggle; supersedes the dashV2 layout when on). Verdict leads (squint-test
+  hero) → the #1 limiter (LimiterCard built in CommandCenter — apply/rollback flow byte-identical) → 3
+  glanceable last-session tiles (real numbers or the honest empty state; graded, NVIDIA temp stays ungraded
+  per LOCKED #5) → the RETAINED 3D rig hologram centerpiece with the full hardware cards one tap away (plan
+  §6 correction) → the Setup & Tour door. §8b backdrop: homeV3 defaults ambiance to "calm" (an explicit
+  Settings choice wins) and auto-offs in Advanced mode — both live-verified. Flag-off byte-identical
+  (test-pinned); zero Rust, zero new IPC. Verified tsc clean + vitest 804/804 + live self-review (shots
+  `docs/ui-sweep/shots/p3-*.png`). **Default-ON flip is an owner taste call.** Open taste note: the verdict
+  sentence and the limiter clear-state both say "measured clean" (the same pairing the classic Home had) —
+  a P5 copy-pass candidate.
 - [ ] P4 dedup: delete classic/losing render paths — ONLY after P1–P3 proven + owner default-ON; guards green
 - [ ] P5 side-pile collapse + chrome/motion pass
 

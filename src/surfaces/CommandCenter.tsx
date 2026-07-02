@@ -14,13 +14,14 @@ import {
   type InstrumentTheme,
   readInstrumentTheme,
   applyInstrumentTheme,
-  readAmbiance,
+  readAmbianceChoice,
   type Ambiance,
   readLivingInstrument,
   readCommitted,
 } from "../design/theme";
 import { CompyHero } from "./CompyHero";
 import { DashboardV2 } from "./DashboardV2";
+import { HomeV3 } from "./HomeV3";
 import { activeChangeCount } from "./dashboard-data";
 import { signalRing, postureLine, liveStrip } from "./command-center-data";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
@@ -323,7 +324,10 @@ export default function CommandCenter(props: Props) {
   // Read once on mount — appearance is changed in Settings now (smalls §4); Home only reflects the
   // current theme/ambiance (applied app-wide via data-itheme at startup + re-asserted here on mount).
   const [itheme] = useState<InstrumentTheme>(readInstrumentTheme);
-  const [ambiance] = useState<Ambiance>(readAmbiance);
+  // The user's EXPLICIT ambiance choice (null = never chose). The effective ambiance is computed
+  // below once the homeV3/view-mode flags are known — P3 calms the default without overriding a
+  // real Settings pick; flag off ⇒ identical to the old readAmbiance() ("full") default.
+  const [ambianceChoice] = useState<Ambiance | null>(readAmbianceChoice);
   // Living Instrument "simplified rail" (owner: fewer, plainer tabs) — mirrors the flag live; when on,
   // Lab leaves the everyday rail for a compact "Advanced" cell (same change as the app-shell rail).
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
@@ -356,6 +360,34 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:dashv2-changed", on);
     return () => window.removeEventListener("compy:dashv2-changed", on);
   }, []);
+  // Answer-first Home (P3, default OFF) — same DOM-attribute + event pattern as dashV2, which it
+  // supersedes when on. Test env (main.tsx never runs) keeps the classic Home its tests assert.
+  const [homeV3, setHomeV3] = useState<boolean>(
+    () => typeof document !== "undefined" && document.documentElement.dataset.homeV3 === "on",
+  );
+  useEffect(() => {
+    const on = () => setHomeV3(document.documentElement.dataset.homeV3 === "on");
+    window.addEventListener("compy:homev3-changed", on);
+    return () => window.removeEventListener("compy:homev3-changed", on);
+  }, []);
+  // Mirror the Basic/Advanced view mode (set on <html> only while the P2 split is armed) so the P3
+  // backdrop can auto-off in Advanced (owner §8b) and react live to the Monitor-side switch.
+  const [viewMode, setViewMode] = useState<string | undefined>(
+    () => (typeof document !== "undefined" ? document.documentElement.dataset.viewMode : undefined),
+  );
+  useEffect(() => {
+    const on = () => setViewMode(document.documentElement.dataset.viewMode);
+    window.addEventListener("compy:viewmode-changed", on);
+    return () => window.removeEventListener("compy:viewmode-changed", on);
+  }, []);
+  // Effective backdrop intensity (owner §8b, P3-gated): homeV3 defaults to "calm" (barely-there
+  // drift behind the hologram) and auto-offs in Advanced mode; an explicit Off/Full Settings choice
+  // wins outside Advanced. Flag off ⇒ the classic default ("full").
+  const ambiance: Ambiance = homeV3
+    ? viewMode === "advanced"
+      ? "off"
+      : (ambianceChoice ?? "calm")
+    : (ambianceChoice ?? "full");
   useEffect(() => {
     applyInstrumentTheme(itheme);
   }, [itheme]);
@@ -461,7 +493,29 @@ export default function CommandCenter(props: Props) {
             </button>
           </header>
 
-          {dashV2 ? (
+          {homeV3 ? (
+            /* Answer-first Home (P3 UI slim-down, default OFF) — verdict → #1 limiter → 3 tiles →
+               the retained 3D rig centerpiece. The LimiterCard is built HERE so the audited
+               apply/rollback flow is byte-for-byte the same one dashV2/classic use. */
+            <HomeV3
+              hw={hw}
+              sessions={sessions}
+              posture={posture}
+              onNavigate={onNavigate}
+              limiterSlot={
+                <LimiterCard
+                  priorities={priorities}
+                  limiter={limiter}
+                  limiterRec={limiterRec}
+                  appliable={limiterAppliable}
+                  activeChange={limiterActiveChange}
+                  busy={busyLimiter}
+                  onToggle={onToggleLimiter}
+                  onSeeInFix={onSeeInFix}
+                />
+              }
+            />
+          ) : dashV2 ? (
             /* Dashboard v2 prototype (evolve-toward-ui-spec) — the premium telemetry dashboard.
                Flag-gated; the classic Home is one toggle away. */
             <>

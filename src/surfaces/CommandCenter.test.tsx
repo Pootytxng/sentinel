@@ -93,4 +93,21 @@ describe("CommandCenter", () => {
     );
     expect(screen.getByText(/Measured clean today/)).toBeTruthy();
   });
+
+  it("renders the answer-first Home when the P3 flag attribute is armed (default OFF elsewhere)", () => {
+    document.documentElement.dataset.homeV3 = "on";
+    localStorage.setItem("compy_home_rig_3d", "0"); // Cards view — the 3D hologram isn't a jsdom citizen
+    try {
+      render(<CommandCenter {...baseProps} />);
+      // Verdict leads (honest scanning posture — readiness is null), limiter card + honest empty
+      // tiles follow. The classic signal ring is NOT mounted (answer-first supersedes it).
+      expect(screen.getByText("Scanning your system…")).toBeTruthy();
+      expect(screen.getByText("Your #1 limiter")).toBeTruthy();
+      expect(screen.getByText(/Play a session to see this/)).toBeTruthy();
+      expect(screen.queryByText("Scanning")).toBeNull(); // the ring's shimmer label
+    } finally {
+      delete document.documentElement.dataset.homeV3;
+      localStorage.clear();
+    }
+  });
 });
