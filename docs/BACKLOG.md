@@ -411,7 +411,14 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   proof line always visible (honesty guardrail, CI-enforced by `src/slim-row-proof-guard.test.tsx`); §8c
   pre-selected Recommended in the consent sheet (selection ≠ application); TrustSwitch untouched; zero Rust.
   Verified tsc clean + vitest 788/788. **Default-ON flip is an owner taste call after he reviews the look.**
-- [ ] P2 Monitor Basic/Advanced split — behind `basicAdvanced` (plan §5.2)
+- [x] **P2 Monitor Basic/Advanced split** — `db00a44` (2026-07-02): global Basic/Advanced contract
+  (`theme.ts` ViewMode + `<html data-view-mode>`) behind `compy_basic_advanced` (**DEFAULT OFF**, Settings →
+  Appearance preview toggle). Basic = 4 glanceable tiles (FPS+capture · GPU temp · CPU · RAM) + ETW honesty
+  line + last-session door → Advanced→Sessions; Advanced = today's panels untouched; flag-off byte-identical
+  (test-pinned). Same read-only sensor IPC, zero new commands, NVIDIA grading unchanged (LOCKED #5). Verified
+  tsc clean + vitest 796/796 + live self-review (shots `docs/ui-sweep/shots/p2-*.png`). **Default-ON flip is
+  an owner taste call.** Open taste notes: "Advanced" now names both the rail Lab surface AND the mode; Basic
+  leaves the lower half of a tall window empty (answer-first minimalism) — both his call at review.
 - [ ] P3 Home answer-first (verdict + hero limiter + 3 tiles; KEEP the 3D rig hologram hero — plan §6 correction) — behind `homeV3`
 - [ ] P4 dedup: delete classic/losing render paths — ONLY after P1–P3 proven + owner default-ON; guards green
 - [ ] P5 side-pile collapse + chrome/motion pass
