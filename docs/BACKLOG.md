@@ -431,7 +431,20 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   sentence and the limiter clear-state both say "measured clean" (the same pairing the classic Home had) —
   a P5 copy-pass candidate.
 - [ ] P4 dedup: delete classic/losing render paths — ONLY after P1–P3 proven + owner default-ON; guards green
-- [ ] P5 side-pile collapse + chrome/motion pass
+- [x] **P5 calm chrome (side-pile collapse + chrome/motion pass)** — `33669a1` (2026-07-02): behind
+  `compy_calm_chrome` (**DEFAULT OFF**, Settings → Appearance preview toggle; flag-off byte-identical,
+  test-pinned). ONE "Nothing else needs attention" expander at the foot of Optimize/Fixes swallows all six
+  "leave it alone" piles (measured fine · not worth touching · not for this rig · dismissed · refuse pile ·
+  Past Tweaks) via SidePileContext portals (`side-pile.tsx`) — content/state/audited handlers stay in
+  Check/Fix, moved never removed; inside the drawer the refuse pile is retitled "Deliberately refused" (it
+  stacked against Check's same-named pile). Export left the persistent header for the setup-summary card
+  (SessionDebrief's untouched). Calm ambiance drifts barely-there (§8b: 76s/94s @ 0.6 opacity; Advanced
+  auto-off + reduced/hidden freezes intact); the Settings Ambiance picker now shows the true effective
+  default (calm under homeV3). P3's open taste note CLOSED: limiter clear-state retitled "None found today"
+  and Check's Biggest-limiters empty state deduped — "measured clean" has one owner per screen, guard-pinned
+  (≤1 occurrence test). Verified tsc clean + vitest 810/810 + cargo 659 + live self-review (shots
+  `docs/ui-sweep/shots/p5/`). **Default-ON flip is an owner taste call** (armed in his live profile with
+  P1–P3 for the same review pass).
 
 ---
 
