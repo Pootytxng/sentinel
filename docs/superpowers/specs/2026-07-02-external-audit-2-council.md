@@ -30,6 +30,23 @@ presents new evidence of harm (zero defect reports from the live build).
 - Standing reinforcement: fresh CC session per task; subagents for audits/investigation only —
   already in `2026-07-01-token-routing-protocol.md`; no new doc created.
 
+## Token-usage claims — MEASURED 2026-07-02 (local transcripts, all sentinel projects, deduped)
+
+Source: `C:\Users\Kuya\.claude\projects\*sentinel*` — 316 main sessions (318 MB) + 483 subagent
+transcripts (76 MB). "Processed tokens" = input + cache_creation + cache_read summed over every
+API call (volume, not dollars — cache reads are ~10x cheaper, so marathons cost less per token
+than raw volume suggests, but volume is what hits rate limits).
+
+| Audit claim | Measured |
+|---|---|
+| "Subagents burning a major part of usage (53%)" | **FALSE.** Subagents = **6%** of processed tokens (1.06B of 18.3B), 3% of output tokens, 19% of bytes. Restricting subagents solves a non-problem. |
+| "Giant 150k+ context sessions" | **TRUE — understated.** 59 sessions ≥150K max-context = 95% of transcript bytes. **13 marathon sessions (>5MB) alone = 74% of ALL processed tokens** (13.5B). Multiple sessions repeatedly hit ~1M context (top: 83MB session 06-22, 999K ctx). |
+| "/self-review overused (13%)" | Not locally reproducible (3,678 transcript lines mention it, incl. hook nudges). Its cost driver is marathon-session re-reads, not the skill. Skill stays (bug→guard law). |
+
+**Conclusion:** the leak is MARATHON SESSIONS, not subagents. The fix is the already-written
+fresh-session-per-task rule in `2026-07-01-token-routing-protocol.md` — enforce it. Note the
+07-01 session (15MB, ~1000K ctx) shows the protocol had not yet changed behavior on day one.
+
 ## Rejected (do not re-propose without new evidence)
 
 - PRODUCT_SPINE.md (duplicate spine)
