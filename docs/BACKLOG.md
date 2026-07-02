@@ -435,8 +435,24 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   slim-down IS the build. Settings → Appearance toggles stay live as the opt-out; classic render paths kept
   as the failsafe. Zero src-tauri/IPC change; TrustSwitch/apply/rollback untouched. tsc clean · vitest
   809/809 (default-pinning tests inverted; flag-off byte-identical guards unchanged).
+- [x] **P5.5 Optimize deep-clean** — `cccb80e` (2026-07-02, owner live-build critique, all six items):
+  all-checks receipt rows (mark · name · one-line result, UI voice — mono terminal list gone from the
+  settled surface) · driver freshness grouped to ONE card (row per device w/ kind chips, ONE shared
+  "newer may be available" note, links behind Copy buttons only — raw URL text removed) · Gaming Mode
+  doored into its own Optimize segment (NEW `compy_gm_door`, calm-chrome family, DEFAULT ON, Settings
+  toggle, classic inline slot on `"0"` — live-verified both states) · History segment collapsed into
+  Applied as one `History (N)` expander + honest empty state (no more near-empty third room) ·
+  Optimize type voice unified (mono = numbers/stamps only; judgment: startup cmd path stays mono as a
+  machine value) · **honesty fix:** rendered disclosure now "Compy earns nothing from these links
+  today…" (the backend "may earn a commission" const is FALSE while links are tag-free; it stays in
+  `priorities.rs` untouched as the Phase-D swap point — swap the render back the same commit tags
+  arm; guard test pins both sides). Bonus: GamingMode "onWhat's this?" run-together fixed. Zero
+  src-tauri diff (`git diff 733f132..cccb80e -- src-tauri` empty) · TrustSwitch untouched · tsc clean ·
+  vitest 815/815 · cargo 659/0 (A6 green) · self-review shots `docs/ui-sweep/shots/p55/` · shipped +
+  stamp-verified live `cccb80e`.
 - [ ] P4 dedup: delete classic/losing render paths — owner default-ON ✅ (2026-07-02); still wants his
   explicit "keeping the new look" confirmation after living with it, then pure removal w/ guards green
+  (now includes `compy_gm_door`'s classic inline Gaming Mode slot)
 - [ ] P6 "Journey" pass (spec direction in `docs/superpowers/specs/2026-07-02-full-tidy-directive.md`):
   one forward door per room + shared RoomShell template + tour alignment — Cowork specs it in detail
   after the owner's lived-in verdict on the default-ON look; flag-gated `compy_journey`, DEFAULT OFF
