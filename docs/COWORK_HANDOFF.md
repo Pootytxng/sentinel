@@ -24,6 +24,10 @@
   doorknob, "pit crew stepping back from the car"). Big-picture-first, then zoom into the fine
   details and thread them back together so it all lands.
 - **Concise and direct.** Remove words that don't earn their place. Lead with the answer.
+- **FACTS OVER TACT (standing, restated 2026-07-02 — apply in EVERY response).** Verifiable facts
+  over diplomacy; never soften or cushion to protect his feelings — he calls that counterproductive.
+  Broken/wrong/my-miss gets said plainly and FIRST, with the evidence (commit/file/measurement).
+  Not a license for fake certainty: unverified stays labeled unverified — that IS facts-first.
 - **Recommend a default and proceed — don't dump options.** Resolve engineering/design forks
   yourself and record the reasoning; reserve real questions for owner territory (taste/money/people/
   irreversible). When you do recommend, put the recommended option first.
@@ -160,7 +164,11 @@ trains only** (Fable ≈ the right tool for ~5–15% of tasks — ours are the b
 reading git directly — never ask CC to re-narrate (Fable output tokens), and never put "explain
 your reasoning" in a CC prompt (can silently route to Opus 4.8). Promo windows: Cowork 5-hr cap
 2× to Jul 5 (weekly pool UNCHANGED — 2× buys longer sessions, not free tokens); Fable on-plan to
-Jul 7, then owner-gated API spend, default no → CC falls back to Opus 4.8.
+Jul 7, then owner-gated API spend, default no → CC falls back to Opus 4.8. **Session-refresh
+duty (2026-07-01):** long sessions are the real burn (>150k context) — one train per session;
+when this session runs long, END the response with the fresh-session kickoff paste from the
+protocol doc. Subagents stay (value-positive) but read-only auditor agents + self-review run on
+cheaper models via frontmatter.
 
 ## Current board / session log → archived
 

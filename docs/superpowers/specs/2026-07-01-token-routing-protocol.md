@@ -64,6 +64,54 @@ Most of the video is already our doctrine — noted so we don't "adopt" what we 
 4. **Cowork model choice (owner-side):** heavy design/synthesis sessions on Fable; routine
    relay/status sessions on a lighter model — same weekly pool either way.
 
+## Subagent policy (owner Q 2026-07-01: "should I stop using subagents?" — NO)
+
+Owner's usage panel (2026-07-01): weekly 12% / Fable 21% — headroom is fine; subagents earn
+their cost (53% of usage, but they're doing the verification work the doctrine demands). Keep
+them; make them cheaper:
+
+1. **Cheaper models for read-only subagents.** The project agents
+   (`.claude/agents/frontend-ipc-contract-auditor.md`, `rust-tauri-reviewer.md`) and the
+   `self-review` skill (13% of usage) are read-only report-writers — they don't need Fable.
+   Add `model: sonnet` (or haiku for the mechanical passes) to their frontmatter.
+2. **Tighten subagent prompts** — a subagent brief states scope + the exact artifacts to
+   check + report format; no doctrine restating (it inherits CLAUDE.md).
+3. **The bigger lever is context length, not subagents:** 72% of usage ran at >150k context.
+   Long sessions compound cost — every turn re-reads the pile. Mitigation below.
+
+## Session-refresh cadence (the >150k fix, standing)
+
+- **One train per session.** When a train lands (or context clearly >150k / feels sluggish):
+  CC → `/compact` mid-task, `/clear` between tasks; Cowork → start a fresh session with the
+  kickoff paste below. State lives on disk (specs/BACKLOG/handoff), so a fresh session loses
+  nothing the relay needs — that's what PERSIST-TO-DISK is for.
+- **Cowork standing duty:** when a Cowork session's context has grown long (many tool calls /
+  several trains deep), END the response with the kickoff paste so the owner can hop to a
+  fresh session in one copy.
+
+### Fresh Cowork session — kickoff paste (durable)
+
+```
+Continue Compy — fresh Cowork session (token refresh).
+FIRST attach C:\Users\Kuya\code\sentinel (Space = memory only, not file access).
+Read in order: CLAUDE.md → docs/COWORK_HANDOFF.md → docs/superpowers/specs/
+2026-07-01-token-routing-protocol.md → docs/BACKLOG.md, then resume the top non-gated
+item unless I redirect. Lanes: Cowork = specs/audits/design/research; CC = builds.
+Audit CC by reading git directly — never ask me to paste CC reports. Terse, answer-first,
+every response ends with the next paste-ready step. No git write commands (CC may be
+live on main). Current thread: <one line — what's mid-flight>
+```
+
+## Docs-sprawl ruling (owner Q 2026-07-01: "too many per-feature .md files?")
+
+**Many small per-feature spec .mds are token-CORRECT — keep them.** They cost nothing until a
+task references one (pay-per-use context); one mega-doc would force every session to swallow
+everything. The only always-loaded files are `CLAUDE.md` (every CC session) + skill/agent
+descriptions — THOSE stay lean. The 2026-06-26 overhaul already moved CLAUDE.md's history
+strata to `docs/CHANGELOG.md` and the board to archive; the routing overhaul (this doc) covered
+prompting/lanes, not docs — no consolidation needed beyond: new standing rules go here or in
+COWORK_HANDOFF as a POINTER, full text in a spec.
+
 ## Report contract (unchanged, restated once)
 
 CC: `hash · what-changed (1–2 lines) · one verify line (point to the proof) · flags`.

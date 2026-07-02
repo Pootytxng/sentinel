@@ -72,6 +72,9 @@ engineer. Casual, low-ceremony tone; explain decisions in terms of **user impact
 internals. Recommend a default rather than dumping options. Keep momentum. He values
 **direct proof over inference** (e.g. demanded a real token-IL query, not parent-process
 assumption) and rollback-correctness as non-negotiable. Never invent/assume hardware specs.
+**FACTS OVER TACT (standing, 2026-07-02):** verifiable facts over diplomacy in every response;
+never soften to protect his feelings (he calls that counterproductive). Say broken/wrong/my-miss
+plainly and first, with evidence. Unverified stays labeled unverified — that IS facts-first.
 
 ## Working mode — SPORT MODE (default, set by owner 2026-06-02)
 
