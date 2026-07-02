@@ -51,7 +51,7 @@ LIVE on `main` — the "stays gated" line below reflected the pre-2026-06-18 sta
 
 **CHECKPOINT (owner) — closed beta:** (1) ship the frozen **beta-001** (known-good, older UI) **or** cut
 **beta-002** from current `main` (new UI + CSP; needs a re-smoke I can run); (2) host / share the
-installer; (3) invite your ~10–20 testers. The kit (`BETA_TESTER_README.md` + `BETA_INVITE_MESSAGE.md`)
+installer; (3) invite your ~10–20 testers. The kit (`BETA_TESTER_README.md` + `archive/BETA_INVITE_MESSAGE.md`)
 is ready for either.
 
 ## Tester Warning

@@ -11,7 +11,7 @@ Working documents for the project. This is an internal index, not public-facing 
 ## Private-beta handoff (historical — frozen `private-beta-001`)
 - [BETA_STATUS.md](BETA_STATUS.md) — frozen-snapshot status (`private-beta-001`) + feature status labels.
 - [BETA_TESTER_README.md](BETA_TESTER_README.md) — install / test / report guide for the invite-only, unsigned private beta.
-- [BETA_INVITE_MESSAGE.md](BETA_INVITE_MESSAGE.md) — short paste-able invite message for testers.
+- [BETA_INVITE_MESSAGE.md](archive/BETA_INVITE_MESSAGE.md) — short paste-able invite message for testers (archived).
 
 ## Release & packaging
 - [PACKAGING_SIGNING_PLAN.md](PACKAGING_SIGNING_PLAN.md) — packaging config, code-signing options, and the pre-package / beta-QA checklists.
