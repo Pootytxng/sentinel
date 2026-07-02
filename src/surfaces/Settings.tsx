@@ -12,6 +12,10 @@ import {
   applyLivingInstrument,
   readSlimRows,
   applySlimRows,
+  readBasicAdvanced,
+  applyBasicAdvanced,
+  readViewMode,
+  applyViewMode,
   readStepAsideGame,
   persistStepAsideGame,
   readCloseToTray,
@@ -124,6 +128,7 @@ export default function Settings({
   const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [slimRows, setSlimRows] = useState<boolean>(readSlimRows);
+  const [basicAdvanced, setBasicAdvanced] = useState<boolean>(readBasicAdvanced);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -165,6 +170,13 @@ export default function Settings({
   const changeSlimRows = (v: boolean) => {
     setSlimRows(v);
     applySlimRows(v);
+  };
+  // Basic/Advanced split (P2) — enables the two-mode contract (Monitor first). Turning it on lands in
+  // Basic (the answer-first face); the mode itself is switched on the surface. Layout only, no data change.
+  const changeBasicAdvanced = (v: boolean) => {
+    setBasicAdvanced(v);
+    applyBasicAdvanced(v);
+    if (v) applyViewMode(readViewMode()); // mirror the persisted mode onto <html> when arming
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -266,6 +278,21 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={slimRows} onChange={changeSlimRows} ariaLabel="Slim rows preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Basic/Advanced mode (preview)</div>
+                  <div className="set-row-sub">
+                    Monitor opens as four big glanceable tiles; every graph, sensor, and overlay
+                    setting stays one tap away under Advanced. Same numbers, same measurements.
+                  </div>
+                </div>
+                <Toggle
+                  on={basicAdvanced}
+                  onChange={changeBasicAdvanced}
+                  ariaLabel="Basic/Advanced mode preview"
+                />
               </div>
             </div>
             <LivePreview ambiance={ambiance} />

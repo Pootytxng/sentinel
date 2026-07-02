@@ -75,6 +75,18 @@ try {
   /* default OFF — nothing to apply */
 }
 
+// Basic/Advanced split (P2 UI slim-down, 2026-07-01) — DEFAULT OFF (preview): applied pre-paint only
+// when the user opted in via Settings, along with their chosen mode. Flag off ⇒ no-op, byte-identical.
+try {
+  if (localStorage.getItem("compy_basic_advanced") === "1") {
+    document.documentElement.dataset.basicAdvanced = "on";
+    document.documentElement.dataset.viewMode =
+      localStorage.getItem("compy_view_mode") === "advanced" ? "advanced" : "basic";
+  }
+} catch {
+  /* default OFF — nothing to apply */
+}
+
 // Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and
 // overrides the OS "reduce motion" setting (opt-out in Settings → Motion). Resolved onto
 // <html data-motion="full|reduced"> before first paint so CSS + JS read one source of truth.

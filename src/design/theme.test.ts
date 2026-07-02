@@ -6,12 +6,18 @@ import {
   persistAmbiance,
   readSlimRows,
   applySlimRows,
+  readBasicAdvanced,
+  applyBasicAdvanced,
+  readViewMode,
+  applyViewMode,
 } from "./theme";
 
 afterEach(() => {
   localStorage.clear();
   delete document.documentElement.dataset.itheme;
   delete document.documentElement.dataset.slimRows;
+  delete document.documentElement.dataset.basicAdvanced;
+  delete document.documentElement.dataset.viewMode;
 });
 
 describe("instrument theme", () => {
@@ -51,6 +57,36 @@ describe("slim rows (P1 UI slim-down — HARD LINE: default OFF)", () => {
     applySlimRows(false);
     expect(document.documentElement.dataset.slimRows).toBeUndefined();
     expect(readSlimRows()).toBe(false);
+  });
+});
+
+describe("basic/advanced split (P2 UI slim-down — HARD LINE: default OFF)", () => {
+  it("defaults OFF when unset; true ONLY on the exact \"1\" opt-in", () => {
+    expect(readBasicAdvanced()).toBe(false);
+    localStorage.setItem("compy_basic_advanced", "on"); // junk value ≠ opt-in
+    expect(readBasicAdvanced()).toBe(false);
+    localStorage.setItem("compy_basic_advanced", "1");
+    expect(readBasicAdvanced()).toBe(true);
+  });
+
+  it("applyBasicAdvanced sets/clears data-basic-advanced on <html> and persists", () => {
+    applyBasicAdvanced(true);
+    expect(document.documentElement.dataset.basicAdvanced).toBe("on");
+    expect(readBasicAdvanced()).toBe(true);
+    applyBasicAdvanced(false);
+    expect(document.documentElement.dataset.basicAdvanced).toBeUndefined();
+    expect(readBasicAdvanced()).toBe(false);
+  });
+
+  it("view mode defaults to basic (answer first), persists, and mirrors onto <html>", () => {
+    expect(readViewMode()).toBe("basic");
+    localStorage.setItem("compy_view_mode", "ludicrous"); // junk → basic
+    expect(readViewMode()).toBe("basic");
+    applyViewMode("advanced");
+    expect(readViewMode()).toBe("advanced");
+    expect(document.documentElement.dataset.viewMode).toBe("advanced");
+    applyViewMode("basic");
+    expect(document.documentElement.dataset.viewMode).toBe("basic");
   });
 });
 

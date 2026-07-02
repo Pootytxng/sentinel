@@ -1,8 +1,10 @@
 import { useEffect, useState, type ComponentProps } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Play from "./Play";
+import { MonitorBasic } from "./MonitorBasic";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { Walkthrough } from "../design/Walkthrough";
+import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
 import { TUNING_PRESETS, resolvePresetItems, type TuningPreset } from "./monitor-view";
 import "./Monitor.css";
 
@@ -26,6 +28,18 @@ type Segment = "sessions" | "live";
 const SEGMENTS: { id: Segment; label: string }[] = [
   { id: "live", label: "Live" },
   { id: "sessions", label: "Sessions" },
+];
+
+// Basic/Advanced split (P2 UI slim-down, DEFAULT OFF behind compy_basic_advanced) — DOM-read like the
+// other preview flags (the surface re-renders fresh on navigation). Flag off ⇒ the shell below renders
+// today's tree byte-identical (no mode switch, no Basic face).
+function basicAdvancedOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.basicAdvanced === "on";
+}
+
+const MODES: { id: ViewMode; label: string }[] = [
+  { id: "basic", label: "Basic" },
+  { id: "advanced", label: "Advanced" },
 ];
 
 // Same props App passes to <Play>, minus `view` (the shell drives that from the segment).
@@ -129,6 +143,14 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
 
 export function Monitor(props: Props) {
   const [segment, setSegment] = useState<Segment>("live");
+  // P2 split state: the feature flag (DOM-read) + the user's chosen mode (global, persisted). Basic is
+  // the default answer-first face; Advanced is today's full panels. Only consulted when the flag is on.
+  const split = basicAdvancedOn();
+  const [mode, setMode] = useState<ViewMode>(readViewMode);
+  const chooseMode = (m: ViewMode) => {
+    setMode(m);
+    applyViewMode(m); // persists + mirrors onto <html data-view-mode> for later phases' CSS
+  };
   // Pre-warm the demand-gated sensor pollers the moment Monitor opens (while the user is still on the
   // Sessions landing) so the Live segment shows real CPU/GPU numbers right away instead of cold-starting
   // the ADLX init + the 2-sample CPU delta after the click. One-shot, read-only; the pollers idle as
@@ -137,21 +159,50 @@ export function Monitor(props: Props) {
     invoke("get_cpu_sensors").catch(() => {});
     invoke("get_gpu_sensors").catch(() => {});
   }, []);
+  const basic = split && mode === "basic";
   return (
     <section className="monitor-root">
       <header className="monitor-bar">
-        <SegmentedControl
-          segments={SEGMENTS}
-          value={segment}
-          onChange={(id) => setSegment(id as Segment)}
-          aria-label="Monitor sections"
-        />
+        {/* Basic collapses Live/Sessions into the one glanceable face, so the segments only show in
+            Advanced (and in the unchanged flag-off surface, where they are the whole bar). */}
+        {!basic && (
+          <SegmentedControl
+            segments={SEGMENTS}
+            value={segment}
+            onChange={(id) => setSegment(id as Segment)}
+            aria-label="Monitor sections"
+          />
+        )}
+        {split && (
+          <SegmentedControl
+            segments={MODES}
+            value={mode}
+            onChange={(id) => chooseMode(id as ViewMode)}
+            aria-label="Detail level"
+          />
+        )}
       </header>
-      {/* The primary answer first (Sessions: last-game debrief · Live: the meters), THEN the advisory
-          Tuning-presets checklist below it — you open Monitor to see how the game went, not to pick a
-          preset. (Presets already start collapsed to just their chips.) */}
-      <Play {...props} view={segment} />
-      <TuningPresets vendor={props.vendor} />
+      {basic ? (
+        // BASIC (P2): the 4 glanceable tiles + last-session door. Advisory presets, overlay config,
+        // graphs, and the deep panels all live one tap away in Advanced.
+        <MonitorBasic
+          active={props.active}
+          vendor={props.vendor}
+          sessions={props.sessions}
+          onOpenSessions={() => {
+            chooseMode("advanced");
+            setSegment("sessions");
+          }}
+        />
+      ) : (
+        <>
+          {/* The primary answer first (Sessions: last-game debrief · Live: the meters), THEN the advisory
+              Tuning-presets checklist below it — you open Monitor to see how the game went, not to pick a
+              preset. (Presets already start collapsed to just their chips.) */}
+          <Play {...props} view={segment} />
+          <TuningPresets vendor={props.vendor} />
+        </>
+      )}
     </section>
   );
 }

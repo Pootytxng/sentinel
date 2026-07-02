@@ -8,7 +8,13 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 import Monitor from "./Monitor";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // P2 split isolation: never leak the flag/mode between tests (default OFF is a HARD LINE).
+  delete document.documentElement.dataset.basicAdvanced;
+  delete document.documentElement.dataset.viewMode;
+  localStorage.clear();
+});
 
 const session = (game: string, avg: number): SessionSummary => ({
   started_at: "2026-06-06T10:00:00Z",
@@ -62,5 +68,65 @@ describe("Monitor — segmented shell (restructure tab #2)", () => {
     expect(screen.getByText("avg FPS")).toBeInTheDocument();
     expect(screen.getByText("Recent sessions")).toBeInTheDocument();
     expect(screen.queryByText("Live monitor")).toBeNull();
+  });
+
+  it("flag off (default): NO Basic/Advanced switch and NO Basic tiles anywhere", () => {
+    const { container } = renderMonitor();
+    expect(screen.queryByRole("tab", { name: "Basic" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Advanced" })).toBeNull();
+    expect(container.querySelectorAll(".mb-tile").length).toBe(0);
+  });
+});
+
+// ── P2 Basic/Advanced split (compy_basic_advanced, DEFAULT OFF) ──
+describe("Monitor — Basic/Advanced split (flag on)", () => {
+  const flagOn = () => (document.documentElement.dataset.basicAdvanced = "on");
+
+  it("defaults to BASIC: exactly 4 tiles (FPS · GPU temp · CPU · RAM), no panels, no presets, no Live/Sessions tabs", () => {
+    flagOn();
+    const { container } = renderMonitor();
+    // The mode switch is on; the Live/Sessions segments are collapsed into the Basic face.
+    expect(screen.getByRole("tab", { name: "Basic" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Advanced" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Live" })).toBeNull();
+    // Exactly 4 glanceable tiles, correctly labeled.
+    expect(container.querySelectorAll(".mb-tile").length).toBe(4);
+    expect(screen.getByText("FPS")).toBeInTheDocument();
+    expect(screen.getByText("GPU temp")).toBeInTheDocument();
+    expect(screen.getByText("CPU")).toBeInTheDocument();
+    expect(screen.getByText("RAM")).toBeInTheDocument();
+    // Today's panels + advisory presets live in Advanced, not here.
+    expect(screen.queryByText("Live monitor")).toBeNull();
+    expect(screen.queryByText("In-game overlay")).toBeNull();
+    expect(screen.queryByText("Tuning presets")).toBeNull();
+    // The honesty line survives the slim-down (method stated, no injection/kernel driver).
+    expect(screen.getByText(/anti-cheat safe — no injection, no kernel driver/)).toBeInTheDocument();
+  });
+
+  it("switching to Advanced restores today's panels exactly (live cards + presets + segments)", () => {
+    flagOn();
+    renderMonitor();
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
+    expect(screen.getByText("Live monitor")).toBeInTheDocument();
+    expect(screen.getByText("In-game overlay")).toBeInTheDocument();
+    expect(screen.getByText("Tuning presets")).toBeInTheDocument();
+  });
+
+  it("the last-session line is a door: it routes to Advanced → Sessions (never a dead end)", () => {
+    flagOn();
+    renderMonitor();
+    fireEvent.click(screen.getByRole("button", { name: /Last session/ }));
+    expect(screen.getByText("Recent sessions")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Advanced" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("the chosen mode persists (advanced sticks across a re-render)", () => {
+    flagOn();
+    const first = renderMonitor();
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+    first.unmount();
+    renderMonitor();
+    expect(screen.getByText("Live monitor")).toBeInTheDocument(); // still Advanced
   });
 });

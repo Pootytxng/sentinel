@@ -47,14 +47,16 @@ function pickGpu(list: GpuLite[]): GpuLite | null {
   return [...list].sort((a, b) => (b.temperature_c ?? -1) - (a.temperature_c ?? -1))[0];
 }
 
-function shortVerdict(s: SessionSummary): string {
+// Exported for MonitorBasic (P2 Basic tiles' last-session line) — same verdict/duration wording
+// everywhere, one source. Rendering here is unchanged.
+export function shortVerdict(s: SessionSummary): string {
   const ratio = s.avg_fps > 0 ? s.low1_fps_est / s.avg_fps : 1;
   if (ratio >= 0.75) return "Smooth";
   if (ratio >= 0.55) return "Some dips";
   return "Rough";
 }
 
-function fmtDur(sec: number): string {
+export function fmtDur(sec: number): string {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;

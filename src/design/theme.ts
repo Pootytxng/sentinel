@@ -299,6 +299,65 @@ export function applySlimRows(on: boolean): void {
   }
 }
 
+// Basic/Advanced split (P2 of the UI slim-down, plan §5.2) — the global two-mode contract: Basic =
+// the glanceable answer (Monitor: 4 big tiles), Advanced = today's full panels. DEFAULT OFF behind
+// `compy_basic_advanced`; flag off, today's UI renders byte-identical (no switch, no mode attribute
+// consumers). The MODE itself (basic|advanced) is separate state below so later phases (Home P3,
+// backdrop auto-off in Advanced — owner §8b) read one global source.
+const BASIC_ADVANCED_KEY = "compy_basic_advanced";
+
+export function readBasicAdvanced(): boolean {
+  try {
+    return localStorage.getItem(BASIC_ADVANCED_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyBasicAdvanced(on: boolean): void {
+  if (on) document.documentElement.dataset.basicAdvanced = "on";
+  else delete document.documentElement.dataset.basicAdvanced;
+  try {
+    localStorage.setItem(BASIC_ADVANCED_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:basicadvanced-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
+}
+
+// The chosen mode while the split is on. Default BASIC (answer first); Advanced is the opt-in depth.
+// Mirrored onto <html data-view-mode> so CSS (and later phases) can react without prop-drilling.
+export type ViewMode = "basic" | "advanced";
+const VIEW_MODE_KEY = "compy_view_mode";
+
+export function readViewMode(): ViewMode {
+  try {
+    if (localStorage.getItem(VIEW_MODE_KEY) === "advanced") return "advanced";
+  } catch {
+    /* ignore — default basic */
+  }
+  return "basic";
+}
+
+export function applyViewMode(m: ViewMode): void {
+  document.documentElement.dataset.viewMode = m;
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, m);
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:viewmode-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.
