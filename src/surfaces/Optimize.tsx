@@ -14,19 +14,18 @@ import "./Optimize.css";
 // same component renders fixes-only or ledger-only). No new IPC, no new mutation path, no restyle
 // (V0 polish is phase 1b) — this proves the merge works before it's made beautiful.
 //
-// Three segments (council-renamed from the over-promising originals):
-//   • Fixes   (default) — diagnose + act: <Check> (the scan + ranked limiters) then the featured
-//                         Gaming Mode slot then <Fix view="fixes"> (recs / guided / startup).
-//   • Applied — the Trust Ledger "active on this PC" layer (what Compy is doing now + one-tap undo),
-//               via <Fix view="applied">.
-//   • History — the full audit trail, via <Fix view="history">.
-// Applied and History are DISTINCT views (each segment shows what the other doesn't); the V0 visual
-// treatment of these layers is phase 1b.
+// Segments (P5.5 owner critique 2026-07-02 — History's empty room removed, Gaming Mode doored):
+//   • Fixes       (default) — diagnose + act: <Check> (the scan + ranked limiters) then
+//                             <Fix view="fixes"> (recs / guided / startup).
+//   • Gaming Mode (only when the gate is on + compy_gm_door on) — the mutation feature's own
+//                             clearly-doored room; flag off ⇒ the classic inline Fixes slot.
+//   • Applied     — the whole Trust Ledger room: the "active on this PC" layer + the full audit
+//                             trail collapsed under one "History (N)" expander (<Fix view="ledger">).
 
 // A GpuDriverInfo subset Check wants for driver freshness (object covariance lets GpuInfo pass).
 type GpuDriverInfo = { name: string; driver_age_days: number | null };
 
-type Segment = "fixes" | "applied" | "history";
+type Segment = "fixes" | "gaming" | "applied";
 
 type Props = {
   // ── Check half (passed straight through — identical to App's <Check> wiring) ──
@@ -55,10 +54,13 @@ type Props = {
   exporting?: boolean;
 };
 
-const SEGMENTS: { id: Segment; label: string }[] = [
+// P5.5 (owner critique 2026-07-02): the standalone History segment is GONE — the full trail now
+// lives inside Applied as one collapsed "History (N)" expander (Fix view="ledger"), so there's no
+// near-empty third room. "Gaming Mode" appears as its own clearly-doored segment when the gate is
+// on and compy_gm_door is on (placement law: a mutation feature is a room, not a mid-scroll card).
+const BASE_SEGMENTS: { id: Segment; label: string }[] = [
   { id: "fixes", label: "Fixes" },
   { id: "applied", label: "Applied" },
-  { id: "history", label: "History" },
 ];
 
 export function Optimize({
@@ -100,6 +102,21 @@ export function Optimize({
   // The expander body element — set via callback ref so the piles portal in only once it exists.
   const [pileHost, setPileHost] = useState<HTMLElement | null>(null);
 
+  // Gaming Mode door (P5.5, compy_gm_door — DEFAULT ON): same DOM-read + live-event pattern as
+  // calm chrome. On ⇒ Gaming Mode gets its own segment; off ⇒ the classic inline Fixes slot.
+  const [gmDoor, setGmDoor] = useState<boolean>(
+    () => typeof document !== "undefined" && document.documentElement.dataset.gmDoor === "on",
+  );
+  useEffect(() => {
+    const on = () => setGmDoor(document.documentElement.dataset.gmDoor === "on");
+    window.addEventListener("compy:gmdoor-changed", on);
+    return () => window.removeEventListener("compy:gmdoor-changed", on);
+  }, []);
+  const gamingDoored = Boolean(gamingSlot) && gmDoor;
+  const segments = gamingDoored
+    ? [BASE_SEGMENTS[0], { id: "gaming" as Segment, label: "Gaming Mode" }, BASE_SEGMENTS[1]]
+    : BASE_SEGMENTS;
+
   // The gliding active indicator (one accent pill measured from the live DOM) is now the shared
   // <SegmentedControl> — extracted to src/design so Optimize, Monitor, and future tabs use ONE
   // measured-glide control. The chip + segment-state logic below stay here (consumer-specific).
@@ -122,11 +139,17 @@ export function Optimize({
     landOnApplied();
   };
 
+  // If the room the user is standing in disappears (gate off, flag flipped live), snap back to
+  // Fixes rather than rendering a segment the control no longer offers.
+  useEffect(() => {
+    if (segment === "gaming" && !gamingDoored) setSegment("fixes");
+  }, [segment, gamingDoored]);
+
   return (
     <section className="optimize-root">
       <header className="optimize-bar">
         <SegmentedControl
-          segments={SEGMENTS}
+          segments={segments}
           value={segment}
           onChange={(id) => setSegment(id as Segment)}
           aria-label="Optimize sections"
@@ -158,7 +181,8 @@ export function Optimize({
               onExport={onExport}
               exporting={exporting}
             />
-            {gamingSlot && <div className="optimize-gaming">{gamingSlot}</div>}
+            {/* Classic slot (compy_gm_door off): Gaming Mode inline on the scroll, as before. */}
+            {gamingSlot && !gamingDoored && <div className="optimize-gaming">{gamingSlot}</div>}
             <Fix
               recs={recs}
               startup={startup}
@@ -203,7 +227,14 @@ export function Optimize({
           </SidePileContext.Provider>
         )}
 
-        {(segment === "applied" || segment === "history") && (
+        {/* The Gaming Mode room (P5.5): the same <GamingMode/> App always passed, in its own
+            clearly-doored segment instead of mid-scroll between fixes. Placement only — the
+            switch, QA contract, and rollback path are untouched. */}
+        {segment === "gaming" && gamingDoored && (
+          <div className="optimize-gaming optimize-gaming-room">{gamingSlot}</div>
+        )}
+
+        {segment === "applied" && (
           <Fix
             recs={recs}
             startup={startup}
@@ -217,9 +248,10 @@ export function Optimize({
             onApplyBatch={onApplyBatchLanding}
             onOpenLibrary={onOpenLibrary}
             vendor={vendor}
-            // Applied = the active layer ("what's on now"); History = the full audit trail. Distinct
-            // views, not a mirror — the third segment shows something the second doesn't.
-            view={segment === "history" ? "history" : "applied"}
+            // P5.5: Applied is the ONE ledger room — the active layer up top, the full audit trail
+            // collapsed under a single "History (N)" expander at the bottom (view="ledger"). The
+            // standalone History segment (a near-empty third room) is gone.
+            view="ledger"
           />
         )}
       </div>

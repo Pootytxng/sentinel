@@ -11,17 +11,14 @@ export function ScanStream({
   shownRows,
   running,
   phase,
-  plain = false,
 }: {
   readiness: GameReadiness | null;
   shownRows: number;
   running: boolean;
   phase: "scan" | "verdict";
-  /** Static list mode (no beam, no verdict streak) — for the collapsed "all checks" disclosure. */
-  plain?: boolean;
 }) {
   const checks = readiness?.checks ?? [];
-  const scanning = !plain && (running || phase === "scan");
+  const scanning = running || phase === "scan";
   return (
     <div className="fc-sweepzone">
       {scanning && <div className="fc-sweep-beam" aria-hidden="true" />}
@@ -42,7 +39,7 @@ export function ScanStream({
           );
         })}
       </div>
-      {!plain && phase === "verdict" && <div className="fc-verdict-streak" aria-hidden="true" />}
+      {phase === "verdict" && <div className="fc-verdict-streak" aria-hidden="true" />}
     </div>
   );
 }

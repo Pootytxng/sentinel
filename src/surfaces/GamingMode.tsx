@@ -276,7 +276,8 @@ export function GamingMode() {
               {CORE_ITEMS.map((it) => (
                 <li key={it.label}>
                   {it.label}
-                  {it.learnId && <WhatsThis id={it.learnId} onOpen={openLibrary} />}
+                  {/* explicit space — the label and "What's this?" must not run together */}
+                  {it.learnId && <>{" "}<WhatsThis id={it.learnId} onOpen={openLibrary} /></>}
                 </li>
               ))}
             </ul>

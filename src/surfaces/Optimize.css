@@ -270,6 +270,11 @@
 .optimize-gaming {
   margin: 4px 0;
 }
+/* The doored Gaming Mode room (P5.5, compy_gm_door): the same card, standing in its own segment —
+   a touch of breathing room since it no longer sits mid-scroll between fixes. */
+.optimize-gaming-room {
+  margin: 12px 0 0;
+}
 
 /* The inner Check/Fix surfaces live here; NOT restyled. Layout only. */
 .optimize-body {

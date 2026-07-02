@@ -108,6 +108,15 @@ try {
   document.documentElement.dataset.calmChrome = "on"; // default ON even if localStorage is unavailable
 }
 
+// Gaming Mode door (P5.5) — Gaming Mode gets its own Optimize segment instead of the Fixes scroll.
+try {
+  if (localStorage.getItem("compy_gm_door") !== "0") {
+    document.documentElement.dataset.gmDoor = "on";
+  }
+} catch {
+  document.documentElement.dataset.gmDoor = "on"; // default ON even if localStorage is unavailable
+}
+
 // Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and
 // overrides the OS "reduce motion" setting (opt-out in Settings → Motion). Resolved onto
 // <html data-motion="full|reduced"> before first paint so CSS + JS read one source of truth.

@@ -15,6 +15,8 @@ import {
   applyHomeV3,
   readCalmChrome,
   applyCalmChrome,
+  readGmDoor,
+  applyGmDoor,
 } from "./theme";
 
 afterEach(() => {
@@ -25,6 +27,7 @@ afterEach(() => {
   delete document.documentElement.dataset.viewMode;
   delete document.documentElement.dataset.homeV3;
   delete document.documentElement.dataset.calmChrome;
+  delete document.documentElement.dataset.gmDoor;
 });
 
 describe("instrument theme", () => {
@@ -153,5 +156,24 @@ describe("calm chrome (P5 UI slim-down — DEFAULT ON, owner call 2026-07-02)", 
     applyCalmChrome(false);
     expect(document.documentElement.dataset.calmChrome).toBeUndefined();
     expect(readCalmChrome()).toBe(false);
+  });
+});
+
+describe("Gaming Mode door (P5.5 — DEFAULT ON, calm-chrome flag family)", () => {
+  it('defaults ON when unset; OFF only on the exact "0" opt-out', () => {
+    expect(readGmDoor()).toBe(true);
+    localStorage.setItem("compy_gm_door", "junk"); // junk value ≠ opt-out
+    expect(readGmDoor()).toBe(true);
+    localStorage.setItem("compy_gm_door", "0");
+    expect(readGmDoor()).toBe(false);
+  });
+
+  it("applyGmDoor sets/clears data-gm-door on <html> and persists", () => {
+    applyGmDoor(true);
+    expect(document.documentElement.dataset.gmDoor).toBe("on");
+    expect(readGmDoor()).toBe(true);
+    applyGmDoor(false);
+    expect(document.documentElement.dataset.gmDoor).toBeUndefined();
+    expect(readGmDoor()).toBe(false);
   });
 });

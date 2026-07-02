@@ -17,6 +17,8 @@ import {
   applyHomeV3,
   readCalmChrome,
   applyCalmChrome,
+  readGmDoor,
+  applyGmDoor,
   readAmbianceChoice,
   readViewMode,
   applyViewMode,
@@ -140,6 +142,7 @@ export default function Settings({
   const [basicAdvanced, setBasicAdvanced] = useState<boolean>(readBasicAdvanced);
   const [homeV3, setHomeV3] = useState<boolean>(readHomeV3);
   const [calmChrome, setCalmChrome] = useState<boolean>(readCalmChrome);
+  const [gmDoor, setGmDoor] = useState<boolean>(readGmDoor);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -200,6 +203,12 @@ export default function Settings({
   const changeCalmChrome = (v: boolean) => {
     setCalmChrome(v);
     applyCalmChrome(v);
+  };
+  // Gaming Mode door (P5.5) — placement only: the same <GamingMode/> renders either in its own
+  // Optimize segment (on) or inline on the Fixes scroll (off, the classic failsafe).
+  const changeGmDoor = (v: boolean) => {
+    setGmDoor(v);
+    applyGmDoor(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -339,6 +348,17 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={calmChrome} onChange={changeCalmChrome} ariaLabel="Calm chrome preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Gaming Mode room (preview)</div>
+                  <div className="set-row-sub">
+                    Gaming Mode gets its own tab on Optimize instead of sitting mid-scroll between
+                    fixes. Same switch, same rollback — only its home moves.
+                  </div>
+                </div>
+                <Toggle on={gmDoor} onChange={changeGmDoor} ariaLabel="Gaming Mode room preview" />
               </div>
             </div>
             <LivePreview ambiance={ambiance} />

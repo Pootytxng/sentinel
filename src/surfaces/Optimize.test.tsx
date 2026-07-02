@@ -92,12 +92,13 @@ function renderOptimize(overrides = {}) {
   );
 }
 
-describe("Optimize — segmented shell (phase 1a)", () => {
-  it("renders the three segment buttons and defaults to Fixes", () => {
+describe("Optimize — segmented shell (phase 1a; P5.5 History segment collapsed into Applied)", () => {
+  it("renders Fixes + Applied segments (no standalone History room) and defaults to Fixes", () => {
     const { container } = renderOptimize();
     expect(screen.getByRole("tab", { name: "Fixes" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Applied" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
+    // P5.5: the near-empty third room is gone — the trail lives inside Applied now.
+    expect(screen.queryByRole("tab", { name: "History" })).toBeNull();
     // Fixes is the default — its Check + Fix content is on screen. (Check's own "Check" title is
     // suppressed when embedded to avoid stacked headings, so assert its root renders, not the title.)
     expect(container.querySelector(".check-root")).toBeTruthy();
@@ -119,14 +120,22 @@ describe("Optimize — segmented shell (phase 1a)", () => {
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
 
-  it("Applied and History are distinct views — Applied = active layer only, History = full-history layer only", () => {
+  it("Applied is the ONE ledger room — active layer up top, the trail under a collapsed History expander", () => {
     renderOptimize({ changes: [activeChange] });
     fireEvent.click(screen.getByRole("tab", { name: "Applied" }));
     expect(screen.getByText("Active on this PC")).toBeTruthy();
-    expect(screen.queryByText("Full history")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "History" }));
-    expect(screen.getByText("Full history")).toBeTruthy();
-    expect(screen.queryByText("Active on this PC")).toBeNull();
+    // The full trail rides along, collapsed — one "History (N)" door at the bottom.
+    const historyHead = screen.getByRole("button", { name: /History/ });
+    expect(historyHead.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(historyHead);
+    expect(historyHead.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/The complete trail — applied, rolled back, superseded/)).toBeTruthy();
+  });
+
+  it("Applied never renders as an empty room — the honest empty state names what lands there", () => {
+    renderOptimize({ changes: [] });
+    fireEvent.click(screen.getByRole("tab", { name: "Applied" }));
+    expect(screen.getByText(/Nothing active on this PC — anything Compy applies shows up here/)).toBeTruthy();
   });
 
   it("the active-undo chip shows the count and is absent at 0", () => {
@@ -159,6 +168,40 @@ describe("Optimize — segmented shell (phase 1a)", () => {
     // …and the shell lands the panic-user on Applied so undo is one glance away.
     expect(screen.getByText("Active on this PC")).toBeTruthy();
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
+  });
+});
+
+describe("Optimize — Gaming Mode door (P5.5, compy_gm_door)", () => {
+  const arm = () => {
+    document.documentElement.dataset.gmDoor = "on";
+  };
+  afterEach(() => {
+    delete document.documentElement.dataset.gmDoor;
+  });
+  const slot = <div data-testid="gm-slot">GM-CARD</div>;
+
+  it("flag ON + gate on: Gaming Mode gets its own segment and leaves the Fixes scroll", () => {
+    arm();
+    renderOptimize({ gamingSlot: slot });
+    const gmTab = screen.getByRole("tab", { name: "Gaming Mode" });
+    // OFF the Fixes scroll (the default segment) — the card only lives behind its own door.
+    expect(screen.queryByTestId("gm-slot")).toBeNull();
+    fireEvent.click(gmTab);
+    expect(screen.getByTestId("gm-slot")).toBeTruthy();
+    // Its own room: the Fixes content is not mounted alongside it.
+    expect(screen.queryByText("Worth making for your rig")).toBeNull();
+  });
+
+  it("flag OFF: classic path — no Gaming Mode segment, the slot renders inline on Fixes", () => {
+    renderOptimize({ gamingSlot: slot });
+    expect(screen.queryByRole("tab", { name: "Gaming Mode" })).toBeNull();
+    expect(screen.getByTestId("gm-slot")).toBeTruthy(); // inline on the default Fixes segment
+  });
+
+  it("gate off (no slot): no Gaming Mode segment even with the flag on", () => {
+    arm();
+    renderOptimize({ gamingSlot: null });
+    expect(screen.queryByRole("tab", { name: "Gaming Mode" })).toBeNull();
   });
 });
 

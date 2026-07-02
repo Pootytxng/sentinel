@@ -166,12 +166,14 @@ describe("Check", () => {
     );
     expect(await screen.findByText("Biggest limiters")).toBeInTheDocument();
     // Age is a fact; "newer exists" stays a maybe — never "out of date", no version claim.
-    expect(screen.getByText(/Your AMD driver is 200 days old/)).toBeInTheDocument();
-    expect(screen.getByText(/Newer ones may be available/)).toBeInTheDocument();
+    // P5.5: the row is fact-only; the card's ONE shared note carries the maybe.
+    expect(screen.getByText(/Your AMD graphics driver is 200 days old/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Newer ones may be available/)).toHaveLength(1);
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument();
-    // Copyable TEXT + a copy button — never a launch link (capabilities untouched).
-    expect(screen.getByText("https://www.amd.com/en/support")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Copy link/ })).toBeInTheDocument();
+    // The link lives behind the Copy button only — no raw URL text, never a launch link
+    // (capabilities untouched).
+    expect(screen.queryByText("https://www.amd.com/en/support")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Copy AMD link/ })).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
@@ -192,7 +194,7 @@ describe("Check", () => {
     // Missing data is a skip, not an alarm — no age, no nudge, no URL.
     expect(screen.getByText(/couldn't read your graphics driver's date/i)).toBeInTheDocument();
     expect(screen.queryByText(/days old/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Copy link/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy .*link/ })).not.toBeInTheDocument();
     rerender(checkWith(20));
     expect(screen.getByText(/Driver is recent — 20 days old\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy link/ })).not.toBeInTheDocument();
@@ -278,10 +280,15 @@ describe("Check", () => {
       </ConfirmProvider>,
     );
     expect(await screen.findByText("Biggest limiters")).toBeInTheDocument();
+    // P5.5 grouped card: the row states the FACT only (no per-device "newer may be available"
+    // paragraph — the card's single shared note carries the honest maybe exactly once).
     expect(
-      await screen.findByText(/Your Realtek driver \(Realtek PCIe GbE Family Controller\) is 1200 days\s+old\. Newer ones may be available/),
+      await screen.findByText(/Your Realtek driver \(Realtek PCIe GbE Family Controller\) is 1200\s+days old\./),
     ).toBeInTheDocument();
-    expect(screen.getByText("https://www.realtek.com/Download")).toBeInTheDocument();
+    expect(screen.getAllByText(/Newer ones may be available/)).toHaveLength(1);
+    // The link lives BEHIND the Copy button only — no raw URL text on the surface, still no anchor.
+    expect(screen.getByRole("button", { name: /Copy Realtek link/ })).toBeInTheDocument();
+    expect(screen.queryByText("https://www.realtek.com/Download")).not.toBeInTheDocument();
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument();
     leftoversMock.nics = [];
   });
@@ -362,8 +369,14 @@ describe("Check", () => {
     );
     expect(await screen.findByText("Upgrade path (advisory)")).toBeInTheDocument();
     expect(screen.getByText("GPU was the measured limiter")).toBeInTheDocument();
-    // The disclosure ALWAYS renders with the links (mandatory — receipts law on money surfaces).
+    // The disclosure ALWAYS renders with the links (mandatory — receipts law on money surfaces)…
     expect(screen.getByText(/never affects verdicts/)).toBeInTheDocument();
+    // …and P5.5 HONESTY GUARD: while the links are tag-free plain searches (the A6 backend guard
+    // pins that), the disclosure must NOT claim a commission we cannot earn. The backend const
+    // (the fixture line above) is the Phase-D swap point; the SURFACE renders the truthful line
+    // until tags actually arm. If Phase D flips this, update BOTH lines the same commit.
+    expect(screen.getByText(/Compy earns nothing from these links/)).toBeInTheDocument();
+    expect(screen.queryByText(/may earn a commission/)).not.toBeInTheDocument();
     // Links are copy BUTTONS, not anchors — no in-app navigation surface.
     expect(screen.getByRole("button", { name: /Copy Amazon search link/ })).toBeInTheDocument();
     expect(document.querySelector(".check-upgrade a")).toBeNull();

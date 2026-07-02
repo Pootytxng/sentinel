@@ -9,7 +9,7 @@ import { walkthroughForKey, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
-import { useScan, buildSetupSummary } from "./use-scan";
+import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { ScanStream } from "./ScanStream";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import "./Check.css";
@@ -66,8 +66,8 @@ const NIC_SUPPORT: Record<string, { label: string; url: string }> = {
 // never a version claim. Unreadable date → neutral skip, no alarm. Vendor comes from the GPU's own
 // name (not the app-level vendor prop) so the advisory names the right driver on mixed rigs.
 function driverFreshness(gpus: GpuDriverInfo[]):
-  | { tone: "skip" | "pass"; message: string; url?: undefined }
-  | { tone: "advisory"; message: string; url: string | null } {
+  | { tone: "skip" | "pass"; message: string; url?: undefined; label?: undefined }
+  | { tone: "advisory"; message: string; label: string; url: string | null } {
   const gpu = gpus.find((g) => g.driver_age_days != null);
   if (!gpu)
     return {
@@ -77,9 +77,12 @@ function driverFreshness(gpus: GpuDriverInfo[]):
   const age = gpu.driver_age_days as number;
   if (age <= 90) return { tone: "pass", message: `Driver is recent — ${age} days old.` };
   const v = VENDOR_SUPPORT[gpuVendor(gpu.name)];
+  // The row states the FACT only; the card's single shared note carries the one "newer may be
+  // available" maybe for every stale driver (P5.5: no duplicated paragraphs per device).
   return {
     tone: "advisory",
-    message: `Your ${v?.label ?? "GPU"} driver is ${age} days old. Newer ones may be available — worth checking your vendor's page.`,
+    message: `Your ${v?.label ?? "GPU"} graphics driver is ${age} days old.`,
+    label: v?.label ?? "vendor",
     url: v?.url ?? null,
   };
 }
@@ -413,14 +416,28 @@ export default function Check({
               <span>All {readiness.checks.length} checks</span>
               <span>{showAllChecks ? "▾" : "▸"}</span>
             </button>
+            {/* P5.5 (owner critique 2026-07-02): the expanded receipt is proper rows — status mark ·
+                check name · its one-line measured result — in the UI voice, not the mono terminal
+                list (that visual belongs to the live scan moment only). */}
             {showAllChecks && (
-              <ScanStream
-                readiness={readiness}
-                shownRows={readiness.checks.length}
-                running={false}
-                phase="verdict"
-                plain
-              />
+              <ul className="check-all-list">
+                {readiness.checks.map((c) => {
+                  const v = rowVerdict(c.status);
+                  const result =
+                    c.detail.trim() ||
+                    c.value ||
+                    (v === "ok" ? "came back fine" : v === "fix" ? "worth fixing" : "couldn't read");
+                  return (
+                    <li key={c.id} className={`check-all-row check-all-${v}`}>
+                      <span className="check-all-mark" aria-hidden="true">
+                        {v === "fix" ? "→" : v === "ok" ? "✓" : "·"}
+                      </span>
+                      <span className="check-all-name">{c.label}</span>
+                      <span className="check-all-result">{result}</span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         )
@@ -485,42 +502,57 @@ export default function Check({
 
           {/* Driver freshness — honest age advisory. The URL is copyable TEXT (doorknob: the copy
               button is the only control); never a launcher, never "out of date", never a version. */}
+          {/* Driver freshness (P5.5: ONE grouped card) — a row per device (kind · fact · Copy
+              button), one shared "newer may be available" note instead of a paragraph per device.
+              Honesty rules unchanged: age is a fact, "newer exists" stays a maybe, links are
+              copy-to-clipboard only (never a launcher, never "out of date", never a version). */}
           {driver && (
             <div className={`check-driver check-driver-${driver.tone}`}>
               <div className="check-row-head">
                 <span className="check-row-title">Driver freshness</span>
-                {driver.tone === "advisory" && <span className="check-advisory">advisory</span>}
+                {(driver.tone === "advisory" || staleNics.length > 0) && (
+                  <span className="check-advisory">advisory</span>
+                )}
               </div>
-              <p className="check-row-reason">{driver.message}</p>
-              {driver.tone === "advisory" && driver.url && (
-                <div className="check-driver-url">
-                  <code className="check-driver-url-text">{driver.url}</code>
-                  <button className="check-driver-copy" onClick={() => copyDriverUrl(driver.url!)}>
-                    {copiedUrl === driver.url ? "Copied ✓" : "Copy link"}
-                  </button>
-                </div>
-              )}
-              {/* NIC drivers (win-source v1): same honesty rules — age is a fact, "newer exists"
-                  is a maybe, the link is copyable text only. Unreadable dates show nothing. */}
-              {staleNics.map((n) => {
-                const support = NIC_SUPPORT[n.vendor];
-                return (
-                  <div key={n.name} className="check-driver-nic">
-                    <p className="check-row-reason">
-                      Your {support?.label ?? "network"} driver ({n.name}) is {n.driver_age_days} days
-                      old. Newer ones may be available — worth checking your vendor's page.
-                    </p>
-                    {support && (
-                      <div className="check-driver-url">
-                        <code className="check-driver-url-text">{support.url}</code>
-                        <button className="check-driver-copy" onClick={() => copyDriverUrl(support.url)}>
-                          {copiedUrl === support.url ? "Copied ✓" : "Copy link"}
+              <ul className="check-driver-list">
+                <li className="check-driver-row">
+                  <span className="check-driver-kind">GPU</span>
+                  <span className="check-driver-fact">{driver.message}</span>
+                  {driver.tone === "advisory" && driver.url && (
+                    <button className="check-driver-copy" onClick={() => copyDriverUrl(driver.url!)}>
+                      {copiedUrl === driver.url ? "Copied ✓" : `Copy ${driver.label} link`}
+                    </button>
+                  )}
+                </li>
+                {/* NIC drivers (win-source v1): one row each — same fact-only voice. Unreadable
+                    dates show nothing. */}
+                {staleNics.map((n) => {
+                  const support = NIC_SUPPORT[n.vendor];
+                  return (
+                    <li key={n.name} className="check-driver-row">
+                      <span className="check-driver-kind">Network</span>
+                      <span className="check-driver-fact">
+                        Your {support?.label ?? "network"} driver ({n.name}) is {n.driver_age_days}{" "}
+                        days old.
+                      </span>
+                      {support && (
+                        <button
+                          className="check-driver-copy"
+                          onClick={() => copyDriverUrl(support.url)}
+                        >
+                          {copiedUrl === support.url ? "Copied ✓" : `Copy ${support.label} link`}
                         </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {(driver.tone === "advisory" || staleNics.length > 0) && (
+                <p className="check-driver-note">
+                  Newer ones may be available — we can't know without checking online, so it stays a
+                  maybe. Copy a link to check the vendor's page in your browser.
+                </p>
+              )}
               {/* The quiet pass line claims "recent" ONLY when every NIC date was readable —
                   a partial read stays silent rather than overclaiming. */}
               {nicDrivers !== null &&
@@ -692,7 +724,16 @@ export default function Check({
                   </div>
                 </div>
               ))}
-              <p className="check-upgrade-disclosure">{priorities.upgrade_path.disclosure}</p>
+              {/* HONESTY (P5.5 owner catch 2026-07-02): the backend disclosure const still says
+                  "we may earn a commission" — FALSE while every link is a tag-free plain search
+                  (the A6 guard in priorities.rs pins exactly that). Until Phase D arms affiliate
+                  tags, render the truthful line; the backend const stays put as the single Phase-D
+                  swap point. Swap back to {priorities.upgrade_path.disclosure} in the SAME commit
+                  that arms tags — the Check guard test pins this. */}
+              <p className="check-upgrade-disclosure">
+                Compy earns nothing from these links today — they're plain searches with no
+                affiliate tag. What you buy never affects verdicts.
+              </p>
             </div>
           )}
 

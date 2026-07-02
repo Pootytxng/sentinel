@@ -1000,10 +1000,19 @@ export default function Fix({
         </>
       )}
 
-      {/* Full history (ledger Layer 2) — the complete audit trail, collapsed; click a row for its
+      {/* Honest empty state for the ledger room (P5.5) — the Applied segment must never be a bare
+          empty room; say plainly that nothing is active and where applies will land. Scoped to the
+          ledger/applied views so standalone Tune (view="all") renders exactly as before. */}
+      {(view === "applied" || view === "ledger") && active.length === 0 && (
+        <p className="fix-empty">
+          Nothing active on this PC — anything Compy applies shows up here with one-tap undo.
+        </p>
+      )}
+
+      {/* History (ledger Layer 2) — the complete audit trail, collapsed; click a row for its
           receipt. Rolled-back + superseded entries stay, muted. */}
       {showHistory && history.length > 0 && (
-        <CollapsibleSection title="Full history" count={history.length} tint="applied">
+        <CollapsibleSection title="History" count={history.length} tint="applied">
           <p className="fix-refuse-intro">
             The complete trail — applied, rolled back, superseded. Click any row for its receipt.
           </p>

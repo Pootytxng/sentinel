@@ -167,20 +167,20 @@ describe("Fix", () => {
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} />);
     expect(screen.getByText("Worth making for your rig")).toBeTruthy();
     expect(screen.getByText("Active on this PC")).toBeTruthy();
-    expect(screen.getByText("Full history")).toBeTruthy();
+    expect(screen.getByText("History")).toBeTruthy();
   });
 
   it('view="fixes" renders the fixes sections and NONE of the ledger sections', () => {
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="fixes" />);
     expect(screen.getByText("Worth making for your rig")).toBeTruthy();
     expect(screen.queryByText("Active on this PC")).toBeNull();
-    expect(screen.queryByText("Full history")).toBeNull();
+    expect(screen.queryByText("History")).toBeNull();
   });
 
   it('view="ledger" renders the ledger sections and NONE of the fixes sections', () => {
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="ledger" />);
     expect(screen.getByText("Active on this PC")).toBeTruthy();
-    expect(screen.getByText("Full history")).toBeTruthy();
+    expect(screen.getByText("History")).toBeTruthy();
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
     // Startup + refuse-pile + guided are fixes-side too — gone in ledger view.
     expect(screen.queryByText("Not worth touching")).toBeNull();
@@ -192,13 +192,13 @@ describe("Fix", () => {
   it('view="applied" renders the active layer ONLY (no full history, no fixes)', () => {
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="applied" />);
     expect(screen.getByText("Active on this PC")).toBeTruthy();
-    expect(screen.queryByText("Full history")).toBeNull();
+    expect(screen.queryByText("History")).toBeNull();
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
 
   it('view="history" renders the full-history layer ONLY (no active layer, no fixes)', () => {
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="history" />);
-    expect(screen.getByText("Full history")).toBeTruthy();
+    expect(screen.getByText("History")).toBeTruthy();
     expect(screen.queryByText("Active on this PC")).toBeNull();
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });

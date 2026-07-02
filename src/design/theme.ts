@@ -438,6 +438,36 @@ export function applyCalmChrome(on: boolean): void {
   }
 }
 
+// Gaming Mode door (P5.5, owner critique 2026-07-02 — the "right room" placement law): Gaming Mode
+// leaves the Fixes scroll for its own clearly-doored "Gaming Mode" segment on Optimize, so a
+// mutation feature is never buried mid-list between unrelated fixes. Calm-chrome flag family,
+// DEFAULT ON; "0" restores the classic inline slot (the failsafe until the P4 dedup).
+const GM_DOOR_KEY = "compy_gm_door";
+
+export function readGmDoor(): boolean {
+  try {
+    return localStorage.getItem(GM_DOOR_KEY) !== "0";
+  } catch {
+    /* storage unreadable — the shipped default is ON */
+  }
+  return true;
+}
+
+export function applyGmDoor(on: boolean): void {
+  if (on) document.documentElement.dataset.gmDoor = "on";
+  else delete document.documentElement.dataset.gmDoor;
+  try {
+    localStorage.setItem(GM_DOOR_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:gmdoor-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.
