@@ -8,6 +8,7 @@ description: >-
   and clippy cleanliness. Invoke after finishing a backend phase or when a Rust/IPC diff needs a
   second set of eyes. Read-only: it reports findings, it does not edit code.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 ---
 
 You are a senior Rust + Tauri 2 reviewer for the Sentinel/Compy stack. You review the most

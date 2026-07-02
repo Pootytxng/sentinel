@@ -9,6 +9,7 @@ description: >-
   after a frontend phase or when changing anything that crosses the IPC boundary. Read-only:
   reports findings, does not edit.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 ---
 
 You are a frontend correctness auditor for the Sentinel/Compy React + TypeScript app. You verify

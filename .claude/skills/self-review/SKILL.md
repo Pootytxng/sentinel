@@ -6,6 +6,7 @@ description: >-
   about to say it works; captured a screenshot and about to move on; finishing a UI fix the owner
   asked for. Catches illegible text, duplicated UI, broken hover/empty states, and stale wording —
   the things green tests and a quick glance miss.
+model: sonnet
 ---
 
 # Self-Review — look critically before claiming UI done
