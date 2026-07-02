@@ -64,47 +64,48 @@ try {
   document.documentElement.dataset.dashV2 = "on"; // default ON even if localStorage is unavailable
 }
 
-// Slim rows (P1 UI slim-down, 2026-07-01) — master-detail rec rows on Optimize's Fixes segment.
-// DEFAULT OFF (preview): applied before first paint only when the user opted in via Settings.
-// Flag off ⇒ this block is a no-op and today's UI renders byte-identical.
+// UI slim-down P1/P2/P3/P5 (owner default-ON call 2026-07-02 — the slim-down IS the build).
+// Applied before first paint; each is opt-OUT via "0" (Settings → Appearance keeps the live
+// toggles), and the classic render paths stay in the tree as the failsafe until P4 dedup.
+
+// Slim rows (P1) — master-detail rec rows on Optimize's Fixes segment.
 try {
-  if (localStorage.getItem("compy_slim_rows") === "1") {
+  if (localStorage.getItem("compy_slim_rows") !== "0") {
     document.documentElement.dataset.slimRows = "on";
   }
 } catch {
-  /* default OFF — nothing to apply */
+  document.documentElement.dataset.slimRows = "on"; // default ON even if localStorage is unavailable
 }
 
-// Basic/Advanced split (P2 UI slim-down, 2026-07-01) — DEFAULT OFF (preview): applied pre-paint only
-// when the user opted in via Settings, along with their chosen mode. Flag off ⇒ no-op, byte-identical.
+// Basic/Advanced split (P2) — the global two-mode contract, along with the chosen mode.
 try {
-  if (localStorage.getItem("compy_basic_advanced") === "1") {
+  if (localStorage.getItem("compy_basic_advanced") !== "0") {
     document.documentElement.dataset.basicAdvanced = "on";
     document.documentElement.dataset.viewMode =
       localStorage.getItem("compy_view_mode") === "advanced" ? "advanced" : "basic";
   }
 } catch {
-  /* default OFF — nothing to apply */
+  // default ON even if localStorage is unavailable; mode falls back to Basic (the answer face)
+  document.documentElement.dataset.basicAdvanced = "on";
+  document.documentElement.dataset.viewMode = "basic";
 }
 
-// Answer-first Home (P3 UI slim-down, 2026-07-02) — DEFAULT OFF (preview): applied pre-paint only
-// when the user opted in via Settings. Flag off ⇒ no-op, byte-identical.
+// Answer-first Home (P3) — supersedes the dashV2 Home layout when on.
 try {
-  if (localStorage.getItem("compy_home_v3") === "1") {
+  if (localStorage.getItem("compy_home_v3") !== "0") {
     document.documentElement.dataset.homeV3 = "on";
   }
 } catch {
-  /* default OFF — nothing to apply */
+  document.documentElement.dataset.homeV3 = "on"; // default ON even if localStorage is unavailable
 }
 
-// Calm chrome (P5 UI slim-down, 2026-07-02) — DEFAULT OFF (preview): applied pre-paint only when
-// the user opted in via Settings. Flag off ⇒ no-op, byte-identical.
+// Calm chrome (P5) — side-pile drawer + contextual Export + barely-there calm drift.
 try {
-  if (localStorage.getItem("compy_calm_chrome") === "1") {
+  if (localStorage.getItem("compy_calm_chrome") !== "0") {
     document.documentElement.dataset.calmChrome = "on";
   }
 } catch {
-  /* default OFF — nothing to apply */
+  document.documentElement.dataset.calmChrome = "on"; // default ON even if localStorage is unavailable
 }
 
 // Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and

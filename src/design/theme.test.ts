@@ -45,16 +45,13 @@ describe("instrument theme", () => {
   });
 });
 
-describe("slim rows (P1 UI slim-down — HARD LINE: default OFF)", () => {
-  it("defaults OFF when unset", () => {
-    expect(readSlimRows()).toBe(false);
-  });
-
-  it('returns true ONLY on the exact "1" opt-in', () => {
-    localStorage.setItem("compy_slim_rows", "on"); // junk value ≠ opt-in
-    expect(readSlimRows()).toBe(false);
-    localStorage.setItem("compy_slim_rows", "1");
+describe("slim rows (P1 UI slim-down — DEFAULT ON, owner call 2026-07-02)", () => {
+  it("defaults ON when unset; OFF only on the exact \"0\" opt-out", () => {
     expect(readSlimRows()).toBe(true);
+    localStorage.setItem("compy_slim_rows", "junk"); // junk value ≠ opt-out
+    expect(readSlimRows()).toBe(true);
+    localStorage.setItem("compy_slim_rows", "0");
+    expect(readSlimRows()).toBe(false);
   });
 
   it("applySlimRows sets/clears data-slim-rows on <html> and persists", () => {
@@ -67,13 +64,13 @@ describe("slim rows (P1 UI slim-down — HARD LINE: default OFF)", () => {
   });
 });
 
-describe("basic/advanced split (P2 UI slim-down — HARD LINE: default OFF)", () => {
-  it("defaults OFF when unset; true ONLY on the exact \"1\" opt-in", () => {
-    expect(readBasicAdvanced()).toBe(false);
-    localStorage.setItem("compy_basic_advanced", "on"); // junk value ≠ opt-in
-    expect(readBasicAdvanced()).toBe(false);
-    localStorage.setItem("compy_basic_advanced", "1");
+describe("basic/advanced split (P2 UI slim-down — DEFAULT ON, owner call 2026-07-02)", () => {
+  it("defaults ON when unset; OFF only on the exact \"0\" opt-out", () => {
     expect(readBasicAdvanced()).toBe(true);
+    localStorage.setItem("compy_basic_advanced", "junk"); // junk value ≠ opt-out
+    expect(readBasicAdvanced()).toBe(true);
+    localStorage.setItem("compy_basic_advanced", "0");
+    expect(readBasicAdvanced()).toBe(false);
   });
 
   it("applyBasicAdvanced sets/clears data-basic-advanced on <html> and persists", () => {
@@ -121,13 +118,13 @@ describe("ambiance", () => {
   });
 });
 
-describe("answer-first Home (P3 UI slim-down — HARD LINE: default OFF)", () => {
-  it('defaults OFF when unset; true ONLY on the exact "1" opt-in', () => {
-    expect(readHomeV3()).toBe(false);
-    localStorage.setItem("compy_home_v3", "on"); // junk value ≠ opt-in
-    expect(readHomeV3()).toBe(false);
-    localStorage.setItem("compy_home_v3", "1");
+describe("answer-first Home (P3 UI slim-down — DEFAULT ON, owner call 2026-07-02)", () => {
+  it('defaults ON when unset; OFF only on the exact "0" opt-out', () => {
     expect(readHomeV3()).toBe(true);
+    localStorage.setItem("compy_home_v3", "junk"); // junk value ≠ opt-out
+    expect(readHomeV3()).toBe(true);
+    localStorage.setItem("compy_home_v3", "0");
+    expect(readHomeV3()).toBe(false);
   });
 
   it("applyHomeV3 sets/clears data-home-v3 on <html> and persists", () => {
@@ -140,13 +137,13 @@ describe("answer-first Home (P3 UI slim-down — HARD LINE: default OFF)", () =>
   });
 });
 
-describe("calm chrome (P5 UI slim-down — HARD LINE: default OFF)", () => {
-  it('defaults OFF when unset; true ONLY on the exact "1" opt-in', () => {
-    expect(readCalmChrome()).toBe(false);
-    localStorage.setItem("compy_calm_chrome", "on"); // junk value ≠ opt-in
-    expect(readCalmChrome()).toBe(false);
-    localStorage.setItem("compy_calm_chrome", "1");
+describe("calm chrome (P5 UI slim-down — DEFAULT ON, owner call 2026-07-02)", () => {
+  it('defaults ON when unset; OFF only on the exact "0" opt-out', () => {
     expect(readCalmChrome()).toBe(true);
+    localStorage.setItem("compy_calm_chrome", "junk"); // junk value ≠ opt-out
+    expect(readCalmChrome()).toBe(true);
+    localStorage.setItem("compy_calm_chrome", "0");
+    expect(readCalmChrome()).toBe(false);
   });
 
   it("applyCalmChrome sets/clears data-calm-chrome on <html> and persists", () => {

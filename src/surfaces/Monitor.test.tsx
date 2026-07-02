@@ -78,7 +78,8 @@ describe("Monitor — segmented shell (restructure tab #2)", () => {
   });
 });
 
-// ── P2 Basic/Advanced split (compy_basic_advanced, DEFAULT OFF) ──
+// ── P2 Basic/Advanced split (compy_basic_advanced, DEFAULT ON since 2026-07-02; tests drive the
+//    <html data-basic-advanced> attribute directly — jsdom never runs main.tsx) ──
 describe("Monitor — Basic/Advanced split (flag on)", () => {
   const flagOn = () => (document.documentElement.dataset.basicAdvanced = "on");
 

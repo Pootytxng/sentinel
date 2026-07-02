@@ -283,18 +283,19 @@ export function applyDashV2(on: boolean): void {
 
 // Slim rows (P1 of the UI slim-down, spec 2026-07-01-p1-slimrows-optimize) — master-detail rec rows
 // on Optimize's Fixes segment: 8 visible controls collapse to 3 (dot · title+proof · badge · switch ·
-// chevron), everything else in a detail panel that expands in place. DEFAULT OFF behind
-// `compy_slim_rows` — flag off, today's UI renders byte-identical. Honesty guardrail (council 🔴):
-// the collapsed row ALWAYS shows one measured proof line — layout changes, evidence never hides.
+// chevron), everything else in a detail panel that expands in place. DEFAULT ON (owner call
+// 2026-07-02 — the slim-down IS the build); classic rows reachable via "0" (Settings → Appearance),
+// kept as the failsafe until P4 dedup. Honesty guardrail (council 🔴): the collapsed row ALWAYS
+// shows one measured proof line — layout changes, evidence never hides.
 const SLIM_ROWS_KEY = "compy_slim_rows";
 
 export function readSlimRows(): boolean {
   try {
-    return localStorage.getItem(SLIM_ROWS_KEY) === "1";
+    return localStorage.getItem(SLIM_ROWS_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* storage unreadable — the shipped default is ON */
   }
-  return false;
+  return true;
 }
 
 export function applySlimRows(on: boolean): void {
@@ -313,19 +314,19 @@ export function applySlimRows(on: boolean): void {
 }
 
 // Basic/Advanced split (P2 of the UI slim-down, plan §5.2) — the global two-mode contract: Basic =
-// the glanceable answer (Monitor: 4 big tiles), Advanced = today's full panels. DEFAULT OFF behind
-// `compy_basic_advanced`; flag off, today's UI renders byte-identical (no switch, no mode attribute
-// consumers). The MODE itself (basic|advanced) is separate state below so later phases (Home P3,
-// backdrop auto-off in Advanced — owner §8b) read one global source.
+// the glanceable answer (Monitor: 4 big tiles), Advanced = today's full panels. DEFAULT ON (owner
+// call 2026-07-02); the classic single-face Monitor reachable via "0" (Settings → Appearance),
+// kept as the failsafe until P4 dedup. The MODE itself (basic|advanced) is separate state below so
+// later phases (Home P3, backdrop auto-off in Advanced — owner §8b) read one global source.
 const BASIC_ADVANCED_KEY = "compy_basic_advanced";
 
 export function readBasicAdvanced(): boolean {
   try {
-    return localStorage.getItem(BASIC_ADVANCED_KEY) === "1";
+    return localStorage.getItem(BASIC_ADVANCED_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* storage unreadable — the shipped default is ON */
   }
-  return false;
+  return true;
 }
 
 export function applyBasicAdvanced(on: boolean): void {
@@ -374,17 +375,18 @@ export function applyViewMode(m: ViewMode): void {
 // Answer-first Home (P3 of the UI slim-down, plan §5.3) — Home leads with the posture verdict, the
 // #1 limiter as the single hero action, and 3 glanceable last-session tiles; the 3D rig hologram
 // STAYS the centerpiece (owner correction §6 — minimalism ≠ sterile) with the full hardware cards one
-// tap away. Supersedes the dashV2 Home layout when on. DEFAULT OFF behind `compy_home_v3`; flag off ⇒
-// today's Home renders byte-identical. Honesty unchanged: every number is real or an honest empty state.
+// tap away. Supersedes the dashV2 Home layout when on. DEFAULT ON (owner call 2026-07-02); the dashV2
+// Home reachable via "0" (Settings → Appearance), kept as the failsafe until P4 dedup. Honesty
+// unchanged: every number is real or an honest empty state.
 const HOME_V3_KEY = "compy_home_v3";
 
 export function readHomeV3(): boolean {
   try {
-    return localStorage.getItem(HOME_V3_KEY) === "1";
+    return localStorage.getItem(HOME_V3_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* storage unreadable — the shipped default is ON */
   }
-  return false;
+  return true;
 }
 
 export function applyHomeV3(on: boolean): void {
@@ -406,18 +408,19 @@ export function applyHomeV3(on: boolean): void {
 // Optimize surface collects every "leave it alone" pile (measured fine · not worth touching ·
 // dismissed · not for this rig · the refuse pile · past tweaks) under ONE quiet "Nothing else needs
 // attention" expander; Export leaves the persistent header for the scan-results card (contextual, not
-// furniture); calm ambiance gains its barely-there drift (owner §8b). DEFAULT OFF behind
-// `compy_calm_chrome`; flag off ⇒ today's UI renders byte-identical. Honesty unchanged: every pile
-// keeps its full content + reasons — collapsed, never removed.
+// furniture); calm ambiance gains its barely-there drift (owner §8b). DEFAULT ON (owner call
+// 2026-07-02); the classic chrome reachable via "0" (Settings → Appearance), kept as the failsafe
+// until P4 dedup. Honesty unchanged: every pile keeps its full content + reasons — collapsed,
+// never removed.
 const CALM_CHROME_KEY = "compy_calm_chrome";
 
 export function readCalmChrome(): boolean {
   try {
-    return localStorage.getItem(CALM_CHROME_KEY) === "1";
+    return localStorage.getItem(CALM_CHROME_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* storage unreadable — the shipped default is ON */
   }
-  return false;
+  return true;
 }
 
 export function applyCalmChrome(on: boolean): void {
