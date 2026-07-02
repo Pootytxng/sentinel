@@ -15,6 +15,7 @@ import { slimProofLine } from "../data/slim-proof";
 import { SlimRecRow, SlimDetailRow } from "../design/SlimRecRow";
 import { ActionDrawer, type DrawerRec } from "./ActionDrawer";
 import { gameModeRevertedExternally } from "./dashboard-data";
+import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import "./Fix.css";
 
 // Whether the Living Instrument preview is on (DOM-read; the surface re-renders fresh on navigation,
@@ -31,6 +32,12 @@ function dashOn(): boolean {
 // like the flags above; flag off ⇒ the classic FixRow path renders byte-identical.
 function slimOn(): boolean {
   return typeof document !== "undefined" && document.documentElement.dataset.slimRows === "on";
+}
+// Calm chrome (P5, DEFAULT OFF) — inside the side-pile drawer the refuse pile sits directly under
+// Check's "N not worth touching" pile; same title twice, stacked, reads as a duplicate. The drawer
+// disambiguates: the refuse pile becomes "Deliberately refused" (the drawer hint's own words).
+function calmOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on";
 }
 
 // A rec's title. Under the Living Instrument preview, jargon recs lead with a plain-language headline
@@ -1010,9 +1017,13 @@ export default function Fix({
 
       {showFixes && (
       <>
+      {/* Side-piles (P5 calm chrome): under the merged shell's provider the three "leave it alone"
+          sections below teleport into the single "Nothing else needs attention" expander; classic/
+          standalone render here as always. Moved, never removed — same content and reasons. */}
       {/* Not for this rig — hardware-ineligible recs (eligibility train): set aside with the reason,
           and OUT of the completion denominator, so they never block "all handled" or nag. */}
       {notForThisRig.length > 0 && (
+        <SidePileItem order={SIDE_PILE_ORDER.notForThisRig}>
         <CollapsibleSection title="Not for this rig" count={notForThisRig.length} tint="refuse">
           <p className="fix-refuse-intro">
             Compy detected these don't apply to your hardware — set aside, and left out of your
@@ -1031,11 +1042,13 @@ export default function Fix({
             ))}
           </ul>
         </CollapsibleSection>
+        </SidePileItem>
       )}
 
       {/* Dismissed — what you deliberately declined ("Not for me"). Reversible; out of the active
           denominator but one tap from restore, so a 100% reached by dismissing is a LABELED 100%. */}
       {dismissedRecs.length > 0 && (
+        <SidePileItem order={SIDE_PILE_ORDER.dismissed}>
         <CollapsibleSection title="Dismissed" count={dismissedRecs.length} tint="applied">
           <p className="fix-refuse-intro">
             You set these aside. They're out of your active count — restore any one anytime.
@@ -1072,11 +1085,13 @@ export default function Fix({
             ))}
           </ul>
         </CollapsibleSection>
+        </SidePileItem>
       )}
 
       {/* Not worth touching — the refuse-pile. What Compy won't do, and why, with the autopsy link. */}
+      <SidePileItem order={SIDE_PILE_ORDER.refusePile}>
       <CollapsibleSection
-        title="Not worth touching"
+        title={calmOn() && view === "fixes" ? "Deliberately refused" : "Not worth touching"}
         count={REFUSE_PILE.length}
         tint="refuse"
         icon={<ShieldOff />}
@@ -1099,6 +1114,7 @@ export default function Fix({
           ))}
         </ul>
       </CollapsibleSection>
+      </SidePileItem>
 
       {/* Guided / advisory — Compy detects but won't auto-apply; the full where + steps + the
           allowlisted "Open it" deep link live right here (no need to fall back to classic Optimize). */}

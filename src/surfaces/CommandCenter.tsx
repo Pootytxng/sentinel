@@ -196,12 +196,14 @@ function LimiterCard({
     );
   }
 
-  // Nothing worth fixing → the honest win state.
+  // Nothing worth fixing → the honest win state. Title deliberately does NOT say "measured clean" —
+  // the posture verdict directly above already does (P5 taste catch: verdict + limiter were
+  // double-saying it on the answer-first Home).
   if (!limiter) {
     return (
       <section className="cc-panel cc-limiter cc-limiter-clear">
         <div className="cc-panel-eyebrow">Your #1 limiter</div>
-        <h3 className="cc-limiter-title">Measured clean today</h3>
+        <h3 className="cc-limiter-title">None found today</h3>
         <p className="cc-limiter-reason">
           No limiter stands out on this rig right now. A lesser tool would invent one — Compy won't.
         </p>

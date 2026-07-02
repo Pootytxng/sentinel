@@ -91,7 +91,38 @@ describe("CommandCenter", () => {
         priorities={{ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null }}
       />,
     );
-    expect(screen.getByText(/Measured clean today/)).toBeTruthy();
+    expect(screen.getByText(/None found today/)).toBeTruthy();
+  });
+
+  // bug→guard (owner taste catch, P5 2026-07-02): on the answer-first Home the posture verdict and
+  // the limiter card BOTH said "measured clean" — the same win announced twice, one panel apart.
+  // The verdict owns that phrase; every other panel finds different words. Guard the whole surface.
+  it("says 'measured clean' at most once on the clean answer-first Home", () => {
+    document.documentElement.dataset.homeV3 = "on";
+    localStorage.setItem("compy_home_rig_3d", "0"); // Cards view — the 3D hologram isn't a jsdom citizen
+    try {
+      render(
+        <CommandCenter
+          {...baseProps}
+          readiness={{
+            checks: [{ id: "ssd", label: "SSD", status: "ready", detail: "", value: null }],
+            ready_count: 1,
+            advisory_count: 0,
+            attention_count: 0,
+            unknown_count: 0,
+            advisory: "",
+            dismissed_ids: [],
+            drifts: [],
+          }}
+          priorities={{ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null }}
+        />,
+      );
+      const hits = screen.queryAllByText(/measured clean/i);
+      expect(hits.length).toBeLessThanOrEqual(1);
+    } finally {
+      delete document.documentElement.dataset.homeV3;
+      localStorage.clear();
+    }
   });
 
   it("renders the answer-first Home when the P3 flag attribute is armed (default OFF elsewhere)", () => {

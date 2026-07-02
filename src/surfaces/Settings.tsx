@@ -6,7 +6,6 @@ import {
   AMBIANCE_OPTIONS,
   readInstrumentTheme,
   applyInstrumentTheme,
-  readAmbiance,
   persistAmbiance,
   readLivingInstrument,
   applyLivingInstrument,
@@ -16,6 +15,9 @@ import {
   applyBasicAdvanced,
   readHomeV3,
   applyHomeV3,
+  readCalmChrome,
+  applyCalmChrome,
+  readAmbianceChoice,
   readViewMode,
   applyViewMode,
   readStepAsideGame,
@@ -127,11 +129,17 @@ export default function Settings({
   onClose: () => void;
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
-  const [ambiance, setAmbiance] = useState<Ambiance>(readAmbiance);
+  // The picker reflects the EFFECTIVE default when the user never chose: the answer-first Home
+  // re-defaults ambiance to "calm" (owner §8b), so showing "Full" selected there would be a lie.
+  // An explicit choice always wins (and picking here persists one, unchanged).
+  const [ambiance, setAmbiance] = useState<Ambiance>(
+    () => readAmbianceChoice() ?? (readHomeV3() ? "calm" : "full"),
+  );
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [slimRows, setSlimRows] = useState<boolean>(readSlimRows);
   const [basicAdvanced, setBasicAdvanced] = useState<boolean>(readBasicAdvanced);
   const [homeV3, setHomeV3] = useState<boolean>(readHomeV3);
+  const [calmChrome, setCalmChrome] = useState<boolean>(readCalmChrome);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -186,6 +194,12 @@ export default function Settings({
   const changeHomeV3 = (v: boolean) => {
     setHomeV3(v);
     applyHomeV3(v);
+  };
+  // Calm chrome (P5) — one quiet side-pile expander on Optimize, Export moves in with the scan
+  // results, calm ambiance drifts barely-there. Layout/chrome only; DEFAULT OFF until owner-approved.
+  const changeCalmChrome = (v: boolean) => {
+    setCalmChrome(v);
+    applyCalmChrome(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -313,6 +327,18 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={homeV3} onChange={changeHomeV3} ariaLabel="Answer-first Home preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Calm chrome (preview)</div>
+                  <div className="set-row-sub">
+                    Optimize tucks everything that's already fine under one quiet "Nothing else needs
+                    attention" drawer, and Export lives with your scan results instead of the header.
+                    Nothing is removed — every reason stays one tap away.
+                  </div>
+                </div>
+                <Toggle on={calmChrome} onChange={changeCalmChrome} ariaLabel="Calm chrome preview" />
               </div>
             </div>
             <LivePreview ambiance={ambiance} />

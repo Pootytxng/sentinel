@@ -11,6 +11,7 @@ import { gpuRunningHot } from "../data/tuning-measure";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary } from "./use-scan";
 import { ScanStream } from "./ScanStream";
+import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import "./Check.css";
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
@@ -83,6 +84,12 @@ function driverFreshness(gpus: GpuDriverInfo[]):
   };
 }
 
+// Calm chrome (P5, compy_calm_chrome — DEFAULT OFF). DOM-read like Fix's flag readers; gates the
+// contextual Export button on the setup-summary card. Flag off ⇒ classic renders byte-identical.
+function calmChromeOn(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on";
+}
+
 // CHECK — the consolidation surface that absorbs Readiness + Priorities (spec 2026-06-06-check-play-lab).
 // Top: the shared scan (radar + streaming rows from useScan — same core as the first-run arc). Below:
 // Priorities' buckets as the permanent ranked result, with drift-watch cards when a regression-
@@ -108,6 +115,8 @@ export default function Check({
   sessions = [],
   gpus = [],
   embedded = false,
+  onExport,
+  exporting = false,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
@@ -118,6 +127,10 @@ export default function Check({
   // When composed inside the merged Optimize "Fixes" segment, the segment label already names the
   // surface — so suppress the standalone "Check" tab-title to avoid stacked redundant headings.
   embedded?: boolean;
+  // Calm chrome (P5): the full-report export rides with the scan results (the setup-summary card)
+  // instead of the app header. App-owned handler/modal; renders only when the flag is on.
+  onExport?: () => void;
+  exporting?: boolean;
 }) {
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
   // re-opening it serves the last verdict instantly instead of replaying the scan + 280ms/row reveal
@@ -524,8 +537,10 @@ export default function Check({
 
           <div className="check-section-label">Biggest limiters</div>
           {limiters.length === 0 ? (
+            // Deliberately NOT "measured clean" — the scan subtitle above already says it (the
+            // same double-saying the P5 taste catch flagged on Home). One phrase, one owner.
             <p className="check-clear">
-              Measured clean — every check came back right on this rig. Nothing to change today.
+              No limiter stands out on this rig — nothing to change today.
             </p>
           ) : (
             <ul className="check-list">
@@ -681,7 +696,11 @@ export default function Check({
             </div>
           )}
 
+          {/* Side-piles (P5 calm chrome): under the merged shell's provider these teleport into the
+              single "Nothing else needs attention" expander; classic/standalone render here as
+              always. Content, counts, and reasons identical either way — moved, never removed. */}
           {alreadyFine.length > 0 && (
+            <SidePileItem order={SIDE_PILE_ORDER.measuredFine}>
             <div className="check-fine">
               <button
                 className="check-fine-head"
@@ -702,9 +721,11 @@ export default function Check({
                 </ul>
               )}
             </div>
+            </SidePileItem>
           )}
 
           {notWorth.length > 0 && (
+            <SidePileItem order={SIDE_PILE_ORDER.notWorthTouching}>
             <div className="check-notworth">
               <button
                 className="check-section-label check-section-label-muted check-collapse-head"
@@ -733,6 +754,7 @@ export default function Check({
               </ul>
               )}
             </div>
+            </SidePileItem>
           )}
 
           {/* Exportable setup summary (A5) — a dedicated card that restates the settled scan in
@@ -761,9 +783,23 @@ export default function Check({
                 <span className="check-section-label" style={{ margin: 0 }}>
                   Setup summary
                 </span>
-                <button type="button" className="btn btn-small" onClick={copySetupSummary}>
-                  {copiedSummary ? "Copied ✓" : "Copy summary"}
-                </button>
+                <span style={{ display: "inline-flex", gap: 8 }}>
+                  {/* Calm chrome (P5): Export lives HERE — with the proof — instead of the app
+                      header. Same App-owned export + report modal; only the button moved. */}
+                  {calmChromeOn() && onExport && (
+                    <button
+                      type="button"
+                      className="btn btn-small"
+                      onClick={onExport}
+                      disabled={exporting}
+                    >
+                      {exporting ? "Exporting…" : "Export full report"}
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-small" onClick={copySetupSummary}>
+                    {copiedSummary ? "Copied ✓" : "Copy summary"}
+                  </button>
+                </span>
               </div>
               <p
                 className="check-row-reason"
@@ -797,6 +833,7 @@ export default function Check({
           siren: receipts (found vs stock default), the matched guide-era tweak, the mechanism cost,
           and a hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes
           are reported as unchecked, never counted clean. No restore action exists in v1. */}
+      <SidePileItem order={SIDE_PILE_ORDER.pastTweaks}>
       <div className="check-leftovers">
         {/* Display name "Past Tweaks" (owner pick 2026-06-11) — code identifiers, command names,
             ids, and the persisted leftover_adopted provenance deliberately keep "leftovers". */}
@@ -864,6 +901,7 @@ export default function Check({
           </ul>
         )}
       </div>
+      </SidePileItem>
     </section>
   );
 }

@@ -13,6 +13,8 @@ import {
   applyViewMode,
   readHomeV3,
   applyHomeV3,
+  readCalmChrome,
+  applyCalmChrome,
 } from "./theme";
 
 afterEach(() => {
@@ -22,6 +24,7 @@ afterEach(() => {
   delete document.documentElement.dataset.basicAdvanced;
   delete document.documentElement.dataset.viewMode;
   delete document.documentElement.dataset.homeV3;
+  delete document.documentElement.dataset.calmChrome;
 });
 
 describe("instrument theme", () => {
@@ -134,5 +137,24 @@ describe("answer-first Home (P3 UI slim-down — HARD LINE: default OFF)", () =>
     applyHomeV3(false);
     expect(document.documentElement.dataset.homeV3).toBeUndefined();
     expect(readHomeV3()).toBe(false);
+  });
+});
+
+describe("calm chrome (P5 UI slim-down — HARD LINE: default OFF)", () => {
+  it('defaults OFF when unset; true ONLY on the exact "1" opt-in', () => {
+    expect(readCalmChrome()).toBe(false);
+    localStorage.setItem("compy_calm_chrome", "on"); // junk value ≠ opt-in
+    expect(readCalmChrome()).toBe(false);
+    localStorage.setItem("compy_calm_chrome", "1");
+    expect(readCalmChrome()).toBe(true);
+  });
+
+  it("applyCalmChrome sets/clears data-calm-chrome on <html> and persists", () => {
+    applyCalmChrome(true);
+    expect(document.documentElement.dataset.calmChrome).toBe("on");
+    expect(readCalmChrome()).toBe(true);
+    applyCalmChrome(false);
+    expect(document.documentElement.dataset.calmChrome).toBeUndefined();
+    expect(readCalmChrome()).toBe(false);
   });
 });

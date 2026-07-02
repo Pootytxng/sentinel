@@ -161,3 +161,50 @@ describe("Optimize — segmented shell (phase 1a)", () => {
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
 });
+
+describe("Optimize — side-pile expander (P5 calm chrome, compy_calm_chrome)", () => {
+  const arm = () => {
+    document.documentElement.dataset.calmChrome = "on";
+  };
+  const disarm = () => {
+    delete document.documentElement.dataset.calmChrome;
+  };
+  afterEach(disarm);
+
+  it("flag OFF: no expander, the piles render in place as always (classic byte-identical)", () => {
+    renderOptimize();
+    expect(screen.queryByText("Nothing else needs attention")).toBeNull();
+    // The refuse pile renders directly on the surface (its CollapsibleSection header).
+    expect(screen.getByText("Not worth touching")).toBeTruthy();
+    expect(screen.getByText("Past Tweaks")).toBeTruthy();
+  });
+
+  it("flag ON: exactly ONE quiet expander swallows the piles — closed by default, content intact on open", () => {
+    arm();
+    const { container } = renderOptimize();
+    // Exactly one expander head (the duplication class the plan forbids: two identical drawers).
+    expect(screen.getAllByText("Nothing else needs attention")).toHaveLength(1);
+    const head = screen.getByRole("button", { name: /Nothing else needs attention/ });
+    expect(head.getAttribute("aria-expanded")).toBe("false");
+    // Closed: the pile content is teleported into the hidden drawer body, not on the open surface.
+    const body = container.querySelector("#optimize-sidepile-body") as HTMLElement;
+    expect(body.hasAttribute("hidden")).toBe(true);
+    // Honesty guardrail: the piles are MOVED, never removed — the refuse pile (retitled inside the
+    // drawer to disambiguate from Check's same-named pile) + Past Tweaks keep their full content.
+    expect(body.textContent).toContain("Deliberately refused");
+    expect(body.textContent).toContain("Past Tweaks");
+    // Open: the drawer unhides in place.
+    fireEvent.click(head);
+    expect(head.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("flag ON: the actionable sections stay OUT of the drawer (only 'leave it alone' piles move)", () => {
+    arm();
+    const { container } = renderOptimize();
+    const body = container.querySelector("#optimize-sidepile-body") as HTMLElement;
+    // "Worth making for your rig" (the fixes list) must never be swallowed.
+    expect(screen.getByText("Worth making for your rig")).toBeTruthy();
+    expect(body.textContent).not.toContain("Worth making for your rig");
+  });
+});

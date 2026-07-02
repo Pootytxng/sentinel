@@ -402,6 +402,39 @@ export function applyHomeV3(on: boolean): void {
   }
 }
 
+// Calm chrome (P5 of the UI slim-down, plan §5.5) — the side-pile collapse + chrome pass: the merged
+// Optimize surface collects every "leave it alone" pile (measured fine · not worth touching ·
+// dismissed · not for this rig · the refuse pile · past tweaks) under ONE quiet "Nothing else needs
+// attention" expander; Export leaves the persistent header for the scan-results card (contextual, not
+// furniture); calm ambiance gains its barely-there drift (owner §8b). DEFAULT OFF behind
+// `compy_calm_chrome`; flag off ⇒ today's UI renders byte-identical. Honesty unchanged: every pile
+// keeps its full content + reasons — collapsed, never removed.
+const CALM_CHROME_KEY = "compy_calm_chrome";
+
+export function readCalmChrome(): boolean {
+  try {
+    return localStorage.getItem(CALM_CHROME_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyCalmChrome(on: boolean): void {
+  if (on) document.documentElement.dataset.calmChrome = "on";
+  else delete document.documentElement.dataset.calmChrome;
+  try {
+    localStorage.setItem(CALM_CHROME_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:calmchrome-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
+}
+
 // In-game overlay backdrop (owner request 2026-06-11): "on" = the near-opaque pill plate; "off" =
 // fully transparent — text only, carrying its own readability via the RTSS-style outline (the same
 // trick the classic overlay shipped with). Same cross-window relay as density.

@@ -277,6 +277,66 @@
   z-index: 1;
 }
 
+/* ── side-pile expander (P5 calm chrome, compy_calm_chrome — DEFAULT OFF) ─────
+   THE one quiet "Nothing else needs attention" drawer at the foot of the Fixes segment; the six
+   "leave it alone" piles from Check + Fix portal their existing markup into .optimize-sidepile-body
+   (see side-pile.tsx). Deliberately muted — it must never compete with the verdict or the fixes
+   (squint test); tokens only, no side-stripe borders, motion none (nothing animates here). */
+.optimize-sidepile {
+  margin-top: 18px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: var(--ix-radius);
+  background: color-mix(in srgb, var(--ix-glass-fill) 55%, transparent);
+}
+
+.optimize-sidepile-head {
+  appearance: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: var(--ix-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--ix-radius);
+}
+.optimize-sidepile-head:hover {
+  color: var(--ix-text-1);
+  background: color-mix(in srgb, var(--ix-text-1) 4%, transparent);
+}
+.optimize-sidepile-head:focus-visible {
+  outline: 2px solid var(--ix-accent);
+  outline-offset: 2px;
+}
+
+.optimize-sidepile-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Information scent (NN/g): the head names what's inside, quietly. Pushes the chevron right. */
+.optimize-sidepile-hint {
+  flex: 1;
+  color: var(--ix-text-3);
+  font-size: 11.5px;
+}
+
+.optimize-sidepile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 14px 14px;
+}
+/* [hidden] loses to display:flex without this — the drawer must actually close. */
+.optimize-sidepile-body[hidden] {
+  display: none;
+}
+
 /* ── motion law: calm/stop ambient motion ONLY when motion is reduced ─────────
    Motion is ON by default and OVERRIDES the OS; this block is the single opt-out (never an OS
    reduce-motion media query). The segmented control's own motion-gating lives in

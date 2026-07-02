@@ -60,13 +60,25 @@ export function AmbientBackdrop({ ambiance }: { ambiance: Ambiance; themeKey?: s
   // Step aside while a game is presenting (user pref) — the aurora gets out of the way entirely.
   if (gameActive && freezeOnGame) return null;
 
-  // Drift only when it's full ambiance, visible, and motion is allowed; calm/reduced/hidden = static.
-  const drift = ambiance === "full" && !reduced && !hidden;
+  // Drift when it's full ambiance, visible, and motion is allowed; reduced/hidden = static
+  // (unconditional a11y/efficiency freezes). Calm chrome (P5, owner §8b "barely-there"): calm
+  // ambiance gains a much slower, fainter drift instead of a full freeze — flag off, calm stays
+  // static exactly as shipped.
+  const calmChrome =
+    typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on";
+  const drift = (ambiance === "full" || (ambiance === "calm" && calmChrome)) && !reduced && !hidden;
+  const slow = drift && ambiance === "calm" ? "ix-aurora-slow" : "";
 
   return (
     <>
-      <div className={`ix-aurora ix-aurora-a ${drift ? "ix-aurora-drift-a" : ""}`} aria-hidden="true" />
-      <div className={`ix-aurora ix-aurora-b ${drift ? "ix-aurora-drift-b" : ""}`} aria-hidden="true" />
+      <div
+        className={`ix-aurora ix-aurora-a ${drift ? "ix-aurora-drift-a" : ""} ${slow}`}
+        aria-hidden="true"
+      />
+      <div
+        className={`ix-aurora ix-aurora-b ${drift ? "ix-aurora-drift-b" : ""} ${slow}`}
+        aria-hidden="true"
+      />
       <div className="ix-vignette" aria-hidden="true" />
     </>
   );

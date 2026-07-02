@@ -45,6 +45,18 @@
     transform: translate(-5%, -3%) scale(1);
   }
 }
+/* Calm ambiance under calm chrome (P5, owner §8b): the same drift at roughly half speed and softer
+   presence — "barely-there", felt more than seen. Full ambiance is untouched. */
+.ix-aurora-slow {
+  opacity: 0.6;
+}
+.ix-aurora-slow.ix-aurora-drift-a {
+  animation-duration: 76s;
+}
+.ix-aurora-slow.ix-aurora-drift-b {
+  animation-duration: 94s;
+}
+
 :root[data-motion="reduced"] {
   .ix-aurora-drift-a,
   .ix-aurora-drift-b {

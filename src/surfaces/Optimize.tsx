@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppliedChange, Recommendation, SessionSummary, StartupEntry } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import Check from "./Check";
 import Fix from "./Fix";
 import { SegmentedControl } from "../design/SegmentedControl";
+import { SidePileContext } from "./side-pile";
 import "./Optimize.css";
 
 // Optimize — the merged Check + Tune surface (phase 1a, spec 2026-06-21-optimize-merge-design).
@@ -48,6 +49,10 @@ type Props = {
   // ── Shell ──
   activeCount: number; // = compy_changes_active — drives the persistent chip
   gamingSlot?: ReactNode; // App renders <GamingMode/> here only when the gate is on
+  // Calm chrome (P5): Export rides with the scan results instead of the app header — forwarded to
+  // Check's setup-summary card. Same App-owned handler + modal; only the button's home moves.
+  onExport?: () => void;
+  exporting?: boolean;
 };
 
 const SEGMENTS: { id: Segment; label: string }[] = [
@@ -74,8 +79,26 @@ export function Optimize({
   onApplyBatch,
   activeCount,
   gamingSlot,
+  onExport,
+  exporting,
 }: Props) {
   const [segment, setSegment] = useState<Segment>("fixes");
+
+  // Calm chrome (P5, compy_calm_chrome — DEFAULT OFF): the Fixes segment's six "leave it alone"
+  // piles collapse under ONE quiet "Nothing else needs attention" expander owned here; Check and
+  // Fix teleport their piles in via SidePileContext (see side-pile.tsx). DOM-read + live event,
+  // same pattern as the other preview flags. Flag off ⇒ no provider ⇒ classic, byte-identical.
+  const [calm, setCalm] = useState<boolean>(
+    () => typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on",
+  );
+  useEffect(() => {
+    const on = () => setCalm(document.documentElement.dataset.calmChrome === "on");
+    window.addEventListener("compy:calmchrome-changed", on);
+    return () => window.removeEventListener("compy:calmchrome-changed", on);
+  }, []);
+  const [pileOpen, setPileOpen] = useState(false);
+  // The expander body element — set via callback ref so the piles portal in only once it exists.
+  const [pileHost, setPileHost] = useState<HTMLElement | null>(null);
 
   // The gliding active indicator (one accent pill measured from the live DOM) is now the shared
   // <SegmentedControl> — extracted to src/design so Optimize, Monitor, and future tabs use ONE
@@ -123,7 +146,7 @@ export function Optimize({
 
       <div className="optimize-body">
         {segment === "fixes" && (
-          <>
+          <SidePileContext.Provider value={calm ? { host: pileHost } : null}>
             <Check
               isAppliable={isAppliable}
               onOpenLibrary={onOpenLibrary}
@@ -132,6 +155,8 @@ export function Optimize({
               sessions={sessions}
               gpus={gpus}
               embedded
+              onExport={onExport}
+              exporting={exporting}
             />
             {gamingSlot && <div className="optimize-gaming">{gamingSlot}</div>}
             <Fix
@@ -149,7 +174,33 @@ export function Optimize({
               vendor={vendor}
               view="fixes"
             />
-          </>
+            {/* THE one side-pile expander (plan §4.1: "one quiet expander swallows all the
+                side-piles"). The hint names what's inside (NN/g: information scent — a bare
+                chevron isn't enough). Content renders via portals from Check + Fix above. */}
+            {calm && (
+              <div className="optimize-sidepile">
+                <button
+                  type="button"
+                  className="optimize-sidepile-head"
+                  onClick={() => setPileOpen((o) => !o)}
+                  aria-expanded={pileOpen}
+                  aria-controls="optimize-sidepile-body"
+                >
+                  <span className="optimize-sidepile-title">Nothing else needs attention</span>
+                  <span className="optimize-sidepile-hint">
+                    measured fine · set aside · deliberately refused · past tweaks
+                  </span>
+                  <span aria-hidden="true">{pileOpen ? "▾" : "▸"}</span>
+                </button>
+                <div
+                  id="optimize-sidepile-body"
+                  className="optimize-sidepile-body"
+                  hidden={!pileOpen}
+                  ref={setPileHost}
+                />
+              </div>
+            )}
+          </SidePileContext.Provider>
         )}
 
         {(segment === "applied" || segment === "history") && (
