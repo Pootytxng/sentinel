@@ -430,7 +430,16 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   `docs/ui-sweep/shots/p3-*.png`). **Default-ON flip is an owner taste call.** Open taste note: the verdict
   sentence and the limiter clear-state both say "measured clean" (the same pairing the classic Home had) —
   a P5 copy-pass candidate.
-- [ ] P4 dedup: delete classic/losing render paths — ONLY after P1–P3 proven + owner default-ON; guards green
+- [x] **Default-ON flip (all four slim-down flags)** — `733f132` (2026-07-02, owner call): `compy_slim_rows` ·
+  `compy_basic_advanced` · `compy_home_v3` · `compy_calm_chrome` all read `!== "0"` (unset ⇒ ON) — the
+  slim-down IS the build. Settings → Appearance toggles stay live as the opt-out; classic render paths kept
+  as the failsafe. Zero src-tauri/IPC change; TrustSwitch/apply/rollback untouched. tsc clean · vitest
+  809/809 (default-pinning tests inverted; flag-off byte-identical guards unchanged).
+- [ ] P4 dedup: delete classic/losing render paths — owner default-ON ✅ (2026-07-02); still wants his
+  explicit "keeping the new look" confirmation after living with it, then pure removal w/ guards green
+- [ ] P6 "Journey" pass (spec direction in `docs/superpowers/specs/2026-07-02-full-tidy-directive.md`):
+  one forward door per room + shared RoomShell template + tour alignment — Cowork specs it in detail
+  after the owner's lived-in verdict on the default-ON look; flag-gated `compy_journey`, DEFAULT OFF
 - [x] **P5 calm chrome (side-pile collapse + chrome/motion pass)** — `33669a1` (2026-07-02): behind
   `compy_calm_chrome` (**DEFAULT OFF**, Settings → Appearance preview toggle; flag-off byte-identical,
   test-pinned). ONE "Nothing else needs attention" expander at the foot of Optimize/Fixes swallows all six
