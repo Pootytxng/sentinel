@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Compy — V2 product shell mockup (owner vision 2026-07-02)</title>
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#10131a; --panel-2:#141824; --line:rgba(255,255,255,.07);
+    --line-strong:rgba(255,255,255,.12);
+    --text:#e8ebf2; --muted:#8b93a7; --faint:#5c6478;
+    --accent:#a78bfa; --accent-ink:#1a0a2e; --accent-dim:rgba(167,139,250,.14);
+    --ok:#3ddc97; --ok-dim:rgba(61,220,151,.12);
+    --warn:#f5c542; --warn-dim:rgba(245,197,66,.12);
+    --info:#6cb8ff; --info-dim:rgba(108,184,255,.12);
+    --mono:"Cascadia Code","Consolas",ui-monospace,monospace;
+    --sans:"Segoe UI Variable Text","Segoe UI",-apple-system,"Inter",sans-serif;
+    --r:10px; --r-sm:7px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font:13px/1.5 var(--sans);-webkit-font-smoothing:antialiased;height:100vh;overflow:hidden}
+  kbd{font:10.5px var(--mono);color:var(--faint);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:var(--panel)}
+  .app{display:grid;grid-template-columns:216px 1fr;height:100vh}
+
+  /* ── Rail ── */
+  .rail{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;padding:14px 10px}
+  .wordmark{display:flex;align-items:center;gap:9px;padding:4px 10px 16px}
+  .wordmark .dot{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--accent),#7c5cd6);display:grid;place-items:center;font:700 11px var(--sans);color:var(--accent-ink)}
+  .wordmark b{font-size:14px;font-weight:600;letter-spacing:.2px}
+  .wordmark span{font:10px var(--mono);color:var(--faint);margin-left:auto}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-sm);color:var(--muted);text-decoration:none;cursor:pointer;border:1px solid transparent}
+  .nav a:hover{background:var(--panel-2);color:var(--text)}
+  .nav a.on{background:var(--accent-dim);color:var(--text);border-color:rgba(167,139,250,.25)}
+  .nav a .ic{width:16px;height:16px;opacity:.85}
+  .nav a kbd{margin-left:auto}
+  .rail .foot{margin-top:auto;padding:10px;border-top:1px solid var(--line);color:var(--faint);font-size:11.5px;display:flex;flex-direction:column;gap:6px}
+  .zero{display:flex;align-items:center;gap:7px}
+  .zero .led{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+
+  /* ── Top bar ── */
+  .main{display:flex;flex-direction:column;overflow:hidden}
+  .top{height:46px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--panel)}
+  .top .room{font-weight:600;font-size:13.5px}
+  .top .crumb{color:var(--faint)}
+  .cmd{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--faint);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 10px;font-size:12px;cursor:default}
+  .stamp{font:10.5px var(--mono);color:var(--faint)}
+
+  /* ── Content ── */
+  .content{flex:1;overflow-y:auto;padding:26px 30px}
+  .wrap{max-width:1120px;margin:0 auto}
+  .verdict{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+  .verdict h1{font-size:19px;font-weight:600;letter-spacing:-.2px}
+  .verdict .sub{color:var(--muted);font-size:12.5px}
+  .measured{font:10.5px var(--mono);color:var(--faint);margin-bottom:20px}
+
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:stretch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+  .card .hd{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--muted)}
+  .card .hd .right{margin-left:auto;font-weight:400;color:var(--faint);font-size:11.5px}
+
+  /* ── Hologram hero ── */
+  .holo{position:relative;min-height:380px;overflow:hidden;background:
+    radial-gradient(60% 70% at 50% 42%, rgba(167,139,250,.08), transparent 70%), var(--panel)}
+  .holo svg{display:block;margin:18px auto 0}
+  .holo .base{position:absolute;left:50%;top:318px;width:300px;height:26px;transform:translateX(-50%);
+    background:radial-gradient(50% 100% at 50% 0%, rgba(167,139,250,.28), transparent 75%);filter:blur(2px)}
+  .scanline{animation:scan 4.5s ease-in-out infinite}
+  @keyframes scan{0%,100%{transform:translateY(0);opacity:0}8%{opacity:.9}50%{transform:translateY(190px);opacity:.9}92%{opacity:.9}}
+  .part{cursor:pointer}
+  .part circle.node{transition:r .15s}
+  .part:hover circle.node{r:6}
+  .tag{position:absolute;display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);
+    background:rgba(10,12,16,.82);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px;backdrop-filter:blur(4px)}
+  .tag b{color:var(--text);font-weight:600}
+  .tag .v{font:10.5px var(--mono)}
+  .tag .led{width:6px;height:6px;border-radius:50%}
+  .led.ok{background:var(--ok)} .led.warn{background:var(--warn)}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)}
+  .holo .hint{position:absolute;left:16px;bottom:12px;font-size:11px;color:var(--faint)}
+
+  /* ── Stats column ── */
+  .stack{display:flex;flex-direction:column;gap:16px}
+  .stat{padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+  .stat .k{color:var(--muted);font-size:11.5px}
+  .stat .n{font:600 22px var(--mono);letter-spacing:-.5px}
+  .stat .d{font-size:11.5px;color:var(--faint)}
+  .stat .d.up{color:var(--ok)}
+  .spark{margin-top:6px;height:26px}
+
+  /* ── Pills / rows / tables ── */
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px}
+  .pill.ok{background:var(--ok-dim);color:var(--ok)}
+  .pill.warn{background:var(--warn-dim);color:var(--warn)}
+  .pill.info{background:var(--info-dim);color:var(--info)}
+  .pill.dim{background:rgba(255,255,255,.05);color:var(--muted)}
+  .rows{display:flex;flex-direction:column}
+  .row{display:grid;grid-template-columns:20px 1fr auto auto;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid var(--line)}
+  .row:first-child{border-top:none}
+  .row:hover{background:var(--panel-2)}
+  .row .nm{font-weight:600;font-size:12.5px}
+  .row .why{color:var(--muted);font-size:11.5px}
+  .row .mark{width:8px;height:8px;border-radius:50%;justify-self:center}
+  .mark.ok{background:var(--ok)} .mark.warn{background:var(--warn)} .mark.info{background:var(--info)}
+  .btn{font:600 12px var(--sans);border-radius:var(--r-sm);padding:6px 13px;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--text)}
+  .btn:hover{background:var(--panel-2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{border-color:transparent;color:var(--muted)}
+  .mono{font:11px var(--mono);color:var(--muted)}
+
+  .door{margin-top:16px;display:flex;align-items:center;gap:8px;color:var(--muted);border:1px dashed var(--line-strong);border-radius:var(--r);padding:12px 16px;cursor:pointer;font-size:12.5px}
+  .door:hover{color:var(--text);border-color:var(--accent);background:var(--accent-dim)}
+  .door .arrow{margin-left:auto;color:var(--accent)}
+
+  .quiet{margin-top:16px;color:var(--faint);font-size:12px;padding:10px 16px;border:1px solid var(--line);border-radius:var(--r);display:flex;gap:8px;align-items:center;cursor:pointer}
+  .quiet:hover{color:var(--muted)}
+  .quiet .n{margin-left:auto;font:10.5px var(--mono)}
+  .full{grid-column:1/-1}
+  .room-view{display:none}.room-view.on{display:block}
+  .banner{position:fixed;right:14px;bottom:12px;font:10.5px var(--mono);color:var(--faint);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- RAIL -->
+  <div class="rail">
+    <div class="wordmark"><div class="dot">C</div><b>Compy</b><span>0.1.0</span></div>
+    <nav class="nav">
+      <a class="on" data-room="home"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 6.5 8 2l5.5 4.5v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/></svg>Home<kbd>1</kbd></a>
+      <a data-room="optimize"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/></svg>Optimize<kbd>2</kbd></a>
+      <a><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12l3-5 3 3 3-6 3 8"/></svg>Monitor<kbd>3</kbd></a>
+      <a><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM6 5h4M6 8h4"/></svg>Blackbook<kbd>4</kbd></a>
+      <a><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2h4M7 2v4.5L3.5 12a1.5 1.5 0 0 0 1.3 2.2h6.4a1.5 1.5 0 0 0 1.3-2.2L9 6.5V2"/></svg>Lab<kbd>5</kbd></a>
+    </nav>
+    <div class="foot">
+      <div class="zero"><div class="led"></div>Zero outbound connections</div>
+      <div>Every change reversible · <span style="font-family:var(--mono);font-size:10px">ledger 41</span></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="top">
+      <span class="room" id="roomTitle">Home</span><span class="crumb" id="roomCrumb">· how your PC is doing</span>
+      <div class="cmd">Search or jump anywhere <kbd>Ctrl K</kbd></div>
+      <span class="stamp">cccb80e · release</span>
+    </div>
+
+    <div class="content"><div class="wrap">
+
+      <!-- ═══ HOME ═══ -->
+      <div class="room-view on" id="view-home">
+        <div class="verdict"><h1>Your PC is healthy and set up well for gaming.</h1><span class="sub">2 small wins available</span></div>
+        <div class="measured">last full check 14 min ago · 16/16 checks measured · nothing needs urgent attention</div>
+
+        <div class="grid">
+          <!-- HOLOGRAM HERO -->
+          <div class="card holo">
+            <svg width="460" height="330" viewBox="0 0 460 330" fill="none">
+              <defs>
+                <linearGradient id="holoLine" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#c4b0ff" stop-opacity=".95"/><stop offset="1" stop-color="#7c5cd6" stop-opacity=".55"/>
+                </linearGradient>
+                <filter id="glow"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+              <!-- tower: isometric wireframe -->
+              <g stroke="url(#holoLine)" stroke-width="1.3" filter="url(#glow)" opacity=".9">
+                <path d="M160 70 L280 40 L330 70 L330 250 L210 285 L160 252 Z"/>
+                <path d="M160 70 L210 100 L210 285"/><path d="M210 100 L330 70"/>
+                <!-- GPU slab -->
+                <path d="M225 170 L318 146 L318 168 L225 193 Z" opacity=".95"/>
+                <path d="M225 170 L225 193"/>
+                <!-- CPU/cooler -->
+                <path d="M240 112 L285 100 L285 128 L240 141 Z"/><circle cx="262" cy="119" r="11"/>
+                <!-- RAM sticks -->
+                <path d="M296 96 L302 94 L302 130 L296 132 Z"/><path d="M306 93 L312 91 L312 127 L306 129 Z"/>
+                <!-- storage -->
+                <path d="M228 222 L268 212 L268 226 L228 236 Z"/>
+                <!-- fans -->
+                <circle cx="185" cy="130" r="14" opacity=".6"/><circle cx="185" cy="185" r="14" opacity=".6"/>
+              </g>
+              <!-- scan sweep -->
+              <g class="scanline"><rect x="150" y="55" width="190" height="2" fill="#c4b0ff" opacity=".8"/><rect x="150" y="57" width="190" height="14" fill="url(#holoLine)" opacity=".12"/></g>
+              <!-- measured-status nodes on parts -->
+              <g class="part"><circle class="node" cx="270" cy="170" r="4.5" fill="#3ddc97"/><circle cx="270" cy="170" r="9" fill="none" stroke="#3ddc97" stroke-opacity=".35"/></g>
+              <g class="part"><circle class="node" cx="262" cy="119" r="4.5" fill="#3ddc97"/><circle cx="262" cy="119" r="9" fill="none" stroke="#3ddc97" stroke-opacity=".35"/></g>
+              <g class="part"><circle class="node" cx="304" cy="112" r="4.5" fill="#3ddc97"/></g>
+              <g class="part"><circle class="node" cx="248" cy="224" r="4.5" fill="#f5c542"/><circle cx="248" cy="224" r="9" fill="none" stroke="#f5c542" stroke-opacity=".35"/></g>
+            </svg>
+            <div class="base"></div>
+            <!-- projected part tags: measured values only -->
+            <div class="tag" style="right:18px;top:52px"><span class="led ok"></span><b>GPU</b> RX 9070 XT <span class="v ok">62°C</span></div>
+            <div class="tag" style="right:18px;top:96px"><span class="led ok"></span><b>CPU</b> Ryzen X3D <span class="v">temp n/a — by design</span></div>
+            <div class="tag" style="left:18px;top:52px"><span class="led ok"></span><b>RAM</b> <span class="v ok">14.2 / 29.4 GB</span></div>
+            <div class="tag" style="left:18px;top:96px"><span class="led warn"></span><b>Storage</b> C: <span class="v warn">87% full</span></div>
+            <div class="hint">Click a part for details · statuses are measured, never guessed</div>
+          </div>
+
+          <!-- STATS -->
+          <div class="stack">
+            <div class="card stat"><span class="k">Last session · Cyberpunk 2077</span><span class="n">142 <span style="font-size:12px;color:var(--muted)">fps avg</span></span>
+              <span class="d up">1% lows +6% vs your baseline</span>
+              <svg class="spark" viewBox="0 0 280 26" preserveAspectRatio="none"><path d="M0 18 L25 16 L50 17 L75 12 L100 14 L125 9 L150 11 L175 8 L200 10 L225 6 L250 8 L280 5" stroke="#a78bfa" stroke-width="1.5" fill="none"/></svg></div>
+            <div class="card stat"><span class="k">Measured wins on this rig</span><span class="n">3</span><span class="d">every one reversible from the ledger</span></div>
+            <div class="card stat"><span class="k">Trust ledger</span><span class="n">41 <span style="font-size:12px;color:var(--muted)">changes tracked</span></span><span class="d">latest: HAGS on · <span style="font-family:var(--mono);font-size:10px">18:22</span></span></div>
+          </div>
+
+          <!-- PRIORITIES -->
+          <div class="card full">
+            <div class="hd">Worth your attention <span class="right">ranked for your hardware, not generic advice</span></div>
+            <div class="rows">
+              <div class="row"><span class="mark warn"></span><span><span class="nm">C: drive is 87% full</span><br><span class="why">Below ~10% free, game load times measurably suffer. 41 GB of leftovers found — review before anything is touched.</span></span><span class="pill warn">biggest limiter</span><button class="btn">Review</button></div>
+              <div class="row"><span class="mark info"></span><span><span class="nm">GPU driver 25.6.1 → 25.7.2 available</span><br><span class="why">Newer may help in recent titles. Link copies to clipboard — you install it, Compy never touches drivers.</span></span><span class="pill info">your call</span><button class="btn">Copy link</button></div>
+              <div class="row"><span class="mark ok"></span><span><span class="nm">Startup apps: 2 heavy ones you don't game with</span><br><span class="why">Disabling frees measured RAM at boot. Fully reversible, one click back.</span></span><span class="pill ok">safe fix ready</span><button class="btn">View fix</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="door">Find what's worth fixing <span class="arrow">→ Optimize</span></div>
+      </div>
+
+      <!-- ═══ OPTIMIZE ═══ -->
+      <div class="room-view" id="view-optimize">
+        <div class="verdict"><h1>2 safe fixes ready. Nothing risky recommended for this rig.</h1></div>
+        <div class="measured">16/16 checks measured · catalog frozen at 29 vetted tweaks · every apply captures its own undo</div>
+
+        <div class="card">
+          <div class="hd">Ready to apply <span class="right"><button class="btn ghost">Scan again</button> <button class="btn primary">Apply 2 safe fixes</button></span></div>
+          <div class="rows">
+            <div class="row"><span class="mark ok"></span><span><span class="nm">Disable 2 heavy startup apps</span><br><span class="why">Frees measured RAM at boot on your 29.4 GB system. Undo restores them exactly.</span></span><span class="pill ok">reversible</span><button class="btn">Details</button></div>
+            <div class="row"><span class="mark ok"></span><span><span class="nm">Windows Game Mode: off → on</span><br><span class="why">Windows' own scheduler hint for games. Zero risk, standard setting.</span></span><span class="pill ok">reversible</span><button class="btn">Details</button></div>
+            <div class="row"><span class="mark info"></span><span><span class="nm">Hardware-accelerated GPU scheduling</span><br><span class="why">Already ON — applied 06-28, measured +4% 1% lows on this rig. In your ledger.</span></span><span class="pill dim">applied ✓</span><button class="btn ghost">Ledger</button></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="hd">Gaming Mode <span class="right">its own room — one door, no surprises</span></div>
+          <div class="rows">
+            <div class="row"><span class="mark ok"></span><span><span class="nm">One switch: quiet background services while you play</span><br><span class="why">Suspends only vetted services, restores them exactly when you're done. Live-tested.</span></span><span class="pill ok">ready</span><button class="btn">Open</button></div>
+          </div>
+        </div>
+
+        <div class="quiet">▸ Nothing else needs attention — measured fine, not worth touching, or not for this rig <span class="n">11 items</span></div>
+        <div class="door">Watch it live <span class="arrow">→ Monitor</span></div>
+      </div>
+
+    </div></div>
+  </div>
+</div>
+<div class="banner">MOCKUP — no live data · example values from your real rig class</div>
+<script>
+  document.querySelectorAll('.nav a[data-room]').forEach(a=>{
+    a.addEventListener('click',()=>{
+      document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('on'));
+      a.classList.add('on');
+      document.querySelectorAll('.room-view').forEach(v=>v.classList.remove('on'));
+      document.getElementById('view-'+a.dataset.room).classList.add('on');
+      document.getElementById('roomTitle').textContent=a.dataset.room==='home'?'Home':'Optimize';
+      document.getElementById('roomCrumb').textContent=a.dataset.room==='home'?'· how your PC is doing':'· find it, fix it, undo it';
+    });
+  });
+</script>
+</body>
+</html>
