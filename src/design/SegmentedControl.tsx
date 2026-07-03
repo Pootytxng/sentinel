@@ -31,13 +31,22 @@ export function SegmentedControl({ segments, value, onChange, "aria-label": aria
   });
   const measurePill = () => {
     const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth, ready: true });
+    // Reading offsetLeft/offsetWidth forces a synchronous reflow — skip it when the control is
+    // hidden (offsetWidth 0, e.g. a keepalive'd surface toggling display:none on a tab switch): the
+    // pill isn't visible anyway, and the reflow-on-hide was a measurable tab-switch hitch. It
+    // re-measures correctly on show (offsetWidth > 0), where the reflow is legitimate.
+    if (el && el.offsetWidth > 0) setPill({ left: el.offsetLeft, width: el.offsetWidth, ready: true });
   };
   useLayoutEffect(measurePill, [value, segments]);
   useEffect(() => {
     const c = ref.current;
     if (!c || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measurePill);
+    // Use the observer's own contentRect (no forced read) to skip entirely when the control has
+    // collapsed to zero size — a display:none tab switch shouldn't trigger any layout work here.
+    const ro = new ResizeObserver((entries) => {
+      if (entries[0]?.contentRect.width === 0) return;
+      measurePill();
+    });
     ro.observe(c);
     return () => ro.disconnect();
   }, []);
