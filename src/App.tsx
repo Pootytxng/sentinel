@@ -16,6 +16,7 @@ import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import CommandCenter from "./surfaces/CommandCenter";
 import { HomeV2 } from "./surfaces/HomeV2";
+import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
@@ -955,6 +956,9 @@ function App() {
   // Check + ~16 rec rows. (Set during render; idempotent. It mounts on first visit, not at app start,
   // so the scan still only runs when the user actually opens Optimize.)
   const optimizeMountedRef = useRef(false);
+  // Same keepalive for the V2 room path (V2-4): OptimizeV2 stays mounted once visited so
+  // returning to it is a CSS show, not a re-mount of Check + the rec rows.
+  const optimizeV2MountedRef = useRef(false);
   // Warm the readiness scan cache during the first idle window after paint, so the user's FIRST
   // open of Optimize/Check seeds the verdict instantly instead of cold-starting the scan (+ replaying
   // the row stagger) on the click. Deferred to idle (requestIdleCallback) so it never competes with
@@ -1081,7 +1085,12 @@ function App() {
       ]
     : [];
 
-  if (activeTab === "Optimize") optimizeMountedRef.current = true;
+  // V2-4: under the v2 shell the merged Optimize room renders OptimizeV2 instead — the classic
+  // keepalive must not ALSO mount the classic tree hidden (double Check/Fix machinery). Each
+  // path keeps its own keepalive; toggling the flag swaps which one is warm.
+  const v2Optimize = v2Shell && optimizeMerged;
+  if (activeTab === "Optimize" && !v2Optimize) optimizeMountedRef.current = true;
+  if (activeTab === "Optimize" && v2Optimize) optimizeV2MountedRef.current = true;
 
   // ── Shared room renders (classic shell + V2 shell) ─────────────────────────
   // The SAME elements render inside whichever chrome is active, so the two paths can never drift:
@@ -1375,7 +1384,41 @@ function App() {
               onSeeInFix={() => setActiveTab("Optimize")}
             />
           ) : (
-            roomPanels
+            <>
+              {/* V2-4: the Optimize room on RoomShell (merged shape only — the compy_optimize="0"
+                  escape hatch falls through to the classic panels below). Kept mounted once
+                  visited, same keepalive rationale as the classic path. */}
+              {optimizeV2MountedRef.current && optimizeMerged && hw && (
+                <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+                  <OptimizeV2
+                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                    onChanged={refresh}
+                    vendor={detectedVendor}
+                    sessions={sessions}
+                    gpus={hw?.gpus ?? []}
+                    recs={recs}
+                    readiness={readiness}
+                    startup={startup}
+                    changes={changes}
+                    busyId={busyId}
+                    activeChangeFor={findActiveChangeForRec}
+                    onToggleRec={(recId) => {
+                      const r = (recs ?? []).find((x) => x.id === recId);
+                      if (r) toggleRec(r);
+                    }}
+                    onToggleStartup={toggleStartup}
+                    onRollback={rollback}
+                    onApplyBatch={applyBatch}
+                    activeCount={activeChangeCount(changes)}
+                    gamingSlot={gamingEnabled ? <GamingMode /> : null}
+                    onExport={onExport}
+                    exporting={exporting}
+                  />
+                </div>
+              )}
+              {!(activeTab === "Optimize" && optimizeMerged) && roomPanels}
+            </>
           )}
         </ShellV2>
       ) : hw && ccActive ? (

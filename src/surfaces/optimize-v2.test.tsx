@@ -1,0 +1,263 @@
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { OptimizeV2 } from "./OptimizeV2";
+import { optimizeVerdict, optimizeMeasuredLine, safeFixesReady } from "./optimize-v2-data";
+import type { AppliedChange, GameReadiness, Recommendation } from "../types";
+
+// V2-4 guards (bug→guard tier 1): the V2 Optimize room composes RoomShell (one verdict, one
+// door), its verdict is a PURE derivation from the real catalog (honestly-loading while recs
+// haven't resolved, branch-proper copy — never "(s)"), the "N active · undo" chip is the one
+// primary action and lands on Applied, every apply entry point lands on Applied (the classic
+// shell's council contract, preserved), and the quiet side-pile expander exists only where the
+// piles portal in (Fixes).
+
+// Check and Fix are the audited heavy surfaces — composed VERBATIM with the same props, covered
+// by their own suites. Stubs here expose the routed handlers so the landing contract is testable.
+vi.mock("./Check", () => ({
+  default: (props: { onChanged: () => void }) => (
+    <div data-testid="check-surface">
+      <button type="button" onClick={props.onChanged}>
+        stub-inline-apply
+      </button>
+    </div>
+  ),
+}));
+vi.mock("./Fix", () => ({
+  default: (props: { view: string; onToggleRec: (id: string) => void }) => (
+    <div data-testid={`fix-${props.view}`}>
+      <button type="button" onClick={() => props.onToggleRec("game-mode")}>
+        stub-toggle-rec
+      </button>
+    </div>
+  ),
+}));
+
+beforeAll(() => {
+  // jsdom lacks the observers the vendored DecryptedText uses (IntersectionObserver) and the
+  // SegmentedControl's measurement path tolerates zero-rects; inert stubs, animation never starts.
+  class RO {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  class IO {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  (globalThis as Record<string, unknown>).ResizeObserver ??= RO;
+  (globalThis as Record<string, unknown>).IntersectionObserver ??= IO;
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
+
+const rec = (over: Partial<Recommendation>): Recommendation =>
+  ({
+    id: "game-mode",
+    title: "Windows Game Mode",
+    category: "Gaming",
+    severity: "safe",
+    description: "",
+    impact: "",
+    downside: null,
+    applies_to: "all",
+    currently_applied: false,
+    provenance: "verified",
+    ...over,
+  }) as Recommendation;
+
+const readiness: GameReadiness = {
+  checks: [
+    { id: "a", label: "A", status: "ready", detail: "", value: null },
+    { id: "b", label: "B", status: "ready", detail: "", value: null },
+    { id: "c", label: "C", status: "unknown", detail: "", value: null },
+  ],
+  ready_count: 2,
+  attention_count: 0,
+  unknown_count: 1,
+  advisory_count: 0,
+  advisory: "",
+  dismissed_ids: [],
+  drifts: [],
+};
+
+const APPLIABLE = new Set(["game-mode", "hags-enable"]);
+const isAppliable = (id: string) => APPLIABLE.has(id);
+
+const recsFixture: Recommendation[] = [
+  rec({ id: "game-mode" }), // safe + appliable + not applied → counts
+  rec({ id: "hags-enable", currently_applied: true }), // applied → excluded
+  rec({ id: "visual-effects" }), // safe but NOT one-click here → excluded
+  rec({ id: "nagle-disable", severity: "moderate" }), // not safe-tier → excluded
+  rec({ id: "power-ultimate", eligible: false }), // ineligible → excluded
+];
+
+function mount(over: Partial<Parameters<typeof OptimizeV2>[0]> = {}) {
+  const props = {
+    isAppliable,
+    onOpenLibrary: vi.fn(),
+    onChanged: vi.fn(),
+    vendor: "amd" as const,
+    recs: recsFixture,
+    startup: [],
+    changes: [] as AppliedChange[],
+    busyId: null,
+    activeChangeFor: () => undefined,
+    onToggleRec: vi.fn(),
+    onToggleStartup: vi.fn(),
+    onRollback: vi.fn(),
+    onApplyBatch: vi.fn().mockResolvedValue({ applied: 0, skipped: [] }),
+    readiness,
+    activeCount: 0,
+    ...over,
+  };
+  const utils = render(<OptimizeV2 {...props} />);
+  return { ...utils, props };
+}
+
+const useReduced = () => localStorage.setItem("compy_motion", "reduced");
+
+describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
+  it("counts only safe + one-click + eligible + not-applied recs", () => {
+    expect(safeFixesReady(recsFixture, isAppliable)).toBe(1);
+  });
+
+  it("catalog not resolved → honestly loading, not settled (no animation on a placeholder)", () => {
+    const v = optimizeVerdict(null, isAppliable, 0);
+    expect(v.settled).toBe(false);
+    expect(v.headline).toBe("Checking what's safe to change…");
+  });
+
+  it("branches singular/plural properly — never '(s)'", () => {
+    expect(optimizeVerdict(recsFixture, isAppliable, 0).headline).toBe(
+      "1 safe fix is ready to apply.",
+    );
+    const two = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
+    expect(optimizeVerdict(two, isAppliable, 0).headline).toBe(
+      "2 safe fixes are ready to apply.",
+    );
+    const none: Recommendation[] = [];
+    expect(optimizeVerdict(none, isAppliable, 1).headline).toBe(
+      "Nothing new to apply — 1 safe change is active.",
+    );
+    expect(optimizeVerdict(none, isAppliable, 3).headline).toBe(
+      "Nothing new to apply — 3 safe changes are active.",
+    );
+    expect(optimizeVerdict(none, isAppliable, 0).headline).toBe(
+      "Nothing needs applying right now.",
+    );
+    // The pluralization law, mechanized: no branch may emit the lazy "(s)".
+    for (const [recs, active] of [
+      [recsFixture, 0],
+      [two, 2],
+      [none, 1],
+      [none, 5],
+      [none, 0],
+      [null, 0],
+    ] as const) {
+      const v = optimizeVerdict(recs, isAppliable, active);
+      expect(`${v.headline} ${v.sub ?? ""}`).not.toContain("(s)");
+    }
+  });
+
+  it("measured line derives from real counts; unresolved → running", () => {
+    expect(optimizeMeasuredLine(readiness, recsFixture)).toBe(
+      "2/3 checks measured · 5 vetted tweaks evaluated",
+    );
+    expect(optimizeMeasuredLine(null, recsFixture)).toBe("running checks…");
+    expect(optimizeMeasuredLine(readiness, null)).toBe("running checks…");
+  });
+});
+
+describe("OptimizeV2 — RoomShell composition", () => {
+  it("renders ONE verdict (the pure helper's output) and ONE forward door to Monitor", () => {
+    useReduced();
+    const { container } = mount();
+    const h1s = container.querySelectorAll(".v2-verdict h1");
+    expect(h1s.length).toBe(1);
+    expect(h1s[0].textContent).toBe("1 safe fix is ready to apply.");
+    const doors = container.querySelectorAll(".v2-door");
+    expect(doors.length).toBe(1);
+    expect(doors[0].textContent).toContain("Watch it live");
+  });
+
+  it("measured line renders under the verdict", () => {
+    useReduced();
+    mount();
+    expect(screen.getByText("2/3 checks measured · 5 vetted tweaks evaluated")).toBeTruthy();
+  });
+
+  it("recs unresolved → loading verdict + running measured line, nothing fabricated", () => {
+    useReduced();
+    mount({ recs: null, readiness: null });
+    expect(screen.getByText("Checking what's safe to change…")).toBeTruthy();
+    expect(screen.getByText("running checks…")).toBeTruthy();
+  });
+});
+
+describe("OptimizeV2 — the one primary action (N active · undo)", () => {
+  it("hidden when nothing is active; renders the measured count and lands on Applied", () => {
+    useReduced();
+    const { container, unmount } = mount();
+    expect(container.querySelector(".ov2-chip")).toBeNull();
+    unmount();
+    const { container: withActive } = mount({ activeCount: 2 });
+    expect(withActive.querySelectorAll(".v2-verdict-action").length).toBe(1);
+    const chip = withActive.querySelector(".ov2-chip") as HTMLElement;
+    expect(chip.textContent).toContain("2");
+    expect(chip.textContent).toContain("active · undo");
+    expect(screen.queryByTestId("fix-ledger")).toBeNull();
+    fireEvent.click(chip);
+    expect(screen.getByTestId("fix-ledger")).toBeTruthy();
+    expect(screen.queryByTestId("check-surface")).toBeNull();
+  });
+});
+
+describe("OptimizeV2 — apply entry points land on Applied (council contract preserved)", () => {
+  it("a rec toggle routes through the SAME handler and lands on Applied", () => {
+    useReduced();
+    const { props } = mount();
+    fireEvent.click(screen.getByText("stub-toggle-rec"));
+    expect(props.onToggleRec).toHaveBeenCalledWith("game-mode");
+    expect(screen.getByTestId("fix-ledger")).toBeTruthy();
+  });
+
+  it("Check's inline apply (onChanged) also lands on Applied", () => {
+    useReduced();
+    const { props } = mount();
+    fireEvent.click(screen.getByText("stub-inline-apply"));
+    expect(props.onChanged).toHaveBeenCalled();
+    expect(screen.getByTestId("fix-ledger")).toBeTruthy();
+  });
+});
+
+describe("OptimizeV2 — quiet slot (side piles) and segments", () => {
+  it("the quiet expander exists on Fixes only, and the drawer actually opens/closes", () => {
+    useReduced();
+    const { container } = mount();
+    const head = screen.getByRole("button", { name: /Nothing else needs attention/ });
+    const body = container.querySelector("#ov2-sidepile-body") as HTMLElement;
+    expect(body.hidden).toBe(true);
+    fireEvent.click(head);
+    expect(body.hidden).toBe(false);
+    // Applied segment: no side piles portal there — the quiet slot is gone.
+    fireEvent.click(screen.getByRole("tab", { name: "Applied" }));
+    expect(screen.queryByRole("button", { name: /Nothing else needs attention/ })).toBeNull();
+  });
+
+  it("Gaming Mode is a segment ONLY when the gate passes a slot (dark = absent)", () => {
+    useReduced();
+    const { unmount } = mount();
+    expect(screen.queryByRole("tab", { name: "Gaming Mode" })).toBeNull();
+    unmount();
+    mount({ gamingSlot: <div data-testid="gaming-slot" /> });
+    fireEvent.click(screen.getByRole("tab", { name: "Gaming Mode" }));
+    expect(screen.getByTestId("gaming-slot")).toBeTruthy();
+  });
+});

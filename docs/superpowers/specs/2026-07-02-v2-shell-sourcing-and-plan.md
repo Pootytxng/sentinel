@@ -74,7 +74,19 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       (@keyframes allowed only with v2- prefix — inert flag-off). MagicBento/GlareHover passed
       over for the restrained stat treatment; still vendored, revisit by V2-9. Manual-parts
       form + fan nudge deliberately not in the hero (detail-inspector candidates, V2-9 call).
-- [ ] **V2-4 Optimize**
+- [x] **V2-4 Optimize** — 2026-07-02: OptimizeV2 on RoomShell — verdict = pure
+      optimizeVerdict (safe/one-click/eligible/not-applied count, honest loading state,
+      branch-proper copy pinned "(s)"-free) via DecryptedText · measured line = real check
+      counts + evaluated-catalog size · primaryAction = the "N active · undo" chip
+      (navigation-only, lands on Applied — the council rollback-one-glance rule, v2 skin) ·
+      segments (Fixes / Gaming Mode when gated-on / Applied) with land-on-Applied preserved ·
+      side-pile expander moved into RoomShell's quiet slot (Fixes only) · door from DOOR_MAP
+      (fix → Monitor). Check/Fix/GamingMode compose VERBATIM (same props, same audited
+      handlers, zero new mutation paths); their re-skin is a --ix-*→--v2-* token re-point
+      scoped to the room element — the exact mechanism the five themes use, classic CSS/DOM
+      untouched. Non-merged escape hatch (compy_optimize="0") falls through to classic panels.
+      Keepalive split per path so classic Optimize never mounts hidden under v2.
+      optimize-v2.css added to scoping/no-literal/token-font guards; +15 tests.
 - [ ] **V2-5 Monitor**
 - [ ] **V2-6 Blackbook**
 - [ ] **V2-7 Lab**
@@ -84,7 +96,10 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       stronger backdrop or move above the stage floor; (b) Trust-ledger card: long mono task ids
       wrap with a tilde artifact ("compatibility~appraiser") — truncate w/ ellipsis + title attr;
       (c) "1 safe one-click tweak(s) not applied" — "(s)" pluralization violates plain-language
-      bar; branch the copy properly.
+      bar; branch the copy properly. (d, from V2-4: the Optimize room now stacks THREE summary
+      lines — the RoomShell verdict + Check's embedded scan verdict ("N things worth a look")
+      + Fix's own "N thing worth a look" header; consolidate so the room verdict is the ONE
+      answer line and the embedded surfaces demote to detail.)
 - [ ] **V2-10 Dedup (after owner default-ON verdict):** delete the classic shell/room paths +
       the losing nav candidate (GooeyNav vs PillNav) + retire `compy_v2` — same ritual as P4.
       Known debt, deliberately carried during the flag-gated rollout (Cowork audit note, V2-2).

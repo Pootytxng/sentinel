@@ -1,0 +1,122 @@
+/* ── V2 Optimize room (V2-4, spec 2026-07-02-v2-shell-sourcing-and-plan) ───────────────
+   RoomShell chrome for the Optimize room + the token re-point that re-skins the composed
+   classic surfaces (Check, Fix, SegmentedControl, GamingMode) to the approved mockup palette.
+
+   LAWS (test-pinned in tokens-v2-guard.test.ts):
+   - EVERY selector is scoped under [data-v2="on"] — the flag-off byte-identity mechanism.
+   - NO color literals — every color resolves from a --v2-* token.
+   - Font declarations reference only var(--v2-font-*).
+
+   THE RE-POINT: the classic surfaces already resolve every color from the --ix-* instrument
+   token layer (that is how the five themes recolor them). Scoping new --ix-* values to the
+   Optimize room element re-skins ALL of it — including TrustSwitch and GamingMode — through
+   the exact mechanism themes already use: zero classic CSS touched, zero classic DOM touched,
+   handlers byte-identical. --ix-danger is deliberately NOT re-pointed (v2 has no danger token;
+   the semantic red must stay red). */
+
+:root[data-v2="on"] .v2-room[data-room="fix"] {
+  /* instrument layer → v2 palette */
+  --ix-base: var(--v2-bg);
+  --ix-bg-1: var(--v2-bg);
+  --ix-glass-fill: var(--v2-panel);
+  --ix-glass-border: var(--v2-line);
+  --ix-glass-top: var(--v2-line-strong);
+  --ix-border: var(--v2-line);
+  --ix-line: var(--v2-line);
+  --ix-surface-2: var(--v2-panel-2);
+  --ix-radius: var(--v2-r);
+  --ix-text-1: var(--v2-text);
+  --ix-text-2: var(--v2-muted);
+  --ix-text-3: var(--v2-faint);
+  --ix-accent: var(--v2-accent);
+  --ix-accent-text: var(--v2-accent);
+  --ix-accent-ink: var(--v2-accent-ink);
+  --ix-accent-2: var(--v2-info);
+  --ix-accent-wash: var(--v2-accent-dim);
+  --ix-streak-1: var(--v2-accent);
+  --ix-streak-2: var(--v2-info);
+  --ix-streak-3: var(--v2-accent);
+  --ix-amber: var(--v2-warn);
+  --ix-mono: var(--v2-font-mono);
+  /* classic (pre-instrument) layer, still read by shared primitives (.btn, modals, rows) */
+  --bg: var(--v2-bg);
+  --bg-2: var(--v2-bg);
+  --panel: var(--v2-panel);
+  --panel-2: var(--v2-panel-2);
+  --panel-3: var(--v2-panel-2);
+  --muted: var(--v2-muted);
+  --accent: var(--v2-accent);
+  --accent-bright: var(--v2-accent);
+  --accent-hover: var(--v2-accent);
+  --accent-soft: var(--v2-accent-dim);
+  --accent-line: var(--v2-accent-line);
+  --accent-glow: var(--v2-accent-dim);
+}
+
+/* ── room chrome ── */
+:root[data-v2="on"] .ov2-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--v2-pad-sm);
+  margin-bottom: var(--v2-gap);
+}
+
+:root[data-v2="on"] .ov2-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+:root[data-v2="on"] .ov2-gaming {
+  margin-top: 4px;
+}
+
+/* The "N active · undo" chip — the room's one primary action (navigation-only: it lands on
+   Applied, where rollback lives). Quiet v2 treatment: accent hairline, dim wash, no float. */
+:root[data-v2="on"] .ov2-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border: 1px solid var(--v2-accent-line);
+  background: var(--v2-accent-dim);
+  color: var(--v2-text);
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .ov2-chip:hover {
+  border-color: var(--v2-accent);
+}
+:root[data-v2="on"] .ov2-chip:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+/* The count is a machine value — the sanctioned mono use. */
+:root[data-v2="on"] .ov2-chip-count {
+  font: 12px var(--v2-font-mono);
+  color: var(--v2-accent);
+}
+
+/* ── quiet slot internals (the head button itself is .v2-quiet from shell-v2.css) ── */
+:root[data-v2="on"] .ov2-quiet-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--v2-faint);
+}
+
+:root[data-v2="on"] .ov2-sidepile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: var(--v2-pad-sm) 0 0;
+}
+/* [hidden] loses to display:flex without this — the drawer must actually close. */
+:root[data-v2="on"] .ov2-sidepile-body[hidden] {
+  display: none;
+}
