@@ -734,6 +734,9 @@ pub(crate) struct AppliedChangesSummary {
     pub(crate) active: usize,
     pub(crate) rolled_back: usize,
     pub(crate) externally_reverted: usize,
+    /// The drifted settings BY NAME (rec titles, sorted for stable output) so surfaces can say
+    /// WHICH setting drifted instead of a vague "N setting(s)" (flags-name-it law).
+    pub(crate) drifted_titles: Vec<String>,
 }
 
 pub(crate) fn applied_changes_summary() -> AppliedChangesSummary {
@@ -767,8 +770,10 @@ fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSummary {
             s.active += 1;
         } else {
             s.externally_reverted += 1;
+            s.drifted_titles.push(c.rec_title.clone());
         }
     }
+    s.drifted_titles.sort(); // HashMap order is random — keep the named list stable
     s
 }
 

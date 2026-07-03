@@ -807,19 +807,39 @@ pub(crate) fn evaluate_readiness(
         ));
     }
 
-    // 8. Applied Compy changes — count active + flag external reverts.
+    // 8. Applied Compy changes — count active + flag external reverts. The drifted settings are
+    // named (flags-name-it law: no vague "N setting(s)", no dead-end room references — "Tune"
+    // no longer exists; Optimize is the room the fix CTA routes to).
     {
         let c = if hist.externally_reverted > 0 {
+            let detail = if hist.externally_reverted == 1 {
+                let name = hist
+                    .drifted_titles
+                    .first()
+                    .map(String::as_str)
+                    .unwrap_or("A setting");
+                format!(
+                    "“{name}” — you turned it on with Compy and it's currently off, changed \
+                     outside Compy (by Windows, another app, or you). Not an error: turn it \
+                     back on or roll it back in Optimize — either one clears this."
+                )
+            } else {
+                let mut names = hist.drifted_titles.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+                if hist.drifted_titles.len() > 3 {
+                    names.push_str(&format!(" and {} more", hist.drifted_titles.len() - 3));
+                }
+                format!(
+                    "{} settings you turned on with Compy are currently off ({names}) — changed \
+                     outside Compy (by Windows, another app, or you). Not an error: turn them \
+                     back on or roll them back in Optimize — either one clears this.",
+                    hist.externally_reverted
+                )
+            };
             check(
                 "applied-changes",
                 "Applied Compy changes",
                 ReadinessStatus::Attention,
-                format!(
-                    "{} setting(s) you turned on with Compy are currently off — changed \
-                     outside Compy (by Windows, another app, or you). Not an error: turn them \
-                     back on or roll them back in Tune — either one clears this.",
-                    hist.externally_reverted
-                ),
+                detail,
                 Some(format!(
                     "{} on / {} drifted",
                     hist.active, hist.externally_reverted
@@ -839,8 +859,8 @@ pub(crate) fn evaluate_readiness(
                 "Applied Compy changes",
                 ReadinessStatus::Ready,
                 format!(
-                    "{} setting(s) active and reversible from the Trust Ledger.",
-                    hist.active
+                    "{} active and reversible from the Trust Ledger.",
+                    if hist.active == 1 { "1 setting".to_string() } else { format!("{} settings", hist.active) }
                 ),
                 Some(format!("{} active", hist.active)),
             )
@@ -1237,9 +1257,17 @@ mod readiness_tests {
             active: 2,
             rolled_back: 0,
             externally_reverted: 1,
+            drifted_titles: vec!["Enable Windows Game Mode".into()],
         };
         let r = evaluate_readiness(&hw, None, false, false, &hist, None);
-        assert_eq!(find(&r, "applied-changes").status, ReadinessStatus::Attention);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        // flags-name-it law: the drifted setting is NAMED; no vague "setting(s)", no dead-end
+        // "Tune" room reference (that surface was merged into Optimize).
+        assert!(c.detail.contains("Enable Windows Game Mode"), "detail names the drifted setting: {}", c.detail);
+        assert!(!c.detail.contains("setting(s)"), "no vague count: {}", c.detail);
+        assert!(!c.detail.contains("Tune"), "no stale room name: {}", c.detail);
+        assert!(c.detail.contains("Optimize"), "points at the real room: {}", c.detail);
     }
 
     #[test]
