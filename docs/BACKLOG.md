@@ -450,12 +450,25 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   src-tauri diff (`git diff 733f132..cccb80e -- src-tauri` empty) · TrustSwitch untouched · tsc clean ·
   vitest 815/815 · cargo 659/0 (A6 green) · self-review shots `docs/ui-sweep/shots/p55/` · shipped +
   stamp-verified live `cccb80e`.
-- [ ] P4 dedup: delete classic/losing render paths — owner default-ON ✅ (2026-07-02); still wants his
-  explicit "keeping the new look" confirmation after living with it, then pure removal w/ guards green
-  (now includes `compy_gm_door`'s classic inline Gaming Mode slot)
+- [x] **P4 dedup: delete classic/losing render paths** — `f13f82a` (2026-07-02). **Owner verdict
+  RECORDED 2026-07-02: keeping the new look** (the P5.5 critique said "keep visual language"; his
+  follow-up "do the single thing that unblocks everything" cleared this gate). Removed the five
+  slim-down flags (`compy_slim_rows/basic_advanced/home_v3/calm_chrome/gm_door`) + every classic
+  branch they gated (−1196 lines): theme.ts readers/appliers, main.tsx pre-paint (view-mode mirror
+  kept), Settings' five preview toggles, dashV2-Home + classic-Home bodies + orphaned
+  `DashboardV2.tsx`, classic single-face Monitor, classic inline GM slot, header Export branch,
+  calm-static backdrop branch. Deliberately KEPT (older families, separate approval train — P4b
+  candidates): `compy_optimize` / `compy_monitor` / `compy_living_instrument` / `compy_dash_v2`
+  (standalone Tune view="all" classic FixRow rides `compy_optimize`). Follow-up found in
+  self-review: `readiness.rs:818` drift-reason copy says "in Tune" + vague "N setting(s)"
+  (backend — violates flags-name-it law; zero-src-tauri hard line kept it out of P4). Verified:
+  tsc clean · vitest 800/800 · cargo 659 · src-tauri diff empty · live self-review shots
+  `docs/ui-sweep/shots/p4/`.
 - [ ] P6 "Journey" pass (spec direction in `docs/superpowers/specs/2026-07-02-full-tidy-directive.md`):
-  one forward door per room + shared RoomShell template + tour alignment — Cowork specs it in detail
-  after the owner's lived-in verdict on the default-ON look; flag-gated `compy_journey`, DEFAULT OFF
+  one forward door per room + shared RoomShell template + tour alignment — **UNBLOCKED 2026-07-02**
+  (the owner's keep-the-look verdict above was the gate). Cowork lane: write the detailed spec
+  (a draft `2026-07-02-p6-journey-spec.md` was already in the worktree during P4 — finish/land it);
+  CC builds after. Flag-gated `compy_journey`, DEFAULT OFF.
 - [x] **P5 calm chrome (side-pile collapse + chrome/motion pass)** — `33669a1` (2026-07-02): behind
   `compy_calm_chrome` (**DEFAULT OFF**, Settings → Appearance preview toggle; flag-off byte-identical,
   test-pinned). ONE "Nothing else needs attention" expander at the foot of Optimize/Fixes swallows all six
