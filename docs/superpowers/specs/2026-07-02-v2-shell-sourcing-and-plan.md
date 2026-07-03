@@ -150,7 +150,25 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       scoping/no-literal/token-font guards; +11 tests. Zero src-tauri diff. V2-9 punch
       candidate (j): baseline date renders in the verdict sub AND the Benchmark card summary —
       same same-fact-twice class as (V2-5) sessions-count.
-- [ ] **V2-8 Journey doors + tour alignment**
+- [x] **V2-8 Journey doors + tour alignment** — 2026-07-03 (absorbs P6 §2/§4). Doors: RoomShell
+      gains `doorOpen` (default open; destination/label still DOOR_MAP-only) — Optimize's door now
+      renders ONLY in the apply-complete/all-clear state (pure `verdict.allClear`: catalog settled
+      + zero safe one-click fixes left; loading = closed — the door is the reward for finishing
+      the chapter, not a bypass); Monitor's door is ABSENT during a live capture session (Play/
+      MonitorBasic mirror their already-polled get_fps_status up via additive `onFpsActive` —
+      absent = classic byte-identical, no second IPC; conservative: last reported value holds
+      across segment switches so the door never opens mid-capture). Home/Blackbook doors stay
+      unconditional per the §2 table; Lab none. Tour alignment: the recap follows the rail the
+      user actually has (buildTabs/buildSetupSteps take `merged`) — merged = the five journey
+      rooms in rail order with a body that NAMES the journey ("Home for the glance, Optimize to
+      check and fix, Monitor to watch it live…"); merged Optimize recap blurb covers BOTH halves
+      (check + undoable ledger); the cpu lesson's stale "Check tab" tie re-ties to Optimize under
+      merge; seatbelt step names the ledger room by its CURRENT rail label (was hardcoded "Tune");
+      compy_optimize="0" escape hatch keeps the classic six-room tour verbatim (test-pinned). No
+      new steps (10 before, 10 after). +13 guards (door gating in room-shell/optimize-v2/
+      monitor-v2/Play suites, tour pins in setup-steps). Zero src-tauri diff. Live-verified over
+      CDP: all-clear Optimize shows the door, idle Monitor shows the door, recap = 5 journey
+      cards (shots in docs/ui-sweep/shots/v2/v2-8-*).
 - [ ] **V2-9 Consistency pass** — punch list (Cowork visual audit of v2-3 shot):
       (a) hologram stage hint text still marginal over the ring glow at bottom-left — needs a
       stronger backdrop or move above the stage floor; (b) Trust-ledger card: long mono task ids

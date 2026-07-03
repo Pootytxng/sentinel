@@ -44,12 +44,17 @@ export function MonitorBasic({
   vendor = "any",
   sessions,
   onOpenSessions,
+  onFpsActive,
 }: {
   active: boolean;
   vendor?: GpuVendor;
   sessions: SessionSummary[];
   /** Routes to Advanced → Sessions (the full debrief) — the last-session line is a door, not a dead end. */
   onOpenSessions: () => void;
+  /** V2-8 (additive — absent = classic byte-identical): mirrors the polled FPS-capture state up so
+   *  the V2 Monitor room can close its forward door during a live session (P6 §2). Same
+   *  get_fps_status read the tiles already make — no second IPC. */
+  onFpsActive?: (active: boolean) => void;
 }) {
   const [cpu, setCpu] = useState<CpuSnap | null>(null);
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
@@ -74,6 +79,12 @@ export function MonitorBasic({
       window.clearInterval(id);
     };
   }, [active, visible]);
+
+  // V2-8: mirror the already-polled capture state up to the shell (no-op without the callback).
+  const fpsActive = fps?.active ?? false;
+  useEffect(() => {
+    onFpsActive?.(fpsActive);
+  }, [onFpsActive, fpsActive]);
 
   // The existing audited capture commands — identical semantics to Play's button.
   const toggleCapture = useCallback(async () => {

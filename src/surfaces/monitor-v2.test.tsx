@@ -20,14 +20,26 @@ vi.mock("./Play", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>;
   return {
     ...orig,
-    default: (props: { view: string }) => <div data-testid={`play-${props.view}`} />,
+    default: (props: { view: string; onFpsActive?: (a: boolean) => void }) => (
+      <div data-testid={`play-${props.view}`}>
+        <button type="button" onClick={() => props.onFpsActive?.(true)}>
+          stub-play-capture-on
+        </button>
+      </div>
+    ),
   };
 });
 vi.mock("./MonitorBasic", () => ({
-  MonitorBasic: (props: { onOpenSessions: () => void }) => (
+  MonitorBasic: (props: { onOpenSessions: () => void; onFpsActive?: (a: boolean) => void }) => (
     <div data-testid="monitor-basic">
       <button type="button" onClick={props.onOpenSessions}>
         stub-open-sessions
+      </button>
+      <button type="button" onClick={() => props.onFpsActive?.(true)}>
+        stub-capture-on
+      </button>
+      <button type="button" onClick={() => props.onFpsActive?.(false)}>
+        stub-capture-off
       </button>
     </div>
   ),
@@ -164,6 +176,28 @@ describe("MonitorV2 — RoomShell composition", () => {
     useReduced();
     const { container } = mount();
     expect(container.querySelector(".v2-verdict-action")).toBeNull();
+  });
+
+  // V2-8 (P6 §2 placement): the door belongs to the session-end state — ABSENT while a capture
+  // session is live, back when it ends. The faces mirror their already-polled get_fps_status up
+  // via onFpsActive (no second IPC).
+  it("closes the forward door during a live capture session, reopens when it ends", () => {
+    useReduced();
+    const { container } = mount();
+    expect(container.querySelectorAll(".v2-door").length).toBe(1);
+    fireEvent.click(screen.getByText("stub-capture-on"));
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
+    fireEvent.click(screen.getByText("stub-capture-off"));
+    expect(container.querySelectorAll(".v2-door").length).toBe(1);
+  });
+
+  it("the Advanced live face reports capture state through the same door signal", () => {
+    useReduced();
+    useAdvanced();
+    const { container } = mount();
+    expect(container.querySelectorAll(".v2-door").length).toBe(1);
+    fireEvent.click(screen.getByText("stub-play-capture-on"));
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
   });
 });
 

@@ -5,8 +5,10 @@ import {
   buildTabs,
   HARDWARE_LESSONS,
   TAB_BLURB,
+  MERGED_FIX_BLURB,
+  JOURNEY_RECAP_BODY,
 } from "./setup-steps";
-import { HOME_RAIL } from "../../design/homeRail";
+import { HOME_RAIL, railFor } from "../../design/homeRail";
 import type { RigPart, RigPartKind } from "../rig/rig-parts";
 
 function part(id: string, kind: RigPartKind, name: string): RigPart {
@@ -42,13 +44,33 @@ describe("buildSetupSteps", () => {
     expect(steps.slice(0, 4).every((s) => s.leg === "setup")).toBe(true);
   });
 
-  it("tours hardware in the owner's order, then ends with the six-tab recap", () => {
+  it("tours hardware in the owner's order, then ends with the rail recap", () => {
     const tour = steps.filter((s) => s.leg === "tour");
     const lessons = tour.filter((s) => s.kind === "lesson");
     expect(lessons.map((s) => s.lesson?.kind)).toEqual(["psu", "storage", "gpu", "cpu", "ram"]);
     const last = steps[steps.length - 1];
     expect(last.kind).toBe("tabmap");
+    expect(last.tabs?.length).toBe(railFor(true).length);
+  });
+
+  // V2-8 tour alignment (P6 §4): the recap follows the rail the user actually has and, on the
+  // merged five-room rail, NAMES the journey in rail order. Align, don't add — same step count.
+  it("merged recap = the five journey rooms in rail order, body names the journey", () => {
+    const last = steps[steps.length - 1];
+    expect(last.tabs?.map((t) => t.id)).toEqual(["home", "fix", "play", "learn", "lab"]);
+    expect(last.body).toBe(JOURNEY_RECAP_BODY);
+    // The journey copy names every room in rail order (order is felt — the recap says it once).
+    for (const label of ["Home", "Optimize", "Monitor", "Blackbook", "Lab"]) {
+      expect(last.body).toContain(label);
+    }
+  });
+
+  it("classic escape hatch (merged=false) keeps the six-room recap verbatim", () => {
+    const classic = buildSetupSteps(PARTS, false);
+    const last = classic[classic.length - 1];
     expect(last.tabs?.length).toBe(HOME_RAIL.length);
+    expect(last.body).toBe("Six rooms, one job each. Here's where everything lives.");
+    expect(classic.length).toBe(steps.length); // align, don't add: no step count change
   });
 
   it("focuses each lesson on the REAL part of its kind, titled with the real name", () => {
@@ -102,11 +124,42 @@ describe("hardware ↔ tab ties", () => {
 });
 
 describe("buildTabs / TAB_BLURB", () => {
-  it("covers exactly the six rail rooms with a blurb each", () => {
+  it("classic: covers exactly the six rail rooms with a blurb each", () => {
     expect(Object.keys(TAB_BLURB).sort()).toEqual(RAIL_IDS);
-    const tabs = buildTabs();
+    const tabs = buildTabs(false);
     expect(tabs.map((t) => t.id).sort()).toEqual(RAIL_IDS);
     expect(tabs.every((t) => t.label && t.icon && t.blurb.trim().length > 0)).toBe(true);
+  });
+
+  it("merged: the five journey rooms from railFor, and Optimize's blurb covers check AND fix", () => {
+    const tabs = buildTabs(true);
+    expect(tabs.map((t) => t.id)).toEqual(railFor(true).map((r) => r.id));
+    const optimize = tabs.find((t) => t.id === "fix")!;
+    expect(optimize.label).toBe("Optimize");
+    expect(optimize.blurb).toBe(MERGED_FIX_BLURB);
+    // Both halves of the merged room are in the blurb: the diagnose half and the undo promise.
+    expect(optimize.blurb).toMatch(/check/i);
+    expect(optimize.blurb).toMatch(/undoable/i);
+  });
+});
+
+describe("V2-8 merged tab ties — no lesson may point at a room the rail doesn't show", () => {
+  it("remaps the Check-tab tie to the merged Optimize room", () => {
+    const cpu = buildHardwareSteps(PARTS, true).find((s) => s.lesson?.kind === "cpu");
+    expect(cpu?.lesson?.tab.id).toBe("fix");
+    expect(cpu?.lesson?.tab.tie).toBe("Optimize scans for CPU limiters and applies the top fix.");
+  });
+
+  it("keeps the classic Check tie under the escape hatch", () => {
+    const cpu = buildHardwareSteps(PARTS, false).find((s) => s.lesson?.kind === "cpu");
+    expect(cpu?.lesson?.tab.id).toBe("check");
+  });
+
+  it("every merged lesson tie targets a room present on the merged rail", () => {
+    const mergedIds = new Set(railFor(true).map((r) => r.id));
+    for (const s of buildHardwareSteps(PARTS, true)) {
+      expect(mergedIds.has(s.lesson!.tab.id), `lesson ${s.lesson!.kind}`).toBe(true);
+    }
   });
 });
 

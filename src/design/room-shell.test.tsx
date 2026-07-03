@@ -69,6 +69,25 @@ describe("RoomShell — one skeleton, five slots, fixed order", () => {
     expect(container.querySelectorAll(".v2-door").length).toBe(1);
   });
 
+  // V2-8 (P6 §2 placement): a room may CLOSE its door while its chapter is unfinished —
+  // Optimize until all-clear, Monitor during a live capture. Default stays open, and the
+  // destination/label still come from DOOR_MAP alone.
+  it("doorOpen={false} hides the door; doorOpen={true} and the default both show it", () => {
+    for (const [props, doors] of [
+      [{ doorOpen: false }, 0],
+      [{ doorOpen: true }, 1],
+      [{}, 1],
+    ] as const) {
+      const { container, unmount } = render(
+        <RoomShell room="fix" verdict="v" {...props}>
+          <div>body</div>
+        </RoomShell>,
+      );
+      expect(container.querySelectorAll(".v2-door").length, JSON.stringify(props)).toBe(doors);
+      unmount();
+    }
+  });
+
   it("Lab (last chapter) renders NO door; the legacy check room renders none either", () => {
     for (const room of ["lab", "check"] as const) {
       const { container, unmount } = render(

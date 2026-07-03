@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import type { SessionSummary } from "../types";
 
 // Play (+ the embedded debrief) polls/reads on mount; mock invoke so it doesn't throw outside Tauri.
@@ -92,5 +92,21 @@ describe("Play", () => {
     expect(screen.getByText("Live monitor")).toBeInTheDocument();
     expect(screen.getByText("Recent sessions")).toBeInTheDocument();
     expect(screen.queryByText("avg FPS")).toBeNull(); // hero is sessions-view-only, not in "all"
+  });
+
+  // V2-8: the additive onFpsActive callback mirrors the ALREADY-polled get_fps_status state up
+  // (so MonitorV2 can close its door during a live session) — same read, no second IPC. Kept
+  // last in the file: it swaps the invoke mock's implementation and restores it after.
+  it("mirrors the polled capture state up via onFpsActive", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_fps_status"
+        ? Promise.resolve({ active: true, status: "capturing", sample: null })
+        : Promise.resolve(null),
+    );
+    const onFpsActive = vi.fn();
+    renderPlay({ view: "live", onFpsActive });
+    await waitFor(() => expect(onFpsActive).toHaveBeenLastCalledWith(true));
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 });

@@ -1,12 +1,17 @@
-import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
+import { railFor, type HomeRailId } from "../../design/homeRail";
 import type { RigPart, RigPartKind } from "../rig/rig-parts";
 import { fmtGB } from "../hardware-format";
 
 // Step model for the combined "Compy Setup & Tour". Leg 1 (setup) reuses the existing
 // first-experience content. Leg 2 (tour) is a HARDWARE fly-through — each real component teaches what
 // it does, the metric it drives, the REAL Compy tweaks that touch it, AND names the Compy tab that
-// manages those tweaks (so hardware and the app's tabs connect). A final recap maps all six tabs.
+// manages those tweaks (so hardware and the app's tabs connect). A final recap maps the rail's rooms.
 // Pure + tested so the lessons / tab ties can't silently drift from the parts or the nav.
+//
+// V2-8 (P6 §4 tour alignment — align, don't add): the recap and the tab ties follow the rail the
+// user ACTUALLY has (railFor). Merged (the shipped default) = five rooms in journey order, and the
+// recap copy names that journey; the compy_optimize="0" escape hatch keeps the classic six-room
+// recap verbatim. No new steps either way.
 
 export type SetupLeg = "setup" | "tour";
 export type SetupStepKind = "rig" | "seatbelt" | "rules" | "check" | "lesson" | "tabmap";
@@ -21,6 +26,11 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
   learn: "The measured library of what actually works — and the myths that don't.",
   lab: "Go deeper: benchmarks, latency and system diagnostics.",
 };
+
+// The merged room absorbs Check's diagnose half, so its blurb must cover both (the fix-id blurb
+// above only describes the Tune half — wrong for the five-room rail).
+export const MERGED_FIX_BLURB =
+  "Check what's holding your games back, then apply the safe fixes — every change undoable in the ledger.";
 
 export interface HardwareLesson {
   /** Which rig part kind this lesson focuses (the showcase shows the first part of this kind). */
@@ -155,15 +165,31 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
   },
 ];
 
-// The six tabs, for the recap — labels/icons from HOME_RAIL (single source), blurbs from TAB_BLURB.
-export function buildTabs(): TabInfo[] {
-  return HOME_RAIL.map((r) => ({ id: r.id, label: r.label, icon: r.icon, blurb: TAB_BLURB[r.id] }));
+// The recap tabs — labels/icons from the SAME rail selector the app renders (railFor, single
+// source), blurbs from TAB_BLURB. Merged = the five journey rooms; the recap can never show a
+// room the rail doesn't have.
+export function buildTabs(merged: boolean): TabInfo[] {
+  return railFor(merged).map((r) => ({
+    id: r.id,
+    label: r.label,
+    icon: r.icon,
+    blurb: merged && r.id === "fix" ? MERGED_FIX_BLURB : TAB_BLURB[r.id],
+  }));
 }
 
 // Build the Leg-2 steps from the user's REAL parts: each lesson focuses the first part of its kind.
 // A lesson whose kind isn't present is skipped (cooler/psu placeholders are always emitted).
-export function buildHardwareSteps(parts: RigPart[]): SetupStep[] {
-  return HARDWARE_LESSONS.flatMap((lesson) => {
+// Under the merged rail the standalone Check room doesn't exist, so a lesson tied to it re-ties to
+// the merged Optimize room (same diagnose-first meaning, the room the rail actually shows).
+export function buildHardwareSteps(parts: RigPart[], merged = true): SetupStep[] {
+  return HARDWARE_LESSONS.flatMap((rawLesson) => {
+    const lesson: HardwareLesson =
+      merged && rawLesson.tab.id === "check"
+        ? {
+            ...rawLesson,
+            tab: { id: "fix", tie: "Optimize scans for CPU limiters and applies the top fix." },
+          }
+        : rawLesson;
     const part = parts.find((p) => p.kind === lesson.kind);
     if (!part) return [];
     // Memory: title by the REAL config (total capacity + module count), never the first slot — a lone
@@ -190,18 +216,24 @@ export function buildHardwareSteps(parts: RigPart[]): SetupStep[] {
   });
 }
 
-// The ordered flow: setup steps → a hardware lesson per present component → the six-tab recap.
-export function buildSetupSteps(parts: RigPart[]): SetupStep[] {
+// The recap body names the journey (P6 §4: order is felt, never taught — but the recap may SAY
+// it): the rail reads top to bottom in story order. Only the merged five-room rail IS that
+// journey; the classic six-room escape hatch keeps its original copy.
+export const JOURNEY_RECAP_BODY =
+  "The rail reads top to bottom: Home for the glance, Optimize to check and fix, Monitor to watch it live, Blackbook for what actually works, the Lab to go deeper.";
+
+// The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
+export function buildSetupSteps(parts: RigPart[], merged = true): SetupStep[] {
   return [
     ...SETUP_STEPS,
-    ...buildHardwareSteps(parts),
+    ...buildHardwareSteps(parts, merged),
     {
       id: "tour-tabmap",
       leg: "tour",
       kind: "tabmap",
       title: "Your way around Compy",
-      body: "Six rooms, one job each. Here's where everything lives.",
-      tabs: buildTabs(),
+      body: merged ? JOURNEY_RECAP_BODY : "Six rooms, one job each. Here's where everything lives.",
+      tabs: buildTabs(merged),
     },
   ];
 }

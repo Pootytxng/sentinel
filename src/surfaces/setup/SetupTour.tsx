@@ -6,7 +6,8 @@ import type { PriorityItem } from "../../types";
 import type { RigLine } from "../../Onboarding";
 import { Wordmark } from "../../design/Wordmark";
 import { NavGlyph } from "../../design/NavGlyph";
-import { HOME_RAIL, type HomeRailId } from "../../design/homeRail";
+import { HOME_RAIL, railFor, type HomeRailId } from "../../design/homeRail";
+import { readOptimizeMerged } from "../../data/nav-flags";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
 import { useReducedMotion } from "../../design/use-motion";
@@ -34,7 +35,13 @@ const HardwareTourScene = lazy(() =>
 );
 
 export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[]; onDone: () => void }) {
-  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw)), [hw]);
+  // The tour follows the rail the user actually has (P6 §4 alignment): merged = the five-room
+  // journey recap; the compy_optimize="0" escape hatch keeps the classic six-room tour.
+  const merged = useMemo(() => readOptimizeMerged(), []);
+  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw), merged), [hw, merged]);
+  // The room that holds the ledger, named by its CURRENT rail label ("Optimize" merged / "Tune"
+  // classic) — so the seatbelt step never names a tab the rail doesn't show.
+  const fixLabel = useMemo(() => railFor(merged).find((r) => r.id === "fix")!.label, [merged]);
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useReducedMotion();
@@ -130,7 +137,7 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
           {/* Calm content panel — never overlaps the stage. */}
           <div className="st-panel">
             {step.kind === "rig" && <StepRig rig={rig} />}
-            {step.kind === "seatbelt" && <StepSeatbelt />}
+            {step.kind === "seatbelt" && <StepSeatbelt fixLabel={fixLabel} />}
             {step.kind === "rules" && <StepRules />}
             {step.kind === "check" && <StepCheck />}
             {step.kind === "lesson" && <StepLesson step={step} />}
@@ -195,7 +202,7 @@ function StepRig({ rig }: { rig: RigLine[] }) {
   );
 }
 
-function StepSeatbelt() {
+function StepSeatbelt({ fixLabel }: { fixLabel: string }) {
   const [applied, setApplied] = useState(false);
   return (
     <>
@@ -222,7 +229,8 @@ function StepSeatbelt() {
       </div>
       <p className="st-body-text">
         Try it — the switch is live (and changes nothing here). Every real change lands in the{" "}
-        <strong>Tune</strong> tab's ledger with its before-state. Undoable today, undoable in six months.
+        <strong>{fixLabel}</strong> tab's ledger with its before-state. Undoable today, undoable in six
+        months.
       </p>
     </>
   );

@@ -84,6 +84,7 @@ export default function Play({
   deepMonitoring,
   vendor = "any",
   view = "all",
+  onFpsActive,
 }: {
   active: boolean;
   sessions: SessionSummary[];
@@ -102,6 +103,10 @@ export default function Play({
   // session list + trends only (no live cards/charts); "live" = the live monitor + overlay + deep
   // monitoring only (no sessions). Mirrors Fix's `view`.
   view?: "all" | "sessions" | "live";
+  // V2-8 (additive — absent = classic byte-identical): reports the polled FPS-capture state up so
+  // the V2 Monitor room can close its forward door during a live session (P6 §2). Same
+  // get_fps_status read the live card already makes — no second IPC, nothing new polled.
+  onFpsActive?: (active: boolean) => void;
 }) {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
@@ -148,6 +153,12 @@ export default function Play({
       window.clearInterval(id);
     };
   }, [active, view]);
+
+  // V2-8: mirror the already-polled capture state up to the shell (no-op without the callback).
+  const fpsActive = fps?.active ?? false;
+  useEffect(() => {
+    onFpsActive?.(fpsActive);
+  }, [onFpsActive, fpsActive]);
 
   // Reflect the actual overlay window state + any armed comparison (existing commands).
   useEffect(() => {

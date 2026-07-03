@@ -174,18 +174,42 @@ describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
     expect(optimizeMeasuredLine(null, recsFixture)).toBe("running checks…");
     expect(optimizeMeasuredLine(readiness, null)).toBe("running checks…");
   });
+
+  // V2-8 (P6 §2): allClear is the door signal — true ONLY once the catalog settled with no safe
+  // one-click fix left (active changes or a clean rig both count as chapter-finished).
+  it("allClear: false while loading or fixes remain; true when nothing is left to apply", () => {
+    expect(optimizeVerdict(null, isAppliable, 0).allClear).toBe(false);
+    expect(optimizeVerdict(recsFixture, isAppliable, 0).allClear).toBe(false);
+    expect(optimizeVerdict([], isAppliable, 0).allClear).toBe(true);
+    expect(optimizeVerdict([], isAppliable, 2).allClear).toBe(true);
+    expect(optimizeVerdict([rec({ id: "game-mode", currently_applied: true })], isAppliable, 1).allClear).toBe(true);
+  });
 });
 
 describe("OptimizeV2 — RoomShell composition", () => {
-  it("renders ONE verdict (the pure helper's output) and ONE forward door to Monitor", () => {
+  it("renders ONE verdict (the pure helper's output); the door STAYS CLOSED while a fix is ready", () => {
     useReduced();
     const { container } = mount();
     const h1s = container.querySelectorAll(".v2-verdict h1");
     expect(h1s.length).toBe(1);
     expect(h1s[0].textContent).toBe("1 safe fix is ready to apply.");
+    // V2-8 (P6 §2): the door is the reward for finishing the chapter, not a bypass — with a safe
+    // fix still unapplied there is no forward door.
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
+  });
+
+  it("all-clear → exactly ONE forward door to Monitor (the finished-chapter reward)", () => {
+    useReduced();
+    const { container } = mount({ recs: [], activeCount: 1 });
     const doors = container.querySelectorAll(".v2-door");
     expect(doors.length).toBe(1);
     expect(doors[0].textContent).toContain("Watch it live");
+  });
+
+  it("no door while the catalog is still loading (no forward door on an unmeasured room)", () => {
+    useReduced();
+    const { container } = mount({ recs: null, readiness: null });
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
   });
 
   it("measured line renders under the verdict", () => {

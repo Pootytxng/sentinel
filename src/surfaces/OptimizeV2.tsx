@@ -30,7 +30,9 @@ import "./optimize-v2.css";
 // path, zero new IPC). What's new is presentation only: the verdict/measured lines are pure
 // derivations from the same real data (optimize-v2-data.ts), the "N active · undo" chip becomes
 // the room's one primary action (navigation-only — the council's rollback-one-glance-away rule,
-// v2 skin), and the side-pile expander moves into RoomShell's quiet slot. The classic surfaces
+// v2 skin), and the side-pile expander moves into RoomShell's quiet slot. V2-8: the forward door
+// opens only in the all-clear state (verdict.allClear — the P6 §2 placement rule: the door is
+// the reward for finishing the chapter, not a bypass past unapplied safe fixes). The classic surfaces
 // re-skin via the token re-point in optimize-v2.css — the SAME mechanism the five instrument
 // themes use, so TrustSwitch/GamingMode internals stay byte-untouched.
 
@@ -183,6 +185,7 @@ export function OptimizeV2({
     <SidePileContext.Provider value={{ host: pileHost }}>
       <RoomShell
         room="fix"
+        doorOpen={verdict.allClear}
         verdict={
           reduced || !verdict.settled ? (
             verdict.headline

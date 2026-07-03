@@ -10,6 +10,10 @@
 //   children      the room body (ranked list / room content). Required.
 //   quiet         the "nothing else needs attention" expander. Optional.
 //   door          derived from DOOR_MAP by room id — rooms cannot pick their own destination.
+//   doorOpen      P6 §2 placement rules (V2-8): a room may CLOSE its door while its chapter is
+//                 unfinished — Optimize opens it only in the apply-complete/all-clear state (the
+//                 door is the reward for finishing, not a bypass); Monitor closes it during a
+//                 live capture session. Rooms still never pick the destination or label.
 import type { ReactNode } from "react";
 import type { HomeRailId } from "./homeRail";
 import { useV2Nav } from "./ShellV2";
@@ -45,6 +49,7 @@ export function RoomShell({
   measured,
   primaryAction,
   quiet,
+  doorOpen = true,
   children,
 }: {
   room: HomeRailId;
@@ -53,9 +58,11 @@ export function RoomShell({
   measured?: ReactNode;
   primaryAction?: ReactNode;
   quiet?: ReactNode;
+  /** P6 §2 placement: false hides the room's door while its chapter is unfinished. Default open. */
+  doorOpen?: boolean;
   children: ReactNode;
 }) {
-  const door = DOOR_MAP[room];
+  const door = doorOpen ? DOOR_MAP[room] : null;
   return (
     <section className="v2-room" data-room={room}>
       <header className="v2-verdict">

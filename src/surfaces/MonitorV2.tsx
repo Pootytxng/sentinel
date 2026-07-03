@@ -27,6 +27,10 @@ import "./monitor-v2.css";
 // Deliberately NO primaryAction: the room's real actions (capture toggle, overlay) live with
 // their tiles/cards, and hoisting one would duplicate live state the tiles already own — the
 // one-mention law outranks filling the optional slot.
+//
+// V2-8 (P6 §2 placement): the forward door is ABSENT during a live capture session — it belongs
+// to the session-end state, not mid-game. The faces already poll get_fps_status for their own
+// tiles; they mirror that state up via the additive onFpsActive callback (no second IPC).
 
 type Segment = "sessions" | "live";
 
@@ -41,14 +45,19 @@ const MODES: { id: ViewMode; label: string }[] = [
   { id: "advanced", label: "Advanced" },
 ];
 
-// Same props App passes to <Play> / <Monitor>, minus `view` (this shell drives it).
-type Props = Omit<ComponentProps<typeof Play>, "view">;
+// Same props App passes to <Play> / <Monitor>, minus `view` + `onFpsActive` (this shell drives them).
+type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive">;
 
 export function MonitorV2(props: Props) {
   const reduced = useReducedMotion();
   const [segment, setSegment] = useState<Segment>("live");
   const [mode, setMode] = useState<ViewMode>(readViewMode);
   const [presetsOpen, setPresetsOpen] = useState(false);
+  // Live capture state, mirrored up from whichever face is polling it (Play live / Basic tiles).
+  // While a session is being captured the forward door closes (P6 §2 — the door belongs to the
+  // session-end state). Conservative on purpose: the last reported value stands until a face
+  // polls again, so the door never opens mid-capture just because the user changed segment.
+  const [capturing, setCapturing] = useState(false);
   const chooseMode = (m: ViewMode) => {
     setMode(m);
     applyViewMode(m); // persists + mirrors onto <html data-view-mode>, same as classic
@@ -65,6 +74,7 @@ export function MonitorV2(props: Props) {
   return (
     <RoomShell
       room="play"
+      doorOpen={!capturing}
       verdict={
         reduced ? (
           verdict.headline
@@ -133,13 +143,14 @@ export function MonitorV2(props: Props) {
             active={props.active}
             vendor={props.vendor}
             sessions={props.sessions}
+            onFpsActive={setCapturing}
             onOpenSessions={() => {
               chooseMode("advanced");
               setSegment("sessions");
             }}
           />
         ) : (
-          <Play {...props} view={segment} />
+          <Play {...props} view={segment} onFpsActive={setCapturing} />
         )}
       </div>
     </RoomShell>
