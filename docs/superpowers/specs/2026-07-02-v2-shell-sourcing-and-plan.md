@@ -87,6 +87,16 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       untouched. Non-merged escape hatch (compy_optimize="0") falls through to classic panels.
       Keepalive split per path so classic Optimize never mounts hidden under v2.
       optimize-v2.css added to scoping/no-literal/token-font guards; +15 tests.
+- [ ] **V2-4b Optimize IA fix** — GOVERNED BY `2026-07-03-owner-optimize-feedback.md` (owner
+      live-review of V2-4): one-mention law (a rec renders as an actionable row ONCE per room;
+      drift/not-applied are attributes on that row — Game Mode currently appears 3×) · grouped
+      actionable list (needs-your-call / ready / applied-drifted) · setup summary OUT of Optimize
+      (→ Applied/ledger surface; fallback Home Setup&Tour zone — pick on-screen) · driver
+      freshness → hologram part-tap detail layer, one quiet Optimize row only when newer detected ·
+      upgrade path demoted to a labeled-early advisory card (real development = own future spec,
+      Receipts Phase-C) · exactly ONE "nothing else needs attention" per room (extend the ≤1 guard
+      to rec identity). This is IA, not skin — Check/Fix content reorganizes, audited handlers
+      still untouched.
 - [ ] **V2-5 Monitor**
 - [ ] **V2-6 Blackbook**
 - [ ] **V2-7 Lab**
@@ -103,6 +113,10 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
 - [ ] **V2-10 Dedup (after owner default-ON verdict):** delete the classic shell/room paths +
       the losing nav candidate (GooeyNav vs PillNav) + retire `compy_v2` — same ritual as P4.
       Known debt, deliberately carried during the flag-gated rollout (Cowork audit note, V2-2).
+- [ ] **FUTURE (own spec, post-V2): Upgrade-path engine** — owner 07-03: current Amazon/Newegg
+      links are a placeholder, not the feature. Design properly: per-rig evidence-gated upgrade
+      verdicts (what limits YOUR rig, measured), honest copy, copy-only links until Receipts
+      Phase-C affiliate work arms. Cowork specs before any build.
 
 ## Build plan (re-scopes P6; P4 dedup still lands FIRST)
 
