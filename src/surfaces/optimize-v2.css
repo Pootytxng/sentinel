@@ -156,18 +156,24 @@
 
 /* Upgrade path, demoted (owner: underdeveloped — a labeled-early quiet card BELOW the action
    groups until the per-rig evidence-gated engine is designed). Copy-only links unchanged. */
+/* Demoted advisory, but a REAL card — it was a transparent, border-only outline dissolving into the
+   room canvas under a blanket opacity:0.85 that flattened its own title/why/disclosure hierarchy.
+   A --v2-panel surface makes it a defined quiet card; the demotion now comes from muted token text
+   (which it already uses) + sitting below the action groups, not from fading everything equally. */
 :root[data-v2="on"] .ov2-upgrade {
   margin-top: var(--v2-gap);
   border: 1px solid var(--v2-line);
   border-radius: var(--v2-r);
   padding: var(--v2-pad-sm) var(--v2-pad) var(--v2-pad);
-  opacity: 0.85;
+  background: var(--v2-panel);
 }
 :root[data-v2="on"] .ov2-upgrade-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--v2-line);
 }
 :root[data-v2="on"] .ov2-upgrade-label {
   font-size: 11px;
@@ -217,6 +223,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--v2-pad-sm);
+  padding-bottom: var(--v2-pad-sm);
+  margin-bottom: var(--v2-pad-sm);
+  border-bottom: 1px solid var(--v2-line);
 }
 :root[data-v2="on"] .ov2-summary-title {
   font-weight: 600;
@@ -231,6 +240,8 @@
   color: var(--v2-muted);
   font-size: 12px;
 }
+/* The recap is secondary meta, so it RECESSES into a carved well below its --v2-panel card —
+   it was inverted onto the raised --v2-panel-2 tier (reading as raised primary content). */
 :root[data-v2="on"] .ov2-summary-text {
   margin: 0;
   padding: 10px 12px;
@@ -240,7 +251,8 @@
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--v2-muted);
-  background: var(--v2-panel-2);
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
   border-radius: var(--v2-r-sm);
 }
 

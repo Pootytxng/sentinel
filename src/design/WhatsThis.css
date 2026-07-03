@@ -1,0 +1,74 @@
+/* "What's this?" — the inline trigger + its in-place hover/focus tooltip (wayfinding §3). Instead of
+   navigating the user out of the section to the Library, it reveals a SHORT plain-language blurb right
+   where they are; the full Blackbook entry stays one tap away via "More". Mirrors the inline-glossary
+   Term tooltip (design/Term.css) so the two affordances read as one family. Classic --ix tokens: this
+   affordance lives in the rooms (Fix/Check/GamingMode), not the V2 shell chrome. */
+.whats-this-wrap {
+  position: relative;
+  display: inline;
+}
+.whats-this {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  cursor: help;
+  opacity: 0.82;
+  transition: opacity 140ms ease;
+}
+.whats-this:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+.whats-this:focus-visible {
+  outline: 2px solid var(--ix-accent, var(--accent, #2ee6c0));
+  outline-offset: 2px;
+  border-radius: 2px;
+  opacity: 1;
+}
+.whats-this-tip {
+  position: absolute;
+  z-index: 1200;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  max-width: 280px;
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ix-surface-2, var(--panel-2, #14181f));
+  border: 1px solid var(--ix-glass-border, var(--border-strong, var(--border, #2a2f3a)));
+  box-shadow: var(--shadow-pop, 0 12px 32px rgba(0, 0, 0, 0.45));
+  text-align: left;
+  white-space: normal;
+  cursor: default;
+}
+.whats-this-what {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-1, var(--fg, #e7ebf2));
+  font-weight: 400;
+}
+.whats-this-more {
+  display: inline-block;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ix-accent-text, var(--accent, #2ee6c0));
+  cursor: pointer;
+}
+.whats-this-more:hover {
+  text-decoration: underline;
+}
+.whats-this-more:focus-visible {
+  outline: 2px solid var(--ix-accent, var(--accent, #2ee6c0));
+  outline-offset: 2px;
+  border-radius: 2px;
+}

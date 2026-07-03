@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import { invoke } from "@tauri-apps/api/core";
 import type { HardwareInfo } from "../../App";
@@ -8,6 +8,7 @@ import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from ".
 import { useRigColors, partColor } from "./use-rig-colors";
 import { useReducedMotion } from "../../design/use-motion";
 import { useDocumentVisible } from "../../data/use-document-visible";
+import { fitCameraDistance } from "./camera-fit";
 import { RigCase } from "./RigCase";
 import { RigPart } from "./RigPart";
 import { RigFan, type FanInfo } from "./RigFan";
@@ -18,6 +19,39 @@ import { RigFan, type FanInfo } from "./RigFan";
 //  • prefers-reduced-motion → no idle animation (frameloop "demand", parts snap, no auto-rotate).
 //  • STEP-ASIDE: while a game is capturing (get_fps_status.active), drop to frameloop "demand" so the
 //    hologram stops burning GPU in the background — anti-cheat-safe (ETW read only, no injection).
+
+// Camera-fit: keep the whole rig in frame at ANY container size/shape (small/minimized window,
+// narrow column, short stage). r3f already tracks the canvas size; here we read it and, when the
+// container is narrower than the landscape framing the base distance assumes, pull the camera back
+// proportionally so the model never clips left/right. At/above the reference aspect the base
+// cameraDist is used unchanged (its framing behavior is preserved). Orbit angle + user zoom are
+// preserved between resizes (we only scale the distance along the current view direction); a resize
+// re-fits. invalidate() repaints even under frameloop="demand" (reduced motion / step-aside).
+function FitCamera({ baseDist }: { baseDist: number }) {
+  const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  const controls = useThree((s) => s.controls) as { update?: () => void } | null;
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const aspect = size.width / Math.max(1, size.height);
+    const dist = fitCameraDistance(baseDist, aspect);
+    // OrbitControls target — scale the camera's offset from it to `dist`, preserving orbit angle.
+    const tx = 0,
+      ty = 0.2,
+      tz = 0;
+    const dx = camera.position.x - tx;
+    const dy = camera.position.y - ty;
+    const dz = camera.position.z - tz;
+    const cur = Math.hypot(dx, dy, dz) || 1;
+    const k = dist / cur;
+    // Reposition only (distance along the current view direction); r3f handles the projection
+    // (aspect/fov) on resize, and OrbitControls.update() re-syncs its internal spherical.
+    camera.position.set(tx + dx * k, ty + dy * k, tz + dz * k);
+    controls?.update?.();
+    invalidate();
+  }, [size.width, size.height, baseDist, camera, controls, invalidate]);
+  return null;
+}
 
 interface Props {
   hw: HardwareInfo;
@@ -251,15 +285,19 @@ export function RigHologram({
       />
 
       <OrbitControls
+        makeDefault
         enablePan={false}
         minDistance={5}
-        maxDistance={18}
+        maxDistance={28}
         minPolarAngle={0.2}
         maxPolarAngle={Math.PI / 1.9}
         autoRotate={orbiting}
         autoRotateSpeed={0.5}
         target={[0, 0.2, 0]}
       />
+      {/* Fit the model to whatever container it's in (must sit AFTER OrbitControls so
+          useThree().controls is registered via makeDefault). */}
+      <FitCamera baseDist={cameraDist} />
     </Canvas>
   );
 }

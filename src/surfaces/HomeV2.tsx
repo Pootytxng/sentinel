@@ -452,7 +452,7 @@ export function HomeV2({
           ) : (
             <div className="hv2-rows">
               {limiters.slice(0, 3).map((l, i) => (
-                <div className="hv2-row" key={l.id}>
+                <div className={`hv2-row${i === 0 ? " hv2-row-top" : ""}`} key={l.id}>
                   <span className={`hv2-mark hv2-mark-${statusTone[l.status] ?? "info"}`} />
                   <span className="hv2-row-text">
                     <span className="hv2-row-nm">{l.title}</span>

@@ -114,7 +114,13 @@ describe("slim row detail panel (in-place reveal)", () => {
     expect(screen.queryByText("What's this?")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Title game-mode/ }));
     expect(screen.getByText("Not for me")).toBeTruthy();
-    expect(screen.getByText("What's this?")).toBeTruthy(); // game-mode resolves a Blackbook entry
+    // "What's this?" is now an in-place hover/focus tooltip (V2 polish 2026-07-03): tapping the
+    // trigger reveals a short blurb WITHOUT leaving the section, and keeps the full Blackbook entry
+    // one tap away via "More" (doctrine: measured detail one tap away — access preserved, not removed).
+    const whatsThis = screen.getByRole("button", { name: "What's this?" }); // game-mode resolves an entry
+    fireEvent.click(whatsThis);
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    expect(screen.getByText(/More in the Blackbook/)).toBeTruthy();
     expect(screen.getByText("Show me the way")).toBeTruthy(); // game-mode has a walkthrough
     // The one control keeps the EXISTING TrustSwitch semantics — same audited path.
     fireEvent.click(screen.getByRole("switch", { name: /Apply Title game-mode/ }));

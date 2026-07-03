@@ -72,3 +72,22 @@
 :root[data-v2="on"] .v2-room[data-room="learn"] .lx-paste:focus {
   box-shadow: none;
 }
+
+/* ── V2 layering (2026-07-03): the browse face read as one flat blanket — entry cards, category
+   bars, the legend, and the search field all resolved to the same --v2-panel. These scoped
+   overrides raise the PRIMARY browsable content off the section and recess the meta/inputs, using
+   only the v2 elevation ladder. Classic Learn.css has no background-hover on these, so a bg-only
+   override is safe; flag-off (and the non-room Library overlay) render untouched. */
+/* Entry cards → raised tier so the browsable items sit ABOVE the category bars that hold them. */
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-card {
+  background: var(--v2-panel-2);
+}
+/* Search + URL-paste inputs → a carved token well (replaces the off-ladder rgba(0,0,0,.28)). */
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-search,
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-paste {
+  background: var(--v2-bg);
+}
+/* "How we grade" legend → recessed meta so the eye skips reference and lands on entries. */
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-gradekey {
+  background: var(--v2-bg);
+}

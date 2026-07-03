@@ -76,10 +76,12 @@
   overflow: hidden;
 }
 /* Explicit height: the stage sits inside ElectricBorder's auto-height content slot, so a
-   percentage chain collapses (the r3f canvas fell back to its 150px default). */
+   percentage chain collapses (the r3f canvas fell back to its 150px default). It's a clamp so the
+   stage (and the hologram, which camera-fits to it) scales down on a short / minimized window
+   instead of overflowing a fixed 500px. */
 :root[data-v2="on"] .hv2-stage {
   position: relative;
-  height: 500px;
+  height: clamp(320px, 52vh, 520px);
   overflow: hidden;
   border-radius: var(--v2-r);
   background: var(--v2-panel);
@@ -226,6 +228,12 @@
   flex-direction: column;
   gap: 3px;
 }
+/* Layering: promote the marquee stat (Last session — the one with the fps + trend) to the raised
+   tier so the three stat cards stop reading as one identical template. Its edge firms up to match. */
+:root[data-v2="on"] .hv2-stat:first-child {
+  background: var(--v2-panel-2);
+  border-color: var(--v2-line-strong);
+}
 :root[data-v2="on"] .hv2-stat-k {
   color: var(--v2-muted);
   font-size: 11.5px;
@@ -262,9 +270,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Recess the trend chart into a carved well — the darkest tier inside the raised card pushes the
+   headline fps number forward as the primary, with the sparkline reading as supporting depth. */
 :root[data-v2="on"] .hv2-spark {
-  margin-top: 6px;
+  margin-top: 8px;
   height: 26px;
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
+  padding: 6px 8px;
 }
 
 /* ── Cards / rows (priorities) ── */
@@ -306,6 +320,12 @@
 }
 :root[data-v2="on"] .hv2-row:hover {
   background: var(--v2-panel-2);
+}
+/* The #1 biggest limiter — the single most important row on Home. Raise it to the top tier with an
+   accent edge-stripe so it reads as THE thing to look at, not row 1 of 3 identical entries. */
+:root[data-v2="on"] .hv2-row-top {
+  background: var(--v2-panel-2);
+  box-shadow: inset 2px 0 0 var(--v2-accent);
 }
 :root[data-v2="on"] .hv2-row-clear {
   display: block;

@@ -54,11 +54,15 @@
 }
 
 /* ── room chrome ── */
+/* Hairline under the control bar so it reads as a header layer above the metric faces, not one
+   continuous field separated by a bare margin. */
 :root[data-v2="on"] .mv2-bar {
   display: flex;
   align-items: center;
   gap: var(--v2-pad-sm);
+  padding-bottom: var(--v2-pad-sm);
   margin-bottom: var(--v2-gap);
+  border-bottom: 1px solid var(--v2-line);
 }
 /* Detail level sits at the far edge whether or not the section segments render (Basic). */
 :root[data-v2="on"] .mv2-bar > :last-child {
@@ -68,7 +72,7 @@
 :root[data-v2="on"] .mv2-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--v2-gap);
 }
 
 /* ── one-mention law (V2-4b, carried forward) ─────────────────────────────────────────
@@ -88,8 +92,14 @@
   color: var(--v2-faint);
 }
 
+/* Recess the advisory checklist drawer into a carved well so it reads clearly BELOW the primary
+   metric faces — it was sitting at the same elevation as the working content it advises on. */
 :root[data-v2="on"] .mv2-presets-body {
-  padding: var(--v2-pad-sm) 0 0;
+  margin-top: var(--v2-pad-sm);
+  padding: var(--v2-pad-sm);
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
 }
 /* [hidden] must actually close the drawer regardless of display rules above. */
 :root[data-v2="on"] .mv2-presets-body[hidden] {
