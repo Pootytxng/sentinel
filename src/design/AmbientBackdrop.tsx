@@ -60,13 +60,10 @@ export function AmbientBackdrop({ ambiance }: { ambiance: Ambiance; themeKey?: s
   // Step aside while a game is presenting (user pref) — the aurora gets out of the way entirely.
   if (gameActive && freezeOnGame) return null;
 
-  // Drift when it's full ambiance, visible, and motion is allowed; reduced/hidden = static
-  // (unconditional a11y/efficiency freezes). Calm chrome (P5, owner §8b "barely-there"): calm
-  // ambiance gains a much slower, fainter drift instead of a full freeze — flag off, calm stays
-  // static exactly as shipped.
-  const calmChrome =
-    typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on";
-  const drift = (ambiance === "full" || (ambiance === "calm" && calmChrome)) && !reduced && !hidden;
+  // Drift when visible and motion is allowed; reduced/hidden = static (unconditional
+  // a11y/efficiency freezes). Calm ambiance (owner §8b "barely-there") drifts much slower and
+  // fainter than full.
+  const drift = (ambiance === "full" || ambiance === "calm") && !reduced && !hidden;
   const slow = drift && ambiance === "calm" ? "ix-aurora-slow" : "";
 
   return (

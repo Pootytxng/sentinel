@@ -561,17 +561,6 @@ function App() {
   const [report, setReport] = useState<ExportResult | null>(null);
   const [priorities, setPriorities] = useState<Priorities | null>(null);
   const [exporting, setExporting] = useState(false);
-  // Calm chrome (P5, compy_calm_chrome — DEFAULT OFF): Export leaves the persistent header for the
-  // scan-results card (contextual action, not furniture). DOM-attribute + event, same as the other
-  // preview flags; flag off ⇒ the header button renders exactly as today.
-  const [calmChrome, setCalmChrome] = useState<boolean>(
-    () => typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on",
-  );
-  useEffect(() => {
-    const on = () => setCalmChrome(document.documentElement.dataset.calmChrome === "on");
-    window.addEventListener("compy:calmchrome-changed", on);
-    return () => window.removeEventListener("compy:calmchrome-changed", on);
-  }, []);
   const [showSettings, setShowSettings] = useState(false);
   // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
   // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
@@ -1136,15 +1125,8 @@ function App() {
           <h1><Wordmark size={17} /></h1>
         </div>
         <div className="header-right">
-          {/* Export is the one header action (one-rail §1b). The rules-source chip moved to
-              Settings → About; the version lives only in the footer; the duplicate Refresh retired
-              (re-run lives in Check + the Home hero). Under calm chrome (P5) it leaves the header
-              entirely — contextual on the scan results (Check) + the session debrief instead. */}
-          {!calmChrome && (
-            <button className="btn" onClick={onExport} disabled={exporting}>
-              {exporting ? "Exporting…" : "Export report"}
-            </button>
-          )}
+          {/* Export left the persistent header (calm chrome) — it lives contextually on the scan
+              results (Check) + the session debrief. The header stays clean. */}
         </div>
         </header>
       )}

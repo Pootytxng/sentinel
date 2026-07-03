@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import CommandCenter from "./CommandCenter";
 import type { SessionSummary } from "../types";
@@ -73,12 +73,20 @@ const baseProps = {
 };
 
 describe("CommandCenter", () => {
-  it("mounts and shows honest pre-data states (no fabricated numbers)", () => {
+  beforeEach(() => {
+    localStorage.setItem("compy_home_rig_3d", "0"); // Cards view — the 3D hologram isn't a jsdom citizen
+  });
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("mounts the answer-first Home with honest pre-data states (no fabricated numbers)", () => {
     render(<CommandCenter {...baseProps} />);
     expect(screen.getByText(/Good (morning|afternoon|evening)/)).toBeTruthy();
-    // Ring shimmer label, never a faked score.
-    expect(screen.getByText("Scanning")).toBeTruthy();
-    // Honest empty live strip.
+    // Verdict leads (honest scanning posture — readiness is null); limiter card + honest empty
+    // tiles follow. No invented score anywhere.
+    expect(screen.getByText("Scanning your system…")).toBeTruthy();
+    expect(screen.getByText("Your #1 limiter")).toBeTruthy();
     expect(screen.getByText(/Play a session to see this/)).toBeTruthy();
     // Rig line carries real hardware.
     expect(screen.getByText(/16 threads/)).toBeTruthy();
@@ -97,48 +105,24 @@ describe("CommandCenter", () => {
   // bug→guard (owner taste catch, P5 2026-07-02): on the answer-first Home the posture verdict and
   // the limiter card BOTH said "measured clean" — the same win announced twice, one panel apart.
   // The verdict owns that phrase; every other panel finds different words. Guard the whole surface.
-  it("says 'measured clean' at most once on the clean answer-first Home", () => {
-    document.documentElement.dataset.homeV3 = "on";
-    localStorage.setItem("compy_home_rig_3d", "0"); // Cards view — the 3D hologram isn't a jsdom citizen
-    try {
-      render(
-        <CommandCenter
-          {...baseProps}
-          readiness={{
-            checks: [{ id: "ssd", label: "SSD", status: "ready", detail: "", value: null }],
-            ready_count: 1,
-            advisory_count: 0,
-            attention_count: 0,
-            unknown_count: 0,
-            advisory: "",
-            dismissed_ids: [],
-            drifts: [],
-          }}
-          priorities={{ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null }}
-        />,
-      );
-      const hits = screen.queryAllByText(/measured clean/i);
-      expect(hits.length).toBeLessThanOrEqual(1);
-    } finally {
-      delete document.documentElement.dataset.homeV3;
-      localStorage.clear();
-    }
-  });
-
-  it("renders the answer-first Home when the P3 flag attribute is armed (default OFF elsewhere)", () => {
-    document.documentElement.dataset.homeV3 = "on";
-    localStorage.setItem("compy_home_rig_3d", "0"); // Cards view — the 3D hologram isn't a jsdom citizen
-    try {
-      render(<CommandCenter {...baseProps} />);
-      // Verdict leads (honest scanning posture — readiness is null), limiter card + honest empty
-      // tiles follow. The classic signal ring is NOT mounted (answer-first supersedes it).
-      expect(screen.getByText("Scanning your system…")).toBeTruthy();
-      expect(screen.getByText("Your #1 limiter")).toBeTruthy();
-      expect(screen.getByText(/Play a session to see this/)).toBeTruthy();
-      expect(screen.queryByText("Scanning")).toBeNull(); // the ring's shimmer label
-    } finally {
-      delete document.documentElement.dataset.homeV3;
-      localStorage.clear();
-    }
+  it("says 'measured clean' at most once on the clean Home", () => {
+    render(
+      <CommandCenter
+        {...baseProps}
+        readiness={{
+          checks: [{ id: "ssd", label: "SSD", status: "ready", detail: "", value: null }],
+          ready_count: 1,
+          advisory_count: 0,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        }}
+        priorities={{ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null }}
+      />,
+    );
+    const hits = screen.queryAllByText(/measured clean/i);
+    expect(hits.length).toBeLessThanOrEqual(1);
   });
 });

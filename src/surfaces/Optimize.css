@@ -270,7 +270,7 @@
 .optimize-gaming {
   margin: 4px 0;
 }
-/* The doored Gaming Mode room (P5.5, compy_gm_door): the same card, standing in its own segment —
+/* The doored Gaming Mode room (P5.5): the same card, standing in its own segment —
    a touch of breathing room since it no longer sits mid-scroll between fixes. */
 .optimize-gaming-room {
   margin: 12px 0 0;
@@ -282,7 +282,7 @@
   z-index: 1;
 }
 
-/* ── side-pile expander (P5 calm chrome, compy_calm_chrome — DEFAULT OFF) ─────
+/* ── side-pile expander (P5 calm chrome) ─────
    THE one quiet "Nothing else needs attention" drawer at the foot of the Fixes segment; the six
    "leave it alone" piles from Check + Fix portal their existing markup into .optimize-sidepile-body
    (see side-pile.tsx). Deliberately muted — it must never compete with the verdict or the fixes

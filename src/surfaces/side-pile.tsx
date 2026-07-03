@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-// Side-pile collapse (P5 UI slim-down, plan §4.1/§5.5, behind compy_calm_chrome — DEFAULT OFF).
+// Side-pile collapse (P5 UI slim-down, plan §4.1/§5.5).
 // The merged Optimize "Fixes" segment stacks six "leave it alone" piles across TWO components
 // (Check: measured fine · not worth touching · past tweaks; Fix: not for this rig · dismissed ·
 // the refuse pile). The plan's contract wants ONE quiet "Nothing else needs attention" expander

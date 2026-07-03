@@ -13,7 +13,7 @@ import "./MonitorBasic.css";
 
 // MonitorBasic — the BASIC face of Monitor (P2 UI slim-down, plan §4.3/§5.2): one glanceable answer
 // to "how is it running?" — 4 big tiles (FPS · GPU temp · CPU · RAM) + the last-session line. Only
-// mounted when the compy_basic_advanced split is ON and the mode is Basic; Advanced (and flag off)
+// mounted when the mode is Basic; Advanced
 // renders today's full Play panels untouched. Same audited read-only sensor commands + the existing
 // FPS-capture toggle — zero new IPC, nothing mutated. Grades reuse the shared hardware-tailored
 // helpers, so NVIDIA GPU temp stays deliberately ungraded (LOCKED rule #5 — sensor confidence copy

@@ -16,10 +16,11 @@ describe("AmbientBackdrop", () => {
     expect(container.querySelector(".ix-vignette")).not.toBeNull();
   });
 
-  it("mounts the aurora (static) when ambiance is calm", () => {
+  it("mounts the aurora with the barely-there slow drift when ambiance is calm (owner §8b)", () => {
     const { container } = render(<AmbientBackdrop ambiance="calm" />);
     expect(container.querySelector(".ix-aurora")).not.toBeNull();
-    // calm = no drift class
-    expect(container.querySelector(".ix-aurora-drift-a")).toBeNull();
+    // calm drifts, but only at the much slower, fainter §8b cadence — never full-speed.
+    expect(container.querySelector(".ix-aurora-drift-a")).not.toBeNull();
+    expect(container.querySelector(".ix-aurora-slow")).not.toBeNull();
   });
 });

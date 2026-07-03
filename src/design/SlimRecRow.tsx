@@ -8,7 +8,7 @@ import "./SlimRecRow.css";
 // ≤3 interactive affordances (the row-toggle, the control, nothing else tabbable). Everything else
 // lives in a detail panel that expands IN PLACE (never a route change). Built as a design primitive
 // (Home's limiter row + the session list reuse it in later phases), consumed by Fix behind the
-// compy_slim_rows flag; the classic row path is untouched when the flag is off.
+// Fixes segment (the standalone Tune view keeps the classic row path).
 //
 // HONESTY GUARDRAIL (council 🔴, guarded by slim-row-proof-guard.test.tsx): `proof` is required and
 // rendered unconditionally — the collapsed row can never hide its measured evidence/reason line.

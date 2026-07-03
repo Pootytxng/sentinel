@@ -10,7 +10,7 @@ import type { Provenance } from "./data/provenance";
 // black-box failure mode Compy attacks — this guard makes the guardrail grep-proof and CI-enforced.
 // Also pins the affordance ceiling (≤3 interactives per collapsed row), the detail-panel contract
 // (Walkthrough / What's this? / Dismiss revealed on tap; dismiss absent when applied), §8c
-// pre-selection (selection ≠ application, no auto-apply ever), and default-OFF gating.
+// pre-selection (selection ≠ application, no auto-apply ever), and the Fixes-only scope.
 
 type Sev = "safe" | "moderate" | "advanced";
 const rec = (id: string, provenance: Provenance = "expected-impact", severity?: Sev, over = {}) => ({
@@ -38,9 +38,7 @@ const baseProps = {
   vendor: "any" as const,
 };
 
-const slimOn = () => (document.documentElement.dataset.slimRows = "on");
 afterEach(() => {
-  delete document.documentElement.dataset.slimRows;
   localStorage.clear();
 });
 
@@ -87,7 +85,6 @@ describe("slim-row-proof-guard — the proof line is never empty, never hidden",
   });
 
   it("every rendered collapsed slim row carries a non-empty proof line and ≤3 interactives", () => {
-    slimOn();
     const recs = [
       rec("game-mode", "verified", "safe"),
       rec("sysmain-disable", "measured-signal", "moderate"),
@@ -110,7 +107,6 @@ describe("slim-row-proof-guard — the proof line is never empty, never hidden",
 
 describe("slim row detail panel (in-place reveal)", () => {
   it("tap reveals Walkthrough / What's this? / Dismiss; TrustSwitch still routes onToggleRec", () => {
-    slimOn();
     const onToggleRec = vi.fn();
     render(<Fix recs={[rec("game-mode", "verified", "safe")]} {...baseProps} onToggleRec={onToggleRec} view="fixes" />);
     // Collapsed: none of the detail affordances are in the tree.
@@ -126,7 +122,6 @@ describe("slim row detail panel (in-place reveal)", () => {
   });
 
   it("dismiss is absent when the rec is currently applied (roll back instead)", () => {
-    slimOn();
     render(
       <ul>
         <SlimFixRow
@@ -150,7 +145,6 @@ describe("slim row detail panel (in-place reveal)", () => {
 
 describe("§8c — pre-selected Recommended (selection ≠ application)", () => {
   it("the consent sheet arrives with every Recommended ticked; deselect narrows the batch to EXACTLY the ticked set", () => {
-    slimOn();
     const onApplyBatch = vi.fn().mockResolvedValue({ applied: 1, skipped: [] });
     const recs = [rec("game-mode", "verified", "safe"), rec("sysmain-disable", "verified", "safe")];
     render(<Fix recs={recs} {...baseProps} onApplyBatch={onApplyBatch} view="fixes" />);
@@ -169,7 +163,6 @@ describe("§8c — pre-selected Recommended (selection ≠ application)", () => 
   });
 
   it("nothing ticked ⇒ Apply is disabled (an empty batch can't be fired)", () => {
-    slimOn();
     const recs = [rec("game-mode", "verified", "safe"), rec("sysmain-disable", "verified", "safe")];
     render(<Fix recs={recs} {...baseProps} view="fixes" />);
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed (2)" }));
@@ -178,16 +171,8 @@ describe("§8c — pre-selected Recommended (selection ≠ application)", () => 
   });
 });
 
-describe("default OFF — flag off renders today's UI (no slim rows anywhere)", () => {
-  it("without data-slim-rows, view=fixes renders classic FixRow markup and zero .slimrow", () => {
-    const { container } = render(<Fix recs={[rec("game-mode", "verified", "safe")]} {...baseProps} view="fixes" />);
-    expect(container.querySelectorAll(".slimrow").length).toBe(0);
-    expect(container.querySelectorAll(".fix-row").length).toBeGreaterThan(0);
-    // Classic sheet copy unchanged when 2+ safe fixes exist is covered by Fix.test.tsx (untouched).
-  });
-
-  it("even WITH the flag on, non-fixes views keep the classic path (P1 scope: Optimize Fixes only)", () => {
-    slimOn();
+describe("scope — slim rows are the Fixes segment's look only", () => {
+  it("non-fixes views (standalone Tune view=\"all\") keep the classic FixRow path", () => {
     const { container } = render(<Fix recs={[rec("game-mode", "verified", "safe")]} {...baseProps} />);
     expect(container.querySelectorAll(".slimrow").length).toBe(0);
     expect(container.querySelectorAll(".fix-row").length).toBeGreaterThan(0);

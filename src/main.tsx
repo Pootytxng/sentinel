@@ -64,57 +64,13 @@ try {
   document.documentElement.dataset.dashV2 = "on"; // default ON even if localStorage is unavailable
 }
 
-// UI slim-down P1/P2/P3/P5 (owner default-ON call 2026-07-02 — the slim-down IS the build).
-// Applied before first paint; each is opt-OUT via "0" (Settings → Appearance keeps the live
-// toggles), and the classic render paths stay in the tree as the failsafe until P4 dedup.
-
-// Slim rows (P1) — master-detail rec rows on Optimize's Fixes segment.
+// Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
+// components read one source of truth. Default BASIC (the answer face).
 try {
-  if (localStorage.getItem("compy_slim_rows") !== "0") {
-    document.documentElement.dataset.slimRows = "on";
-  }
+  document.documentElement.dataset.viewMode =
+    localStorage.getItem("compy_view_mode") === "advanced" ? "advanced" : "basic";
 } catch {
-  document.documentElement.dataset.slimRows = "on"; // default ON even if localStorage is unavailable
-}
-
-// Basic/Advanced split (P2) — the global two-mode contract, along with the chosen mode.
-try {
-  if (localStorage.getItem("compy_basic_advanced") !== "0") {
-    document.documentElement.dataset.basicAdvanced = "on";
-    document.documentElement.dataset.viewMode =
-      localStorage.getItem("compy_view_mode") === "advanced" ? "advanced" : "basic";
-  }
-} catch {
-  // default ON even if localStorage is unavailable; mode falls back to Basic (the answer face)
-  document.documentElement.dataset.basicAdvanced = "on";
   document.documentElement.dataset.viewMode = "basic";
-}
-
-// Answer-first Home (P3) — supersedes the dashV2 Home layout when on.
-try {
-  if (localStorage.getItem("compy_home_v3") !== "0") {
-    document.documentElement.dataset.homeV3 = "on";
-  }
-} catch {
-  document.documentElement.dataset.homeV3 = "on"; // default ON even if localStorage is unavailable
-}
-
-// Calm chrome (P5) — side-pile drawer + contextual Export + barely-there calm drift.
-try {
-  if (localStorage.getItem("compy_calm_chrome") !== "0") {
-    document.documentElement.dataset.calmChrome = "on";
-  }
-} catch {
-  document.documentElement.dataset.calmChrome = "on"; // default ON even if localStorage is unavailable
-}
-
-// Gaming Mode door (P5.5) — Gaming Mode gets its own Optimize segment instead of the Fixes scroll.
-try {
-  if (localStorage.getItem("compy_gm_door") !== "0") {
-    document.documentElement.dataset.gmDoor = "on";
-  }
-} catch {
-  document.documentElement.dataset.gmDoor = "on"; // default ON even if localStorage is unavailable
 }
 
 // Motion preference (2026-06-19, owner decision) — Compy's living motion is ON BY DEFAULT and

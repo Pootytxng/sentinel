@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Term } from "../design/Term";
+import { useEffect, useState } from "react";
 import type { AppliedChange, GameReadiness, Priorities, PriorityItem, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { AmbientBackdrop } from "../design/AmbientBackdrop";
@@ -7,7 +6,6 @@ import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { NavGlyph } from "../design/NavGlyph";
 import { railFor, type HomeRailId } from "../design/homeRail";
-import { useReducedMotion } from "../design/use-motion";
 import { PROVENANCE_LABEL } from "../data/provenance";
 import { readOptimizeMerged } from "../data/nav-flags";
 import {
@@ -20,12 +18,10 @@ import {
   readCommitted,
 } from "../design/theme";
 import { CompyHero } from "./CompyHero";
-import { DashboardV2 } from "./DashboardV2";
 import { HomeV3 } from "./HomeV3";
 import { activeChangeCount } from "./dashboard-data";
-import { signalRing, postureLine, liveStrip } from "./command-center-data";
+import { postureLine } from "./command-center-data";
 import { TrustSwitch, TrustSnapshotLine } from "../design/TrustSwitch";
-import { HardwareSection } from "./HardwareSection";
 import "./CommandCenter.css";
 
 // ─── Structural prop subsets ────────────────────────────────────────────────
@@ -68,93 +64,6 @@ function greeting(d = new Date()): string {
   if (h >= 5 && h < 12) return "Good morning";
   if (h >= 12 && h < 18) return "Good afternoon";
   return "Good evening";
-}
-
-// Motion respects the app-wide preference (Settings → Motion), which overrides the OS by default.
-
-// 0→1 ease-out on mount; drives the ring fill + count-ups. Static (1) immediately when reduced.
-function useMountProgress(durationMs: number, reduced: boolean): number {
-  const [p, setP] = useState(reduced ? 1 : 0);
-  useEffect(() => {
-    if (reduced) {
-      setP(1);
-      return;
-    }
-    let raf = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      const e = Math.min(1, (t - start) / durationMs);
-      setP(1 - Math.pow(1 - e, 3)); // ease-out cubic
-      if (e < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [durationMs, reduced]);
-  return p;
-}
-
-// ─── Inline brand + nav glyphs (no icon font — offline, zero-outbound) ───────
-// ─── Signal ring ─────────────────────────────────────────────────────────────
-// Encodes the REAL readiness ratio (ideal/total). Big text is an honest word ("Dialed"/"Ready"),
-// never an invented score. Fills 0→ratio on mount.
-function SignalRingGauge({ readiness, progress }: { readiness: GameReadiness | null; progress: number }) {
-  const ring = signalRing(readiness);
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const dash = C * ring.ratio * progress;
-
-  // Patient-gaze (shadow realm, Six Laws): hold a steady gaze on a fully-Dialed ring for 10s and it
-  // takes one slow breath + whispers a different subline. Nothing changes, nothing unlocks. Hover-only
-  // (no knob — invisible until found); the breath is CSS-gated so reduced-motion = the text swap only.
-  const [breathing, setBreathing] = useState(false);
-  const gazeTimer = useRef(0);
-  const canGaze = ring.known && ring.dialed;
-  const onGazeStart = () => {
-    if (!canGaze) return;
-    gazeTimer.current = window.setTimeout(() => setBreathing(true), 10000);
-  };
-  const onGazeEnd = () => {
-    window.clearTimeout(gazeTimer.current);
-    setBreathing(false);
-  };
-  useEffect(() => () => window.clearTimeout(gazeTimer.current), []);
-
-  if (!ring.known) {
-    return (
-      <div className="cc-ring" title="Scanning…">
-        <div className="cc-ring-shimmer" aria-hidden="true" />
-        <div className="cc-ring-center">
-          <div className="cc-ring-label cc-shimmer-text">Scanning</div>
-          <div className="cc-ring-sub">running checks…</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`cc-ring cc-ring-${ring.dialed ? "dialed" : "ready"}${breathing ? " cc-ring-breathing" : ""}`}
-      title={`${ring.ideal}/${ring.total} readiness checks ideal`}
-      onMouseEnter={onGazeStart}
-      onMouseLeave={onGazeEnd}
-    >
-      <svg className="cc-ring-svg" viewBox="0 0 120 120" aria-hidden="true">
-        <circle className="cc-ring-track" cx="60" cy="60" r={R} />
-        <circle
-          className="cc-ring-fill"
-          cx="60"
-          cy="60"
-          r={R}
-          strokeDasharray={`${dash} ${C}`}
-          transform="rotate(-90 60 60)"
-        />
-      </svg>
-      <div className="cc-ring-center">
-        <div className="cc-ring-label">{ring.label}</div>
-        <div className="cc-ring-sub">{breathing ? "Nothing to fix. Go play." : ring.sub}</div>
-      </div>
-    </div>
-  );
 }
 
 // Labels from the shared provenance source of truth (can't drift from Fix / ActionDrawer); CSS class local.
@@ -251,51 +160,6 @@ function LimiterCard({
   );
 }
 
-// Count a real integer up to its target as the surface settles. Pure presentation of a real value.
-const countUp = (target: number, progress: number) => Math.round(target * progress);
-
-function LiveStrip({ sessions, progress }: { sessions: SessionSummary[]; progress: number }) {
-  const strip = liveStrip(sessions);
-  if (strip.kind === "empty") {
-    return (
-      <section className="cc-panel cc-live cc-live-empty">
-        <div className="cc-panel-eyebrow">Last session</div>
-        <p className="cc-live-emptytext">
-          Play a session to see this — Compy captures it from outside the game.
-        </p>
-      </section>
-    );
-  }
-  return (
-    <section className="cc-panel cc-live">
-      <div className="cc-live-head">
-        <div className="cc-panel-eyebrow">Last session</div>
-        <span className="cc-live-game">{strip.game}</span>
-      </div>
-      <div className="cc-live-metrics">
-        <LiveMetric value={`${countUp(strip.avgFps, progress)}`} label={<Term id="hz-vs-fps">Avg FPS</Term>} />
-        <LiveMetric value={`${countUp(strip.low1Est, progress)}`} label={<Term id="one-percent-lows">1% low</Term>} note="est" />
-        <LiveMetric
-          value={strip.peakTempC == null ? "—" : `${countUp(strip.peakTempC, progress)}°C`}
-          label="Peak temp"
-        />
-      </div>
-    </section>
-  );
-}
-
-function LiveMetric({ value, label, note }: { value: string; label: ReactNode; note?: string }) {
-  return (
-    <div className="cc-metric">
-      <div className="cc-metric-value">{value}</div>
-      <div className="cc-metric-label">
-        {label}
-        {note && <span className="cc-metric-note"> · {note}</span>}
-      </div>
-    </div>
-  );
-}
-
 export default function CommandCenter(props: Props) {
   const {
     hw,
@@ -317,9 +181,6 @@ export default function CommandCenter(props: Props) {
     canGoForward,
   } = props;
 
-  const reduced = useReducedMotion();
-  const progress = useMountProgress(900, reduced);
-
   // Instrument theme + ambiance. The theme is now app-wide (set at startup in main.tsx + here on
   // change) and persists across every surface — no unmount-removal (the classic ThemePicker is
   // retired; Instrument's Velocity/Nova/Ember is the one theme system).
@@ -327,8 +188,8 @@ export default function CommandCenter(props: Props) {
   // current theme/ambiance (applied app-wide via data-itheme at startup + re-asserted here on mount).
   const [itheme] = useState<InstrumentTheme>(readInstrumentTheme);
   // The user's EXPLICIT ambiance choice (null = never chose). The effective ambiance is computed
-  // below once the homeV3/view-mode flags are known — P3 calms the default without overriding a
-  // real Settings pick; flag off ⇒ identical to the old readAmbiance() ("full") default.
+  // below from the view mode — the answer-first Home calms the default without overriding a
+  // real Settings pick.
   const [ambianceChoice] = useState<Ambiance | null>(readAmbianceChoice);
   // Living Instrument "simplified rail" (owner: fewer, plainer tabs) — mirrors the flag live; when on,
   // Lab leaves the everyday rail for a compact "Advanced" cell (same change as the app-shell rail).
@@ -351,29 +212,8 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:committed-changed", on);
     return () => window.removeEventListener("compy:committed-changed", on);
   }, []);
-  // Dashboard v2 — the premium telemetry-dashboard Home (default ON, owner-approved). Read from the DOM
-  // attribute (set by main.tsx before paint / applyDashV2 on toggle) so the test env — where main.tsx
-  // never runs — keeps the classic Home its tests assert. The live toggle re-reads on the event.
-  const [dashV2, setDashV2] = useState<boolean>(
-    () => typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on",
-  );
-  useEffect(() => {
-    const on = () => setDashV2(document.documentElement.dataset.dashV2 === "on");
-    window.addEventListener("compy:dashv2-changed", on);
-    return () => window.removeEventListener("compy:dashv2-changed", on);
-  }, []);
-  // Answer-first Home (P3, default OFF) — same DOM-attribute + event pattern as dashV2, which it
-  // supersedes when on. Test env (main.tsx never runs) keeps the classic Home its tests assert.
-  const [homeV3, setHomeV3] = useState<boolean>(
-    () => typeof document !== "undefined" && document.documentElement.dataset.homeV3 === "on",
-  );
-  useEffect(() => {
-    const on = () => setHomeV3(document.documentElement.dataset.homeV3 === "on");
-    window.addEventListener("compy:homev3-changed", on);
-    return () => window.removeEventListener("compy:homev3-changed", on);
-  }, []);
-  // Mirror the Basic/Advanced view mode (set on <html> only while the P2 split is armed) so the P3
-  // backdrop can auto-off in Advanced (owner §8b) and react live to the Monitor-side switch.
+  // Mirror the Basic/Advanced view mode (set on <html> before paint) so the backdrop can auto-off
+  // in Advanced (owner §8b) and react live to the Monitor-side switch.
   const [viewMode, setViewMode] = useState<string | undefined>(
     () => (typeof document !== "undefined" ? document.documentElement.dataset.viewMode : undefined),
   );
@@ -382,14 +222,10 @@ export default function CommandCenter(props: Props) {
     window.addEventListener("compy:viewmode-changed", on);
     return () => window.removeEventListener("compy:viewmode-changed", on);
   }, []);
-  // Effective backdrop intensity (owner §8b, P3-gated): homeV3 defaults to "calm" (barely-there
-  // drift behind the hologram) and auto-offs in Advanced mode; an explicit Off/Full Settings choice
-  // wins outside Advanced. Flag off ⇒ the classic default ("full").
-  const ambiance: Ambiance = homeV3
-    ? viewMode === "advanced"
-      ? "off"
-      : (ambianceChoice ?? "calm")
-    : (ambianceChoice ?? "full");
+  // Effective backdrop intensity (owner §8b): the default is "calm" (barely-there drift behind the
+  // hologram) and auto-offs in Advanced mode; an explicit Off/Full Settings choice wins outside
+  // Advanced.
+  const ambiance: Ambiance = viewMode === "advanced" ? "off" : (ambianceChoice ?? "calm");
   useEffect(() => {
     applyInstrumentTheme(itheme);
   }, [itheme]);
@@ -495,36 +331,15 @@ export default function CommandCenter(props: Props) {
             </button>
           </header>
 
-          {homeV3 ? (
-            /* Answer-first Home (P3 UI slim-down, default OFF) — verdict → #1 limiter → 3 tiles →
-               the retained 3D rig centerpiece. The LimiterCard is built HERE so the audited
-               apply/rollback flow is byte-for-byte the same one dashV2/classic use. */
-            <HomeV3
-              hw={hw}
-              sessions={sessions}
-              posture={posture}
-              onNavigate={onNavigate}
-              limiterSlot={
-                <LimiterCard
-                  priorities={priorities}
-                  limiter={limiter}
-                  limiterRec={limiterRec}
-                  appliable={limiterAppliable}
-                  activeChange={limiterActiveChange}
-                  busy={busyLimiter}
-                  onToggle={onToggleLimiter}
-                  onSeeInFix={onSeeInFix}
-                />
-              }
-            />
-          ) : dashV2 ? (
-            /* Dashboard v2 prototype (evolve-toward-ui-spec) — the premium telemetry dashboard.
-               Flag-gated; the classic Home is one toggle away. */
-            <>
-              {/* The #1-limiter CTA — the one actionable thing worth doing for THIS rig — leads the
-                  default Home. It was dropped when dashV2 shipped (the telemetry dashboard focused on
-                  charts), so the most useful card vanished; restored here as the hero above the
-                  telemetry. Same audited apply flow + props as the classic path (no new IPC). */}
+          {/* Answer-first Home — verdict → #1 limiter → 3 tiles → the retained 3D rig centerpiece.
+              The LimiterCard is built HERE so the audited apply/rollback flow is byte-for-byte the
+              same one Fix uses. */}
+          <HomeV3
+            hw={hw}
+            sessions={sessions}
+            posture={posture}
+            onNavigate={onNavigate}
+            limiterSlot={
               <LimiterCard
                 priorities={priorities}
                 limiter={limiter}
@@ -535,43 +350,8 @@ export default function CommandCenter(props: Props) {
                 onToggle={onToggleLimiter}
                 onSeeInFix={onSeeInFix}
               />
-              <DashboardV2 hw={hw} sessions={sessions} onNavigate={onNavigate} />
-            </>
-          ) : (
-            <>
-              {/* Posture hero */}
-              <section className={`cc-panel cc-hero cc-hero-${posture.tone}`}>
-                <SignalRingGauge readiness={readiness} progress={progress} />
-                <div className="cc-hero-text">
-                  <div className="cc-panel-eyebrow">System posture</div>
-                  <h2 className="cc-hero-headline">{posture.headline}</h2>
-                  <p className="cc-hero-sentence">{posture.sentence}</p>
-                  {posture.reassurance && <p className="cc-hero-reassure">{posture.reassurance}</p>}
-                </div>
-              </section>
-
-              <LimiterCard
-                priorities={priorities}
-                limiter={limiter}
-                limiterRec={limiterRec}
-                appliable={limiterAppliable}
-                activeChange={limiterActiveChange}
-                busy={busyLimiter}
-                onToggle={onToggleLimiter}
-                onSeeInFix={onSeeInFix}
-              />
-
-              <LiveStrip sessions={sessions} progress={progress} />
-
-              {/* "Your hardware" — the detailed card grid (incl. the elastic §6 Network card), shared with
-                  the classic Overview via HardwareGrid so the two Homes can't drift. Restores the owner-
-                  approved grid to the default Home, below Last Session. Same `hw`, zero new IPC; the global
-                  `.grid` reflows responsively (flex-wrap, min-width:0) down to the 380px floor. */}
-              <section className="cc-hardware">
-                <HardwareSection hw={hw} />
-              </section>
-            </>
-          )}
+            }
+          />
           {/* Appearance controls (theme + ambiance) live in Settings → Appearance now (smalls §4) —
               the canvas stays clean; the rail's Settings gear is the way there. */}
         </div>

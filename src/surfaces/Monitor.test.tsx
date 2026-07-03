@@ -10,8 +10,7 @@ import { ConfirmProvider } from "../design/ConfirmDialog";
 
 afterEach(() => {
   cleanup();
-  // P2 split isolation: never leak the flag/mode between tests (default OFF is a HARD LINE).
-  delete document.documentElement.dataset.basicAdvanced;
+  // Mode isolation: never leak the chosen Basic/Advanced mode between tests.
   delete document.documentElement.dataset.viewMode;
   localStorage.clear();
 });
@@ -51,8 +50,11 @@ const renderMonitor = () =>
     </ConfirmProvider>,
   );
 
-describe("Monitor — segmented shell (restructure tab #2)", () => {
+describe("Monitor — segmented shell in Advanced mode (restructure tab #2)", () => {
+  const advanced = () => localStorage.setItem("compy_view_mode", "advanced");
+
   it("renders Live + Sessions segments and DEFAULTS to Live (the primary live meters)", () => {
+    advanced();
     renderMonitor();
     expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sessions" })).toBeInTheDocument();
@@ -63,28 +65,18 @@ describe("Monitor — segmented shell (restructure tab #2)", () => {
   });
 
   it("clicking 'Sessions' swaps to the last-game debrief (and drops the live cards)", () => {
+    advanced();
     renderMonitor();
     fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
     expect(screen.getByText("avg FPS")).toBeInTheDocument();
     expect(screen.getByText("Recent sessions")).toBeInTheDocument();
     expect(screen.queryByText("Live monitor")).toBeNull();
   });
-
-  it("flag off (default): NO Basic/Advanced switch and NO Basic tiles anywhere", () => {
-    const { container } = renderMonitor();
-    expect(screen.queryByRole("tab", { name: "Basic" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Advanced" })).toBeNull();
-    expect(container.querySelectorAll(".mb-tile").length).toBe(0);
-  });
 });
 
-// ── P2 Basic/Advanced split (compy_basic_advanced, DEFAULT ON since 2026-07-02; tests drive the
-//    <html data-basic-advanced> attribute directly — jsdom never runs main.tsx) ──
-describe("Monitor — Basic/Advanced split (flag on)", () => {
-  const flagOn = () => (document.documentElement.dataset.basicAdvanced = "on");
-
+// ── Basic/Advanced split — the two-mode contract (Basic = the glanceable answer face) ──
+describe("Monitor — Basic/Advanced split", () => {
   it("defaults to BASIC: exactly 4 tiles (FPS · GPU temp · CPU · RAM), no panels, no presets, no Live/Sessions tabs", () => {
-    flagOn();
     const { container } = renderMonitor();
     // The mode switch is on; the Live/Sessions segments are collapsed into the Basic face.
     expect(screen.getByRole("tab", { name: "Basic" })).toBeInTheDocument();
@@ -105,7 +97,6 @@ describe("Monitor — Basic/Advanced split (flag on)", () => {
   });
 
   it("switching to Advanced restores today's panels exactly (live cards + presets + segments)", () => {
-    flagOn();
     renderMonitor();
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
     expect(screen.getByRole("tab", { name: "Live" })).toBeInTheDocument();
@@ -115,7 +106,6 @@ describe("Monitor — Basic/Advanced split (flag on)", () => {
   });
 
   it("the last-session line is a door: it routes to Advanced → Sessions (never a dead end)", () => {
-    flagOn();
     renderMonitor();
     fireEvent.click(screen.getByRole("button", { name: /Last session/ }));
     expect(screen.getByText("Recent sessions")).toBeInTheDocument();
@@ -123,7 +113,6 @@ describe("Monitor — Basic/Advanced split (flag on)", () => {
   });
 
   it("the chosen mode persists (advanced sticks across a re-render)", () => {
-    flagOn();
     const first = renderMonitor();
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
     first.unmount();

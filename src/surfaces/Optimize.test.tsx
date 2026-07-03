@@ -171,17 +171,10 @@ describe("Optimize — segmented shell (phase 1a; P5.5 History segment collapsed
   });
 });
 
-describe("Optimize — Gaming Mode door (P5.5, compy_gm_door)", () => {
-  const arm = () => {
-    document.documentElement.dataset.gmDoor = "on";
-  };
-  afterEach(() => {
-    delete document.documentElement.dataset.gmDoor;
-  });
+describe("Optimize — Gaming Mode door (the 'right room' placement law)", () => {
   const slot = <div data-testid="gm-slot">GM-CARD</div>;
 
-  it("flag ON + gate on: Gaming Mode gets its own segment and leaves the Fixes scroll", () => {
-    arm();
+  it("gate on: Gaming Mode gets its own segment and stays OFF the Fixes scroll", () => {
     renderOptimize({ gamingSlot: slot });
     const gmTab = screen.getByRole("tab", { name: "Gaming Mode" });
     // OFF the Fixes scroll (the default segment) — the card only lives behind its own door.
@@ -192,38 +185,14 @@ describe("Optimize — Gaming Mode door (P5.5, compy_gm_door)", () => {
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
 
-  it("flag OFF: classic path — no Gaming Mode segment, the slot renders inline on Fixes", () => {
-    renderOptimize({ gamingSlot: slot });
-    expect(screen.queryByRole("tab", { name: "Gaming Mode" })).toBeNull();
-    expect(screen.getByTestId("gm-slot")).toBeTruthy(); // inline on the default Fixes segment
-  });
-
-  it("gate off (no slot): no Gaming Mode segment even with the flag on", () => {
-    arm();
+  it("gate off (no slot): no Gaming Mode segment", () => {
     renderOptimize({ gamingSlot: null });
     expect(screen.queryByRole("tab", { name: "Gaming Mode" })).toBeNull();
   });
 });
 
-describe("Optimize — side-pile expander (P5 calm chrome, compy_calm_chrome)", () => {
-  const arm = () => {
-    document.documentElement.dataset.calmChrome = "on";
-  };
-  const disarm = () => {
-    delete document.documentElement.dataset.calmChrome;
-  };
-  afterEach(disarm);
-
-  it("flag OFF: no expander, the piles render in place as always (classic byte-identical)", () => {
-    renderOptimize();
-    expect(screen.queryByText("Nothing else needs attention")).toBeNull();
-    // The refuse pile renders directly on the surface (its CollapsibleSection header).
-    expect(screen.getByText("Not worth touching")).toBeTruthy();
-    expect(screen.getByText("Past Tweaks")).toBeTruthy();
-  });
-
-  it("flag ON: exactly ONE quiet expander swallows the piles — closed by default, content intact on open", () => {
-    arm();
+describe("Optimize — side-pile expander (calm chrome)", () => {
+  it("exactly ONE quiet expander swallows the piles — closed by default, content intact on open", () => {
     const { container } = renderOptimize();
     // Exactly one expander head (the duplication class the plan forbids: two identical drawers).
     expect(screen.getAllByText("Nothing else needs attention")).toHaveLength(1);
@@ -242,8 +211,7 @@ describe("Optimize — side-pile expander (P5 calm chrome, compy_calm_chrome)", 
     expect(body.hasAttribute("hidden")).toBe(false);
   });
 
-  it("flag ON: the actionable sections stay OUT of the drawer (only 'leave it alone' piles move)", () => {
-    arm();
+  it("the actionable sections stay OUT of the drawer (only 'leave it alone' piles move)", () => {
     const { container } = renderOptimize();
     const body = container.querySelector("#optimize-sidepile-body") as HTMLElement;
     // "Worth making for your rig" (the fixes list) must never be swallowed.

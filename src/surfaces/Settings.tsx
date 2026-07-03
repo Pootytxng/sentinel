@@ -9,19 +9,7 @@ import {
   persistAmbiance,
   readLivingInstrument,
   applyLivingInstrument,
-  readSlimRows,
-  applySlimRows,
-  readBasicAdvanced,
-  applyBasicAdvanced,
-  readHomeV3,
-  applyHomeV3,
-  readCalmChrome,
-  applyCalmChrome,
-  readGmDoor,
-  applyGmDoor,
   readAmbianceChoice,
-  readViewMode,
-  applyViewMode,
   readStepAsideGame,
   persistStepAsideGame,
   readCloseToTray,
@@ -134,15 +122,8 @@ export default function Settings({
   // The picker reflects the EFFECTIVE default when the user never chose: the answer-first Home
   // re-defaults ambiance to "calm" (owner §8b), so showing "Full" selected there would be a lie.
   // An explicit choice always wins (and picking here persists one, unchanged).
-  const [ambiance, setAmbiance] = useState<Ambiance>(
-    () => readAmbianceChoice() ?? (readHomeV3() ? "calm" : "full"),
-  );
+  const [ambiance, setAmbiance] = useState<Ambiance>(() => readAmbianceChoice() ?? "calm");
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
-  const [slimRows, setSlimRows] = useState<boolean>(readSlimRows);
-  const [basicAdvanced, setBasicAdvanced] = useState<boolean>(readBasicAdvanced);
-  const [homeV3, setHomeV3] = useState<boolean>(readHomeV3);
-  const [calmChrome, setCalmChrome] = useState<boolean>(readCalmChrome);
-  const [gmDoor, setGmDoor] = useState<boolean>(readGmDoor);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -178,37 +159,6 @@ export default function Settings({
   const changeLiving = (v: boolean) => {
     setLiving(v);
     applyLivingInstrument(v);
-  };
-  // Slim rows preview (P1 UI slim-down) — toggles the [data-slim-rows] attribute live. Layout only:
-  // the same fixes, switches, and rollback flow; DEFAULT OFF until the look is owner-approved.
-  const changeSlimRows = (v: boolean) => {
-    setSlimRows(v);
-    applySlimRows(v);
-  };
-  // Basic/Advanced split (P2) — enables the two-mode contract (Monitor first). Turning it on lands in
-  // Basic (the answer-first face); the mode itself is switched on the surface. Layout only, no data change.
-  const changeBasicAdvanced = (v: boolean) => {
-    setBasicAdvanced(v);
-    applyBasicAdvanced(v);
-    if (v) applyViewMode(readViewMode()); // mirror the persisted mode onto <html> when arming
-  };
-  // Answer-first Home (P3) — Home leads with the verdict + #1 limiter + 3 tiles; the 3D rig hologram
-  // stays the centerpiece. Layout only, same audited flows; DEFAULT OFF until owner-approved.
-  const changeHomeV3 = (v: boolean) => {
-    setHomeV3(v);
-    applyHomeV3(v);
-  };
-  // Calm chrome (P5) — one quiet side-pile expander on Optimize, Export moves in with the scan
-  // results, calm ambiance drifts barely-there. Layout/chrome only; DEFAULT OFF until owner-approved.
-  const changeCalmChrome = (v: boolean) => {
-    setCalmChrome(v);
-    applyCalmChrome(v);
-  };
-  // Gaming Mode door (P5.5) — placement only: the same <GamingMode/> renders either in its own
-  // Optimize segment (on) or inline on the Fixes scroll (off, the classic failsafe).
-  const changeGmDoor = (v: boolean) => {
-    setGmDoor(v);
-    applyGmDoor(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -301,65 +251,6 @@ export default function Settings({
                 <Toggle on={living} onChange={changeLiving} ariaLabel="Living Instrument preview" />
               </div>
 
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Slim rows (preview)</div>
-                  <div className="set-row-sub">
-                    Calmer fix rows on Optimize — one line of proof stays visible, the full detail
-                    opens on tap. Same fixes, same switches, same one-tap undo.
-                  </div>
-                </div>
-                <Toggle on={slimRows} onChange={changeSlimRows} ariaLabel="Slim rows preview" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Basic/Advanced mode (preview)</div>
-                  <div className="set-row-sub">
-                    Monitor opens as four big glanceable tiles; every graph, sensor, and overlay
-                    setting stays one tap away under Advanced. Same numbers, same measurements.
-                  </div>
-                </div>
-                <Toggle
-                  on={basicAdvanced}
-                  onChange={changeBasicAdvanced}
-                  ariaLabel="Basic/Advanced mode preview"
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Answer-first Home (preview)</div>
-                  <div className="set-row-sub">
-                    Home leads with the verdict, your #1 limiter, and three glanceable tiles — the
-                    3D rig stays the centerpiece, with the full hardware cards one tap away.
-                  </div>
-                </div>
-                <Toggle on={homeV3} onChange={changeHomeV3} ariaLabel="Answer-first Home preview" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Calm chrome (preview)</div>
-                  <div className="set-row-sub">
-                    Optimize tucks everything that's already fine under one quiet "Nothing else needs
-                    attention" drawer, and Export lives with your scan results instead of the header.
-                    Nothing is removed — every reason stays one tap away.
-                  </div>
-                </div>
-                <Toggle on={calmChrome} onChange={changeCalmChrome} ariaLabel="Calm chrome preview" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Gaming Mode room (preview)</div>
-                  <div className="set-row-sub">
-                    Gaming Mode gets its own tab on Optimize instead of sitting mid-scroll between
-                    fixes. Same switch, same rollback — only its home moves.
-                  </div>
-                </div>
-                <Toggle on={gmDoor} onChange={changeGmDoor} ariaLabel="Gaming Mode room preview" />
-              </div>
             </div>
             <LivePreview ambiance={ambiance} />
           </div>

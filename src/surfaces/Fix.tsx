@@ -28,17 +28,6 @@ function livingOn(): boolean {
 function dashOn(): boolean {
   return typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on";
 }
-// Slim rows (P1 UI slim-down, DEFAULT OFF) — master-detail rec rows on the Fixes segment. DOM-read
-// like the flags above; flag off ⇒ the classic FixRow path renders byte-identical.
-function slimOn(): boolean {
-  return typeof document !== "undefined" && document.documentElement.dataset.slimRows === "on";
-}
-// Calm chrome (P5, DEFAULT OFF) — inside the side-pile drawer the refuse pile sits directly under
-// Check's "N not worth touching" pile; same title twice, stacked, reads as a duplicate. The drawer
-// disambiguates: the refuse pile becomes "Deliberately refused" (the drawer hint's own words).
-function calmOn(): boolean {
-  return typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on";
-}
 
 // A rec's title. Under the Living Instrument preview, jargon recs lead with a plain-language headline
 // + a quiet technical tag (owner direction 2026-06-15: friendly-first, real name kept visible). The
@@ -285,7 +274,7 @@ function FixRow({
   );
 }
 
-// The slim master-detail rec row (P1 UI slim-down, behind compy_slim_rows — flag off, FixRow above
+// The slim master-detail rec row (P1 UI slim-down — the Fixes segment look; FixRow above
 // renders byte-identical). LAYOUT ONLY: the TrustSwitch is the same component on the same audited
 // onToggle path, the proof line is the rec's real evidence/reason (slimProofLine — never fabricated,
 // never hidden), and everything else moves into the in-place detail panel, reusing the existing
@@ -718,9 +707,9 @@ export default function Fix({
   const safeBatch = worthFixing.filter((r) => r.severity === "safe");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [batching, setBatching] = useState(false);
-  // Slim rows (P1, compy_slim_rows — DEFAULT OFF): master-detail rows on the Fixes segment only.
-  // Flag off ⇒ every branch below takes the classic path byte-identical.
-  const slim = slimOn() && view === "fixes";
+  // Slim master-detail rows are the Fixes segment's one look (P4 dedup); standalone Tune
+  // (view="all", the compy_optimize escape hatch) keeps the classic FixRow list.
+  const slim = view === "fixes";
   // §8c (owner decision 2026-07-01, slim mode only): the batch consent sheet arrives with every
   // Recommended (safe-tier) row SELECTED — one-tap deselect; the ticked list IS exactly what will
   // change. Selection ≠ application: Apply stays the explicit act. NO auto-apply on render, ever.
@@ -1100,7 +1089,7 @@ export default function Fix({
       {/* Not worth touching — the refuse-pile. What Compy won't do, and why, with the autopsy link. */}
       <SidePileItem order={SIDE_PILE_ORDER.refusePile}>
       <CollapsibleSection
-        title={calmOn() && view === "fixes" ? "Deliberately refused" : "Not worth touching"}
+        title={view === "fixes" ? "Deliberately refused" : "Not worth touching"}
         count={REFUSE_PILE.length}
         tint="refuse"
         icon={<ShieldOff />}

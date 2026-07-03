@@ -5,7 +5,7 @@ import type { SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import type { PostureLine } from "./command-center-data";
 
-// HomeV3 (P3 answer-first Home, behind compy_home_v3) — asserts the answer-first contract renders
+// HomeV3 (P3 answer-first Home) — asserts the answer-first contract renders
 // honestly: the verdict leads, the limiter slot mounts as passed, the 3 tiles show REAL session
 // numbers or the honest empty state (never fabricated), and the full hardware cards are one tap away
 // (Cards view — the 3D hologram is the runtime default but is WebGL/lazy, so tests pin Cards).

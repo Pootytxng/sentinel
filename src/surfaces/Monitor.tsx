@@ -30,13 +30,6 @@ const SEGMENTS: { id: Segment; label: string }[] = [
   { id: "sessions", label: "Sessions" },
 ];
 
-// Basic/Advanced split (P2 UI slim-down, DEFAULT OFF behind compy_basic_advanced) — DOM-read like the
-// other preview flags (the surface re-renders fresh on navigation). Flag off ⇒ the shell below renders
-// today's tree byte-identical (no mode switch, no Basic face).
-function basicAdvancedOn(): boolean {
-  return typeof document !== "undefined" && document.documentElement.dataset.basicAdvanced === "on";
-}
-
 const MODES: { id: ViewMode; label: string }[] = [
   { id: "basic", label: "Basic" },
   { id: "advanced", label: "Advanced" },
@@ -143,9 +136,7 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
 
 export function Monitor(props: Props) {
   const [segment, setSegment] = useState<Segment>("live");
-  // P2 split state: the feature flag (DOM-read) + the user's chosen mode (global, persisted). Basic is
-  // the default answer-first face; Advanced is today's full panels. Only consulted when the flag is on.
-  const split = basicAdvancedOn();
+  // Basic is the default answer-first face; Advanced is the full panels. Mode is global + persisted.
   const [mode, setMode] = useState<ViewMode>(readViewMode);
   const chooseMode = (m: ViewMode) => {
     setMode(m);
@@ -159,12 +150,12 @@ export function Monitor(props: Props) {
     invoke("get_cpu_sensors").catch(() => {});
     invoke("get_gpu_sensors").catch(() => {});
   }, []);
-  const basic = split && mode === "basic";
+  const basic = mode === "basic";
   return (
     <section className="monitor-root">
       <header className="monitor-bar">
         {/* Basic collapses Live/Sessions into the one glanceable face, so the segments only show in
-            Advanced (and in the unchanged flag-off surface, where they are the whole bar). */}
+            Advanced. */}
         {!basic && (
           <SegmentedControl
             segments={SEGMENTS}
@@ -173,14 +164,12 @@ export function Monitor(props: Props) {
             aria-label="Monitor sections"
           />
         )}
-        {split && (
-          <SegmentedControl
-            segments={MODES}
-            value={mode}
-            onChange={(id) => chooseMode(id as ViewMode)}
-            aria-label="Detail level"
-          />
-        )}
+        <SegmentedControl
+          segments={MODES}
+          value={mode}
+          onChange={(id) => chooseMode(id as ViewMode)}
+          aria-label="Detail level"
+        />
       </header>
       {basic ? (
         // BASIC (P2): the 4 glanceable tiles + last-session door. Advisory presets, overlay config,

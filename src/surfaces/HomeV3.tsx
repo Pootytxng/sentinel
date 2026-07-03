@@ -12,7 +12,7 @@ import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import "./HardwareSection.css";
 import "./HomeV3.css";
 
-// HomeV3 — the answer-first Home (P3 UI slim-down, plan §5.3, behind compy_home_v3, default OFF).
+// HomeV3 — the answer-first Home (P3 UI slim-down, plan §5.3) — the Home.
 // One question per room: "Is my PC ready, and what's the one thing to do?" Top to bottom: the posture
 // VERDICT (the only element that pops — squint test), the #1 limiter as the single hero action
 // (passed in from CommandCenter so the audited apply/rollback flow stays identical), 3 glanceable

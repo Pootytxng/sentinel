@@ -87,12 +87,6 @@ function driverFreshness(gpus: GpuDriverInfo[]):
   };
 }
 
-// Calm chrome (P5, compy_calm_chrome — DEFAULT OFF). DOM-read like Fix's flag readers; gates the
-// contextual Export button on the setup-summary card. Flag off ⇒ classic renders byte-identical.
-function calmChromeOn(): boolean {
-  return typeof document !== "undefined" && document.documentElement.dataset.calmChrome === "on";
-}
-
 // CHECK — the consolidation surface that absorbs Readiness + Priorities (spec 2026-06-06-check-play-lab).
 // Top: the shared scan (radar + streaming rows from useScan — same core as the first-run arc). Below:
 // Priorities' buckets as the permanent ranked result, with drift-watch cards when a regression-
@@ -825,9 +819,9 @@ export default function Check({
                   Setup summary
                 </span>
                 <span style={{ display: "inline-flex", gap: 8 }}>
-                  {/* Calm chrome (P5): Export lives HERE — with the proof — instead of the app
-                      header. Same App-owned export + report modal; only the button moved. */}
-                  {calmChromeOn() && onExport && (
+                  {/* Export lives HERE — with the proof — instead of the app header. Same
+                      App-owned export + report modal; only the button moved. */}
+                  {onExport && (
                     <button
                       type="button"
                       className="btn btn-small"
