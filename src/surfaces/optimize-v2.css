@@ -110,6 +110,107 @@
   color: var(--v2-faint);
 }
 
+/* ── V2-4b IA ── */
+/* Check's header slims to just the Re-run button once the title + settled subtitle are
+   suppressed (the RoomShell verdict owns the summary) — the empty text column collapses. */
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-head > div:empty {
+  display: none;
+}
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-head {
+  justify-content: flex-end;
+  margin: 0 0 4px;
+}
+
+/* Upgrade path, demoted (owner: underdeveloped — a labeled-early quiet card BELOW the action
+   groups until the per-rig evidence-gated engine is designed). Copy-only links unchanged. */
+:root[data-v2="on"] .ov2-upgrade {
+  margin-top: var(--v2-gap);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  padding: var(--v2-pad-sm) var(--v2-pad) var(--v2-pad);
+  opacity: 0.85;
+}
+:root[data-v2="on"] .ov2-upgrade-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+:root[data-v2="on"] .ov2-upgrade-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .ov2-early {
+  font-size: 10.5px;
+  color: var(--v2-warn);
+  border: 1px solid var(--v2-warn-dim);
+  background: var(--v2-warn-dim);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+:root[data-v2="on"] .ov2-upgrade-title {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+:root[data-v2="on"] .ov2-upgrade-why {
+  margin: 4px 0 8px;
+  color: var(--v2-muted);
+  font-size: 12px;
+}
+:root[data-v2="on"] .ov2-upgrade-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+:root[data-v2="on"] .ov2-upgrade-disclosure {
+  margin: 10px 0 0;
+  color: var(--v2-faint);
+  font-size: 11px;
+}
+
+/* Setup summary on Applied — a record card among the records (V2-4b relocation). */
+:root[data-v2="on"] .ov2-summary {
+  margin-top: var(--v2-gap);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  background: var(--v2-panel);
+  padding: var(--v2-pad-sm) var(--v2-pad) var(--v2-pad);
+}
+:root[data-v2="on"] .ov2-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--v2-pad-sm);
+}
+:root[data-v2="on"] .ov2-summary-title {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+:root[data-v2="on"] .ov2-summary-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+:root[data-v2="on"] .ov2-summary-blurb {
+  margin: 6px 0 10px;
+  color: var(--v2-muted);
+  font-size: 12px;
+}
+:root[data-v2="on"] .ov2-summary-text {
+  margin: 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--v2-font-sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--v2-muted);
+  background: var(--v2-panel-2);
+  border-radius: var(--v2-r-sm);
+}
+
 :root[data-v2="on"] .ov2-sidepile-body {
   display: flex;
   flex-direction: column;

@@ -103,6 +103,13 @@ type Props = {
   // separate Fixes / Applied / History segments without duplicating any markup — and keep each segment
   // a DISTINCT view (History is not a mirror of Applied). Old callers pass nothing → "all".
   view?: "all" | "fixes" | "ledger" | "applied" | "history";
+  // V2-4b IA (spec 2026-07-03-owner-optimize-feedback) — only the V2 Optimize room sets these;
+  // classic/standalone render byte-identically with them absent. v2Ia regroups the fixes view by
+  // what-it-needs (ready / needs your call / applied — drifted); `reverted` is the scan's
+  // applied-then-turned-off-outside-Compy list, so a drifted rec renders as ONE row in the
+  // drifted group with its state on it (one-mention law), never a second time under ready.
+  v2Ia?: boolean;
+  reverted?: { rec_id: string; title: string }[];
 };
 
 // Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
@@ -677,6 +684,8 @@ export default function Fix({
   onOpenLibrary,
   vendor,
   view = "all",
+  v2Ia = false,
+  reverted = [],
 }: Props) {
   // Which section(s) of the surface to render — the merged Optimize shell drives this via segments;
   // standalone Tune leaves it "all" so the surface is unchanged. The two ledger layers gate
@@ -699,6 +708,12 @@ export default function Fix({
   const appliable = liveRecs.filter((r) => isAppliable(r.id));
   const worthFixing = appliable.filter((r) => !r.currently_applied);
   const advisory = liveRecs.filter((r) => !isAppliable(r.id));
+  // V2-4b grouping (one-mention law): a rec you applied that later turned off outside Compy
+  // renders ONCE, in the drifted group, with that state on it — never a second time under ready.
+  // Classic (v2Ia false): drifted stays empty and readyRows === worthFixing, byte-identical.
+  const revertedIds = new Set(reverted.map((r) => r.rec_id));
+  const drifted = v2Ia ? worthFixing.filter((r) => revertedIds.has(r.id)) : [];
+  const readyRows = v2Ia ? worthFixing.filter((r) => !revertedIds.has(r.id)) : worthFixing;
 
   // §4 "Apply all safe fixes" — SAFE-tier only (moderate stays individual; advisory can't apply;
   // dismissed/not-for-this-rig already excluded since this derives from worthFixing). One consent
@@ -788,7 +803,9 @@ export default function Fix({
               the surface — suppress the standalone "Tune" tab-title to avoid stacked redundant headings
               (Check's title is suppressed the same way). Standalone Tune (view="all") keeps it. */}
           {view !== "fixes" && <h2 className="fix-title">Tune</h2>}
-          {living ? (
+          {/* V2-4b: the RoomShell verdict is the room's ONE summary line — this subtitle would
+              restate it (the stacked-summaries owner catch). The consent line below stays. */}
+          {v2Ia ? null : living ? (
             <p className="fix-subtitle">
               {worthFixing.length === 0
                 ? "Your rig's already dialed in."
@@ -812,7 +829,43 @@ export default function Fix({
       {/* Worth making for your rig — the outstanding appliable recs, each with its trust-switch. */}
       {showFixes && (
       <>
-      <div className="fix-section-label">Worth making for your rig</div>
+      {/* V2-4b "Applied — drifted" group FIRST: a regression on something you already chose
+          outranks new tweaks (it's where the old drift limiter card sat). ONE row per drifted
+          rec — same SlimFixRow, same audited onToggleRec apply path; the group intro carries the
+          drift state, GameModeNote carries the won't-stick specifics on its row. */}
+      {v2Ia && drifted.length > 0 && (
+        <>
+          <div className="fix-section-label">Applied — turned off outside Compy</div>
+          <p className="fix-refuse-intro">
+            You turned {drifted.length === 1 ? "this" : "these"} on with Compy; something outside
+            Compy switched {drifted.length === 1 ? "it" : "them"} back off. Flip{" "}
+            {drifted.length === 1 ? "it" : "any"} back on — or leave it, your call.
+          </p>
+          <ul className="fix-list">
+            {drifted.map((rec) => (
+              <SlimFixRow
+                key={rec.id}
+                rec={rec}
+                vendor={vendor}
+                gameModeReverted={gameModeReverted}
+                applied={false}
+                activeChange={undefined}
+                busy={rowBusy(rec)}
+                onToggle={() => onToggleRec(rec.id)}
+                onWhatsThis={onOpenLibrary}
+                onDismiss={dismiss}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+      {/* V2-4b: the ready head disappears with its rows — a group label over nothing (the case
+          where the room's only pending fix is in the drifted group above) is noise, not order. */}
+      {!(v2Ia && readyRows.length === 0 && drifted.length > 0) && (
+        <div className="fix-section-label">
+          {v2Ia ? "Ready — one click, reversible" : "Worth making for your rig"}
+        </div>
+      )}
       {safeBatch.length >= 2 && (
         <div className="fix-applyall-bar">
           <button className="fix-applyall" onClick={openSheet}>
@@ -831,11 +884,15 @@ export default function Fix({
           . Each is individually reversible below.
         </p>
       )}
-      {worthFixing.length === 0 ? (
-        <p className="fix-empty">Your rig's already dialed in — nothing here needs a change right now.</p>
+      {readyRows.length === 0 ? (
+        // With a drifted group above, "already dialed in" would be false — the group head + intro
+        // already said what's up, so the empty line renders only when there's truly nothing.
+        drifted.length === 0 && (
+          <p className="fix-empty">Your rig's already dialed in — nothing here needs a change right now.</p>
+        )
       ) : (
         <ul className="fix-list">
-          {worthFixing.map((rec) =>
+          {readyRows.map((rec) =>
             slim ? (
               // Slim master-detail row (P1): 8 → 3 visible affordances; same TrustSwitch, same
               // audited onToggleRec path; everything else in the in-place detail panel.
@@ -1116,19 +1173,37 @@ export default function Fix({
 
       {/* Guided / advisory — Compy detects but won't auto-apply; the full where + steps + the
           allowlisted "Open it" deep link live right here (no need to fall back to classic Optimize). */}
-      {advisory.length > 0 && (
-        <CollapsibleSection title="Compy points the way" count={advisory.length}>
-          <p className="fix-refuse-intro">
-            Detected, but Compy won't change these for you — they live in a vendor app or a Windows
-            page with no safe, reversible switch. Here's exactly where each one lives, with the steps.
-          </p>
-          <ul className="fix-list">
-            {advisory.map((rec) => (
-              <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} onWhatsThis={onOpenLibrary} />
-            ))}
-          </ul>
-        </CollapsibleSection>
-      )}
+      {advisory.length > 0 &&
+        (v2Ia ? (
+          // V2-4b: elevated to an open, labeled group — these are real actions (the owner's
+          // "cold and insignificant" catch was burial, not insignificance), grouped by what
+          // they need from you: a judgment call + a few steps outside Compy.
+          <>
+            <div className="fix-section-label">Needs your call</div>
+            <p className="fix-refuse-intro">
+              Detected, but Compy won't change these for you — they live in a vendor app or a
+              Windows page with no safe, reversible switch. Here's exactly where each one lives,
+              with the steps.
+            </p>
+            <ul className="fix-list">
+              {advisory.map((rec) => (
+                <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} onWhatsThis={onOpenLibrary} />
+              ))}
+            </ul>
+          </>
+        ) : (
+          <CollapsibleSection title="Compy points the way" count={advisory.length}>
+            <p className="fix-refuse-intro">
+              Detected, but Compy won't change these for you — they live in a vendor app or a Windows
+              page with no safe, reversible switch. Here's exactly where each one lives, with the steps.
+            </p>
+            <ul className="fix-list">
+              {advisory.map((rec) => (
+                <GuidedRow key={rec.id} rec={rec} vendor={vendor} onDismiss={dismiss} onWhatsThis={onOpenLibrary} />
+              ))}
+            </ul>
+          </CollapsibleSection>
+        ))}
 
       {/* Startup apps — user-scope auto-start entries; toggle off to stop them launching with Windows. */}
       {startup.length > 0 && (

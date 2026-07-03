@@ -114,6 +114,7 @@ export default function Check({
   embedded = false,
   onExport,
   exporting = false,
+  v2Ia = false,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
@@ -128,6 +129,13 @@ export default function Check({
   // instead of the app header. App-owned handler/modal; renders only when the flag is on.
   onExport?: () => void;
   exporting?: boolean;
+  // V2-4b IA (spec 2026-07-03-owner-optimize-feedback): only the V2 Optimize room sets this —
+  // classic/standalone render byte-identically with it false. Under the one-mention law the
+  // aggregate limiters that re-render recs Fix already shows as rows (pending-safe-recs,
+  // applied-changes) are suppressed (Fix carries their state ON its rows), the setup summary
+  // moves to the Applied segment (a record, not an action), driver freshness renders ONLY when
+  // there is actually something stale to say, and the upgrade path is labeled early.
+  v2Ia?: boolean;
 }) {
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
   // re-opening it serves the last verdict instantly instead of replaying the scan + 280ms/row reveal
@@ -262,7 +270,13 @@ export default function Check({
   };
 
   const checks = readiness?.checks ?? [];
-  const limiters = priorities?.limiters ?? [];
+  // One-mention law (V2-4b): these two aggregate limiters re-render recommendations that the
+  // composed Fix surface already shows as actionable rows (Game Mode was appearing 3×). Under
+  // the v2 IA their state rides ON those rows; the ranked list keeps only non-rec limiters.
+  const allLimiters = priorities?.limiters ?? [];
+  const limiters = v2Ia
+    ? allLimiters.filter((l) => l.id !== "pending-safe-recs" && l.id !== "applied-changes")
+    : allLimiters;
   const alreadyFine = priorities?.already_fine ?? [];
   const notWorth = priorities?.not_worth_touching ?? [];
   const drifts = readiness?.drifts ?? [];
@@ -356,6 +370,9 @@ export default function Check({
       <header className="check-head">
         <div>
           {!embedded && <h2 className="check-title">Check</h2>}
+          {/* V2-4b: settled, the RoomShell verdict + confidence chips own the summary — this line
+              would stack a third restatement. It still narrates the scan while one is running. */}
+          {(!v2Ia || running) && (
           <p className="check-sub">
             {running
               ? "Scanning your rig…"
@@ -365,6 +382,7 @@ export default function Check({
                   : `${limiters.length} ${limiters.length === 1 ? "thing" : "things"} worth a look — the rest came back clean.`
                 : `${checks.length} checks · ${elapsed?.toFixed(1) ?? "—"}s · ${limiters.length} worth fixing`}
           </p>
+          )}
         </div>
         <button className="check-rerun" disabled={running} onClick={() => rerun()}>
           {running ? "Scanning…" : "Re-run check"}
@@ -500,7 +518,10 @@ export default function Check({
               button), one shared "newer may be available" note instead of a paragraph per device.
               Honesty rules unchanged: age is a fact, "newer exists" stays a maybe, links are
               copy-to-clipboard only (never a launcher, never "out of date", never a version). */}
-          {driver && (
+          {/* V2-4b: in the v2 room this is advisory hardware state, not a Compy action — ONE
+              quiet row ONLY when something stale was actually measured (its primary home becomes
+              the hologram part-tap inspector when that layer lands). Classic renders as always. */}
+          {driver && (!v2Ia || driver.tone === "advisory" || staleNics.length > 0) && (
             <div className={`check-driver check-driver-${driver.tone}`}>
               <div className="check-row-head">
                 <span className="check-row-title">Driver freshness</span>
@@ -561,6 +582,11 @@ export default function Check({
             </div>
           )}
 
+          {/* V2-4b: when the only limiters were the suppressed rec-aggregates, the section head
+              disappears entirely — a "no limiter stands out / nothing to change" claim would be
+              false while the rec rows below still offer changes. */}
+          {v2Ia && limiters.length === 0 ? null : (
+          <>
           <div className="check-section-label">Biggest limiters</div>
           {limiters.length === 0 ? (
             // Deliberately NOT "measured clean" — the scan subtitle above already says it (the
@@ -691,11 +717,15 @@ export default function Check({
               })}
             </ul>
           )}
+          </>
+          )}
 
           {/* R3 Lane B: upgrade-path advisory — renders ONLY when a verdict already names hardware
               as the limiter (GPU-limited session / HDD install drive). Links are plain retailer
               searches, COPY-only in-app (no navigation, no opener); the disclosure always rides. */}
-          {priorities?.upgrade_path && (
+          {/* V2-4b: suppressed in the v2 room — demoted content must not LEAD the room, so
+              OptimizeV2 renders its labeled-early card BELOW the action groups instead. */}
+          {!v2Ia && priorities?.upgrade_path && (
             <div className="check-upgrade">
               <div className="check-section-label">Upgrade path (advisory)</div>
               {priorities.upgrade_path.items.map((item) => (
@@ -796,7 +826,9 @@ export default function Check({
               plain English, ready to copy and share. Read-only: copies measured facts to the
               clipboard, no launch/URL, no mutation. The text stays on screen so it can be selected
               manually if the clipboard is blocked. */}
-          {setupSummary && (
+          {/* V2-4b: a record of what happened, not an action — in the v2 room it lives on the
+              Applied segment with the rest of the records (OptimizeV2 renders it there). */}
+          {!v2Ia && setupSummary && (
             <div
               className="check-summary"
               style={{

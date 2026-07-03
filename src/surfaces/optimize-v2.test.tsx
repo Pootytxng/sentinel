@@ -114,6 +114,7 @@ function mount(over: Partial<Parameters<typeof OptimizeV2>[0]> = {}) {
     onRollback: vi.fn(),
     onApplyBatch: vi.fn().mockResolvedValue({ applied: 0, skipped: [] }),
     readiness,
+    priorities: null,
     activeCount: 0,
     ...over,
   };
@@ -249,6 +250,56 @@ describe("OptimizeV2 — quiet slot (side piles) and segments", () => {
     // Applied segment: no side piles portal there — the quiet slot is gone.
     fireEvent.click(screen.getByRole("tab", { name: "Applied" }));
     expect(screen.queryByRole("button", { name: /Nothing else needs attention/ })).toBeNull();
+  });
+
+  it("setup summary is a RECORD: renders on Applied, not in the fixes flow (V2-4b relocation)", () => {
+    useReduced();
+    const { container } = mount({
+      priorities: {
+        limiters: [],
+        already_fine: [],
+        not_worth_touching: [],
+        session_hint: null,
+        upgrade_path: null,
+      },
+    });
+    expect(screen.queryByText("Setup summary")).toBeNull(); // Fixes segment: absent
+    fireEvent.click(screen.getByRole("tab", { name: "Applied" }));
+    expect(screen.getByText("Setup summary")).toBeTruthy();
+    expect(container.querySelector(".ov2-summary-text")?.textContent).toContain(
+      "Compy setup summary",
+    );
+  });
+
+  it("upgrade path renders as the labeled-early card BELOW the body (V2-4b demotion)", () => {
+    useReduced();
+    const { container } = mount({
+      priorities: {
+        limiters: [],
+        already_fine: [],
+        not_worth_touching: [],
+        session_hint: null,
+        upgrade_path: {
+          items: [
+            {
+              kind: "gpu",
+              title: "GPU was the measured limiter",
+              why: "GPU usage peaked very high.",
+              links: [{ retailer: "Amazon", url: "https://amazon.example/q" }],
+            },
+          ],
+          disclosure: "x",
+        },
+      },
+    });
+    const card = container.querySelector(".ov2-upgrade") as HTMLElement;
+    expect(card.textContent).toContain("GPU was the measured limiter");
+    expect(card.textContent).toContain("early — being developed");
+    // Below the groups: the card follows the Fix stub in DOM order.
+    const body = container.querySelector(".ov2-body") as HTMLElement;
+    const fix = screen.getByTestId("fix-fixes");
+    expect(body.contains(card)).toBe(true);
+    expect(fix.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("Gaming Mode is a segment ONLY when the gate passes a slot (dark = absent)", () => {

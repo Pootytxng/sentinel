@@ -87,16 +87,21 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       untouched. Non-merged escape hatch (compy_optimize="0") falls through to classic panels.
       Keepalive split per path so classic Optimize never mounts hidden under v2.
       optimize-v2.css added to scoping/no-literal/token-font guards; +15 tests.
-- [ ] **V2-4b Optimize IA fix** — GOVERNED BY `2026-07-03-owner-optimize-feedback.md` (owner
-      live-review of V2-4): one-mention law (a rec renders as an actionable row ONCE per room;
-      drift/not-applied are attributes on that row — Game Mode currently appears 3×) · grouped
-      actionable list (needs-your-call / ready / applied-drifted) · setup summary OUT of Optimize
-      (→ Applied/ledger surface; fallback Home Setup&Tour zone — pick on-screen) · driver
-      freshness → hologram part-tap detail layer, one quiet Optimize row only when newer detected ·
-      upgrade path demoted to a labeled-early advisory card (real development = own future spec,
-      Receipts Phase-C) · exactly ONE "nothing else needs attention" per room (extend the ≤1 guard
-      to rec identity). This is IA, not skin — Check/Fix content reorganizes, audited handlers
-      still untouched.
+- [x] **V2-4b Optimize IA fix** — 2026-07-03, per `2026-07-03-owner-optimize-feedback.md`.
+      Mechanism: `v2Ia` props on Check/Fix (absent = classic byte-identical, test-pinned) + the
+      regrouped body. One-mention law: Check drops the pending-safe-recs + applied-changes
+      aggregate limiters under v2Ia; a drifted rec renders ONCE in "Applied — turned off outside
+      Compy" (state + won't-stick note ON the row, same audited onToggleRec), never again under
+      "Ready — one click, reversible"; guided recs elevate to the open "Needs your call" group
+      (live-probed: Game Mode rows = 1). Setup summary → Applied segment (record with the
+      records — primary placement per the ruling; reads right on the dev build, no Home
+      fallback needed). Driver freshness renders ONLY when something stale was measured (pass
+      state returns with the hologram part-tap inspector when that layer lands). Upgrade path
+      suppressed in Check and re-rendered by OptimizeV2 BELOW the groups as the labeled-early
+      card ("early — being developed", copy-only links, truthful no-affiliate line). Check's
+      settled subtitle + Fix's subtitle suppressed under v2Ia (RoomShell verdict is the ONE
+      summary — clears V2-9 punch (d) for this room). Exactly ONE quiet expander (live-probed).
+      +14 guards in optimize-v2-ia.test.tsx incl. classic-render pins. Zero src-tauri diff.
 - [ ] **V2-5 Monitor**
 - [ ] **V2-6 Blackbook**
 - [ ] **V2-7 Lab**
