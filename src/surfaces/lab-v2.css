@@ -1,0 +1,68 @@
+/* ── V2 Lab room (V2-7, spec 2026-07-02-v2-shell-sourcing-and-plan) ────────────────────────
+   Token re-point that re-skins the composed classic Lab (the instrument cards plus the
+   Benchmark/Latency/BlackBox/Tuning/Diagnostics bodies they expand) to the approved mockup
+   palette.
+
+   LAWS (test-pinned in tokens-v2-guard.test.ts):
+   - EVERY selector is scoped under [data-v2="on"] — the flag-off byte-identity mechanism.
+   - NO color literals — every color resolves from a --v2-* token.
+   - Font declarations reference only var(--v2-font-*).
+
+   THE RE-POINT: identical mechanism to optimize/monitor/blackbook-v2.css — Lab.css and the
+   instrument bodies resolve every color from the --ix-* instrument layer, so scoping new
+   --ix-* values to the Lab room element re-skins all of it with zero classic CSS/DOM touched.
+   --ix-danger deliberately NOT re-pointed (the semantic red must stay red — a Regressed
+   verdict keeps its meaning). */
+
+:root[data-v2="on"] .v2-room[data-room="lab"] {
+  /* instrument layer → v2 palette */
+  --ix-base: var(--v2-bg);
+  --ix-bg-1: var(--v2-bg);
+  --ix-glass-fill: var(--v2-panel);
+  --ix-glass-border: var(--v2-line);
+  --ix-glass-top: var(--v2-line-strong);
+  --ix-border: var(--v2-line);
+  --ix-line: var(--v2-line);
+  --ix-surface-2: var(--v2-panel-2);
+  --ix-radius: var(--v2-r);
+  --ix-text-1: var(--v2-text);
+  --ix-text-2: var(--v2-muted);
+  --ix-text-3: var(--v2-faint);
+  --ix-accent: var(--v2-accent);
+  --ix-accent-text: var(--v2-accent);
+  --ix-accent-ink: var(--v2-accent-ink);
+  --ix-accent-2: var(--v2-info);
+  --ix-accent-wash: var(--v2-accent-dim);
+  --ix-streak-1: var(--v2-accent);
+  --ix-streak-2: var(--v2-info);
+  --ix-streak-3: var(--v2-accent);
+  --ix-amber: var(--v2-warn);
+  --ix-mono: var(--v2-font-mono);
+  --font-mono: var(--v2-font-mono);
+  /* classic (pre-instrument) layer, still read by shared primitives (.btn, cards, chips) */
+  --bg: var(--v2-bg);
+  --bg-2: var(--v2-bg);
+  --panel: var(--v2-panel);
+  --panel-2: var(--v2-panel-2);
+  --panel-3: var(--v2-panel-2);
+  --muted: var(--v2-muted);
+  --accent: var(--v2-accent);
+  --accent-bright: var(--v2-accent);
+  --accent-hover: var(--v2-accent);
+  --accent-soft: var(--v2-accent-dim);
+  --accent-line: var(--v2-accent-line);
+  --accent-glow: var(--v2-accent-dim);
+}
+
+/* The classic static dot-grid texture reads as stray dotted rules on the v2 background (the
+   same live-reviewed call as Blackbook's) — the v2 shell carries its own backdrop treatment,
+   so the classic one yields here. Flag-off renders it untouched. */
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-dotgrid {
+  display: none;
+}
+
+/* Lab's own top padding doubles RoomShell's body gutter inside the room — flatten it here.
+   Flag-off renders everything untouched. */
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-root {
+  padding-top: 0;
+}

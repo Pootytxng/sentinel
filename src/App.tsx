@@ -19,6 +19,7 @@ import { HomeV2 } from "./surfaces/HomeV2";
 import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
 import { BlackbookV2 } from "./surfaces/BlackbookV2";
+import { LabV2 } from "./surfaces/LabV2";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
@@ -1454,9 +1455,19 @@ function App() {
                   onClose={() => setActiveTab("Overview")}
                 />
               )}
+              {/* V2-7: the Lab room on RoomShell — Lab composes verbatim (its v2 prop trims the
+                  standalone head; RoomShell's verdict is the ONE summary). Mounts per-visit like
+                  the classic path; no door — Lab is the journey's last chapter. */}
+              {activeTab === "Lab" && (
+                <LabV2
+                  diagnostics={<DiagnosticsTab sections={diagnostics} />}
+                  vendor={detectedVendor}
+                />
+              )}
               {!(activeTab === "Optimize" && optimizeMerged) &&
                 !(activeTab === "Play" && v2Monitor) &&
                 activeTab !== "Learn" &&
+                activeTab !== "Lab" &&
                 roomPanels}
             </>
           )}

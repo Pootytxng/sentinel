@@ -133,7 +133,23 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       texture hidden under v2 (read as stray dotted rules on the v2 bg, live-reviewed);
       blackbook-v2.css added to scoping/no-literal/token-font guards; +13 tests. Zero
       src-tauri diff.
-- [ ] **V2-7 Lab**
+- [x] **V2-7 Lab** — 2026-07-03: LabV2 on RoomShell — verdict = pure labVerdict from the SAME
+      benchmark efficacy the Benchmark card grades (honest nothing-graded state; baseline branch
+      names the set date; graded branches name their component evidence with measured deltas +
+      the run's noise floor in the same breath — the punch (h) law applied from birth;
+      "(s)"-free pinned) via DecryptedText · measured = instrument count computed from the
+      body's own gates (vendor/diagnostics, never hardcoded) + "they only measure — nothing in
+      the Lab changes your PC" · deliberately NO primaryAction (the instruments ARE the work —
+      hoisting one demotes the rest) · NO door (last chapter, DOOR_MAP lab→null) · body = Lab
+      composed VERBATIM (same audited read-only probes, zero new IPC) with an additive `v2` prop
+      (absent = classic byte-identical, test-pinned): standalone head (title + read-only promise
+      + benchmark chip) yields to the room verdict (one-mention law); bench state feeds the
+      verdict up via onBenchState — same read, no second IPC. Token re-point CSS scoped to
+      [data-room="lab"] (--ix-danger NOT re-pointed — Regressed stays red); classic dot-grid
+      hidden under v2 (same live-reviewed call as Blackbook's); lab-v2.css added to
+      scoping/no-literal/token-font guards; +11 tests. Zero src-tauri diff. V2-9 punch
+      candidate (j): baseline date renders in the verdict sub AND the Benchmark card summary —
+      same same-fact-twice class as (V2-5) sessions-count.
 - [ ] **V2-8 Journey doors + tour alignment**
 - [ ] **V2-9 Consistency pass** — punch list (Cowork visual audit of v2-3 shot):
       (a) hologram stage hint text still marginal over the ring glow at bottom-left — needs a

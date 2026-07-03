@@ -49,9 +49,18 @@ function readWelcomeSeen(): boolean {
 export default function Lab({
   diagnostics,
   vendor = "any",
+  v2 = false,
+  onBenchState,
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
+  // V2 shell composition (V2-7, spec 2026-07-02-v2-shell-sourcing-and-plan): the room shell
+  // provides the ONE room summary via RoomShell, so the standalone head (title + read-only
+  // promise + benchmark chip) yields to it (one-mention law). Absent = classic, byte-identical
+  // (test-pinned). The benchmark state feeds the room verdict up through onBenchState instead
+  // of a second get_benchmark_state read.
+  v2?: boolean;
+  onBenchState?: (bench: BenchmarkState) => void;
 }) {
   // Seed from the probe cache so re-opening Advanced paints last-known instantly instead of cold-
   // re-running get_latency_diagnostics (a synchronous MSI/timer/USB scan) every visit.
@@ -79,7 +88,10 @@ export default function Lab({
   // Recent-results summary — existing commands, read once on mount (no polling, ZERO new IPC).
   useEffect(() => {
     cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
-      .then(setBench)
+      .then((b) => {
+        setBench(b);
+        onBenchState?.(b); // feed the V2 room verdict — same read, no second IPC
+      })
       .catch(() => {});
     cachedProbe("latency-diag", () => invoke<LatencyReport>("get_latency_diagnostics"), 60_000)
       .then(setLatency)
@@ -122,6 +134,9 @@ export default function Lab({
     <section className="lab-root">
       <div className="lab-dotgrid" aria-hidden="true" />
       <div className="lab-inner">
+        {/* Under the V2 shell the RoomShell verdict is the ONE summary — the standalone head
+            (title + read-only promise + benchmark chip) yields to it (one-mention law). */}
+        {!v2 && (
         <header className="lab-head">
           <div className="lab-head-row">
             <h2 className="lab-title">Advanced</h2>
@@ -138,6 +153,7 @@ export default function Lab({
             changes your PC. Start with Benchmark.
           </p>
         </header>
+        )}
 
         {/* Welcome band — a static signpost for newcomers (bathroom law): what each instrument
             answers, in plain words. Deliberately KNOBLESS (doorknob law): no cmp-door, no click
