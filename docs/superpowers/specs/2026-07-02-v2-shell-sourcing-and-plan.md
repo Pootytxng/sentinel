@@ -79,7 +79,12 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
 - [ ] **V2-6 Blackbook**
 - [ ] **V2-7 Lab**
 - [ ] **V2-8 Journey doors + tour alignment**
-- [ ] **V2-9 Consistency pass**
+- [ ] **V2-9 Consistency pass** — punch list (Cowork visual audit of v2-3 shot):
+      (a) hologram stage hint text still marginal over the ring glow at bottom-left — needs a
+      stronger backdrop or move above the stage floor; (b) Trust-ledger card: long mono task ids
+      wrap with a tilde artifact ("compatibility~appraiser") — truncate w/ ellipsis + title attr;
+      (c) "1 safe one-click tweak(s) not applied" — "(s)" pluralization violates plain-language
+      bar; branch the copy properly.
 - [ ] **V2-10 Dedup (after owner default-ON verdict):** delete the classic shell/room paths +
       the losing nav candidate (GooeyNav vs PillNav) + retire `compy_v2` — same ritual as P4.
       Known debt, deliberately carried during the flag-gated rollout (Cowork audit note, V2-2).
