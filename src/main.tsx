@@ -64,16 +64,12 @@ try {
   document.documentElement.dataset.dashV2 = "on"; // default ON even if localStorage is unavailable
 }
 
-// V2 product shell (2026-07-02) — DEFAULT OFF preview flag for the Linear/Geist-discipline shell
-// rebuild. Applied before first paint so a flag-ON session never flashes the classic shell.
-// Flag-off: no data-v2 attribute → tokens-v2.css matches nothing → byte-identical app.
-try {
-  if (localStorage.getItem("compy_v2") === "1") {
-    document.documentElement.dataset.v2 = "on";
-  }
-} catch {
-  /* default OFF */
-}
+// V2 product shell (2026-07-03) — the shipped shell. Set before first paint, unconditionally:
+// every rule in tokens-v2.css is scoped under [data-v2="on"], so the attribute MUST always be
+// present for the shell to render. The compy_v2 opt-in flag + the classic-surface escape hatch
+// were removed when V2 became the default build (spec 2026-07-03-v2-default-and-polish-sweep).
+// Guard: tokens-v2-guard.test.ts.
+document.documentElement.dataset.v2 = "on";
 
 // Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
 // components read one source of truth. Default BASIC (the answer face).

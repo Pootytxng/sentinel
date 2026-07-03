@@ -9,8 +9,6 @@ import {
   persistAmbiance,
   readLivingInstrument,
   applyLivingInstrument,
-  readV2,
-  applyV2,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -126,7 +124,6 @@ export default function Settings({
   // An explicit choice always wins (and picking here persists one, unchanged).
   const [ambiance, setAmbiance] = useState<Ambiance>(() => readAmbianceChoice() ?? "calm");
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
-  const [v2, setV2] = useState<boolean>(readV2);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -162,12 +159,6 @@ export default function Settings({
   const changeLiving = (v: boolean) => {
     setLiving(v);
     applyLivingInstrument(v);
-  };
-  // V2 product shell preview — applies [data-v2] live app-wide. DEFAULT OFF (owner reviews each
-  // V2 stage on the dev build before anything ships default-ON). Cosmetic/chrome only.
-  const changeV2 = (v: boolean) => {
-    setV2(v);
-    applyV2(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -258,17 +249,6 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={living} onChange={changeLiving} ariaLabel="Living Instrument preview" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">V2 shell (early preview)</div>
-                  <div className="set-row-sub">
-                    The next-generation look, in progress. Purely visual — measurements, fixes, and
-                    your ledger are untouched. Off keeps today&apos;s look exactly as it is.
-                  </div>
-                </div>
-                <Toggle on={v2} onChange={changeV2} ariaLabel="V2 shell early preview" />
               </div>
 
             </div>

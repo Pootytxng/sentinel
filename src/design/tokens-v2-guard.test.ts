@@ -1,13 +1,14 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
-import { readV2, applyV2 } from "./theme";
 
-// V2-1 foundation guards (spec 2026-07-02-v2-shell-sourcing-and-plan) — the V2 shell laws,
-// mechanized (bug→guard tier 1):
-//   1. compy_v2 defaults OFF and gates via <html data-v2="on"> only.
-//   2. Every rule in tokens-v2.css is scoped under [data-v2="on"] — THE flag-off
-//      byte-identity mechanism: no attribute → no rule can match → the app is untouched.
+// V2 shell guards — the V2 shell laws, mechanized (bug→guard tier 1):
+//   1. V2 is the SHIPPED shell — main.tsx sets <html data-v2="on"> unconditionally; the compy_v2
+//      opt-in flag + the classic-surface escape hatch were removed when V2 became the default build
+//      (spec 2026-07-03-v2-default-and-polish-sweep). This guard locks the flip in (no re-introduced
+//      opt-in, no reachable classic shell).
+//   2. Every rule in tokens-v2.css is STILL scoped under [data-v2="on"] — now purely as namespacing
+//      (the attribute is always present, so every v2 rule matches).
 //   3. The v2 palette clears the same WCAG floors as the instrument themes (4.5 body,
 //      3.0 muted-caption, 4.5 ink-on-accent) — extends theme-contrast.test.ts to v2.
 //   4. Type discipline: Geist families are referenced ONLY via the v2 token layer, and
@@ -15,26 +16,22 @@ import { readV2, applyV2 } from "./theme";
 //   5. Vendor hygiene: every vendored React Bits file carries its license header and is
 //      listed in THIRD_PARTY.md (MIT + Commons Clause requires the notice travel along).
 
-afterEach(() => {
-  localStorage.clear();
-  delete document.documentElement.dataset.v2;
-});
+describe("V2 shell is the shipped default (opt-in gate removed)", () => {
+  const mainTsx = readFileSync(join("src", "main.tsx"), "utf8");
+  const themeTs = readFileSync(join("src", "design", "theme.ts"), "utf8");
 
-describe("compy_v2 flag", () => {
-  it("defaults OFF (flag-off IS the shipped app)", () => {
-    expect(readV2()).toBe(false);
-    localStorage.setItem("compy_v2", "ludicrous"); // junk → OFF
-    expect(readV2()).toBe(false);
+  it("main.tsx sets data-v2='on' unconditionally — no compy_v2 opt-in", () => {
+    // The attribute MUST always be present so tokens-v2.css scoping (law #2) resolves.
+    expect(mainTsx).toMatch(/document\.documentElement\.dataset\.v2\s*=\s*["']on["']/);
+    // No opt-in flag READ: the escape hatch is gone, not merely defaulted on. (Comments may still
+    // name the retired flag; we assert on the mechanism — a localStorage access — not the string.)
+    expect(mainTsx).not.toMatch(/localStorage\.getItem\(\s*["']compy_v2["']/);
   });
 
-  it("applies + removes data-v2 on <html> and persists", () => {
-    applyV2(true);
-    expect(document.documentElement.dataset.v2).toBe("on");
-    expect(localStorage.getItem("compy_v2")).toBe("1");
-    expect(readV2()).toBe(true);
-    applyV2(false);
-    expect(document.documentElement.dataset.v2).toBeUndefined();
-    expect(readV2()).toBe(false);
+  it("theme.ts no longer exposes a compy_v2 opt-in flag (readV2/applyV2 removed)", () => {
+    expect(themeTs).not.toMatch(/localStorage\.\w+\(\s*["']compy_v2["']/);
+    expect(themeTs).not.toMatch(/function readV2\b/);
+    expect(themeTs).not.toMatch(/function applyV2\b/);
   });
 });
 

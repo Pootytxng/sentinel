@@ -1,20 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import Onboarding, { ONBOARDED_KEY } from "./Onboarding";
+import { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
 import { LibraryContext } from "./surfaces/library-context";
 import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
-import { BackButton, ForwardButton } from "./design/BackButton";
-import { NavGlyph } from "./design/NavGlyph";
-import { readCloseToTray, persistDisplayRefreshHz, readLivingInstrument, readV2 } from "./design/theme";
+import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
 import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
-import CommandCenter from "./surfaces/CommandCenter";
 import { HomeV2 } from "./surfaces/HomeV2";
 import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
@@ -528,25 +525,8 @@ function App() {
   }, []);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
-  // Living Instrument "simplified rail" (2026-06-15): when the preview skin is on, the shell rail
-  // shows the everyday rooms and tucks Lab under an "Advanced" group (owner direction: fewer, plainer
-  // tabs). `living` mirrors the flag live (Settings toggle broadcasts compy:living-changed); default
-  // OFF → the classic six-room rail. Reversible: the flag governs only which rail layout renders.
-  const [living, setLiving] = useState<boolean>(readLivingInstrument);
-  useEffect(() => {
-    const on = () => setLiving(readLivingInstrument());
-    window.addEventListener("compy:living-changed", on);
-    return () => window.removeEventListener("compy:living-changed", on);
-  }, []);
-  // V2 product shell (V2-2, spec 2026-07-02-v2-shell-sourcing-and-plan): mirrors compy_v2 live
-  // (the Settings preview toggle broadcasts compy:v2-changed). DEFAULT OFF — flag-off the classic
-  // tree renders untouched (the byte-identity contract; the CSS side is pinned in tokens-v2-guard).
-  const [v2, setV2] = useState<boolean>(readV2);
-  useEffect(() => {
-    const on = () => setV2(readV2());
-    window.addEventListener("compy:v2-changed", on);
-    return () => window.removeEventListener("compy:v2-changed", on);
-  }, []);
+  // V2 is the shipped shell (2026-07-03) — the ShellV2 rail carries every room; there's no classic
+  // rail layout to switch between anymore, so nothing here mirrors the retired compy_v2/living flags.
   // Optimize merge (phase 1a, spec 2026-06-21-optimize-merge-design): when on, Check + Tune collapse
   // into one "Optimize" room (Fixes / Applied / History segments). Read once at startup (mirrors the
   // other compy_* dev-flag readers). Reversible: the flag governs only which navigation/render path
@@ -586,10 +566,9 @@ function App() {
     window.addEventListener("compy:open-settings", on);
     return () => window.removeEventListener("compy:open-settings", on);
   }, []);
-  // The combined "Setup & Tour" (HoloLens) is the new first-run experience AND the always-present
-  // Home launcher. The legacy Onboarding + FirstCheck auto-modals are SUPERSEDED for fresh installs
-  // (kept in the tree as a failsafe; FirstCheck stays reachable via the explicit "Re-run check").
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  // The combined "Setup & Tour" (HoloLens) is the first-run experience AND the always-present Home
+  // launcher. The legacy Onboarding auto-modal is retired; FirstCheck stays reachable on demand via
+  // the explicit "Re-run check" (Home / Settings), never as an auto-modal.
   const [showFirstCheck, setShowFirstCheck] = useState(false);
   // Auto-open the tour ONLY on a truly fresh install (never toured AND never onboarded) — never
   // re-nag a returning user; they reach it from the Home launcher card or Settings.
@@ -900,9 +879,8 @@ function App() {
       ? "Rules: Cached (last-known-good)"
       : "Rules: Built-in";
 
-  // Six-home rail (one-rail §1b) — the shell rail + the CommandCenter rail both render from HOME_RAIL.
-  // navHome maps a home id to its tab; HOME_FOR_TAB maps the active tab back to its home so the
-  // right rail item highlights.
+  // Six-home rail (one-rail §1b) — the ShellV2 rail renders from HOME_RAIL. navHome maps a home id
+  // to its tab; HOME_FOR_TAB maps the active tab back to its home so the right rail item highlights.
   const navHome = (id: HomeRailId) => {
     setActiveTab(
       id === "home"
@@ -935,10 +913,6 @@ function App() {
     Diagnostics: "lab",
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
-  // Persistent room name for the narrow (icon-only-rail) layout — the wayfinding-law amendment so you
-  // always know where you are even when the rail shows only icons (elastic-window §1).
-  const activeRoomName =
-    railFor(optimizeMerged).find((r) => r.id === activeHomeId)?.label ?? "Compy";
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
   const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
 
@@ -1057,26 +1031,15 @@ function App() {
   // ── Command Center (new home) wiring ──────────────────────────────────────
   // Resolve the #1 limiter + its linked recommendation so the trust-switch routes through the SAME
   // audited apply/rollback flow (toggleRec) the rest of the app uses — no parallel mutation path.
-  const ccTopLimiter = priorities?.limiters[0] ?? null;
-  const ccLimiterRec = ccTopLimiter
-    ? (recs ?? []).find((r) => r.id === (ccTopLimiter.linked ?? ccTopLimiter.id))
-    : undefined;
-  const ccLimiterAppliable = ccLimiterRec ? APPLIABLE_REC_IDS.has(ccLimiterRec.id) : false;
-  const ccLimiterActiveChange = ccLimiterRec
-    ? findActiveChangeForRec(ccLimiterRec.id) ?? null
-    : null;
   // Settings is a full-surface route (replaces the home/shell while open) so the surfaces under it
   // unmount and re-read their persisted prefs on return — no cross-surface live-sync needed.
   // NOT gated on settingsV2: Settings v2 is the ONLY Settings surface (no classic fallback), and the
   // settings flag was itself toggleable inside Settings → disabling it was a permanent self-lockout
   // (dead gear, no way back in). The gear must always open Settings regardless of the stored flag.
   const settingsActive = showSettings && hw !== null;
-  // The Command Center is the Home surface once hardware has resolved (avoids a blank first paint);
-  // any other tab renders the shell.
-  const ccActive = activeTab === "Overview" && hw !== null && !settingsActive;
-  // V2 shell active: ONE rail+topbar chrome wraps every room, Home included (V2-2). Settings keeps
-  // its full-surface route (titlebar gear) unchanged. Flag off → false → the classic tree exactly.
-  const v2Shell = v2 && hw !== null && !settingsActive;
+  // V2 shell: ONE rail+topbar chrome wraps every room, Home included — the shipped shell now. Active
+  // whenever hardware has resolved and Settings isn't the full-surface route (titlebar gear).
+  const v2Shell = hw !== null && !settingsActive;
 
   // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
   const rigLines = hw
@@ -1099,33 +1062,9 @@ function App() {
   // escape hatch) falls through to the classic Play panels, same contract as Optimize.
   const v2Monitor = v2Shell && monitorMerged;
 
-  // ── Shared room renders (classic shell + V2 shell) ─────────────────────────
-  // The SAME elements render inside whichever chrome is active, so the two paths can never drift:
-  // V2-2 changes the shell around the rooms, never the rooms themselves (those are V2-3..V2-7).
-  const commandCenter = hw && (
-    <CommandCenter
-      hw={hw}
-      readiness={readiness}
-      priorities={priorities}
-      sessions={sessions}
-      changes={changes}
-      limiterRec={ccLimiterRec}
-      limiterAppliable={ccLimiterAppliable}
-      limiterActiveChange={ccLimiterActiveChange}
-      busyLimiter={
-        busyId !== null &&
-        (busyId === ccLimiterRec?.id || busyId === ccLimiterActiveChange?.id)
-      }
-      onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
-      onSeeInFix={() => setActiveTab("Optimize")}
-      onNavigate={(tab) => setActiveTab(tab)}
-      onRunCheck={() => setShowFirstCheck(true)}
-      onBack={goBack}
-      canGoBack={canGoBack}
-      onForward={goForward}
-      canGoForward={canGoForward}
-    />
-  );
+  // ── Room renders ───────────────────────────────────────────────────────────
+  // The room panels render inside the V2 shell; each room re-skins independently, so these shared
+  // panels stay the one source of truth for what a room shows (the shell only wraps them).
   const roomPanels = hw && (
     <>
       {activeTab === "Overview" && <OverviewTab hw={hw} />}
@@ -1249,7 +1188,7 @@ function App() {
   return (
     <LibraryContext.Provider value={libraryApi}>
     <KonamiWhisper />
-    <main className={v2Shell ? "app app-v2" : ccActive || settingsActive ? "app app-cc" : "app"}>
+    <main className={v2Shell ? "app app-v2" : settingsActive ? "app app-cc" : "app"}>
       {showSetupTour && hw && (
         <SetupTour
           hw={hw}
@@ -1266,10 +1205,7 @@ function App() {
           }}
         />
       )}
-      {showOnboarding && (
-        <Onboarding onDone={() => setShowOnboarding(false)} arcV2 rig={rigLines} />
-      )}
-      {!showOnboarding && showFirstCheck && (
+      {showFirstCheck && (
         <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2 />
       )}
       {showEncyclopedia && (
@@ -1294,22 +1230,6 @@ function App() {
           }}
         />
       )}
-      {!ccActive && !settingsActive && !v2Shell && (
-        <header className="header">
-        <BackButton onBack={goBack} canGoBack={canGoBack} />
-        <ForwardButton onForward={goForward} canGoForward={canGoForward} />
-        <div>
-          {/* ui-sweep: slimmed the repeated room branding (the titlebar already carries the
-              wordmark); the full wordmark + tagline stays on Home where it sets the tone. */}
-          <h1><Wordmark size={17} /></h1>
-        </div>
-        <div className="header-right">
-          {/* Export left the persistent header (calm chrome) — it lives contextually on the scan
-              results (Check) + the session debrief. The header stays clean. */}
-        </div>
-        </header>
-      )}
-
       {/* Once the app is loaded, action errors (apply/rollback/export/…) show here as a calm,
           dismissable banner. While hw is still null the failed-hardware retry below owns the message,
           so we don't double up. */}
@@ -1472,62 +1392,6 @@ function App() {
             </>
           )}
         </ShellV2>
-      ) : hw && ccActive ? (
-        commandCenter
-      ) : hw ? (
-        <div className="shell">
-            {/* ONE rail (one-rail §1b): the six-home set from the shared HOME_RAIL — identical to the
-                Command Center rail (parity-guarded). The legacy SECTION_META rail is retired; the
-                posture hero is Home-only (CommandHero removed). */}
-            <nav className="rail" role="tablist" aria-label="Sections">
-              {(() => {
-                // railFor collapses Check + Tune → "Optimize" when the merge flag is on (else the
-                // blessed six-home set); the living-instrument Lab-tuck filter then rides on top.
-                const base = railFor(optimizeMerged);
-                return living ? base.filter((r) => r.id !== "lab") : base;
-              })().map((item) => (
-                <button
-                  key={item.id}
-                  role="tab"
-                  aria-selected={activeHomeId === item.id}
-                  className={`rail-item ${activeHomeId === item.id ? "rail-item-on" : ""}`}
-                  onClick={() => navHome(item.id)}
-                  title={item.label}
-                >
-                  <NavGlyph name={item.icon} />
-                  <span className="rail-label">{item.label}</span>
-                </button>
-              ))}
-              {/* Living Instrument (owner: fewer, plainer tabs): Lab — the power-user room (benchmarks,
-                  latency, diagnostics) — leaves the everyday rail and lives under a compact "Advanced"
-                  cell. Routing is unchanged (it still navigates to the Lab surface); only the rail's
-                  prominence changes, so the everyday set is shorter and the labels stop truncating. */}
-              {living && (
-                <button
-                  role="tab"
-                  aria-selected={activeHomeId === "lab"}
-                  className={`rail-item rail-advanced ${activeHomeId === "lab" ? "rail-item-on" : ""}`}
-                  onClick={() => navHome("lab")}
-                  title="Advanced — Lab: benchmarks, latency, diagnostics"
-                >
-                  <NavGlyph name="lab" />
-                  <span className="rail-label">Advanced</span>
-                </button>
-              )}
-              {/* Gaming Mode is no longer its own rail room — it lives as a featured section inside
-                  Tune (Optimize). See the Optimize render below. */}
-              {/* Settings moved to the always-visible custom titlebar (reachable on every tab + every
-                  responsive layout); the rail gear is retired. Its margin-left:auto was also stretching
-                  the "Advanced" cell in the top-strip layout. */}
-            </nav>
-
-            <div className="content">
-              {/* Persistent room name — shown only in the narrow icon-only-rail layout (CSS), so the
-                  wayfinding law holds even when the rail is icons-only (elastic-window §1). */}
-              <div className="shell-room-name" aria-hidden="true">{activeRoomName}</div>
-              {roomPanels}
-            </div>
-          </div>
       ) : (
         // hw still null — detection in flight (or slow WMI). A calm placeholder, never a blank window.
         // If the read actually FAILED (error set), don't spin forever — say so and offer a retry.
@@ -1546,14 +1410,6 @@ function App() {
         </div>
       )}
 
-      {!ccActive && !settingsActive && !v2Shell && (
-      <footer className="footer">
-        {/* Footer carries the version only (halfway-home §0). Preview toggles live in Settings →
-            New look; re-run lives in Settings + Check; the approval-reassurance line lives where
-            approval happens (Fix header / the apply confirm), not in global chrome. */}
-        <span className="footer-version">v{APP_VERSION}</span>
-      </footer>
-      )}
     </main>
     </LibraryContext.Provider>
   );
