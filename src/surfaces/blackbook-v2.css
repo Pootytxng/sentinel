@@ -64,3 +64,11 @@
 :root[data-v2="on"] .v2-room[data-room="learn"] .lx-dotgrid {
   display: none;
 }
+
+/* ── V2-9 punch (i) — search/paste focus: ONE treatment. Classic keeps its soft ring; on the
+   v2 palette the ring + accent border read as a double border, so the ring yields and the
+   accent hairline alone marks focus. Flag-off untouched. */
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-search:focus,
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-paste:focus {
+  box-shadow: none;
+}

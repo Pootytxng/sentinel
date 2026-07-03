@@ -48,6 +48,16 @@ const TYPE_LABEL: Record<KnowledgeType, string> = {
   guide: "Guide",
 };
 
+// One-line scent for each browse category bar (V2-9 punch i: title + count alone left the bars
+// tall and empty — a reader couldn't tell a Term from a Trick without opening one). Descriptions
+// state what the entries ARE; the grading claims stay with the entries themselves.
+const TYPE_DESC: Record<KnowledgeType, string> = {
+  guide: "Step-by-step setups, fact-checked claim by claim",
+  tweak: "Single settings, each graded Real, Placebo, or Risky",
+  term: "The jargon, translated into plain English",
+  trick: "The tricks fake optimizers pull — spot them before they cost you",
+};
+
 // Verdict chip labels + their meanings come from the shared verdict-glossary (single source — the
 // visible "How we grade" key, these chips' hover tooltips, and the Learn entry all read the same
 // definitions, so they can't drift). `verdictChip` replaced the old local VERDICT_LABEL.
@@ -980,7 +990,10 @@ export default function Learn({
                             })
                           }
                         >
-                          <span className="lx-cat-title">{TYPE_LABEL[type]}s</span>
+                          <span className="lx-cat-text">
+                            <span className="lx-cat-title">{TYPE_LABEL[type]}s</span>
+                            <span className="lx-cat-desc">{TYPE_DESC[type]}</span>
+                          </span>
                           <span className="lx-cat-count">{items.length}</span>
                           <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
                         </button>

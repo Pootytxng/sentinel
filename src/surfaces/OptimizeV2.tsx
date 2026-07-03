@@ -132,13 +132,13 @@ export function OptimizeV2({
     if (segment === "gaming" && !gamingDoored) setSegment("fixes");
   }, [segment, gamingDoored]);
 
-  const verdict = optimizeVerdict(recs, isAppliable, activeCount);
-  const measured = optimizeMeasuredLine(readiness, recs);
-
   // V2-4b IA: the drifted list (applied with Compy, since turned off outside Compy) — pure
   // derivation from the same ledger the classic drift limiter used; Fix renders each as its
-  // ONE row (one-mention law).
+  // ONE row (one-mention law). The verdict takes it too (V2-9 punch g): a drifted re-enable
+  // must never be announced as "ready to apply".
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
+  const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted);
+  const measured = optimizeMeasuredLine(readiness, recs);
   // Setup summary — a record of what the check measured, so it lives with the records on
   // Applied (owner: it felt unrelated in the fixes flow). Same pure builder Check used.
   const setupSummary = buildSetupSummary(readiness, priorities);

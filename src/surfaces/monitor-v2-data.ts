@@ -23,13 +23,18 @@ export function monitorVerdict(sessions: SessionSummary[]): MonitorVerdictLine {
   }
   const game = prettyGameName(latest.process_name) || "your last game";
   const fps = Math.round(latest.avg_fps);
+  const low = Math.round(latest.low1_fps_est);
   const grade = shortVerdict(latest);
+  // The grade names its evidence in the same breath (V2-9 punch h): shortVerdict grades on the
+  // 1%-low/average ratio, so a non-smooth verdict states the lows that earned it — otherwise
+  // "ran rough — 336 fps average" argues with itself. The sub's "live estimate" framing covers
+  // that the lows are estimated.
   const headline =
     grade === "Smooth"
       ? `Last session ran smooth — ${game} at ${fps} fps average.`
       : grade === "Some dips"
-        ? `Last session had some dips — ${game} at ${fps} fps average.`
-        : `Last session ran rough — ${game} at ${fps} fps average.`;
+        ? `Last session had some dips — ${game}'s 1% lows fell to ${low} fps against a ${fps} fps average.`
+        : `Last session ran rough — ${game}'s 1% lows fell to ${low} fps against a ${fps} fps average.`;
   return {
     // "live estimate, not benchmark-grade" is the F3 honesty framing, kept on the room's
     // answer line so the verdict never overclaims what a 1 Hz sampler can prove.

@@ -85,6 +85,7 @@ export default function Play({
   vendor = "any",
   view = "all",
   onFpsActive,
+  v2 = false,
 }: {
   active: boolean;
   sessions: SessionSummary[];
@@ -107,6 +108,10 @@ export default function Play({
   // the V2 Monitor room can close its forward door during a live session (P6 §2). Same
   // get_fps_status read the live card already makes — no second IPC, nothing new polled.
   onFpsActive?: (active: boolean) => void;
+  // V2-9 (additive — absent = classic byte-identical): under the v2 room the RoomShell measured
+  // line already states "N sessions on record", so the History & trends header drops its own
+  // count (one screen never states the same fact twice — the punch (j) law).
+  v2?: boolean;
 }) {
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [gpu, setGpu] = useState<GpuLite | null>(null);
@@ -446,7 +451,7 @@ export default function Play({
         )}
         {/* Compy Pro: long-term history & trends over the full retained set (ProGate — inert/free while
             licensing is disarmed, gated when armed + not Pro). Self-hides until there are ≥2 sessions. */}
-        <SessionTrends sessions={sessions} />
+        <SessionTrends sessions={sessions} hideCount={v2} />
       </div>
       )}
     </section>

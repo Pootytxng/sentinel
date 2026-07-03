@@ -17,8 +17,15 @@ export function buildSetupSummary(
   // Readiness breakdown — only the non-zero buckets, so a clean rig reads "N checks · N ready".
   const total = readiness.checks.length;
   const parts: string[] = [];
-  if (readiness.ready_count > 0) parts.push(`${readiness.ready_count} ready`);
-  if (readiness.attention_count > 0) parts.push(`${readiness.attention_count} need attention`);
+  // "look good" not "ready" (one word per meaning — "ready" belongs to appliable fixes), and
+  // branch-proper counts (never "1 need attention") — the V2-9 punch (e)/(f) laws, applied to
+  // the shareable summary too so pasted text reads as well as the screen.
+  if (readiness.ready_count > 0)
+    parts.push(`${readiness.ready_count} look${readiness.ready_count === 1 ? "s" : ""} good`);
+  if (readiness.attention_count > 0)
+    parts.push(
+      `${readiness.attention_count} need${readiness.attention_count === 1 ? "s" : ""} attention`,
+    );
   if (readiness.advisory_count > 0) parts.push(`${readiness.advisory_count} advisory`);
   if (readiness.unknown_count > 0) parts.push(`${readiness.unknown_count} unknown`);
   lines.push(

@@ -121,6 +121,39 @@
   margin: 0 0 4px;
 }
 
+/* ── V2-9 punch (d): one header rhythm ── */
+/* The classic accent wash behind Check's header painted a dead glow band around the lone
+   Re-run button — the v2 shell carries its own backdrop, so it yields here. The root's top
+   padding goes with it (it existed to give that wash room). */
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-root::before {
+  display: none;
+}
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-root {
+  padding-top: 0;
+}
+/* Once the scan settles (.check-confidence exists), the Re-run button joins the confidence
+   chips on ONE row — chips left, action right — instead of floating alone above them. During
+   a scan the flex header keeps narrating as before. */
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-root:has(.check-confidence) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--v2-pad-sm);
+  align-items: center;
+}
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-root:has(.check-confidence) > * {
+  grid-column: 1 / -1;
+}
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-root:has(.check-confidence) .check-confidence {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+:root[data-v2="on"] .v2-room[data-room="fix"] .check-root:has(.check-confidence) .check-head {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+}
+
 /* Upgrade path, demoted (owner: underdeveloped — a labeled-early quiet card BELOW the action
    groups until the per-rig evidence-gated engine is designed). Copy-only links unchanged. */
 :root[data-v2="on"] .ov2-upgrade {

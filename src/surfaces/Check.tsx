@@ -394,15 +394,20 @@ export default function Check({
           get_game_readiness; each chip hidden when its count is 0 (a clean rig shows just "N ready"). */}
       {phase === "verdict" && readiness && (
         <div className="check-confidence" role="status" aria-label="Readiness breakdown">
+          {/* "look good" not "ready" — the room verdict already uses "ready" for appliable
+              FIXES; these chips count CHECKS. One word per meaning (V2-9 punch f), and the
+              copy branches properly — never "1 need attention" (punch e). */}
           {readiness.ready_count > 0 && (
-            <span className="cc-chip cc-chip-ready">{readiness.ready_count} ready</span>
+            <span className="cc-chip cc-chip-ready">
+              {readiness.ready_count} look{readiness.ready_count === 1 ? "s" : ""} good
+            </span>
           )}
           {readiness.advisory_count > 0 && (
             <span className="cc-chip cc-chip-advisory">{readiness.advisory_count} advisory</span>
           )}
           {readiness.attention_count > 0 && (
             <span className="cc-chip cc-chip-attention">
-              {readiness.attention_count} need attention
+              {readiness.attention_count} need{readiness.attention_count === 1 ? "s" : ""} attention
             </span>
           )}
           {readiness.unknown_count > 0 && (

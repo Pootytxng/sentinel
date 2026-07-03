@@ -189,16 +189,18 @@
 :root[data-v2="on"] .hv2-led-warn {
   background: var(--v2-warn);
 }
+/* V2-9 punch (a): the hint sat ON the hologram's floor-ring glow and read marginal — lifted
+   above the stage floor, on the darkest opaque backdrop with the stronger hairline. */
 :root[data-v2="on"] .hv2-stage-hint {
   position: absolute;
   left: 14px;
-  bottom: 10px;
+  bottom: 18px;
   font-size: 11px;
   color: var(--v2-muted);
-  background: var(--v2-panel-2);
-  border: 1px solid var(--v2-line);
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-line-strong);
   border-radius: var(--v2-r-sm);
-  padding: 3px 9px;
+  padding: 4px 10px;
   z-index: 3;
   pointer-events: none;
 }
@@ -247,6 +249,18 @@
 :root[data-v2="on"] .hv2-stat-d {
   font-size: 11.5px;
   color: var(--v2-faint);
+}
+/* Ledger "latest" line: one line, ellipsized title (V2-9 punch b) — the timestamp never clips. */
+:root[data-v2="on"] .hv2-stat-latest {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .hv2-stat-latest-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 :root[data-v2="on"] .hv2-spark {
   margin-top: 6px;

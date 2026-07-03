@@ -411,8 +411,13 @@ export function HomeV2({
               </span>
             </span>
             {latest ? (
-              <span className="hv2-stat-d">
-                latest: {latest.rec_title} · <span className="hv2-mono">{latestTime}</span>
+              // Long titles/task ids truncate with an ellipsis (V2-9 punch b — the wrap produced
+              // a mid-word break artifact); the full name stays reachable via the title attr.
+              <span className="hv2-stat-d hv2-stat-latest">
+                <span className="hv2-stat-latest-t" title={latest.rec_title}>
+                  latest: {latest.rec_title}
+                </span>
+                <span className="hv2-mono">· {latestTime}</span>
               </span>
             ) : (
               <span className="hv2-stat-d">nothing applied yet — your PC is untouched</span>

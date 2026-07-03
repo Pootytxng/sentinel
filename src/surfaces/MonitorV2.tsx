@@ -45,8 +45,8 @@ const MODES: { id: ViewMode; label: string }[] = [
   { id: "advanced", label: "Advanced" },
 ];
 
-// Same props App passes to <Play> / <Monitor>, minus `view` + `onFpsActive` (this shell drives them).
-type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive">;
+// Same props App passes to <Play> / <Monitor>, minus `view`/`onFpsActive`/`v2` (this shell drives them).
+type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2">;
 
 export function MonitorV2(props: Props) {
   const reduced = useReducedMotion();
@@ -150,7 +150,7 @@ export function MonitorV2(props: Props) {
             }}
           />
         ) : (
-          <Play {...props} view={segment} onFpsActive={setCapturing} />
+          <Play {...props} view={segment} onFpsActive={setCapturing} v2 />
         )}
       </div>
     </RoomShell>

@@ -7,21 +7,31 @@ import "./SessionTrends.css";
 // the most recent 20). ProGate-wrapped: inert (shown free) while licensing is disarmed; gated when armed
 // + not Pro. Read-only over data `get_session_summaries` already returns — no new IPC, no fabrication
 // (no trend arrow until ≥4 sessions, and only when the move clears the noise floor).
-export function SessionTrends({ sessions }: { sessions: SessionSummary[] }) {
+// hideCount (additive — absent = classic byte-identical): the V2 Monitor room's measured line
+// already states the sessions-on-record count, so under v2 this header keeps only what it alone
+// carries (trend + best) — one screen never states the same fact twice (V2-9 punch j).
+export function SessionTrends({
+  sessions,
+  hideCount = false,
+}: {
+  sessions: SessionSummary[];
+  hideCount?: boolean;
+}) {
   const t = computeSessionTrends(sessions);
   if (t.total < 2) return null; // nothing to trend yet
   const arrow =
     t.trend === "up" ? "▲ trending up" : t.trend === "down" ? "▼ trending down" : t.trend === "flat" ? "→ steady" : "";
+  const subParts = [
+    ...(hideCount ? [] : [`${t.total} sessions kept`]),
+    ...(arrow ? [arrow] : []),
+    ...(t.overallBestFps > 0 ? [`best ${t.overallBestFps.toFixed(0)} fps`] : []),
+  ];
   return (
     <ProGate feature="Long-term history & trends">
       <section className="strends">
         <header className="strends-head">
           <span className="strends-title">History &amp; trends</span>
-          <span className="strends-sub">
-            {t.total} sessions kept
-            {arrow ? ` · ${arrow}` : ""}
-            {t.overallBestFps > 0 ? ` · best ${t.overallBestFps.toFixed(0)} fps` : ""}
-          </span>
+          <span className="strends-sub">{subParts.join(" · ")}</span>
         </header>
         <ul className="strends-games">
           {t.games.slice(0, 6).map((g) => (

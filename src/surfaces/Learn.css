@@ -392,7 +392,10 @@
   margin: 0;
 }
 .lx-gradekey-toggle {
-  display: inline-flex;
+  /* Block-level on purpose (V2-9 punch i): inline-flex let this land on the SAME line as the
+     "More filters" toggle — two unrelated affordances reading as one control. */
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 4px;
   align-self: flex-start;
@@ -755,8 +758,20 @@
 .lx-cat-head:hover {
   border-color: var(--ix-glass-top);
 }
-.lx-cat-title {
+.lx-cat-text {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+/* One-line scent under each category title (V2-9 punch i) — quiet, never competing with the
+   title, but muted (not faint): it's meant to be READ, so it clears AA, unlike the faint count. */
+.lx-cat-desc {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ix-text-2);
 }
 .lx-cat-count {
   font-size: 11.5px;

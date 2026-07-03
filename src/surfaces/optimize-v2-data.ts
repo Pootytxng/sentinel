@@ -22,13 +22,15 @@ export type OptimizeVerdictLine = {
 export function safeFixesReady(
   recs: Recommendation[],
   isAppliable: (recId: string) => boolean,
+  revertedIds?: ReadonlySet<string>,
 ): number {
   return recs.filter(
     (r) =>
       r.severity === "safe" &&
       isAppliable(r.id) &&
       !r.currently_applied &&
-      r.eligible !== false,
+      r.eligible !== false &&
+      !revertedIds?.has(r.id),
   ).length;
 }
 
@@ -36,11 +38,17 @@ export function optimizeVerdict(
   recs: Recommendation[] | null,
   isAppliable: (recId: string) => boolean,
   activeCount: number,
+  // Drifted changes (applied with Compy, since turned off outside it). The body renders these
+  // ONLY under "Applied — turned off outside Compy" (V2-4b one-mention), so the headline must
+  // never count them as "ready to apply" — the V2-9 punch (g) law: the verdict describes the
+  // state the body actually shows.
+  reverted: { rec_id: string }[] = [],
 ): OptimizeVerdictLine {
   if (recs == null) {
     return { settled: false, allClear: false, headline: "Checking what's safe to change…" };
   }
-  const ready = safeFixesReady(recs, isAppliable);
+  const revertedIds = new Set(reverted.map((r) => r.rec_id));
+  const ready = safeFixesReady(recs, isAppliable, revertedIds);
   // The undo promise is the rollback-first law stated plainly — and it names where undo lives.
   const undoSub = "Every apply captures its undo first — roll anything back from Applied.";
   if (ready === 1)
@@ -51,6 +59,23 @@ export function optimizeVerdict(
       allClear: false,
       headline: `${ready} safe fixes are ready to apply.`,
       sub: undoSub,
+    };
+  // Drifted-only: nothing new to apply, but a change Compy made was switched off outside it.
+  // Named honestly — maybe the user did it on purpose, so the verdict offers, never pushes.
+  // Still not all-clear (an actionable row remains), so the forward door stays closed.
+  if (reverted.length === 1)
+    return {
+      settled: true,
+      allClear: false,
+      headline: "1 change you applied was turned off outside Compy.",
+      sub: "Flip it back on from the row below — or leave it off if that was you. Compy never re-applies on its own.",
+    };
+  if (reverted.length > 1)
+    return {
+      settled: true,
+      allClear: false,
+      headline: `${reverted.length} changes you applied were turned off outside Compy.`,
+      sub: "Flip them back on from the rows below — or leave them off if that was you. Compy never re-applies on its own.",
     };
   if (activeCount === 1)
     return {

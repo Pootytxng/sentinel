@@ -184,6 +184,30 @@ describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
     expect(optimizeVerdict([], isAppliable, 2).allClear).toBe(true);
     expect(optimizeVerdict([rec({ id: "game-mode", currently_applied: true })], isAppliable, 1).allClear).toBe(true);
   });
+
+  // V2-9 punch (g), mechanized: a drifted re-enable is NOT "ready to apply". The body renders
+  // drifted recs only under "Applied — turned off outside Compy" (V2-4b one-mention), so the
+  // verdict describes that state — and the door stays closed while the actionable row remains.
+  it("drifted-only → names the outside-Compy switch-off, never 'ready to apply'", () => {
+    const v = optimizeVerdict(recsFixture, isAppliable, 0, [{ rec_id: "game-mode" }]);
+    expect(v.headline).toBe("1 change you applied was turned off outside Compy.");
+    expect(v.sub).toContain("never re-applies");
+    expect(v.allClear).toBe(false);
+    const both = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
+    const v2 = optimizeVerdict(both, isAppliable, 0, [
+      { rec_id: "game-mode" },
+      { rec_id: "hags-enable" },
+    ]);
+    expect(v2.headline).toBe("2 changes you applied were turned off outside Compy.");
+    for (const x of [v, v2]) expect(`${x.headline} ${x.sub ?? ""}`).not.toContain("(s)");
+  });
+
+  it("a fresh safe fix still leads the verdict; a drifted rec never inflates the ready count", () => {
+    const mixed = [...recsFixture, rec({ id: "hags-enable", currently_applied: false })];
+    const v = optimizeVerdict(mixed, isAppliable, 0, [{ rec_id: "hags-enable" }]);
+    expect(v.headline).toBe("1 safe fix is ready to apply.");
+    expect(safeFixesReady(mixed, isAppliable, new Set(["hags-enable"]))).toBe(1);
+  });
 });
 
 describe("OptimizeV2 — RoomShell composition", () => {

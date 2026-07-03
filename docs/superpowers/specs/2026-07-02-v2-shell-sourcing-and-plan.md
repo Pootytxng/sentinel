@@ -169,28 +169,44 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       monitor-v2/Play suites, tour pins in setup-steps). Zero src-tauri diff. Live-verified over
       CDP: all-clear Optimize shows the door, idle Monitor shows the door, recap = 5 journey
       cards (shots in docs/ui-sweep/shots/v2/v2-8-*).
-- [ ] **V2-9 Consistency pass** — punch list (Cowork visual audit of v2-3 shot):
-      (a) hologram stage hint text still marginal over the ring glow at bottom-left — needs a
-      stronger backdrop or move above the stage floor; (b) Trust-ledger card: long mono task ids
-      wrap with a tilde artifact ("compatibility~appraiser") — truncate w/ ellipsis + title attr;
-      (c) "1 safe one-click tweak(s) not applied" — "(s)" pluralization violates plain-language
-      bar; branch the copy properly. [CLEARED by V2-4b — copy pinned "(s)"-free]
-      (d) [from V2-4b shot, Cowork audit] Optimize: dead vertical band around the floating
-      Re-run button + residual gap under the segmented control (CC self-noted) — one header
-      rhythm; (e) chip grammar "1 need attention" → "1 needs attention"; (f) "ready" means two
-      things on one screen (verdict counts fixes, chips count checks) — rename one; (g) verdict
-      says "ready to apply" when the only action is a drifted re-enable — verdict must describe
-      the state the body actually shows.
-      (h) [v2-5 shot] Monitor verdict "ran rough — 336 fps average" reads self-contradictory —
-      the grade must name its evidence in the same breath (the 1% lows/stutter that earned
-      "rough"), else a high average argues with the verdict.
-      (i) [v2-6 shot] Blackbook: search focus ring double-borders (outline + inner ring — pick
-      one); "More filters ▸ / HOW WE GRADE ▸" jams two unrelated affordances on one line;
-      category bars (Guides/Tweaks/Terms/Scam patterns) are tall and empty — one-line
-      description each. (d, from V2-4: the Optimize room now stacks THREE summary
-      lines — the RoomShell verdict + Check's embedded scan verdict ("N things worth a look")
-      + Fix's own "N thing worth a look" header; consolidate so the room verdict is the ONE
-      answer line and the embedded surfaces demote to detail.)
+- [x] **V2-9 Consistency pass** — 2026-07-03. All punch items landed + live-verified over CDP at
+      1484×971 (shots in docs/ui-sweep/shots/v2/v2-9-*):
+      (a) DONE — hologram hint lifted above the stage floor (bottom:18px) onto an opaque
+      `--v2-bg` backdrop with the `--v2-line-strong` hairline; legible clear of the ring glow.
+      (b) DONE — ledger "latest" line is one flex row: title ellipsis-truncates with a `title`
+      attr, the mono timestamp never clips ("Enable Windows Game Mo… · 03:29 AM"). No tilde wrap.
+      (c) CLEARED earlier by V2-4b (copy pinned "(s)"-free).
+      (d) DONE — Optimize header is one rhythm: the classic accent-wash band behind Check's header
+      is hidden under v2 and, once settled, the Re-run button joins the confidence chips on ONE
+      grid row (chips left / action right) — the floating-button dead band is gone. The 3-summary
+      stack stays consolidated to the single RoomShell verdict (Check/Fix subtitles suppressed
+      under v2Ia, held from V2-4b).
+      (e) DONE — chip + setup-summary counts branch singular/plural properly (never "1 need
+      attention"); guard in use-scan.test.ts.
+      (f) DONE — the readiness chips read "N look good" (not "ready"); "ready" now belongs solely
+      to appliable fixes in the room verdict. One word per meaning.
+      (g) DONE — a drifted re-enable no longer reads "ready to apply": optimizeVerdict takes the
+      reverted list, and a drifted-only state says "N change(s) you applied were turned off outside
+      Compy" with the offer-never-push sub; the door stays closed (allClear=false). Guard in
+      optimize-v2.test.tsx.
+      (h) DONE — a non-smooth Monitor verdict names its evidence in the same breath: "ran rough —
+      Sand's 1% lows fell to 184 fps against a 336 fps average." Guard in monitor-v2.test.tsx.
+      (i) DONE — Blackbook: search/paste focus is ONE ring (the v2 box-shadow yields to the accent
+      border); "More filters ▸" and "HOW WE GRADE ▸" are on their own lines; each browse category
+      bar carries a one-line muted description (AA-contrast, verified rgb(139,147,167) on panel).
+      (j) DONE — same-fact-twice removed: the Monitor "N sessions on record" count drops from the
+      History & trends header (SessionTrends `hideCount`, Play `v2`), and the Lab baseline date
+      renders once on the Benchmark card, not also in the room verdict sub. Guards in
+      SessionTrends.test.tsx + lab-v2.test.tsx.
+      OPEN DECISIONS resolved (no code — recorded for V2-10): **GooeyNav vs PillNav** → the
+      restrained shipped rail treatment is the keeper; BOTH vendored candidates go unused and are
+      deleted in V2-10 (deletion waits on the owner default-ON verdict per V2-10's ritual).
+      **MagicBento / GlareHover** → stay passed-over (the restrained SpotlightCard stat treatment
+      holds); delete-in-V2-10 candidates. **Manual-parts form + fan nudge in the hero** → kept OUT
+      (they're detail-inspector features, not consistency-pass scope; the design spec's no-new-
+      features rule governs — revisit as a hologram part-tap inspector in a future spec, owner call).
+      Hard lines held: zero src-tauri diff · TrustSwitch/audited handlers untouched · animated
+      values render measured data only · flag-off byte-identity via additive props (all test-pinned).
 - [ ] **V2-10 Dedup (after owner default-ON verdict):** delete the classic shell/room paths +
       the losing nav candidate (GooeyNav vs PillNav) + retire `compy_v2` — same ritual as P4.
       Known debt, deliberately carried during the flag-gated rollout (Cowork audit note, V2-2).

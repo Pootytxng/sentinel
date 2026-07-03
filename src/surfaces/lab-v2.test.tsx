@@ -74,13 +74,14 @@ describe("labVerdict — pure, measured, evidence named in the same breath", () 
     }
   });
 
-  it("baseline set, nothing graded yet → the next-run coaching, with the real date", () => {
+  it("baseline set, nothing graded yet → the next-run coaching, WITHOUT the date (V2-9 punch j: the Benchmark card below already names when the baseline was saved)", () => {
     const v = labVerdict(
       state({ baseline: { components: [], confidence: "clean", notes: [] }, baseline_at: "2026-07-01T10:00:00Z" }),
     );
     expect(v.headline).toBe("Baseline recorded — your next benchmark run gets graded against it.");
-    expect(v.sub).toContain(new Date("2026-07-01T10:00:00Z").toLocaleDateString());
-    // No date recorded → no invented one.
+    expect(v.sub).toBe("The grade lands here the moment you re-run.");
+    expect(v.sub).not.toContain(new Date("2026-07-01T10:00:00Z").toLocaleDateString());
+    // No date recorded → same line either way (nothing invented, nothing repeated).
     const noDate = labVerdict(state({ baseline: { components: [], confidence: "clean", notes: [] } }));
     expect(noDate.sub).toBe("The grade lands here the moment you re-run.");
   });

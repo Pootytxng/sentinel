@@ -27,12 +27,6 @@ const fmtDelta = (pct: number): string => `${pct >= 0 ? "+" : ""}${pct.toFixed(1
 const fmtFloor = (pct: number): string =>
   Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`;
 
-const fmtDate = (iso: string | null): string => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
-};
-
 // The components that earned the overall grade, with their measured deltas.
 const evidence = (per: ComponentEfficacy[], verdict: string): string =>
   per
@@ -68,12 +62,12 @@ export function labVerdict(bench: BenchmarkState | null): LabVerdictLine {
     };
   }
   if (bench?.baseline) {
-    // The Benchmark card right below already coaches "change one thing, re-run" — the sub
-    // carries only what the card doesn't (when the baseline was set).
-    const date = fmtDate(bench.baseline_at);
+    // The Benchmark card right below coaches "change one thing, re-run" AND names when the
+    // baseline was saved — so the sub repeats neither (V2-9 punch j: the same fact never
+    // renders twice on one screen).
     return {
       headline: "Baseline recorded — your next benchmark run gets graded against it.",
-      sub: date ? `Set ${date} · the grade lands here the moment you re-run.` : "The grade lands here the moment you re-run.",
+      sub: "The grade lands here the moment you re-run.",
     };
   }
   return {

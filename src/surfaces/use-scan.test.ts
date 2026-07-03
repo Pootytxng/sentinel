@@ -105,12 +105,24 @@ describe("buildSetupSummary (A5 — exportable, read-only, plain-English)", () =
       readiness({ ready_count: 5, attention_count: 2, advisory_count: 1, unknown_count: 0 }),
       priorities(),
     );
-    expect(out).toMatch(/5 ready/);
+    // "look good" not "ready" (V2-9 punch f: "ready" belongs to appliable fixes, these are checks).
+    expect(out).toMatch(/5 look good/);
     expect(out).toMatch(/2 need attention/);
     expect(out).toMatch(/1 advisory/);
     // A zero bucket is never listed (no "0 unknown" noise).
-    expect(out).not.toMatch(/0 (ready|advisory|unknown|need attention)/);
+    expect(out).not.toMatch(/0 (look good|advisory|unknown|need attention)/);
     expect(out).not.toMatch(/unknown/);
+  });
+
+  it("branches singular counts properly — never '1 need attention' (V2-9 punch e)", () => {
+    const out = buildSetupSummary(
+      readiness({ ready_count: 1, attention_count: 1, advisory_count: 0, unknown_count: 0 }),
+      priorities(),
+    );
+    expect(out).toMatch(/1 looks good/);
+    expect(out).toMatch(/1 needs attention/);
+    expect(out).not.toMatch(/1 need attention/);
+    expect(out).not.toMatch(/1 look good\b/);
   });
 
   it("names each limiter Compy found, in order", () => {

@@ -118,15 +118,15 @@ describe("monitorVerdict — pure, measured, branch-proper copy", () => {
     expect(v.sub).toBe("Start capture and play — the debrief lands here when the session ends.");
   });
 
-  it("grades with the SAME shortVerdict thresholds the debrief uses", () => {
+  it("grades with the SAME shortVerdict thresholds the debrief uses — and a non-smooth grade names the 1% lows that earned it (V2-9 punch h)", () => {
     expect(monitorVerdict([session()]).headline).toBe(
       "Last session ran smooth — valorant at 240 fps average.",
     );
     expect(monitorVerdict([session({ low1_fps_est: 150 })]).headline).toBe(
-      "Last session had some dips — valorant at 240 fps average.",
+      "Last session had some dips — valorant's 1% lows fell to 150 fps against a 240 fps average.",
     );
     expect(monitorVerdict([session({ low1_fps_est: 100 })]).headline).toBe(
-      "Last session ran rough — valorant at 240 fps average.",
+      "Last session ran rough — valorant's 1% lows fell to 100 fps against a 240 fps average.",
     );
   });
 
