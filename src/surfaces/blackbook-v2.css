@@ -1,0 +1,66 @@
+/* ── V2 Blackbook room (V2-6, spec 2026-07-02-v2-shell-sourcing-and-plan) ──────────────
+   Token re-point that re-skins the composed classic Blackbook (Learn — library + Guide
+   Autopsy, plus the Walkthrough/TuningGuide bodies it embeds) to the approved mockup palette.
+
+   LAWS (test-pinned in tokens-v2-guard.test.ts):
+   - EVERY selector is scoped under [data-v2="on"] — the flag-off byte-identity mechanism.
+   - NO color literals — every color resolves from a --v2-* token.
+   - Font declarations reference only var(--v2-font-*).
+
+   THE RE-POINT: identical mechanism to optimize-v2.css / monitor-v2.css — Learn.css resolves
+   every color from the --ix-* instrument layer, so scoping new --ix-* values to the Blackbook
+   room element re-skins all of it with zero classic CSS/DOM touched. --ix-danger deliberately
+   NOT re-pointed (the semantic red must stay red — Risky verdict chips keep their meaning). */
+
+:root[data-v2="on"] .v2-room[data-room="learn"] {
+  /* instrument layer → v2 palette */
+  --ix-base: var(--v2-bg);
+  --ix-bg-1: var(--v2-bg);
+  --ix-glass-fill: var(--v2-panel);
+  --ix-glass-border: var(--v2-line);
+  --ix-glass-top: var(--v2-line-strong);
+  --ix-border: var(--v2-line);
+  --ix-line: var(--v2-line);
+  --ix-surface-2: var(--v2-panel-2);
+  --ix-radius: var(--v2-r);
+  --ix-text-1: var(--v2-text);
+  --ix-text-2: var(--v2-muted);
+  --ix-text-3: var(--v2-faint);
+  --ix-accent: var(--v2-accent);
+  --ix-accent-text: var(--v2-accent);
+  --ix-accent-ink: var(--v2-accent-ink);
+  --ix-accent-2: var(--v2-info);
+  --ix-accent-wash: var(--v2-accent-dim);
+  --ix-streak-1: var(--v2-accent);
+  --ix-streak-2: var(--v2-info);
+  --ix-streak-3: var(--v2-accent);
+  --ix-amber: var(--v2-warn);
+  --ix-mono: var(--v2-font-mono);
+  /* classic (pre-instrument) layer, still read by shared primitives (.btn, cards, chips) */
+  --bg: var(--v2-bg);
+  --bg-2: var(--v2-bg);
+  --panel: var(--v2-panel);
+  --panel-2: var(--v2-panel-2);
+  --panel-3: var(--v2-panel-2);
+  --muted: var(--v2-muted);
+  --accent: var(--v2-accent);
+  --accent-bright: var(--v2-accent);
+  --accent-hover: var(--v2-accent);
+  --accent-soft: var(--v2-accent-dim);
+  --accent-line: var(--v2-accent-line);
+  --accent-glow: var(--v2-accent-dim);
+}
+
+/* Learn's asPanel form already strips the modal chrome (transparent, borderless), but it keeps
+   the modal's own inner padding — inside RoomShell's body that padding doubles the room gutter,
+   so it flattens to zero here. Flag-off renders everything untouched. */
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-aspanel .lx-modal .lx-inner {
+  padding: 0;
+}
+
+/* The classic static dot-grid texture reads as stray dotted rules on the v2 background
+   (live-reviewed on the v2-6 shot) — the v2 shell carries its own backdrop treatment, so the
+   classic one yields here. Flag-off renders it untouched. */
+:root[data-v2="on"] .v2-room[data-room="learn"] .lx-dotgrid {
+  display: none;
+}

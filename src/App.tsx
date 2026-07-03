@@ -18,6 +18,7 @@ import CommandCenter from "./surfaces/CommandCenter";
 import { HomeV2 } from "./surfaces/HomeV2";
 import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
+import { BlackbookV2 } from "./surfaces/BlackbookV2";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
@@ -1442,8 +1443,20 @@ function App() {
                   vendor={detectedVendor}
                 />
               )}
+              {/* V2-6: the Blackbook room on RoomShell — Learn composes verbatim (its v2 prop
+                  trims the standalone head + in-panel record; RoomShell's verdict is the ONE
+                  summary). Mounts per-visit like the classic path; autopsy/mode continuity
+                  lives in sessionStorage, same as classic. */}
+              {activeTab === "Learn" && (
+                <BlackbookV2
+                  focusId={libraryFocusId}
+                  vendor={detectedVendor}
+                  onClose={() => setActiveTab("Overview")}
+                />
+              )}
               {!(activeTab === "Optimize" && optimizeMerged) &&
                 !(activeTab === "Play" && v2Monitor) &&
+                activeTab !== "Learn" &&
                 roomPanels}
             </>
           )}

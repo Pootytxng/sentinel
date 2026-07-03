@@ -18,7 +18,7 @@ import {
   type Applicability,
 } from "../data/knowledge-topics";
 import { autopsyScan, AUTOPSY_MAX_CHARS, type AutopsyHit, type AutopsyResult } from "../data/knowledge-autopsy";
-import { autopsyStats, readAutopsyLedger, recordAutopsy } from "../data/autopsy-ledger";
+import { autopsyStats, readAutopsyLedger, recordAutopsy, type AutopsyLedgerEntry } from "../data/autopsy-ledger";
 import {
   VERDICT_GLOSSARY,
   VERDICT_GLOSSARY_ENTRY_ID,
@@ -523,7 +523,17 @@ function persistAutopsy(text: string, graded: boolean): void {
   }
 }
 
-function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
+function AutopsyPanel({
+  onNavigate,
+  hideRecord = false,
+  onRecorded,
+}: {
+  onNavigate: (id: string) => void;
+  // V2-6: under the V2 shell the RoomShell verdict states the autopsy record — the in-panel
+  // rollup yields to it (one-mention law). Classic renders it unchanged.
+  hideRecord?: boolean;
+  onRecorded?: (ledger: AutopsyLedgerEntry[]) => void;
+}) {
   const [text, setText] = useState(readAutopsyText);
   const [result, setResult] = useState<AutopsyResult | null>(() => {
     try {
@@ -558,7 +568,7 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
       </p>
       {/* A3.8 — your local autopsy record: a running tally of what the guides you've graded turned out
           to be. Counts only, stored on this PC. Shown once you've graded at least one guide. */}
-      {stats.count > 0 && (
+      {!hideRecord && stats.count > 0 && (
         <div className="lx-autopsy-record" role="status">
           <span className="lx-autopsy-record-title">Your autopsy record</span>
           <span className="lx-autopsy-record-line">
@@ -602,7 +612,9 @@ function AutopsyPanel({ onNavigate }: { onNavigate: (id: string) => void }) {
             const r = autopsyScan(text);
             setResult(r);
             persistAutopsy(text, true);
-            setLedger(recordAutopsy(r));
+            const next = recordAutopsy(r);
+            setLedger(next);
+            onRecorded?.(next);
           }}
         >
           Grade this guide
@@ -641,11 +653,19 @@ export default function Learn({
   focusId = null,
   asPanel = false,
   vendor = "any",
+  v2 = false,
+  onAutopsyRecorded,
 }: {
   onClose: () => void;
   focusId?: string | null;
   asPanel?: boolean;
   vendor?: GpuVendor;
+  // V2-6 (additive — absent = classic byte-identical, test-pinned): the V2 Blackbook room
+  // provides the ONE room summary via RoomShell, so the standalone head (title + tagline) and
+  // the in-panel autopsy record yield to it (one-mention law). The record feeds the room
+  // verdict live through onAutopsyRecorded instead.
+  v2?: boolean;
+  onAutopsyRecorded?: (ledger: AutopsyLedgerEntry[]) => void;
 }) {
   // The room (asPanel) restores its last mode so returning mid-autopsy isn't an empty browse view
   // (continuity §3). A deep-link (focusId) always lands in browse; the cross-link modal doesn't persist.
@@ -758,25 +778,32 @@ export default function Learn({
       >
         <div className="lx-dotgrid" aria-hidden="true" />
         <div className="lx-inner">
-          <div className="lx-head">
-            <div>
-              <h2 className="lx-title" id="lx-modal-title">Blackbook</h2>
-              <p className="lx-tagline">
-                What actually works — measured. Look up any tweak, term, or scam you heard online;
-                we only answer what we've verified.
-              </p>
+          {/* Under the V2 shell the RoomShell verdict is the ONE summary — the standalone
+              head yields (one-mention law). v2 only ever renders as a rail room (asPanel),
+              so no Close button is lost. */}
+          {!v2 && (
+            <div className="lx-head">
+              <div>
+                <h2 className="lx-title" id="lx-modal-title">Blackbook</h2>
+                <p className="lx-tagline">
+                  What actually works — measured. Look up any tweak, term, or scam you heard online;
+                  we only answer what we've verified.
+                </p>
+              </div>
+              {/* As a rail room there's no "Close" (you leave via the rail); only the modal form has it. */}
+              {!asPanel && (
+                <button className="lx-btn lx-btn-ghost" onClick={onClose}>
+                  Close
+                </button>
+              )}
             </div>
-            {/* As a rail room there's no "Close" (you leave via the rail); only the modal form has it. */}
-            {!asPanel && (
-              <button className="lx-btn lx-btn-ghost" onClick={onClose}>
-                Close
-              </button>
-            )}
-          </div>
+          )}
 
           {/* Surface the Autopsy — Blackbook's most distinctive trick (paste a guide, get it graded
-              offline) otherwise hides behind the mode tab. One quiet honest line, browse-only. */}
-          {mode === "browse" && (
+              offline) otherwise hides behind the mode tab. One quiet honest line, browse-only.
+              Under v2 the RoomShell verdict sub already coaches "paste a whole guide" and the mode
+              tab sits right here — the hint would be a third mention, so it yields (one-mention). */}
+          {mode === "browse" && !v2 && (
             <button className="lx-autopsy-hint cmp-door" onClick={() => setMode("autopsy")}>
               Got a guide to fact-check? Try Autopsy
               <span className="cmp-door-chevron" aria-hidden="true">→</span>
@@ -803,7 +830,7 @@ export default function Learn({
           </div>
 
           {mode === "autopsy" ? (
-            <AutopsyPanel onNavigate={navigateTo} />
+            <AutopsyPanel onNavigate={navigateTo} hideRecord={v2} onRecorded={onAutopsyRecorded} />
           ) : (
             <>
               <input

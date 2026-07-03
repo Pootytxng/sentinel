@@ -117,7 +117,22 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       [data-room="play"], added to scoping/no-literal/token-font guards; +17 tests. Zero
       src-tauri diff. V2-9 punch candidate: measured line "N sessions on record" vs History &
       trends "N sessions kept" state the same count twice.
-- [ ] **V2-6 Blackbook**
+- [x] **V2-6 Blackbook** — 2026-07-03: BlackbookV2 on RoomShell — verdict = pure
+      blackbookVerdict from the LOCAL autopsy ledger (the reader's own measured record: "you've
+      fact-checked N guides — X% of their tweaks were real", branch-proper its/their, honest
+      no-record state with zero invented numbers, no-graded-tweaks branch shows no misleading
+      0%) via DecryptedText · measured = computed corpus count (never hardcoded) + "answers
+      come from this PC, never the internet" · deliberately NO primaryAction (the P6 spec names
+      Blackbook the room that may have none) · body = Learn composed VERBATIM (same locked
+      read-only cores, zero IPC) with an additive `v2` prop (absent = classic byte-identical,
+      test-pinned): standalone head + in-panel autopsy record + browse "Try Autopsy" hint yield
+      to the room verdict (one-mention law); the record feeds the verdict live via
+      onAutopsyRecorded · door from DOOR_MAP (learn → lab). Token re-point CSS scoped to
+      [data-room="learn"] (--ix-danger NOT re-pointed — Risky stays red; classic Real chip
+      already reads the accent token, so semantics match classic exactly); classic dot-grid
+      texture hidden under v2 (read as stray dotted rules on the v2 bg, live-reviewed);
+      blackbook-v2.css added to scoping/no-literal/token-font guards; +13 tests. Zero
+      src-tauri diff.
 - [ ] **V2-7 Lab**
 - [ ] **V2-8 Journey doors + tour alignment**
 - [ ] **V2-9 Consistency pass** — punch list (Cowork visual audit of v2-3 shot):
