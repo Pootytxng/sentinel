@@ -111,7 +111,13 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       stronger backdrop or move above the stage floor; (b) Trust-ledger card: long mono task ids
       wrap with a tilde artifact ("compatibility~appraiser") — truncate w/ ellipsis + title attr;
       (c) "1 safe one-click tweak(s) not applied" — "(s)" pluralization violates plain-language
-      bar; branch the copy properly. (d, from V2-4: the Optimize room now stacks THREE summary
+      bar; branch the copy properly. [CLEARED by V2-4b — copy pinned "(s)"-free]
+      (d) [from V2-4b shot, Cowork audit] Optimize: dead vertical band around the floating
+      Re-run button + residual gap under the segmented control (CC self-noted) — one header
+      rhythm; (e) chip grammar "1 need attention" → "1 needs attention"; (f) "ready" means two
+      things on one screen (verdict counts fixes, chips count checks) — rename one; (g) verdict
+      says "ready to apply" when the only action is a drifted re-enable — verdict must describe
+      the state the body actually shows. (d, from V2-4: the Optimize room now stacks THREE summary
       lines — the RoomShell verdict + Check's embedded scan verdict ("N things worth a look")
       + Fix's own "N thing worth a look" header; consolidate so the room verdict is the ONE
       answer line and the embedded surfaces demote to detail.)
