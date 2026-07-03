@@ -102,7 +102,21 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       settled subtitle + Fix's subtitle suppressed under v2Ia (RoomShell verdict is the ONE
       summary — clears V2-9 punch (d) for this room). Exactly ONE quiet expander (live-probed).
       +14 guards in optimize-v2-ia.test.tsx incl. classic-render pins. Zero src-tauri diff.
-- [ ] **V2-5 Monitor**
+- [x] **V2-5 Monitor** — 2026-07-03: MonitorV2 on RoomShell — verdict = pure monitorVerdict
+      (last-session answer graded by the SAME shortVerdict the debrief uses; honest empty state;
+      "(s)"-free pinned) via DecryptedText · sub = real duration/samples + the F3 "live estimate,
+      not a benchmark" honesty framing · measured = sessions-on-record count + the literal 1 Hz
+      demand-gated poll cadence · deliberately NO primaryAction (capture/overlay live with their
+      tiles — one-mention law outranks filling the optional slot) · Basic/Advanced + Live-first
+      semantics identical to classic (Play/MonitorBasic/TuningPresets compose VERBATIM, same
+      audited read-only commands, zero new IPC) · quiet slot = advisory Tuning-presets expander
+      (Advanced only; TuningPresets exported with additive `bare` prop — classic byte-identical,
+      test-pinned) · door from DOOR_MAP (play → learn). One-mention: sessions-hero top row yields
+      to the room verdict under v2; MonitorBasic's last-session DOOR keeps its label
+      (live-reviewed — hiding it read as an empty bar). Token re-point CSS scoped to
+      [data-room="play"], added to scoping/no-literal/token-font guards; +17 tests. Zero
+      src-tauri diff. V2-9 punch candidate: measured line "N sessions on record" vs History &
+      trends "N sessions kept" state the same count twice.
 - [ ] **V2-6 Blackbook**
 - [ ] **V2-7 Lab**
 - [ ] **V2-8 Journey doors + tour alignment**

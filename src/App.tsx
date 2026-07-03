@@ -17,6 +17,7 @@ import { GamingMode } from "./surfaces/GamingMode";
 import CommandCenter from "./surfaces/CommandCenter";
 import { HomeV2 } from "./surfaces/HomeV2";
 import { OptimizeV2 } from "./surfaces/OptimizeV2";
+import { MonitorV2 } from "./surfaces/MonitorV2";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
@@ -1091,6 +1092,10 @@ function App() {
   const v2Optimize = v2Shell && optimizeMerged;
   if (activeTab === "Optimize" && !v2Optimize) optimizeMountedRef.current = true;
   if (activeTab === "Optimize" && v2Optimize) optimizeV2MountedRef.current = true;
+  // V2-5: same swap for the Monitor room (no keepalive on either path — classic Play also
+  // mounts per-visit; its pollers are demand-gated on the tab). compy_monitor="0" (non-merged
+  // escape hatch) falls through to the classic Play panels, same contract as Optimize.
+  const v2Monitor = v2Shell && monitorMerged;
 
   // ── Shared room renders (classic shell + V2 shell) ─────────────────────────
   // The SAME elements render inside whichever chrome is active, so the two paths can never drift:
@@ -1418,7 +1423,28 @@ function App() {
                   />
                 </div>
               )}
-              {!(activeTab === "Optimize" && optimizeMerged) && roomPanels}
+              {/* V2-5: the Monitor room on RoomShell (merged shape only — compy_monitor="0"
+                  falls through to the classic Play panels below). Same props the classic
+                  Monitor shell receives; mounts per-visit like the classic path. */}
+              {activeTab === "Play" && v2Monitor && hw && (
+                <MonitorV2
+                  active
+                  sessions={sessions}
+                  sessionsSeenAt={sessionsSeenAt}
+                  priorities={priorities}
+                  recs={recs ?? []}
+                  apply={apply}
+                  busyId={busyId}
+                  onExport={onExport}
+                  changes={changes}
+                  rollback={rollback}
+                  deepMonitoring={<MonitoringTab active embedded />}
+                  vendor={detectedVendor}
+                />
+              )}
+              {!(activeTab === "Optimize" && optimizeMerged) &&
+                !(activeTab === "Play" && v2Monitor) &&
+                roomPanels}
             </>
           )}
         </ShellV2>

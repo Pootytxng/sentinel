@@ -1,0 +1,97 @@
+/* ── V2 Monitor room (V2-5, spec 2026-07-02-v2-shell-sourcing-and-plan) ────────────────
+   RoomShell chrome for the Monitor room + the token re-point that re-skins the composed
+   classic surfaces (Play, MonitorBasic, TuningPresets, SegmentedControl, LiveCharts, the
+   deep MonitoringTab panels) to the approved mockup palette.
+
+   LAWS (test-pinned in tokens-v2-guard.test.ts):
+   - EVERY selector is scoped under [data-v2="on"] — the flag-off byte-identity mechanism.
+   - NO color literals — every color resolves from a --v2-* token.
+   - Font declarations reference only var(--v2-font-*).
+
+   THE RE-POINT: identical mechanism to optimize-v2.css — the classic surfaces resolve every
+   color from the --ix-* instrument layer (how the five themes recolor them), so scoping new
+   --ix-* values to the Monitor room element re-skins all of it with zero classic CSS/DOM
+   touched. --ix-danger deliberately NOT re-pointed (the semantic red must stay red — graded
+   metric colors keep their meaning). */
+
+:root[data-v2="on"] .v2-room[data-room="play"] {
+  /* instrument layer → v2 palette */
+  --ix-base: var(--v2-bg);
+  --ix-bg-1: var(--v2-bg);
+  --ix-glass-fill: var(--v2-panel);
+  --ix-glass-border: var(--v2-line);
+  --ix-glass-top: var(--v2-line-strong);
+  --ix-border: var(--v2-line);
+  --ix-line: var(--v2-line);
+  --ix-surface-2: var(--v2-panel-2);
+  --ix-radius: var(--v2-r);
+  --ix-text-1: var(--v2-text);
+  --ix-text-2: var(--v2-muted);
+  --ix-text-3: var(--v2-faint);
+  --ix-accent: var(--v2-accent);
+  --ix-accent-text: var(--v2-accent);
+  --ix-accent-ink: var(--v2-accent-ink);
+  --ix-accent-2: var(--v2-info);
+  --ix-accent-wash: var(--v2-accent-dim);
+  --ix-streak-1: var(--v2-accent);
+  --ix-streak-2: var(--v2-info);
+  --ix-streak-3: var(--v2-accent);
+  --ix-amber: var(--v2-warn);
+  --ix-mono: var(--v2-font-mono);
+  /* classic (pre-instrument) layer, still read by shared primitives (.btn, cards, chips) */
+  --bg: var(--v2-bg);
+  --bg-2: var(--v2-bg);
+  --panel: var(--v2-panel);
+  --panel-2: var(--v2-panel-2);
+  --panel-3: var(--v2-panel-2);
+  --muted: var(--v2-muted);
+  --accent: var(--v2-accent);
+  --accent-bright: var(--v2-accent);
+  --accent-hover: var(--v2-accent);
+  --accent-soft: var(--v2-accent-dim);
+  --accent-line: var(--v2-accent-line);
+  --accent-glow: var(--v2-accent-dim);
+}
+
+/* ── room chrome ── */
+:root[data-v2="on"] .mv2-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--v2-pad-sm);
+  margin-bottom: var(--v2-gap);
+}
+/* Detail level sits at the far edge whether or not the section segments render (Basic). */
+:root[data-v2="on"] .mv2-bar > :last-child {
+  margin-left: auto;
+}
+
+:root[data-v2="on"] .mv2-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── one-mention law (V2-4b, carried forward) ─────────────────────────────────────────
+   The RoomShell verdict already states the last session's game + grade + duration; the
+   sessions-hero top row repeats exactly that DIRECTLY under it — under v2 it yields (the 4
+   graded metrics below stay). MonitorBasic's last-session DOOR keeps its label text: a door
+   naming where it goes is information scent, not a stacked summary (live-reviewed — hiding
+   it left an empty-looking bar). Flag-off renders everything untouched. */
+:root[data-v2="on"] .v2-room[data-room="play"] .play-hero-top {
+  display: none;
+}
+
+/* ── quiet slot internals (the head button itself is .v2-quiet from shell-v2.css) ── */
+:root[data-v2="on"] .mv2-quiet-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--v2-faint);
+}
+
+:root[data-v2="on"] .mv2-presets-body {
+  padding: var(--v2-pad-sm) 0 0;
+}
+/* [hidden] must actually close the drawer regardless of display rules above. */
+:root[data-v2="on"] .mv2-presets-body[hidden] {
+  display: none;
+}

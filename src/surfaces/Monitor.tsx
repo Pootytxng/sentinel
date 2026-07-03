@@ -38,7 +38,16 @@ const MODES: { id: ViewMode; label: string }[] = [
 // Same props App passes to <Play>, minus `view` (the shell drives that from the segment).
 type Props = Omit<ComponentProps<typeof Play>, "view">;
 
-function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor"] }) {
+// Exported for MonitorV2 (V2-5): the same advisory checklist renders in the v2 room's quiet
+// slot. `bare` skips only the standalone <h2> (the v2 expander head already names it) — absent
+// (the classic render here) the output is byte-identical to before the export.
+export function TuningPresets({
+  vendor,
+  bare = false,
+}: {
+  vendor: ComponentProps<typeof Play>["vendor"];
+  bare?: boolean;
+}) {
   // Which preset's checklist is open (null = all collapsed); and within it, which walkthrough is open.
   const [openPreset, setOpenPreset] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
@@ -61,9 +70,11 @@ function TuningPresets({ vendor }: { vendor: ComponentProps<typeof Play>["vendor
       aria-label="Tuning presets"
       style={{ display: "flex", flexDirection: "column", gap: 8 }}
     >
-      <h2 className="section-title" style={{ fontSize: 14 }}>
-        Tuning presets
-      </h2>
+      {!bare && (
+        <h2 className="section-title" style={{ fontSize: 14 }}>
+          Tuning presets
+        </h2>
+      )}
       <p className="section-help" style={{ marginTop: 0 }}>
         Pick the result you want — each is a short, by-hand checklist of guided steps. The steps adapt
         to your graphics card by name{vendorHint}. Advisory only: Compy never changes these for you; it
