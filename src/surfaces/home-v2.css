@@ -1,0 +1,396 @@
+/* ── V2 Home room (V2-3, spec 2026-07-02-v2-shell-sourcing-and-plan) ────────────────────
+   The owner-approved mockup's Home layout on the tokens-v2 layer: hologram hero stage +
+   stat column + priorities card. Same laws as shell-v2.css (test-pinned in
+   tokens-v2-guard.test.ts): every selector scoped under [data-v2="on"], no color literals,
+   fonts only via var(--v2-font-*). The one sanctioned @keyframes (v2-scan) drives the
+   check-activity sweep; it is inert flag-off (only a [data-v2] rule references it) and
+   frozen under reduced motion. */
+
+:root[data-v2="on"] .hv2-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--v2-gap);
+  align-items: stretch;
+}
+:root[data-v2="on"] .hv2-full {
+  grid-column: 1 / -1;
+}
+
+/* ── Hero — the hologram's dedicated stage ── */
+:root[data-v2="on"] .hv2-hero {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+:root[data-v2="on"] .hv2-hero-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root[data-v2="on"] .hv2-hero-title {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hv2-stage-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+:root[data-v2="on"] .hv2-view-toggle {
+  display: flex;
+  gap: 6px;
+}
+:root[data-v2="on"] .hv2-seg {
+  font-family: var(--v2-font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--v2-muted);
+  background: transparent;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .hv2-seg:hover {
+  background: var(--v2-panel-2);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hv2-seg-on {
+  background: var(--v2-accent-dim);
+  border-color: var(--v2-accent-line);
+  color: var(--v2-text);
+}
+
+/* The framed stage. ElectricBorder (hv2-eb) supplies the animated frame; the reduced-motion
+   fallback (hv2-hero-frame) is the same geometry with a static accent hairline. */
+:root[data-v2="on"] .hv2-eb {
+  flex: 1;
+}
+:root[data-v2="on"] .hv2-hero-frame {
+  flex: 1;
+  border: 1px solid var(--v2-accent-line);
+  border-radius: var(--v2-r);
+  overflow: hidden;
+}
+/* Explicit height: the stage sits inside ElectricBorder's auto-height content slot, so a
+   percentage chain collapses (the r3f canvas fell back to its 150px default). */
+:root[data-v2="on"] .hv2-stage {
+  position: relative;
+  height: 500px;
+  overflow: hidden;
+  border-radius: var(--v2-r);
+  background: var(--v2-panel);
+}
+:root[data-v2="on"] .hv2-stage canvas {
+  border-radius: var(--v2-r);
+}
+:root[data-v2="on"] .hv2-stage-cards {
+  padding: var(--v2-pad);
+  overflow-y: auto;
+  height: 100%;
+}
+:root[data-v2="on"] .hv2-stage-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--v2-faint);
+  font-size: 12px;
+}
+
+/* Scan sweep — renders ONLY while checks are actually running (honest activity). */
+:root[data-v2="on"] .hv2-scan {
+  position: absolute;
+  inset-inline: 10%;
+  top: 0;
+  height: 2px;
+  background: var(--v2-accent);
+  box-shadow: 0 2px 14px var(--v2-accent-dim);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 2;
+  animation: v2-scan 4.5s ease-in-out infinite;
+}
+:root[data-v2="on"][data-motion="reduced"] .hv2-scan {
+  animation: none;
+  display: none;
+}
+@keyframes v2-scan {
+  0%,
+  100% {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(400px);
+    opacity: 0.8;
+  }
+  92% {
+    opacity: 0.8;
+  }
+}
+
+/* Projected part-tags — measured values only; a missing probe simply omits the value. */
+:root[data-v2="on"] .hv2-tags {
+  position: absolute;
+  top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 3;
+  pointer-events: none;
+}
+:root[data-v2="on"] .hv2-tags-left {
+  left: 14px;
+}
+:root[data-v2="on"] .hv2-tags-right {
+  right: 14px;
+  align-items: flex-end;
+}
+:root[data-v2="on"] .hv2-tag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--v2-muted);
+  background: var(--v2-panel-2);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .hv2-tag b {
+  color: var(--v2-text);
+  font-weight: 600;
+}
+:root[data-v2="on"] .hv2-tag-detail {
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hv2-tag-v.hv2-tag-v-ok {
+  color: var(--v2-ok);
+}
+:root[data-v2="on"] .hv2-tag-v.hv2-tag-v-warn {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"] .hv2-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+:root[data-v2="on"] .hv2-led-ok {
+  background: var(--v2-ok);
+}
+:root[data-v2="on"] .hv2-led-warn {
+  background: var(--v2-warn);
+}
+:root[data-v2="on"] .hv2-stage-hint {
+  position: absolute;
+  left: 14px;
+  bottom: 10px;
+  font-size: 11px;
+  color: var(--v2-muted);
+  background: var(--v2-panel-2);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r-sm);
+  padding: 3px 9px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Machine values only (mono type law) — measured numbers, timestamps. */
+:root[data-v2="on"] .hv2-mono {
+  font-family: var(--v2-font-mono);
+}
+
+/* ── Stat column ── */
+:root[data-v2="on"] .hv2-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-gap);
+}
+:root[data-v2="on"] .hv2-stat {
+  flex: 1;
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  padding: 14px var(--v2-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+:root[data-v2="on"] .hv2-stat-k {
+  color: var(--v2-muted);
+  font-size: 11.5px;
+}
+:root[data-v2="on"] .hv2-stat-n {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--v2-text);
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+:root[data-v2="on"] .hv2-stat-unit {
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hv2-stat-d {
+  font-size: 11.5px;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .hv2-spark {
+  margin-top: 6px;
+  height: 26px;
+}
+
+/* ── Cards / rows (priorities) ── */
+:root[data-v2="on"] .hv2-card {
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+}
+:root[data-v2="on"] .hv2-card-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px var(--v2-pad);
+  border-bottom: 1px solid var(--v2-line);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hv2-card-hd-right {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--v2-faint);
+  font-size: 11.5px;
+}
+:root[data-v2="on"] .hv2-rows {
+  display: flex;
+  flex-direction: column;
+}
+:root[data-v2="on"] .hv2-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px var(--v2-pad);
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .hv2-row:first-child {
+  border-top: none;
+}
+:root[data-v2="on"] .hv2-row:hover {
+  background: var(--v2-panel-2);
+}
+:root[data-v2="on"] .hv2-row-clear {
+  display: block;
+  color: var(--v2-muted);
+  font-size: 12.5px;
+}
+:root[data-v2="on"] .hv2-row-text {
+  min-width: 0;
+}
+:root[data-v2="on"] .hv2-row-nm {
+  display: block;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hv2-row-why {
+  display: block;
+  color: var(--v2-muted);
+  font-size: 11.5px;
+}
+:root[data-v2="on"] .hv2-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  justify-self: center;
+}
+:root[data-v2="on"] .hv2-mark-ok {
+  background: var(--v2-ok);
+}
+:root[data-v2="on"] .hv2-mark-warn {
+  background: var(--v2-warn);
+}
+:root[data-v2="on"] .hv2-mark-info {
+  background: var(--v2-info);
+}
+:root[data-v2="on"] .hv2-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .hv2-pill-ok {
+  background: var(--v2-ok-dim);
+  color: var(--v2-ok);
+}
+:root[data-v2="on"] .hv2-pill-warn {
+  background: var(--v2-warn-dim);
+  color: var(--v2-warn);
+}
+:root[data-v2="on"] .hv2-pill-info {
+  background: var(--v2-info-dim);
+  color: var(--v2-info);
+}
+
+/* ── Buttons ── */
+:root[data-v2="on"] .hv2-btn {
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--v2-r-sm);
+  padding: 6px 13px;
+  cursor: pointer;
+  border: 1px solid var(--v2-line-strong);
+  background: transparent;
+  color: var(--v2-text);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .hv2-btn:hover {
+  background: var(--v2-panel-2);
+}
+:root[data-v2="on"] .hv2-btn-ghost {
+  border-color: transparent;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hv2-btn-ghost:hover {
+  color: var(--v2-text);
+  background: var(--v2-panel-2);
+}
+
+/* ── Skeletons (data not yet resolved — shimmer, never a placeholder claim) ── */
+:root[data-v2="on"] .hv2-skel {
+  background: var(--v2-panel-2);
+  border-radius: 4px;
+}
+:root[data-v2="on"] .hv2-skel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  justify-self: center;
+}
+:root[data-v2="on"] .hv2-skel-line {
+  height: 12px;
+  width: 60%;
+  grid-column: 2 / -1;
+}
+:root[data-v2="on"] .hv2-skel-short {
+  width: 40%;
+}

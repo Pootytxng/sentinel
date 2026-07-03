@@ -28,6 +28,9 @@ interface Props {
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
   manualParts: ManualPart[];
+  /** Initial camera distance. Default = the classic framing; the V2 hero stage pulls in closer
+      so the model fills its bigger stage (additive — existing callers are untouched). */
+  cameraDist?: number;
 }
 
 export function RigHologram({
@@ -39,6 +42,7 @@ export function RigHologram({
   onSelect,
   onHover,
   manualParts,
+  cameraDist = 9.5,
 }: Props) {
   const colors = useRigColors();
   const parts = useMemo(() => buildRigParts(hw), [hw]);
@@ -172,7 +176,7 @@ export function RigHologram({
       frameloop={frameloop}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
-      camera={{ position: [0.6, 1.5, 9.5], fov: 45 }}
+      camera={{ position: [0.6, 1.5, cameraDist], fov: 45 }}
       onPointerMissed={() => onSelect("")}
     >
       <fogExp2 attach="fog" args={["#0a1320", 0.045]} />

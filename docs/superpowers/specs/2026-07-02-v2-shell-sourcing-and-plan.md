@@ -63,7 +63,17 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       Mockup's Ctrl-K box deliberately ABSENT (CommandPalette parked — no fake affordances).
       shell-v2.css fully [data-v2]-scoped + color/font-literal guards. GooeyNav/PillNav rail eval
       still open — the restrained mockup treatment shipped; both stay vendored, decide by V2-9.
-- [ ] **V2-3 Home** — hologram hero stage + bento stats + priorities + door
+- [x] **V2-3 Home** — 2026-07-02: HomeV2 on RoomShell (verdict=postureLine via DecryptedText,
+      measured checks line, Re-run check action, door from DOOR_MAP) · hologram hero stage
+      (REAL RigHologram, ElectricBorder frame — its ONE sanctioned use, measured part-tags
+      GPU/CPU/RAM/Storage off existing read-only probes, scan sweep renders ONLY while checks
+      run, reduced-motion = static frame/no sweep/plain numbers) · stat column (SpotlightCard +
+      CountUp on measured values: last session + spark, active changes, ledger) · priorities
+      card (top-3 limiters, honest clean/skeleton states, rows route to Optimize) · Cards
+      toggle + Setup&Tour kept (parity). home-v2.css added to the scoping/no-literal guards
+      (@keyframes allowed only with v2- prefix — inert flag-off). MagicBento/GlareHover passed
+      over for the restrained stat treatment; still vendored, revisit by V2-9. Manual-parts
+      form + fan nudge deliberately not in the hero (detail-inspector candidates, V2-9 call).
 - [ ] **V2-4 Optimize**
 - [ ] **V2-5 Monitor**
 - [ ] **V2-6 Blackbook**

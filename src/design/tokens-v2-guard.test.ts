@@ -40,16 +40,18 @@ describe("compy_v2 flag", () => {
 
 // ── source-level guards (read the real files, like theme-literal-guard) ──
 
-const loadV2Css = (name: string): string =>
-  readFileSync(join("src", "design", name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const loadV2Css = (...path: string[]): string =>
+  readFileSync(join("src", ...path), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-const tokensCss = loadV2Css("tokens-v2.css");
-const shellCss = loadV2Css("shell-v2.css");
+const tokensCss = loadV2Css("design", "tokens-v2.css");
+const shellCss = loadV2Css("design", "shell-v2.css");
+const homeCss = loadV2Css("surfaces", "home-v2.css");
 
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
   ["tokens-v2.css", tokensCss],
   ["shell-v2.css", shellCss],
+  ["home-v2.css", homeCss],
 ];
 
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
@@ -63,6 +65,15 @@ describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
         if (ch === "{") {
           if (depth === 0) {
             const sel = buf.trim();
+            // @keyframes are the one sanctioned unscoped header, and ONLY with the v2- prefix:
+            // a keyframes block is inert unless a rule references it, and every referencing rule
+            // is itself scoped — so flag-off byte-identity holds. (Inner 0%/100% headers sit at
+            // depth ≥ 1 and are never selector-checked.)
+            if (/^@keyframes\s+v2-/.test(sel)) {
+              depth++;
+              buf = "";
+              continue;
+            }
             // every comma-separated selector in the header must carry the scope
             for (const part of sel.split(",")) {
               if (!part.includes('[data-v2="on"]')) offenders.push(part.trim());
@@ -82,22 +93,28 @@ describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
   }
 });
 
-describe("shell-v2.css consumes the token layer only (no-slop law)", () => {
-  it("no color literals — every color comes from a --v2-* token", () => {
-    expect(shellCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
-    expect(shellCss.match(/\brgba?\(/g) ?? []).toEqual([]);
-    expect(shellCss.match(/\bhsla?\(/g) ?? []).toEqual([]);
-  });
+describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
+  const SURFACE_CSS: [string, string][] = [
+    ["shell-v2.css", shellCss],
+    ["home-v2.css", homeCss],
+  ];
+  for (const [name, css] of SURFACE_CSS) {
+    it(`${name}: no color literals — every color comes from a --v2-* token`, () => {
+      expect(css.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
+      expect(css.match(/\brgba?\(/g) ?? []).toEqual([]);
+      expect(css.match(/\bhsla?\(/g) ?? []).toEqual([]);
+    });
 
-  it("font/font-family declarations reference only var(--v2-font-*)", () => {
-    const offenders: string[] = [];
-    for (const m of shellCss.matchAll(/(?:^|[;{])\s*(font(?:-family)?)\s*:\s*([^;}]+)/g)) {
-      if (!/var\(--v2-font-/.test(m[2]) && !/^\s*inherit\s*$/.test(m[2])) {
-        offenders.push(`${m[1]}: ${m[2].trim()}`);
+    it(`${name}: font/font-family declarations reference only var(--v2-font-*)`, () => {
+      const offenders: string[] = [];
+      for (const m of css.matchAll(/(?:^|[;{])\s*(font(?:-family)?)\s*:\s*([^;}]+)/g)) {
+        if (!/var\(--v2-font-/.test(m[2]) && !/^\s*inherit\s*$/.test(m[2])) {
+          offenders.push(`${m[1]}: ${m[2].trim()}`);
+        }
       }
-    }
-    expect(offenders).toEqual([]);
-  });
+      expect(offenders).toEqual([]);
+    });
+  }
 });
 
 // ── contrast floors on the v2 palette (same math as theme-contrast.test.ts) ──

@@ -15,6 +15,7 @@ import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import CommandCenter from "./surfaces/CommandCenter";
+import { HomeV2 } from "./surfaces/HomeV2";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
@@ -1353,8 +1354,9 @@ function App() {
           onClose={() => setShowSettings(false)}
         />
       ) : v2Shell ? (
-        // V2 product shell (V2-2): one rail+topbar chrome around the SAME room elements the classic
-        // paths render. Rooms re-skin one stage at a time (V2-3..V2-7); the chrome lands first.
+        // V2 product shell (V2-2): one rail+topbar chrome; rooms re-skin one stage at a time.
+        // Home is the first V2 room (V2-3 — hologram hero + stats + priorities on RoomShell);
+        // the remaining rooms still render their classic elements until V2-4..V2-7.
         <ShellV2
           items={railFor(optimizeMerged)}
           activeId={activeHomeId}
@@ -1362,7 +1364,19 @@ function App() {
           ledgerCount={changes.length}
           version={APP_VERSION}
         >
-          {activeTab === "Overview" ? commandCenter : roomPanels}
+          {activeTab === "Overview" && hw ? (
+            <HomeV2
+              hw={hw}
+              readiness={readiness}
+              priorities={priorities}
+              sessions={sessions}
+              changes={changes}
+              onRunCheck={() => setShowFirstCheck(true)}
+              onSeeInFix={() => setActiveTab("Optimize")}
+            />
+          ) : (
+            roomPanels
+          )}
         </ShellV2>
       ) : hw && ccActive ? (
         commandCenter
