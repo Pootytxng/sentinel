@@ -66,3 +66,19 @@
 :root[data-v2="on"] .v2-room[data-room="lab"] .lab-root {
   padding-top: 0;
 }
+
+/* ── V2 layering (2026-07-03): the instrument cards read as one flat blanket — every card resolved
+   to the same --v2-panel with no focal one and no recessed body. These scoped overrides raise the
+   coached entry instrument and recess each expanded body, using only the v2 ladder. Classic Lab.css
+   has no background-hover on these, so bg-only overrides are safe; flag-off renders untouched. */
+/* Benchmark is the coached "start with Benchmark" entry point — raise it to the top tier so the eye
+   has one place to land first among the sibling instruments. (Its --v2-line-strong top edge stays.) */
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-card[data-instrument="Benchmark"] {
+  background: var(--v2-panel-2);
+}
+/* Recess each instrument's expanded body into a carved well so the result content reads as tucked
+   INSIDE the card (header on the card surface, body recessed) instead of continuous with it. The
+   header/body hairline is already there (Lab.css .lab-card-body border-top). */
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-card-body {
+  background: var(--v2-bg);
+}

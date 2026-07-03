@@ -320,7 +320,7 @@ function LabSection({
       return !o;
     });
   return (
-    <div className={`lab-card ${open ? "lab-card-open" : ""}`}>
+    <div className={`lab-card ${open ? "lab-card-open" : ""}`} data-instrument={name}>
       {/* WAI-ARIA accordion: the toggle button is wrapped in a native heading so screen-reader
           users get the instrument list as a navigable h3 structure (under Lab's h2). `font: inherit`
           + `margin: 0` on .lab-card-heading keep the visual byte-identical to a bare button. */}
