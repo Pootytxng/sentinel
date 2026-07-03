@@ -42,6 +42,8 @@ import "./Onboarding.css";
 import "./arc-instrument.css"; // arc re-dress skin (scoped under .arc-v2; after the classics)
 import "./design/living-instrument.css"; // "Living Instrument" feel-refresh skin — scoped under [data-living], default OFF
 import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default OFF
+import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) — inert until tokens-v2 uses them
+import "./design/tokens-v2.css"; // V2 shell tokens — every rule scoped under [data-v2="on"], default OFF
 
 type DiskInfo = {
   mount_point: string;

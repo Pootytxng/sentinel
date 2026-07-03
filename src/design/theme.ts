@@ -281,6 +281,37 @@ export function applyDashV2(on: boolean): void {
   }
 }
 
+// V2 product shell (owner vision 2026-07-02) — the Linear/Geist/Raycast-discipline shell rebuild,
+// scoped under [data-v2="on"] (tokens-v2.css) and rendered by V2 surfaces only. DEFAULT OFF —
+// preview flag until the owner approves each stage live; flag-off the app is byte-identical
+// (guard: tokens-v2-guard.test.ts). Cosmetic + structural chrome only: never logic, IPC, or
+// what Compy measures. Spec: docs/superpowers/specs/2026-07-02-v2-shell-sourcing-and-plan.md.
+const V2_KEY = "compy_v2";
+
+export function readV2(): boolean {
+  try {
+    return localStorage.getItem(V2_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyV2(on: boolean): void {
+  if (on) document.documentElement.dataset.v2 = "on";
+  else delete document.documentElement.dataset.v2;
+  try {
+    localStorage.setItem(V2_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore persistence failure — still applies this session */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:v2-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
+}
+
 // The chosen Basic/Advanced mode. Default BASIC (answer first); Advanced is the opt-in depth.
 // Mirrored onto <html data-view-mode> so CSS (and later phases) can react without prop-drilling.
 export type ViewMode = "basic" | "advanced";

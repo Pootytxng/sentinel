@@ -4,7 +4,9 @@
 // so these are ambient MODULE declarations (creation), not augmentations.
 declare module "fs" {
   export function readdirSync(path: string, options: { recursive: true }): string[];
+  export function readdirSync(path: string): string[];
   export function readFileSync(path: string, encoding: "utf8"): string;
+  export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean };
 }
 declare module "path" {
   export function join(...parts: string[]): string;

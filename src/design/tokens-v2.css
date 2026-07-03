@@ -1,0 +1,49 @@
+/* ── V2 shell token contract (V2-1 foundation, spec 2026-07-02) ────────────────────────
+   The owner-approved mockup palette (docs/mockups/ui-v2-product-shell.html), issued as
+   tokens. EVERY selector in this file must be scoped under [data-v2="on"] — that is the
+   flag-off byte-identity mechanism and it is test-pinned (tokens-v2-guard.test.ts).
+   V2 surfaces consume ONLY these tokens: no color/spacing/font literals in V2 CSS
+   (same law as theme-literal-guard, extended here).
+
+   Type discipline (Geist law): --v2-font-sans is the ONE UI face; --v2-font-mono is for
+   MACHINE VALUES ONLY (measured numbers, hashes, timestamps, units) — never labels or
+   prose. Fonts are bundled locally (fonts-v2.css, OFL 1.1) — zero network. */
+
+:root[data-v2="on"] {
+  /* Surfaces */
+  --v2-bg: #0a0c10;
+  --v2-panel: #10131a;
+  --v2-panel-2: #141824;
+  --v2-line: rgba(255, 255, 255, 0.07);
+  --v2-line-strong: rgba(255, 255, 255, 0.12);
+
+  /* Text. faint is nudged from the mockup's #5c6478 (2.99:1 on panel-2 — a hair under the
+     AA-large 3.0 floor) to the minimal passing value; everything else is the mockup verbatim. */
+  --v2-text: #e8ebf2;
+  --v2-muted: #8b93a7;
+  --v2-faint: #626a80;
+
+  /* Accent (violet family — the approved mockup accent) */
+  --v2-accent: #a78bfa;
+  --v2-accent-ink: #1a0a2e;
+  --v2-accent-dim: rgba(167, 139, 250, 0.14);
+
+  /* Status — color is information, never decoration */
+  --v2-ok: #3ddc97;
+  --v2-ok-dim: rgba(61, 220, 151, 0.12);
+  --v2-warn: #f5c542;
+  --v2-warn-dim: rgba(245, 197, 66, 0.12);
+  --v2-info: #6cb8ff;
+  --v2-info-dim: rgba(108, 184, 255, 0.12);
+
+  /* Type — Geist Sans everywhere; Geist Mono on machine values only */
+  --v2-font-sans: "Geist Sans", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --v2-font-mono: "Geist Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  /* Geometry rhythm — the only sanctioned radii/spacing steps for V2 chrome */
+  --v2-r: 10px;
+  --v2-r-sm: 7px;
+  --v2-gap: 16px;
+  --v2-pad: 16px;
+  --v2-pad-sm: 12px;
+}

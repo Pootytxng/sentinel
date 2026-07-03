@@ -1,0 +1,60 @@
+# Third-party vendored components — src/design/vendor/
+
+V2-1 foundation (spec `docs/superpowers/specs/2026-07-02-v2-shell-sourcing-and-plan.md`).
+Vendored — not npm-installed — so the code is pinned, auditable, and adaptable to Compy's
+token system. Every file carries a license header pointing here.
+
+## React Bits — https://reactbits.dev (github.com/DavidHDev/react-bits)
+
+Copyright (c) 2026 David Haz. **MIT + Commons Clause License Condition v1.0.**
+
+Permission granted to use, copy, modify, merge, publish, and distribute the Software **as
+part of an application, website, or product**. Commons Clause restriction: the components
+may not be sold, sublicensed, or redistributed **as components** (alone, bundled, or
+ported). Compy ships them inside an app — compliant. No warranty. Full text:
+https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md
+
+All components below are the **TS-CSS (ts-default) variants**, vendored 2026-07-02 from
+the `main` branch.
+
+| Component | Source path (ts-default/) | Planned use (adopt list) | Local modifications |
+|---|---|---|---|
+| DecryptedText | TextAnimations/DecryptedText | Verdict lines resolve on scan completion — measured values only | LF-normalized, header added |
+| CountUp | TextAnimations/CountUp | Stat values land with weight — measured values only | LF-normalized, header added |
+| Radar | Backgrounds/Radar | Active-scan backdrop (one place) | LF-normalized, header added |
+| DotField | Backgrounds/DotField | Quiet technical shell backdrop, barely-there opacity | LF-normalized, header added |
+| Grainient | Backgrounds/Grainient | Texture pass — kills the flat-gradient look | LF-normalized, header added |
+| Noise | Animations/Noise | Static grain texture overlay | LF-normalized, header added |
+| ElectricBorder | Animations/ElectricBorder | ONE sanctioned use: hologram hero stage frame | LF-normalized, header added |
+| SpotlightCard | Components/SpotlightCard | Hover treatment, priority/finding cards | LF-normalized, header added |
+| GlareHover | Animations/GlareHover | Hover treatment (alternative — one of the two ships) | LF-normalized, header added |
+| MagicBento | Components/MagicBento | Home stats bento rhythm | LF-normalized, header added |
+| GooeyNav | Components/GooeyNav | Rail active-state candidate (vs PillNav — dev-build eval, loser deleted) | LF-normalized, header added |
+| PillNav | Components/PillNav | Rail active-state candidate (vs GooeyNav — dev-build eval, loser deleted) | LF-normalized, header added; **react-router-dom removed** — plain anchors + `onItemSelect` callback (Compy is router-less) |
+
+Adopt-list picks settled at vendor time (rationale in the V2-1 commit):
+
+- **Radar over GridScan** — GridScan imports `face-api.js` (webcam face-detection ML) +
+  `postprocessing`; unacceptable dependency surface for a scan backdrop.
+- **DotField over DotGrid** — zero-dep vs gsap InertiaPlugin; same visual role.
+- **Noise + Grainient over Dither** — Dither needs `@react-three/postprocessing` +
+  `postprocessing` (two new deps for one texture).
+- **ElectricBorder over BorderGlow** — the spec's named-first pick; zero-dep.
+
+Runtime deps these components pull (all free, MIT-family, added in V2-1): `gsap`
+(MagicBento, PillNav), `ogl` (Radar, Grainient), `motion` (DecryptedText, CountUp).
+
+## Geist Sans + Geist Mono — src/design/fonts/
+
+Copyright (c) Vercel, Inc. **SIL Open Font License 1.1** — free to bundle/embed.
+Full text: `src/design/fonts/OFL.txt`. Variable-weight woff2 (wght 100–900), vendored
+2026-07-02 from github.com/vercel/geist-font `main`.
+
+## Usage laws (bind every consumer of this directory)
+
+- **Honesty law:** DecryptedText/CountUp render **measured values only** — never invented,
+  never placeholder numbers presented as live.
+- **§8b motion caps + reduced-motion:** every animated component is gated on the app's
+  resolved motion preference (`:root[data-motion="reduced"]` freezes it).
+- **Mono law:** Geist Mono on machine values only (numbers, hashes, timestamps, units).
+- Components render only inside `compy_v2` surfaces until a stage ships default-ON.

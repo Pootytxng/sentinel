@@ -1,0 +1,8 @@
+/* Vendored from React Bits (reactbits.dev) — Radar, TS-CSS variant.
+ * Copyright (c) 2026 David Haz. MIT + Commons Clause License Condition v1.0.
+ * Full license + local-modification notes: src/design/vendor/THIRD_PARTY.md */
+
+.radar-container {
+  width: 100%;
+  height: 100%;
+}

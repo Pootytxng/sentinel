@@ -1,0 +1,21 @@
+/* Geist Sans + Geist Mono (variable, wght 100–900) — bundled locally, zero network.
+   © Vercel, SIL Open Font License 1.1 — full text: src/design/fonts/OFL.txt.
+   V2-1 foundation (spec 2026-07-02-v2-shell-sourcing-and-plan). @font-face alone is
+   inert: the files are only fetched when a rule USES the family, and the only rules
+   that do live in tokens-v2.css under [data-v2="on"] — so flag-off nothing changes. */
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("./fonts/GeistVF.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMonoVF.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}

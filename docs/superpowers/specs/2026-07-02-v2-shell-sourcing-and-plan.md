@@ -47,6 +47,23 @@ with a stock viewer).
 Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or three
 (already bundled) is fine; no new paid or heavyweight deps without flagging.
 
+## Stage tracker (one stage = one session = its own commit; tick when live-verified)
+
+- [x] **V2-1 Foundation** — 2026-07-02: Geist bundled (variable woff2 + OFL) · tokens-v2.css
+      (mockup palette, faint nudged #5c6478→#626a80 for the 3.0 floor) · 12 components vendored
+      (Radar over GridScan — face-api.js dep; DotField over DotGrid; Noise+Grainient over Dither;
+      ElectricBorder; both nav candidates) · deps gsap/ogl/motion · compy_v2 flag default-OFF +
+      Settings preview toggle · 22 guards (scoping=byte-identity, contrast, Geist-via-tokens-only,
+      vendor license hygiene).
+- [ ] **V2-2 Shell** — rail + topbar + RoomShell v2 skin
+- [ ] **V2-3 Home** — hologram hero stage + bento stats + priorities + door
+- [ ] **V2-4 Optimize**
+- [ ] **V2-5 Monitor**
+- [ ] **V2-6 Blackbook**
+- [ ] **V2-7 Lab**
+- [ ] **V2-8 Journey doors + tour alignment**
+- [ ] **V2-9 Consistency pass**
+
 ## Build plan (re-scopes P6; P4 dedup still lands FIRST)
 
 Flag: `compy_v2` — DEFAULT OFF, Settings preview toggle, flag-off byte-identical, the proven
