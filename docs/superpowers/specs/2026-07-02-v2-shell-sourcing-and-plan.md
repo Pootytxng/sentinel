@@ -70,6 +70,9 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
 - [ ] **V2-7 Lab**
 - [ ] **V2-8 Journey doors + tour alignment**
 - [ ] **V2-9 Consistency pass**
+- [ ] **V2-10 Dedup (after owner default-ON verdict):** delete the classic shell/room paths +
+      the losing nav candidate (GooeyNav vs PillNav) + retire `compy_v2` — same ritual as P4.
+      Known debt, deliberately carried during the flag-gated rollout (Cowork audit note, V2-2).
 
 ## Build plan (re-scopes P6; P4 dedup still lands FIRST)
 
