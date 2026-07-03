@@ -459,10 +459,13 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   `DashboardV2.tsx`, classic single-face Monitor, classic inline GM slot, header Export branch,
   calm-static backdrop branch. Deliberately KEPT (older families, separate approval train — P4b
   candidates): `compy_optimize` / `compy_monitor` / `compy_living_instrument` / `compy_dash_v2`
-  (standalone Tune view="all" classic FixRow rides `compy_optimize`). Follow-up found in
-  self-review: `readiness.rs:818` drift-reason copy says "in Tune" + vague "N setting(s)"
-  (backend — violates flags-name-it law; zero-src-tauri hard line kept it out of P4). Verified:
-  tsc clean · vitest 800/800 · cargo 659 · src-tauri diff empty · live self-review shots
+  (standalone Tune view="all" classic FixRow rides `compy_optimize`). Self-review follow-up
+  SHIPPED same day — `706094f`: the applied-changes drift reason (rendered on the Home #1-limiter
+  card + the all-checks row) now NAMES the drifted setting(s) via a new read-only
+  `drifted_titles` on `AppliedChangesSummary` (≤3 named + "and N more", honest plurals) and says
+  Optimize instead of the merged-away "Tune"; bug→guard test pins named-setting and bans
+  "setting(s)"/"Tune" (`readiness.rs`; cargo 659 · clippy clean · no gate/mutation/IPC change).
+  P4 verified: tsc clean · vitest 800/800 · cargo 659 · live self-review shots
   `docs/ui-sweep/shots/p4/`.
 - [ ] P6 "Journey" pass (spec direction in `docs/superpowers/specs/2026-07-02-full-tidy-directive.md`):
   one forward door per room + shared RoomShell template + tour alignment — **UNBLOCKED 2026-07-02**
