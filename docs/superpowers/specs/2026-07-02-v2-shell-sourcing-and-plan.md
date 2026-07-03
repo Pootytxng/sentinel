@@ -149,7 +149,11 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       the state the body actually shows.
       (h) [v2-5 shot] Monitor verdict "ran rough — 336 fps average" reads self-contradictory —
       the grade must name its evidence in the same breath (the 1% lows/stutter that earned
-      "rough"), else a high average argues with the verdict. (d, from V2-4: the Optimize room now stacks THREE summary
+      "rough"), else a high average argues with the verdict.
+      (i) [v2-6 shot] Blackbook: search focus ring double-borders (outline + inner ring — pick
+      one); "More filters ▸ / HOW WE GRADE ▸" jams two unrelated affordances on one line;
+      category bars (Guides/Tweaks/Terms/Scam patterns) are tall and empty — one-line
+      description each. (d, from V2-4: the Optimize room now stacks THREE summary
       lines — the RoomShell verdict + Check's embedded scan verdict ("N things worth a look")
       + Fix's own "N thing worth a look" header; consolidate so the room verdict is the ONE
       answer line and the embedded surfaces demote to detail.)
