@@ -8,7 +8,8 @@ import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { BackButton, ForwardButton } from "./design/BackButton";
 import { NavGlyph } from "./design/NavGlyph";
-import { readCloseToTray, persistDisplayRefreshHz, readLivingInstrument } from "./design/theme";
+import { readCloseToTray, persistDisplayRefreshHz, readLivingInstrument, readV2 } from "./design/theme";
+import { ShellV2 } from "./design/ShellV2";
 import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
@@ -531,6 +532,15 @@ function App() {
     const on = () => setLiving(readLivingInstrument());
     window.addEventListener("compy:living-changed", on);
     return () => window.removeEventListener("compy:living-changed", on);
+  }, []);
+  // V2 product shell (V2-2, spec 2026-07-02-v2-shell-sourcing-and-plan): mirrors compy_v2 live
+  // (the Settings preview toggle broadcasts compy:v2-changed). DEFAULT OFF — flag-off the classic
+  // tree renders untouched (the byte-identity contract; the CSS side is pinned in tokens-v2-guard).
+  const [v2, setV2] = useState<boolean>(readV2);
+  useEffect(() => {
+    const on = () => setV2(readV2());
+    window.addEventListener("compy:v2-changed", on);
+    return () => window.removeEventListener("compy:v2-changed", on);
   }, []);
   // Optimize merge (phase 1a, spec 2026-06-21-optimize-merge-design): when on, Check + Tune collapse
   // into one "Optimize" room (Fixes / Applied / History segments). Read once at startup (mirrors the
@@ -1056,6 +1066,9 @@ function App() {
   // The Command Center is the Home surface once hardware has resolved (avoids a blank first paint);
   // any other tab renders the shell.
   const ccActive = activeTab === "Overview" && hw !== null && !settingsActive;
+  // V2 shell active: ONE rail+topbar chrome wraps every room, Home included (V2-2). Settings keeps
+  // its full-surface route (titlebar gear) unchanged. Flag off → false → the classic tree exactly.
+  const v2Shell = v2 && hw !== null && !settingsActive;
 
   // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
   const rigLines = hw
@@ -1069,10 +1082,157 @@ function App() {
 
   if (activeTab === "Optimize") optimizeMountedRef.current = true;
 
+  // ── Shared room renders (classic shell + V2 shell) ─────────────────────────
+  // The SAME elements render inside whichever chrome is active, so the two paths can never drift:
+  // V2-2 changes the shell around the rooms, never the rooms themselves (those are V2-3..V2-7).
+  const commandCenter = hw && (
+    <CommandCenter
+      hw={hw}
+      readiness={readiness}
+      priorities={priorities}
+      sessions={sessions}
+      changes={changes}
+      limiterRec={ccLimiterRec}
+      limiterAppliable={ccLimiterAppliable}
+      limiterActiveChange={ccLimiterActiveChange}
+      busyLimiter={
+        busyId !== null &&
+        (busyId === ccLimiterRec?.id || busyId === ccLimiterActiveChange?.id)
+      }
+      onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
+      onSeeInFix={() => setActiveTab("Optimize")}
+      onNavigate={(tab) => setActiveTab(tab)}
+      onRunCheck={() => setShowFirstCheck(true)}
+      onBack={goBack}
+      canGoBack={canGoBack}
+      onForward={goForward}
+      canGoForward={canGoForward}
+    />
+  );
+  const roomPanels = hw && (
+    <>
+      {activeTab === "Overview" && <OverviewTab hw={hw} />}
+      {/* Check renders standalone ONLY when the Optimize merge is off; when merged it folds
+          into the Optimize shell below (the Check tab is unreachable then anyway). */}
+      {activeTab === "Check" && !optimizeMerged && (
+        <Check
+          isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+          onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+          onChanged={refresh}
+          vendor={detectedVendor}
+          sessions={sessions}
+          gpus={hw?.gpus ?? []}
+          onExport={onExport}
+          exporting={exporting}
+        />
+      )}
+      {optimizeMountedRef.current && (
+        <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+          {optimizeMerged ? (
+          // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
+          // persistent active-undo chip. Same props the standalone surfaces receive — pure
+          // composition, no new IPC, same audited apply/rollback handlers.
+          <OptimizeShell
+            isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+            onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+            onChanged={refresh}
+            vendor={detectedVendor}
+            sessions={sessions}
+            gpus={hw?.gpus ?? []}
+            recs={recs ?? []}
+            startup={startup}
+            changes={changes}
+            busyId={busyId}
+            activeChangeFor={findActiveChangeForRec}
+            onToggleRec={(recId) => {
+              const r = (recs ?? []).find((x) => x.id === recId);
+              if (r) toggleRec(r);
+            }}
+            onToggleStartup={toggleStartup}
+            onRollback={rollback}
+            onApplyBatch={applyBatch}
+            activeCount={activeChangeCount(changes)}
+            gamingSlot={gamingEnabled ? <GamingMode /> : null}
+            onExport={onExport}
+            exporting={exporting}
+          />
+        ) : (
+          <>
+            {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
+                retired — owner 2026-06-19). Only when the gate is on. */}
+            {gamingEnabled && (
+              <div className="tune-gaming-feature">
+                <GamingMode />
+              </div>
+            )}
+            <Fix
+              recs={recs ?? []}
+              startup={startup}
+              changes={changes}
+              busyId={busyId}
+              isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+              activeChangeFor={findActiveChangeForRec}
+              onToggleRec={(recId) => {
+                const r = (recs ?? []).find((x) => x.id === recId);
+                if (r) toggleRec(r);
+              }}
+              onToggleStartup={toggleStartup}
+              onRollback={rollback}
+              onApplyBatch={applyBatch}
+              onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+              vendor={detectedVendor}
+            />
+          </>
+          )}
+        </div>
+      )}
+      {activeTab === "Play" &&
+        (() => {
+          // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
+          // control and drives Play's `view`. Behind compy_monitor (default off this phase).
+          const monitorProps = {
+            active: activeTab === "Play",
+            sessions,
+            sessionsSeenAt,
+            priorities,
+            recs: recs ?? [],
+            apply,
+            busyId,
+            onExport,
+            changes,
+            rollback,
+            deepMonitoring: <MonitoringTab active={activeTab === "Play"} embedded />,
+            vendor: detectedVendor,
+          };
+          return monitorMerged ? <Monitor {...monitorProps} /> : <Play {...monitorProps} />;
+        })()}
+      {activeTab === "Learn" && (
+        <Learn
+          asPanel
+          focusId={libraryFocusId}
+          vendor={detectedVendor}
+          onClose={() => setActiveTab("Overview")}
+        />
+      )}
+      {activeTab === "Lab" && (
+        <Lab
+          diagnostics={<DiagnosticsTab sections={diagnostics} />}
+          vendor={detectedVendor}
+        />
+      )}
+      {activeTab === "Diagnostics" && (
+        <DiagnosticsTab sections={diagnostics} />
+      )}
+      {activeTab === "History" && (
+        <HistoryTab changes={changes} busyId={busyId} onRollback={rollback} />
+      )}
+    </>
+  );
+
   return (
     <LibraryContext.Provider value={libraryApi}>
     <KonamiWhisper />
-    <main className={ccActive || settingsActive ? "app app-cc" : "app"}>
+    <main className={v2Shell ? "app app-v2" : ccActive || settingsActive ? "app app-cc" : "app"}>
       {showSetupTour && hw && (
         <SetupTour
           hw={hw}
@@ -1117,7 +1277,7 @@ function App() {
           }}
         />
       )}
-      {!ccActive && !settingsActive && (
+      {!ccActive && !settingsActive && !v2Shell && (
         <header className="header">
         <BackButton onBack={goBack} canGoBack={canGoBack} />
         <ForwardButton onForward={goForward} canGoForward={canGoForward} />
@@ -1192,29 +1352,20 @@ function App() {
           }}
           onClose={() => setShowSettings(false)}
         />
+      ) : v2Shell ? (
+        // V2 product shell (V2-2): one rail+topbar chrome around the SAME room elements the classic
+        // paths render. Rooms re-skin one stage at a time (V2-3..V2-7); the chrome lands first.
+        <ShellV2
+          items={railFor(optimizeMerged)}
+          activeId={activeHomeId}
+          onNavigate={navHome}
+          ledgerCount={changes.length}
+          version={APP_VERSION}
+        >
+          {activeTab === "Overview" ? commandCenter : roomPanels}
+        </ShellV2>
       ) : hw && ccActive ? (
-        <CommandCenter
-          hw={hw}
-          readiness={readiness}
-          priorities={priorities}
-          sessions={sessions}
-          changes={changes}
-          limiterRec={ccLimiterRec}
-          limiterAppliable={ccLimiterAppliable}
-          limiterActiveChange={ccLimiterActiveChange}
-          busyLimiter={
-            busyId !== null &&
-            (busyId === ccLimiterRec?.id || busyId === ccLimiterActiveChange?.id)
-          }
-          onToggleLimiter={() => ccLimiterRec && toggleRec(ccLimiterRec)}
-          onSeeInFix={() => setActiveTab("Optimize")}
-          onNavigate={(tab) => setActiveTab(tab)}
-          onRunCheck={() => setShowFirstCheck(true)}
-          onBack={goBack}
-          canGoBack={canGoBack}
-          onForward={goForward}
-          canGoForward={canGoForward}
-        />
+        commandCenter
       ) : hw ? (
         <div className="shell">
             {/* ONE rail (one-rail §1b): the six-home set from the shared HOME_RAIL — identical to the
@@ -1266,121 +1417,7 @@ function App() {
               {/* Persistent room name — shown only in the narrow icon-only-rail layout (CSS), so the
                   wayfinding law holds even when the rail is icons-only (elastic-window §1). */}
               <div className="shell-room-name" aria-hidden="true">{activeRoomName}</div>
-              {activeTab === "Overview" && <OverviewTab hw={hw} />}
-              {/* Check renders standalone ONLY when the Optimize merge is off; when merged it folds
-                  into the Optimize shell below (the Check tab is unreachable then anyway). */}
-              {activeTab === "Check" && !optimizeMerged && (
-                <Check
-                  isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                  onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                  onChanged={refresh}
-                  vendor={detectedVendor}
-                  sessions={sessions}
-                  gpus={hw?.gpus ?? []}
-                  onExport={onExport}
-                  exporting={exporting}
-                />
-              )}
-              {optimizeMountedRef.current && (
-                <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
-                  {optimizeMerged ? (
-                  // Merged shell: Check + Gaming + Fix under Fixes / Applied / History segments + the
-                  // persistent active-undo chip. Same props the standalone surfaces receive — pure
-                  // composition, no new IPC, same audited apply/rollback handlers.
-                  <OptimizeShell
-                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                    onChanged={refresh}
-                    vendor={detectedVendor}
-                    sessions={sessions}
-                    gpus={hw?.gpus ?? []}
-                    recs={recs ?? []}
-                    startup={startup}
-                    changes={changes}
-                    busyId={busyId}
-                    activeChangeFor={findActiveChangeForRec}
-                    onToggleRec={(recId) => {
-                      const r = (recs ?? []).find((x) => x.id === recId);
-                      if (r) toggleRec(r);
-                    }}
-                    onToggleStartup={toggleStartup}
-                    onRollback={rollback}
-                    onApplyBatch={applyBatch}
-                    activeCount={activeChangeCount(changes)}
-                    gamingSlot={gamingEnabled ? <GamingMode /> : null}
-                    onExport={onExport}
-                    exporting={exporting}
-                  />
-                ) : (
-                  <>
-                    {/* Gaming Mode lives here as a featured section at the top of Tune (its own tab
-                        retired — owner 2026-06-19). Only when the gate is on. */}
-                    {gamingEnabled && (
-                      <div className="tune-gaming-feature">
-                        <GamingMode />
-                      </div>
-                    )}
-                    <Fix
-                      recs={recs ?? []}
-                      startup={startup}
-                      changes={changes}
-                      busyId={busyId}
-                      isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                      activeChangeFor={findActiveChangeForRec}
-                      onToggleRec={(recId) => {
-                        const r = (recs ?? []).find((x) => x.id === recId);
-                        if (r) toggleRec(r);
-                      }}
-                      onToggleStartup={toggleStartup}
-                      onRollback={rollback}
-                      onApplyBatch={applyBatch}
-                      onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                      vendor={detectedVendor}
-                    />
-                  </>
-                  )}
-                </div>
-              )}
-              {activeTab === "Play" &&
-                (() => {
-                  // Same props for both surfaces; the Monitor shell adds the Sessions/Live segmented
-                  // control and drives Play's `view`. Behind compy_monitor (default off this phase).
-                  const monitorProps = {
-                    active: activeTab === "Play",
-                    sessions,
-                    sessionsSeenAt,
-                    priorities,
-                    recs: recs ?? [],
-                    apply,
-                    busyId,
-                    onExport,
-                    changes,
-                    rollback,
-                    deepMonitoring: <MonitoringTab active={activeTab === "Play"} embedded />,
-                    vendor: detectedVendor,
-                  };
-                  return monitorMerged ? <Monitor {...monitorProps} /> : <Play {...monitorProps} />;
-                })()}
-              {activeTab === "Learn" && (
-                <Learn
-                  asPanel
-                  focusId={libraryFocusId}
-                  vendor={detectedVendor}
-                  onClose={() => setActiveTab("Overview")}
-                />
-              )}
-              {activeTab === "Lab" && (
-                <Lab
-                  diagnostics={<DiagnosticsTab sections={diagnostics} />}
-                  vendor={detectedVendor}
-                />
-              )}
-              {activeTab === "Diagnostics" && (
-                <DiagnosticsTab sections={diagnostics} />
-              )}
-              {activeTab === "History" && (
-                <HistoryTab changes={changes} busyId={busyId} onRollback={rollback} />
-              )}
+              {roomPanels}
             </div>
           </div>
       ) : (
@@ -1401,7 +1438,7 @@ function App() {
         </div>
       )}
 
-      {!ccActive && !settingsActive && (
+      {!ccActive && !settingsActive && !v2Shell && (
       <footer className="footer">
         {/* Footer carries the version only (halfway-home §0). Preview toggles live in Settings →
             New look; re-run lives in Settings + Check; the approval-reassurance line lives where

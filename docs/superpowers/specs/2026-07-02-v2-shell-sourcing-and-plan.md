@@ -55,7 +55,14 @@ Deps note: preferred picks are CSS/canvas-light; anything pulling gsap (free) or
       ElectricBorder; both nav candidates) · deps gsap/ogl/motion · compy_v2 flag default-OFF +
       Settings preview toggle · 22 guards (scoping=byte-identity, contrast, Geist-via-tokens-only,
       vendor license hygiene).
-- [ ] **V2-2 Shell** — rail + topbar + RoomShell v2 skin
+- [x] **V2-2 Shell** — 2026-07-02: rail (5 rooms · WORKING 1–5 digit hints · wordmark+version ·
+      zero-outbound + "reversible · ledger N" footer) + 46px topbar (room title · plain-English
+      crumb · real `get_build_stamp`) + RoomShell/ForwardDoor primitives with the v2 skin (slot
+      order verdict→action→body→quiet→door + DOOR_MAP pinned literally in room-shell.test.tsx;
+      rooms adopt from V2-3). Classic and V2 paths render the SAME shared room elements (no drift).
+      Mockup's Ctrl-K box deliberately ABSENT (CommandPalette parked — no fake affordances).
+      shell-v2.css fully [data-v2]-scoped + color/font-literal guards. GooeyNav/PillNav rail eval
+      still open — the restrained mockup treatment shipped; both stay vendored, decide by V2-9.
 - [ ] **V2-3 Home** — hologram hero stage + bento stats + priorities + door
 - [ ] **V2-4 Optimize**
 - [ ] **V2-5 Monitor**

@@ -40,33 +40,60 @@ describe("compy_v2 flag", () => {
 
 // ── source-level guards (read the real files, like theme-literal-guard) ──
 
-const tokensCss = readFileSync(join("src", "design", "tokens-v2.css"), "utf8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+const loadV2Css = (name: string): string =>
+  readFileSync(join("src", "design", name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-describe("tokens-v2.css scoping (flag-off byte-identity mechanism)", () => {
-  it("every selector is scoped under [data-v2=\"on\"]", () => {
-    // Split into rule headers: text before each '{' at nesting depth 0.
-    const offenders: string[] = [];
-    let depth = 0;
-    let buf = "";
-    for (const ch of tokensCss) {
-      if (ch === "{") {
-        if (depth === 0) {
-          const sel = buf.trim();
-          // every comma-separated selector in the header must carry the scope
-          for (const part of sel.split(",")) {
-            if (!part.includes('[data-v2="on"]')) offenders.push(part.trim());
+const tokensCss = loadV2Css("tokens-v2.css");
+const shellCss = loadV2Css("shell-v2.css");
+
+// EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
+const V2_CSS: [string, string][] = [
+  ["tokens-v2.css", tokensCss],
+  ["shell-v2.css", shellCss],
+];
+
+describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
+  for (const [name, css] of V2_CSS) {
+    it(`${name}: every selector is scoped under [data-v2="on"]`, () => {
+      // Split into rule headers: text before each '{' at nesting depth 0.
+      const offenders: string[] = [];
+      let depth = 0;
+      let buf = "";
+      for (const ch of css) {
+        if (ch === "{") {
+          if (depth === 0) {
+            const sel = buf.trim();
+            // every comma-separated selector in the header must carry the scope
+            for (const part of sel.split(",")) {
+              if (!part.includes('[data-v2="on"]')) offenders.push(part.trim());
+            }
           }
+          depth++;
+          buf = "";
+        } else if (ch === "}") {
+          depth--;
+          buf = "";
+        } else if (depth === 0) {
+          buf += ch;
         }
-        depth++;
-        buf = "";
-      } else if (ch === "}") {
-        depth--;
-        buf = "";
-      } else if (depth === 0) {
-        buf += ch;
+      }
+      expect(offenders).toEqual([]);
+    });
+  }
+});
+
+describe("shell-v2.css consumes the token layer only (no-slop law)", () => {
+  it("no color literals — every color comes from a --v2-* token", () => {
+    expect(shellCss.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
+    expect(shellCss.match(/\brgba?\(/g) ?? []).toEqual([]);
+    expect(shellCss.match(/\bhsla?\(/g) ?? []).toEqual([]);
+  });
+
+  it("font/font-family declarations reference only var(--v2-font-*)", () => {
+    const offenders: string[] = [];
+    for (const m of shellCss.matchAll(/(?:^|[;{])\s*(font(?:-family)?)\s*:\s*([^;}]+)/g)) {
+      if (!/var\(--v2-font-/.test(m[2]) && !/^\s*inherit\s*$/.test(m[2])) {
+        offenders.push(`${m[1]}: ${m[2].trim()}`);
       }
     }
     expect(offenders).toEqual([]);

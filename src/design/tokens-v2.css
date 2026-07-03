@@ -27,6 +27,7 @@
   --v2-accent: #a78bfa;
   --v2-accent-ink: #1a0a2e;
   --v2-accent-dim: rgba(167, 139, 250, 0.14);
+  --v2-accent-line: rgba(167, 139, 250, 0.25); /* active-nav / hero-frame hairline */
 
   /* Status — color is information, never decoration */
   --v2-ok: #3ddc97;

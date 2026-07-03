@@ -57,7 +57,7 @@ for (const p of pages) {
   let w = 0;
   for (let i = 0; i < 5; i++) {
     const { result } = await c.send("Runtime.evaluate", {
-      expression: "JSON.stringify({rail:document.querySelectorAll('.cc-rail-item, .rail-item').length, w:innerWidth})",
+      expression: "JSON.stringify({rail:document.querySelectorAll('.cc-rail-item, .rail-item, .v2-nav-item').length, w:innerWidth})",
       returnByValue: true,
     });
     const m = (() => { try { return JSON.parse(result.value); } catch { return { rail: 0, w: 0 }; } })();
