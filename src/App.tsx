@@ -1300,6 +1300,42 @@ function App() {
           ledgerCount={changes.length}
           version={APP_VERSION}
         >
+          {/* OptimizeV2 keepalive — hoisted OUT of the Home ternary (below) so it persists across
+              EVERY tab, Home included (display:none when it isn't the active room). It used to live
+              inside the ternary's else-branch, which unmounts whenever you're on Home — so every
+              Home→Optimize RE-MOUNTED the heavy Check+Fix and re-fired Check's on-mount scan (the
+              profiled Optimize-enter hitch). Mounted once, it now stays warm; returning is a cheap
+              display toggle. Perf-only: same component, same props, same audited handlers. */}
+          {optimizeV2MountedRef.current && optimizeMerged && hw && (
+            <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
+              <OptimizeV2
+                isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                onChanged={refresh}
+                vendor={detectedVendor}
+                sessions={sessions}
+                gpus={hw?.gpus ?? []}
+                recs={recs}
+                readiness={readiness}
+                priorities={priorities}
+                startup={startup}
+                changes={changes}
+                busyId={busyId}
+                activeChangeFor={findActiveChangeForRec}
+                onToggleRec={(recId) => {
+                  const r = (recs ?? []).find((x) => x.id === recId);
+                  if (r) toggleRec(r);
+                }}
+                onToggleStartup={toggleStartup}
+                onRollback={rollback}
+                onApplyBatch={applyBatch}
+                activeCount={activeChangeCount(changes)}
+                gamingSlot={gamingEnabled ? <GamingMode /> : null}
+                onExport={onExport}
+                exporting={exporting}
+              />
+            </div>
+          )}
           {activeTab === "Overview" && hw ? (
             <HomeV2
               hw={hw}
@@ -1312,39 +1348,6 @@ function App() {
             />
           ) : (
             <>
-              {/* V2-4: the Optimize room on RoomShell (merged shape only — the compy_optimize="0"
-                  escape hatch falls through to the classic panels below). Kept mounted once
-                  visited, same keepalive rationale as the classic path. */}
-              {optimizeV2MountedRef.current && optimizeMerged && hw && (
-                <div style={activeTab === "Optimize" ? undefined : { display: "none" }}>
-                  <OptimizeV2
-                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
-                    onChanged={refresh}
-                    vendor={detectedVendor}
-                    sessions={sessions}
-                    gpus={hw?.gpus ?? []}
-                    recs={recs}
-                    readiness={readiness}
-                    priorities={priorities}
-                    startup={startup}
-                    changes={changes}
-                    busyId={busyId}
-                    activeChangeFor={findActiveChangeForRec}
-                    onToggleRec={(recId) => {
-                      const r = (recs ?? []).find((x) => x.id === recId);
-                      if (r) toggleRec(r);
-                    }}
-                    onToggleStartup={toggleStartup}
-                    onRollback={rollback}
-                    onApplyBatch={applyBatch}
-                    activeCount={activeChangeCount(changes)}
-                    gamingSlot={gamingEnabled ? <GamingMode /> : null}
-                    onExport={onExport}
-                    exporting={exporting}
-                  />
-                </div>
-              )}
               {/* V2-5: the Monitor room on RoomShell (merged shape only — compy_monitor="0"
                   falls through to the classic Play panels below). Same props the classic
                   Monitor shell receives; mounts per-visit like the classic path. */}
