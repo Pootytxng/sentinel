@@ -19,7 +19,7 @@ the `main` branch.
 
 | Component | Source path (ts-default/) | Planned use (adopt list) | Local modifications |
 |---|---|---|---|
-| DecryptedText | TextAnimations/DecryptedText | Verdict lines resolve on scan completion — measured values only | LF-normalized, header added |
+| DecryptedText | TextAnimations/DecryptedText | Verdict lines resolve on scan completion — measured values only | LF-normalized, header added; **decode-once registry** (module-level `decodedTexts` set) so `animateOn="view"` scrambles a given text once per session and shows it resolved instantly on later re-mounts — stops the per-char scramble re-churning on every V2 room re-mount (the tab-switch "stick") |
 | CountUp | TextAnimations/CountUp | Stat values land with weight — measured values only | LF-normalized, header added |
 | Radar | Backgrounds/Radar | Active-scan backdrop (one place) | LF-normalized, header added |
 | DotField | Backgrounds/DotField | Quiet technical shell backdrop, barely-there opacity | LF-normalized, header added |

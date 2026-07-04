@@ -40,6 +40,14 @@ interface DecryptedTextProps extends HTMLMotionProps<'span'> {
 
 type Direction = 'forward' | 'reverse';
 
+// Local modification (see THIRD_PARTY.md): decode-once registry. animateOn="view" re-fired the
+// per-character scramble from scratch on EVERY re-mount (each V2 room re-mounts its RoomShell verdict
+// on navigation), so returning to a room re-churned the headline for ~1s — the tab-switch "stick".
+// This module-level set records texts already decoded this session; a re-mount with the same text
+// skips the scramble and shows the resolved text instantly. New/changed text still decodes once.
+// It lives at module scope (outside the remounting component) on purpose, so it survives re-mounts.
+const decodedTexts = new Set<string>();
+
 export default function DecryptedText({
   text,
   speed = 50,
@@ -338,8 +346,18 @@ export default function DecryptedText({
     const observerCallback = (entries: IntersectionObserverEntry[]) => {
       entries.forEach(entry => {
         if (entry.isIntersecting && !hasAnimated) {
-          triggerDecrypt();
-          setHasAnimated(true);
+          // Already decoded this session (a re-mount)? Skip the scramble — the mount effect already
+          // set displayText=text + isDecrypted=true, so the resolved text is on screen instantly.
+          if (decodedTexts.has(text)) {
+            setHasAnimated(true);
+          } else {
+            // Mark on first trigger (not on completion): if the user navigates away mid-scramble
+            // (rapid room switching), the text is still recorded, so returning shows it resolved
+            // instantly instead of re-churning a fresh scramble.
+            decodedTexts.add(text);
+            triggerDecrypt();
+            setHasAnimated(true);
+          }
         }
       });
     };
