@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 
 // Lab + the embedded instrument tabs poll on mount; mock invoke so they don't throw.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
@@ -44,5 +44,72 @@ describe("compy_lab_guided flag-off byte-identity", () => {
   it("flag on: the root wears the guided marker (the preview toggle has a live hook)", () => {
     localStorage.setItem("compy_lab_guided", "1");
     expect(renderClassic().querySelector("[data-guided]")).not.toBeNull();
+  });
+});
+
+const renderGuided = () => {
+  localStorage.setItem("compy_lab_guided", "1");
+  return renderClassic();
+};
+
+describe("guided bench stations (§B)", () => {
+  it("orders the stations Diagnostics → Benchmark → Latency → Tuning → Black Box, numbered 1..5", () => {
+    const c = renderGuided();
+    const names = Array.from(c.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
+    expect(names).toEqual(["Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
+    const nums = Array.from(c.querySelectorAll(".lab-station-num")).map((n) => n.textContent);
+    expect(nums).toEqual(["1", "2", "3", "4", "5"]);
+  });
+
+  it("every station carries the four contract lines, labeled", () => {
+    const c = renderGuided();
+    const stations = Array.from(c.querySelectorAll(".lab-station-lines"));
+    expect(stations).toHaveLength(5);
+    for (const s of stations) {
+      const labels = Array.from(s.querySelectorAll("dt")).map((d) => d.textContent);
+      expect(labels).toEqual([
+        "What it's for",
+        "Reach for it when",
+        "What the reading means",
+        "How it connects",
+      ]);
+    }
+  });
+
+  it("numbering is computed over the stations this rig has (no gaps when Tuning/Diagnostics are absent)", () => {
+    localStorage.setItem("compy_lab_guided", "1");
+    const c = render(<Lab v2 vendor="nvidia" />).container; // no tuning guide, no diagnostics slot
+    const names = Array.from(c.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
+    expect(names).toEqual(["Benchmark", "Latency", "Black Box"]);
+    const nums = Array.from(c.querySelectorAll(".lab-station-num")).map((n) => n.textContent);
+    expect(nums).toEqual(["1", "2", "3"]);
+  });
+
+  it("with nothing measured, reading lines are an honest 'No reading yet' — never a placeholder number", () => {
+    const c = renderGuided(); // invoke mock resolves null for every probe
+    const readings = Array.from(c.querySelectorAll(".lab-station-line"))
+      .filter((l) => l.querySelector("dt")!.textContent === "What the reading means")
+      .map((l) => l.querySelector("dd")!.textContent!);
+    // Benchmark, Latency, Tuning, Black Box: nothing run yet → "No reading yet".
+    // Diagnostics: captured (the fixture passes diagnosticsCaptured) → the captured line.
+    expect(readings.filter((r) => r.startsWith("No reading yet"))).toHaveLength(4);
+    expect(readings.some((r) => /\d/.test(r) && !r.startsWith("No reading yet"))).toBe(false);
+  });
+
+  it("the reading line pulls the SAME live value the instrument body shows (benchmark verdict)", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === "get_benchmark_state"
+          ? { baseline: {}, baseline_at: null, efficacy: { overall: "improved" } }
+          : cmd === "get_session_summaries"
+            ? [] // an array, so the tuning measurement path never sees null mid-render
+            : null,
+      ),
+    );
+    renderGuided();
+    const line = await screen.findByText(/Last verdict: Improved/);
+    expect(line.textContent).toMatch(/moved more than the run's own noise/);
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 });

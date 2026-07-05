@@ -16,6 +16,12 @@ import { BlackBox } from "./BlackBox";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { labLatestReadings } from "./lab-v2-data";
+import {
+  LAB_STATION_ORDER,
+  LAB_STATIONS,
+  stationReading,
+  type LabStationKey,
+} from "./lab-guided-data";
 import { readLabGuided } from "../design/theme";
 import { TuningInstrument } from "./TuningInstrument";
 import { type GpuVendor } from "./walkthroughs";
@@ -148,6 +154,36 @@ export default function Lab({
 
   const tuningSummary = measurement ? measurement.headline : "Undervolt guide + stability";
 
+  // Guided bench: the stations this rig actually has, in the §B diagnostic order. The Tuning and
+  // Diagnostics gates are the SAME ones the classic path uses (vendor + slot content) — the flag
+  // never adds or removes an instrument, it only orders and signposts them.
+  const stationKeys = LAB_STATION_ORDER.filter(
+    (k) => (k !== "tuning" || !!tuningGuide) && (k !== "diagnostics" || !!diagnostics),
+  );
+  // The identical instrument bodies the classic path renders — one source for both layouts.
+  const stationBody = (k: LabStationKey): ReactNode => {
+    switch (k) {
+      case "diagnostics":
+        return diagnostics;
+      case "benchmark":
+        return <BenchmarkTab />;
+      case "latency":
+        return <LatencyTab />;
+      case "tuning":
+        return tuningGuide ? (
+          <TuningInstrument
+            guide={tuningGuide}
+            vendor={vendor}
+            measurement={measurement}
+            recentSessions={sessions.slice(0, 5)}
+            evidence={tuningEvidenceVerdict}
+          />
+        ) : null;
+      case "blackbox":
+        return <BlackBox onReport={setBbReport} />;
+    }
+  };
+
   return (
     <section className="lab-root" data-guided={guided || undefined}>
       <div className="lab-dotgrid" aria-hidden="true" />
@@ -176,8 +212,10 @@ export default function Lab({
         {/* Welcome band — a static signpost for newcomers (bathroom law): what each instrument
             answers, in plain words. Deliberately KNOBLESS (doorknob law): no cmp-door, no click
             handler — the instrument cards below stay the only doors in the room. Folds away once the
-            reader has opened any instrument (welcomeSeen): it just renames the cards below it. */}
-        {!welcomeSeen && (
+            reader has opened any instrument (welcomeSeen): it just renames the cards below it.
+            Guided bench: hidden — every station's own contract lines carry the same signposting,
+            so the band would state each instrument's purpose twice on one screen. */}
+        {!welcomeSeen && !guided && (
         <div className="lab-welcome">
           <span className="lab-welcome-row">
             <span className="lab-welcome-term">Benchmark</span>
@@ -206,6 +244,40 @@ export default function Lab({
         </div>
         )}
 
+        {/* Guided bench (flag-on): the same five instruments as numbered stations in the
+            diagnostic order — know your rig → measure change → chase input lag → tame heat →
+            explain a failure. Each station wraps the IDENTICAL instrument body the classic path
+            renders (same components, same reads); only the header contract around them is new.
+            Numbering is computed over the stations this rig actually has (vendor/diagnostics
+            gates unchanged) — never hardcoded. */}
+        {guided &&
+          stationKeys.map((k, i) => (
+            <LabSection
+              key={k}
+              icon={STATION_ICON[k]}
+              name={LAB_STATIONS[k].name}
+              anchorId={`lab-station-${k}`}
+              station={{
+                n: i + 1,
+                forLine: LAB_STATIONS[k].forLine,
+                whenLine: LAB_STATIONS[k].whenLine,
+                readingLine: stationReading(k, {
+                  bench,
+                  latency,
+                  tuningHeadline: measurement?.headline ?? null,
+                  crash: bbReport,
+                  diagnosticsCaptured,
+                }),
+                connectsLine: LAB_STATIONS[k].connectsLine,
+              }}
+              onFirstOpen={markInstrumentOpened}
+            >
+              {stationBody(k)}
+            </LabSection>
+          ))}
+
+        {!guided && (
+        <>
         <LabSection
           icon="chart"
           name="Benchmark"
@@ -274,6 +346,8 @@ export default function Lab({
             {diagnostics}
           </LabSection>
         )}
+        </>
+        )}
 
         {/* Latest readings (fill pass, spec 2026-07-05): ONE quiet foot-of-room strip consolidating
             the newest value per instrument — an at-a-glance overview over the SAME reads the cards
@@ -299,6 +373,15 @@ export default function Lab({
     </section>
   );
 }
+
+// Station → icon, reusing the exact glyphs the classic cards wear (same instrument, same face).
+const STATION_ICON: Record<LabStationKey, string> = {
+  diagnostics: "terminal",
+  benchmark: "chart",
+  latency: "pulse",
+  tuning: "tune",
+  blackbox: "blackbox",
+};
 
 const ICONS: Record<string, ReactNode> = {
   chart: (
@@ -335,18 +418,35 @@ const ICONS: Record<string, ReactNode> = {
   ),
 };
 
+// The four-line station contract (guided bench §B). Line 3 is live — the same value the
+// instrument body shows — so the header can never disagree with the instrument under it.
+type StationContract = {
+  n: number;
+  forLine: string;
+  whenLine: string;
+  readingLine: string;
+  connectsLine: string;
+};
+
 function LabSection({
   icon,
   name,
   oneLiner,
   summary,
+  station,
+  anchorId,
   children,
   onFirstOpen,
 }: {
   icon: string;
   name: string;
-  oneLiner: string;
-  summary: string;
+  // Classic face (one-liner + summary chip). Absent on the guided face — their facts live in the
+  // station contract lines instead (the same fact never renders twice on one card).
+  oneLiner?: string;
+  summary?: string;
+  // Guided face: the numbered four-line station contract, rendered above the instrument body.
+  station?: StationContract;
+  anchorId?: string;
   children: ReactNode;
   // Fired the FIRST time this section is expanded — lets Lab retire the welcome band once the reader
   // has found a door. Opt-in (undefined = no-op), so the section stays a self-contained collapsible.
@@ -359,12 +459,17 @@ function LabSection({
       return !o;
     });
   return (
-    <div className={`lab-card ${open ? "lab-card-open" : ""}`} data-instrument={name}>
+    <div className={`lab-card ${open ? "lab-card-open" : ""}`} data-instrument={name} id={anchorId}>
       {/* WAI-ARIA accordion: the toggle button is wrapped in a native heading so screen-reader
           users get the instrument list as a navigable h3 structure (under Lab's h2). `font: inherit`
           + `margin: 0` on .lab-card-heading keep the visual byte-identical to a bare button. */}
       <h3 className="lab-card-heading">
         <button className="lab-card-head cmp-door" onClick={toggle} aria-expanded={open}>
+          {station && (
+            <span className="lab-station-num" aria-label={`Station ${station.n}`}>
+              {station.n}
+            </span>
+          )}
           <svg
             className="lab-card-icon"
             viewBox="0 0 24 24"
@@ -381,12 +486,35 @@ function LabSection({
           </svg>
           <span className="lab-card-text">
             <span className="lab-card-name">{name}</span>
-            <span className="lab-card-oneliner">{oneLiner}</span>
+            {oneLiner && <span className="lab-card-oneliner">{oneLiner}</span>}
           </span>
-          <span className="lab-card-summary">{summary}</span>
+          {summary && <span className="lab-card-summary">{summary}</span>}
           <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
         </button>
       </h3>
+      {/* The four-line station contract — always visible on the card face (it's the signpost),
+          above the expandable instrument body. Static text + the live reading line; KNOBLESS
+          (the head button above stays the card's only door). */}
+      {station && (
+        <dl className="lab-station-lines">
+          <div className="lab-station-line">
+            <dt>What it's for</dt>
+            <dd>{station.forLine}</dd>
+          </div>
+          <div className="lab-station-line">
+            <dt>Reach for it when</dt>
+            <dd>{station.whenLine}</dd>
+          </div>
+          <div className="lab-station-line">
+            <dt>What the reading means</dt>
+            <dd>{station.readingLine}</dd>
+          </div>
+          <div className="lab-station-line">
+            <dt>How it connects</dt>
+            <dd>{station.connectsLine}</dd>
+          </div>
+        </dl>
+      )}
       {open && <div className="lab-card-body">{children}</div>}
     </div>
   );

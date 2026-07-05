@@ -155,3 +155,49 @@
     display: none;
   }
 }
+
+/* ── Guided bench (compy_lab_guided, spec 2026-07-05-lab-linear-guided-bench) ──
+   Station chrome around the SAME instrument cards. Token-only; no accent fills (number + labels
+   are accent TEXT on the card fill, so there is no ink-contrast hazard). */
+.lab-station-num {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ix-accent);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 50%;
+}
+/* The four-line station contract — annotation, not a control: sits under the head button,
+   above the body, knobless (dashed top rule echoes the welcome band's annotation grammar). */
+.lab-station-lines {
+  margin: 0;
+  padding: 10px 20px 14px 62px;
+  border-top: 1px dashed var(--ix-glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.lab-station-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.lab-station-line dt {
+  flex-shrink: 0;
+  width: 158px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ix-text-3);
+}
+.lab-station-line dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
