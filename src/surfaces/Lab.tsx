@@ -16,6 +16,7 @@ import { BlackBox } from "./BlackBox";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { labLatestReadings } from "./lab-v2-data";
+import { readLabGuided } from "../design/theme";
 import { TuningInstrument } from "./TuningInstrument";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
@@ -79,6 +80,15 @@ export default function Lab({
   const [bbReport, setBbReport] = useState<BlackBoxReport | null>(null);
   // Welcome band: shown on a truly first-ever visit, hidden once any instrument has been opened.
   const [welcomeSeen, setWelcomeSeen] = useState(readWelcomeSeen);
+  // Guided bench (spec 2026-07-05-lab-linear-guided-bench, DEFAULT OFF): router + numbered
+  // stations + walk-through around the SAME instruments. Live-reactive so the Settings preview
+  // toggle re-renders an already-mounted Lab without a reload (same pattern as living-changed).
+  const [guided, setGuided] = useState(readLabGuided);
+  useEffect(() => {
+    const onChange = () => setGuided(readLabGuided());
+    window.addEventListener("compy:lab-guided-changed", onChange);
+    return () => window.removeEventListener("compy:lab-guided-changed", onChange);
+  }, []);
   const markInstrumentOpened = () => {
     if (welcomeSeen) return;
     setWelcomeSeen(true);
@@ -139,7 +149,7 @@ export default function Lab({
   const tuningSummary = measurement ? measurement.headline : "Undervolt guide + stability";
 
   return (
-    <section className="lab-root">
+    <section className="lab-root" data-guided={guided || undefined}>
       <div className="lab-dotgrid" aria-hidden="true" />
       <div className="lab-inner">
         {/* Under the V2 shell the RoomShell verdict is the ONE summary — the standalone head

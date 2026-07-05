@@ -250,6 +250,35 @@ export function applyCommitted(on: boolean): void {
   }
 }
 
+// Guided Lab bench (spec 2026-07-05-lab-linear-guided-bench) — the Lab room as a linear instrument
+// bench: symptom→station router + ordered numbered stations + the "Walk the bench" step-through.
+// DEFAULT OFF behind `compy_lab_guided` (Settings → Appearance preview toggle, the P-series
+// contract): flag off, today's Lab renders byte-identical (test-pinned). Frontend only — the flag
+// changes signposting and order around the existing instruments, never what they read or run.
+const LAB_GUIDED_KEY = "compy_lab_guided";
+
+export function readLabGuided(): boolean {
+  try {
+    return localStorage.getItem(LAB_GUIDED_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyLabGuided(on: boolean): void {
+  try {
+    localStorage.setItem(LAB_GUIDED_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:lab-guided-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
 // prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
 // DEFAULT OFF behind `compy_dash_v2`; toggled for review. Evolves the existing app — nothing scrapped.

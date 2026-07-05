@@ -9,6 +9,8 @@ import {
   persistAmbiance,
   readLivingInstrument,
   applyLivingInstrument,
+  readLabGuided,
+  applyLabGuided,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -124,6 +126,7 @@ export default function Settings({
   // An explicit choice always wins (and picking here persists one, unchanged).
   const [ambiance, setAmbiance] = useState<Ambiance>(() => readAmbianceChoice() ?? "calm");
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
+  const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -159,6 +162,12 @@ export default function Settings({
   const changeLiving = (v: boolean) => {
     setLiving(v);
     applyLivingInstrument(v);
+  };
+  // Guided Lab bench preview — reorders + signposts the Lab's instruments (router, numbered
+  // stations, walk-through). Layout/copy only: the instruments and their reads are untouched.
+  const changeLabGuided = (v: boolean) => {
+    setLabGuided(v);
+    applyLabGuided(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -249,6 +258,17 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={living} onChange={changeLiving} ariaLabel="Living Instrument preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Guided Lab bench (preview)</div>
+                  <div className="set-row-sub">
+                    Lines the Lab's instruments up as numbered stations with a "which tool do I
+                    need?" guide. Same instruments, same readings — just signposted.
+                  </div>
+                </div>
+                <Toggle on={labGuided} onChange={changeLabGuided} ariaLabel="Guided Lab bench preview" />
               </div>
 
             </div>
