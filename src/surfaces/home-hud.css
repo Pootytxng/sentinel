@@ -1,0 +1,657 @@
+/* ── Instrument-HUD Home pilot (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED
+   direction — editorial retired, pure operator-console HUD) ─────────────────────────────
+   The whole room reads as a high-end diagnostic HUD: system-console masthead, bracketed +
+   ruled instrument bay around the real hologram, telemetry column where the measured numbers
+   are the heroes (ring gauge, oscilloscope trace), ranked priority queue. Clean and
+   restrained on purpose — precision hairline strokes, mono machine values, letterspaced
+   micro-labels; NO neon, NO glow clutter (the one hard steer).
+
+   Same laws as home-v2.css (guard-pinned in tokens-v2-guard.test.ts): every selector scoped
+   under [data-v2="on"] AND [data-hud="on"] (the flag-off byte-identity mechanism), no color
+   literals, fonts only via var(--v2-font-*), @keyframes carry the v2- prefix and are inert
+   unless a HUD rule references them. Motion: transform/opacity only; the scan sweep renders
+   only while checks actually run; everything stills under [data-motion="reduced"]. */
+
+/* ── Masthead — the system console header (Home's RoomShell verdict slot) ── */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] {
+  position: relative;
+}
+/* Whisper page scanline — the CRT skin at "felt not seen" alpha; never intercepts input. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--hud-scanline-page) 0 1px,
+    transparent 1px 4px
+  );
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict h1 {
+  display: block;
+  margin: 0 0 6px;
+  font: 600 clamp(22px, 2.6vw, 30px) / 1.18 var(--v2-font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v2-text);
+  max-width: 34ch;
+  text-wrap: balance;
+}
+:root[data-v2="on"][data-hud="on"] .hud-headline {
+  display: block;
+  animation: v2-hud-arrive 0.4s ease both;
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .hud-headline {
+  animation: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-masthead-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+  margin-bottom: 10px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-masthead-eyebrow .hud-mono {
+  font: 10px var(--v2-font-mono);
+  letter-spacing: 0.08em;
+}
+:root[data-v2="on"][data-hud="on"] .hud-eyebrow-sep {
+  color: var(--v2-accent);
+  letter-spacing: 0;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict-sub {
+  display: block;
+  font-size: 13px;
+  max-width: 64ch;
+  margin-top: 2px;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict-action {
+  margin: 12px 0 0;
+}
+/* The readout strip — measured provenance as segmented instrument fields. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-measured {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  border-block: 1px solid var(--hud-hairline);
+  padding: 7px 2px;
+  margin-bottom: 22px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-readout-seg {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-hud="on"] .hud-readout-seg .hud-mono {
+  font: 11px var(--v2-font-mono);
+  color: var(--v2-text);
+  letter-spacing: 0.02em;
+}
+:root[data-v2="on"][data-hud="on"] .hud-readout-seg + .hud-readout-seg {
+  border-left: 1px solid var(--hud-hairline);
+  padding-left: 18px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-readout-warn,
+:root[data-v2="on"][data-hud="on"] .hud-readout-warn .hud-mono {
+  color: var(--v2-warn);
+}
+
+/* ── Page grid ── */
+:root[data-v2="on"][data-hud="on"] .hud-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  align-items: stretch;
+}
+:root[data-v2="on"][data-hud="on"] .hud-full {
+  grid-column: 1 / -1;
+}
+:root[data-v2="on"][data-hud="on"] .hud-mono {
+  font-family: var(--v2-font-mono);
+}
+/* Letterspaced micro-label — the HUD's section register. */
+:root[data-v2="on"][data-hud="on"] .hud-eyebrow {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+
+/* ── Instrument bay ── */
+:root[data-v2="on"][data-hud="on"] .hud-bay {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-bay-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-bay-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-seg-group {
+  display: flex;
+  gap: 4px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-seg {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+  background: transparent;
+  border: 1px solid var(--hud-hairline-strong);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"][data-hud="on"] .hud-seg:hover {
+  color: var(--v2-text);
+  border-color: var(--v2-accent-line);
+}
+:root[data-v2="on"][data-hud="on"] .hud-seg-on {
+  background: var(--v2-accent-dim);
+  border-color: var(--v2-accent-line);
+  color: var(--v2-text);
+}
+
+/* The stage — hairline frame, ruler ticks, corner brackets, scanline field. Height mechanism
+   mirrors home-v2 (deslop #5 carried over): fill the flex-stretched frame, clamp floor. */
+:root[data-v2="on"][data-hud="on"] .hud-stage {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-height: clamp(320px, 52vh, 520px);
+  overflow: hidden;
+  border: 1px solid var(--hud-hairline-strong);
+  border-radius: 3px;
+  background: var(--v2-panel);
+}
+:root[data-v2="on"][data-hud="on"] .hud-stage canvas {
+  border-radius: 3px;
+}
+/* Ruler ticks along the top edge — instrument precision, static, zero cost. */
+:root[data-v2="on"][data-hud="on"] .hud-stage::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  inset-inline: 28px;
+  height: 5px;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--hud-hairline-strong) 0 1px,
+    transparent 1px 12px
+  );
+}
+/* Scanline field — static (zero animation cost), pointer-transparent, "felt not seen". */
+:root[data-v2="on"][data-hud="on"] .hud-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--hud-scanline) 0 1px,
+    transparent 1px 3px
+  );
+}
+:root[data-v2="on"][data-hud="on"] .hud-stage-cards {
+  padding: var(--v2-pad);
+  overflow-y: auto;
+  height: 100%;
+}
+:root[data-v2="on"][data-hud="on"] .hud-stage-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--v2-faint);
+  font-size: 12px;
+}
+
+/* Corner brackets — the HUD frame ticks. They breathe with the pointer (±2px, opposite the
+   callouts) — depth between the frame plane and the annotation plane. */
+:root[data-v2="on"][data-hud="on"] .hud-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--v2-accent-line);
+  z-index: 2;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--hud-px, 0) * 2px),
+    calc(var(--hud-py, 0) * 2px),
+    0
+  );
+  transition: transform 0.12s linear;
+}
+:root[data-v2="on"][data-hud="on"] .hud-c-tl {
+  top: 8px;
+  left: 8px;
+  border-right: none;
+  border-bottom: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-c-tr {
+  top: 8px;
+  right: 8px;
+  border-left: none;
+  border-bottom: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-c-bl {
+  bottom: 8px;
+  left: 8px;
+  border-right: none;
+  border-top: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-c-br {
+  bottom: 8px;
+  right: 8px;
+  border-left: none;
+  border-top: none;
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .hud-corner {
+  transform: none;
+  transition: none;
+}
+
+/* Scan sweep — renders ONLY while checks are actually running (honest activity; the
+   component gates it on `checking && !reduced`). */
+:root[data-v2="on"][data-hud="on"] .hud-sweep {
+  position: absolute;
+  inset-inline: 8%;
+  top: 0;
+  height: 2px;
+  background: var(--v2-accent);
+  box-shadow: 0 2px 14px var(--v2-accent-dim);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 3;
+  animation: v2-hud-sweep 4.5s ease-in-out infinite;
+}
+
+/* Callouts — instrument annotations on hairline leaders; the parallax plane (±6px against
+   the pointer, transform-only, event-driven from the component — no rAF loop). */
+:root[data-v2="on"][data-hud="on"] .hud-callouts {
+  position: absolute;
+  top: 18px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--hud-px, 0) * -6px),
+    calc(var(--hud-py, 0) * -4px),
+    0
+  );
+  transition: transform 0.12s linear;
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .hud-callouts {
+  transform: none;
+  transition: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callouts-left {
+  left: 16px;
+  align-items: flex-start;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callouts-right {
+  right: 16px;
+  align-items: flex-end;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 200px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callouts-left .hud-callout {
+  border-left: 1px solid var(--hud-hairline-strong);
+  padding-left: 9px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callouts-right .hud-callout {
+  border-right: 1px solid var(--hud-hairline-strong);
+  padding-right: 9px;
+  align-items: flex-end;
+  text-align: right;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout-head b {
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout-detail {
+  color: var(--v2-muted);
+  font-size: 11px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout-v {
+  font-size: 12px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout-v-ok {
+  color: var(--v2-ok);
+}
+:root[data-v2="on"][data-hud="on"] .hud-callout-v-warn {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"][data-hud="on"] .hud-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+:root[data-v2="on"][data-hud="on"] .hud-led-ok {
+  background: var(--v2-ok);
+  box-shadow: 0 0 5px var(--v2-ok-dim);
+}
+:root[data-v2="on"][data-hud="on"] .hud-led-warn {
+  background: var(--v2-warn);
+  box-shadow: 0 0 5px var(--v2-warn-dim);
+}
+/* The scanning LED — accent ink, breathing only while checks actually run. */
+:root[data-v2="on"][data-hud="on"] .hud-led-scan {
+  background: var(--v2-accent);
+  box-shadow: 0 0 5px var(--v2-accent-dim);
+  animation: v2-hud-pulse 1.4s ease-in-out infinite;
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .hud-led-scan {
+  animation: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-stage-hint {
+  position: absolute;
+  bottom: 10px;
+  inset-inline: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--v2-faint);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* ── Telemetry column — hairline measurement log; readings are the heroes ── */
+:root[data-v2="on"][data-hud="on"] .hud-ledger {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--hud-hairline-strong);
+}
+:root[data-v2="on"][data-hud="on"] .hud-module {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--hud-hairline);
+}
+:root[data-v2="on"][data-hud="on"] .hud-reading {
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--v2-text);
+}
+:root[data-v2="on"][data-hud="on"] .hud-unit {
+  font-size: 10.5px;
+  color: var(--v2-faint);
+  margin-left: 7px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:root[data-v2="on"][data-hud="on"] .hud-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-hud="on"] .hud-note .hud-led {
+  margin-right: 2px;
+  vertical-align: 1px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-note-warn {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"][data-hud="on"] .hud-note-clip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Session hero — ring gauge (fps vs THIS display's Hz) beside the graded reading. */
+:root[data-v2="on"][data-hud="on"] .hud-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-ring-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-ring-pct {
+  font: 600 10px var(--v2-font-mono);
+  fill: var(--v2-muted);
+}
+:root[data-v2="on"][data-hud="on"] .hud-ring-cap {
+  font: 500 9px var(--v2-font-mono);
+  letter-spacing: 0.06em;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"][data-hud="on"] .hud-hero-num {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+:root[data-v2="on"][data-hud="on"] .hud-hero-num .hud-unit {
+  margin-left: 0;
+}
+
+/* Oscilloscope trace — the sparkline on graph-paper ink. */
+:root[data-v2="on"][data-hud="on"] .hud-trace {
+  margin-top: 8px;
+  padding: 6px 6px 4px;
+  border: 1px solid var(--hud-hairline);
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(0deg, var(--hud-grid) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(90deg, var(--hud-grid) 0 1px, transparent 1px 10px);
+}
+:root[data-v2="on"][data-hud="on"] .hud-trace-cap {
+  display: block;
+  margin-top: 4px;
+  font: 500 9px var(--v2-font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+
+/* ── Priority queue — ranked findings; rank numerals are real order ── */
+:root[data-v2="on"][data-hud="on"] .hud-docket {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 9px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-rows {
+  border-top: 1px solid var(--hud-hairline-strong);
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--hud-hairline);
+}
+:root[data-v2="on"][data-hud="on"] .hud-rank {
+  font-size: 12px;
+  color: var(--v2-faint);
+  flex: none;
+  width: 2em;
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-top .hud-rank {
+  color: var(--v2-accent);
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-nm {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--v2-text);
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-why {
+  font-size: 12px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-hud="on"] .hud-docket-clear {
+  font-size: 12.5px;
+  color: var(--v2-muted);
+  padding: 14px 2px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-pill {
+  flex: none;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 2px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-pill-warn {
+  background: var(--v2-warn-dim);
+  color: var(--v2-warn);
+}
+:root[data-v2="on"][data-hud="on"] .hud-pill-ok {
+  background: var(--v2-ok-dim);
+  color: var(--v2-ok);
+}
+:root[data-v2="on"][data-hud="on"] .hud-pill-info {
+  background: var(--v2-info-dim);
+  color: var(--v2-info);
+}
+
+/* ── Buttons — quiet instrument chrome ── */
+:root[data-v2="on"][data-hud="on"] .hud-btn {
+  font: 600 11px var(--v2-font-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--v2-text);
+  background: transparent;
+  border: 1px solid var(--hud-hairline-strong);
+  border-radius: 3px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+:root[data-v2="on"][data-hud="on"] .hud-btn:hover {
+  border-color: var(--v2-accent-line);
+  background: var(--v2-accent-dim);
+}
+:root[data-v2="on"][data-hud="on"] .hud-btn-ghost {
+  flex: none;
+  font-weight: 500;
+  color: var(--v2-muted);
+  padding: 5px 11px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-btn-ghost:hover {
+  color: var(--v2-text);
+}
+
+/* ── Setup & Tour front door joins the hairline language (parity with the pilot page). ── */
+:root[data-v2="on"][data-hud="on"] [data-hud-home] .stl-card {
+  background: transparent;
+  border: 1px solid var(--hud-hairline-strong);
+  border-radius: 3px;
+}
+:root[data-v2="on"][data-hud="on"] [data-hud-home] .stl-card:hover {
+  border-color: var(--v2-accent-line);
+  box-shadow: none;
+  background: var(--v2-accent-dim);
+}
+
+/* ── Skeletons (loading queue) ── */
+:root[data-v2="on"][data-hud="on"] .hud-skel {
+  display: inline-block;
+  border-radius: 2px;
+  background: var(--hud-hairline);
+  animation: v2-hud-pulse 1.4s ease-in-out infinite;
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .hud-skel {
+  animation: none;
+}
+:root[data-v2="on"][data-hud="on"] .hud-skel-rank {
+  width: 2em;
+  height: 12px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-skel-line {
+  height: 12px;
+  flex: 1;
+  max-width: 420px;
+}
+:root[data-v2="on"][data-hud="on"] .hud-skel-short {
+  max-width: 260px;
+}
+
+/* Keyframes — v2- prefixed (the guard's one sanctioned unscoped header); inert unless a
+   HUD-scoped rule above references them. Transform/opacity only. */
+@keyframes v2-hud-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes v2-hud-sweep {
+  0%,
+  100% {
+    transform: translateY(14px);
+    opacity: 0.15;
+  }
+  50% {
+    transform: translateY(min(46vh, 480px));
+    opacity: 0.8;
+  }
+}
+@keyframes v2-hud-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}

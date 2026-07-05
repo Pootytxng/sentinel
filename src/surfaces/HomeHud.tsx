@@ -14,22 +14,25 @@ import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import CountUp from "../design/vendor/CountUp/CountUp";
-import "./home-editorial.css";
+import "./home-hud.css";
 
-// HomeEditorial — the Editorial-Instrument pilot (spec 2026-07-05-ui-deslop-organic-directive,
-// LOCKED direction; flag compy_editorial, DEFAULT OFF). Editorial type carries the story: a
-// serif verdict masthead over a hairline folio. Instrument precision carries the data: the
-// telemetry ledger (a hairline measurement log, not card soup) and the instrument bay — the
-// REAL WebGL rig hologram in a bracketed HUD frame with a whisper scanline field and part
-// callouts on hairline leaders.
+// HomeHud — the pure Instrument-HUD pilot (spec 2026-07-05-ui-deslop-organic-directive,
+// LOCKED direction CORRECTED: editorial retired; flag DEFAULT OFF). The whole room reads as
+// a high-end diagnostic HUD: a system-console masthead (status LED · letterspaced eyebrow ·
+// display verdict · segmented readout), the REAL WebGL rig hologram in a bracketed, ruled
+// instrument bay with part callouts on hairline leaders, a telemetry column where numbers are
+// the heroes (fps-vs-refresh ring gauge, oscilloscope trace on graph-paper ink), and a ranked
+// priority queue. Clean and restrained on purpose — precision strokes + type discipline, no
+// neon clutter (the one hard steer).
 //
 // Honesty contract (identical to HomeV2 — this file changes PRESENTATION only): every number
-// is measured or honestly absent; the verdict is postureLine's real output; the boot sweep
+// is measured or honestly absent; the verdict is postureLine's real output; the scan sweep
 // renders ONLY while checks are actually running; graded ink comes from metric-grade against
-// THIS rig; NVIDIA temp stays ungraded (LOCKED rule 5 — gradeGpuTempForVendor). Zero new IPC.
+// THIS rig; the ring gauge is the measured avg-fps over THIS display's refresh ceiling; NVIDIA
+// temp stays ungraded (LOCKED rule 5 — gradeGpuTempForVendor). Zero new IPC.
 //
 // Motion contract (HARD RAILS): pointer-parallax is event-driven (no rAF loop — nothing runs
-// on blur or idle), applies to the callout layer only (never fights drag-orbit inside the
+// on blur or idle), applies to the annotation plane only (never fights drag-orbit inside the
 // canvas), transform/opacity only, and reduced-motion renders the still page.
 
 const RigHologram = lazy(() =>
@@ -75,15 +78,15 @@ function Callout({
   mono?: boolean;
 }) {
   return (
-    <div className="edh-callout">
-      <span className="edh-callout-head">
-        {tone && <span className={`edh-led edh-led-${tone}`} aria-hidden="true" />}
+    <div className="hud-callout">
+      <span className="hud-callout-head">
+        {tone && <span className={`hud-led hud-led-${tone}`} aria-hidden="true" />}
         <b>{name}</b>
-        {detail && <span className="edh-callout-detail">{detail}</span>}
+        {detail && <span className="hud-callout-detail">{detail}</span>}
       </span>
       {value && (
         <span
-          className={`edh-callout-v ${mono ? "edh-mono" : ""}${valueTone ? ` edh-callout-v-${valueTone}` : ""}`}
+          className={`hud-callout-v ${mono ? "hud-mono" : ""}${valueTone ? ` hud-callout-v-${valueTone}` : ""}`}
         >
           {value}
         </span>
@@ -92,23 +95,44 @@ function Callout({
   );
 }
 
-// One telemetry-ledger entry: letterspaced mono eyebrow · reading · one-line note.
-function LedgerEntry({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+// The fps-vs-refresh ring gauge — a real ratio, never a fabricated score: the measured session
+// average over THIS display's refresh ceiling (the same reference gradeFps grades against).
+// Rendered only when both sides of the ratio were actually read.
+function HudRing({ frac, color, pct }: { frac: number; color: string; pct: number }) {
+  const r = 20;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(1, frac));
   return (
-    <div className="edh-entry">
-      <span className="edh-eyebrow">{label}</span>
+    <svg className="hud-ring" width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+      <circle cx="26" cy="26" r={r} fill="none" stroke="var(--hud-hairline)" strokeWidth="3" />
+      <circle
+        cx="26"
+        cy="26"
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="3"
+        strokeDasharray={`${(c * clamped).toFixed(2)} ${c.toFixed(2)}`}
+        transform="rotate(-90 26 26)"
+      />
+      <text x="26" y="26" className="hud-ring-pct" textAnchor="middle" dominantBaseline="central">
+        {pct}%
+      </text>
+    </svg>
+  );
+}
+
+// One telemetry module: letterspaced micro-label · reading · one-line plain-English note.
+function Module({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="hud-module">
+      <span className="hud-eyebrow">{label}</span>
       {children}
     </div>
   );
 }
 
-export function HomeEditorial({
+export function HomeHud({
   hw,
   readiness,
   priorities,
@@ -167,8 +191,8 @@ export function HomeEditorial({
   const { parts: manualParts } = useManualParts();
 
   // ── pointer parallax (JARVIS depth, event-driven — no rAF loop, nothing runs on blur).
-  // Writes two CSS vars on the stage; ONLY the callout layer + brackets consume them, so the
-  // canvas (drag-orbit's home) never moves under the cursor.
+  // Writes two CSS vars on the stage; ONLY the annotation plane + brackets consume them, so
+  // the canvas (drag-orbit's home) never moves under the cursor.
   const stageRef = useRef<HTMLDivElement | null>(null);
   const onStageMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (reduced || e.pointerType !== "mouse") return;
@@ -177,14 +201,14 @@ export function HomeEditorial({
     const r = el.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * 2 - 1;
     const py = ((e.clientY - r.top) / r.height) * 2 - 1;
-    el.style.setProperty("--edh-px", px.toFixed(3));
-    el.style.setProperty("--edh-py", py.toFixed(3));
+    el.style.setProperty("--hud-px", px.toFixed(3));
+    el.style.setProperty("--hud-py", py.toFixed(3));
   };
   const onStageLeave = () => {
     const el = stageRef.current;
     if (!el) return;
-    el.style.setProperty("--edh-px", "0");
-    el.style.setProperty("--edh-py", "0");
+    el.style.setProperty("--hud-px", "0");
+    el.style.setProperty("--hud-py", "0");
   };
 
   // ── measured derivations (all real, all honestly empty when absent — HomeV2's exact logic) ──
@@ -194,17 +218,17 @@ export function HomeEditorial({
   const fpsGrade: Grade = strip.kind === "data" ? gradeFps(strip.avgFps, rig) : "neutral";
   const low1Grade: Grade =
     strip.kind === "data" ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
-  const gradeClass = (g: Grade) => (g === "neutral" ? "" : ` edh-grade-${g}`);
+  const gradeClass = (g: Grade) => (g === "neutral" ? "" : ` hud-grade-${g}`);
   const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running
   const vendor = gpuVendor(hw.gpus?.[0]?.name);
   const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
 
-  // The masthead dek: postureLine's sentence often opens by restating its own headline
-  // ("You're ready to play" / "Ready to play — …"). Under a display-size serif that reads as a
-  // stutter, so the dek drops the restated prefix and keeps only the part that ADDS information;
-  // a fully-redundant sentence is omitted (the folio line still carries provenance). Text is
-  // still postureLine's real output — trimmed, never rewritten.
+  // The dek: postureLine's sentence often opens by restating its own headline. Under the
+  // display verdict that reads as a stutter, so the dek drops the restated prefix and keeps
+  // only the part that ADDS information; a fully-redundant sentence is omitted (the readout
+  // strip still carries provenance). Text is still postureLine's real output — trimmed,
+  // never rewritten.
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, "").trim();
   const headNorm = norm(posture.headline).replace(/^youre /, "");
   const sentNorm = norm(posture.sentence).replace(/^youre /, "");
@@ -217,18 +241,15 @@ export function HomeEditorial({
     sentNorm === headNorm ||
     dek === "" ||
     norm(dek) === headNorm ||
-    // Clean state: the docket's clear line is the ONE owner of "measured clean" on this screen
+    // Clean state: the queue's clear line is the ONE owner of "measured clean" on this screen
     // (the P5 one-owner-per-screen voice law) — the dek stands down rather than echo it.
     ((priorities?.limiters ?? []).length === 0 && priorities != null && /measured clean/i.test(dek));
 
-  const measured = readiness
-    ? `${readiness.checks.length - readiness.unknown_count}/${readiness.checks.length} checks measured` +
-      (readiness.attention_count === 0
-        ? " · nothing needs urgent attention"
-        : ` · ${readiness.attention_count} need${readiness.attention_count === 1 ? "s" : ""} attention`)
-    : "running checks…";
+  // The status LED next to the eyebrow — real state only: scanning while checks run, warn
+  // when measured checks flagged attention, ok otherwise.
+  const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 ? "warn" : "ok";
 
-  // The folio dateline — the date this report is being read (today), never a fabricated stamp.
+  // The masthead dateline — the date this diagnostic is being read (today), never fabricated.
   const dateline = new Date().toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -272,21 +293,26 @@ export function HomeEditorial({
     unknown: "info",
   };
 
+  // The fps-vs-refresh ratio — both sides measured (session avg · this display's Hz) or the
+  // ring doesn't render. Same reference gradeFps grades against, so ring and ink agree.
+  const ringFrac =
+    strip.kind === "data" && rig.refreshHz ? strip.avgFps / rig.refreshHz : null;
+
   // The instrument bay stage (shared by 3D and cards views).
   const stage = (
     <div
-      className="edh-stage"
+      className="hud-stage"
       ref={stageRef}
       onPointerMove={onStageMove}
       onPointerLeave={onStageLeave}
     >
-      <span className="edh-corner edh-c-tl" aria-hidden="true" />
-      <span className="edh-corner edh-c-tr" aria-hidden="true" />
-      <span className="edh-corner edh-c-bl" aria-hidden="true" />
-      <span className="edh-corner edh-c-br" aria-hidden="true" />
-      {checking && !reduced && <div className="edh-sweep" aria-hidden="true" />}
+      <span className="hud-corner hud-c-tl" aria-hidden="true" />
+      <span className="hud-corner hud-c-tr" aria-hidden="true" />
+      <span className="hud-corner hud-c-bl" aria-hidden="true" />
+      <span className="hud-corner hud-c-br" aria-hidden="true" />
+      {checking && !reduced && <div className="hud-sweep" aria-hidden="true" />}
       {rig3d ? (
-        <Suspense fallback={<div className="edh-stage-loading">Initializing hologram…</div>}>
+        <Suspense fallback={<div className="hud-stage-loading">Initializing hologram…</div>}>
           <RigHologram
             hw={hw}
             exploded={exploded}
@@ -300,13 +326,13 @@ export function HomeEditorial({
           />
         </Suspense>
       ) : (
-        <div className="edh-stage-cards">
+        <div className="hud-stage-cards">
           <HardwareGrid hw={hw} />
         </div>
       )}
       {rig3d && (
         <>
-          <div className="edh-callouts edh-callouts-left">
+          <div className="hud-callouts hud-callouts-left">
             <Callout
               tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
               name="RAM"
@@ -326,7 +352,7 @@ export function HomeEditorial({
               />
             )}
           </div>
-          <div className="edh-callouts edh-callouts-right">
+          <div className="hud-callouts hud-callouts-right">
             <Callout
               tone={gradeTone(gpuGrade)}
               name="GPU"
@@ -342,7 +368,7 @@ export function HomeEditorial({
               mono={false}
             />
           </div>
-          <div className="edh-stage-hint">
+          <div className="hud-stage-hint">
             Drag to orbit · click a part for its live specs — measured, never guessed
           </div>
         </>
@@ -355,34 +381,55 @@ export function HomeEditorial({
       room="home"
       verdict={
         <>
-          <span className="edh-masthead-eyebrow">
-            Rig report <span className="edh-mono">· {dateline}</span>
+          <span className="hud-masthead-eyebrow">
+            <span className={`hud-led hud-led-${ledState}`} aria-hidden="true" />
+            Rig diagnostic <span className="hud-eyebrow-sep">//</span>{" "}
+            <span className="hud-mono">{dateline}</span>
           </span>
-          <span className="edh-headline" key={posture.headline}>
+          <span className="hud-headline" key={posture.headline}>
             {posture.headline}
           </span>
         </>
       }
       sub={dekRedundant ? undefined : dek}
-      measured={measured}
+      measured={
+        checking ? (
+          <span className="hud-readout-seg">running checks…</span>
+        ) : (
+          <>
+            <span className="hud-readout-seg">
+              checks{" "}
+              <span className="hud-mono">
+                {readiness!.checks.length - readiness!.unknown_count}/{readiness!.checks.length}
+              </span>{" "}
+              measured
+            </span>
+            <span
+              className={`hud-readout-seg${(readiness!.attention_count ?? 0) > 0 ? " hud-readout-warn" : ""}`}
+            >
+              attention <span className="hud-mono">{readiness!.attention_count}</span>
+            </span>
+          </>
+        )
+      }
       primaryAction={
-        <button type="button" className="edh-btn" onClick={onRunCheck}>
+        <button type="button" className="hud-btn" onClick={onRunCheck}>
           Re-run check
         </button>
       }
     >
-      <div className="edh-grid" data-editorial-home>
-        {/* ── Instrument bay — the real hologram in a bracketed HUD frame ── */}
-        <section className="edh-bay">
-          <header className="edh-bay-head">
-            <span className="edh-eyebrow">Your rig</span>
-            <div className="edh-bay-controls">
-              <div className="edh-seg-group" role="tablist" aria-label="Rig view">
+      <div className="hud-grid" data-hud-home>
+        {/* ── Instrument bay — the real hologram in a bracketed, ruled HUD frame ── */}
+        <section className="hud-bay">
+          <header className="hud-bay-head">
+            <span className="hud-eyebrow">Your rig</span>
+            <div className="hud-bay-controls">
+              <div className="hud-seg-group" role="tablist" aria-label="Rig view">
                 <button
                   type="button"
                   role="tab"
                   aria-selected={rig3d}
-                  className={`edh-seg ${rig3d ? "edh-seg-on" : ""}`}
+                  className={`hud-seg ${rig3d ? "hud-seg-on" : ""}`}
                   onClick={() => chooseRig3d(true)}
                 >
                   3D
@@ -391,24 +438,24 @@ export function HomeEditorial({
                   type="button"
                   role="tab"
                   aria-selected={!rig3d}
-                  className={`edh-seg ${!rig3d ? "edh-seg-on" : ""}`}
+                  className={`hud-seg ${!rig3d ? "hud-seg-on" : ""}`}
                   onClick={() => chooseRig3d(false)}
                 >
                   Cards
                 </button>
               </div>
               {rig3d && (
-                <div className="edh-seg-group">
+                <div className="hud-seg-group">
                   <button
                     type="button"
-                    className={`edh-seg ${exploded ? "edh-seg-on" : ""}`}
+                    className={`hud-seg ${exploded ? "hud-seg-on" : ""}`}
                     onClick={() => setExploded((v) => !v)}
                   >
                     {exploded ? "Reassemble" : "Exploded"}
                   </button>
                   <button
                     type="button"
-                    className={`edh-seg ${autoRotate ? "edh-seg-on" : ""}`}
+                    className={`hud-seg ${autoRotate ? "hud-seg-on" : ""}`}
                     onClick={() => setAutoRotate((v) => !v)}
                     aria-pressed={autoRotate}
                   >
@@ -421,138 +468,161 @@ export function HomeEditorial({
           {stage}
         </section>
 
-        {/* ── Telemetry ledger — a hairline measurement log, not card soup ── */}
-        <aside className="edh-ledger">
-          <LedgerEntry
+        {/* ── Telemetry column — numbers are the heroes; every one measured or absent ── */}
+        <aside className="hud-ledger">
+          <Module
             label={strip.kind === "data" ? `Last session — ${strip.game}` : "Last session"}
           >
             {strip.kind === "data" ? (
               <>
-                <span className={`edh-reading edh-mono${gradeClass(fpsGrade)}`} style={gradeInk(fpsGrade)}>
-                  {reduced ? (
-                    Math.round(strip.avgFps)
-                  ) : (
-                    <CountUp to={Math.round(strip.avgFps)} duration={0.9} />
+                <div className="hud-hero">
+                  {ringFrac != null && (
+                    <div className="hud-ring-wrap">
+                      <HudRing
+                        frac={ringFrac}
+                        color={gradeColor(fpsGrade)}
+                        pct={Math.round(ringFrac * 100)}
+                      />
+                      <span className="hud-ring-cap">vs {rig.refreshHz} Hz</span>
+                    </div>
                   )}
-                  <span className="edh-unit">fps avg</span>
-                </span>
-                <span className="edh-note">
-                  1% low{" "}
-                  <span className={`edh-mono${gradeClass(low1Grade)}`} style={gradeInk(low1Grade)}>
-                    {Math.round(strip.low1Est)}
-                  </span>{" "}
-                  (estimate)
-                </span>
+                  <div className="hud-hero-num">
+                    <span
+                      className={`hud-reading hud-mono${gradeClass(fpsGrade)}`}
+                      style={gradeInk(fpsGrade)}
+                    >
+                      {reduced ? (
+                        Math.round(strip.avgFps)
+                      ) : (
+                        <CountUp to={Math.round(strip.avgFps)} duration={0.9} />
+                      )}
+                    </span>
+                    <span className="hud-unit">fps avg</span>
+                    <span className="hud-note">
+                      1% low{" "}
+                      <span
+                        className={`hud-mono${gradeClass(low1Grade)}`}
+                        style={gradeInk(low1Grade)}
+                      >
+                        {Math.round(strip.low1Est)}
+                      </span>{" "}
+                      (estimate)
+                    </span>
+                  </div>
+                </div>
                 {sparkValues.length >= 2 && (
-                  <div className="edh-trace">
-                    <Sparkline values={sparkValues} height={24} stroke="var(--v2-accent)" />
+                  <div className="hud-trace">
+                    <Sparkline values={sparkValues} height={30} stroke="var(--v2-accent)" />
+                    <span className="hud-trace-cap">
+                      avg fps · last {sparkValues.length} sessions
+                    </span>
                   </div>
                 )}
               </>
             ) : (
-              <span className="edh-note">
+              <span className="hud-note">
                 Nothing on the books yet — play a session and Compy captures it from outside the
                 game.
               </span>
             )}
-          </LedgerEntry>
+          </Module>
 
-          <LedgerEntry label="Safe changes active">
-            <span className="edh-reading edh-mono">
+          <Module label="Active changes">
+            <span className="hud-reading hud-mono">
               {reduced ? activeCount : <CountUp to={activeCount} duration={0.9} />}
             </span>
-            <span className="edh-note">every one reversible from the ledger</span>
-          </LedgerEntry>
+            <span className="hud-note">every one reversible from the ledger</span>
+          </Module>
 
-          <LedgerEntry label="Trust ledger">
-            <span className="edh-reading edh-mono">
+          <Module label="Trust ledger">
+            <span className="hud-reading hud-mono">
               {reduced ? changes.length : <CountUp to={changes.length} duration={0.9} />}
-              <span className="edh-unit">change{changes.length === 1 ? "" : "s"} tracked</span>
+              <span className="hud-unit">change{changes.length === 1 ? "" : "s"} tracked</span>
             </span>
             {latest ? (
-              <span className="edh-note edh-note-clip" title={latest.rec_title}>
-                latest: {latest.rec_title} <span className="edh-mono">· {latestTime}</span>
+              <span className="hud-note hud-note-clip" title={latest.rec_title}>
+                latest: {latest.rec_title} <span className="hud-mono">· {latestTime}</span>
               </span>
             ) : (
-              <span className="edh-note">nothing applied yet — your PC is untouched</span>
+              <span className="hud-note">nothing applied yet — your PC is untouched</span>
             )}
-          </LedgerEntry>
+          </Module>
 
-          <LedgerEntry label="Drift watch">
+          <Module label="Drift watch">
             {readiness == null ? (
-              <span className="edh-note">drift status lands with the current check</span>
+              <span className="hud-note">drift status lands with the current check</span>
             ) : drifts.length === 0 ? (
-              <span className="edh-note">
-                <span className="edh-led edh-led-ok" aria-hidden="true" /> nothing's drifted —
+              <span className="hud-note">
+                <span className="hud-led hud-led-ok" aria-hidden="true" /> nothing's drifted —
                 every applied change is still holding
               </span>
             ) : (
-              <span className="edh-note edh-note-warn">
-                <span className="edh-led edh-led-warn" aria-hidden="true" /> {drifts.length}{" "}
+              <span className="hud-note hud-note-warn">
+                <span className="hud-led hud-led-warn" aria-hidden="true" /> {drifts.length}{" "}
                 setting{drifts.length === 1 ? "" : "s"} drifted off · {driftNames}
               </span>
             )}
-          </LedgerEntry>
+          </Module>
 
-          <LedgerEntry label="Drive health">
+          <Module label="Drive health">
             {smartDrives.length === 0 ? (
-              <span className="edh-note">
+              <span className="hud-note">
                 no SMART reading from this rig — Compy won't guess drive health
               </span>
             ) : flaggedDrives.length === 0 ? (
-              <span className="edh-note">
-                <span className="edh-led edh-led-ok" aria-hidden="true" /> {smartDrives.length}{" "}
+              <span className="hud-note">
+                <span className="hud-led hud-led-ok" aria-hidden="true" /> {smartDrives.length}{" "}
                 drive{smartDrives.length === 1 ? "" : "s"} · SMART OK
               </span>
             ) : (
-              <span className="edh-note edh-note-warn">
-                <span className="edh-led edh-led-warn" aria-hidden="true" />{" "}
+              <span className="hud-note hud-note-warn">
+                <span className="hud-led hud-led-warn" aria-hidden="true" />{" "}
                 {flaggedDrives[0].friendly_name} — {flaggedDrives[0].health} · back up important
                 data
               </span>
             )}
-          </LedgerEntry>
+          </Module>
         </aside>
 
-        {/* ── The docket — ranked for THIS hardware; rank numerals are real order ── */}
-        <section className="edh-docket">
-          <header className="edh-docket-head">
-            <span className="edh-eyebrow">Worth your attention</span>
-            <span className="edh-docket-note">ranked for your hardware, not generic advice</span>
+        {/* ── Priority queue — ranked for THIS hardware; rank numerals are real order ── */}
+        <section className="hud-docket">
+          <header className="hud-docket-head">
+            <span className="hud-eyebrow">Priority queue</span>
+            <span className="hud-docket-note">ranked for your hardware, not generic advice</span>
           </header>
           {priorities == null ? (
-            <div className="edh-docket-rows">
-              <div className="edh-docket-row">
-                <span className="edh-skel edh-skel-rank" />
-                <span className="edh-skel edh-skel-line" />
+            <div className="hud-docket-rows">
+              <div className="hud-docket-row">
+                <span className="hud-skel hud-skel-rank" />
+                <span className="hud-skel hud-skel-line" />
               </div>
-              <div className="edh-docket-row">
-                <span className="edh-skel edh-skel-rank" />
-                <span className="edh-skel edh-skel-line edh-skel-short" />
+              <div className="hud-docket-row">
+                <span className="hud-skel hud-skel-rank" />
+                <span className="hud-skel hud-skel-line hud-skel-short" />
               </div>
             </div>
           ) : limiters.length === 0 ? (
-            <div className="edh-docket-rows">
-              <div className="edh-docket-row edh-docket-clear">
+            <div className="hud-docket-rows">
+              <div className="hud-docket-row hud-docket-clear">
                 Nothing worth changing today — measured clean on this rig. A lesser tool would
                 invent something; Compy won't.
               </div>
             </div>
           ) : (
-            <div className="edh-docket-rows">
+            <div className="hud-docket-rows">
               {limiters.slice(0, 3).map((l, i) => (
-                <div className={`edh-docket-row${i === 0 ? " edh-docket-top" : ""}`} key={l.id}>
-                  <span className="edh-rank edh-mono">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="edh-docket-text">
-                    <span className="edh-docket-nm">{l.title}</span>
-                    <span className="edh-docket-why">{l.reason}</span>
+                <div className={`hud-docket-row${i === 0 ? " hud-docket-top" : ""}`} key={l.id}>
+                  <span className="hud-rank hud-mono">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="hud-docket-text">
+                    <span className="hud-docket-nm">{l.title}</span>
+                    <span className="hud-docket-why">{l.reason}</span>
                   </span>
                   <span
-                    className={`edh-pill edh-pill-${i === 0 ? "warn" : (statusTone[l.status] ?? "info")}`}
+                    className={`hud-pill hud-pill-${i === 0 ? "warn" : (statusTone[l.status] ?? "info")}`}
                   >
                     {i === 0 ? "biggest limiter" : `${l.confidence} confidence`}
                   </span>
-                  <button type="button" className="edh-btn edh-btn-ghost" onClick={onSeeInFix}>
+                  <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
                     See in Optimize
                   </button>
                 </div>
@@ -562,7 +632,7 @@ export function HomeEditorial({
         </section>
 
         {/* The guided Setup & Tour front door — quiet, below the answer (parity with HomeV2). */}
-        <div className="edh-full">
+        <div className="hud-full">
           <SetupLauncherCard />
         </div>
       </div>

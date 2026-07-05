@@ -7,7 +7,6 @@ import { tuningGuideForVendor } from "../data/tuning-guides";
 import { labVerdict, labMeasuredLine } from "./lab-v2-data";
 import type { BenchmarkState } from "../types";
 import type { GpuVendor } from "./walkthroughs";
-import { useEditorialFlag } from "../design/use-editorial";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./lab-v2.css";
 
@@ -39,7 +38,6 @@ export function LabV2({
   diagnosticsCaptured?: boolean;
 }) {
   const reduced = useReducedMotion();
-  const editorial = useEditorialFlag();
   // Seeded from the probe cache (same key Lab reads) so a re-visit paints the verdict
   // instantly; live updates arrive through Lab's onBenchState — the SAME read, no second IPC.
   const [bench, setBench] = useState<BenchmarkState | null>(
@@ -54,14 +52,7 @@ export function LabV2({
     <RoomShell
       room="lab"
       verdict={
-        editorial ? (
-          // Editorial masthead (rollout, spec 2026-07-05): eyebrow + the composed serif
-          // verdict — a serif headline lands whole, not decoded. Same pure-helper text.
-          <>
-            <span className="edh-masthead-eyebrow">The bench</span>
-            {verdict.headline}
-          </>
-        ) : reduced ? (
+        reduced ? (
           verdict.headline
         ) : (
           // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's

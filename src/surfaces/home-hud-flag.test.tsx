@@ -7,11 +7,12 @@ import { railFor } from "../design/homeRail";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 
-// Guards for the Editorial-Instrument Home pilot (spec 2026-07-05-ui-deslop-organic-directive).
-// The redesign is behind compy_editorial, DEFAULT OFF — these tests pin the P-series
-// reversibility contract: flag off (absent OR "0"), HomeV2 renders byte-identical with zero
-// editorial DOM; flag on, the pilot renders the SAME measured numbers (graded ink classes
-// included — the deslop #4 bug→guard carries over to the new presentation).
+// Guards for the Instrument-HUD Home pilot (spec 2026-07-05-ui-deslop-organic-directive,
+// CORRECTED direction — editorial retired). The redesign is behind the preview flag, DEFAULT
+// OFF — these tests pin the P-series reversibility contract: flag off (absent OR "0"), HomeV2
+// renders byte-identical with zero HUD DOM; flag on, the pilot renders the SAME measured
+// numbers (graded ink classes included — the deslop #4 bug→guard carries over), and the ring
+// gauge renders ONLY when both sides of its ratio were actually measured.
 
 vi.mock("./rig/RigHologram", () => ({
   RigHologram: () => <div data-testid="rig-hologram" />,
@@ -159,7 +160,7 @@ const shell = (child: React.ReactNode) => (
   </ShellV2>
 );
 
-describe("compy_editorial flag-off byte-identity (P-series contract)", () => {
+describe("Instrument-HUD flag-off byte-identity (P-series contract)", () => {
   it("flag absent and flag='0' render byte-identical to HomeV2 directly", () => {
     const direct = render(shell(<HomeV2 {...props} />)).container.innerHTML;
     cleanup();
@@ -171,43 +172,61 @@ describe("compy_editorial flag-off byte-identity (P-series contract)", () => {
     expect(off).toBe(direct);
   });
 
-  it("flag off: zero editorial DOM present", () => {
+  it("flag off: zero HUD DOM present", () => {
     const c = render(shell(<HomeRoom {...props} />)).container;
-    expect(c.querySelector("[data-editorial-home]")).toBeNull();
-    expect(c.querySelector(".edh-grid")).toBeNull();
-    expect(c.querySelector(".edh-headline")).toBeNull();
+    expect(c.querySelector("[data-hud-home]")).toBeNull();
+    expect(c.querySelector(".hud-grid")).toBeNull();
+    expect(c.querySelector(".hud-headline")).toBeNull();
   });
 });
 
-describe("compy_editorial flag-on pilot (same measured numbers, new presentation)", () => {
+describe("Instrument-HUD flag-on pilot (same measured numbers, new presentation)", () => {
   const mountOn = () => {
     localStorage.setItem("compy_editorial", "1");
     return render(shell(<HomeRoom {...props} />)).container;
   };
 
-  it("renders the editorial Home with the serif masthead over the real verdict", () => {
+  it("renders the HUD Home with the console masthead over the real verdict", () => {
     const c = mountOn();
-    expect(c.querySelector("[data-editorial-home]")).not.toBeNull();
+    expect(c.querySelector("[data-hud-home]")).not.toBeNull();
     // The verdict is postureLine's real output, in the ONE RoomShell h1 (one-mention law).
     expect(c.querySelectorAll(".v2-verdict h1")).toHaveLength(1);
-    expect(c.querySelector(".edh-headline")).not.toBeNull();
+    expect(c.querySelector(".hud-headline")).not.toBeNull();
+    // The status LED reflects the REAL resolved state (checks done, nothing flagged → ok).
+    expect(c.querySelector(".hud-masthead-eyebrow .hud-led-ok")).not.toBeNull();
+    expect(c.querySelector(".hud-led-scan")).toBeNull();
   });
 
   it("session numbers stay graded (deslop #4 bug→guard carried to the pilot): fps + 1% low carry tone classes and real values", () => {
     const c = mountOn();
-    const fps = c.querySelector(".edh-reading");
-    expect(fps?.className).toMatch(/edh-grade-(good|ok|bad)/);
+    const fps = c.querySelector(".hud-reading");
+    expect(fps?.className).toMatch(/hud-grade-(good|ok|bad)/);
     // 1% low renders the measured estimate with its own grade class.
-    const low = Array.from(c.querySelectorAll(".edh-note .edh-mono")).find((n) =>
+    const low = Array.from(c.querySelectorAll(".hud-note .hud-mono")).find((n) =>
       /^98$/.test(n.textContent ?? ""),
     );
     expect(low).toBeTruthy();
-    expect(low?.className).toMatch(/edh-grade-(good|ok|bad)/);
+    expect(low?.className).toMatch(/hud-grade-(good|ok|bad)/);
   });
 
-  it("docket ranks are real order and the ledger renders honest measured entries", () => {
+  it("ring gauge is the real fps-vs-refresh ratio, only when both sides were measured", () => {
     const c = mountOn();
-    const ranks = Array.from(c.querySelectorAll(".edh-rank")).map((n) => n.textContent);
+    // 142.3 / 165 Hz → 86% — a measured ratio, not a score.
+    expect(c.querySelector(".hud-ring")).not.toBeNull();
+    expect(c.querySelector(".hud-ring-pct")?.textContent).toBe("86%");
+    expect(c.querySelector(".hud-ring-cap")?.textContent).toBe("vs 165 Hz");
+    cleanup();
+    // No refresh reading → no ring (never a fabricated reference).
+    localStorage.setItem("compy_editorial", "1");
+    const noHz = render(
+      shell(<HomeRoom {...props} hw={{ ...hw, display: null } as unknown as HardwareInfo} />),
+    ).container;
+    expect(noHz.querySelector(".hud-ring")).toBeNull();
+  });
+
+  it("docket ranks are real order and the column renders honest measured entries", () => {
+    const c = mountOn();
+    const ranks = Array.from(c.querySelectorAll(".hud-rank")).map((n) => n.textContent);
     expect(ranks).toEqual(["01"]);
     // Trust ledger shows the real applied change, not an invented stat.
     expect(c.textContent).toContain("Hardware-accelerated GPU scheduling");
@@ -215,21 +234,25 @@ describe("compy_editorial flag-on pilot (same measured numbers, new presentation
     expect(c.textContent).toContain("temp n/a — by design");
   });
 
-  it("no boot sweep when checks are resolved; sweep present only while checks run", () => {
+  it("readout strip carries the real check counts; scan state only while checks run", () => {
     const c = mountOn();
-    expect(c.querySelector(".edh-sweep")).toBeNull();
+    expect(c.querySelector(".v2-measured")?.textContent).toContain("3/3");
+    expect(c.querySelector(".hud-sweep")).toBeNull();
     cleanup();
     localStorage.setItem("compy_editorial", "1");
     const checking = render(
       shell(<HomeRoom {...props} readiness={null} priorities={null} />),
     ).container;
-    expect(checking.querySelector(".edh-sweep")).not.toBeNull();
+    expect(checking.querySelector(".hud-sweep")).not.toBeNull();
+    expect(checking.querySelector(".hud-led-scan")).not.toBeNull();
+    expect(checking.querySelector(".v2-measured")?.textContent).toContain("running checks…");
   });
 
-  it("honest empty state: no sessions → no fabricated numbers", () => {
+  it("honest empty state: no sessions → no fabricated numbers, no ring", () => {
     localStorage.setItem("compy_editorial", "1");
     const c = render(shell(<HomeRoom {...props} sessions={[]} />)).container;
     expect(c.textContent).toContain("Nothing on the books yet");
-    expect(c.querySelector(".edh-grade-good")).toBeNull();
+    expect(c.querySelector(".hud-grade-good")).toBeNull();
+    expect(c.querySelector(".hud-ring")).toBeNull();
   });
 });

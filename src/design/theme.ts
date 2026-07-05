@@ -280,32 +280,33 @@ export function applyLabGuided(on: boolean): void {
   }
 }
 
-// Editorial-Instrument look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction) —
-// editorial serif verdicts carry the story, precision-instrument telemetry carries the data,
-// plus the HUD/scanline skin. Piloted on Home. DEFAULT OFF behind `compy_editorial` (Settings →
-// Appearance preview toggle, the P-series contract): flag off, every room renders byte-identical
-// (test-pinned). Frontend only — presentation over the SAME measured props/probes, zero new IPC.
-const EDITORIAL_KEY = "compy_editorial";
+// Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction —
+// CORRECTED: editorial retired) — the pure operator-console/HUD redesign, piloted on Home.
+// DEFAULT OFF (Settings → Appearance preview toggle, the P-series contract): flag off, every
+// room renders byte-identical (test-pinned). Frontend only — presentation over the SAME
+// measured props/probes, zero new IPC. The storage-key literal is kept from the retired
+// editorial pilot so the owner's existing preview opt-in carries straight over to the HUD.
+const HUD_KEY = "compy_editorial";
 
-export function readEditorial(): boolean {
+export function readHud(): boolean {
   try {
-    return localStorage.getItem(EDITORIAL_KEY) === "1";
+    return localStorage.getItem(HUD_KEY) === "1";
   } catch {
     /* ignore — default OFF */
   }
   return false;
 }
 
-export function applyEditorial(on: boolean): void {
-  if (on) document.documentElement.dataset.editorial = "on";
-  else delete document.documentElement.dataset.editorial;
+export function applyHud(on: boolean): void {
+  if (on) document.documentElement.dataset.hud = "on";
+  else delete document.documentElement.dataset.hud;
   try {
-    localStorage.setItem(EDITORIAL_KEY, on ? "1" : "0");
+    localStorage.setItem(HUD_KEY, on ? "1" : "0");
   } catch {
     /* ignore */
   }
   try {
-    window.dispatchEvent(new Event("compy:editorial-changed"));
+    window.dispatchEvent(new Event("compy:hud-changed"));
   } catch {
     /* ignore */
   }

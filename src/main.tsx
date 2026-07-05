@@ -71,12 +71,13 @@ try {
 // Guard: tokens-v2-guard.test.ts.
 document.documentElement.dataset.v2 = "on";
 
-// Editorial-Instrument look (spec 2026-07-05-ui-deslop-organic-directive) — the de-slop redesign
-// pilot. DEFAULT OFF (P-series preview contract): only an explicit "1" wears the attribute, so
-// flag-off every room renders byte-identical (all editorial CSS is scoped [data-editorial="on"]).
+// Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED — editorial
+// retired) — the de-slop redesign pilot. DEFAULT OFF (P-series preview contract): only an
+// explicit "1" wears the attribute, so flag-off every room renders byte-identical (all HUD CSS
+// is scoped [data-hud="on"]). Key literal kept from the retired editorial pilot on purpose.
 try {
   if (localStorage.getItem("compy_editorial") === "1") {
-    document.documentElement.dataset.editorial = "on";
+    document.documentElement.dataset.hud = "on";
   }
 } catch {
   /* default OFF */

@@ -87,13 +87,26 @@ The escape is real design tooling:
 honest-measurement (graded, never fabricated), rollback/TrustSwitch untouched, flag-gated + flag-off
 byte-identical, all-original. "Organic/unique" never buys a loosened gate or a fabricated number.
 
-## LOCKED — aesthetic direction: **Editorial-Instrument** (owner, 2026-07-05)
+## LOCKED — aesthetic direction: **Instrument / Tony-Stark HUD** (owner, 2026-07-05, CORRECTED)
 
-Editorial owns the *story* (serif verdict headline, crafted voice, whitespace, intentional rules);
-Instrument owns the *data* (mono numerals, gauges, signal traces, HUD precision). Unified by
-letterspaced mono labels, hairline rules, and green reserved strictly for a graded-good value.
-Chat mockups approved (`compy_home_editorial_instrument_blend`). Pilot = Home, built full-fidelity
-in Figma/v0, flag-gated DEFAULT OFF, then rolled to all five rooms.
+**Editorial is RETIRED (owner reversal 2026-07-05, after seeing the built version).** Serif/type-led
+"story" composition fights a live-telemetry app — editorial says *read slowly*, Compy says *watch this
+happen*. Cowork should have held that line earlier ([[challenge-taste-mismatches]]); dropping it now.
+
+**The direction is a pure operator-console / JARVIS instrument aesthetic:** the whole UI reads as a
+high-end diagnostic HUD / spacecraft cockpit. Technical (mono/display) type, NOT serif. Gauges,
+oscilloscope signal traces, HUD framing + corner brackets, scanline/CRT skin, the holographic rig,
+glowing precision strokes, data-dense but clean. Numbers + live status are the heroes; copy stays
+plain-language + honest but delivered in a terse SYSTEM voice, not prose. The JARVIS interactive layer
+(draggable 3D rig + parallax, data-reactive motion, scan/HUD) is core, not garnish.
+
+**The one risk to steer against (Cowork's job to enforce):** "techy" must NOT tip into gamer-RGB /
+neon-slop cliché. The real Stark HUD is *clean, restrained, legible* — advanced-feeling through
+precision and motion, not clutter or rainbow glow. Restraint + honesty + readability are the rails.
+
+Pilot = Home, built full-fidelity, flag-gated DEFAULT OFF; **owner eyeballs the Home pilot before the
+language rolls to the other four rooms** (checkpoint reinstated — a taste-critical direction earns one
+confirm before a full-marathon rollout).
 
 ## Interaction / motion layer — "JARVIS-grade" (owner, 2026-07-05)
 
@@ -162,7 +175,38 @@ drag-orbit + parallax depth + a boot/scan sweep on load; telemetry column — li
 count-up on real values + magnetic hover reveals; room transitions — an instrument "retune" wipe;
 Monitor — the meters as living oscilloscope traces. All flag-gated, all honest, all reduced-motion-safe.
 
-## PILOT DESIGN RECORD — Home shipped (Fable, 2026-07-05, creative-authority lane)
+## PILOT DESIGN RECORD v2 — pure-HUD Home shipped (Fable, 2026-07-05, post-correction)
+
+**Supersedes the v1 (editorial) record below.** Editorial retired per the CORRECTED direction:
+serif fonts deleted from the repo (Instrument Serif woff2 + OFL), `editorial-rooms.css` +
+`HomeEditorial` + the four rooms' editorial masthead branches removed — flag-on now changes
+HOME ONLY (checkpoint contract, pinned by `hud-rooms-untouched.test.tsx`). The preview flag
+KEEPS the `compy_editorial` storage-key literal (so the owner's existing opt-in carries over)
+but is now the **Instrument HUD** (Settings → Appearance "Instrument HUD (preview)", DEFAULT
+OFF; attribute `data-hud`, event `compy:hud-changed`; flag-off byte-identity pinned in
+`home-hud-flag.test.tsx`).
+
+The executed HUD design (`HomeHud.tsx` · `home-hud.css` · `tokens-hud.css`):
+- **Type roles:** NO serif. Geist Sans 600 uppercase letterspaced (0.06em) display verdict —
+  the system-console voice; Geist Mono for every machine value; 10px letterspaced uppercase
+  micro-labels as the section register. Terse SYSTEM masthead (`● RIG DIAGNOSTIC // date`,
+  segmented readout `CHECKS n/m MEASURED | ATTENTION n`); the plain-English honesty notes stay.
+- **No new hues.** `tokens-hud.css` adds only hairline/scanline/graph-grid alphas of text ink.
+  Color remains information: graded ink (probed live: fps green `rgb(70,217,138)`, 1% low amber),
+  status LEDs, violet for interaction. Sharp 2–3px radii.
+- **Signature instruments:** fps-vs-refresh **ring gauge** (measured avg over THIS display's Hz —
+  the same reference gradeFps grades against; renders only when both sides were read) ·
+  **oscilloscope trace** (sparkline on graph-paper ink with an honest caption) · bracketed +
+  ruler-ticked stage around the real hologram · whisper scanline on stage AND page (CRT skin,
+  alphas 0.028/0.014) · masthead LED that scans (pulses) only while checks actually run.
+- **JARVIS layer:** drag-orbit hologram (real Three.js) + event-driven pointer parallax on the
+  annotation plane only (no rAF loop, nothing on blur), CountUp on real values, scan sweep only
+  during a real check. All still under reduced-motion.
+- **Deps:** none added. GSAP/Lenis still deferred; v0/Figma MCPs not spent.
+- **Follow-ups for the rollout (after the owner's eyeball):** roll the HUD language to
+  Optimize/Monitor/Blackbook/Lab; deep Check/Fix internals de-slop + body-copy voice pass.
+
+## RETIRED — v1 pilot design record (editorial; kept as history)
 
 Flag `compy_editorial` (DEFAULT OFF, Settings → Appearance "Editorial look (preview)"); flag-off
 byte-identity test-pinned (`home-editorial-flag.test.tsx`). The executed design, recorded so the

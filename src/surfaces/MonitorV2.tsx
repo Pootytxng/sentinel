@@ -8,7 +8,6 @@ import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
 import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
 import { monitorVerdict, monitorMeasuredLine } from "./monitor-v2-data";
-import { useEditorialFlag } from "../design/use-editorial";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./monitor-v2.css";
 
@@ -51,7 +50,6 @@ type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2">;
 
 export function MonitorV2(props: Props) {
   const reduced = useReducedMotion();
-  const editorial = useEditorialFlag();
   const [segment, setSegment] = useState<Segment>("live");
   const [mode, setMode] = useState<ViewMode>(readViewMode);
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -78,14 +76,7 @@ export function MonitorV2(props: Props) {
       room="play"
       doorOpen={!capturing}
       verdict={
-        editorial ? (
-          // Editorial masthead (rollout, spec 2026-07-05): eyebrow + the composed serif
-          // verdict — a serif headline lands whole, not decoded. Same pure-helper text.
-          <>
-            <span className="edh-masthead-eyebrow">Live telemetry</span>
-            {verdict.headline}
-          </>
-        ) : reduced ? (
+        reduced ? (
           verdict.headline
         ) : (
           // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's

@@ -1,0 +1,29 @@
+/* ── Instrument-HUD token layer (pilot, spec 2026-07-05-ui-deslop-organic-directive,
+   CORRECTED direction — editorial retired, pure operator-console HUD) ──────────────────
+
+   The de-slop redesign's additions to the v2 contract: the hairline/scanline/grid inks the
+   diagnostic-HUD skin is drawn with. NO new hues and NO new fonts — everything composes the
+   existing v2 palette (text ink + accent at low alphas), so the HUD stays clean/restrained
+   across the five instrument themes; color remains information (graded values, status LEDs),
+   never decoration. The Stark-HUD read comes from precision strokes + type discipline
+   (mono machine values, letterspaced micro-labels), not glow clutter.
+
+   Scoping law (same as tokens-v2.css, guard-pinned in tokens-v2-guard.test.ts): every
+   selector carries [data-v2="on"], and additionally [data-hud="on"] — the flag-off
+   byte-identity mechanism for the preview (P-series contract, DEFAULT OFF). */
+
+:root[data-v2="on"][data-hud="on"] {
+  /* Hairline inks — instrument-frame lines + rules (text ink at low alpha). */
+  --hud-hairline: rgba(232, 235, 242, 0.1);
+  --hud-hairline-strong: rgba(232, 235, 242, 0.22);
+
+  /* Scanline fields — "felt not seen". Stage = the bay's CRT skin; page = a whisper. */
+  --hud-scanline: rgba(232, 235, 242, 0.028);
+  --hud-scanline-page: rgba(232, 235, 242, 0.014);
+
+  /* Graph-paper ink — the oscilloscope trace panel's grid. */
+  --hud-grid: rgba(232, 235, 242, 0.055);
+
+  /* Bay atmosphere — the faint depth wash behind the hologram. */
+  --hud-bay: rgba(10, 12, 16, 0.55);
+}

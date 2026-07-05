@@ -41,11 +41,10 @@ const loadV2Css = (...path: string[]): string =>
   readFileSync(join("src", ...path), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const tokensCss = loadV2Css("design", "tokens-v2.css");
-const editorialTokensCss = loadV2Css("design", "tokens-editorial.css");
-const editorialRoomsCss = loadV2Css("design", "editorial-rooms.css");
+const hudTokensCss = loadV2Css("design", "tokens-hud.css");
 const shellCss = loadV2Css("design", "shell-v2.css");
 const homeCss = loadV2Css("surfaces", "home-v2.css");
-const homeEditorialCss = loadV2Css("surfaces", "home-editorial.css");
+const homeHudCss = loadV2Css("surfaces", "home-hud.css");
 const optimizeCss = loadV2Css("surfaces", "optimize-v2.css");
 const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
@@ -54,11 +53,10 @@ const labCss = loadV2Css("surfaces", "lab-v2.css");
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
   ["tokens-v2.css", tokensCss],
-  ["tokens-editorial.css", editorialTokensCss],
-  ["editorial-rooms.css", editorialRoomsCss],
+  ["tokens-hud.css", hudTokensCss],
   ["shell-v2.css", shellCss],
   ["home-v2.css", homeCss],
-  ["home-editorial.css", homeEditorialCss],
+  ["home-hud.css", homeHudCss],
   ["optimize-v2.css", optimizeCss],
   ["monitor-v2.css", monitorCss],
   ["blackbook-v2.css", blackbookCss],
@@ -108,8 +106,7 @@ describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
   const SURFACE_CSS: [string, string][] = [
     ["shell-v2.css", shellCss],
     ["home-v2.css", homeCss],
-    ["home-editorial.css", homeEditorialCss],
-    ["editorial-rooms.css", editorialRoomsCss],
+    ["home-hud.css", homeHudCss],
     ["optimize-v2.css", optimizeCss],
     ["monitor-v2.css", monitorCss],
     ["blackbook-v2.css", blackbookCss],

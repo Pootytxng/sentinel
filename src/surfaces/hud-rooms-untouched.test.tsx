@@ -6,11 +6,11 @@ import { BlackbookV2 } from "./BlackbookV2";
 import { LabV2 } from "./LabV2";
 import type { SessionSummary } from "../types";
 
-// Editorial rollout guards (spec 2026-07-05-ui-deslop-organic-directive): the four remaining
-// rooms wear the editorial masthead ONLY under compy_editorial — flag off (absent OR "0"),
-// each room renders byte-identical with zero editorial DOM (P-series contract, same standard
-// as home-editorial-flag.test.tsx). Flag on, each room's masthead eyebrow is pinned and the
-// verdict stays the pure helper's text (composed, not decoded).
+// Checkpoint guard (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED direction):
+// editorial is RETIRED and the Instrument-HUD pilot is HOME-ONLY until the owner eyeballs it —
+// the other four rooms must render byte-identical whether the preview flag is on or off, with
+// zero editorial/HUD DOM either way. When the rollout is approved this file is superseded by
+// per-room flag guards (the home-hud-flag.test.tsx pattern).
 
 vi.mock("./Check", () => ({ default: () => <div data-testid="check-stub" /> }));
 vi.mock("./Fix", () => ({ default: () => <div data-testid="fix-stub" /> }));
@@ -61,11 +61,10 @@ const session = {
 } as SessionSummary;
 
 // One light mount per room — the composed heavy surfaces are stubbed (covered by their own
-// suites); what this file pins is the masthead contract around them.
-const ROOMS: { name: string; eyebrow: string; mount: () => HTMLElement }[] = [
+// suites); what this file pins is that the flag changes NOTHING outside Home.
+const ROOMS: { name: string; mount: () => HTMLElement }[] = [
   {
     name: "OptimizeV2",
-    eyebrow: "The fix list",
     mount: () =>
       render(
         <OptimizeV2
@@ -90,7 +89,6 @@ const ROOMS: { name: string; eyebrow: string; mount: () => HTMLElement }[] = [
   },
   {
     name: "MonitorV2",
-    eyebrow: "Live telemetry",
     mount: () =>
       render(
         <MonitorV2
@@ -110,41 +108,27 @@ const ROOMS: { name: string; eyebrow: string; mount: () => HTMLElement }[] = [
   },
   {
     name: "BlackbookV2",
-    eyebrow: "Claims, graded",
     mount: () => render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />).container,
   },
   {
     name: "LabV2",
-    eyebrow: "The bench",
     mount: () => render(<LabV2 vendor="amd" />).container,
   },
 ];
 
-describe("compy_editorial flag-off byte-identity (rollout rooms)", () => {
+describe("HUD pilot is Home-only: the four rooms ignore the flag (checkpoint contract)", () => {
   for (const room of ROOMS) {
-    it(`${room.name}: flag absent and flag='0' render byte-identical, zero editorial DOM`, () => {
-      const absent = room.mount().innerHTML;
+    it(`${room.name}: flag on renders byte-identical to flag off, zero editorial/HUD DOM`, () => {
+      const off = room.mount().innerHTML;
       cleanup();
       // Composed surfaces persist their own first-run state (e.g. Learn's grade-key fold) —
       // clear it so the SECOND mount is the same first-run, isolating the flag as the only delta.
       localStorage.clear();
-      localStorage.setItem("compy_editorial", "0");
-      const off = room.mount();
-      expect(off.innerHTML).toBe(absent);
-      expect(off.querySelector(".edh-masthead-eyebrow")).toBeNull();
-    });
-  }
-});
-
-describe("compy_editorial flag-on masthead (rollout rooms)", () => {
-  for (const room of ROOMS) {
-    it(`${room.name}: wears its eyebrow inside the ONE RoomShell verdict`, () => {
       localStorage.setItem("compy_editorial", "1");
-      const c = room.mount();
-      const eyebrows = c.querySelectorAll(".edh-masthead-eyebrow");
-      expect(eyebrows).toHaveLength(1);
-      expect(eyebrows[0].textContent).toBe(room.eyebrow);
-      expect(c.querySelectorAll(".v2-verdict h1")).toHaveLength(1);
+      const on = room.mount();
+      expect(on.innerHTML).toBe(off);
+      expect(on.querySelector(".edh-masthead-eyebrow")).toBeNull();
+      expect(on.querySelector("[class*='hud-']")).toBeNull();
     });
   }
 });

@@ -11,8 +11,8 @@ import {
   applyLivingInstrument,
   readLabGuided,
   applyLabGuided,
-  readEditorial,
-  applyEditorial,
+  readHud,
+  applyHud,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -129,7 +129,7 @@ export default function Settings({
   const [ambiance, setAmbiance] = useState<Ambiance>(() => readAmbianceChoice() ?? "calm");
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
-  const [editorial, setEditorial] = useState<boolean>(readEditorial);
+  const [hud, setHud] = useState<boolean>(readHud);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -172,11 +172,12 @@ export default function Settings({
     setLabGuided(v);
     applyLabGuided(v);
   };
-  // Editorial-Instrument preview — the de-slop redesign pilot (Home first). Presentation only:
-  // the same measured numbers, the same probes; flag off renders today's rooms byte-identical.
-  const changeEditorial = (v: boolean) => {
-    setEditorial(v);
-    applyEditorial(v);
+  // Instrument-HUD preview — the de-slop redesign pilot (Home first; editorial retired,
+  // CORRECTED direction). Presentation only: the same measured numbers, the same probes;
+  // flag off renders today's rooms byte-identical.
+  const changeHud = (v: boolean) => {
+    setHud(v);
+    applyHud(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -282,14 +283,14 @@ export default function Settings({
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Editorial look (preview)</div>
+                  <div className="set-row-title">Instrument HUD (preview)</div>
                   <div className="set-row-sub">
-                    A magazine-meets-instrument redesign, starting with Home: serif verdict,
-                    telemetry ledger, bracketed rig bay. Same numbers, same measurements — only
-                    the presentation changes.
+                    A diagnostic-HUD redesign, starting with Home: console verdict, telemetry
+                    readouts, bracketed rig bay. Same numbers, same measurements — only the
+                    presentation changes.
                   </div>
                 </div>
-                <Toggle on={editorial} onChange={changeEditorial} ariaLabel="Editorial look preview" />
+                <Toggle on={hud} onChange={changeHud} ariaLabel="Instrument HUD preview" />
               </div>
 
             </div>
