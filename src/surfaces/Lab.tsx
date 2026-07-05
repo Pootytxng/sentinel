@@ -389,8 +389,10 @@ export default function Lab({
 
         {/* Latest readings (fill pass, spec 2026-07-05): ONE quiet foot-of-room strip consolidating
             the newest value per instrument — an at-a-glance overview over the SAME reads the cards
-            above already made (zero new IPC). V2 rooms only; classic Lab renders untouched. */}
-        {v2 && (
+            above already made (zero new IPC). V2 rooms only; classic Lab renders untouched.
+            Guided bench: absent — each station's "what the reading means" line carries the same
+            live value, so the strip would state every reading twice (superseded per the spec). */}
+        {v2 && !guided && (
           <div className="lab-readings">
             <span className="lab-readings-k">Latest readings</span>
             {labLatestReadings({

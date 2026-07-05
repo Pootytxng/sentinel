@@ -158,6 +158,17 @@ describe("'Which tool do I need?' router (§A)", () => {
     expect(stations).toEqual(["Latency", "Benchmark", "Black Box"]);
   });
 
+  it("flag on: the 'Latest readings' strip is gone — its role lives in the station reading lines", () => {
+    const c = renderGuided();
+    expect(c.querySelector(".lab-readings")).toBeNull();
+    // Every present station still carries a live reading line (the strip's role, absorbed).
+    expect(
+      Array.from(c.querySelectorAll(".lab-station-line dt")).filter(
+        (d) => d.textContent === "What the reading means",
+      ),
+    ).toHaveLength(5);
+  });
+
   it("clicking a row expands that station in place (no teleport)", () => {
     const c = renderGuided();
     const rows = Array.from(c.querySelectorAll<HTMLButtonElement>(".lab-router-row"));
