@@ -196,6 +196,37 @@ describe("Fix", () => {
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
 
+  // bug→guard (V2 nits pass, spec 2026-07-05): a no-op receipt (prior == after) must NOT render a
+  // change arrow — it says "Already <state> — no change needed" on both the collapsed active card
+  // and the expanded history receipt. Real states keep the arrow.
+  it("no-op receipt (restores_label === applied_label) drops the arrow for honest no-change copy", () => {
+    const noop = {
+      ...activeChange,
+      restores_label: "Disabled",
+      applied_label: "Disabled",
+    };
+    render(<Fix recs={[]} {...baseProps} changes={[noop]} />);
+    // Collapsed active card: no-change copy, no arrow anywhere.
+    expect(screen.getByText(/Already Disabled — no change needed/)).toBeTruthy();
+    expect(screen.queryByText(/→/)).toBeNull();
+    // Expanded history receipt: same honesty. History is collapsed — open it, then the row.
+    fireEvent.click(screen.getByText("History"));
+    fireEvent.click(screen.getByRole("button", { name: /Game Mode/ }));
+    expect(screen.getAllByText(/no change needed/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/Before/)).toBeNull();
+  });
+
+  it("a real change (restores_label !== applied_label) keeps the → arrow", () => {
+    const real = {
+      ...activeChange,
+      restores_label: "Enabled",
+      applied_label: "Disabled",
+    };
+    render(<Fix recs={[]} {...baseProps} changes={[real]} />);
+    expect(screen.getByText(/Enabled → Disabled/)).toBeTruthy();
+    expect(screen.queryByText(/no change needed/)).toBeNull();
+  });
+
   it('view="history" renders the full-history layer ONLY (no active layer, no fixes)', () => {
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} changes={[activeChange]} view="history" />);
     expect(screen.getByText("History")).toBeTruthy();

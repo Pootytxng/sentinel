@@ -609,7 +609,9 @@ function ActiveChangeCard({
         <p className="fix-row-reason">
           Active since {humanizeWhen(change.applied_at)}
           {change.restores_label && change.applied_label
-            ? ` · ${change.restores_label} → ${change.applied_label}`
+            ? change.restores_label === change.applied_label
+              ? ` · Already ${change.applied_label} — no change needed`
+              : ` · ${change.restores_label} → ${change.applied_label}`
             : change.restores_label
               ? ` · rolls back to ${change.restores_label}`
               : ""}
@@ -639,10 +641,16 @@ function HistoryRow({ change }: { change: AppliedChange }) {
       {open && (
         <div className="fix-hist-detail">
           {change.restores_label && change.applied_label ? (
-            <div>
-              Before <strong>{change.restores_label}</strong> → after{" "}
-              <strong>{change.applied_label}</strong>
-            </div>
+            change.restores_label === change.applied_label ? (
+              <div>
+                Already <strong>{change.applied_label}</strong> — no change needed
+              </div>
+            ) : (
+              <div>
+                Before <strong>{change.restores_label}</strong> → after{" "}
+                <strong>{change.applied_label}</strong>
+              </div>
+            )
           ) : change.restores_label ? (
             <div>
               Restores: <strong>{change.restores_label}</strong>
