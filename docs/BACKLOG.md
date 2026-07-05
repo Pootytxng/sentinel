@@ -467,11 +467,18 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   "setting(s)"/"Tune" (`readiness.rs`; cargo 659 · clippy clean · no gate/mutation/IPC change).
   P4 verified: tsc clean · vitest 800/800 · cargo 659 · live self-review shots
   `docs/ui-sweep/shots/p4/`.
-- [ ] P6 "Journey" pass (spec direction in `docs/superpowers/specs/2026-07-02-full-tidy-directive.md`):
-  one forward door per room + shared RoomShell template + tour alignment — **UNBLOCKED 2026-07-02**
-  (the owner's keep-the-look verdict above was the gate). Cowork lane: write the detailed spec
-  (a draft `2026-07-02-p6-journey-spec.md` was already in the worktree during P4 — finish/land it);
-  CC builds after. Flag-gated `compy_journey`, DEFAULT OFF.
+- [x] **P6 "Journey" pass — SHIPPED via the V2 shell train** (Cowork audit 2026-07-04, verified in code; ledger
+  was stale — this item and the kickoff's "land the P6 spec" thread predated the V2 train absorbing it). The
+  V2-2..V2-8 train re-scoped the P6 spec (`2026-07-02-p6-journey-spec.md`) directly onto the V2 shell rather than a
+  separate `compy_journey` flag. `src/design/room-shell.tsx` ships the `RoomShell` 5-slot skeleton (§1), the
+  `ForwardDoor` primitive, and `DOOR_MAP` with the EXACT §2 copy/destinations (home→"Find what's worth fixing"→Optimize
+  · fix→"Watch it live"→Monitor · play→"See what changed"→Blackbook · learn→"Open the instruments"→Lab · lab→none) plus
+  the §2 `doorOpen` placement rules (Optimize opens only in apply-complete; Monitor closes during live capture). The
+  door renders inside RoomShell keyed by DOOR_MAP so a room can't pick its own destination — cleaner than the spec's
+  per-room render. §3 guards live in `room-shell.test.tsx` (copy + destinations pinned literally); §4 tour alignment =
+  the SetupTour journey recap (`SetupTour.tsx:39`). Hard line held: `git diff 706094f..4e07420 -- src-tauri/` empty.
+  Shipped DEFAULT-ON as part of the owner-greenlit V2 train (not a preview flag), so P6's reversibility contract was
+  satisfied by the V2 train's own gate. **Nothing left to land.**
 - [x] **P5 calm chrome (side-pile collapse + chrome/motion pass)** — `33669a1` (2026-07-02): behind
   `compy_calm_chrome` (**DEFAULT OFF**, Settings → Appearance preview toggle; flag-off byte-identical,
   test-pinned). ONE "Nothing else needs attention" expander at the foot of Optimize/Fixes swallows all six
