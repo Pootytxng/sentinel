@@ -6,7 +6,7 @@ import rawTweaks from "./tweaks.json";
 import rawTerms from "./terms.json";
 import rawTricks from "./tricks.json";
 import rawGuides from "./guides.json";
-import { KNOWLEDGE, KNOWLEDGE_BY_ID, APPLIES_BY_ID, DATES_BY_ID, formatEntryDate } from "./knowledge";
+import { KNOWLEDGE, KNOWLEDGE_BY_ID, APPLIES_BY_ID, DATES_BY_ID, formatEntryDate, supersessionChain } from "./knowledge";
 import { TOPIC_BY_ID, TOPICS } from "./knowledge-topics";
 import { APPLICABILITY, type Applicability } from "./knowledge-topics";
 
@@ -121,6 +121,24 @@ describe("knowledge dataset lint", () => {
       }
     }
     expect(offenders, `lifecycle problems:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("lifecycle: every supersession chain terminates at a CURRENT entry (no cycles, no dead ends)", () => {
+    // A5 chain guard: Learn resolves the chain to its end and links THERE — so the corpus must
+    // guarantee every chain reaches a non-superseded entry. A cycle or a broken mid-chain link
+    // would strand the reader on stale guidance.
+    const byId = new Map(KNOWLEDGE.map((e) => [e.id, e]));
+    const offenders: string[] = [];
+    for (const e of KNOWLEDGE) {
+      if (e.status !== "superseded") continue;
+      const chain = supersessionChain(e, byId);
+      if (chain.length === 0) {
+        offenders.push(`${e.id}: supersession chain resolves to nothing`);
+      } else if (chain[chain.length - 1].status === "superseded") {
+        offenders.push(`${e.id}: chain ends on a still-superseded entry (cycle or broken link)`);
+      }
+    }
+    expect(offenders, `chain problems:\n${offenders.join("\n")}`).toEqual([]);
   });
 
   it("no two entries of the SAME type claim the same alias (search/autopsy shadowing)", () => {

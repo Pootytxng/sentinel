@@ -4,6 +4,7 @@ import {
   KNOWLEDGE_BY_ID,
   relatedIds,
   formatEntryDate,
+  supersessionChain,
   type KnowledgeEntry,
   type KnowledgeType,
   type TweakVerdict,
@@ -210,6 +211,9 @@ function EntryBody({ entry, onNavigate }: { entry: KnowledgeEntry; onNavigate: (
 
 // A3 lifecycle — an outdated entry stays findable but reads honestly as superseded/deprecated
 // (the corpus is publishable: an old debunk points to its replacement, never silently misleads).
+// A5 chain close-out: the link resolves the supersession chain to its CURRENT end — a reader on
+// a twice-replaced entry lands on today's guidance, never on another stale stop; multi-hop
+// chains name the path so the trail stays auditable.
 function SupersededNote({
   entry,
   onNavigate,
@@ -217,10 +221,9 @@ function SupersededNote({
   entry: KnowledgeEntry;
   onNavigate: (id: string) => void;
 }) {
-  const target =
-    entry.status === "superseded" && entry.supersededBy
-      ? KNOWLEDGE_BY_ID.get(entry.supersededBy)
-      : undefined;
+  const chain =
+    entry.status === "superseded" ? supersessionChain(entry, KNOWLEDGE_BY_ID) : [];
+  const target = chain.length > 0 ? chain[chain.length - 1] : undefined;
   return (
     <p className="lx-superseded" role="note">
       {entry.status === "superseded" ? (
@@ -231,12 +234,17 @@ function SupersededNote({
               <button
                 type="button"
                 className="lx-superseded-link"
-                onClick={() => onNavigate(entry.supersededBy!)}
+                onClick={() => onNavigate(target.id)}
               >
                 {target.name}
               </button>
             </>
           ) : null}. Kept for reference; the current guidance has moved on.
+          {chain.length > 1 && (
+            <span className="lx-superseded-chain">
+              Replaced in steps: {entry.name} → {chain.map((c) => c.name).join(" → ")}
+            </span>
+          )}
         </>
       ) : (
         <>⚠ Outdated — kept for reference; this guidance is no longer current.</>

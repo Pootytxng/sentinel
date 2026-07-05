@@ -164,6 +164,28 @@ export function lifecycle(t: Raw): { status?: "deprecated" | "superseded"; super
   return {};
 }
 
+// A3 supersession chain — walk supersededBy links transitively to the CURRENT end of the line,
+// so a reader landing on a twice-replaced entry gets pointed at today's guidance, not at another
+// stale stop. Pure + defensive: cycle-safe (a repeated id ends the walk) and missing-target-safe
+// (stops at the last resolvable entry). Returns the ordered replacements AFTER `entry`
+// ([] when the entry isn't superseded or its target can't be resolved).
+export function supersessionChain(
+  entry: Pick<KnowledgeEntry, "id" | "status" | "supersededBy">,
+  byId: ReadonlyMap<string, KnowledgeEntry>,
+): KnowledgeEntry[] {
+  const chain: KnowledgeEntry[] = [];
+  const seen = new Set<string>([entry.id]);
+  let cur = entry.status === "superseded" ? entry.supersededBy : undefined;
+  while (cur && !seen.has(cur)) {
+    const next = byId.get(cur);
+    if (!next) break;
+    chain.push(next);
+    seen.add(cur);
+    cur = next.status === "superseded" ? next.supersededBy : undefined;
+  }
+  return chain;
+}
+
 // Apply the central applicability map to a fully-built entry — adds `applies` ONLY when this id has
 // tags, so an unmapped (universal) entry keeps `applies` undefined rather than an empty array. Done as
 // one normalization pass over the assembled corpus so it covers EVERY source uniformly (the four JSON

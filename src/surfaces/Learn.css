@@ -878,3 +878,10 @@
   color: var(--ix-accent);
   text-decoration-thickness: 2px;
 }
+/* A5 supersession chain — the quiet audit trail under a multi-hop note ("A → B → C"). */
+.lx-superseded-chain {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--ix-text-3, var(--ix-text-2));
+}
