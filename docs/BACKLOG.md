@@ -35,6 +35,23 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-07-05d — A5/A6 finishables cleared (Fable autonomous, same session as 05c) — `main` @ `c6c00a4`
+The queued non-gated finishables, all six shipped after the HUD pilot checkpoint:
+- ✅ `2f698e4` **A6 anchor test** (test-only): export-layer anchor integrity for every RetailLink.
+- ✅ `2f5b675` **rig-tag train**: `hw_fingerprint` stamped on every new receipt (one funnel, all
+  paths) + driver-insensitive `on_this_rig` · History "This rig only" filter (legacy rows never
+  hidden) · "last seen working on" tag/receipt-line/active-card heads-up · fuller before/after
+  (TrustSnapshotLine " · set to <after>", locked §6 copy intact). Mutation/rollback boundary
+  untouched; rollback still resolves from history.json alone.
+- ✅ `d060b07` **supersession chain**: transitive resolver + Learn links the CURRENT end + corpus
+  lint pins chain termination.
+- ✅ `c6c00a4` **applicability override**: reversible "My hardware supports this" on
+  capability-gated recs; same audited apply path; decision on record.
+- **Verify GREEN:** cargo 662 + clippy clean · vitest **1013** · tsc 0 · fixture-mount self-review
+  at native 1500×980 (`docs/ui-sweep/shots/hud/*fixture*.png`; new `cdp-eval-file.mjs` driver).
+- The A5/A6 `[~]` tail is now **zero**; remaining non-gated work is the owner-gated-adjacent
+  redesign rollout (waits on the HUD eyeball) — see the top lane.
+
 ### Cycle 2026-07-05c — DIRECTION CORRECTION: editorial retired → pure Instrument-HUD Home pilot (Fable autonomous) — `main` @ `b60a2b5`
 Owner saw the built editorial and REVERSED it — serif/magazine composition fights a live-telemetry
 app. Spec CORRECTED (pure operator-console/Stark HUD, restraint rails, never gamer-RGB); this cycle
@@ -474,12 +491,12 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] override toggle — "Restore all (N)" bulk control in the Dismissed strip (Fix.tsx, ≥2 dismissed, reversible, zero IPC)
 - [x] drift-watch integration — `drift.rs`, `Check.tsx:325`
 - [x] historical-ledger surfacing — `Fix.tsx:712`
-- [~] applicability check — eligibility filter exists; no override for ineligible
-- [~] obsolescence/superseded flags — status field only; no supersession chain
-- [~] before/after delta display — shows rollback target only, no full diff
-- [~] "last seen working on" hardware tag — backend names prior state; no UI card
+- [x] applicability check + override — eligibility filter + A5 override: "My hardware supports this" on capability-gated recs in the Not-for-this-rig pile; rec rejoins the normal flow through the SAME audited apply path; reversible, decision kept on record ("overridden by you" + Compy's original read + "Set aside again"); localStorage pref (`eligibility-override.ts`), zero IPC — `c6c00a4`
+- [x] obsolescence/superseded flags + supersession CHAIN — pure `supersessionChain()` (cycle-safe, missing-target-safe) resolves transitively; Learn's superseded note links the CURRENT end of the line + names multi-hop paths; corpus lint pins chain termination — `d060b07`
+- [x] before/after delta display — full pair everywhere: TrustSnapshotLine appends " · set to <after>" ADDITIVELY (locked kernel-§6 sentence verbatim, test-pinned); Fix + CommandCenter pass the typed applied_label — `2f5b675`
+- [x] "last seen working on" hardware tag — AppliedChange stamps `hw_fingerprint` at apply time (ONE receipt funnel covers all paths); `on_this_rig` computed driver-INsensitively (gpu·ram·display); history receipts + active cards show "Last seen working on <gpu · ram> — before your hardware changed"; legacy entries stay honest "rig unknown" — `2f5b675`
 - [x] per-tweak audit trail — `Fix.tsx:423`
-- [~] ledger filter "this rig only" — no UI toggle
+- [x] ledger filter "this rig only" — History checkbox, rendered only when some entry is KNOWN to be from other hardware; hides exactly those (legacy unstamped rows never hidden); hidden count named — `2f5b675`
 - [x] measured-payoff linkage — per-tweak honest payoff meter: `payoff_label_from_action` (history.rs) names the KIND of gain (input latency / background CPU&RAM / network / power&thermal / …), never a fabricated number; rendered as a quiet advisory chip on active + history ledger rows (Fix.tsx)
 
 ### A6 · UPGRADE-PATH advisory — **complete** (affiliate tags = Phase D)
@@ -488,7 +505,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] session-qualified copy — `priorities.rs:109`
 - [x] copy-only buttons (no URL opener) — `Check.tsx:207`
 - [x] plain retailer links (no tags) + disclosure — `priorities.rs:81`
-- [~] markdown-export anchors — present; not independently tested
+- [x] markdown-export anchors — independently tested: anchor-format integrity for EVERY RetailLink (count parity, well-formed Markdown, https-only, export-layer tracking-marker ban mirroring the priorities guard) — `2f698e4`
 - [x] test "no tags + disclosure always paired" — comprehensive affiliate/tracking guard over ALL retail links (const tables, 12 markers, https-only) + single-item disclosure pairing locked (`priorities.rs` tests)
 
 ---
