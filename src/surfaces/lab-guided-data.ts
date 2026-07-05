@@ -61,6 +61,40 @@ export const LAB_STATIONS: Record<LabStationKey, LabStationInfo> = {
   },
 };
 
+// "Which tool do I need?" — the symptom→station router (§A). The copy is the spec's, pinned
+// literally by lab-guided.test.tsx: real-world feelings, each mapped to exactly one station with
+// the plain-English because. Lab filters rows to the stations this rig actually has (a row must
+// never point at a station that isn't there — no dead ends).
+export type LabRouterRow = { symptom: string; station: LabStationKey; because: string };
+
+export const LAB_ROUTER: LabRouterRow[] = [
+  {
+    symptom: "My aim/clicks feel a beat behind",
+    station: "latency",
+    because: "it traces mouse→screen and names what's adding delay",
+  },
+  {
+    symptom: "Did that tweak actually help — or did I imagine it?",
+    station: "benchmark",
+    because: "it grades a real before/after against a noise floor",
+  },
+  {
+    symptom: "It runs hot / loud, I want it cooler without losing frames",
+    station: "tuning",
+    because: "it measures whether an undervolt dropped temps AND held frames",
+  },
+  {
+    symptom: "It crashed or froze and I don't know why",
+    station: "blackbox",
+    because: "it reads Windows' own crash & freeze record in plain English",
+  },
+  {
+    symptom: "I just want to know what's in this rig",
+    station: "diagnostics",
+    because: "read-only forensics — everything Compy detected, raw",
+  },
+];
+
 // The live inputs — the SAME state the instrument bodies render from (zero new IPC; Lab already
 // holds all of these).
 export type LabStationFacts = {

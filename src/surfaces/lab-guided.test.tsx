@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 // Lab + the embedded instrument tabs poll on mount; mock invoke so they don't throw.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
 import Lab from "./Lab";
+import { LAB_ROUTER } from "./lab-guided-data";
 
 // Guards for the guided Lab bench (spec 2026-07-05-lab-linear-guided-bench).
 // The redesign is behind compy_lab_guided, DEFAULT OFF — these tests pin the reversibility
@@ -111,5 +112,58 @@ describe("guided bench stations (§B)", () => {
     const line = await screen.findByText(/Last verdict: Improved/);
     expect(line.textContent).toMatch(/moved more than the run's own noise/);
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+});
+
+describe("'Which tool do I need?' router (§A)", () => {
+  it("pins the symptom→station map literally (the spec's copy, word for word)", () => {
+    expect(LAB_ROUTER).toEqual([
+      {
+        symptom: "My aim/clicks feel a beat behind",
+        station: "latency",
+        because: "it traces mouse→screen and names what's adding delay",
+      },
+      {
+        symptom: "Did that tweak actually help — or did I imagine it?",
+        station: "benchmark",
+        because: "it grades a real before/after against a noise floor",
+      },
+      {
+        symptom: "It runs hot / loud, I want it cooler without losing frames",
+        station: "tuning",
+        because: "it measures whether an undervolt dropped temps AND held frames",
+      },
+      {
+        symptom: "It crashed or froze and I don't know why",
+        station: "blackbox",
+        because: "it reads Windows' own crash & freeze record in plain English",
+      },
+      {
+        symptom: "I just want to know what's in this rig",
+        station: "diagnostics",
+        because: "read-only forensics — everything Compy detected, raw",
+      },
+    ]);
+  });
+
+  it("renders one row per station this rig has — never a row for a missing tool", () => {
+    const c = renderGuided();
+    expect(c.querySelectorAll(".lab-router-row")).toHaveLength(5);
+    cleanup();
+    localStorage.setItem("compy_lab_guided", "1");
+    const bare = render(<Lab v2 vendor="nvidia" />).container; // no Tuning, no Diagnostics
+    const stations = Array.from(bare.querySelectorAll(".lab-router-station")).map(
+      (s) => s.textContent,
+    );
+    expect(stations).toEqual(["Latency", "Benchmark", "Black Box"]);
+  });
+
+  it("clicking a row expands that station in place (no teleport)", () => {
+    const c = renderGuided();
+    const rows = Array.from(c.querySelectorAll<HTMLButtonElement>(".lab-router-row"));
+    const latencyRow = rows.find((r) => r.textContent!.includes("a beat behind"))!;
+    fireEvent.click(latencyRow);
+    const card = c.querySelector("#lab-station-latency")!;
+    expect(card.querySelector(".lab-card-head")!.getAttribute("aria-expanded")).toBe("true");
   });
 });

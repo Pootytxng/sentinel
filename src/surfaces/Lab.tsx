@@ -17,12 +17,14 @@ import { tuningGuideForVendor } from "../data/tuning-guides";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { labLatestReadings } from "./lab-v2-data";
 import {
+  LAB_ROUTER,
   LAB_STATION_ORDER,
   LAB_STATIONS,
   stationReading,
   type LabStationKey,
 } from "./lab-guided-data";
 import { readLabGuided } from "../design/theme";
+import { useReducedMotion } from "../design/use-motion";
 import { TuningInstrument } from "./TuningInstrument";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
@@ -95,6 +97,19 @@ export default function Lab({
     window.addEventListener("compy:lab-guided-changed", onChange);
     return () => window.removeEventListener("compy:lab-guided-changed", onChange);
   }, []);
+  const reduced = useReducedMotion();
+  // Router → station jump: an incrementing pulse per station tells that LabSection to expand
+  // (in-room scroll + expand — navigation never teleports). Jumping through the router counts as
+  // finding a door, same as clicking the card head.
+  const [pulses, setPulses] = useState<Partial<Record<LabStationKey, number>>>({});
+  const jumpToStation = (k: LabStationKey) => {
+    markInstrumentOpened();
+    setPulses((p) => ({ ...p, [k]: (p[k] ?? 0) + 1 }));
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`lab-station-${k}`);
+      el?.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    });
+  };
   const markInstrumentOpened = () => {
     if (welcomeSeen) return;
     setWelcomeSeen(true);
@@ -209,6 +224,28 @@ export default function Lab({
         </header>
         )}
 
+        {/* "Which tool do I need?" — the symptom→station router (§A, guided bench only): the
+            hand-hold that maps a real-world feeling to the right station. Rows are doors — click
+            scrolls to and expands that station in place (never teleports). Filtered to the
+            stations this rig has, so a row can never point at a missing tool. */}
+        {guided && (
+          <nav className="lab-router" aria-label="Which tool do I need?">
+            <div className="lab-router-title">Which tool do I need?</div>
+            {LAB_ROUTER.filter((r) => stationKeys.includes(r.station)).map((r) => (
+              <button
+                key={r.station}
+                className="lab-router-row cmp-door"
+                onClick={() => jumpToStation(r.station)}
+              >
+                <span className="lab-router-symptom">“{r.symptom}”</span>
+                <span className="lab-router-station">{LAB_STATIONS[r.station].name}</span>
+                <span className="lab-router-because">{r.because}</span>
+                <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
+              </button>
+            ))}
+          </nav>
+        )}
+
         {/* Welcome band — a static signpost for newcomers (bathroom law): what each instrument
             answers, in plain words. Deliberately KNOBLESS (doorknob law): no cmp-door, no click
             handler — the instrument cards below stay the only doors in the room. Folds away once the
@@ -257,6 +294,7 @@ export default function Lab({
               icon={STATION_ICON[k]}
               name={LAB_STATIONS[k].name}
               anchorId={`lab-station-${k}`}
+              openPulse={pulses[k]}
               station={{
                 n: i + 1,
                 forLine: LAB_STATIONS[k].forLine,
@@ -435,6 +473,7 @@ function LabSection({
   summary,
   station,
   anchorId,
+  openPulse,
   children,
   onFirstOpen,
 }: {
@@ -447,6 +486,9 @@ function LabSection({
   // Guided face: the numbered four-line station contract, rendered above the instrument body.
   station?: StationContract;
   anchorId?: string;
+  // Router jump: each increment forces this section open (never closed) — the router's "take me
+  // to my tool" is an expand, not a toggle.
+  openPulse?: number;
   children: ReactNode;
   // Fired the FIRST time this section is expanded — lets Lab retire the welcome band once the reader
   // has found a door. Opt-in (undefined = no-op), so the section stays a self-contained collapsible.
@@ -458,6 +500,11 @@ function LabSection({
       if (!o) onFirstOpen?.(); // opening (not closing) is the "found a door" signal
       return !o;
     });
+  // A router jump expands (never collapses) the target station. The caller already counted the
+  // jump as "found a door", so onFirstOpen isn't re-fired here.
+  useEffect(() => {
+    if (openPulse) setOpen(true);
+  }, [openPulse]);
   return (
     <div className={`lab-card ${open ? "lab-card-open" : ""}`} data-instrument={name} id={anchorId}>
       {/* WAI-ARIA accordion: the toggle button is wrapped in a native heading so screen-reader
