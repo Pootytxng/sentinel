@@ -52,6 +52,16 @@ The queued non-gated finishables, all six shipped after the HUD pilot checkpoint
 - The A5/A6 `[~]` tail is now **zero**; remaining non-gated work is the owner-gated-adjacent
   redesign rollout (waits on the HUD eyeball) — see the top lane.
 
+```
+COUNCIL STRIP — A5/A6 finishables train, 2026-07-05
+Contrarian: the applicability override is the one risk-bearing item — a user can now surface a capability-gated rec Compy's probe rejected; contained because the apply path, snapshot, and rollback are byte-identical and the pile keeps the decision auditable.
+First-Principles: rig identity belonged ON the receipt, not inferred later — stamping at the one funnel makes every future rig feature (filter, tag, per-rig analysis) a pure view over honest data.
+Expansionist: per-receipt fingerprints are the substrate for per-rig Receipts aggregation later (Phase C) without a schema migration.
+Outsider: the ledger now answers "which PC did this happen on?" — the first multi-rig-aware surface in the app.
+Executor: nothing here waits on the owner; the only open asks remain the two preview-toggle eyeballs.
+Chairman: the marginal tail is cleared with the boundary untouched — the backlog's non-gated lane is empty, honestly.
+```
+
 ### Cycle 2026-07-05c — DIRECTION CORRECTION: editorial retired → pure Instrument-HUD Home pilot (Fable autonomous) — `main` @ `b60a2b5`
 Owner saw the built editorial and REVERSED it — serif/magazine composition fights a live-telemetry
 app. Spec CORRECTED (pure operator-console/Stark HUD, restraint rails, never gamer-RGB); this cycle
