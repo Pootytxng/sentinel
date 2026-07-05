@@ -129,6 +129,19 @@
   border-radius: 3px;
 }
 
+/* ── Setup & Tour front door (Home) — the glassy gradient card joins the hairline language:
+   quiet chrome, glow only as a hover whisper. Orb/handlers untouched. ── */
+:root[data-v2="on"][data-editorial="on"] .stl-card {
+  background: transparent;
+  border: 1px solid var(--ed-hairline-strong);
+  border-radius: 4px;
+}
+:root[data-v2="on"][data-editorial="on"] .stl-card:hover {
+  border-color: var(--v2-accent-line);
+  box-shadow: none;
+  background: var(--v2-accent-dim);
+}
+
 /* ── Monitor room chrome ── */
 :root[data-v2="on"][data-editorial="on"] .mv2-bar {
   border-bottom-color: var(--ed-hairline);
