@@ -53,6 +53,12 @@ byte-identity test-pinned per room; zero `src-tauri` diff across the whole train
 - **⏳ OWNER (the only open gates on this lane):** flip "Editorial look (preview)" and react (taste
   gate for default-ON); eyeball the reworked guided Lab; then the deeper body-copy voice pass rides
   the approved direction.
+- **📋 NEXT-SESSION QUEUE (non-gated, session ended at the milestone per the owner's usage-economics
+  rule — not a false-done):** the A5/A6 `[~]` finishables, marginal-but-buildable: ledger
+  "this rig only" filter toggle · "last seen working on" hardware-tag UI card · fuller before/after
+  delta display on ledger rows · applicability override for ineligible recs · supersession chain
+  UI · (Rust, test-only) markdown-export anchor test. Plus, AFTER the owner approves the editorial
+  direction: deep Check/Fix internals de-slop + body-copy voice pass under the same flag.
 
 ```
 COUNCIL STRIP — Editorial-Instrument marathon, 2026-07-05
