@@ -1100,6 +1100,7 @@ mod safety_tests {
             ruleset_version_at_apply: None,
             elevation_used: None,
             provenance: None,
+            hw_fingerprint: None,
         }
     }
 
@@ -1172,6 +1173,7 @@ mod safety_tests {
             ruleset_version_at_apply: Some("1.0.0-baseline".into()),
             elevation_used: Some(true),
             provenance: None,
+            hw_fingerprint: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

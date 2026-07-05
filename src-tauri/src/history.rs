@@ -78,6 +78,13 @@ pub(crate) struct AppliedChange {
     /// optional — every pre-existing ledger entry deserializes with None.
     #[serde(default)]
     pub(crate) provenance: Option<String>,
+    /// A5 rig tagging: the hardware this change was applied ON (same compact identity sessions
+    /// carry — hardware::HwFingerprint). Stamped at apply time in build_applied_change, so every
+    /// receipt path (single, batch, suspend, debloat, leftovers) records where it happened.
+    /// Additive + optional — legacy entries deserialize with None and stay honestly "rig unknown".
+    /// Local-only; never leaves the machine.
+    #[serde(default)]
+    pub(crate) hw_fingerprint: Option<crate::hardware::HwFingerprint>,
 }
 
 // AppliedChange + a freshly-computed `is_still_active` flag. We never persist
@@ -111,6 +118,14 @@ pub(crate) struct AppliedChangeView {
     // the typed AppliedAction; None for legacy entries and for restore-to-stock leftovers (undoing
     // a bad past tweak is not a forward gain) → the UI shows no meter rather than an invented one.
     payoff_label: Option<String>,
+    // A5 rig tagging: the stamped apply-time fingerprint, passed through for the UI's
+    // "last seen working on <hardware>" tag. None for legacy entries.
+    hw_fingerprint: Option<crate::hardware::HwFingerprint>,
+    // Read-only, computed-at-read (never persisted): does the stamped rig match TODAY's rig?
+    // Compared on the stable identity fields only (gpu · ram_gb · display) — deliberately
+    // driver-INsensitive, unlike the session hash: a driver update must not make your own
+    // ledger read "different hardware". None = legacy entry with no stamp (honest unknown).
+    on_this_rig: Option<bool>,
 }
 
 impl AppliedChangeView {
@@ -211,6 +226,13 @@ fn payoff_label_from_action(action: &Option<AppliedAction>) -> Option<&'static s
     Some(label)
 }
 
+/// A5 rig tagging: does a stamped fingerprint identify TODAY's rig? Stable identity fields only
+/// (gpu · ram_gb · display) — deliberately driver-INsensitive, unlike the session hash: a driver
+/// update is still your rig, and must not hide your own ledger under a "this rig only" filter.
+fn same_rig(stamp: &crate::hardware::HwFingerprint, now: &crate::hardware::HwFingerprint) -> bool {
+    stamp.gpu == now.gpu && stamp.ram_gb == now.ram_gb && stamp.display == now.display
+}
+
 fn into_view(c: AppliedChange) -> AppliedChangeView {
     let is_still_active = if c.status == "applied" {
         check_change_active(&c)
@@ -220,6 +242,11 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
     let restores_label = restores_label_from_snapshot(&c.snapshot);
     let applied_label = applied_label_from_action(&c.applied_action);
     let payoff_label = payoff_label_from_action(&c.applied_action).map(str::to_string);
+    // None = legacy unstamped entry → the UI says "rig unknown", never guesses.
+    let on_this_rig = c
+        .hw_fingerprint
+        .as_ref()
+        .map(|f| same_rig(f, &crate::hardware::current_fingerprint()));
     AppliedChangeView {
         id: c.id,
         rec_id: c.rec_id,
@@ -236,6 +263,8 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         restores_label,
         applied_label,
         payoff_label,
+        hw_fingerprint: c.hw_fingerprint,
+        on_this_rig,
     }
 }
 
@@ -347,6 +376,9 @@ fn build_applied_change(
         ruleset_version_at_apply: Some("1.0.0-baseline".to_string()),
         elevation_used: Some(result.elevation_used),
         provenance: None,
+        // A5 rig tagging — every receipt path funnels through here, so every new entry
+        // records the hardware it was applied on. Local-only.
+        hw_fingerprint: Some(crate::hardware::current_fingerprint()),
     })
 }
 
@@ -1627,7 +1659,58 @@ mod history_tests {
             ruleset_version_at_apply: None,
             elevation_used: None,
             provenance: None,
+            hw_fingerprint: None,
         }
+    }
+
+    #[test]
+    fn rig_tagging_stamps_new_receipts_and_stays_backcompat() {
+        // A5 rig tagging: build_applied_change (the ONE receipt funnel) stamps the apply-time
+        // fingerprint; a legacy ledger JSON without the field still deserializes (None) and its
+        // view reports on_this_rig = None — honest "rig unknown", never a guess.
+        let result = ApplyResult {
+            applied_action: AppliedAction::DisableFastStartup,
+            rollback_action: RollbackAction::RestoreFastStartupFromSnapshot,
+            snapshot: Snapshot::FastStartup { prior_hiberboot: Some(1) },
+            elevation_used: false,
+        };
+        let c = build_applied_change("fast-startup-off", "t", result).expect("build");
+        let f = c.hw_fingerprint.as_ref().expect("new receipts must carry the rig stamp");
+        assert!(!f.hash.is_empty(), "stamp carries the digest");
+        // Stamped-on-THIS-rig entries read as this rig in the view.
+        let v = into_view(c);
+        assert_eq!(v.on_this_rig, Some(true), "freshly stamped on this rig → true");
+
+        // Back-compat: pre-tagging JSON (no hw_fingerprint key) deserializes to None.
+        let legacy = serde_json::json!({
+            "id": "x-1", "rec_id": "game-mode", "rec_title": "t",
+            "applied_at": "2026-01-01T00:00:00Z", "snapshot": { "prior": 1 },
+            "status": "rolled_back"
+        });
+        let parsed: AppliedChange = serde_json::from_value(legacy).expect("legacy parses");
+        assert!(parsed.hw_fingerprint.is_none());
+        assert_eq!(into_view(parsed).on_this_rig, None, "legacy → honest unknown");
+    }
+
+    #[test]
+    fn same_rig_ignores_driver_but_not_hardware() {
+        // The ledger comparison is driver-INsensitive (a driver update is still your rig) but
+        // flips on real hardware identity (gpu / ram / display).
+        let base = crate::hardware::HwFingerprint {
+            hash: "aa".into(),
+            gpu: "Radeon RX 9070 XT".into(),
+            gpu_driver: "25.5.1".into(),
+            ram_gb: 32,
+            display: "2560x1440@250".into(),
+        };
+        let driver_bump =
+            crate::hardware::HwFingerprint { gpu_driver: "25.6.0".into(), ..base.clone() };
+        assert!(same_rig(&base, &driver_bump), "driver bump is still this rig");
+        let new_gpu =
+            crate::hardware::HwFingerprint { gpu: "GeForce RTX 5080".into(), ..base.clone() };
+        assert!(!same_rig(&base, &new_gpu), "different GPU is a different rig");
+        let new_ram = crate::hardware::HwFingerprint { ram_gb: 64, ..base.clone() };
+        assert!(!same_rig(&base, &new_ram), "different RAM is a different rig");
     }
 
     #[test]

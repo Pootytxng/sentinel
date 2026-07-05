@@ -263,7 +263,12 @@ function FixRow({
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
         <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
-        {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
+        {applied && (
+          <TrustSnapshotLine
+            restoresLabel={activeChange?.restores_label}
+            appliedLabel={activeChange?.applied_label}
+          />
+        )}
         {/* Deliberate, reversible decline — applied rows can't be dismissed (roll back instead). */}
         {!applied && (
           <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
@@ -353,7 +358,12 @@ export function SlimFixRow({
         }
       />
       <GameModeNote id={rec.id} vendor={vendor} reverted={gameModeReverted} />
-      {applied && <TrustSnapshotLine restoresLabel={activeChange?.restores_label} />}
+      {applied && (
+        <TrustSnapshotLine
+          restoresLabel={activeChange?.restores_label}
+          appliedLabel={activeChange?.applied_label}
+        />
+      )}
       <div className="slimrow-acts">
         {walkthrough && (
           <details className="fix-walkthrough">
@@ -617,12 +627,28 @@ function ActiveChangeCard({
               : ""}
         </p>
         <PayoffMeter label={change.payoff_label} />
+        {/* A5 "last seen working on" — an ACTIVE change stamped on different hardware is worth a
+            quiet heads-up (it may behave differently on today's parts). Honest: only when the
+            stamp is KNOWN to mismatch; legacy unstamped entries say nothing. */}
+        {change.on_this_rig === false && change.hw_fingerprint && (
+          <p className="fix-rig-note">
+            Last seen working on <strong>{rigLabel(change.hw_fingerprint)}</strong> — applied
+            before your hardware changed. Rollback still works from the ledger.
+          </p>
+        )}
       </div>
       <button className="fix-ghost-rollback" disabled={busy} onClick={onRollback}>
         {busy ? "Rolling back…" : "Roll back"}
       </button>
     </li>
   );
+}
+
+// A5 rig tagging: the short human name of a stamped rig ("RX 9070 XT · 32 GB RAM"). Only ever
+// renders fields the stamp actually recorded — an empty GPU read stays honest.
+function rigLabel(f: NonNullable<AppliedChange["hw_fingerprint"]>): string {
+  const gpu = f.gpu.trim() || "unknown GPU";
+  return `${gpu} · ${f.ram_gb} GB RAM`;
 }
 
 // Ledger Layer 2 — the full chronological audit trail (active + rolled-back + superseded), muted,
@@ -635,6 +661,12 @@ function HistoryRow({ change }: { change: AppliedChange }) {
       <button className="fix-hist-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <Chevron />
         <span className="fix-hist-title">{change.rec_title}</span>
+        {/* A5 rig tag — only when the stamp says this entry is KNOWN to be from other hardware. */}
+        {change.on_this_rig === false && (
+          <span className="fix-hist-rig-tag" title="Applied before your hardware changed">
+            other rig
+          </span>
+        )}
         <span className="fix-hist-when">{humanizeWhen(change.applied_at)}</span>
         <span className="fix-hist-status">{rolledBack ? "✓ rolled back" : "active"}</span>
       </button>
@@ -666,6 +698,15 @@ function HistoryRow({ change }: { change: AppliedChange }) {
             Applied {humanizeWhen(change.applied_at)}
             {change.elevation_used ? " · elevated" : ""}
           </div>
+          {/* A5 rig tagging: where this change was applied. Legacy entries (no stamp) show
+              nothing rather than a guess. */}
+          {change.hw_fingerprint && (
+            <div>
+              {change.on_this_rig === false ? "Last seen working on" : "Applied on"}{" "}
+              <strong>{rigLabel(change.hw_fingerprint)}</strong>
+              {change.on_this_rig === false && " — before your hardware changed"}
+            </div>
+          )}
           {change.payoff_label && (
             <div>
               Measured payoff: <PayoffMeter label={change.payoff_label} />
@@ -792,6 +833,32 @@ export default function Fix({
     () => [...changes].sort((a, b) => +new Date(b.applied_at) - +new Date(a.applied_at)),
     [changes],
   );
+  // A5 "this rig only" ledger filter — persisted view preference. Hides ONLY entries whose
+  // apply-time rig stamp is KNOWN to mismatch today's hardware (on_this_rig === false); legacy
+  // unstamped entries (null) always stay visible — never hide a rollback behind a guess.
+  const [thisRigOnly, setThisRigOnly] = useState(() => {
+    try {
+      return localStorage.getItem("compy_ledger_this_rig") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const chooseThisRigOnly = (v: boolean) => {
+    setThisRigOnly(v);
+    try {
+      localStorage.setItem("compy_ledger_this_rig", v ? "1" : "0");
+    } catch {
+      /* session-only preference */
+    }
+  };
+  const otherRigCount = useMemo(
+    () => history.filter((c) => c.on_this_rig === false).length,
+    [history],
+  );
+  const visibleHistory =
+    thisRigOnly && otherRigCount > 0
+      ? history.filter((c) => c.on_this_rig !== false)
+      : history;
 
   const rowBusy = (rec: Rec) =>
     busyId !== null && (busyId === rec.id || busyId === activeChangeFor(rec.id)?.id);
@@ -1066,12 +1133,30 @@ export default function Fix({
       {/* History (ledger Layer 2) — the complete audit trail, collapsed; click a row for its
           receipt. Rolled-back + superseded entries stay, muted. */}
       {showHistory && history.length > 0 && (
-        <CollapsibleSection title="History" count={history.length} tint="applied">
+        <CollapsibleSection title="History" count={visibleHistory.length} tint="applied">
           <p className="fix-refuse-intro">
             The complete trail — applied, rolled back, superseded. Click any row for its receipt.
           </p>
+          {/* A5 "this rig only" — rendered ONLY when some entry is KNOWN to be from other
+              hardware (a filter with nothing to filter is noise). Hides exactly the entries whose
+              stamp mismatches today's rig; legacy unstamped entries always stay visible. */}
+          {otherRigCount > 0 && (
+            <label className="fix-rig-filter">
+              <input
+                type="checkbox"
+                checked={thisRigOnly}
+                onChange={(e) => chooseThisRigOnly(e.target.checked)}
+              />
+              This rig only
+              {thisRigOnly && (
+                <span className="fix-rig-hidden">
+                  {otherRigCount} from other hardware hidden
+                </span>
+              )}
+            </label>
+          )}
           <ul className="fix-list">
-            {history.map((c) => (
+            {visibleHistory.map((c) => (
               <HistoryRow key={c.id} change={c} />
             ))}
           </ul>

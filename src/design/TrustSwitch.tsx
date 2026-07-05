@@ -47,11 +47,22 @@ export function TrustSwitch({
 }
 
 // The snapshot-reveal line shown once a change is applied — names the prior the switch will restore.
-export function TrustSnapshotLine({ restoresLabel }: { restoresLabel?: string | null }) {
+// A5 fuller delta: `appliedLabel` (the backend's typed "after") appends the other half of the
+// before/after pair ADDITIVELY — the locked kernel-§6 sentence above stays verbatim. Absent or
+// identical to the prior (a no-op apply), nothing is appended.
+export function TrustSnapshotLine({
+  restoresLabel,
+  appliedLabel,
+}: {
+  restoresLabel?: string | null;
+  appliedLabel?: string | null;
+}) {
+  const delta = appliedLabel && appliedLabel !== restoresLabel ? ` · set to ${appliedLabel}` : "";
   return (
     <p className="ts-snapshot">
       <span className="ts-snapshot-dot" aria-hidden="true" />
       {restoresCopy(restoresLabel)}
+      {delta}
     </p>
   );
 }

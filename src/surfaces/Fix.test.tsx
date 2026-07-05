@@ -233,4 +233,73 @@ describe("Fix", () => {
     expect(screen.queryByText("Active on this PC")).toBeNull();
     expect(screen.queryByText("Worth making for your rig")).toBeNull();
   });
+
+  // ── A5 rig tagging: "this rig only" filter + "last seen working on" hardware tag ──
+  const oldRig = { hash: "aa", gpu: "GTX 1070", gpu_driver: "512.1", ram_gb: 16, display: "1920x1080@60" };
+  const histEntry = (id: string, extra: Record<string, unknown>) => ({
+    id,
+    rec_id: id,
+    rec_title: `Change ${id}`,
+    applied_at: "2026-06-01T10:00:00Z",
+    snapshot: null,
+    status: "rolled_back" as const,
+    is_still_active: false,
+    ...extra,
+  });
+
+  it("A5 rig filter: hides exactly the known-other-rig entries; legacy unstamped rows always stay", () => {
+    const changes = [
+      histEntry("stamped-other", { on_this_rig: false, hw_fingerprint: oldRig }),
+      histEntry("stamped-here", { on_this_rig: true, hw_fingerprint: { ...oldRig, gpu: "RX 9070 XT" } }),
+      histEntry("legacy", {}), // pre-tagging entry: no stamp → must NEVER be hidden
+    ];
+    render(<Fix recs={[]} {...baseProps} changes={changes} view="history" />);
+    fireEvent.click(screen.getByText("History"));
+    expect(screen.getByText("Change stamped-other")).toBeTruthy();
+    expect(screen.getByText("Change legacy")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: /This rig only/ }));
+    expect(screen.queryByText("Change stamped-other")).toBeNull();
+    expect(screen.getByText("Change stamped-here")).toBeTruthy();
+    expect(screen.getByText("Change legacy")).toBeTruthy();
+    expect(screen.getByText(/1 from other hardware hidden/)).toBeTruthy();
+  });
+
+  it("A5 rig filter: no toggle at all when nothing is from other hardware (no dead control)", () => {
+    const changes = [histEntry("stamped-here", { on_this_rig: true, hw_fingerprint: oldRig })];
+    render(<Fix recs={[]} {...baseProps} changes={changes} view="history" />);
+    fireEvent.click(screen.getByText("History"));
+    expect(screen.queryByRole("checkbox", { name: /This rig only/ })).toBeNull();
+  });
+
+  it("A5 hardware tag: an other-rig history receipt names the rig it was last seen working on", () => {
+    const changes = [histEntry("stamped-other", { on_this_rig: false, hw_fingerprint: oldRig })];
+    render(<Fix recs={[]} {...baseProps} changes={changes} view="history" />);
+    fireEvent.click(screen.getByText("History"));
+    expect(screen.getByText("other rig")).toBeTruthy(); // the row tag
+    fireEvent.click(screen.getByText("Change stamped-other")); // expand the receipt
+    expect(screen.getByText(/Last seen working on/)).toBeTruthy();
+    expect(screen.getByText(/GTX 1070 · 16 GB RAM/)).toBeTruthy();
+  });
+
+  it("A5 hardware tag: an ACTIVE change from other hardware gets the quiet heads-up card line", () => {
+    const ch = {
+      ...activeChange,
+      on_this_rig: false,
+      hw_fingerprint: oldRig,
+    };
+    render(<Fix recs={[]} {...baseProps} changes={[ch]} view="applied" />);
+    expect(screen.getByText(/Last seen working on/)).toBeTruthy();
+    expect(screen.getByText(/GTX 1070 · 16 GB RAM/)).toBeTruthy();
+    // Honest scope: a same-rig active change shows NO such line.
+    localStorage.clear();
+  });
+
+  it("A5 hardware tag: legacy entries (no stamp) render no rig line and no tag — never a guess", () => {
+    const changes = [histEntry("legacy", {})];
+    render(<Fix recs={[]} {...baseProps} changes={changes} view="history" />);
+    fireEvent.click(screen.getByText("History"));
+    expect(screen.queryByText("other rig")).toBeNull();
+    fireEvent.click(screen.getByText("Change legacy"));
+    expect(screen.queryByText(/Applied on|Last seen working on/)).toBeNull();
+  });
 });

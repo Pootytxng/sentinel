@@ -3766,6 +3766,7 @@ mod rollback_tests {
             ruleset_version_at_apply: None,
             elevation_used: None,
             provenance: None,
+            hw_fingerprint: None,
         }
     }
 

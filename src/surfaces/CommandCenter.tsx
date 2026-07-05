@@ -148,7 +148,10 @@ function LimiterCard({
             />
           </div>
           {applied && activeChange && (
-            <TrustSnapshotLine restoresLabel={activeChange.restores_label} />
+            <TrustSnapshotLine
+              restoresLabel={activeChange.restores_label}
+              appliedLabel={activeChange.applied_label}
+            />
           )}
         </>
       ) : (

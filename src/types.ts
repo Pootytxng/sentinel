@@ -8,6 +8,15 @@ export type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 export type PriorityStatus = "ready" | "attention" | "unknown";
 export type Confidence = "high" | "medium" | "low";
 
+// A5 rig tagging — the compact rig identity (same shape sessions carry). Local-only.
+export type HwFingerprint = {
+  hash: string;
+  gpu: string;
+  gpu_driver: string;
+  ram_gb: number;
+  display: string;
+};
+
 export type AppliedChange = {
   id: string;
   rec_id: string;
@@ -31,6 +40,12 @@ export type AppliedChange = {
   // ("Input latency", "Background CPU & RAM", …), NEVER a fabricated FPS/latency number. Derived from
   // the typed applied_action. null for legacy entries + restore-to-stock leftovers → UI shows no meter.
   payoff_label?: string | null;
+  // A5 rig tagging: the hardware this change was applied ON, stamped at apply time. null/absent for
+  // entries recorded before rig tagging existed.
+  hw_fingerprint?: HwFingerprint | null;
+  // Read-only, computed-at-read: stamped rig == today's rig, compared on stable identity fields only
+  // (gpu · ram · display — deliberately driver-insensitive). null = legacy entry, honest "rig unknown".
+  on_this_rig?: boolean | null;
 };
 
 export type ReadinessCheck = { id: string; label: string; status: ReadinessStatus; detail: string; value: string | null; action_uri?: string | null; action_label?: string | null };
