@@ -19,12 +19,12 @@ Full spec: [`docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md`](
 Owner's verdict after living with the V2 shell: theme-consistent but reads as **generic AI-slop template design** — wants organic/unique, concise, crafted copy, and **trending design tooling (Figma / v0-Vercel MCPs)** used anywhere the UI uses recognizable AI defaults. Elevated to top priority per his instruction (after a confirmed clean stop — HEAD `b413204`, main synced, nothing stranded).
 
 - [x] **Bug fixes (aesthetic-independent, ship now):** (#4) Home last-session numbers graded per-rig via `metric-grade.ts` + (#5) hologram stage fills its frame — **shipped `c945c88`** (2026-07-05), bug→guard tone-class pins in `home-v2.test.tsx`, live-verified via embedded hash (see RELEASE_STATE).
-- [~] **Redesign lane — direction LOCKED: Editorial-Instrument + JARVIS layer (owner 2026-07-05; Fable creative authority):**
-  - [x] **Home pilot** — `HomeEditorial` behind **`compy_editorial` (DEFAULT OFF**, Settings → Appearance "Editorial look (preview)"; flag-off byte-identical, test-pinned in `home-editorial-flag.test.tsx`): Instrument Serif verdict masthead (OFL, bundled) over a hairline folio · instrument bay (real hologram, HUD corner brackets, whisper scanline, callout leaders, event-driven pointer parallax — no rAF loop) · telemetry ledger (hairline measurement log, graded ink carried over) · ranked docket. Zero src-tauri/IPC. Self-review shots `docs/ui-sweep/shots/editorial/`.
-  - [x] Roll the language to Optimize → Monitor → Blackbook → Lab — **shipped `f3e90c1`** (2026-07-05): shared `editorial-rooms.css` layer (serif masthead + folio all rooms, eyebrows, flattened seg-control keeping the ink-on-accent invariant, hairline chrome) + per-room eyebrows via `useEditorialFlag`; flag-off byte-identity pinned per room (`editorial-rooms-flag.test.tsx`).
-  - [x] #1 walk-the-bench rework — **shipped `f3e90c1`**: the step-through is REMOVED; the symptom router leads the guided bench, retitled **"What are you here to do?"** + coach line (ask → jump straight to the tool). Router map untouched (still pinned); `compy_lab_guided` stays DEFAULT OFF for the owner's eyeball.
-  - [~] Voice/copy pass (#3) — rode the masthead/eyebrow/dek work (dek de-dup, plain-language eyebrows); a deeper body-copy pass remains open for after the owner approves the direction.
-  - Note: #6 "trending design tooling" — v0/Figma MCPs spend owner-gated credits ([[v0-mcp-for-compy-ui]]); pilot built in-repo instead (fonts bundled, zero network). Use tooling only if a room's language demands it.
+- [~] **Redesign lane — direction CORRECTED (owner 2026-07-05, after seeing the built editorial): EDITORIAL RETIRED → pure Instrument / Stark-HUD.** Serif fights a live-telemetry app; the LOCKED direction is a clean, restrained operator-console HUD (mono/display type, gauges, oscilloscope traces, HUD brackets, scanline/CRT, JARVIS layer). The one hard steer: never gamer-RGB/neon.
+  - [x] ~~Editorial Home pilot + 4-room rollout~~ — built (`1aa85d6`/`f3e90c1`), owner REVERSED on sight; **retired + deleted in `b60a2b5`** (serif fonts, `editorial-rooms.css`, `HomeEditorial`, room masthead branches all gone).
+  - [x] **Pure-HUD Home pilot** — **shipped `b60a2b5`** (2026-07-05): `HomeHud` behind the SAME preview flag (key `compy_editorial` kept so the owner's opt-in carries over; now `data-hud` / Settings "Instrument HUD (preview)", **DEFAULT OFF**). System-console masthead (scan LED · segmented CHECKS/ATTENTION readout · uppercase display verdict) · bracketed + ruler-ticked bay around the real drag-orbit hologram, whisper scanline (stage + page CRT skin), event-driven parallax · telemetry column (fps-vs-Hz ring gauge — measured ratio only, renders only when both sides were read; graded ink carried over; oscilloscope trace on graph-grid) · ranked priority queue. Flag-off byte-identity pinned (`home-hud-flag.test.tsx`); **HUD is HOME-ONLY — the four rooms ignore the flag, pinned by `hud-rooms-untouched.test.tsx`** (checkpoint contract). Zero src-tauri. Self-review shots `docs/ui-sweep/shots/hud/`.
+  - [x] #1 walk-the-bench rework — **shipped `f3e90c1`**, survives the correction (it rides `compy_lab_guided`, not the aesthetic flag): step-through REMOVED, symptom router leads as **"What are you here to do?"**; still DEFAULT OFF for the owner's eyeball.
+  - [ ] 🎨 **OWNER CHECKPOINT:** eyeball the HUD Home pilot (flip "Instrument HUD (preview)") → on approval, roll the HUD language to Optimize → Monitor → Blackbook → Lab (+ deep Check/Fix internals de-slop + body-copy voice pass under the same flag).
+  - Note: #6 "trending design tooling" — v0/Figma MCPs spend owner-gated credits ([[v0-mcp-for-compy-ui]]); pilot built in-repo instead (zero network, zero new deps). Use tooling only if a room's language demands it.
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
@@ -35,7 +35,36 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
-### Cycle 2026-07-05b — Editorial-Instrument marathon (Fable autonomous, owner away) — `main` @ `1deda2c`
+### Cycle 2026-07-05c — DIRECTION CORRECTION: editorial retired → pure Instrument-HUD Home pilot (Fable autonomous) — `main` @ `b60a2b5`
+Owner saw the built editorial and REVERSED it — serif/magazine composition fights a live-telemetry
+app. Spec CORRECTED (pure operator-console/Stark HUD, restraint rails, never gamer-RGB); this cycle
+executed the correction in one train:
+- ✅ `b60a2b5` **editorial retired** (Instrument Serif fonts deleted, `editorial-rooms.css` +
+  `HomeEditorial` + 4-room masthead branches removed) + **`HomeHud` pure-HUD pilot** behind the SAME
+  preview flag (key `compy_editorial` kept for opt-in continuity; `data-hud`; Settings label now
+  "Instrument HUD (preview)", DEFAULT OFF). Console masthead w/ scan LED + segmented readout ·
+  bracketed/ruled bay + scanline + event-driven parallax · fps-vs-Hz ring gauge (measured ratio
+  only) · graded ink carried over · oscilloscope trace · ranked queue.
+- **Checkpoint enforced in code:** HUD is HOME-ONLY — the four rooms ignore the flag
+  (`hud-rooms-untouched.test.tsx`); rollout waits for the owner's eyeball.
+- **Verify GREEN:** tsc 0 · vitest **1000** (137 files) · `git diff -- src-tauri` empty · self-review
+  native 1500×980 (`docs/ui-sweep/shots/hud/`, computed inks CDP-probed) · installer rebuilt +
+  silent-reinstalled, **stamp-verified `b60a2b5` live**, one installer on the Desktop.
+- **⏳ OWNER:** flip "Instrument HUD (preview)" → react to the HUD Home; on approval the language
+  rolls to the other four rooms (+ deep internals de-slop + voice pass). "Guided Lab bench" eyeball
+  still pending too (unchanged by the correction).
+
+```
+COUNCIL STRIP — HUD correction train, 2026-07-05
+Contrarian: two aesthetic pivots in one day — the risk is thrash; the mitigation is that the HUD pilot reuses the proven honest core (same data, same probes) so only the skin moved.
+First-Principles: the owner's reversal confirms the diagnosis was right (de-slop) but the prescription was wrong (serif); telemetry wants an instrument voice, not a magazine voice.
+Expansionist: the ring-gauge + readout-strip grammar is exactly the share-card shape Receipts will want — the HUD language compounds toward the measurement brand.
+Outsider: a first-time user now reads Home as "my PC's cockpit" — the strongest differentiation from optimizer-slop yet; the four un-reskinned rooms are the visible seam until rollout.
+Executor: one toggle flip is the whole owner ask; everything else is staged behind it.
+Chairman: correction executed same-day with rigor intact; the taste verdict is the owner's again.
+```
+
+### Cycle 2026-07-05b — Editorial-Instrument marathon (Fable autonomous, owner away) — `main` @ `1deda2c` **[SUPERSEDED by 2026-07-05c: editorial RETIRED on owner sight; its Lab router rework survives under `compy_lab_guided`]**
 The full de-slop redesign train, built solo under the spec's CREATIVE AUTHORITY mandate. ALL of it
 behind **`compy_editorial` DEFAULT OFF** (Settings → Appearance "Editorial look (preview)"); flag-off
 byte-identity test-pinned per room; zero `src-tauri` diff across the whole train.
