@@ -178,3 +178,78 @@ describe("'Which tool do I need?' router (§A)", () => {
     expect(card.querySelector(".lab-card-head")!.getAttribute("aria-expanded")).toBe("true");
   });
 });
+
+describe("'Walk the bench' step-through (§C)", () => {
+  const startWalk = (c: HTMLElement) => {
+    fireEvent.click(c.querySelector(".lab-walk-open")!);
+  };
+
+  it("first-ever visit nudges 'New here?'; after finishing, the affordance stays without the nudge", () => {
+    const c = renderGuided();
+    expect(c.querySelector(".lab-walk-open")!.textContent).toMatch(/New here\? Walk the bench/);
+    startWalk(c);
+    // Walk to the end: 5 stations → 5 Next/Done clicks.
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(screen.getByRole("button", { name: /Next|Done/ }));
+    }
+    expect(localStorage.getItem("compy_lab_walk_seen_v1")).toBe("1");
+    // The walk closed; the affordance is back, self-folded to the quiet label (re-openable).
+    const open = c.querySelector(".lab-walk-open")!;
+    expect(open.textContent).not.toMatch(/New here\?/);
+    expect(open.textContent).toMatch(/Walk the bench/);
+  });
+
+  it("parks on each station in bench order with the symptom framing", () => {
+    const c = renderGuided();
+    startWalk(c);
+    const expected = [
+      ["Diagnostics", "I just want to know what's in this rig"],
+      ["Benchmark", "Did that tweak actually help"],
+      ["Latency", "a beat behind"],
+      ["Tuning", "hot / loud"],
+      ["Black Box", "crashed or froze"],
+    ] as const;
+    for (const [name, symptom] of expected) {
+      const panel = c.querySelector(".lab-walk")!;
+      expect(panel.querySelector(".lab-walk-title")!.textContent).toContain(name);
+      expect(panel.querySelector(".lab-walk-frame")!.textContent).toContain(symptom);
+      // The panel parks ABOVE its station: the lit card is the named one.
+      expect(c.querySelector(".lab-card-walk")!.getAttribute("data-instrument")).toBe(name);
+      fireEvent.click(screen.getByRole("button", { name: /Next|Done/ }));
+    }
+    expect(c.querySelector(".lab-walk")).toBeNull(); // Done → closed
+  });
+
+  it("is read-only: stepping never expands or runs an instrument", () => {
+    const c = renderGuided();
+    startWalk(c);
+    for (let i = 0; i < 5; i++) {
+      fireEvent.click(screen.getByRole("button", { name: /Next|Done/ }));
+    }
+    for (const head of Array.from(c.querySelectorAll(".lab-card-head"))) {
+      expect(head.getAttribute("aria-expanded")).toBe("false");
+    }
+  });
+
+  it("Skip closes and self-folds; Back walks backwards", () => {
+    const c = renderGuided();
+    startWalk(c);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(c.querySelector(".lab-walk-title")!.textContent).toContain("Benchmark");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(c.querySelector(".lab-walk-title")!.textContent).toContain("Diagnostics");
+    fireEvent.click(screen.getByRole("button", { name: /Skip the walk/ }));
+    expect(c.querySelector(".lab-walk")).toBeNull();
+    expect(localStorage.getItem("compy_lab_walk_seen_v1")).toBe("1");
+  });
+
+  it("the last step lands the 'you've seen the bench' close", () => {
+    const c = renderGuided();
+    startWalk(c);
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(c.querySelector(".lab-walk-body")!.textContent).toMatch(
+      /dive into whichever station your situation calls for/,
+    );
+    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+  });
+});
