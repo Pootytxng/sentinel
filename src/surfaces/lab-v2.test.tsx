@@ -6,9 +6,9 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 
 import { LabV2 } from "./LabV2";
 import Lab from "./Lab";
-import { labVerdict, labMeasuredLine } from "./lab-v2-data";
-import { invalidateProbe } from "../data/probe-cache";
-import type { BenchmarkState, Efficacy } from "../types";
+import { labVerdict, labMeasuredLine, labLatestReadings } from "./lab-v2-data";
+import { invalidateProbe, putProbe } from "../data/probe-cache";
+import type { BenchmarkState, Efficacy, LatencyReport } from "../types";
 
 // V2-7 guards (bug→guard tier 1): the V2 Lab room composes RoomShell (one verdict, NO door —
 // Lab is the journey's last chapter — and deliberately NO primary action: the instruments ARE
@@ -189,6 +189,91 @@ describe("LabV2 — RoomShell composition", () => {
   });
 });
 
+// Latest readings (fill pass, spec 2026-07-05): the foot-of-room strip is measured-or-honestly-
+// absent — no reading renders "—", a populated source renders the real value, and no fabricated-
+// value path exists. The strip is v2-only (classic Lab byte-identity below).
+describe("labLatestReadings — pure, measured or honestly '—'", () => {
+  it("nothing read yet → every instrument shows '—', never a placeholder number", () => {
+    const readings = labLatestReadings({
+      bench: null,
+      latency: null,
+      tuning: { present: true, headline: null },
+      crash: null,
+      diagnostics: { present: true, captured: false },
+    });
+    expect(readings.map((r) => r.label)).toEqual([
+      "Baseline",
+      "Latency",
+      "Tuning",
+      "Black Box",
+      "System report",
+    ]);
+    for (const r of readings) expect(r.value).toBe("—");
+  });
+
+  it("gated instruments (no tuning guide, no diagnostics slot) get NO chip — absent, not '—'", () => {
+    const labels = labLatestReadings({
+      bench: null,
+      latency: null,
+      tuning: { present: false, headline: null },
+      crash: null,
+      diagnostics: { present: false, captured: false },
+    }).map((r) => r.label);
+    expect(labels).toEqual(["Baseline", "Latency", "Black Box"]);
+  });
+
+  it("populated sources → the real measured values (date · timer · verdict · crash count · captured)", () => {
+    const readings = labLatestReadings({
+      bench: state({
+        baseline: { components: [], confidence: "clean", notes: [] },
+        baseline_at: "2026-07-01T10:00:00Z",
+      }),
+      latency: { timer_current_ms: 0.5, msi: { total: 4, msi_on: 3, msi_off: 1 } } as LatencyReport,
+      tuning: { present: true, headline: "Holding up so far" },
+      crash: { incidents: [], skipped_sources: [] },
+      diagnostics: { present: true, captured: true },
+    });
+    expect(readings).toEqual([
+      { label: "Baseline", value: new Date("2026-07-01T10:00:00Z").toLocaleDateString() },
+      { label: "Latency", value: "timer 0.50 ms" },
+      { label: "Tuning", value: "Holding up so far" },
+      { label: "Black Box", value: "none found" },
+      { label: "System report", value: "captured" },
+    ]);
+    // A scan that found incidents reports the honest count.
+    const found = labLatestReadings({
+      bench: null,
+      latency: null,
+      tuning: { present: false, headline: null },
+      crash: { incidents: [{} as never, {} as never], skipped_sources: [] },
+      diagnostics: { present: false, captured: false },
+    });
+    expect(found.find((r) => r.label === "Black Box")?.value).toBe("2 recorded");
+  });
+});
+
+describe("LabV2 — latest-readings strip renders at the foot", () => {
+  it("cold room → the strip with honest '—' chips; populated bench seed → the real date", () => {
+    useReduced();
+    const { container, unmount } = render(<LabV2 vendor="nvidia" />);
+    const strip = container.querySelector(".lab-readings");
+    expect(strip).toBeTruthy();
+    expect(strip!.textContent).toContain("Latest readings");
+    expect(strip!.querySelectorAll(".lab-reading-v").length).toBe(3); // no tuning/diag gates on this rig
+    for (const v of strip!.querySelectorAll(".lab-reading-v")) expect(v.textContent).toBe("—");
+    unmount();
+    // Seed the probe cache (the same seed path Lab reads) with a saved baseline → the real date chip.
+    putProbe("benchmark-state", state({
+      baseline: { components: [], confidence: "clean", notes: [] },
+      baseline_at: "2026-07-01T10:00:00Z",
+    }));
+    const { container: seeded } = render(<LabV2 vendor="nvidia" />);
+    expect(seeded.querySelector(".lab-readings")!.textContent).toContain(
+      new Date("2026-07-01T10:00:00Z").toLocaleDateString(),
+    );
+  });
+});
+
 describe("classic Lab — pinned unchanged (flag-off byte-identity at the render level)", () => {
   it("keeps its standalone head (title + read-only promise) and renders no RoomShell chrome", () => {
     const { container } = render(<Lab vendor="amd" />);
@@ -196,5 +281,7 @@ describe("classic Lab — pinned unchanged (flag-off byte-identity at the render
     expect(screen.getByText(/nothing in Advanced\s+changes your PC/)).toBeTruthy();
     expect(container.querySelector(".v2-verdict")).toBeNull();
     expect(container.querySelector(".v2-door")).toBeNull();
+    // The latest-readings strip is v2-only — classic renders without it (fill pass, 2026-07-05).
+    expect(container.querySelector(".lab-readings")).toBeNull();
   });
 });

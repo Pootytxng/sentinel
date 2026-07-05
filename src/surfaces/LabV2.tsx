@@ -29,9 +29,13 @@ import "./lab-v2.css";
 export function LabV2({
   diagnostics,
   vendor = "any",
+  diagnosticsCaptured = false,
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
+  // Threads to Lab's latest-readings strip (fill pass, spec 2026-07-05): whether the system
+  // report behind the diagnostics slot actually has sections — never claim "captured" otherwise.
+  diagnosticsCaptured?: boolean;
 }) {
   const reduced = useReducedMotion();
   // Seeded from the probe cache (same key Lab reads) so a re-visit paints the verdict
@@ -66,7 +70,13 @@ export function LabV2({
       sub={verdict.sub}
       measured={labMeasuredLine(instruments)}
     >
-      <Lab v2 diagnostics={diagnostics} vendor={vendor} onBenchState={setBench} />
+      <Lab
+        v2
+        diagnostics={diagnostics}
+        vendor={vendor}
+        onBenchState={setBench}
+        diagnosticsCaptured={diagnosticsCaptured}
+      />
     </RoomShell>
   );
 }

@@ -1385,6 +1385,7 @@ function App() {
                 <LabV2
                   diagnostics={<DiagnosticsTab sections={diagnostics} />}
                   vendor={detectedVendor}
+                  diagnosticsCaptured={diagnostics.length > 0}
                 />
               )}
               {!(activeTab === "Optimize" && optimizeMerged) &&

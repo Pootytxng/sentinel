@@ -82,3 +82,34 @@
 :root[data-v2="on"] .v2-room[data-room="lab"] .lab-card-body {
   background: var(--v2-bg);
 }
+
+/* ── Latest readings (fill pass, spec 2026-07-05): the ONE quiet consolidation strip at the
+   room's foot — newest value per instrument, from the same reads the cards above made. The
+   element only renders under the v2 shell (Lab's v2 prop), so it's styled here, not Lab.css. */
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-readings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: var(--v2-panel);
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  font-size: 11.5px;
+}
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-readings-k {
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-reading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-reading-l {
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .v2-room[data-room="lab"] .lab-reading-v {
+  color: var(--v2-text);
+  font-family: var(--v2-font-mono);
+}

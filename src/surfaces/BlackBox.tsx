@@ -8,7 +8,12 @@ import "./BlackBox.css";
 // instrument. On-demand scan only (no background watcher in v1). It reports the evidence Windows
 // recorded + Compy's own "last vitals" — and makes ZERO causal claims. The receipt expander holds
 // the raw IDs/module/code; plain English up top (Sarah & Caleb bar).
-export function BlackBox() {
+export function BlackBox({
+  onReport,
+}: {
+  // Feeds the scan result up (V2 Lab's latest-readings strip) — same read, no second IPC.
+  onReport?: (r: BlackBoxReport) => void;
+} = {}) {
   const [report, setReport] = useState<BlackBoxReport | null>(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +22,10 @@ export function BlackBox() {
     setScanning(true);
     setError(null);
     invoke<BlackBoxReport>("get_crash_blackbox")
-      .then((r) => setReport(r))
+      .then((r) => {
+        setReport(r);
+        onReport?.(r);
+      })
       .catch(() => setError("Couldn't read the crash log just now — try again in a moment."))
       .finally(() => setScanning(false));
   };

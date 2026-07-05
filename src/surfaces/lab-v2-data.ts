@@ -1,4 +1,10 @@
-import type { BenchComponent, BenchmarkState, ComponentEfficacy } from "../types";
+import type {
+  BenchComponent,
+  BenchmarkState,
+  BlackBoxReport,
+  ComponentEfficacy,
+  LatencyReport,
+} from "../types";
 
 // Pure verdict/measured derivations for the V2 Lab room (V2-7, spec
 // 2026-07-02-v2-shell-sourcing-and-plan). Same contract as monitorVerdict/blackbookVerdict:
@@ -82,4 +88,60 @@ export function labVerdict(bench: BenchmarkState | null): LabVerdictLine {
 export function labMeasuredLine(instruments: number): string {
   const count = instruments === 1 ? "1 instrument" : `${instruments} instruments`;
   return `${count} · they only measure — nothing in the Lab changes your PC`;
+}
+
+// ── Latest readings (fill pass, spec 2026-07-05-v2-nits-fill-pass) ──
+// The newest value each instrument produced, consolidated for the foot-of-room glance strip.
+// Pure derivation over the SAME reads the instrument cards above already made (zero new IPC);
+// an instrument with no reading yet is an honest "—" — no placeholder number, ever.
+export type LabReading = { label: string; value: string };
+
+export function labLatestReadings(f: {
+  bench: BenchmarkState | null;
+  latency: LatencyReport | null;
+  // present = the Tuning instrument renders on this rig (vendor gate); headline = measureTuning's
+  // verdict when a measurement exists.
+  tuning: { present: boolean; headline: string | null };
+  // null = the user hasn't scanned yet this visit (Black Box is on-demand) — honestly unread.
+  crash: BlackBoxReport | null;
+  // present = the Diagnostics instrument renders; captured = the system report actually has sections.
+  diagnostics: { present: boolean; captured: boolean };
+}): LabReading[] {
+  const baselineDate = f.bench?.baseline_at ? new Date(f.bench.baseline_at) : null;
+  const readings: LabReading[] = [
+    {
+      label: "Baseline",
+      value:
+        baselineDate && !isNaN(baselineDate.getTime())
+          ? baselineDate.toLocaleDateString()
+          : f.bench?.baseline
+            ? "set"
+            : "—",
+    },
+    {
+      label: "Latency",
+      value:
+        f.latency == null
+          ? "—"
+          : f.latency.timer_current_ms != null
+            ? `timer ${f.latency.timer_current_ms.toFixed(2)} ms`
+            : `MSI ${f.latency.msi.msi_on} on`,
+    },
+  ];
+  if (f.tuning.present) {
+    readings.push({ label: "Tuning", value: f.tuning.headline ?? "—" });
+  }
+  readings.push({
+    label: "Black Box",
+    value:
+      f.crash == null
+        ? "—"
+        : f.crash.incidents.length === 0
+          ? "none found"
+          : `${f.crash.incidents.length} recorded`,
+  });
+  if (f.diagnostics.present) {
+    readings.push({ label: "System report", value: f.diagnostics.captured ? "captured" : "—" });
+  }
+  return readings;
 }

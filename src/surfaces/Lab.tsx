@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   BenchmarkState,
+  BlackBoxReport,
   LatencyReport,
   Verdict,
   SessionSummary,
@@ -14,6 +15,7 @@ import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { BlackBox } from "./BlackBox";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
+import { labLatestReadings } from "./lab-v2-data";
 import { TuningInstrument } from "./TuningInstrument";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
@@ -51,6 +53,7 @@ export default function Lab({
   vendor = "any",
   v2 = false,
   onBenchState,
+  diagnosticsCaptured = false,
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
@@ -61,6 +64,9 @@ export default function Lab({
   // of a second get_benchmark_state read.
   v2?: boolean;
   onBenchState?: (bench: BenchmarkState) => void;
+  // Whether the system report behind the diagnostics slot actually has sections (fill pass,
+  // spec 2026-07-05) — the strip must never claim "captured" for an empty report.
+  diagnosticsCaptured?: boolean;
 }) {
   // Seed from the probe cache so re-opening Advanced paints last-known instantly instead of cold-
   // re-running get_latency_diagnostics (a synchronous MSI/timer/USB scan) every visit.
@@ -69,6 +75,8 @@ export default function Lab({
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [armed, setArmed] = useState<ArmedComparison | null>(null);
   const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
+  // Black Box is on-demand — null until the user scans this visit (the strip shows an honest "—").
+  const [bbReport, setBbReport] = useState<BlackBoxReport | null>(null);
   // Welcome band: shown on a truly first-ever visit, hidden once any instrument has been opened.
   const [welcomeSeen, setWelcomeSeen] = useState(readWelcomeSeen);
   const markInstrumentOpened = () => {
@@ -210,7 +218,7 @@ export default function Lab({
           summary="Crash & freeze record"
           onFirstOpen={markInstrumentOpened}
         >
-          <BlackBox />
+          <BlackBox onReport={setBbReport} />
         </LabSection>
 
         <LabSection
@@ -255,6 +263,27 @@ export default function Lab({
           >
             {diagnostics}
           </LabSection>
+        )}
+
+        {/* Latest readings (fill pass, spec 2026-07-05): ONE quiet foot-of-room strip consolidating
+            the newest value per instrument — an at-a-glance overview over the SAME reads the cards
+            above already made (zero new IPC). V2 rooms only; classic Lab renders untouched. */}
+        {v2 && (
+          <div className="lab-readings">
+            <span className="lab-readings-k">Latest readings</span>
+            {labLatestReadings({
+              bench,
+              latency,
+              tuning: { present: !!tuningGuide, headline: measurement?.headline ?? null },
+              crash: bbReport,
+              diagnostics: { present: !!diagnostics, captured: diagnosticsCaptured },
+            }).map((r) => (
+              <span className="lab-reading" key={r.label}>
+                <span className="lab-reading-l">{r.label}</span>
+                <span className="lab-reading-v">{r.value}</span>
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </section>
