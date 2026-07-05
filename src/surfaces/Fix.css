@@ -149,6 +149,20 @@
   margin-top: 0;
 }
 
+/* A5 applicability override — the "overridden by you" marker in the Not-for-this-rig pile.
+   Muted outline chip: a user decision on record, not an alert. */
+.fix-override-chip {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--ix-text-2);
+  border: 1px solid var(--ix-border);
+  flex: none;
+}
+
 /* A5 rig tagging — the "other rig" tag on history rows + the active-card heads-up. Muted,
    informational chrome: an entry from old hardware is a fact, not an alarm. */
 .fix-hist-rig-tag {

@@ -294,6 +294,31 @@ describe("Fix", () => {
     localStorage.clear();
   });
 
+  // ── A5 applicability override: "My hardware supports this" on capability-gated recs ──
+  it("A5 override: an ineligible rec can be overridden into the live flow, reversibly", () => {
+    const ineligibleRec = {
+      ...rec("game-mode", false),
+      eligible: false,
+      ineligible_reason: "No wired Ethernet port detected.",
+    };
+    render(<Fix recs={[ineligibleRec]} {...baseProps} />);
+    // Starts set aside: counted as not-for-this-rig, not worth-a-look; no switch offered.
+    expect(screen.getByText(/0 worth a look · 0 active · 0 dismissed · 1 not for this rig/)).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /Apply Title game-mode/ })).toBeNull();
+    // Override from the pile → it rejoins the normal flow with the REAL switch.
+    fireEvent.click(screen.getByText("Not for this rig"));
+    expect(screen.getByText("No wired Ethernet port detected.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /My hardware supports this/ }));
+    expect(screen.getByText(/1 worth a look · 0 active · 0 dismissed · 0 not for this rig/)).toBeTruthy();
+    expect(screen.getByRole("switch", { name: /Apply Title game-mode/ })).toBeTruthy();
+    // The pile keeps the decision on record — marker + the original read + the way back.
+    expect(screen.getByText("overridden by you")).toBeTruthy();
+    expect(screen.getByText(/Compy's read was/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Set aside again" }));
+    expect(screen.getByText(/0 worth a look · 0 active · 0 dismissed · 1 not for this rig/)).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /Apply Title game-mode/ })).toBeNull();
+  });
+
   it("A5 hardware tag: legacy entries (no stamp) render no rig line and no tag — never a guess", () => {
     const changes = [histEntry("legacy", {})];
     render(<Fix recs={[]} {...baseProps} changes={changes} view="history" />);

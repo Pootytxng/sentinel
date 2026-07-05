@@ -7,6 +7,7 @@ import { WhatsThis } from "../design/WhatsThis";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { useDismissed } from "./dismissed";
+import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
@@ -745,8 +746,15 @@ export default function Fix({
   // Applicability gating (eligibility train): hardware-ineligible recs leave the active lists +
   // the completion denominator entirely — they sit in a quiet "Not for this rig" bucket with the
   // plain-English reason, never silently dropped, never falsely offered.
-  const notForThisRig = recs.filter((r) => r.eligible === false);
-  const eligibleRecs = recs.filter((r) => r.eligible !== false);
+  // A5 override: the user can assert Compy's hardware READ was wrong ("My hardware supports
+  // this") — the rec then rejoins the normal flow (same audited apply path, same receipt);
+  // reversible from the same pile. Only capability-gated recs ever reach this pile, so the
+  // override can't resurrect anything the backend omitted as irrelevant.
+  const { overridden, override, clearOverride } = useEligibilityOverrides();
+  const ineligible = recs.filter((r) => r.eligible === false);
+  const notForThisRig = ineligible.filter((r) => !overridden.has(r.id));
+  const overriddenRecs = ineligible.filter((r) => overridden.has(r.id));
+  const eligibleRecs = recs.filter((r) => r.eligible !== false || overridden.has(r.id));
   // User dismissal ("Not for me"): deliberate, reversible. Dismissed = eligible + user-declined +
   // not currently applied (an APPLIED rec can't be dismissed — roll it back instead; a dismissed rec
   // that becomes applied externally just resolves normally). Dismissed leave the active denominator.
@@ -1170,12 +1178,13 @@ export default function Fix({
           standalone render here as always. Moved, never removed — same content and reasons. */}
       {/* Not for this rig — hardware-ineligible recs (eligibility train): set aside with the reason,
           and OUT of the completion denominator, so they never block "all handled" or nag. */}
-      {notForThisRig.length > 0 && (
+      {notForThisRig.length + overriddenRecs.length > 0 && (
         <SidePileItem order={SIDE_PILE_ORDER.notForThisRig}>
         <CollapsibleSection title="Not for this rig" count={notForThisRig.length} tint="refuse">
           <p className="fix-refuse-intro">
             Compy detected these don't apply to your hardware — set aside, and left out of your
-            "all handled" count.
+            "all handled" count. If a hardware read is wrong (a dock, an adapter, a new part),
+            you can override it.
           </p>
           <ul className="fix-list">
             {notForThisRig.map((r) => (
@@ -1186,6 +1195,26 @@ export default function Fix({
                 <p className="fix-row-reason">
                   {r.ineligible_reason ?? "Not applicable to this rig's hardware."}
                 </p>
+                {/* A5 override — reversible; the rec rejoins the normal list through the SAME
+                    audited apply path. The user is asserting the detection, not skipping safety. */}
+                <button className="fix-dismiss" onClick={() => override(r.id)}>
+                  My hardware supports this — show it anyway
+                </button>
+              </li>
+            ))}
+            {overriddenRecs.map((r) => (
+              <li key={r.id} className="fix-refuse-row">
+                <div className="fix-row-head">
+                  <RecTitle id={r.id} title={r.title} />
+                  <span className="fix-override-chip">overridden by you</span>
+                </div>
+                <p className="fix-row-reason">
+                  Treated as eligible — it now appears in your list. Compy's read was:{" "}
+                  {r.ineligible_reason ?? "not applicable to this rig's hardware."}
+                </p>
+                <button className="fix-dismiss" onClick={() => clearOverride(r.id)}>
+                  Set aside again
+                </button>
               </li>
             ))}
           </ul>
