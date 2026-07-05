@@ -604,6 +604,65 @@ mod export_tests {
     }
 
     #[test]
+    fn upgrade_path_anchor_format_holds_for_every_link_in_the_table() {
+        // A6 close-out: the anchors themselves, independently tested. With BOTH qualifying
+        // verdicts present (GPU-limited session + install-drive HDD attention), every RetailLink
+        // build_upgrade_path returns must render as a well-formed `- [<retailer> search](<url>)`
+        // Markdown anchor — same count (none dropped or duplicated), https-only, and free of
+        // affiliate/tracking markers at the EXPORT layer (mirrors the priorities-side guard so a
+        // rendering regression can't reintroduce what the table-side guard already bans).
+        let sessions = json!([{ "peak_gpu_usage_pct": 97, "avg_fps": 90.0, "low1_fps_est": 70.0 }]);
+        let readiness = json!({ "checks": [
+            { "id": "install-drive", "status": "attention", "label": "Game install drive",
+              "detail": "HDD detected" }
+        ]});
+        let up = crate::priorities::build_upgrade_path(&readiness, &sessions)
+            .expect("both qualifying verdicts must produce an upgrade path");
+        let expected: Vec<(&str, &str)> = up
+            .items
+            .iter()
+            .flat_map(|i| i.links.iter().map(|l| (l.retailer, l.url)))
+            .collect();
+        assert!(expected.len() >= 4, "test premise: both link tables in play");
+
+        let md = build_markdown_report(
+            &Value::Null, &json!([]), &json!([]), &readiness, &sessions, &json!([]),
+            "embedded", "t", None,
+        );
+        let anchors: Vec<&str> = md
+            .lines()
+            .map(str::trim_start)
+            .filter(|l| l.starts_with("- [") && l.contains(" search]("))
+            .collect();
+        assert_eq!(
+            anchors.len(),
+            expected.len(),
+            "every table link renders exactly once as an anchor"
+        );
+        for (retailer, url) in expected {
+            let anchor = format!("- [{retailer} search]({url})");
+            assert!(md.contains(&anchor), "missing/malformed anchor: {anchor}");
+            assert!(url.starts_with("https://"), "https-only: {url}");
+            for marker in ["tag=", "ref=", "affid", "affiliate", "utm_", "clickid", "irclick"] {
+                assert!(
+                    !url.to_ascii_lowercase().contains(marker),
+                    "tracking marker `{marker}` in exported URL: {url}"
+                );
+            }
+        }
+        // Well-formed anchors only: no stray `](` outside a closed `[...](...)` pair on the line.
+        for a in anchors {
+            let open = a.matches('[').count();
+            let close = a.matches(']').count();
+            let parens = a.matches("](").count();
+            assert!(
+                open == 1 && close == 1 && parens == 1 && a.ends_with(')'),
+                "anchor line not well-formed Markdown: {a}"
+            );
+        }
+    }
+
+    #[test]
     fn shared_artifacts_carry_the_site_footer() {
         // R3 Lane A4: the full report and the summary card both point home via the paired
         // SITE_URL/SITE_TAGLINE constants (one logical constant with src/data/site.ts).
