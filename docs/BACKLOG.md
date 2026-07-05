@@ -35,6 +35,35 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-07-05b — Editorial-Instrument marathon (Fable autonomous, owner away) — `main` @ `1deda2c`
+The full de-slop redesign train, built solo under the spec's CREATIVE AUTHORITY mandate. ALL of it
+behind **`compy_editorial` DEFAULT OFF** (Settings → Appearance "Editorial look (preview)"); flag-off
+byte-identity test-pinned per room; zero `src-tauri` diff across the whole train.
+- ✅ `1aa85d6` **Home pilot**: Instrument Serif masthead (OFL, bundled, 43KB) · instrument bay (real
+  hologram + HUD brackets + whisper scanline + callout leaders + event-driven parallax, no rAF loop) ·
+  telemetry ledger · ranked docket. 2 voice defects caught+fixed in self-review.
+- ✅ `f3e90c1` **rollout 2-5/5**: shared `editorial-rooms.css` (masthead all rooms, eyebrows, flattened
+  seg-control keeping the ink-on-accent invariant, hairline chrome) + **Lab walk-the-bench REMOVED,
+  router promoted to "What are you here to do?"** (deslop #1; `compy_lab_guided` still DEFAULT OFF).
+- ✅ `1deda2c` setup-door polish. State commits `bbc3845` · `9caa56a` · this one.
+- **Verify GREEN at every checkpoint:** tsc 0 · vitest 998→**1006** (19 new guards) · `git diff --
+  src-tauri` empty · self-review native 1500×980 shots (`docs/ui-sweep/shots/editorial/`, computed
+  inks CDP-probed) · 3 installers built+silent-reinstalled, each **stamp-verified** (`1aa85d6` →
+  `f3e90c1` → `1deda2c` live now).
+- **⏳ OWNER (the only open gates on this lane):** flip "Editorial look (preview)" and react (taste
+  gate for default-ON); eyeball the reworked guided Lab; then the deeper body-copy voice pass rides
+  the approved direction.
+
+```
+COUNCIL STRIP — Editorial-Instrument marathon, 2026-07-05
+Contrarian: serif-in-a-telemetry-app is the one real bet — if it reads "magazine cosplay" to the owner, the whole language re-anchors on it; flag-off reversibility is the containment.
+First-Principles: the slop was shape+type sameness, not color — re-pointing type/geometry/hairlines at the token layer attacked the actual cause instead of adding more decoration.
+Expansionist: the masthead/eyebrow/folio grammar is share-card-shaped — the same language can render Receipts exports later (measurement brand compounding).
+Outsider: five rooms now read as one printed instrument panel; the remaining tell is the deep Check/Fix card internals, which still speak the old dialect under the new masthead.
+Executor: owner flips two Settings toggles, reacts to Home first; if it lands, default-ON + deep-internals pass is the next train.
+Chairman: direction executed end-to-end behind its flag with rigor intact — ship verdict now belongs to the owner's eyes.
+```
+
 ### Cycle 2026-07-05 — Lab linear guided bench (owner-approved spec, CC build train) — `main` @ `2c49ed0`
 Spec `docs/superpowers/specs/2026-07-05-lab-linear-guided-bench.md` built in full, 6 commits, behind
 **`compy_lab_guided` DEFAULT OFF** (Settings → Appearance preview toggle; flag-off Lab byte-identical, test-pinned):
