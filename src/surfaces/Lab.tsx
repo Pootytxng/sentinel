@@ -57,18 +57,6 @@ function readWelcomeSeen(): boolean {
   }
 }
 
-// "Walk the bench" one-time-seen flag (guided bench §C, mirrors compy_lab_welcome_seen_v1): once
-// the walkthrough has been finished or skipped, the affordance drops its "New here?" nudge but
-// stays — always re-openable.
-const WALK_SEEN_KEY = "compy_lab_walk_seen_v1";
-function readWalkSeen(): boolean {
-  try {
-    return localStorage.getItem(WALK_SEEN_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 export default function Lab({
   diagnostics,
   vendor = "any",
@@ -114,30 +102,6 @@ export default function Lab({
   // (in-room scroll + expand — navigation never teleports). Jumping through the router counts as
   // finding a door, same as clicking the card head.
   const [pulses, setPulses] = useState<Partial<Record<LabStationKey, number>>>({});
-  // "Walk the bench" (§C): a linear, read-only step-through — one station at a time, in bench
-  // order. It only teaches order + purpose (never runs an instrument, never expands one); the
-  // step panel parks above the station and the card lights up under it.
-  const [walkSeen, setWalkSeen] = useState(readWalkSeen);
-  const [walkStep, setWalkStep] = useState<number | null>(null);
-  const endWalk = () => {
-    setWalkStep(null);
-    if (!walkSeen) {
-      setWalkSeen(true);
-      try {
-        localStorage.setItem(WALK_SEEN_KEY, "1");
-      } catch {
-        /* localStorage unavailable — the nudge just won't persist its folded state */
-      }
-    }
-  };
-  // Park the viewport on the active station as the walk advances (reduced-motion honored).
-  useEffect(() => {
-    if (walkStep === null) return;
-    requestAnimationFrame(() => {
-      const el = document.querySelector(".lab-walk");
-      el?.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "center" });
-    });
-  }, [walkStep, reduced]);
   const jumpToStation = (k: LabStationKey) => {
     markInstrumentOpened();
     setPulses((p) => ({ ...p, [k]: (p[k] ?? 0) + 1 }));
@@ -260,27 +224,18 @@ export default function Lab({
         </header>
         )}
 
-        {/* "Which tool do I need?" — the symptom→station router (§A, guided bench only): the
-            hand-hold that maps a real-world feeling to the right station. Rows are doors — click
-            scrolls to and expands that station in place (never teleports). Filtered to the
-            stations this rig has, so a row can never point at a missing tool. */}
-        {/* "Walk the bench" affordance (§C): quiet, always re-openable; the "New here?" nudge
-            folds once the walk has been finished or skipped (compy_lab_walk_seen_v1). */}
-        {guided && walkStep === null && (
-          <button className="lab-walk-open cmp-door" onClick={() => setWalkStep(0)}>
-            <span className="lab-walk-open-label">
-              {walkSeen ? "Walk the bench" : "New here? Walk the bench"}
-            </span>
-            <span className="lab-walk-open-sub">
-              a quick, read-only tour of the {stationKeys.length} stations, in order
-            </span>
-            <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">▸</span>
-          </button>
-        )}
-
+        {/* "What are you here to do?" — the plain-language router leads the guided bench
+            (deslop directive #1: the walk-the-bench step-through was redundant with the station
+            contract lines and is gone; asking what you're here to do and jumping you straight to
+            the right tool IS the guided experience). Rows are doors — click scrolls to and
+            expands that station in place (never teleports). Filtered to the stations this rig
+            has, so a row can never point at a missing tool. */}
         {guided && (
-          <nav className="lab-router" aria-label="Which tool do I need?">
-            <div className="lab-router-title">Which tool do I need?</div>
+          <nav className="lab-router" aria-label="What are you here to do?">
+            <div className="lab-router-title">What are you here to do?</div>
+            <p className="lab-router-sub">
+              Pick the line that sounds like you — it opens the right tool below.
+            </p>
             {LAB_ROUTER.filter((r) => stationKeys.includes(r.station)).map((r) => (
               <button
                 key={r.station}
@@ -340,24 +295,11 @@ export default function Lab({
         {guided &&
           stationKeys.map((k, i) => (
             <Fragment key={k}>
-              {/* The walk panel parks ABOVE the station it's teaching; the card below lights up.
-                  Read-only: it never runs or expands an instrument — order + purpose only. */}
-              {walkStep === i && (
-                <WalkPanel
-                  step={i}
-                  total={stationKeys.length}
-                  stationKey={k}
-                  onBack={() => setWalkStep(i - 1)}
-                  onNext={() => (i >= stationKeys.length - 1 ? endWalk() : setWalkStep(i + 1))}
-                  onSkip={endWalk}
-                />
-              )}
               <LabSection
                 icon={STATION_ICON[k]}
                 name={LAB_STATIONS[k].name}
                 anchorId={`lab-station-${k}`}
                 openPulse={pulses[k]}
-                walkActive={walkStep === i}
                 station={{
                   n: i + 1,
                   forLine: LAB_STATIONS[k].forLine,
@@ -522,70 +464,6 @@ const ICONS: Record<string, ReactNode> = {
   ),
 };
 
-// "Walk the bench" step panel (§C) — the SetupTour step grammar (leg tag · title · progress
-// ticks · Back/Next · Skip) rebuilt as a slim in-room card that parks above one station at a
-// time. Teaches order + purpose only: the four contract lines live on the lit-up card below,
-// the panel adds the "this is the tool for {symptom}" framing. Never runs an instrument.
-function WalkPanel({
-  step,
-  total,
-  stationKey,
-  onBack,
-  onNext,
-  onSkip,
-}: {
-  step: number;
-  total: number;
-  stationKey: LabStationKey;
-  onBack: () => void;
-  onNext: () => void;
-  onSkip: () => void;
-}) {
-  const isLast = step === total - 1;
-  const symptom = LAB_ROUTER.find((r) => r.station === stationKey)?.symptom;
-  return (
-    <div className="lab-walk" role="region" aria-label={`Walk the bench — step ${step + 1} of ${total}`}>
-      <div className="lab-walk-head">
-        <span className="lab-walk-tag">Walk the bench</span>
-        <button className="lab-walk-skip" onClick={onSkip} aria-label="Skip the walk">
-          Skip ✕
-        </button>
-      </div>
-      <div className="lab-walk-title">
-        Station {step + 1} of {total} — {LAB_STATIONS[stationKey].name}
-      </div>
-      {symptom && (
-        <p className="lab-walk-frame">
-          This is the tool for: <em>“{symptom}”</em>
-        </p>
-      )}
-      <p className="lab-walk-body">
-        {isLast
-          ? "That's the whole bench — dive into whichever station your situation calls for (the “Which tool do I need?” list up top always knows the way)."
-          : "The card right below is this station — its four lines say what it's for and what its reading means."}
-      </p>
-      <div className="lab-walk-foot">
-        <div className="lab-walk-ticks" aria-hidden="true">
-          {Array.from({ length: total }, (_, t) => (
-            <span
-              key={t}
-              className={`lab-walk-tick ${t === step ? "lab-walk-tick-on" : ""} ${t < step ? "lab-walk-tick-done" : ""}`}
-            />
-          ))}
-        </div>
-        <div className="lab-walk-nav">
-          <button className="btn-small" onClick={onBack} disabled={step === 0}>
-            Back
-          </button>
-          <button className="btn-small btn-small-on" onClick={onNext}>
-            {isLast ? "Done" : "Next"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // The four-line station contract (guided bench §B). Line 3 is live — the same value the
 // instrument body shows — so the header can never disagree with the instrument under it.
 type StationContract = {
@@ -604,7 +482,6 @@ function LabSection({
   station,
   anchorId,
   openPulse,
-  walkActive = false,
   children,
   onFirstOpen,
 }: {
@@ -620,8 +497,6 @@ function LabSection({
   // Router jump: each increment forces this section open (never closed) — the router's "take me
   // to my tool" is an expand, not a toggle.
   openPulse?: number;
-  // "Walk the bench": the step panel is parked on this station — light the card up under it.
-  walkActive?: boolean;
   children: ReactNode;
   // Fired the FIRST time this section is expanded — lets Lab retire the welcome band once the reader
   // has found a door. Opt-in (undefined = no-op), so the section stays a self-contained collapsible.
@@ -640,7 +515,7 @@ function LabSection({
   }, [openPulse]);
   return (
     <div
-      className={`lab-card ${open ? "lab-card-open" : ""}${walkActive ? " lab-card-walk" : ""}`}
+      className={`lab-card ${open ? "lab-card-open" : ""}`}
       data-instrument={name}
       id={anchorId}
     >

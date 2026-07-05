@@ -251,7 +251,8 @@ export function applyCommitted(on: boolean): void {
 }
 
 // Guided Lab bench (spec 2026-07-05-lab-linear-guided-bench) — the Lab room as a linear instrument
-// bench: symptom→station router + ordered numbered stations + the "Walk the bench" step-through.
+// bench: the "What are you here to do?" router + ordered numbered stations (the walk-the-bench
+// step-through was removed per the 2026-07-05 deslop directive #1 — the router IS the guide).
 // DEFAULT OFF behind `compy_lab_guided` (Settings → Appearance preview toggle, the P-series
 // contract): flag off, today's Lab renders byte-identical (test-pinned). Frontend only — the flag
 // changes signposting and order around the existing instruments, never what they read or run.

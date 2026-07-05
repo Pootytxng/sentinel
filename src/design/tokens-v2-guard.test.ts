@@ -42,6 +42,7 @@ const loadV2Css = (...path: string[]): string =>
 
 const tokensCss = loadV2Css("design", "tokens-v2.css");
 const editorialTokensCss = loadV2Css("design", "tokens-editorial.css");
+const editorialRoomsCss = loadV2Css("design", "editorial-rooms.css");
 const shellCss = loadV2Css("design", "shell-v2.css");
 const homeCss = loadV2Css("surfaces", "home-v2.css");
 const homeEditorialCss = loadV2Css("surfaces", "home-editorial.css");
@@ -54,6 +55,7 @@ const labCss = loadV2Css("surfaces", "lab-v2.css");
 const V2_CSS: [string, string][] = [
   ["tokens-v2.css", tokensCss],
   ["tokens-editorial.css", editorialTokensCss],
+  ["editorial-rooms.css", editorialRoomsCss],
   ["shell-v2.css", shellCss],
   ["home-v2.css", homeCss],
   ["home-editorial.css", homeEditorialCss],
@@ -107,6 +109,7 @@ describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
     ["shell-v2.css", shellCss],
     ["home-v2.css", homeCss],
     ["home-editorial.css", homeEditorialCss],
+    ["editorial-rooms.css", editorialRoomsCss],
     ["optimize-v2.css", optimizeCss],
     ["monitor-v2.css", monitorCss],
     ["blackbook-v2.css", blackbookCss],

@@ -17,6 +17,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { SidePileContext } from "./side-pile";
 import { buildSetupSummary, deriveReverted } from "./use-scan";
 import { optimizeVerdict, optimizeMeasuredLine } from "./optimize-v2-data";
+import { useEditorialFlag } from "../design/use-editorial";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./optimize-v2.css";
 
@@ -100,6 +101,7 @@ export function OptimizeV2({
   exporting,
 }: Props) {
   const reduced = useReducedMotion();
+  const editorial = useEditorialFlag();
   const [segment, setSegment] = useState<Segment>("fixes");
   const [pileOpen, setPileOpen] = useState(false);
   const [pileHost, setPileHost] = useState<HTMLElement | null>(null);
@@ -187,7 +189,14 @@ export function OptimizeV2({
         room="fix"
         doorOpen={verdict.allClear}
         verdict={
-          reduced || !verdict.settled ? (
+          editorial ? (
+            // Editorial masthead (rollout, spec 2026-07-05): eyebrow + the composed serif
+            // verdict — a serif headline lands whole, not decoded. Same pure-helper text.
+            <>
+              <span className="edh-masthead-eyebrow">The fix list</span>
+              {verdict.headline}
+            </>
+          ) : reduced || !verdict.settled ? (
             verdict.headline
           ) : (
             // The "measurement arriving" moment (adopt list: verdict lines ONLY) — resolves

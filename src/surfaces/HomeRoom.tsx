@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
-import { readEditorial } from "../design/theme";
+import { useEditorialFlag } from "../design/use-editorial";
 import { HomeV2 } from "./HomeV2";
 import { HomeEditorial } from "./HomeEditorial";
 
@@ -22,11 +21,6 @@ type Props = {
 };
 
 export function HomeRoom(props: Props) {
-  const [editorial, setEditorial] = useState(readEditorial);
-  useEffect(() => {
-    const sync = () => setEditorial(readEditorial());
-    window.addEventListener("compy:editorial-changed", sync);
-    return () => window.removeEventListener("compy:editorial-changed", sync);
-  }, []);
+  const editorial = useEditorialFlag();
   return editorial ? <HomeEditorial {...props} /> : <HomeV2 {...props} />;
 }

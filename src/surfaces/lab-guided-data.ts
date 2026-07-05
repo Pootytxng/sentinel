@@ -61,7 +61,7 @@ export const LAB_STATIONS: Record<LabStationKey, LabStationInfo> = {
   },
 };
 
-// "Which tool do I need?" — the symptom→station router (§A). The copy is the spec's, pinned
+// "What are you here to do?" — the symptom→station router (§A). The copy is the spec's, pinned
 // literally by lab-guided.test.tsx: real-world feelings, each mapped to exactly one station with
 // the plain-English because. Lab filters rows to the stations this rig actually has (a row must
 // never point at a station that isn't there — no dead ends).

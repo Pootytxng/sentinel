@@ -5,6 +5,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict, blackbookMeasuredLine } from "./blackbook-v2-data";
 import type { GpuVendor } from "./walkthroughs";
+import { useEditorialFlag } from "../design/use-editorial";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./blackbook-v2.css";
 
@@ -34,6 +35,7 @@ export function BlackbookV2({
   onClose: () => void;
 }) {
   const reduced = useReducedMotion();
+  const editorial = useEditorialFlag();
   // Seeded from the persisted ledger; Learn reports each new grading up so the room verdict
   // updates the moment a guide is fact-checked (same data, no second read of the panel).
   const [ledger, setLedger] = useState(readAutopsyLedger);
@@ -43,7 +45,14 @@ export function BlackbookV2({
     <RoomShell
       room="learn"
       verdict={
-        reduced ? (
+        editorial ? (
+          // Editorial masthead (rollout, spec 2026-07-05): eyebrow + the composed serif
+          // verdict — a serif headline lands whole, not decoded. Same pure-helper text.
+          <>
+            <span className="edh-masthead-eyebrow">Claims, graded</span>
+            {verdict.headline}
+          </>
+        ) : reduced ? (
           verdict.headline
         ) : (
           // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's

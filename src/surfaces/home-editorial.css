@@ -10,53 +10,14 @@
    edges, not app-template rounding. Motion: transform/opacity only; the sweep renders only
    while checks actually run; everything stills under [data-motion="reduced"]. */
 
-/* ── Masthead — the serif verdict is the editorial thesis (Home room only, pilot scope) ── */
-:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict {
-  display: block;
-  margin-bottom: 10px;
-}
-:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict h1 {
-  display: block;
-  margin: 0 0 6px;
-}
-:root[data-v2="on"][data-editorial="on"] .edh-masthead-eyebrow {
-  display: block;
-  font: 600 10px var(--v2-font-sans);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--v2-faint);
-  margin-bottom: 10px;
-}
-:root[data-v2="on"][data-editorial="on"] .edh-masthead-eyebrow .edh-mono {
-  font: 10px var(--v2-font-mono);
-  letter-spacing: 0.08em;
-}
+/* ── Masthead — shared rules now live in design/editorial-rooms.css (the rollout layer);
+   Home keeps only its arrival moment: the verdict settles in once per fresh scan. ── */
 :root[data-v2="on"][data-editorial="on"] .edh-headline {
   display: block;
-  font: 400 clamp(27px, 3.4vw, 38px) / 1.14 var(--v2-font-serif);
-  letter-spacing: 0.1px;
-  color: var(--v2-text);
-  max-width: 26ch;
-  text-wrap: balance;
   animation: v2-edh-arrive 0.55s ease both;
 }
 :root[data-v2="on"][data-editorial="on"][data-motion="reduced"] .edh-headline {
   animation: none;
-}
-:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict-sub {
-  display: block;
-  font-size: 13px;
-  max-width: 64ch;
-  margin-top: 2px;
-}
-:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict-action {
-  margin: 12px 0 0;
-}
-/* The folio line — the measured provenance gets its editorial rules. */
-:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-measured {
-  border-block: 1px solid var(--ed-hairline);
-  padding: 7px 2px;
-  margin-bottom: 22px;
 }
 
 /* ── Page grid ── */

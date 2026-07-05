@@ -273,8 +273,8 @@ export default function Settings({
                 <div className="set-row-text">
                   <div className="set-row-title">Guided Lab bench (preview)</div>
                   <div className="set-row-sub">
-                    Lines the Lab's instruments up as numbered stations with a "which tool do I
-                    need?" guide. Same instruments, same readings — just signposted.
+                    Lines the Lab's instruments up as numbered stations behind a "what are you
+                    here to do?" guide. Same instruments, same readings — just signposted.
                   </div>
                 </div>
                 <Toggle on={labGuided} onChange={changeLabGuided} ariaLabel="Guided Lab bench preview" />

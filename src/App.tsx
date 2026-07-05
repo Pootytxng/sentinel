@@ -49,6 +49,7 @@ import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) —
 import "./design/tokens-v2.css"; // V2 shell tokens — every rule scoped under [data-v2="on"], default OFF
 import "./design/fonts-editorial.css"; // Instrument Serif @font-face (OFL, bundled) — inert until tokens-editorial uses it
 import "./design/tokens-editorial.css"; // Editorial-Instrument tokens — scoped under [data-editorial="on"], DEFAULT OFF
+import "./design/editorial-rooms.css"; // Editorial rollout layer (all rooms) — same scoping, DEFAULT OFF
 
 type DiskInfo = {
   mount_point: string;
