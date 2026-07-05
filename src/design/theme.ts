@@ -279,6 +279,37 @@ export function applyLabGuided(on: boolean): void {
   }
 }
 
+// Editorial-Instrument look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction) —
+// editorial serif verdicts carry the story, precision-instrument telemetry carries the data,
+// plus the HUD/scanline skin. Piloted on Home. DEFAULT OFF behind `compy_editorial` (Settings →
+// Appearance preview toggle, the P-series contract): flag off, every room renders byte-identical
+// (test-pinned). Frontend only — presentation over the SAME measured props/probes, zero new IPC.
+const EDITORIAL_KEY = "compy_editorial";
+
+export function readEditorial(): boolean {
+  try {
+    return localStorage.getItem(EDITORIAL_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyEditorial(on: boolean): void {
+  if (on) document.documentElement.dataset.editorial = "on";
+  else delete document.documentElement.dataset.editorial;
+  try {
+    localStorage.setItem(EDITORIAL_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:editorial-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
 // prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
 // DEFAULT OFF behind `compy_dash_v2`; toggled for review. Evolves the existing app — nothing scrapped.

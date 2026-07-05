@@ -1,0 +1,29 @@
+/* ── Editorial-Instrument token layer (pilot, spec 2026-07-05-ui-deslop-organic-directive) ──
+   The de-slop redesign's additions to the v2 contract: a display serif for the verdict
+   masthead, and the hairline/scanline inks the instrument-bay HUD skin is drawn with.
+   NO new hues — everything composes the existing v2 palette; color stays information
+   (graded values, status LEDs), never decoration.
+
+   Scoping law (same as tokens-v2.css, guard-pinned in tokens-v2-guard.test.ts): every
+   selector carries [data-v2="on"], and additionally [data-editorial="on"] — the flag-off
+   byte-identity mechanism for the compy_editorial preview (P-series contract, DEFAULT OFF).
+
+   Type discipline extends the v2 font law: --v2-font-serif is for DISPLAY VERDICTS ONLY
+   (the masthead headline — the story voice). Labels/prose stay --v2-font-sans; machine
+   values stay --v2-font-mono. Fonts bundled locally (fonts-editorial.css, OFL 1.1). */
+
+:root[data-v2="on"][data-editorial="on"] {
+  /* The story voice — display sizes only, single weight (restraint by construction). */
+  --v2-font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+
+  /* Hairline inks — the editorial rules + instrument-frame lines (text ink at low alpha,
+     so they hold across the five instrument themes). */
+  --ed-hairline: rgba(232, 235, 242, 0.1);
+  --ed-hairline-strong: rgba(232, 235, 242, 0.2);
+
+  /* The scanline field — "felt not seen" (a static repeating gradient at whisper alpha). */
+  --ed-scanline: rgba(232, 235, 242, 0.028);
+
+  /* Bay atmosphere — the faint instrument-bay depth wash behind the hologram. */
+  --ed-bay: rgba(10, 12, 16, 0.55);
+}

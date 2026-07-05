@@ -1,0 +1,23 @@
+/* Instrument Serif (regular + italic, latin) — bundled locally, zero network.
+   © The Instrument Serif Project Authors, SIL Open Font License 1.1 — full text:
+   src/design/fonts/InstrumentSerif-OFL.txt.
+   Editorial-Instrument pilot (spec 2026-07-05-ui-deslop-organic-directive). @font-face
+   alone is inert: the files are only fetched when a rule USES the family, and the only
+   rules that do live in tokens-editorial.css under [data-editorial="on"] — so flag-off
+   nothing changes (the P-series byte-identity contract). */
+
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./fonts/InstrumentSerif-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./fonts/InstrumentSerif-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}

@@ -12,7 +12,7 @@ import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB, fmtGHz } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
-import { HomeV2 } from "./surfaces/HomeV2";
+import { HomeRoom } from "./surfaces/HomeRoom";
 import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
 import { BlackbookV2 } from "./surfaces/BlackbookV2";
@@ -47,6 +47,8 @@ import "./design/living-instrument.css"; // "Living Instrument" feel-refresh ski
 import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default OFF
 import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) — inert until tokens-v2 uses them
 import "./design/tokens-v2.css"; // V2 shell tokens — every rule scoped under [data-v2="on"], default OFF
+import "./design/fonts-editorial.css"; // Instrument Serif @font-face (OFL, bundled) — inert until tokens-editorial uses it
+import "./design/tokens-editorial.css"; // Editorial-Instrument tokens — scoped under [data-editorial="on"], DEFAULT OFF
 
 type DiskInfo = {
   mount_point: string;
@@ -1337,7 +1339,7 @@ function App() {
             </div>
           )}
           {activeTab === "Overview" && hw ? (
-            <HomeV2
+            <HomeRoom
               hw={hw}
               readiness={readiness}
               priorities={priorities}

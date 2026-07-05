@@ -13,6 +13,18 @@
 
 ---
 
+## 🔥 TOP PRIORITY LANE (owner directive 2026-07-05) — de-slop the UI, organic + unique
+
+Full spec: [`docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md`](superpowers/specs/2026-07-05-ui-deslop-organic-directive.md).
+Owner's verdict after living with the V2 shell: theme-consistent but reads as **generic AI-slop template design** — wants organic/unique, concise, crafted copy, and **trending design tooling (Figma / v0-Vercel MCPs)** used anywhere the UI uses recognizable AI defaults. Elevated to top priority per his instruction (after a confirmed clean stop — HEAD `b413204`, main synced, nothing stranded).
+
+- [x] **Bug fixes (aesthetic-independent, ship now):** (#4) Home last-session numbers graded per-rig via `metric-grade.ts` + (#5) hologram stage fills its frame — **shipped `c945c88`** (2026-07-05), bug→guard tone-class pins in `home-v2.test.tsx`, live-verified via embedded hash (see RELEASE_STATE).
+- [~] **Redesign lane — direction LOCKED: Editorial-Instrument + JARVIS layer (owner 2026-07-05; Fable creative authority):**
+  - [x] **Home pilot** — `HomeEditorial` behind **`compy_editorial` (DEFAULT OFF**, Settings → Appearance "Editorial look (preview)"; flag-off byte-identical, test-pinned in `home-editorial-flag.test.tsx`): Instrument Serif verdict masthead (OFL, bundled) over a hairline folio · instrument bay (real hologram, HUD corner brackets, whisper scanline, callout leaders, event-driven pointer parallax — no rAF loop) · telemetry ledger (hairline measurement log, graded ink carried over) · ranked docket. Zero src-tauri/IPC. Self-review shots `docs/ui-sweep/shots/editorial/`.
+  - [ ] Roll the language to Optimize → Monitor → Blackbook → Lab (Lab keeps the guided-bench structure; #1 walk-the-bench → plain-language router rework folds in here).
+  - [ ] Voice/copy pass (#3) rides each surface.
+  - Note: #6 "trending design tooling" — v0/Figma MCPs spend owner-gated credits ([[v0-mcp-for-compy-ui]]); pilot built in-repo instead (fonts bundled, zero network). Use tooling only if a room's language demands it.
+
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,

@@ -1,0 +1,530 @@
+/* ── Editorial-Instrument Home pilot (spec 2026-07-05-ui-deslop-organic-directive) ──────
+   Editorial type carries the story (serif verdict masthead over a hairline folio);
+   instrument precision carries the data (telemetry ledger, bracketed instrument bay,
+   whisper scanline). Same laws as home-v2.css (guard-pinned in tokens-v2-guard.test.ts):
+   every selector scoped under [data-v2="on"] AND [data-editorial="on"] (the compy_editorial
+   flag-off byte-identity mechanism), no color literals, fonts only via var(--v2-font-*),
+   @keyframes carry the v2- prefix and are inert unless an editorial rule references them.
+
+   Geometry voice: edh chrome is SHARPER than the v2 default (4px, pills 3px) — instrument
+   edges, not app-template rounding. Motion: transform/opacity only; the sweep renders only
+   while checks actually run; everything stills under [data-motion="reduced"]. */
+
+/* ── Masthead — the serif verdict is the editorial thesis (Home room only, pilot scope) ── */
+:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict {
+  display: block;
+  margin-bottom: 10px;
+}
+:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict h1 {
+  display: block;
+  margin: 0 0 6px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-masthead-eyebrow {
+  display: block;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+  margin-bottom: 10px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-masthead-eyebrow .edh-mono {
+  font: 10px var(--v2-font-mono);
+  letter-spacing: 0.08em;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-headline {
+  display: block;
+  font: 400 clamp(27px, 3.4vw, 38px) / 1.14 var(--v2-font-serif);
+  letter-spacing: 0.1px;
+  color: var(--v2-text);
+  max-width: 26ch;
+  text-wrap: balance;
+  animation: v2-edh-arrive 0.55s ease both;
+}
+:root[data-v2="on"][data-editorial="on"][data-motion="reduced"] .edh-headline {
+  animation: none;
+}
+:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict-sub {
+  display: block;
+  font-size: 13px;
+  max-width: 64ch;
+  margin-top: 2px;
+}
+:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-verdict-action {
+  margin: 12px 0 0;
+}
+/* The folio line — the measured provenance gets its editorial rules. */
+:root[data-v2="on"][data-editorial="on"] .v2-room[data-room="home"] .v2-measured {
+  border-block: 1px solid var(--ed-hairline);
+  padding: 7px 2px;
+  margin-bottom: 22px;
+}
+
+/* ── Page grid ── */
+:root[data-v2="on"][data-editorial="on"] .edh-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  align-items: stretch;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-full {
+  grid-column: 1 / -1;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-mono {
+  font-family: var(--v2-font-mono);
+}
+/* Letterspaced eyebrow — the instrument register's section label. */
+:root[data-v2="on"][data-editorial="on"] .edh-eyebrow {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+
+/* ── Instrument bay ── */
+:root[data-v2="on"][data-editorial="on"] .edh-bay {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-bay-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-bay-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-seg-group {
+  display: flex;
+  gap: 4px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-seg {
+  font-family: var(--v2-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--v2-muted);
+  background: transparent;
+  border: 1px solid var(--ed-hairline-strong);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-seg:hover {
+  color: var(--v2-text);
+  border-color: var(--v2-accent-line);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-seg-on {
+  background: var(--v2-accent-dim);
+  border-color: var(--v2-accent-line);
+  color: var(--v2-text);
+}
+
+/* The stage — hairline frame, corner brackets, whisper scanline field. Height mechanism
+   mirrors home-v2 (deslop #5): fill the flex-stretched frame, clamp survives as a floor. */
+:root[data-v2="on"][data-editorial="on"] .edh-stage {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-height: clamp(320px, 52vh, 520px);
+  overflow: hidden;
+  border: 1px solid var(--ed-hairline-strong);
+  border-radius: 4px;
+  background: var(--v2-panel);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-stage canvas {
+  border-radius: 4px;
+}
+/* Scanline field — static (zero animation cost), pointer-transparent, "felt not seen". */
+:root[data-v2="on"][data-editorial="on"] .edh-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--ed-scanline) 0 1px,
+    transparent 1px 3px
+  );
+}
+:root[data-v2="on"][data-editorial="on"] .edh-stage-cards {
+  padding: var(--v2-pad);
+  overflow-y: auto;
+  height: 100%;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-stage-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--v2-faint);
+  font-size: 12px;
+}
+
+/* Corner brackets — the HUD frame ticks. They breathe with the pointer (±2px, opposite the
+   callouts) — depth between the frame plane and the annotation plane. */
+:root[data-v2="on"][data-editorial="on"] .edh-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--v2-accent-line);
+  z-index: 2;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--edh-px, 0) * 2px),
+    calc(var(--edh-py, 0) * 2px),
+    0
+  );
+  transition: transform 0.12s linear;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-c-tl {
+  top: 8px;
+  left: 8px;
+  border-right: none;
+  border-bottom: none;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-c-tr {
+  top: 8px;
+  right: 8px;
+  border-left: none;
+  border-bottom: none;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-c-bl {
+  bottom: 8px;
+  left: 8px;
+  border-right: none;
+  border-top: none;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-c-br {
+  bottom: 8px;
+  right: 8px;
+  border-left: none;
+  border-top: none;
+}
+:root[data-v2="on"][data-editorial="on"][data-motion="reduced"] .edh-corner {
+  transform: none;
+  transition: none;
+}
+
+/* Boot sweep — renders ONLY while checks are actually running (honest activity; the
+   component gates it on `checking && !reduced`). */
+:root[data-v2="on"][data-editorial="on"] .edh-sweep {
+  position: absolute;
+  inset-inline: 8%;
+  top: 0;
+  height: 2px;
+  background: var(--v2-accent);
+  box-shadow: 0 2px 14px var(--v2-accent-dim);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 3;
+  animation: v2-edh-sweep 4.5s ease-in-out infinite;
+}
+
+/* Callouts — instrument annotations on hairline leaders; the parallax plane (±6px against
+   the pointer, transform-only, event-driven from the component — no rAF loop). */
+:root[data-v2="on"][data-editorial="on"] .edh-callouts {
+  position: absolute;
+  top: 16px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--edh-px, 0) * -6px),
+    calc(var(--edh-py, 0) * -4px),
+    0
+  );
+  transition: transform 0.12s linear;
+}
+:root[data-v2="on"][data-editorial="on"][data-motion="reduced"] .edh-callouts {
+  transform: none;
+  transition: none;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callouts-left {
+  left: 16px;
+  align-items: flex-start;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callouts-right {
+  right: 16px;
+  align-items: flex-end;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 200px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callouts-left .edh-callout {
+  border-left: 1px solid var(--ed-hairline-strong);
+  padding-left: 9px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callouts-right .edh-callout {
+  border-right: 1px solid var(--ed-hairline-strong);
+  padding-right: 9px;
+  align-items: flex-end;
+  text-align: right;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout-head b {
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout-detail {
+  color: var(--v2-muted);
+  font-size: 11px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout-v {
+  font-size: 12px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout-v-ok {
+  color: var(--v2-ok);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-callout-v-warn {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-led-ok {
+  background: var(--v2-ok);
+  box-shadow: 0 0 5px var(--v2-ok-dim);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-led-warn {
+  background: var(--v2-warn);
+  box-shadow: 0 0 5px var(--v2-warn-dim);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-stage-hint {
+  position: absolute;
+  bottom: 10px;
+  inset-inline: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--v2-faint);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* ── Telemetry ledger — a hairline measurement log, not card soup ── */
+:root[data-v2="on"][data-editorial="on"] .edh-ledger {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ed-hairline-strong);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--ed-hairline);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-reading {
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--v2-text);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-unit {
+  font-size: 10.5px;
+  color: var(--v2-faint);
+  margin-left: 7px;
+  letter-spacing: 0.06em;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-note .edh-led {
+  margin-right: 2px;
+  vertical-align: 1px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-note-warn {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-note-clip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-trace {
+  margin-top: 6px;
+  opacity: 0.85;
+}
+
+/* ── The docket — ranked findings; rank numerals are real order ── */
+:root[data-v2="on"][data-editorial="on"] .edh-docket {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 9px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-rows {
+  border-top: 1px solid var(--ed-hairline-strong);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--ed-hairline);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-rank {
+  font-size: 12px;
+  color: var(--v2-faint);
+  flex: none;
+  width: 2em;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-top .edh-rank {
+  color: var(--v2-accent);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-nm {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--v2-text);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-why {
+  font-size: 12px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-docket-clear {
+  font-size: 12.5px;
+  color: var(--v2-muted);
+  padding: 14px 2px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-pill {
+  flex: none;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-pill-warn {
+  background: var(--v2-warn-dim);
+  color: var(--v2-warn);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-pill-ok {
+  background: var(--v2-ok-dim);
+  color: var(--v2-ok);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-pill-info {
+  background: var(--v2-info-dim);
+  color: var(--v2-info);
+}
+
+/* ── Buttons — quiet instrument chrome ── */
+:root[data-v2="on"][data-editorial="on"] .edh-btn {
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-text);
+  background: transparent;
+  border: 1px solid var(--ed-hairline-strong);
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-btn:hover {
+  border-color: var(--v2-accent-line);
+  background: var(--v2-accent-dim);
+}
+:root[data-v2="on"][data-editorial="on"] .edh-btn-ghost {
+  flex: none;
+  font-weight: 500;
+  color: var(--v2-muted);
+  padding: 5px 11px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-btn-ghost:hover {
+  color: var(--v2-text);
+}
+
+/* ── Skeletons (loading docket) ── */
+:root[data-v2="on"][data-editorial="on"] .edh-skel {
+  display: inline-block;
+  border-radius: 3px;
+  background: var(--ed-hairline);
+  animation: v2-edh-pulse 1.4s ease-in-out infinite;
+}
+:root[data-v2="on"][data-editorial="on"][data-motion="reduced"] .edh-skel {
+  animation: none;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-skel-rank {
+  width: 2em;
+  height: 12px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-skel-line {
+  height: 12px;
+  flex: 1;
+  max-width: 420px;
+}
+:root[data-v2="on"][data-editorial="on"] .edh-skel-short {
+  max-width: 260px;
+}
+
+/* Keyframes — v2- prefixed (the guard's one sanctioned unscoped header); inert unless an
+   editorial-scoped rule above references them. Transform/opacity only. */
+@keyframes v2-edh-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes v2-edh-sweep {
+  0%,
+  100% {
+    transform: translateY(14px);
+    opacity: 0.15;
+  }
+  50% {
+    transform: translateY(min(46vh, 480px));
+    opacity: 0.8;
+  }
+}
+@keyframes v2-edh-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}

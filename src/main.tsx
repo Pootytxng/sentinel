@@ -71,6 +71,17 @@ try {
 // Guard: tokens-v2-guard.test.ts.
 document.documentElement.dataset.v2 = "on";
 
+// Editorial-Instrument look (spec 2026-07-05-ui-deslop-organic-directive) — the de-slop redesign
+// pilot. DEFAULT OFF (P-series preview contract): only an explicit "1" wears the attribute, so
+// flag-off every room renders byte-identical (all editorial CSS is scoped [data-editorial="on"]).
+try {
+  if (localStorage.getItem("compy_editorial") === "1") {
+    document.documentElement.dataset.editorial = "on";
+  }
+} catch {
+  /* default OFF */
+}
+
 // Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
 // components read one source of truth. Default BASIC (the answer face).
 try {
