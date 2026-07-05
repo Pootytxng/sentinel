@@ -9,7 +9,7 @@ import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { gpuVendor } from "./walkthroughs";
-import type { Grade } from "../data/metric-grade";
+import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
@@ -169,6 +169,13 @@ export function HomeV2({
   // ── measured derivations (all real, all honestly empty when absent) ──
   const posture = postureLine(readiness, priorities, activeChangeCount(changes));
   const strip = liveStrip(sessions);
+  // Session numbers graded against THIS rig (deslop directive #4): fps vs the display's real
+  // refresh, 1% low vs the session's own average. Neutral (nothing measured) = uncolored ink.
+  const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
+  const fpsGrade: Grade = strip.kind === "data" ? gradeFps(strip.avgFps, rig) : "neutral";
+  const low1Grade: Grade = strip.kind === "data" ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
+  const gradeClass = (g: Grade) => (g === "neutral" ? "" : ` hv2-grade-${g}`);
+  const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running (boot hydrate / re-scan)
   const vendor = gpuVendor(hw.gpus?.[0]?.name);
   const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
@@ -381,7 +388,10 @@ export function HomeV2({
             {strip.kind === "data" ? (
               <>
                 <span className="hv2-stat-k">Last session · {strip.game}</span>
-                <span className="hv2-stat-n hv2-mono">
+                <span
+                  className={`hv2-stat-n hv2-mono${gradeClass(fpsGrade)}`}
+                  style={gradeInk(fpsGrade)}
+                >
                   {reduced ? (
                     Math.round(strip.avgFps)
                   ) : (
@@ -389,7 +399,16 @@ export function HomeV2({
                   )}
                   <span className="hv2-stat-unit">fps avg</span>
                 </span>
-                <span className="hv2-stat-d">1% low {Math.round(strip.low1Est)} (estimate)</span>
+                <span className="hv2-stat-d">
+                  1% low{" "}
+                  <span
+                    className={`hv2-mono${gradeClass(low1Grade)}`}
+                    style={gradeInk(low1Grade)}
+                  >
+                    {Math.round(strip.low1Est)}
+                  </span>{" "}
+                  (estimate)
+                </span>
                 {sparkValues.length >= 2 && (
                   <div className="hv2-spark">
                     <Sparkline values={sparkValues} height={26} stroke="var(--v2-accent)" />

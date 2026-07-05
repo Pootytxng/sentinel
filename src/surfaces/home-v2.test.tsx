@@ -322,6 +322,31 @@ describe("HomeV2 — glance cards (fill pass)", () => {
   });
 });
 
+// Deslop directive #4 (bug→guard): the last-session numbers are GRADED against this rig, never
+// plain white — the value element must carry the hardware-derived tone class. Neutral (nothing
+// measured) stays unclassed/uncolored: honesty means no grade is also visible as no color.
+describe("HomeV2 — last-session numbers carry hardware-graded tone", () => {
+  it("fps avg is graded vs the display's refresh; 1% low vs the session's own average", () => {
+    useReduced();
+    const { container } = mount();
+    // 142.3 avg on the fixture's 165 Hz panel → ratio 0.86 → good
+    const fpsEl = container.querySelector(".hv2-stat-n");
+    expect(fpsEl?.className).toContain("hv2-grade-good");
+    expect(fpsEl?.textContent).toContain("142");
+    // 98.4 low vs 142.3 avg → ratio 0.69 → ok
+    const lowEl = container.querySelector(".hv2-grade-ok");
+    expect(lowEl?.textContent).toBe("98");
+  });
+
+  it("ungraded (neutral) session numbers stay plain — no tone class, no invented grade", () => {
+    useReduced();
+    const { container } = mount({
+      sessions: [{ ...session, avg_fps: 0, low1_fps_est: 0 } as SessionSummary],
+    });
+    expect(container.querySelector('[class*="hv2-grade-"]')).toBeNull();
+  });
+});
+
 describe("HomeV2 — priorities rows", () => {
   it("ranks the first limiter 'biggest limiter'; rows route to Optimize", () => {
     useReduced();
