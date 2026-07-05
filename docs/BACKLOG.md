@@ -22,6 +22,18 @@
 > Lanes: run your `/loop` (LANE_BUS §②) and **self-continue** through your queue — never stop to "await
 > direction." This STEERING LOG keeps the integrate-verify history; LANE_BUS holds the live work distribution.
 
+### Cycle 2026-07-05 — Lab linear guided bench (owner-approved spec, CC build train) — `main` @ `2c49ed0`
+Spec `docs/superpowers/specs/2026-07-05-lab-linear-guided-bench.md` built in full, 6 commits, behind
+**`compy_lab_guided` DEFAULT OFF** (Settings → Appearance preview toggle; flag-off Lab byte-identical, test-pinned):
+- ✅ `1b6a9de` flag + byte-identity guard · `0a4cc04` numbered stations (four-line contract, bench order, live line 3
+  or honest "No reading yet") · `5e80a41` symptom→station router (map pinned literally) · `815a39a` readings strip
+  removed flag-on · `42bbb15` "Walk the bench" read-only step-through (`compy_lab_walk_seen_v1`) · `2c49ed0` polish+shots.
+- **Verify GREEN:** tsc 0 · vitest **985/985** (24 new lab-guided guards) · `git diff -- src-tauri` **empty** (zero new
+  IPC) · self-review 7 native 1500×980 shots (`docs/ui-sweep/shots/lab-guided/`) · installer rebuilt + silent-reinstalled,
+  **stamp-verified `2c49ed0 · release`**.
+- **⏳ OWNER:** flip the preview toggle on (Settings → Appearance → "Guided Lab bench"), eyeball; default-ON is his
+  taste call (P-series contract).
+
 ### Cycle 2026-06-25f — SECOND compy-burst (A5 finishables, owner "+300k") — `main` @ `901e1a5`
 Burst (maxItems 2 + A5 focus; triage returned 3 disjoint): **3 shipped · 0 skipped · GREEN.**
 - ✅ A4 Monitor: FreeSync↔VRB exclusion **warning** (advisory, not strobe-detection — honest angle) (`49b03f3`).
