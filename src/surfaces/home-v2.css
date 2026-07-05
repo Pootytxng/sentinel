@@ -270,6 +270,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Glance-card headline (fill pass, spec 2026-07-05): a worded verdict line (drift watch / drive
+   health) — smaller than the numeric hv2-stat-n tier, LED-dotted, warn ink only when measured. */
+:root[data-v2="on"] .hv2-glance-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hv2-glance-h.hv2-glance-warn {
+  color: var(--v2-warn);
+}
 /* Recess the trend chart into a carved well — the darkest tier inside the raised card pushes the
    headline fps number forward as the primary, with the sparkline reading as supporting depth. */
 :root[data-v2="on"] .hv2-spark {

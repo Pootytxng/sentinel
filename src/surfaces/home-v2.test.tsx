@@ -249,6 +249,79 @@ describe("HomeV2 — honest empty states", () => {
   });
 });
 
+// Glanceable fill (spec 2026-07-05): drift-watch + drive-health cards are measured-or-honestly-
+// absent — empty sources render the honest copy (no number), populated sources render the real
+// value from props. No fabricated-value path exists.
+describe("HomeV2 — glance cards (fill pass)", () => {
+  it("no drifts → \"Nothing's drifted\" (ok), never a fabricated count", () => {
+    useReduced();
+    mount();
+    expect(screen.getByText("Nothing's drifted")).toBeTruthy();
+    expect(screen.getByText("every applied change is still holding")).toBeTruthy();
+  });
+
+  it("N drifts → honest count + names ≤2 with 'and N more' (warn)", () => {
+    useReduced();
+    mount({
+      readiness: {
+        ...readiness,
+        drifts: [
+          { id: "d1", label: "Game Mode", detail: "", noticed_at: "2026-07-04T10:00:00Z" },
+          { id: "d2", label: "Power plan", detail: "", noticed_at: "2026-07-04T10:00:00Z" },
+          { id: "d3", label: "SysMain", detail: "", noticed_at: "2026-07-04T10:00:00Z" },
+        ],
+      },
+    });
+    expect(screen.getByText("3 settings drifted off")).toBeTruthy();
+    expect(screen.getByText("Game Mode · Power plan · and 1 more")).toBeTruthy();
+  });
+
+  it("readiness unresolved → drift card claims nothing", () => {
+    useReduced();
+    mount({ readiness: null, priorities: null });
+    expect(screen.getByText("drift status lands with the current check")).toBeTruthy();
+    expect(screen.queryByText("Nothing's drifted")).toBeNull();
+  });
+
+  it("no SMART reads → honest absence, no drive count", () => {
+    useReduced();
+    mount(); // fixture hw has no disk_health entries
+    expect(screen.getByText(/no SMART reading from this rig/)).toBeTruthy();
+    expect(screen.queryByText("Drives healthy")).toBeNull();
+  });
+
+  it("all drives Healthy → 'Drives healthy' with the real count; Unknown reads omitted", () => {
+    useReduced();
+    mount({
+      hw: {
+        ...hw,
+        disk_health: [
+          { friendly_name: "CT1000P510SSD5", health: "Healthy" },
+          { friendly_name: "WD Blue", health: "Healthy" },
+          { friendly_name: "Mystery Drive", health: "Unknown" }, // no SMART read → omitted
+        ],
+      } as HardwareInfo,
+    });
+    expect(screen.getByText("Drives healthy")).toBeTruthy();
+    expect(screen.getByText("2 drives · SMART OK")).toBeTruthy();
+  });
+
+  it("a flagged drive is named with its measured status (warn)", () => {
+    useReduced();
+    mount({
+      hw: {
+        ...hw,
+        disk_health: [
+          { friendly_name: "CT1000P510SSD5", health: "Warning" },
+          { friendly_name: "WD Blue", health: "Healthy" },
+        ],
+      } as HardwareInfo,
+    });
+    expect(screen.getByText("CT1000P510SSD5 — Warning")).toBeTruthy();
+    expect(screen.queryByText("Drives healthy")).toBeNull();
+  });
+});
+
 describe("HomeV2 — priorities rows", () => {
   it("ranks the first limiter 'biggest limiter'; rows route to Optimize", () => {
     useReduced();

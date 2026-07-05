@@ -194,6 +194,18 @@ export function HomeV2({
     : null;
   const activeCount = activeChangeCount(changes);
 
+  // ── Glanceable fill (spec 2026-07-05) — measured-only sources for the two glance cards ──
+  // Drift watch: the A5 drift signal, surfaced on Home for the first time (no one-mention clash).
+  const drifts = readiness?.drifts ?? [];
+  const driftNames =
+    drifts
+      .slice(0, 2)
+      .map((d) => d.label)
+      .join(" · ") + (drifts.length > 2 ? ` · and ${drifts.length - 2} more` : "");
+  // Drive health: SMART reads only — a drive with no reading is omitted from the count, never guessed.
+  const smartDrives = (hw.disk_health ?? []).filter((d) => d.health !== "Unknown");
+  const flaggedDrives = smartDrives.filter((d) => d.health !== "Healthy");
+
   // Sparkline: avg FPS across the recent sessions, oldest → newest (real records only).
   const sparkValues = useMemo(
     () =>
@@ -421,6 +433,61 @@ export function HomeV2({
               </span>
             ) : (
               <span className="hv2-stat-d">nothing applied yet — your PC is untouched</span>
+            )}
+          </SpotlightCard>
+
+          {/* ── Glanceable fill (spec 2026-07-05) — below the existing stats, so the verdict →
+              hologram → priorities order is untouched (answer-first). Measured or honestly absent. ── */}
+          <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
+            <span className="hv2-stat-k">Drift watch</span>
+            {readiness == null ? (
+              <span className="hv2-stat-d">drift status lands with the current check</span>
+            ) : drifts.length === 0 ? (
+              <>
+                <span className="hv2-glance-h">
+                  <span className="hv2-led hv2-led-ok" aria-hidden="true" />
+                  Nothing's drifted
+                </span>
+                <span className="hv2-stat-d">every applied change is still holding</span>
+              </>
+            ) : (
+              <>
+                <span className="hv2-glance-h hv2-glance-warn">
+                  <span className="hv2-led hv2-led-warn" aria-hidden="true" />
+                  {drifts.length} setting{drifts.length === 1 ? "" : "s"} drifted off
+                </span>
+                <span className="hv2-stat-d">{driftNames}</span>
+              </>
+            )}
+          </SpotlightCard>
+
+          <SpotlightCard className="hv2-stat" spotlightColor="rgba(167, 139, 250, 0.10)">
+            <span className="hv2-stat-k">Drive health</span>
+            {smartDrives.length === 0 ? (
+              <span className="hv2-stat-d">
+                no SMART reading from this rig — Compy won't guess drive health
+              </span>
+            ) : flaggedDrives.length === 0 ? (
+              <>
+                <span className="hv2-glance-h">
+                  <span className="hv2-led hv2-led-ok" aria-hidden="true" />
+                  Drives healthy
+                </span>
+                <span className="hv2-stat-d">
+                  {smartDrives.length} drive{smartDrives.length === 1 ? "" : "s"} · SMART OK
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="hv2-glance-h hv2-glance-warn">
+                  <span className="hv2-led hv2-led-warn" aria-hidden="true" />
+                  {flaggedDrives[0].friendly_name} — {flaggedDrives[0].health}
+                </span>
+                <span className="hv2-stat-d">
+                  SMART flagged {flaggedDrives.length === 1 ? "this drive" : `${flaggedDrives.length} drives`} —
+                  back up important data
+                </span>
+              </>
             )}
           </SpotlightCard>
         </div>
