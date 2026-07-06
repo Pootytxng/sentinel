@@ -312,7 +312,7 @@ export function HomeHud({
       <span className="hud-corner hud-c-br" aria-hidden="true" />
       {checking && !reduced && <div className="hud-sweep" aria-hidden="true" />}
       {rig3d ? (
-        <Suspense fallback={<div className="hud-stage-loading">Initializing hologram…</div>}>
+        <Suspense fallback={<div className="hud-stage-loading">Loading your rig in 3D…</div>}>
           <RigHologram
             hw={hw}
             exploded={exploded}
@@ -364,12 +364,12 @@ export function HomeHud({
               tone={null}
               name="CPU"
               detail={hw.cpu_arch?.family_label || undefined}
-              value="temp n/a — by design"
+              value="no temp — Compy won't ship a kernel driver"
               mono={false}
             />
           </div>
           <div className="hud-stage-hint">
-            Drag to orbit · click a part for its live specs — measured, never guessed
+            Drag to orbit · click a part for its live specs
           </div>
         </>
       )}
@@ -383,7 +383,7 @@ export function HomeHud({
         <>
           <span className="hud-masthead-eyebrow">
             <span className={`hud-led hud-led-${ledState}`} aria-hidden="true" />
-            Rig diagnostic <span className="hud-eyebrow-sep">//</span>{" "}
+            Rig diagnostic <span className="hud-eyebrow-sep">·</span>{" "}
             <span className="hud-mono">{dateline}</span>
           </span>
           <span className="hud-headline" key={posture.headline}>
@@ -588,7 +588,7 @@ export function HomeHud({
         <section className="hud-docket">
           <header className="hud-docket-head">
             <span className="hud-eyebrow">Priority queue</span>
-            <span className="hud-docket-note">ranked for your hardware, not generic advice</span>
+            <span className="hud-docket-note">ranked for your hardware</span>
           </header>
           {priorities == null ? (
             <div className="hud-docket-rows">
@@ -604,8 +604,7 @@ export function HomeHud({
           ) : limiters.length === 0 ? (
             <div className="hud-docket-rows">
               <div className="hud-docket-row hud-docket-clear">
-                Nothing worth changing today — measured clean on this rig. A lesser tool would
-                invent something; Compy won't.
+                Nothing worth changing today — measured clean on this rig.
               </div>
             </div>
           ) : (
