@@ -15,6 +15,19 @@ $nsis = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\bundle\nsis\Compy_
 if (-not (Test-Path $nsis)) { throw "Built NSIS not found — run 'npm run tauri build' first: $nsis" }
 $desk = [Environment]::GetFolderPath("Desktop")
 
+# 0) STALE-BUILD GATE (bug→guard, 2026-07-06): a docs/frontend-only commit chain can leave cargo's
+#    fingerprint "fresh", so `npm run tauri build` silently re-bundles the PREVIOUS binary — stale
+#    stamp AND stale embedded assets (caught live: a rebuild at b52adb3 shipped a 6b2f46f exe).
+#    stamp == HEAD ⟺ the crate recompiled ⟺ assets were re-embedded from the current dist/. The
+#    packaged exe is checked BEFORE install; on mismatch: `cargo clean -p compy --release` + rebuild.
+$releaseExe = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\compy.exe"
+$head = (git -C "C:\Users\Kuya\code\sentinel" rev-parse --short HEAD).Trim()
+if ((Test-Path $releaseExe) -and $head) {
+  if (-not (Select-String -Path $releaseExe -Pattern $head -Quiet)) {
+    throw "STALE BUILD: target\release\compy.exe does not embed HEAD ($head) — cargo reused a cached binary. Run: cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml && npm run tauri build"
+  }
+}
+
 # 1) Stop any running Compy so the install can replace the exe (single-instance + file lock). Close
 #    GRACEFULLY first (CloseMainWindow → the app's §1 clean-exit path), so an active Gaming Mode session
 #    restores cleanly and the next launch doesn't show a spurious "session didn't end cleanly" recovery
