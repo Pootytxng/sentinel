@@ -18,6 +18,8 @@ import {
   EDIT_COUNT_THRESHOLD,
   GENERATED_PATH,
   SENSITIVE_PATH,
+  appendDesignSystemNote,
+  designSystemOptions,
   filterFindings,
   loadDetector,
   matchesAnyGlob,
@@ -25,6 +27,7 @@ import {
   readCache,
   readConfig,
   renderTemplate,
+  resolveCacheCwd,
   resolveProjectCwd,
   truthy,
   writeAuditLog,
@@ -377,9 +380,12 @@ async function main() {
     return allow({ skipped: 'stdin-empty' });
   }
 
-  const cwd = resolveProjectCwd(event);
+  const sessionCwd = resolveProjectCwd(event);
   const started = Date.now();
-  const filePath = proposedFilePath(event, cwd);
+  const filePath = proposedFilePath(event, sessionCwd);
+  // Re-key config/cache to the edited file's project root when the session
+  // was launched from a non-project umbrella directory (issue #305).
+  const cwd = resolveCacheCwd(filePath, sessionCwd);
   const audit = {
     harness: 'cursor',
     cwd,
@@ -415,10 +421,11 @@ async function main() {
   if (!detector || typeof detector.detectText !== 'function') {
     return allow({ ...audit, skipped: 'detector-missing', durationMs: Date.now() - started });
   }
+  const scanOptions = designSystemOptions(config, detector, cwd);
 
   let findings = [];
   try {
-    findings = await detector.detectText(content, filePath);
+    findings = await detector.detectText(content, filePath, scanOptions);
   } catch {
     return allow({ ...audit, error: 'detector-threw', durationMs: Date.now() - started });
   }
@@ -433,7 +440,7 @@ async function main() {
     });
   }
 
-  const message = cursorBlockMessage(filtered, filePath, config, cwd);
+  const message = appendDesignSystemNote(cursorBlockMessage(filtered, filePath, config, cwd), scanOptions);
   const sessionId = event.session_id || event.conversation_id || 'unknown';
   const cache = readCache(cwd);
   const denial = bumpCursorDenial(cache, sessionId, filePath, filtered);
