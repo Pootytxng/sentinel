@@ -209,6 +209,40 @@
 .lab-bento-report-line-unread .lab-bento-line-reading {
   color: var(--ix-text-3);
 }
+/* Active card — its detail panel is open below (accent border, no fill: no ink hazard). */
+.lab-bento-card:has(.lab-bento-door[aria-pressed="true"]) {
+  border-color: var(--ix-accent);
+}
+
+/* ── Bento detail — the ONE open station (header + instrument body) ── */
+.lab-bento-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+}
+.lab-bento-detail-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.lab-bento-detail-close {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.lab-bento-detail-close:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-glass-top);
+}
+
 /* The ONE next step — accent text on the glass fill (no fill, no ink hazard). */
 .lab-bento-next {
   margin-top: 12px;

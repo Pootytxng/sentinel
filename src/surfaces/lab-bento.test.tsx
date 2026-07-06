@@ -87,11 +87,11 @@ describe("bento face (flag on)", () => {
     expect(c.querySelector(".lab-bento-grid")).not.toBeNull();
   });
 
-  it("the stations render below in the numbered guided form — the grid's story continues", () => {
+  it("no standing station list below — the grid IS the menu (owner feedback: no duplicate clutter)", () => {
     const c = renderBento();
-    expect(c.querySelectorAll(".lab-station-lines")).toHaveLength(5);
-    const nums = Array.from(c.querySelectorAll(".lab-station-num")).map((n) => n.textContent);
-    expect(nums).toEqual(["1", "2", "3", "4", "5"]);
+    expect(c.querySelector(".lab-station-lines")).toBeNull();
+    expect(c.querySelector(".lab-card")).toBeNull(); // no accordion cards until a door is opened
+    expect(c.querySelector(".lab-bento-detail")).toBeNull(); // and no detail before a click
   });
 
   it("with nothing measured, card states are an honest 'Not yet' — never a placeholder", () => {
@@ -107,14 +107,25 @@ describe("bento face (flag on)", () => {
     expect(readings.filter((r) => r.startsWith("No reading yet"))).toHaveLength(4);
   });
 
-  it("clicking a card opens that station in place (no teleport)", () => {
+  it("clicking a card opens exactly ONE detail panel; click again closes; another swaps", () => {
     const c = renderBento();
-    const door = Array.from(c.querySelectorAll<HTMLButtonElement>(".lab-bento-door")).find(
-      (d) => d.textContent!.includes("Benchmark"),
-    )!;
-    fireEvent.click(door);
-    const card = c.querySelector("#lab-station-benchmark")!;
-    expect(card.querySelector(".lab-card-head")!.getAttribute("aria-expanded")).toBe("true");
+    const doorFor = (name: string) =>
+      Array.from(c.querySelectorAll<HTMLButtonElement>(".lab-bento-door")).find((d) =>
+        d.textContent!.includes(name),
+      )!;
+    fireEvent.click(doorFor("Benchmark"));
+    let details = c.querySelectorAll(".lab-bento-detail");
+    expect(details).toHaveLength(1);
+    expect(details[0].getAttribute("data-instrument")).toBe("Benchmark");
+    expect(doorFor("Benchmark").getAttribute("aria-pressed")).toBe("true");
+    // Swap to Latency — still exactly one panel.
+    fireEvent.click(doorFor("Latency"));
+    details = c.querySelectorAll(".lab-bento-detail");
+    expect(details).toHaveLength(1);
+    expect(details[0].getAttribute("data-instrument")).toBe("Latency");
+    // Toggle closed.
+    fireEvent.click(doorFor("Latency"));
+    expect(c.querySelector(".lab-bento-detail")).toBeNull();
   });
 
   it("the vendor purple never paints — glow is the computed theme accent (or the neutral fallback)", () => {

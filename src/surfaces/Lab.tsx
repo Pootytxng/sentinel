@@ -113,6 +113,19 @@ export default function Lab({
   // (in-room scroll + expand — navigation never teleports). Jumping through the router counts as
   // finding a door, same as clicking the card head.
   const [pulses, setPulses] = useState<Partial<Record<LabStationKey, number>>>({});
+  // Bento detail view (owner feedback 2026-07-05: the grid IS the menu — a second standing list
+  // of the same five stations below it is clutter). Exactly ONE station renders at a time:
+  // clicking a card opens it, clicking again closes, clicking another swaps.
+  const [openStation, setOpenStation] = useState<LabStationKey | null>(null);
+  const openBentoStation = (k: LabStationKey) => {
+    markInstrumentOpened();
+    setOpenStation((cur) => (cur === k ? null : k));
+    requestAnimationFrame(() => {
+      document
+        .getElementById("lab-bento-detail")
+        ?.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+    });
+  };
   const jumpToStation = (k: LabStationKey) => {
     markInstrumentOpened();
     setPulses((p) => ({ ...p, [k]: (p[k] ?? 0) + 1 }));
@@ -252,8 +265,48 @@ export default function Lab({
               crash: bbReport,
               diagnosticsCaptured,
             }}
-            onOpen={jumpToStation}
+            onOpen={openBentoStation}
+            openStation={openStation}
           />
+        )}
+
+        {/* Bento detail — ONE station at a time (owner feedback: no duplicate standing list
+            under the grid). Header + the identical instrument body; close returns to the menu. */}
+        {bento && openStation && (
+          <div
+            className="lab-card lab-bento-detail"
+            id="lab-bento-detail"
+            data-instrument={LAB_STATIONS[openStation].name}
+          >
+            <div className="lab-bento-detail-head">
+              <span className="lab-station-num" aria-hidden="true">
+                {stationKeys.indexOf(openStation) + 1}
+              </span>
+              <svg
+                className="lab-card-icon"
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                {ICONS[STATION_ICON[openStation]]}
+              </svg>
+              <span className="lab-bento-detail-name">{LAB_STATIONS[openStation].name}</span>
+              <button
+                className="lab-bento-detail-close"
+                onClick={() => setOpenStation(null)}
+                aria-label="Close station"
+              >
+                Close
+              </button>
+            </div>
+            <div className="lab-card-body">{stationBody(openStation)}</div>
+          </div>
         )}
 
         {/* "What are you here to do?" — the plain-language router leads the guided bench
@@ -324,7 +377,7 @@ export default function Lab({
             renders (same components, same reads); only the header contract around them is new.
             Numbering is computed over the stations this rig actually has (vendor/diagnostics
             gates unchanged) — never hardcoded. */}
-        {(guided || bento) &&
+        {guided && !bento &&
           stationKeys.map((k, i) => (
             <Fragment key={k}>
               <LabSection

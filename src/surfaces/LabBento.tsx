@@ -33,10 +33,14 @@ export function LabBento({
   keys,
   facts,
   onOpen,
+  openStation = null,
 }: {
   keys: LabStationKey[];
   facts: LabStationFacts;
   onOpen: (k: LabStationKey) => void;
+  // The station whose detail panel is open below (owner feedback 2026-07-05: the grid is the
+  // menu — one detail at a time, no standing duplicate list). Marks the active card.
+  openStation?: LabStationKey | null;
 }) {
   const reduced = useReducedMotion();
   const gridRef = useRef<HTMLDivElement>(null);
@@ -109,6 +113,7 @@ export function LabBento({
               className="lab-bento-door"
               onClick={() => onOpen(c.key)}
               aria-label={`Open station ${c.n} — ${c.name}`}
+              aria-pressed={openStation === c.key}
             >
               <span className="lab-bento-top">
                 <span className="lab-bento-n">{String(c.n).padStart(2, "0")}</span>

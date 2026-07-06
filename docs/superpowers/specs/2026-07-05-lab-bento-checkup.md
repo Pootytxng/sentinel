@@ -28,8 +28,10 @@ train adds the **presentation + synthesis** the owner asked for:
    never a second derivation), and ONE next-step ("Next: station 2 — Benchmark…") pointing at
    the first unread station in bench order. Zero readings = an honest, welcoming
    "checkup hasn't started" state — never fabricated results.
-3. **Stations below** — rendered in the guided numbered form (contract lines) whenever bento is
-   on, so the grid's story continues into the instruments.
+3. **One detail at a time** (CORRECTED same-day — owner feedback: the grid IS the menu, a
+   second standing list of the same five stations below it is clutter). Bento-on renders NO
+   station accordion list; clicking a card opens exactly one detail panel (station header +
+   the identical instrument body) below the report — click again closes, another card swaps.
 
 ## Flag + rails
 
