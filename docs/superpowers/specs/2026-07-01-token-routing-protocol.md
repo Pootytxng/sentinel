@@ -74,6 +74,15 @@ them; make them cheaper:
    (`.claude/agents/frontend-ipc-contract-auditor.md`, `rust-tauri-reviewer.md`) and the
    `self-review` skill (13% of usage) are read-only report-writers — they don't need Fable.
    Add `model: sonnet` (or haiku for the mechanical passes) to their frontmatter.
+   **ENFORCED IN CONFIG (2026-07-05, orchestrator pattern):** `.claude/settings.json` now sets
+   `"env": { "CLAUDE_CODE_SUBAGENT_MODEL": "opus" }` — subagents without their own model
+   (Explore, general-purpose, Plan, skill-spawned) run Opus instead of inheriting Fable; the
+   two project agents stay Sonnet via frontmatter. Fable stays the orchestrator: planning,
+   judgment, and the build itself. Source: owner-supplied "Fable 5 Orchestrator" doc
+   (Google Docs, 2026-07-05); it reports ~58% usage cut w/ Sonnet workers, ~74% w/ Haiku —
+   we chose Opus workers because Compy's subagents are adversarial audits at the
+   mutation/rollback boundary, where worker quality is the point. No per-session verbal
+   routing instruction needed anymore — the setting is the guard.
 2. **Tighten subagent prompts** — a subagent brief states scope + the exact artifacts to
    check + report format; no doctrine restating (it inherits CLAUDE.md).
 3. **The bigger lever is context length, not subagents:** 72% of usage ran at >150k context.

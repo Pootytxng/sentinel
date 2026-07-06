@@ -161,6 +161,10 @@ Full protocol: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Th
   credits are an owner-gated spend (zero-budget law), default no.
 - **Effort matching:** default high; x-high only for correctness-critical work at the
   mutation/rollback boundary; medium/low for routine edits.
+- **Subagents never run on Fable (enforced 2026-07-05, orchestrator pattern):**
+  `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=opus`; the two project reviewer
+  agents pin `model: sonnet` in frontmatter. Fable = orchestrator (plan/judge/build itself);
+  workers = Opus/Sonnet. Don't add per-session routing instructions — the setting is the guard.
 - **Never ask Fable to show its reasoning** (standing "explain your reasoning" lines can refuse
   or silently route to Opus 4.8). Proof lives in commits/diffs/tests, not narration. The
   auto-switch-as-STOP-signal rule above stands.
