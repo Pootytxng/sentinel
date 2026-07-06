@@ -301,41 +301,41 @@ export default function Settings({
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Lab checkup bento (preview)</div>
+                  <div className="set-row-title">Lab checkup bento</div>
                   <div className="set-row-sub">
                     Opens the Lab as a checkup room: station cards left to right in working
                     order, plus a plain-English report of what your readings mean. Same
-                    instruments, same readings.
+                    instruments, same readings — turn off for the classic Lab face.
                   </div>
                 </div>
-                <Toggle on={labBento} onChange={changeLabBento} ariaLabel="Lab checkup bento preview" />
+                <Toggle on={labBento} onChange={changeLabBento} ariaLabel="Lab checkup bento" />
               </div>
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Instrument HUD (preview)</div>
+                  <div className="set-row-title">Instrument HUD</div>
                   <div className="set-row-sub">
-                    A diagnostic-HUD redesign, starting with Home: console verdict, telemetry
-                    readouts, bracketed rig bay. Same numbers, same measurements — only the
-                    presentation changes.
+                    The diagnostic-HUD look across Home and every room: console verdict,
+                    telemetry readouts, bracketed rig bay. Same numbers, same measurements —
+                    turn off for the classic look.
                   </div>
                 </div>
-                <Toggle on={hud} onChange={changeHud} ariaLabel="Instrument HUD preview" />
+                <Toggle on={hud} onChange={changeHud} ariaLabel="Instrument HUD" />
               </div>
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Setup stepper (preview)</div>
+                  <div className="set-row-title">Setup stepper</div>
                   <div className="set-row-sub">
                     Numbered step markers with check marks in the Setup &amp; Tour's progress
                     bar, so you can see where you are and hop between steps. Same tour, same
-                    steps.
+                    steps — turn off for the classic tick row.
                   </div>
                 </div>
                 <Toggle
                   on={setupStepper}
                   onChange={changeSetupStepper}
-                  ariaLabel="Setup stepper preview"
+                  ariaLabel="Setup stepper"
                 />
               </div>
 

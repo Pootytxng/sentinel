@@ -7,7 +7,12 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 import Lab from "./Lab";
 
 afterEach(cleanup);
-beforeEach(() => localStorage.clear());
+// The Lab bento face is default-ON since the 2026-07-06 owner approval — this suite pins the
+// CLASSIC Lab, which lives behind the "0" failsafe (bento's own contract: lab-bento.test.tsx).
+beforeEach(() => {
+  localStorage.clear();
+  localStorage.setItem("compy_lab_bento", "0");
+});
 
 describe("Lab", () => {
   it("renders the two instrument sections with plain-English one-liners", () => {

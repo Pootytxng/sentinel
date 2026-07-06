@@ -72,15 +72,16 @@ try {
 document.documentElement.dataset.v2 = "on";
 
 // Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED — editorial
-// retired) — the de-slop redesign pilot. DEFAULT OFF (P-series preview contract): only an
-// explicit "1" wears the attribute, so flag-off every room renders byte-identical (all HUD CSS
-// is scoped [data-hud="on"]). Key literal kept from the retired editorial pilot on purpose.
+// retired) — DEFAULT ON since the owner approval 2026-07-06 ("all looks good"): the HUD IS
+// the build, Home + all four rooms. Only an explicit "0" (the Settings failsafe toggle)
+// removes the attribute; all HUD CSS stays scoped [data-hud="on"] so the classic look
+// remains byte-reachable. Key literal kept from the retired editorial pilot on purpose.
 try {
-  if (localStorage.getItem("compy_editorial") === "1") {
+  if (localStorage.getItem("compy_editorial") !== "0") {
     document.documentElement.dataset.hud = "on";
   }
 } catch {
-  /* default OFF */
+  document.documentElement.dataset.hud = "on"; // default ON even if localStorage is unavailable
 }
 
 // Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and

@@ -13,7 +13,13 @@ import { LAB_ROUTER } from "./lab-guided-data";
 // with zero guided-bench DOM present.
 
 afterEach(cleanup);
-beforeEach(() => localStorage.clear());
+// The Lab bento face is default-ON since the 2026-07-06 owner approval — this suite pins the
+// classic + guided faces, which live behind the "0" failsafe (bento's own contract:
+// lab-bento.test.tsx).
+beforeEach(() => {
+  localStorage.clear();
+  localStorage.setItem("compy_lab_bento", "0");
+});
 
 const renderClassic = () =>
   render(<Lab v2 vendor="amd" diagnostics={<div data-testid="diag" />} diagnosticsCaptured />)

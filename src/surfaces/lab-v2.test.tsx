@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 // Lab + the embedded Benchmark/Latency tabs poll on mount; mock invoke so they don't throw.
@@ -41,6 +41,15 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   invalidateProbe(); // the probe cache is module-level — isolate the bench seed between tests
+});
+
+// This suite pins the CLASSIC room + Lab-face composition — the Instrument HUD and the Lab
+// bento are default-ON since the 2026-07-06 owner approval, so the classic trees live behind
+// the "0" failsafes; the flag-on contracts are pinned in hud-rooms-flag.test.tsx and
+// lab-bento.test.tsx.
+beforeEach(() => {
+  localStorage.setItem("compy_editorial", "0");
+  localStorage.setItem("compy_lab_bento", "0");
 });
 
 const useReduced = () => localStorage.setItem("compy_motion", "reduced");

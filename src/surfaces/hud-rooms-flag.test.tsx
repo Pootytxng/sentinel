@@ -7,10 +7,11 @@ import { LabV2 } from "./LabV2";
 import type { SessionSummary } from "../types";
 
 // Four-room Instrument-HUD rollout guards (owner approval 2026-07-06 — supersedes
-// hud-rooms-untouched.test.tsx, exactly as that checkpoint file said it would be).
+// hud-rooms-untouched.test.tsx, exactly as that checkpoint file said it would be; the flag
+// is DEFAULT ON since the same approval, so "off" means the explicit "0" Settings failsafe).
 // Pins, per room:
-//   1. Flag off (absent OR "0") renders byte-identical with zero HUD DOM — the P-series
-//      reversibility contract, same as home-hud-flag.test.tsx.
+//   1. Flag "0" renders the pre-rollout tree with zero HUD DOM — the reversibility contract,
+//      same as home-hud-flag.test.tsx; flag absent (the shipped default) renders the HUD.
 //   2. Flag on adds ONLY the masthead eyebrow + the .hud-headline wrapper — removing them
 //      restores the flag-off tree byte-for-byte (presentation-only proof: same verdict text,
 //      same body, nothing else moved).
@@ -132,15 +133,15 @@ const mountWithFlag = (room: (typeof ROOMS)[number], flag: string | null) => {
   return room.mount();
 };
 
-describe("HUD four-room rollout: flag-off byte-identity (P-series contract)", () => {
+describe("HUD four-room rollout: flag-off byte-identity (the classic failsafe)", () => {
   for (const room of ROOMS) {
-    it(`${room.name}: flag absent and flag='0' render byte-identical, zero HUD DOM`, () => {
-      const absent = mountWithFlag(room, null).innerHTML;
-      cleanup();
+    it(`${room.name}: flag='0' renders zero HUD DOM; flag absent (default ON) renders the masthead`, () => {
       const off = mountWithFlag(room, "0");
-      expect(off.innerHTML).toBe(absent);
       expect(off.querySelector(".hud-masthead-eyebrow")).toBeNull();
       expect(off.querySelector("[class*='hud-']")).toBeNull();
+      cleanup();
+      const absent = mountWithFlag(room, null);
+      expect(absent.querySelector(".hud-masthead-eyebrow")).not.toBeNull();
     });
   }
 });
@@ -148,7 +149,7 @@ describe("HUD four-room rollout: flag-off byte-identity (P-series contract)", ()
 describe("HUD four-room rollout: flag-on adds ONLY the masthead (presentation-only proof)", () => {
   for (const room of ROOMS) {
     it(`${room.name}: eyebrow reads "${room.label}", and removing masthead + unwrapping the headline restores the flag-off tree`, () => {
-      const off = mountWithFlag(room, null).innerHTML;
+      const off = mountWithFlag(room, "0").innerHTML;
       cleanup();
       const on = mountWithFlag(room, "1");
       const eyebrow = on.querySelector(".hud-masthead-eyebrow");

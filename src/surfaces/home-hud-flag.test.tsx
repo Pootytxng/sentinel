@@ -7,10 +7,10 @@ import { railFor } from "../design/homeRail";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 
-// Guards for the Instrument-HUD Home pilot (spec 2026-07-05-ui-deslop-organic-directive,
-// CORRECTED direction — editorial retired). The redesign is behind the preview flag, DEFAULT
-// OFF — these tests pin the P-series reversibility contract: flag off (absent OR "0"), HomeV2
-// renders byte-identical with zero HUD DOM; flag on, the pilot renders the SAME measured
+// Guards for the Instrument-HUD Home (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED
+// direction — editorial retired; DEFAULT ON since the owner approval 2026-07-06). These pin
+// the reversibility contract: flag "0" (the Settings failsafe) restores HomeV2 byte-identical
+// with zero HUD DOM; flag absent renders the HUD (the shipped default) with the SAME measured
 // numbers (graded ink classes included — the deslop #4 bug→guard carries over), and the ring
 // gauge renders ONLY when both sides of its ratio were actually measured.
 
@@ -160,23 +160,26 @@ const shell = (child: React.ReactNode) => (
   </ShellV2>
 );
 
-describe("Instrument-HUD flag-off byte-identity (P-series contract)", () => {
-  it("flag absent and flag='0' render byte-identical to HomeV2 directly", () => {
+describe("Instrument-HUD flag-off byte-identity (the classic failsafe)", () => {
+  it("flag='0' renders byte-identical to HomeV2 directly", () => {
     const direct = render(shell(<HomeV2 {...props} />)).container.innerHTML;
-    cleanup();
-    const absent = render(shell(<HomeRoom {...props} />)).container.innerHTML;
-    expect(absent).toBe(direct);
     cleanup();
     localStorage.setItem("compy_editorial", "0");
     const off = render(shell(<HomeRoom {...props} />)).container.innerHTML;
     expect(off).toBe(direct);
   });
 
-  it("flag off: zero HUD DOM present", () => {
+  it("flag='0': zero HUD DOM present", () => {
+    localStorage.setItem("compy_editorial", "0");
     const c = render(shell(<HomeRoom {...props} />)).container;
     expect(c.querySelector("[data-hud-home]")).toBeNull();
     expect(c.querySelector(".hud-grid")).toBeNull();
     expect(c.querySelector(".hud-headline")).toBeNull();
+  });
+
+  it("flag absent renders the HUD (default ON — owner approval 2026-07-06)", () => {
+    const c = render(shell(<HomeRoom {...props} />)).container;
+    expect(c.querySelector("[data-hud-home]")).not.toBeNull();
   });
 });
 

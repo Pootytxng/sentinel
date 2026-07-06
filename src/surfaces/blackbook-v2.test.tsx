@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { BlackbookV2 } from "./BlackbookV2";
 import Learn from "./Learn";
@@ -38,6 +38,11 @@ afterEach(() => {
   localStorage.clear();
   sessionStorage.clear(); // Learn persists mode + autopsy text per session — isolate tests
 });
+
+// This suite pins the CLASSIC room composition — the Instrument HUD is default-ON since the
+// 2026-07-06 owner approval, so the classic tree lives behind the "0" failsafe; the HUD
+// masthead's own contract is pinned in hud-rooms-flag.test.tsx.
+beforeEach(() => localStorage.setItem("compy_editorial", "0"));
 
 const entry = (over: Partial<AutopsyLedgerEntry> = {}): AutopsyLedgerEntry => ({
   at: 1,

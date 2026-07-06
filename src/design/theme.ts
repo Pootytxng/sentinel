@@ -288,12 +288,14 @@ export function applyLabGuided(on: boolean): void {
 const LAB_BENTO_KEY = "compy_lab_bento";
 
 export function readLabBento(): boolean {
+  // Default ON (owner approval 2026-07-06 — ship-approved-work-as-the-build); the classic
+  // Lab face stays reachable as the failsafe (Settings toggle / localStorage "0").
   try {
-    return localStorage.getItem(LAB_BENTO_KEY) === "1";
+    return localStorage.getItem(LAB_BENTO_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyLabBento(on: boolean): void {
@@ -318,12 +320,14 @@ export function applyLabBento(on: boolean): void {
 const SETUP_STEPPER_KEY = "compy_setup_stepper";
 
 export function readSetupStepper(): boolean {
+  // Default ON (owner approval 2026-07-06 — ship-approved-work-as-the-build); the classic
+  // tick row stays reachable as the failsafe (Settings toggle / localStorage "0").
   try {
-    return localStorage.getItem(SETUP_STEPPER_KEY) === "1";
+    return localStorage.getItem(SETUP_STEPPER_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applySetupStepper(on: boolean): void {
@@ -348,12 +352,15 @@ export function applySetupStepper(on: boolean): void {
 const HUD_KEY = "compy_editorial";
 
 export function readHud(): boolean {
+  // Default ON (owner approval 2026-07-06 "all looks good" — ship-approved-work-as-the-build):
+  // the Instrument HUD IS the build now, Home + all four rooms. The classic look stays
+  // reachable as the reversibility failsafe (Settings toggle / localStorage "0").
   try {
-    return localStorage.getItem(HUD_KEY) === "1";
+    return localStorage.getItem(HUD_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyHud(on: boolean): void {

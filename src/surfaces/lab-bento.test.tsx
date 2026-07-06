@@ -14,10 +14,11 @@ import {
 } from "./lab-bento-data";
 import type { LabStationFacts } from "./lab-guided-data";
 
-// Guards for the Lab bento checkup (spec 2026-07-05-lab-bento-checkup).
-// Behind compy_lab_bento, DEFAULT OFF — these pin the reversibility contract (flag off ⇒
-// today's Lab byte-identical in BOTH guided states), the chronological order, the one-source
-// honesty of the readings, and that the vendor purple can never paint.
+// Guards for the Lab bento checkup (spec 2026-07-05-lab-bento-checkup; DEFAULT ON since the
+// owner approval 2026-07-06). These pin the reversibility contract (flag "0" — the Settings
+// failsafe — restores the classic Lab with zero bento DOM in BOTH guided states; flag absent
+// renders the bento), the chronological order, the one-source honesty of the readings, and
+// that the vendor purple can never paint.
 
 afterEach(cleanup);
 beforeEach(() => localStorage.clear());
@@ -34,29 +35,18 @@ const NO_FACTS: LabStationFacts = {
   diagnosticsCaptured: false,
 };
 
-describe("compy_lab_bento flag-off byte-identity", () => {
-  it("flag absent and flag='0' render byte-identical HTML (classic)", () => {
-    const absent = renderLab().innerHTML;
-    cleanup();
-    localStorage.setItem("compy_lab_bento", "0");
-    const off = renderLab().innerHTML;
-    expect(off).toBe(absent);
+describe("compy_lab_bento flag-off byte-identity (the classic failsafe)", () => {
+  it("flag absent renders the bento (default ON — owner approval 2026-07-06)", () => {
+    const absent = renderLab();
+    expect(absent.querySelector(".lab-bento")).not.toBeNull();
   });
 
-  it("flag absent and flag='0' render byte-identical HTML (guided on)", () => {
-    localStorage.setItem("compy_lab_guided", "1");
-    const absent = renderLab().innerHTML;
-    cleanup();
-    localStorage.setItem("compy_lab_guided", "1");
-    localStorage.setItem("compy_lab_bento", "0");
-    const off = renderLab().innerHTML;
-    expect(off).toBe(absent);
-  });
-
-  it("flag off: zero bento DOM in either mode", () => {
+  it("flag='0': zero bento DOM in either guided mode", () => {
     for (const guided of ["0", "1"]) {
       cleanup();
+      localStorage.clear();
       localStorage.setItem("compy_lab_guided", guided);
+      localStorage.setItem("compy_lab_bento", "0");
       const c = renderLab();
       expect(c.querySelector(".lab-bento")).toBeNull();
       expect(c.querySelector("[data-bento]")).toBeNull();

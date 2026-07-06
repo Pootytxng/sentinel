@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { OptimizeV2 } from "./OptimizeV2";
 import { optimizeVerdict, optimizeMeasuredLine, safeFixesReady } from "./optimize-v2-data";
@@ -56,6 +56,11 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
 });
+
+// This suite pins the CLASSIC room composition — the Instrument HUD is default-ON since the
+// 2026-07-06 owner approval, so the classic tree lives behind the "0" failsafe; the HUD
+// masthead's own contract is pinned in hud-rooms-flag.test.tsx.
+beforeEach(() => localStorage.setItem("compy_editorial", "0"));
 
 const rec = (over: Partial<Recommendation>): Recommendation =>
   ({

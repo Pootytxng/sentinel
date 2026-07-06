@@ -11,10 +11,11 @@ vi.mock("../rig/rig-parts", () => ({ buildRigParts: () => [] }));
 import { SetupTour } from "./SetupTour";
 import type { HardwareInfo } from "../../App";
 
-// Guards for the Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass).
-// Behind compy_setup_stepper, DEFAULT OFF — these pin the reversibility contract (flag off ⇒
-// today's tour byte-identical), the indicator/connector composition, click-to-jump, and that
-// the vendor purple can never paint.
+// Guards for the Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass;
+// DEFAULT ON since the owner approval 2026-07-06). These pin the reversibility contract
+// (flag "0" — the Settings failsafe — restores the classic tick row with zero stepper DOM;
+// flag absent renders the stepper), the indicator/connector composition, click-to-jump, and
+// that the vendor purple can never paint.
 
 afterEach(cleanup);
 beforeEach(() => localStorage.clear());
@@ -22,16 +23,14 @@ beforeEach(() => localStorage.clear());
 const renderTour = () =>
   render(<SetupTour hw={{} as HardwareInfo} rig={[]} onDone={() => {}} />).container;
 
-describe("compy_setup_stepper flag-off byte-identity", () => {
-  it("flag absent and flag='0' render byte-identical HTML", () => {
-    const absent = renderTour().innerHTML;
-    cleanup();
-    localStorage.setItem("compy_setup_stepper", "0");
-    const off = renderTour().innerHTML;
-    expect(off).toBe(absent);
+describe("compy_setup_stepper flag-off byte-identity (the classic failsafe)", () => {
+  it("flag absent renders the stepper (default ON — owner approval 2026-07-06)", () => {
+    const c = renderTour();
+    expect(c.querySelector(".st-progress-stepper")).not.toBeNull();
   });
 
-  it("flag off: the classic ticks render, zero stepper DOM", () => {
+  it("flag='0': the classic ticks render, zero stepper DOM", () => {
+    localStorage.setItem("compy_setup_stepper", "0");
     const c = renderTour();
     expect(c.querySelectorAll(".st-tick")).toHaveLength(5);
     expect(c.querySelector(".st-progress-stepper")).toBeNull();
