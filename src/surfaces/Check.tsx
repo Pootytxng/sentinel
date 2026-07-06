@@ -72,7 +72,7 @@ function driverFreshness(gpus: GpuDriverInfo[]):
   if (!gpu)
     return {
       tone: "skip",
-      message: "We couldn't read your graphics driver's date this time — nothing to check here, and that's not a problem.",
+      message: "Couldn't read your graphics driver's date this time — nothing to check, and nothing wrong.",
     };
   const age = gpu.driver_age_days as number;
   if (age <= 90) return { tone: "pass", message: `Driver is recent — ${age} days old.` };
@@ -474,7 +474,7 @@ export default function Check({
                 {[...hwSummary.visible, ...(hwSummary.overflowLabel ? [hwSummary.overflowLabel] : [])].join(
                   " · ",
                 )}{" "}
-                — new parts can want different settings, so it's worth re-checking your setup.
+                — new parts can want different settings, so it's worth a re-check.
               </p>
               <div className="check-drift-actions">
                 <button className="btn btn-small" disabled={running} onClick={() => rerun()}>
@@ -569,8 +569,8 @@ export default function Check({
               </ul>
               {(driver.tone === "advisory" || staleNics.length > 0) && (
                 <p className="check-driver-note">
-                  Newer ones may be available — we can't know without checking online, so it stays a
-                  maybe. Copy a link to check the vendor's page in your browser.
+                  Newer ones may be available — Compy can't know without going online, so that
+                  stays a maybe. Copy a link and check the vendor's page in your browser.
                 </p>
               )}
               {/* The quiet pass line claims "recent" ONLY when every NIC date was readable —
@@ -660,9 +660,9 @@ export default function Check({
                           <span className="check-conf">{cap(lim.confidence)} confidence</span>
                         </div>
                         <p className="check-row-reason">
-                          These launch with Windows and use memory + CPU before you open a game. Turn
-                          off any you don't need at startup right here — it won't uninstall them, just
-                          stops the auto-start (reversible anytime in Optimize).
+                          These launch with Windows and use memory and CPU before a game ever opens.
+                          Turn off the ones you don't need — nothing gets uninstalled, they just stop
+                          auto-starting. Reversible anytime.
                         </p>
                         {enabled.length > 0 && (
                           <ul className="check-startup-list">

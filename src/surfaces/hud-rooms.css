@@ -161,3 +161,186 @@
     opacity: 1;
   }
 }
+
+/* ── Deep Check/Fix internals de-slop (rollout follow-up train, 2026-07-06) ─────────────
+   The Optimize room's working surfaces still spoke the template dialect under the approved
+   masthead: glass-blur cards, 999px pills, radial glow washes, rounded-everything. Under
+   the flag they join the instrument language — hairline log rows with semantic left rails,
+   micro-label section rules, flat mono tags, sharp 2–4px radii, no blur, no glow.
+
+   CSS ONLY, zero DOM delta: neither Check.tsx nor Fix.tsx gains a hud- classname, so the
+   flag-"0" failsafe stays byte-identical by construction (hud-rooms-flag.test.tsx's
+   zero-HUD-DOM pin keeps holding). Scope: the fix room only — the classic escape-hatch
+   rooms are untouched. Same laws as above (guard-pinned): no color literals, fonts via
+   var(--v2-font-*) only, no @media (reduced-motion rides the data-motion attribute; this
+   section adds no motion at all).
+
+   Case discipline (round-1 owner rail): nothing here ADDS text-transform — tags that were
+   already uppercase micro-labels keep it from their base rule; sentences and buttons stay
+   sentence case. The register shift is mono + tracking + geometry, not shouting. */
+
+/* The ambient radial glow blobs are the template tell — the page scanline is the room's
+   only atmosphere now. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-root::before,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-root::before {
+  background: none;
+}
+
+/* Section labels become HUD section rules: the micro-label register + a trailing hairline.
+   (.check-collapse-head keeps its own two-span space-between layout — no rule line.) */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room[data-room="fix"]
+  .check-section-label:not(.check-collapse-head),
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room[data-room="fix"]
+  .check-section-label:not(.check-collapse-head)::after,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hud-hairline);
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-collapse-head {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  color: var(--v2-faint);
+}
+
+/* Cards → instrument log rows: hairline frames, sharp radii, no glass blur. The glass
+   fills go transparent so the rows read as entries in one log, not floating tiles. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-row,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-row,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-refuse-row,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-active-card,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-driver,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-applyall-item,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-guided-detail,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-startup-row {
+  background: transparent;
+  border-color: var(--hud-hairline);
+  border-radius: 3px;
+  backdrop-filter: none;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-fine,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-group,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .slimrow {
+  background: transparent;
+  border-color: var(--hud-hairline);
+  border-radius: 3px;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .slimrow:hover {
+  border-color: var(--hud-hairline-strong);
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .slimrow-detail {
+  background: transparent;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-row-advisory {
+  background: transparent;
+}
+
+/* Semantic state stays in the frame INK, not a side stripe (the repo's standing
+   "never a side-stripe" law, and side rails are themselves a template tell): a warn- or
+   accent-tinted hairline mix on the whole frame — color stays information (warn =
+   measured attention · accent = an active Compy change), never decoration. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-row {
+  border-color: color-mix(in srgb, var(--v2-warn) 28%, var(--hud-hairline));
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-row-info {
+  border-color: var(--hud-hairline);
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-active-card {
+  border-color: color-mix(in srgb, var(--v2-accent) 30%, var(--hud-hairline));
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-driver-advisory {
+  border-color: color-mix(in srgb, var(--v2-warn) 28%, var(--hud-hairline));
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-drift,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-nudge {
+  border: 1px solid color-mix(in srgb, var(--v2-warn) 28%, var(--hud-hairline));
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--v2-warn) 5%, transparent);
+}
+
+/* Denser log stack. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-list,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-list {
+  gap: 6px;
+}
+
+/* Pills → flat mono tags: machine annotations wear the machine face. Case comes from each
+   tag's base rule (already-uppercase micro-tags stay so; phrases stay sentence case). */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .cc-chip {
+  font: 500 11px/1.6 var(--v2-font-mono);
+  letter-spacing: 0.02em;
+  border-radius: 2px;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-advisory,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-guided-tag,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-payoff {
+  font: 500 10.5px/1.6 var(--v2-font-mono);
+  letter-spacing: 0.04em;
+  border-radius: 2px;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-driver-kind,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-evidence,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-override-chip,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-hist-rig-tag,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .slimrow-badge {
+  font: 600 10px/1.6 var(--v2-font-mono);
+  letter-spacing: 0.07em;
+  border-radius: 2px;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-group-count {
+  font: 500 11px var(--v2-font-mono);
+  background: transparent;
+  border: 1px solid var(--hud-hairline);
+  border-radius: 2px;
+}
+
+/* Machine qualifiers + stamps in the mono register (values/timestamps, not sentences). */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-conf,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-hist-status {
+  font: 500 10.5px var(--v2-font-mono);
+  letter-spacing: 0.04em;
+}
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-drift-when {
+  font: 500 11px var(--v2-font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Notes drop the italic voice — italics read editorial; that direction is retired. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-driver-note,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-drift-note {
+  font-style: normal;
+}
+
+/* Controls sharpen to instrument edges — color/hover semantics untouched. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-rerun,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-driver-copy,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-nudge-link,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .check-leftovers-run,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-applyall,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-ghost-rollback,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-restore,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-guided-toggle,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-guided-open,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-autopsy,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-applyall-cancel,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-applyall-go,
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .btn {
+  border-radius: 3px;
+}
+
+/* The consent sheet squares up; content and behavior untouched. */
+:root[data-v2="on"][data-hud="on"] .v2-room[data-room="fix"] .fix-applyall-modal {
+  border-radius: 4px;
+  border-color: var(--hud-hairline-strong);
+}

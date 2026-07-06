@@ -899,7 +899,7 @@ export default function Fix({
             <p className="fix-subtitle">
               {worthFixing.length} worth a look · {active.length} active ·{" "}
               {dismissedRecs.length} dismissed · {notForThisRig.length} not for this rig. Measured
-              changes for YOUR rig — every one is one click to undo.
+              changes for your rig — every one is one click to undo.
             </p>
           )}
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
@@ -970,8 +970,10 @@ export default function Fix({
       {readyRows.length === 0 ? (
         // With a drifted group above, "already dialed in" would be false — the group head + intro
         // already said what's up, so the empty line renders only when there's truly nothing.
+        // One phrase, one owner: the living subtitle already says "dialed in" — this line
+        // states the fact without restating it.
         drifted.length === 0 && (
-          <p className="fix-empty">Your rig's already dialed in — nothing here needs a change right now.</p>
+          <p className="fix-empty">Nothing waiting — no changes to make on this rig right now.</p>
         )
       ) : (
         <ul className="fix-list">
@@ -1041,7 +1043,7 @@ export default function Fix({
             </h3>
             <p className="fix-applyall-note">
               Each is reversible — Compy snapshots the prior state and writes a separate undo for every
-              one. These tidy up how your rig is set up for you — not a performance boost.
+              one. These tidy up your setup — not a performance boost.
               {slim &&
                 " Recommended arrive ticked — untick anything you don't want; only what's ticked changes."}
             </p>
@@ -1274,7 +1276,7 @@ export default function Fix({
         icon={<ShieldOff />}
       >
         <p className="fix-refuse-intro">
-          Popular tweaks Compy deliberately refuses — the honest reason for each, with the full
+          Popular tweaks Compy deliberately refuses — the reason for each, with the full
           autopsy a click away.
         </p>
         <ul className="fix-list">

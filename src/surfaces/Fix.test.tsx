@@ -105,7 +105,10 @@ describe("Fix", () => {
 
   it("honest empty state when nothing is worth fixing", () => {
     render(<Fix recs={[rec("game-mode", true)]} {...baseProps} />);
-    expect(screen.getByText(/Your rig's already dialed in/)).toBeTruthy();
+    // Voice pass 2026-07-06: the empty line no longer restates the living subtitle's
+    // "dialed in" phrase (one phrase, one owner) — it states the fact once.
+    expect(screen.getByText(/Nothing waiting — no changes to make/)).toBeTruthy();
+    expect(screen.queryByText(/dialed in — nothing here needs/)).toBeNull();
   });
 
   it("refuse-pile autopsy links open the correct Library entry", () => {
