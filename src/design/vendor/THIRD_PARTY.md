@@ -44,6 +44,20 @@ Adopt-list picks settled at vendor time (rationale in the V2-1 commit):
 Runtime deps these components pull (all free, MIT-family, added in V2-1): `gsap`
 (MagicBento, PillNav), `ogl` (Radar, Grainient), `motion` (DecryptedText, CountUp).
 
+### Round-2 sourcing pass (2026-07-05, owner browsing reactbits index — pre-vetted shortlist)
+
+Full catalog swept against the corrected pure-Instrument-HUD direction. **Candidates that pass
+the rails** (deps already installed; vendor only when a concrete use lands): TextType (console
+typing, needs the DecryptedText-style animate-once guard) · GradualBlur (scroll-edge fade on
+queues/ledgers) · ClickSpark (tactile apply/toggle confirmation, tuned small) · Stepper
+(setup/onboarding rework only) · LineWaves/Threads (oscilloscope-adjacent; likely redundant vs
+our custom trace). **Rejected as off-law** (never-gamer-RGB/neon · garbled-text-reads-as-defect ·
+glassmorphism ≠ instrument voice): Aurora, Galaxy, Plasma*, Prism*, Hyperspeed, Lightning,
+LaserFlow, LiquidChrome, Iridescence, StarBorder, LetterGlitch, GlitchText, FaultyTerminal,
+cursor gimmicks (Splash/Blob/Ghost/Crosshair), FluidGlass/GlassSurface/GlassIcons. Vetting rules
+for any future pick: dep surface (reject `postprocessing`/`face-api` class) · honesty law ·
+reduced-motion gate · re-mount churn guard · restraint rails.
+
 ## Geist Sans + Geist Mono — src/design/fonts/
 
 Copyright (c) Vercel, Inc. **SIL Open Font License 1.1** — free to bundle/embed.
