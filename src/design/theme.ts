@@ -309,6 +309,36 @@ export function applyLabBento(on: boolean): void {
   }
 }
 
+// Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass) — the tour's
+// footer progress row as numbered step indicators with animated connectors + check marks,
+// replacing the anonymous ticks. DEFAULT OFF behind `compy_setup_stepper` (Settings →
+// Appearance preview toggle, P-series contract): flag off, today's Setup & Tour renders
+// byte-identical (test-pinned). Presentation only — steps, content, and navigation are
+// untouched.
+const SETUP_STEPPER_KEY = "compy_setup_stepper";
+
+export function readSetupStepper(): boolean {
+  try {
+    return localStorage.getItem(SETUP_STEPPER_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applySetupStepper(on: boolean): void {
+  try {
+    localStorage.setItem(SETUP_STEPPER_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:setup-stepper-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction —
 // CORRECTED: editorial retired) — the pure operator-console/HUD redesign, piloted on Home.
 // DEFAULT OFF (Settings → Appearance preview toggle, the P-series contract): flag off, every

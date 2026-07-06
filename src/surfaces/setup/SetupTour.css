@@ -141,6 +141,31 @@
   background: var(--ix-accent, #2ee6c0);
   box-shadow: 0 0 8px var(--ix-accent, #2ee6c0);
 }
+/* Stepper progress preview (compy_setup_stepper): the vendored indicator primitives at footer
+   scale — the tour can run ~10 steps, so the 2rem demo circles shrink to chrome size. */
+.st-progress-stepper {
+  gap: 0;
+  align-items: center;
+}
+.st-progress-stepper .step-indicator-inner {
+  height: 22px;
+  width: 22px;
+}
+.st-progress-stepper .step-number {
+  font-size: 11px;
+}
+.st-progress-stepper .active-dot {
+  height: 8px;
+  width: 8px;
+}
+.st-progress-stepper .check-icon {
+  height: 12px;
+  width: 12px;
+}
+.st-progress-stepper .step-connector {
+  margin-left: 4px;
+  margin-right: 4px;
+}
 .st-nav {
   display: flex;
   align-items: center;

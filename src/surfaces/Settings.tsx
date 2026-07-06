@@ -15,6 +15,8 @@ import {
   applyLabGuided,
   readHud,
   applyHud,
+  readSetupStepper,
+  applySetupStepper,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -133,6 +135,7 @@ export default function Settings({
   const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
   const [labBento, setLabBento] = useState<boolean>(readLabBento);
   const [hud, setHud] = useState<boolean>(readHud);
+  const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -187,6 +190,12 @@ export default function Settings({
   const changeHud = (v: boolean) => {
     setHud(v);
     applyHud(v);
+  };
+  // Setup stepper preview — the Setup & Tour's progress row as numbered step indicators.
+  // Presentation only: same steps, same content, same navigation.
+  const changeSetupStepper = (v: boolean) => {
+    setSetupStepper(v);
+    applySetupStepper(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -312,6 +321,22 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={hud} onChange={changeHud} ariaLabel="Instrument HUD preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Setup stepper (preview)</div>
+                  <div className="set-row-sub">
+                    Numbered step markers with check marks in the Setup &amp; Tour's progress
+                    bar, so you can see where you are and hop between steps. Same tour, same
+                    steps.
+                  </div>
+                </div>
+                <Toggle
+                  on={setupStepper}
+                  onChange={changeSetupStepper}
+                  ariaLabel="Setup stepper preview"
+                />
               </div>
 
             </div>

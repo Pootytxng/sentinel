@@ -31,6 +31,7 @@ the `main` branch.
 | MagicBento | Components/MagicBento | Home stats bento rhythm; **Lab checkup bento** (`LabBento.tsx`, spec 2026-07-05-lab-bento-checkup) | LF-normalized, header added; **`ParticleCard` exported** so LabBento composes real station cards from the interaction primitive (theme-accent glow, tilt/magnetism off, reduced-motion gated) instead of duplicating it |
 | GooeyNav | Components/GooeyNav | Rail active-state candidate (vs PillNav — dev-build eval, loser deleted) | LF-normalized, header added |
 | PillNav | Components/PillNav | Rail active-state candidate (vs GooeyNav — dev-build eval, loser deleted) | LF-normalized, header added; **react-router-dom removed** — plain anchors + `onItemSelect` callback (Compy is router-less) |
+| Stepper | Components/Stepper | Setup & Tour footer progress — numbered indicators + animated connectors + check marks (`compy_setup_stepper`, DEFAULT OFF; vendored 2026-07-05, round-2 pass) | LF-normalized, header added; **StepIndicator/StepConnector exported** (SetupTour composes the indicator row without the demo container); **status colors moved from the motion variants into token-driven CSS** (`data-status`; vendor purple can never paint, test-pinned); `reduced` prop zeroes every animation duration (reduced-motion gate) |
 
 Adopt-list picks settled at vendor time (rationale in the V2-1 commit):
 
@@ -50,8 +51,8 @@ Full catalog swept against the corrected pure-Instrument-HUD direction. **Candid
 the rails** (deps already installed; vendor only when a concrete use lands): TextType (console
 typing, needs the DecryptedText-style animate-once guard) · GradualBlur (scroll-edge fade on
 queues/ledgers) · ClickSpark (tactile apply/toggle confirmation, tuned small) · Stepper
-(setup/onboarding rework only) · LineWaves/Threads (oscilloscope-adjacent; likely redundant vs
-our custom trace). **Rejected as off-law** (never-gamer-RGB/neon · garbled-text-reads-as-defect ·
+(setup/onboarding rework only — **vendored 2026-07-05**, row above) · LineWaves/Threads
+(oscilloscope-adjacent; likely redundant vs our custom trace). **Rejected as off-law** (never-gamer-RGB/neon · garbled-text-reads-as-defect ·
 glassmorphism ≠ instrument voice): Aurora, Galaxy, Plasma*, Prism*, Hyperspeed, Lightning,
 LaserFlow, LiquidChrome, Iridescence, StarBorder, LetterGlitch, GlitchText, FaultyTerminal,
 cursor gimmicks (Splash/Blob/Ghost/Crosshair), FluidGlass/GlassSurface/GlassIcons. Vetting rules

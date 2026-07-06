@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { IconCpuOff, IconShieldCheck, IconWifiOff } from "@tabler/icons-react";
 import type { HardwareInfo } from "../../App";
@@ -8,6 +8,8 @@ import { Wordmark } from "../../design/Wordmark";
 import { NavGlyph } from "../../design/NavGlyph";
 import { HOME_RAIL, railFor, type HomeRailId } from "../../design/homeRail";
 import { readOptimizeMerged } from "../../data/nav-flags";
+import { readSetupStepper } from "../../design/theme";
+import { StepIndicator, StepConnector } from "../../design/vendor/Stepper/Stepper";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
 import { useReducedMotion } from "../../design/use-motion";
@@ -45,6 +47,14 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useReducedMotion();
+  // Stepper progress preview (compy_setup_stepper, DEFAULT OFF): the footer's progress row as
+  // numbered React Bits step indicators instead of the anonymous ticks. Presentation only.
+  const [stepper, setStepper] = useState(readSetupStepper);
+  useEffect(() => {
+    const onChange = () => setStepper(readSetupStepper());
+    window.addEventListener("compy:setup-stepper-changed", onChange);
+    return () => window.removeEventListener("compy:setup-stepper-changed", onChange);
+  }, []);
   const rootRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
 
@@ -146,14 +156,33 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
         </div>
 
         <footer className="st-footer">
-          <div className="st-progress" aria-hidden="true">
-            {steps.map((s, idx) => (
-              <span
-                key={s.id}
-                className={`st-tick ${idx === i ? "st-tick-on" : ""} ${idx < i ? "st-tick-done" : ""}`}
-              />
-            ))}
-          </div>
+          {stepper ? (
+            // Numbered indicators + animated connectors (vendored Stepper primitives). Click hops
+            // straight to a step — the same free navigation the arrow keys already allow. Pointer
+            // affordance only (aria-hidden like the ticks): keyboard/AT users have Back/Next.
+            <div className="st-progress st-progress-stepper" aria-hidden="true">
+              {steps.map((s, idx) => (
+                <Fragment key={s.id}>
+                  <StepIndicator
+                    step={idx + 1}
+                    currentStep={i + 1}
+                    reduced={reduced}
+                    onClickStep={(n) => setI(n - 1)}
+                  />
+                  {idx < steps.length - 1 && <StepConnector isComplete={i > idx} reduced={reduced} />}
+                </Fragment>
+              ))}
+            </div>
+          ) : (
+            <div className="st-progress" aria-hidden="true">
+              {steps.map((s, idx) => (
+                <span
+                  key={s.id}
+                  className={`st-tick ${idx === i ? "st-tick-on" : ""} ${idx < i ? "st-tick-done" : ""}`}
+                />
+              ))}
+            </div>
+          )}
           <div className="st-nav">
             <button className="btn-small" onClick={back} disabled={i === 0}>
               Back
