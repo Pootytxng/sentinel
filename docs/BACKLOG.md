@@ -25,6 +25,9 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   - [x] #1 walk-the-bench rework — **shipped `f3e90c1`**, survives the correction (it rides `compy_lab_guided`, not the aesthetic flag): step-through REMOVED, symptom router leads as **"What are you here to do?"**; still DEFAULT OFF for the owner's eyeball.
   - [ ] 🎨 **OWNER CHECKPOINT:** eyeball the HUD Home pilot (flip "Instrument HUD (preview)") → on approval, roll the HUD language to Optimize → Monitor → Blackbook → Lab (+ deep Check/Fix internals de-slop + body-copy voice pass under the same flag).
   - Note: #6 "trending design tooling" — v0/Figma MCPs spend owner-gated credits ([[v0-mcp-for-compy-ui]]); pilot built in-repo instead (zero network, zero new deps). Use tooling only if a room's language demands it.
+- [~] **Lab bento checkup (owner directive 2026-07-05, reactbits MagicBento prompt)** — **built `b0ec87a`**, behind `compy_lab_bento` (Settings → Appearance "Lab checkup bento (preview)", DEFAULT OFF): station-card grid left→right in bench order (status LED · Measured/Not-yet chip · educational lab notes) + synthesized checkup report (coverage headline · per-station annotated readings, `stationReading` one-source · ONE next step); cards are doors onto the existing router jump; stations render below in guided numbered form. Flag-off byte-identity test-pinned in both guided states; theme-accent glow (vendor purple can never paint, test-pinned); 16 new guards, vitest 1029. Spec `2026-07-05-lab-bento-checkup.md`.
+  - [ ] 🎨 **OWNER CHECKPOINT:** flip "Lab checkup bento (preview)" and react — default-ON is his taste call.
+  - [ ] Stepper (owner's 2nd reactbits prompt, pre-vetted pass) — vendor Compy-tokenized, wire to a real step flow (Setup/onboarding/guide); queued next session.
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
