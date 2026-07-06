@@ -1,0 +1,163 @@
+/* ── Instrument-HUD four-room rollout (owner approval 2026-07-06 — "all looks good") ────
+   The approved Home-pilot language rolled to Optimize (fix) · Monitor (play) · Blackbook
+   (learn) · Lab: system-console masthead over each room's real verdict, mono provenance
+   readout strip, whisper page scanline. Same laws as home-hud.css (guard-pinned in
+   tokens-v2-guard.test.ts): every selector scoped [data-v2="on"][data-hud="on"], no color
+   literals, fonts only via var(--v2-font-*), v2- prefixed keyframes, stills under
+   [data-motion="reduced"].
+
+   SELF-CONTAINED on purpose: home-hud.css ships with the Home chunk (HomeHud is lazy), so
+   the rooms re-declare the masthead atoms they use — a session that never visits Home still
+   renders the full room masthead.
+
+   Scoping: `.v2-room:not([data-room="home"]):not([data-room="check"])` = the four journey
+   rooms. The :not() chain (rather than a :is() list) is deliberate — the tokens-v2-guard
+   selector check splits headers on commas, and home/check are excluded because Home wears
+   its own approved skin and check is the legacy merge-off escape hatch. Nothing here can
+   repaint the Home pilot.
+
+   Voice rail (round-1 owner verdict): the eyebrow is the ONLY uppercase line — verdict h1,
+   subs, buttons and body copy stay sentence case; the HUD register lives in micro-labels
+   and mono machine values. */
+
+:root[data-v2="on"][data-hud="on"] .v2-room:not([data-room="home"]):not([data-room="check"]) {
+  position: relative;
+}
+
+/* Whisper page scanline — the CRT skin at "felt not seen" alpha; never intercepts input. */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--hud-scanline-page) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+/* The verdict speaks in sentence case — calm confidence, not a shouted banner (same rule
+   as Home's masthead; the HUD register stays in the eyebrow above it). */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .v2-verdict
+  h1 {
+  display: block;
+  margin: 0 0 6px;
+  font: 650 clamp(24px, 2.8vw, 32px) / 1.15 var(--v2-font-sans);
+  letter-spacing: -0.01em;
+  color: var(--v2-text);
+  max-width: 34ch;
+  text-wrap: balance;
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .v2-verdict-sub {
+  display: block;
+  font-size: 13.5px;
+  max-width: 64ch;
+  margin-top: 2px;
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .v2-verdict-action {
+  margin: 12px 0 0;
+}
+
+/* The rooms' verdict headline — block only; DecryptedText already owns the arrival moment,
+   so no second animation stacks on it (restraint rail). */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-headline {
+  display: block;
+}
+
+/* Masthead eyebrow — the one uppercase, letterspaced line in the room. */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-masthead-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+  margin-bottom: 10px;
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-masthead-eyebrow
+  .hud-mono {
+  font: 10px var(--v2-font-mono);
+  letter-spacing: 0.08em;
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-eyebrow-sep {
+  color: var(--v2-accent);
+  letter-spacing: 0;
+}
+
+/* Status LEDs — real state only (scan = work actually running · warn = measured attention ·
+   ok = measured clear); a room with no live state renders no LED. */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-led-ok {
+  background: var(--v2-ok);
+  box-shadow: 0 0 5px var(--v2-ok-dim);
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-led-warn {
+  background: var(--v2-warn);
+  box-shadow: 0 0 5px var(--v2-warn-dim);
+}
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-led-scan {
+  background: var(--v2-accent);
+  box-shadow: 0 0 5px var(--v2-accent-dim);
+  animation: v2-hudr-pulse 1.4s ease-in-out infinite;
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .hud-led-scan {
+  animation: none;
+}
+
+/* The readout strip — the room's measured-provenance line as a mono instrument field
+   between hairlines (sentence case: it's a sentence, not a micro-label). */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])
+  .v2-measured {
+  display: block;
+  font: 500 11.5px / 1.5 var(--v2-font-mono);
+  letter-spacing: 0.02em;
+  color: var(--v2-muted);
+  border-block: 1px solid var(--hud-hairline);
+  padding: 7px 2px;
+  margin-bottom: 22px;
+}
+
+@keyframes v2-hudr-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}

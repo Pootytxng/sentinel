@@ -6,6 +6,8 @@ import { TuningPresets } from "./Monitor";
 import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
+import { useHudFlag } from "../design/use-hud";
+import { HudMasthead } from "./hud-masthead";
 import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
 import { monitorVerdict, monitorMeasuredLine } from "./monitor-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
@@ -50,6 +52,7 @@ type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2">;
 
 export function MonitorV2(props: Props) {
   const reduced = useReducedMotion();
+  const hud = useHudFlag();
   const [segment, setSegment] = useState<Segment>("live");
   const [mode, setMode] = useState<ViewMode>(readViewMode);
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -75,12 +78,12 @@ export function MonitorV2(props: Props) {
     <RoomShell
       room="play"
       doorOpen={!capturing}
-      verdict={
-        reduced ? (
+      verdict={(() => {
+        // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
+        // real output; the animation never alters what is claimed.
+        const headline = reduced ? (
           verdict.headline
         ) : (
-          // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
-          // real output; the animation never alters what is claimed.
           <DecryptedText
             key={verdict.headline}
             text={verdict.headline}
@@ -89,8 +92,17 @@ export function MonitorV2(props: Props) {
             speed={22}
             useOriginalCharsOnly
           />
-        )
-      }
+        );
+        if (!hud) return headline; // flag off: the exact pre-rollout tree
+        // HUD masthead (four-room rollout) — the LED breathes ONLY while a capture is
+        // actually recording (the room's one live state); otherwise no LED, never fabricated.
+        return (
+          <>
+            <HudMasthead label="Live telemetry" led={capturing ? "scan" : null} />
+            <span className="hud-headline">{headline}</span>
+          </>
+        );
+      })()}
       sub={verdict.sub}
       measured={monitorMeasuredLine(props.sessions)}
       quiet={

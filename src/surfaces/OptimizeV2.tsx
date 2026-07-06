@@ -14,6 +14,8 @@ import Fix from "./Fix";
 import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
+import { useHudFlag } from "../design/use-hud";
+import { HudMasthead } from "./hud-masthead";
 import { SidePileContext } from "./side-pile";
 import { buildSetupSummary, deriveReverted } from "./use-scan";
 import { optimizeVerdict, optimizeMeasuredLine } from "./optimize-v2-data";
@@ -100,6 +102,7 @@ export function OptimizeV2({
   exporting,
 }: Props) {
   const reduced = useReducedMotion();
+  const hud = useHudFlag();
   const [segment, setSegment] = useState<Segment>("fixes");
   const [pileOpen, setPileOpen] = useState(false);
   const [pileHost, setPileHost] = useState<HTMLElement | null>(null);
@@ -186,23 +189,36 @@ export function OptimizeV2({
       <RoomShell
         room="fix"
         doorOpen={verdict.allClear}
-        verdict={
-          reduced || !verdict.settled ? (
-            verdict.headline
-          ) : (
-            // The "measurement arriving" moment (adopt list: verdict lines ONLY) — resolves
-            // character-by-character once the catalog has actually settled. The text is the
-            // pure helper's real output; the animation never alters what is claimed.
-            <DecryptedText
-              key={verdict.headline}
-              text={verdict.headline}
-              animateOn="view"
-              sequential
-              speed={22}
-              useOriginalCharsOnly
-            />
-          )
-        }
+        verdict={(() => {
+          // The "measurement arriving" moment (adopt list: verdict lines ONLY) — resolves
+          // character-by-character once the catalog has actually settled. The text is the
+          // pure helper's real output; the animation never alters what is claimed.
+          const headline =
+            reduced || !verdict.settled ? (
+              verdict.headline
+            ) : (
+              <DecryptedText
+                key={verdict.headline}
+                text={verdict.headline}
+                animateOn="view"
+                sequential
+                speed={22}
+                useOriginalCharsOnly
+              />
+            );
+          if (!hud) return headline; // flag off: the exact pre-rollout tree
+          // HUD masthead (four-room rollout) — LED is the room's REAL state: scan while the
+          // catalog is still measuring, warn while actionable fixes remain, ok at all-clear.
+          return (
+            <>
+              <HudMasthead
+                label="Repair bay"
+                led={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
+              />
+              <span className="hud-headline">{headline}</span>
+            </>
+          );
+        })()}
         sub={verdict.sub}
         measured={measured}
         primaryAction={

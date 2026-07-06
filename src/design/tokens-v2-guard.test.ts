@@ -49,6 +49,7 @@ const optimizeCss = loadV2Css("surfaces", "optimize-v2.css");
 const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
 const labCss = loadV2Css("surfaces", "lab-v2.css");
+const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
@@ -61,6 +62,7 @@ const V2_CSS: [string, string][] = [
   ["monitor-v2.css", monitorCss],
   ["blackbook-v2.css", blackbookCss],
   ["lab-v2.css", labCss],
+  ["hud-rooms.css", hudRoomsCss],
 ];
 
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
@@ -111,6 +113,7 @@ describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
     ["monitor-v2.css", monitorCss],
     ["blackbook-v2.css", blackbookCss],
     ["lab-v2.css", labCss],
+    ["hud-rooms.css", hudRoomsCss],
   ];
   for (const [name, css] of SURFACE_CSS) {
     it(`${name}: no color literals — every color comes from a --v2-* token`, () => {

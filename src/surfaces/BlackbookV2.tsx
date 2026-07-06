@@ -2,6 +2,8 @@ import { useState } from "react";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
+import { useHudFlag } from "../design/use-hud";
+import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict, blackbookMeasuredLine } from "./blackbook-v2-data";
 import type { GpuVendor } from "./walkthroughs";
@@ -34,6 +36,7 @@ export function BlackbookV2({
   onClose: () => void;
 }) {
   const reduced = useReducedMotion();
+  const hud = useHudFlag();
   // Seeded from the persisted ledger; Learn reports each new grading up so the room verdict
   // updates the moment a guide is fact-checked (same data, no second read of the panel).
   const [ledger, setLedger] = useState(readAutopsyLedger);
@@ -42,12 +45,12 @@ export function BlackbookV2({
   return (
     <RoomShell
       room="learn"
-      verdict={
-        reduced ? (
+      verdict={(() => {
+        // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
+        // real output; the animation never alters what is claimed.
+        const headline = reduced ? (
           verdict.headline
         ) : (
-          // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
-          // real output; the animation never alters what is claimed.
           <DecryptedText
             key={verdict.headline}
             text={verdict.headline}
@@ -56,8 +59,17 @@ export function BlackbookV2({
             speed={22}
             useOriginalCharsOnly
           />
-        )
-      }
+        );
+        if (!hud) return headline; // flag off: the exact pre-rollout tree
+        // HUD masthead (four-room rollout) — no LED: a record count is not a health state,
+        // and this room computes no live status to honestly light one from.
+        return (
+          <>
+            <HudMasthead label="Field records" />
+            <span className="hud-headline">{headline}</span>
+          </>
+        );
+      })()}
       sub={verdict.sub}
       measured={blackbookMeasuredLine()}
     >

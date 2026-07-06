@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import Lab from "./Lab";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
+import { useHudFlag } from "../design/use-hud";
+import { HudMasthead } from "./hud-masthead";
 import { peekProbe } from "../data/probe-cache";
 import { tuningGuideForVendor } from "../data/tuning-guides";
 import { labVerdict, labMeasuredLine } from "./lab-v2-data";
@@ -38,6 +40,7 @@ export function LabV2({
   diagnosticsCaptured?: boolean;
 }) {
   const reduced = useReducedMotion();
+  const hud = useHudFlag();
   // Seeded from the probe cache (same key Lab reads) so a re-visit paints the verdict
   // instantly; live updates arrive through Lab's onBenchState — the SAME read, no second IPC.
   const [bench, setBench] = useState<BenchmarkState | null>(
@@ -51,12 +54,12 @@ export function LabV2({
   return (
     <RoomShell
       room="lab"
-      verdict={
-        reduced ? (
+      verdict={(() => {
+        // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
+        // real output; the animation never alters what is claimed.
+        const headline = reduced ? (
           verdict.headline
         ) : (
-          // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
-          // real output; the animation never alters what is claimed.
           <DecryptedText
             key={verdict.headline}
             text={verdict.headline}
@@ -65,8 +68,17 @@ export function LabV2({
             speed={22}
             useOriginalCharsOnly
           />
-        )
-      }
+        );
+        if (!hud) return headline; // flag off: the exact pre-rollout tree
+        // HUD masthead (four-room rollout) — no LED: the instruments below own their own
+        // states; the room itself computes no live status to honestly light one from.
+        return (
+          <>
+            <HudMasthead label="Test bench" />
+            <span className="hud-headline">{headline}</span>
+          </>
+        );
+      })()}
       sub={verdict.sub}
       measured={labMeasuredLine(instruments)}
     >
