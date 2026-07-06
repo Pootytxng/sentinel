@@ -173,6 +173,16 @@ Full protocol: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Th
 - Hard-lines blocks in prompts are deliberate negative prompting — keep them; don't restate
   doctrine per prompt (it's here and in the specs).
 
+### SUBAGENT-MODEL ORCHESTRATION (standing rule, 2026-07-05 — the "Fable-orchestrator" pattern)
+
+Orchestrator keeps the thinking/judgment; grunt work (searches, sweeps, verification, audits) is
+delegated to the CHEAPEST capable model. **CC lane:** covered by the owner's global
+`~/.claude/settings.json` `CLAUDE_CODE_SUBAGENT_MODEL` override (a Claude-Code-only mechanism).
+**Cowork lane:** ALWAYS set the `Agent` tool's `model` param explicitly — `haiku` (search/read/format),
+`sonnet` (research/verify/audit), `opus` (rare, judgment-heavy), never `fable`, never inherit. Full
+routing table in `docs/COWORK_HANDOFF.md` → "Subagent-model orchestration." Rigor unchanged — cheaper
+workers, not lazier checks; orchestration pays off on multi-step work, skip it for a one-shot lookup.
+
 ### SELF-REVIEW + BUG→GUARD — vigilance lives in the toolchain (standing rule, 2026-06-20)
 
 Owner asked to be made "more precise and vigilant" of the laws after I shipped a muted-on-accent button

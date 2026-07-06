@@ -170,6 +170,25 @@ when this session runs long, END the response with the fresh-session kickoff pas
 protocol doc. Subagents stay (value-positive) but read-only auditor agents + self-review run on
 cheaper models via frontmatter.
 
+### SUBAGENT-MODEL ORCHESTRATION (standing rule, 2026-07-05 — the "Fable-orchestrator" pattern, Cowork lane)
+
+Adapted from Aki's Fable-5 Orchestrator setup. Principle: the orchestrator (this session) keeps the
+thinking/planning/judgment; the grunt work (searches, file sweeps, verification, audits, formatting)
+is DELEGATED to subagents on the CHEAPEST capable model — so heavy work never silently bills at the
+orchestrator's rate. In Cowork this is native and per-task: the **`Agent` tool takes an explicit
+`model` parameter** (`haiku`/`sonnet`/`opus`/`fable`) — ALWAYS set it, never inherit.
+
+Routing default:
+- **`haiku`** — simple search/read/grep sweeps, file listing, format/lint checks, mechanical extraction.
+- **`sonnet`** — moderate research, multi-file exploration, verification/audit passes, spec-diff reviews.
+- **`opus`** — only when the subagent itself needs real judgment (rare; usually the orchestrator keeps that).
+- **`fable`** — essentially never for a Cowork subagent (Cowork is spec/steer/audit; builds live in CC).
+
+Notes: the CC lane is covered separately by the owner's global `~/.claude/settings.json`
+`CLAUDE_CODE_SUBAGENT_MODEL` override (a Claude-Code-only mechanism — Cowork can't rely on that env
+var, hence the per-`Agent`-call `model` rule here). Orchestration pays off on multi-step work; for a
+one-shot lookup, just do it inline. Rigor unchanged — cheaper workers, not lazier verification.
+
 ## Current board / session log → archived
 
 The reverse-chronological board log + resume points were moved to
