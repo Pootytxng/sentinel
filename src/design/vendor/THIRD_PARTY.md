@@ -58,6 +58,23 @@ cursor gimmicks (Splash/Blob/Ghost/Crosshair), FluidGlass/GlassSurface/GlassIcon
 for any future pick: dep surface (reject `postprocessing`/`face-api` class) · honesty law ·
 reduced-motion gate · re-mount churn guard · restraint rails.
 
+### Sourcing channel — shadcn registry + MCP (wired 2026-07-05)
+
+React Bits publishes a shadcn-compatible registry; it is now wired as the **fetch/browse
+channel** for future sourcing rounds (replaces GitHub scraping):
+
+- `components.json` (repo root) registers `@react-bits` → `https://reactbits.dev/r/{name}.json`.
+  Item names carry the variant suffix — ours is always **`<Component>-TS-CSS`**
+  (e.g. `TextType-TS-CSS`); suffixless/kebab names return the SPA HTML, not JSON.
+- `.mcp.json` runs the shadcn MCP server for Claude Code sessions (catalog browse/search;
+  loads on next fresh session). `shadcn` is pinned as a devDependency.
+- Inspect without writing: `npx shadcn view @react-bits/<Name>-TS-CSS`.
+
+**Vendoring law unchanged:** never `shadcn add` straight into the tree. Fetch via the
+registry, then vendor by hand as before — license header, LF-normalize, token adaptation,
+vetting rails (dep surface · honesty law · reduced-motion gate · re-mount churn guard ·
+restraint rails), and a row in the table above.
+
 ## Geist Sans + Geist Mono — src/design/fonts/
 
 Copyright (c) Vercel, Inc. **SIL Open Font License 1.1** — free to bundle/embed.
