@@ -6,66 +6,44 @@ description: >-
   about to say it works; captured a screenshot and about to move on; finishing a UI fix the owner
   asked for. Catches illegible text, duplicated UI, broken hover/empty states, and stale wording —
   the things green tests and a quick glance miss.
-model: sonnet
 ---
 
-# Self-Review — look critically before claiming UI done
+# Self-Review — dispatch the reviewer, never review inline
 
-## The failure this prevents
-Looking ≠ looking *critically*. Real misses the owner caught AFTER I reported "done":
-- A **"Turn it back on" button rendered muted-gray text on an accent fill** (illegible). I had
-  screenshotted it — and never checked the contrast.
-- A **yellow drift banner that duplicated** a card I'd just added (and used a renamed-away word,
-  "Optimize"). I never looked for the sibling representation.
+## The Iron Rule (unchanged since 2026-06-20)
 
-`tsc` + `vitest` were green both times. **Green tests + a glance are not a review.**
+Do not claim a visual change is done/fixed/ready without a **PASS verdict** from the
+`self-reviewer` agent, quoted in your report. A claim without the verdict block = the law was
+violated. "I basically looked" / "it's one CSS line" / "tests are green" / "the owner will catch
+it" all mean STOP and dispatch.
 
-## The Iron Rule
-Do not claim a visual change is done/fixed/ready until you have (1) captured it at the owner's REAL
-resolution and (2) answered EVERY rubric item below **with evidence** in a short `SELF-REVIEW` block.
-A rubric item with no evidence = not reviewed. Any item fails → fix → re-review from the top.
+## The Token Law (added 2026-07-05 — why this skill is now a dispatcher)
 
-**Violating the letter is violating the spirit:** "I basically looked" / "it's one CSS line" / "the
-owner will catch it" all mean STOP and run the rubric.
+**Never run the rubric inline.** Inline review put every native-res screenshot and cdp-eval dump
+into the orchestrator's transcript, where it was re-sent on every later turn — self-review became
+64% of weekly token usage and a driver of >150k contexts. Evidence must live and die in the
+worker's context; only the verdict returns.
 
-## Capture it RIGHT first (this is where the artifact lies)
-The dev build runs two same-origin webviews + a small default window, so captures mislead unless:
-- Resize the REAL OS window (~1500×980 via MoveWindow) and capture NATIVELY with
-  `docs/ui-sweep/cdp-shot.mjs`. Do NOT trust `setDeviceMetricsOverride` — it distorts when the real
-  window is small (it made a correctly-centered panel look like it floated: a false defect that also
-  hides real ones).
-- Confirm the shot is the MAIN window (6 `.cc-rail-item`s visible), not the overlay.
-- For the EXACT element you changed, scroll to it / zoom — look AT it, not just the page.
+## How to run it
 
-## The rubric — one line of EVIDENCE each
-1. **Capture** — native, real-res, main window (state the size; confirm not the overlay).
-2. **Legibility / contrast** — every text-on-fill you touched: readable? On accent/colored fills the
-   text MUST be `--ix-accent-ink` (dark), never `--muted`. STATE the computed color
-   (`getComputedStyle(el).color` via `docs/ui-sweep/cdp-eval.mjs`) — direct proof, not a guess.
-3. **Duplication** — does this show data/an action already shown elsewhere? Grep/look for the sibling
-   representation and say what you checked.
-4. **Interactive states** — hover / active / disabled don't break or mislead (no false danger-red on a
-   primary action). Say which you checked.
-5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
-6. **Wording** — plain, accurate, no stale references (renamed features — e.g. "Optimize", "Startup
-   tab" no longer exist).
-7. **The owner's exact ask** — re-read it; does the result satisfy EACH part (decompose multi-part
-   asks)? Quote the part, confirm it's met.
+1. **Dispatch** the `self-reviewer` subagent (Task tool, `subagent_type: self-reviewer` — it pins
+   `model: sonnet` itself; do not override upward). The brief MUST contain:
+   - the owner's exact ask, quoted;
+   - files touched + the specific elements/selectors changed;
+   - states to exercise (hover / empty / loading / error) if relevant.
+2. **Receive** the single `SELF-REVIEW` block (7 rubric items, one evidence line each, VERDICT).
+3. **On FAIL:** apply the fix list, then re-dispatch for a full fresh review (from the top — a fix
+   can break a neighboring item). Repeat until PASS.
+4. **On PASS:** quote the block in your done-report. That is the claim's license.
 
-## Red flags — you're about to ship a miss
-- "tsc/vitest pass, so it's good" — they see neither contrast, duplication, nor layout.
-- "I captured a screenshot" — capturing ≠ scrutinizing each item.
-- "It's one CSS line / too small to review."
-- "It probably looks fine."
+## Red flags — you're about to violate the law
 
-All mean: run the rubric **with evidence** before claiming anything.
+- Capturing or `cdp-eval`-ing UI evidence yourself in the main session → that's inline review;
+  dispatch instead.
+- Reporting "done" with green tsc/vitest but no verdict block → they see neither contrast,
+  duplication, nor layout (they missed the muted button AND the duplicate banner).
+- Editing the fix and moving on without re-dispatch → the second review is where the regression
+  hides.
 
-## Rationalization table
-| Excuse | Reality |
-|--------|---------|
-| "I looked at it" | You glanced. The button was on screen and still muted. State the computed color. |
-| "Same pattern as elsewhere" | The cascade/theme can differ. Prove it on THIS element. |
-| "Tests are green" | Tests caught neither the muted button nor the duplicate banner. |
-| "The owner can eyeball it" | The law exists so he never has to. That's the whole point. |
-
-Operationalizes the memory [[always-self-review-visual-work]] — turns the law into a forced, evidenced rubric.
+Operationalizes [[always-self-review-visual-work]] + [[bug-becomes-guard]]. Rubric text and
+capture procedure live in `.claude/agents/self-reviewer.md` — rigor unchanged, residency moved.

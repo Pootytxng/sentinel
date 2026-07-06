@@ -161,10 +161,13 @@ Full protocol: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Th
   credits are an owner-gated spend (zero-budget law), default no.
 - **Effort matching:** default high; x-high only for correctness-critical work at the
   mutation/rollback boundary; medium/low for routine edits.
-- **Subagents never run on Fable (enforced 2026-07-05, orchestrator pattern):**
-  `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=opus`; the two project reviewer
-  agents pin `model: sonnet` in frontmatter. Fable = orchestrator (plan/judge/build itself);
-  workers = Opus/Sonnet. Don't add per-session routing instructions — the setting is the guard.
+- **Subagents never run on Fable (enforced 2026-07-05, orchestrator pattern; default revised
+  to sonnet later same day):** `.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`
+  — opus workers bought nothing once CC's main lane falls back to Opus 4.8 post-Jul 7 (opus
+  under opus = zero delta; the ~58% cut in the orchestrator doc assumed Sonnet workers). Pin
+  `model: opus` per-agent in frontmatter ONLY where adversarial judgment is provably the point.
+  Fable = orchestrator (plan/judge/build itself). Don't add per-session routing instructions —
+  the setting is the guard.
 - **Never ask Fable to show its reasoning** (standing "explain your reasoning" lines can refuse
   or silently route to Opus 4.8). Proof lives in commits/diffs/tests, not narration. The
   auto-switch-as-STOP-signal rule above stands.
@@ -176,8 +179,9 @@ Full protocol: `docs/superpowers/specs/2026-07-01-token-routing-protocol.md`. Th
 ### SUBAGENT-MODEL ORCHESTRATION (standing rule, 2026-07-05 — the "Fable-orchestrator" pattern)
 
 Orchestrator keeps the thinking/judgment; grunt work (searches, sweeps, verification, audits) is
-delegated to the CHEAPEST capable model. **CC lane:** covered by the owner's global
-`~/.claude/settings.json` `CLAUDE_CODE_SUBAGENT_MODEL` override (a Claude-Code-only mechanism).
+delegated to the CHEAPEST capable model. **CC lane:** the in-repo `.claude/settings.json` sets
+`CLAUDE_CODE_SUBAGENT_MODEL=sonnet` (project settings override the owner's global `~/.claude`
+copy — if the global still says `opus`, that only affects OTHER repos; owner may align it).
 **Cowork lane:** ALWAYS set the `Agent` tool's `model` param explicitly — `haiku` (search/read/format),
 `sonnet` (research/verify/audit), `opus` (rare, judgment-heavy), never `fable`, never inherit. Full
 routing table in `docs/COWORK_HANDOFF.md` → "Subagent-model orchestration." Rigor unchanged — cheaper
@@ -192,7 +196,11 @@ to move each law OUT of memory INTO the toolchain (the chosen enforcement, 2026-
   change done** — a forced, evidence-required rubric (capture native/real-res, STATE the computed text
   color on accent fills, duplication, hover/empty states, stale wording, each part of the ask). A
   PostToolUse hook (`.claude/hooks/self-review-reminder.mjs`) nudges it when a `src/**.{tsx,css}` file
-  changes. Green tsc/vitest are NOT a visual review.
+  changes. Green tsc/vitest are NOT a visual review. **Execution moved to a subagent (token law,
+  2026-07-05):** the skill is now a dispatcher for `.claude/agents/self-reviewer.md` (sonnet) — the
+  rubric/captures run in the worker's context and only the SELF-REVIEW verdict block returns. NEVER
+  capture/cdp-eval inline in the orchestrator (inline review was 64% of weekly tokens). Rigor
+  unchanged: no done-claim without a quoted PASS verdict.
 - **`bug → guard`:** every defect the owner catches becomes a permanent guard before the fix is done —
   a vitest/cargo test if mechanizable (e.g. `src/button-legibility-guard.test.ts`,
   `src/theme-contrast.test.ts`), else a `self-review` rubric item. Tiers: automated guard > forced

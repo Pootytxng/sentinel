@@ -168,7 +168,9 @@ Jul 7, then owner-gated API spend, default no → CC falls back to Opus 4.8. **S
 duty (2026-07-01):** long sessions are the real burn (>150k context) — one train per session;
 when this session runs long, END the response with the fresh-session kickoff paste from the
 protocol doc. Subagents stay (value-positive) but read-only auditor agents + self-review run on
-cheaper models via frontmatter.
+cheaper models via frontmatter. **Self-review is a dispatcher since 2026-07-05:** the rubric runs
+in `.claude/agents/self-reviewer.md` (sonnet) and only the verdict block returns — inline review
+(captures/cdp-eval in the orchestrator transcript) was 64% of weekly tokens and is banned.
 
 ### SUBAGENT-MODEL ORCHESTRATION (standing rule, 2026-07-05 — the "Fable-orchestrator" pattern, Cowork lane)
 
@@ -184,9 +186,10 @@ Routing default:
 - **`opus`** — only when the subagent itself needs real judgment (rare; usually the orchestrator keeps that).
 - **`fable`** — essentially never for a Cowork subagent (Cowork is spec/steer/audit; builds live in CC).
 
-Notes: the CC lane is covered separately by the owner's global `~/.claude/settings.json`
-`CLAUDE_CODE_SUBAGENT_MODEL` override (a Claude-Code-only mechanism — Cowork can't rely on that env
-var, hence the per-`Agent`-call `model` rule here). Orchestration pays off on multi-step work; for a
+Notes: the CC lane is covered separately by the in-repo `.claude/settings.json`
+`CLAUDE_CODE_SUBAGENT_MODEL=sonnet` (2026-07-05; project settings beat the owner's global
+`~/.claude` copy — a Claude-Code-only mechanism, Cowork can't rely on that env var, hence the
+per-`Agent`-call `model` rule here). Orchestration pays off on multi-step work; for a
 one-shot lookup, just do it inline. Rigor unchanged — cheaper workers, not lazier verification.
 
 ### AUDIT ROUTING — when a Cowork audit is actually needed (owner-confirmed 2026-07-05)

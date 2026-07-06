@@ -74,15 +74,15 @@ them; make them cheaper:
    (`.claude/agents/frontend-ipc-contract-auditor.md`, `rust-tauri-reviewer.md`) and the
    `self-review` skill (13% of usage) are read-only report-writers — they don't need Fable.
    Add `model: sonnet` (or haiku for the mechanical passes) to their frontmatter.
-   **ENFORCED IN CONFIG (2026-07-05, orchestrator pattern):** `.claude/settings.json` now sets
-   `"env": { "CLAUDE_CODE_SUBAGENT_MODEL": "opus" }` — subagents without their own model
-   (Explore, general-purpose, Plan, skill-spawned) run Opus instead of inheriting Fable; the
-   two project agents stay Sonnet via frontmatter. Fable stays the orchestrator: planning,
-   judgment, and the build itself. Source: owner-supplied "Fable 5 Orchestrator" doc
-   (Google Docs, 2026-07-05); it reports ~58% usage cut w/ Sonnet workers, ~74% w/ Haiku —
-   we chose Opus workers because Compy's subagents are adversarial audits at the
-   mutation/rollback boundary, where worker quality is the point. No per-session verbal
-   routing instruction needed anymore — the setting is the guard.
+   **ENFORCED IN CONFIG (2026-07-05, orchestrator pattern; REVISED same day — see the
+   2026-07-05 reassessment below):** `.claude/settings.json` now sets
+   `"env": { "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet" }` — subagents without their own model
+   (Explore, general-purpose, Plan, skill-spawned) run Sonnet instead of inheriting Fable;
+   the two project agents already pin Sonnet via frontmatter. Initial choice was Opus
+   workers ("adversarial audits deserve worker quality"), reversed hours later: post-Jul 7
+   CC's orchestrator IS Opus 4.8, so opus workers = zero savings; the orchestrator doc's
+   ~58% cut assumed Sonnet workers. Pin `model: opus` per-agent only where judgment is
+   provably the point. Fable stays the orchestrator: planning, judgment, the build itself.
 2. **Tighten subagent prompts** — a subagent brief states scope + the exact artifacts to
    check + report format; no doctrine restating (it inherits CLAUDE.md).
 3. **The bigger lever is context length, not subagents:** 72% of usage ran at >150k context.
@@ -125,3 +125,46 @@ COWORK_HANDOFF as a POINTER, full text in a spec.
 
 CC: `hash · what-changed (1–2 lines) · one verify line (point to the proof) · flags`.
 Cowork: terse, answer-first, next move teed up. Mechanism lives in commits/specs.
+
+## 2026-07-05 panel reassessment (VS Code usage panel, week ending Jul 5)
+
+Numbers vs the 07-01 baseline: **subagent share 53% → 33%** (improving, and the config guard
+only landed 07-05) · **>150k context 72% → 74%** (the session-refresh rule was prescribed 07-01
+and did NOT move the number) · **self-review 13% → 64%** (new dominant cost).
+
+Root-cause on self-review: `model: sonnet` was added to the skill frontmatter only late in the
+window, so most of the 64% billed at full rate — but the deeper cost was **context residency**,
+not model: the skill ran inline, so every native-res capture + cdp-eval dump entered the main
+transcript and was re-sent on every subsequent turn. This is also a direct feeder of the 74%
+>150k stat — the two numbers are one problem.
+
+**Enforcement shipped 2026-07-05 (all in-git, standing):**
+1. **`.claude/agents/self-reviewer.md`** (sonnet, Bash/Read/Grep/Glob) — owns the capture
+   procedure + 7-item rubric; returns ONLY the SELF-REVIEW verdict block. Evidence lives and
+   dies in the worker's context.
+2. **`.claude/skills/self-review/SKILL.md`** → thin dispatcher. New Token Law: never run the
+   rubric inline; no done-claim without a quoted PASS verdict. Rigor unchanged (full re-review
+   on FAIL), residency moved. Hook message updated to match.
+3. **`CLAUDE_CODE_SUBAGENT_MODEL` opus → sonnet** (rationale above). Note: the owner's global
+   `~/.claude/settings.json` may still say opus — project settings win in this repo; aligning
+   the global copy is a one-line owner edit affecting other repos only.
+
+**Autopilot vs session-refresh ruling:** the Stop-hook autopilot chains tasks through one
+session by design — it manufactures the >150k contexts the refresh rule bans. Standing
+resolution: **cap autopilot queues at 1–2 tasks; `/clear` between trains.** A long queue is a
+deliberate trade (autonomy over tokens), not the default.
+
+**Watch item for the next panel:** self-review share should collapse (sonnet + isolated
+context); >150k share should fall only if the queue-cap + `/clear` cadence is actually
+followed — if it doesn't move again, the failure is behavioral, not structural.
+
+**Context-refresh advisor (added 2026-07-05; v2 same day — owner directive "CC hands me the
+paste"):** `.claude/hooks/context-size-advisor.mjs` (Stop hook) stats the session transcript
+after each turn; past ~1.5 MB (≈ the >150k-token zone) it blocks the stop ONCE (per +1 MB
+growth) and instructs CC to (1) persist any conversation-only state to the spec/BACKLOG, then
+(2) end its reply with a ready-to-send **CONTEXT REFRESH block**: which command to type
+(`/clear` if state is on disk, `/compact` only if it couldn't persist) + the exact resume
+prompt to paste after. The owner's whole job is type-command → paste. Guards: `stop_hook_active`
+(never loops) · growth-step marker (never nags) · autopilot armed → downgrades to a plain
+systemMessage so it never fights the queue. The command itself remains owner-typed — models
+cannot clear their own context; this is the ceiling of automation.
