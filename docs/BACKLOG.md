@@ -469,8 +469,18 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 **Peripheral** (no Peripheral surface exists in the rail — whole section missing)
 - [x] mouse DPI / genre audit — handed off to content (DPI isn't OS-readable → can't be a hardware-tailored peripheral card); shipped as the `effective-sensitivity` (eDPI) input-topic Learn entry: eDPI = DPI × in-game sensitivity is the number that decides aim feel, match it (not just DPI) to copy a setup; names the can't-read-DPI limit + the 400–800 (rarely >1600) rule-of-thumb; no FPS claim; guard test (`bcf7316`)
-- [ ] debounce / Snap-Tap / Null-Bind / Rapid-Trigger detection
-- [ ] sensor ID + known-issue DB (bundled JSON)
+- [ ] debounce / Snap-Tap / Null-Bind / Rapid-Trigger detection — 🪪 **owner-curated-data-gated**
+  (assessed 2026-07-05): whether the feature is *enabled* is firmware/vendor-software state — not
+  user-mode readable (no standard HID report; same wall class as [[detection-feasibility-walls-usermode]]).
+  The only honest buildable form is capability *inference*: match the connected keyboard's product name
+  (already read — `latency.rs` PnP enumeration, real names + VID&PID) against a device→capability list —
+  and that list is per-SKU claims about users' hardware, the owner-curated-never-LLM-generated class
+  (same rule as safe-to-suspend above). Content half already shipped (`rapid-trigger`/`keyboard-actuation`
+  Learn terms). Unblocks when the owner curates the device list.
+- [ ] sensor ID + known-issue DB (bundled JSON) — 🪪 **owner-curated-data-gated** (assessed 2026-07-05):
+  the sensor silicon inside a mouse is not exposed over USB/HID (only the mouse's own product name is —
+  already read, `latency.rs`); model→sensor mapping + "known issues" are third-party teardown claims =
+  the owner-curated-never-LLM-generated class. Unblocks when the owner curates the DB.
 - [x] wired-vs-wireless latency model — honest conservative wireless-name advisory, read-only (`27f3651`)
 - [x] keyboard actuation / NKRO / Rapid-Trigger guide — `keyboard-actuation` + `nkro` + `rapid-trigger` input-topic term explainers (pairs with peripheral's switch detection). Honest: actuation = a speed-vs-misfire feel preference (not skill/FPS); NKRO = inputs-not-dropped (not speed); Rapid Trigger needs HE/analog hardware and is **anti-cheat-aware** — flags that Snap Tap / SOCD is banned in CS2 (Valorant currently permits it — honesty fix), rules differ by game, and Compy enables/recommends nothing your game forbids. No fabricated specs. Guard test `knowledge-keyboard.test.ts`. Flagged for owner brand-voice skim.
 - [x] USB-port recommendations — both halves shipped: SHARING (`shared_controller_advisory`) + TIER (`usb_tier_advisory`: honest 2.0-fine-for-input + 3.x/USB4 myth-buster, read-only, owns the tier dimension only — never re-issues the "move device X" call) (`9a045d9`)
