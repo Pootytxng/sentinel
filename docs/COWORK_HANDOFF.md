@@ -189,6 +189,22 @@ Notes: the CC lane is covered separately by the owner's global `~/.claude/settin
 var, hence the per-`Agent`-call `model` rule here). Orchestration pays off on multi-step work; for a
 one-shot lookup, just do it inline. Rigor unchanged — cheaper workers, not lazier verification.
 
+### AUDIT ROUTING — when a Cowork audit is actually needed (owner-confirmed 2026-07-05)
+
+Since the CC lane self-contains routine verification in-VSCode (Opus/Sonnet subagents + the two
+reviewer agents + /check + /security), **routine trains get NO Cowork audit** — UI, advisory,
+content, tests all verify in-lane. Cowork's audit value is *independent context* (it reads the repo
+cold; CC's subagents inherit CC's blind spots), so it is reserved for the three high-stakes cases:
+
+1. **Mutation/rollback-boundary diffs** — anything touching `actions.rs` / `history.rs` apply-rollback paths.
+2. **Gate flips** — arming Phase B/C/D, remote-fetch, updater, Receipts telemetry (stop-rule 3 requires
+   its own security review anyway), capability/CSP loosening.
+3. **Periodic state-drift audits** — the RELEASE_STATE-vs-docs-vs-code class that created RELEASE_STATE.md.
+
+**CC's standing duty (owner ask 2026-07-05): CC proactively TELLS the owner when a train crosses one
+of these three lines** ("this one's worth a Cowork audit — here's the handoff") — the owner doesn't
+have to judge it himself. Everything else, CC just verifies in-lane and reports.
+
 ## Current board / session log → archived
 
 The reverse-chronological board log + resume points were moved to
