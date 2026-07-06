@@ -166,15 +166,28 @@
   color: var(--v2-text);
 }
 
-/* The stage — hairline frame, ruler ticks, corner brackets, scanline field. Height mechanism
-   mirrors home-v2 (deslop #5 carried over): fill the flex-stretched frame, clamp floor. */
+/* The framed stage — ElectricBorder (hud-eb) supplies the animated frame (owner call,
+   round-2: the lightning border belongs around the hologram); the reduced-motion fallback
+   (hud-eb-frame) is the same geometry with a static accent hairline. Inside: ruler ticks,
+   corner brackets, scanline field. Height mechanism mirrors home-v2 (deslop #5 carried
+   over): fill the flex-stretched frame, clamp floor. */
+:root[data-v2="on"][data-hud="on"] .hud-eb {
+  flex: 1;
+}
+:root[data-v2="on"][data-hud="on"] .hud-eb .eb-content {
+  height: 100%;
+}
+:root[data-v2="on"][data-hud="on"] .hud-eb-frame {
+  flex: 1;
+  border: 1px solid var(--v2-accent-line);
+  border-radius: 3px;
+  overflow: hidden;
+}
 :root[data-v2="on"][data-hud="on"] .hud-stage {
   position: relative;
-  flex: 1;
   height: 100%;
   min-height: clamp(320px, 52vh, 520px);
   overflow: hidden;
-  border: 1px solid var(--hud-hairline-strong);
   border-radius: 3px;
   background: var(--v2-panel);
 }

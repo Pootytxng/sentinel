@@ -56,7 +56,8 @@ const gradeTone = (g: Grade): "ok" | "warn" | null =>
 
 // Resolve the v2 accent for canvas-drawing vendor components (they can't read var(--v2-accent)).
 // Falls back to the token default so a failed resolve still renders the approved violet.
-function useV2Accent(): string {
+// Exported: HomeHud frames its hologram bay with the same accent (ElectricBorder's one use).
+export function useV2Accent(): string {
   const [accent, setAccent] = useState("#a78bfa");
   useEffect(() => {
     try {
@@ -375,7 +376,8 @@ export function HomeV2({
           {reduced ? (
             <div className="hv2-hero-frame">{stage}</div>
           ) : (
-            // ElectricBorder's ONE sanctioned use (adopt list): the hero stage frame. Nowhere else.
+            // ElectricBorder's one sanctioned USE-CLASS (adopt list): the hologram stage frame —
+            // here and HomeHud's bay (the flag-switched render of the same room). Nowhere else.
             <ElectricBorder color={accent} speed={0.4} chaos={0.04} borderRadius={10} className="hv2-eb">
               {stage}
             </ElectricBorder>

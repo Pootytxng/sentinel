@@ -13,7 +13,9 @@ import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grad
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
+import { useV2Accent } from "./HomeV2";
 import CountUp from "../design/vendor/CountUp/CountUp";
+import ElectricBorder from "../design/vendor/ElectricBorder/ElectricBorder";
 import "./home-hud.css";
 
 // HomeHud — the pure Instrument-HUD pilot (spec 2026-07-05-ui-deslop-organic-directive,
@@ -142,6 +144,7 @@ export function HomeHud({
   onSeeInFix,
 }: Props) {
   const reduced = useReducedMotion();
+  const accent = useV2Accent();
 
   // ── live callout probes (existing read-only commands; a failure just omits the value) ──
   const [gpuTemp, setGpuTemp] = useState<number | null>(null);
@@ -465,7 +468,15 @@ export function HomeHud({
               )}
             </div>
           </header>
-          {stage}
+          {reduced ? (
+            <div className="hud-eb-frame">{stage}</div>
+          ) : (
+            // ElectricBorder's ONE sanctioned use (adopt list): the hologram stage frame —
+            // owner-requested back onto the HUD bay (2026-07-05 round-2 note). Nowhere else.
+            <ElectricBorder color={accent} speed={0.4} chaos={0.04} borderRadius={3} className="hud-eb">
+              {stage}
+            </ElectricBorder>
+          )}
         </section>
 
         {/* ── Telemetry column — numbers are the heroes; every one measured or absent ── */}
