@@ -280,6 +280,35 @@ export function applyLabGuided(on: boolean): void {
   }
 }
 
+// Lab bento checkup (spec 2026-07-05-lab-bento-checkup) — the Lab's face as a MagicBento grid
+// of station cards in bench order + a synthesized checkup report. DEFAULT OFF behind
+// `compy_lab_bento` (Settings → Appearance preview toggle, P-series contract): flag off,
+// today's Lab renders byte-identical in both guided states (test-pinned). Presentation +
+// synthesis only — the instruments, their reads, and the guided-bench data are untouched.
+const LAB_BENTO_KEY = "compy_lab_bento";
+
+export function readLabBento(): boolean {
+  try {
+    return localStorage.getItem(LAB_BENTO_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyLabBento(on: boolean): void {
+  try {
+    localStorage.setItem(LAB_BENTO_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:lab-bento-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction —
 // CORRECTED: editorial retired) — the pure operator-console/HUD redesign, piloted on Home.
 // DEFAULT OFF (Settings → Appearance preview toggle, the P-series contract): flag off, every

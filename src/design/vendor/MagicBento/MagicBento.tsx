@@ -107,7 +107,9 @@ const updateCardGlowProperties = (card: HTMLElement, mouseX: number, mouseY: num
   card.style.setProperty('--glow-radius', `${radius}px`);
 };
 
-const ParticleCard: React.FC<{
+// Local modification: exported so Compy surfaces (LabBento) can compose real cards from the
+// same interaction primitive instead of duplicating it — see THIRD_PARTY.md.
+export const ParticleCard: React.FC<{
   children: React.ReactNode;
   className?: string;
   disableAnimations?: boolean;

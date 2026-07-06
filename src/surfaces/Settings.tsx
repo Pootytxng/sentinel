@@ -10,6 +10,8 @@ import {
   readLivingInstrument,
   applyLivingInstrument,
   readLabGuided,
+  readLabBento,
+  applyLabBento,
   applyLabGuided,
   readHud,
   applyHud,
@@ -129,6 +131,7 @@ export default function Settings({
   const [ambiance, setAmbiance] = useState<Ambiance>(() => readAmbianceChoice() ?? "calm");
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
+  const [labBento, setLabBento] = useState<boolean>(readLabBento);
   const [hud, setHud] = useState<boolean>(readHud);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
@@ -171,6 +174,12 @@ export default function Settings({
   const changeLabGuided = (v: boolean) => {
     setLabGuided(v);
     applyLabGuided(v);
+  };
+  // Lab checkup bento preview — the Lab's face as a station-card grid in bench order + a
+  // synthesized checkup report. Presentation + synthesis only: same instruments, same readings.
+  const changeLabBento = (v: boolean) => {
+    setLabBento(v);
+    applyLabBento(v);
   };
   // Instrument-HUD preview — the de-slop redesign pilot (Home first; editorial retired,
   // CORRECTED direction). Presentation only: the same measured numbers, the same probes;
@@ -279,6 +288,18 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={labGuided} onChange={changeLabGuided} ariaLabel="Guided Lab bench preview" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Lab checkup bento (preview)</div>
+                  <div className="set-row-sub">
+                    Opens the Lab as a checkup room: station cards left to right in working
+                    order, plus a plain-English report of what your readings mean. Same
+                    instruments, same readings.
+                  </div>
+                </div>
+                <Toggle on={labBento} onChange={changeLabBento} ariaLabel="Lab checkup bento preview" />
               </div>
 
               <div className="set-row set-row-inset">

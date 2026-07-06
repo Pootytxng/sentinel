@@ -1,0 +1,220 @@
+/* Lab bento checkup (compy_lab_bento, spec 2026-07-05-lab-bento-checkup).
+   Token-only (--ix-*). The border glow reads --glow-rgb (theme accent, set inline by LabBento
+   from the computed --ix-accent — never a hardcoded color) + the --glow-x/y/intensity custom
+   props the pointer handler drives. No accent FILLS anywhere on the cards (number/state are
+   accent TEXT on the glass fill), so there is no ink-contrast hazard. */
+
+.lab-bento {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lab-bento-lede {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+.lab-bento-lede em {
+  font-style: normal;
+  color: var(--ix-accent);
+}
+
+.lab-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+@media (max-width: 1180px) {
+  .lab-bento-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .lab-bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.lab-bento-card {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+}
+.lab-bento-card:hover {
+  transform: translateY(-2px);
+}
+:root[data-motion="reduced"] .lab-bento-card,
+:root[data-motion="reduced"] .lab-bento-card:hover {
+  transition: none;
+  transform: none;
+}
+/* Cursor-following border glow — the MagicBento mechanism on the theme accent. Masked to the
+   border ring only; intensity fades with pointer distance (driven by LabBento's handler). */
+.lab-bento-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  background: radial-gradient(
+    240px circle at var(--glow-x) var(--glow-y),
+    rgba(var(--glow-rgb), calc(var(--glow-intensity) * 0.55)) 0%,
+    rgba(var(--glow-rgb), calc(var(--glow-intensity) * 0.25)) 35%,
+    transparent 65%
+  );
+  border-radius: inherit;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* The whole card is ONE door (doorknob law): a full-bleed button, plain-text inside. */
+.lab-bento-door {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lab-bento-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.lab-bento-n {
+  font-family: var(--ix-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ix-accent);
+  letter-spacing: 0.06em;
+}
+.lab-bento-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--ix-glass-border);
+}
+.lab-bento-led-read {
+  background: var(--ix-accent);
+  border-color: var(--ix-accent);
+  box-shadow: 0 0 6px rgba(var(--glow-rgb), 0.55);
+}
+.lab-bento-state {
+  margin-left: auto;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ix-text-3);
+}
+
+.lab-bento-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+.lab-bento-for {
+  font-size: 12px;
+  color: var(--ix-text-2);
+}
+/* Lab note — the discover-something layer: annotation grammar (italic, quietest ink). */
+.lab-bento-note {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed var(--ix-glass-border);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--ix-text-3);
+}
+
+/* ── Checkup report — the annotated summary panel ── */
+.lab-bento-report {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 14px 20px 16px;
+}
+.lab-bento-report-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.lab-bento-report-k {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ix-text-3);
+}
+.lab-bento-report-headline {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+.lab-bento-report-sub {
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
+.lab-bento-report-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lab-bento-report-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.lab-bento-line-name {
+  flex-shrink: 0;
+  width: 96px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ix-text-2);
+}
+.lab-bento-line-reading {
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
+.lab-bento-report-line-unread .lab-bento-line-name,
+.lab-bento-report-line-unread .lab-bento-line-reading {
+  color: var(--ix-text-3);
+}
+/* The ONE next step — accent text on the glass fill (no fill, no ink hazard). */
+.lab-bento-next {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ix-glass-border);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ix-accent);
+}

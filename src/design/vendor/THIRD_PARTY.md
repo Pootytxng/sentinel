@@ -28,7 +28,7 @@ the `main` branch.
 | ElectricBorder | Animations/ElectricBorder | ONE sanctioned use: hologram hero stage frame | LF-normalized, header added |
 | SpotlightCard | Components/SpotlightCard | Hover treatment, priority/finding cards | LF-normalized, header added |
 | GlareHover | Animations/GlareHover | Hover treatment (alternative — one of the two ships) | LF-normalized, header added |
-| MagicBento | Components/MagicBento | Home stats bento rhythm | LF-normalized, header added |
+| MagicBento | Components/MagicBento | Home stats bento rhythm; **Lab checkup bento** (`LabBento.tsx`, spec 2026-07-05-lab-bento-checkup) | LF-normalized, header added; **`ParticleCard` exported** so LabBento composes real station cards from the interaction primitive (theme-accent glow, tilt/magnetism off, reduced-motion gated) instead of duplicating it |
 | GooeyNav | Components/GooeyNav | Rail active-state candidate (vs PillNav — dev-build eval, loser deleted) | LF-normalized, header added |
 | PillNav | Components/PillNav | Rail active-state candidate (vs GooeyNav — dev-build eval, loser deleted) | LF-normalized, header added; **react-router-dom removed** — plain anchors + `onItemSelect` callback (Compy is router-less) |
 
