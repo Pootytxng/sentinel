@@ -20,29 +20,37 @@
 
 ## Gate matrix (re-verified at HEAD `733f132`, 2026-07-02 — every gate function re-read at source; states unchanged since `9463c10`. Still current at `4e07420` (2026-07-04): the V2 product-shell train `706094f..4e07420` (V2-1→V2-15) is **entirely frontend/docs — `git diff 706094f..4e07420 -- src-tauri/` is empty**, so no gate function, mutation/rollback path, or IPC/capability surface changed. Before that, `706094f`'s sole src-tauri change was readiness drift-reason copy + a read-only `drifted_titles` summary field (`readiness.rs` / `history.rs`; diff-verified: no gate moved))
 
+> **Re-verified 2026-07-06 at HEAD `8c9b711` — audit now mechanized.** Layer 1 (`node
+> scripts/verify-release-state.mjs`, new): six citations had drifted 77–253 lines (the preload-dark +
+> receipt-metadata trains grew `actions.rs`/`history.rs` above the cited symbols) — all re-anchored in
+> this pass; script exits 0. Layer 2 (source re-read of every gate fn body): **every gate VALUE
+> unchanged** — the only truth-level fix was quoting the literal CSP `connect-src` instead of a
+> simplified one. Standing rule: run the script after any train touching cited files
+> (`.claude/skills/gate-drift-audit`).
+
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:500` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **live reboot-while-active QA still owner-pending.** |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1350` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1421` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:174` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1435` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1506` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:178` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:1646` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Leftovers restore** | **DARK** (`false`) | `restore_gate()` — `leftovers.rs:727` | Double-dark; detector is read-only, restore path refused + `#[cfg(test)]` bypass only. |
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key); FE `pro.ts:14`, `entitlements.ts:14` | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
 | **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:96`; all-zeros pubkey `remote_rules.rs:84` | Double-gated: `verify_chain` ALSO hard-fails on the placeholder key (`remote_rules.rs:235`). Ed25519 verify is real but never runs in shipped builds. |
 | **Auto-updater** | **OFF / absent** | no `plugins`/`updater` block in `tauri.conf.json`; no updater dep in `Cargo.toml` | — |
-| **Outbound network** | **NONE** | no `reqwest`/`ureq`/`hyper`/HTTP client in `Cargo.toml`; CSP `connect-src 'self' ipc:` | Verified-zero-outbound property holds while Receipts + remote-fetch stay dark. |
+| **Outbound network** | **NONE** | no `reqwest`/`ureq`/`hyper`/HTTP client in `Cargo.toml`; CSP `connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420` (literal from `tauri.conf.json` — all local-only origins: Tauri IPC host + vite dev server; zero external origins) | Verified-zero-outbound property holds while Receipts + remote-fetch stay dark. |
 
 ## Mutation safety posture (unchanged LOCKED rules)
 
 - No kernel driver · no game injection · rollback-first · typed mutation allowlist
   (`KnownService`/`KnownBloatTask`/`AppliedAction`/`RollbackAction`/`Snapshot`, unknown inputs rejected).
-- Rollback resolves from `history.json` alone, never the live catalog (`history.rs:620`→`actions::resolve_rollback`).
+- Rollback resolves from `history.json` alone, never the live catalog (`history.rs:745`→`actions::resolve_rollback`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned
-  (`save_history_to` `history.rs:240`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:1737`).
+  (`save_history_to` `history.rs:320`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:1990`).
 - Elevation: relaunch `compy.exe --run-elevated <hex>` (windowless), 4-way honest UAC outcome
-  attribution (`elevation_outcome` `actions.rs:701`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
+  attribution (`elevation_outcome` `actions.rs:786`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
 
 ## Release blockers
 

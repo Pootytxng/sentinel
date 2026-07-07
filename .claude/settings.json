@@ -33,6 +33,17 @@
             "statusMessage": "self-review reminder"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/ship-reminder.mjs\"",
+            "timeout": 10,
+            "statusMessage": "ship-law reminder"
+          }
+        ]
       }
     ]
   }

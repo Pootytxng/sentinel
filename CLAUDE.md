@@ -206,6 +206,15 @@ to move each law OUT of memory INTO the toolchain (the chosen enforcement, 2026-
   `src/theme-contrast.test.ts`), else a `self-review` rubric item. Tiers: automated guard > forced
   rubric item > memory. Memories: [[always-self-review-visual-work]] · [[bug-becomes-guard]].
 
+### PROJECT SKILLS INDEX (2026-07-06 — Fable-window persistence pack)
+
+**`.claude/skills/INDEX.md`** maps every project skill (self-review · impeccable · compy-coverage-sweep
+· **mutation-gate · gate-drift-audit · ship · guard-forge · doc-sync** — the last five added 2026-07-06
+to persist judgment past the Fable window) to its trigger + cheapest executor model, plus tier-2
+spec'd-not-built skills. Consult it before mutation-boundary diffs, ships, state assertions, or bug
+fixes; `scripts/verify-release-state.mjs` mechanizes the RELEASE_STATE citation audit. A `ship-reminder`
+PostToolUse hook now nudges the reinstall law after any `tauri build`.
+
 ### SILENT REINSTALL IS MINE, NOT THE OWNER'S — automatic after every rebuild (standing LAW, 2026-06-26)
 
 The owner must **NEVER** run an installer himself, and must **never** have more than the ONE current

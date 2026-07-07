@@ -32,9 +32,11 @@
   Script now exits 0 (21/21 anchored).
 - [x] **`ship-reminder` PostToolUse(Bash) hook** — nudges the silent-reinstall law + RELEASE_STATE row
   after any `tauri build` (same pattern/throttle as self-review-reminder; behavior-tested pos+neg).
-- [ ] ⛔ **Commit this train from the CC lane (Windows-side)** — Cowork sandbox doesn't touch git
-  (FUSE .git view unreliable, standing memory). Everything above is working-tree only until then.
-  Suggested: `feat(toolchain): Fable persistence pack — 5 skills + INDEX + gate-drift script (6 citations re-anchored) + ship hook`.
+- [x] **Commit this train from the CC lane (Windows-side)** — committed 2026-07-07 from CC on `main`
+  as `feat(toolchain): Fable persistence pack — 5 skills + INDEX + gate-drift script (6 citations re-anchored) + ship hook`.
+  Verify script re-run at commit time: 22/22 citations anchored, exit 0. Note: `.claude/hooks/` is
+  gitignored (standing pattern — self-review-reminder is machine-local too), so the ship-reminder
+  hook SCRIPT stays local; only its settings.json registration is in git.
 
 ## 🔥 TOP PRIORITY LANE (owner directive 2026-07-05) — de-slop the UI, organic + unique
 
