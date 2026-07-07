@@ -56,8 +56,12 @@ The dev build runs two same-origin webviews + a small default window, so capture
    (`for (const fn of ['drawElements','drawArrays','drawElementsInstanced','drawArraysInstanced'])`
    patch `WebGL2RenderingContext.prototype[fn]` to increment `window.__glProbe.draws`), go to
    Home, hands off ≥15s → draw growth MUST be 0 (real sensor-data changes exempt — say so if
-   seen); then toggle Orbit on → draws MUST grow (the bay still animates on demand), toggle off.
-   STATE both numbers.
+   seen; a one-time ≤~6k settle burst within ~500ms of an orbit-off click is known-benign);
+   then toggle Orbit on → draws MUST grow (the bay still animates on demand), toggle off.
+   STATE both numbers. When the diff instead touches room-shell/nav or adds full-room overlay
+   layers (backdrop-filter, grain, scanline), also run the 5-leg rail switch circuit
+   (click → main-content-change ms, 16ms poll) and state the band — it must stay ≲50ms
+   (T1.5 #2 reference: 16–24ms on both the pre- and post-T4c installed builds).
 
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the

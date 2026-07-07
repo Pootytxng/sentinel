@@ -203,24 +203,44 @@ installed-build QA) · Gaming Mode reboot-while-active QA · code signing route 
 
 ---
 
-## TRAIN STATE (CC session handoff, 2026-07-06 ~22:35)
+## TRAIN STATE (CC session handoff, 2026-07-07 ~09:15 — T0–T4 + T1.5 SHIPPED + LIVE)
 
-All code is ON MAIN, pushed. T0 ✓ · T1 `8c9b711` ✓ · T2+T4a `8f37161` ✓ (self-review PASS
-end-to-end incl. fill-frame re-measure) · docs `b64f046` ✓ · T3+T4b `d170c66` ✓ (self-review
-PASS all items; the LiveCharts-duplication FAIL was fixed + guard-pinned + re-verified PASS
-live in both flag states) · T4c+T4d `bf76a07` — built, tsc clean, vitest 1071/1071, **visual
-self-review PENDING** (commit says so). GSAP approved but not used (zero-dep theater);
-`@react-three/postprocessing@3.0.4` added for T4d (THIRD_PARTY.md updated, per-origin
-vendor-hygiene guard extended).
+All code ON MAIN, pushed, **shipped + stamp-verified live**. T0 ✓ · T1 `8c9b711` ✓ · T2+T4a
+`8f37161` ✓ · docs `b64f046` ✓ · T3+T4b `d170c66` ✓ · **T4c+T4d `bf76a07` ✓ self-review PASS**
+(theme-accent tracking, explode/Glitch settle, reduced-motion pixel-identity, grain/glass/foil
+legibility) with ONE FAIL fixed: orbit-opt-in was hardcoded ON in HomeHud's copy of the control
+→ `3a078d1` + `hologram-orbit-optin-guard.test.tsx` (4 pins, red→green) · **T1.5 BOTH RESOLVED
+`b6687b3`**: #1 flicker = the idle-repaint class, GL-draw-probe diagnosed — old installed build
+~25.5k draws/sec at rest (fan-poll reference churn + unmemoized RigHologram re-commits) → **0
+draws/15s at rest on the NEW installed build**, orbit-on still animates (~30k/s); guards:
+`fan-sensors.test.ts` (5 pins) + self-reviewer **rubric item 8 "Canvas idle rest"** (+ the
+5-leg switch circuit for room-shell/overlay diffs) · #2 switch-lag: content-swap fast on BOTH
+builds (before 16–22ms / after 16.6–23.7ms, 5-leg circuit ×2) — T4c regresses nothing; the
+perceived lag's plausible mechanism was #1's churn; **owner eyeball = the final word on both**
+· Cowork docs folded `ce060ed`. **SHIPPED: installer SHA-256 `B29AB4…F4A186` built from
+`ce060ed`, live stamp `ce060ed · release` EXACT, one installer on the Desktop.** (First attempt
+from `e01db2d` stamped `+dirty` — docs WIP in tree at compile time; the measure-worker refused
+it, resolved by the fold + clean rebuild. GSAP approved but unused; `@react-three/
+postprocessing@3.0.4` vendored-in per THIRD_PARTY.md.)
 
-**Next steps, in order:** (1) dispatch `self-reviewer` for T4c (ambient-hud.css: grain/glass/
-holo-foil on the rooms + modals) and T4d (Home hologram bay v2: holo shell in theme accent,
-Bloom, explode-Glitch burst, orbit now opt-in, reduced-motion static) — fix anything it fails;
-(2) `npm run tauri build` then the `ship` skill (silent reinstall + stamp-verify, expect stamp
-= new HEAD); (3) `doc-sync`/RELEASE_STATE update (live-installer row; note Cowork lane also
-has uncommitted RELEASE_STATE/CLAUDE.md/.claude-skills WIP in the tree — do NOT sweep it);
-(4) T5 installed-build QA sweep if window remains. New flags (all default ON, Settings →
-Appearance): `compy_firstcheck_theater` · `compy_monitor_cards` · `compy_hologram_v2`.
+**Next steps, in order:**
+
+1. **T6 — START A FRESH SESSION** (mutation boundary, x-high, `mutation-gate` skill FIRST;
+   Cowork-audit-worthy diff). Diagnosis already DONE (this session): the ~5–6 prompts =
+   per-service `apply_service_suspend` (one elevation each, ≤4) + USB + PCIe (one each), fired
+   sequentially by `gaming_orchestrator::start` (`gaming_orchestrator.rs:108`). The audited
+   batching machinery ALREADY EXISTS: `ElevationDeferral` sink + `compose_batch_script` +
+   `parse_batch_receipts` (`actions.rs:613`→`:780`); mirror the production two-phase pattern of
+   `apply_recommendations_batch` (`history.rs:588-726`): phase-1 sink-armed applies with
+   cursor-range attribution → persist unelevated receipts → phase-2 ONE elevation, per-item
+   file receipts → confirm-then-record; UAC-decline = honest per-item skip. Session-semantics
+   decision at build time: today ANY apply error (incl. UAC-cancel) aborts + restores the WHOLE
+   session — preserve that exact no-partial contract under the batch. Guard: cargo pin ≤1
+   elevated invocation per session start (count at the dispatch layer) + no-partial +
+   exact-restore suites green.
+2. **T5 — REQUIRED** (beta ships from `main`, owner decision 2026-07-06): fresh installed-build
+   QA sweep, CC-runnable parts, AFTER T6 so it QAs the shipping UX; then prompt the owner for
+   GAMING_MODE_QA.md live case #4 (reboot-while-active, ~5 min, owner-run).
 
 ## Report format (standing)
 
