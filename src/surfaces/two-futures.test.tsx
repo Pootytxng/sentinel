@@ -19,18 +19,23 @@ vi.mock("./rig/TwoFuturesScene", () => ({
   default: () => <div data-testid="tf-scene" />,
 }));
 
+const NO_PAIR = {
+  running: false,
+  latest: null,
+  latest_at: null,
+  baseline: null,
+  baseline_at: null,
+  efficacy: null,
+  error: null,
+};
+
+// Settable benchmark state so the BenchmarkTab wiring can be pinned both without and WITH a
+// measured pair (the subsume guard below).
+const mocks = vi.hoisted(() => ({ bench: null as unknown }));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
-    if (cmd === "get_benchmark_state")
-      return Promise.resolve({
-        running: false,
-        latest: null,
-        latest_at: null,
-        baseline: null,
-        baseline_at: null,
-        efficacy: null,
-        error: null,
-      });
+    if (cmd === "get_benchmark_state") return Promise.resolve(mocks.bench ?? NO_PAIR);
     if (cmd === "get_applied_changes") return Promise.resolve([]);
     if (cmd === "get_recommendations") return Promise.resolve([]);
     if (cmd === "get_appliable_rec_ids") return Promise.resolve([]);
@@ -43,6 +48,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  mocks.bench = null;
 });
 
 const hw = {
@@ -175,6 +181,14 @@ describe("tier-1 source grep-guard — no fallback numbers, no demo data, v2 per
     expect(scene).toContain("autoRotate={false}");
   });
 
+  it("scene clamps orbit azimuth — the camera can never swap the rigs under the fixed heads", () => {
+    // bug→guard (self-review catch): unclamped azimuth let a drag rotate past ±90°, putting the
+    // Baseline rig under the "Now" head and vice versa.
+    const scene = readFileSync(join("src", "surfaces", "rig", "TwoFuturesScene.tsx"), "utf8");
+    expect(scene).toContain("minAzimuthAngle");
+    expect(scene).toContain("maxAzimuthAngle");
+  });
+
   it("the Two Futures CSS block stays on theme tokens (no raw hex — no invented palette)", () => {
     const css = readFileSync(join("src", "surfaces", "Benchmark.css"), "utf8");
     const tf = css.slice(css.indexOf("Two Futures measured split"));
@@ -205,6 +219,27 @@ describe("flag compy_two_futures — DEFAULT OFF", () => {
     expect(await c.findByText("Two futures")).toBeTruthy();
     expect(c.getByTestId("two-futures-empty")).toBeTruthy();
     expect(c.queryByTestId("tf-scene")).toBeNull();
+  });
+
+  // bug→guard (self-review catch): with the flag on AND a pair, the classic efficacy card
+  // rendered the same overall pill + the same 4 delta/verdict rows directly above the split.
+  // The split SUBSUMES it — one readout, not two adjacent copies.
+  it("flag on + measured pair: the split subsumes the efficacy card (no duplicate readout)", async () => {
+    mocks.bench = pair;
+    localStorage.setItem("compy_two_futures", "1");
+    const c = render(<BenchmarkTab />);
+    expect(await c.findByTestId("two-futures-split")).toBeTruthy();
+    expect(c.queryByText("Since your baseline")).toBeNull();
+    // The attribution line the efficacy card carried moved into the split.
+    expect(c.getByText(/No Compy changes recorded since the baseline/)).toBeTruthy();
+  });
+
+  it("flag off + measured pair: today's efficacy card renders unchanged, no split", async () => {
+    mocks.bench = pair;
+    const c = render(<BenchmarkTab />);
+    expect(await c.findByText("Since your baseline")).toBeTruthy();
+    expect(c.queryByText("Two futures")).toBeNull();
+    expect(c.queryByTestId("two-futures-split")).toBeNull();
   });
 });
 

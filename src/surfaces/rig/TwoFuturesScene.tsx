@@ -154,6 +154,11 @@ export default function TwoFuturesScene({
           maxDistance={30}
           minPolarAngle={0.2}
           maxPolarAngle={Math.PI / 1.9}
+          // Azimuth clamped (self-review catch): the DOM "Baseline"/"Now" heads are fixed, so
+          // the camera must never rotate far enough to swap which rig sits on-screen left vs
+          // right (swap point is ±90° — ±60° keeps a clear margin).
+          minAzimuthAngle={-Math.PI / 3}
+          maxAzimuthAngle={Math.PI / 3}
           autoRotate={false}
           target={[0, 0.2, 0]}
         />

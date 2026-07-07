@@ -336,14 +336,18 @@ export function BenchmarkTab() {
         {!err && state?.error && <span className="bench-err">{state.error}</span>}
       </div>
 
-      {showEfficacy && state?.efficacy && (
+      {/* Two Futures SUBSUMES the efficacy card when the flag is on (self-review catch: same
+          overall pill + the same 4 delta/verdict rows would render twice adjacently) — it
+          carries the full readout plus before/after values, the split rigs, and the change
+          attribution. Flag off renders today's card unchanged. */}
+      {showEfficacy && state?.efficacy && !twoFutures && (
         <EfficacyCard efficacy={state.efficacy} changes={changesSince} />
       )}
 
-      {/* Two Futures measured split — adjacent to the efficacy readout (where the data lives).
+      {/* Two Futures measured split — where the efficacy readout lives (spec placement).
           Flag DEFAULT OFF; with it on, the component itself enforces the one law (no measured
           pair → honest empty state, no 3D). */}
-      {twoFutures && <TwoFutures bench={state} hw={hw} />}
+      {twoFutures && <TwoFutures bench={state} hw={hw} changes={changesSince} />}
 
       {state?.latest && (
         <RunCard
