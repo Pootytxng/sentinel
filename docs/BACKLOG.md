@@ -72,9 +72,12 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   T4 owner-picked R&D components (`2026-07-06-design-rnd-options.md`) · T5 optional QA filler.
 - **RUNG 1 — DECIDED (owner, 2026-07-06): beta ships from CURRENT `main`** ("more complete in
   the way I want it"). Frozen `16069fa` stays archival. Consequence: RUNG 2 is now REQUIRED.
-- **RUNG 2 — REQUIRED before any send, in order:** ① single-prompt Gaming Mode elevation fix
-  (train T6 — owner-caught 5–6 UAC prompts on enable, 2026-07-06) → ② fresh full §6/§7
-  installed-build QA on the current installer (CC-runnable parts = train T5, now mandatory) →
+- **RUNG 2 — REQUIRED before any send, in order:** ① ✅ **single-prompt Gaming Mode elevation
+  fix DONE 2026-07-07 (T6)** — session-start advanced tier batches to ONE elevation
+  (`apply_elevated_tier`, gaming_orchestrator.rs; ≤1-dispatch cargo pin; no-partial +
+  UAC-decline honesty preserved; mutation-gate 10/10; stop/restore side still elevates
+  per change — out of T6 scope, flagged to owner) → ② fresh full §6/§7 installed-build QA
+  on the post-T6 installer (CC-runnable parts = train T5, now mandatory) →
   ③ **owner-run GAMING_MODE_QA.md live case #4** (start Gaming Mode → reboot → relaunch →
   confirm restore prompt → exact prior state back). ~5 min of owner time; the only
   live-checklist case a session cannot prove — run it against the post-T6 single-prompt build.

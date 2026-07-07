@@ -235,22 +235,26 @@ tsc 0 · vitest 1099/1099 · self-reviewer PASS (fresh full pass at eb5df81). De
 
 **Next steps, in order:**
 
-1. **T6 — START A FRESH SESSION** (mutation boundary, x-high, `mutation-gate` skill FIRST;
-   Cowork-audit-worthy diff). Diagnosis already DONE (this session): the ~5–6 prompts =
-   per-service `apply_service_suspend` (one elevation each, ≤4) + USB + PCIe (one each), fired
-   sequentially by `gaming_orchestrator::start` (`gaming_orchestrator.rs:108`). The audited
-   batching machinery ALREADY EXISTS: `ElevationDeferral` sink + `compose_batch_script` +
-   `parse_batch_receipts` (`actions.rs:613`→`:780`); mirror the production two-phase pattern of
-   `apply_recommendations_batch` (`history.rs:588-726`): phase-1 sink-armed applies with
-   cursor-range attribution → persist unelevated receipts → phase-2 ONE elevation, per-item
-   file receipts → confirm-then-record; UAC-decline = honest per-item skip. Session-semantics
-   decision at build time: today ANY apply error (incl. UAC-cancel) aborts + restores the WHOLE
-   session — preserve that exact no-partial contract under the batch. Guard: cargo pin ≤1
-   elevated invocation per session start (count at the dispatch layer) + no-partial +
-   exact-restore suites green.
-2. **T5 — REQUIRED** (beta ships from `main`, owner decision 2026-07-06): fresh installed-build
-   QA sweep, CC-runnable parts, AFTER T6 so it QAs the shipping UX; then prompt the owner for
-   GAMING_MODE_QA.md live case #4 (reboot-while-active, ~5 min, owner-run).
+1. ~~**T6**~~ — **BUILT 2026-07-07 (mutation-gate 10/10, fresh session as ordered).** The
+   advanced tier (USB + PCIe + ≤4 service suspends) now stages via the `ElevationDeferral`
+   sink → `compose_batch_script` → **ONE `run_elevated_powershell`** → per-item receipts
+   (`apply_elevated_tier`, gaming_orchestrator.rs). Session-semantics decision, as specced:
+   the no-partial contract is preserved EXACTLY — any apply error / receipt failure aborts +
+   restores the whole session. UAC-decline refinement: staged contract entries are dropped
+   ONLY when the elevated process verifiably never ran (`elevation_error_nothing_ran`,
+   conservative polarity — unknown errors keep + restore), so a decline stays a zero-extra-
+   prompt clean abort, exactly like pre-T6. Crash-safe ordering holds: staged changes hit the
+   on-disk contract BEFORE the elevation. Guards: `a_full_tier_dispatches_exactly_one_elevation`
+   (dispatch-layer ≤1 pin) · decline-drop/keep-core pin · every `resolve_tier_elevation` arm ·
+   classifier pins riding `elevation_outcome` · ignored owner-present `qa10` (real one-prompt
+   run) · qa5/qa9 no-partial suites unchanged-green. `SessionDirOverride` test seam keeps CI
+   runs off the live session file. Restore/stop side still elevates per change (out of T6
+   scope — flagged to owner).
+2. **T5 — REQUIRED, NEXT** (beta ships from `main`, owner decision 2026-07-06): fresh
+   installed-build QA sweep, CC-runnable parts, on the post-T6 installer so it QAs the
+   shipping UX; then prompt the owner for GAMING_MODE_QA.md live case #4
+   (reboot-while-active, ~5 min, owner-run — his single-prompt eyeball rides the same
+   session).
 
 ## Report format (standing)
 

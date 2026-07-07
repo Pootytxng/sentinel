@@ -40,9 +40,11 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       and **prompts to restore**; confirm → **exact prior state restored.** *(This is the one the
       automated harness cannot prove — it's the whole reason this checklist exists.)*
 - [ ] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
-- [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles
-      (these prompt UAC), start, and **cancel the UAC prompt.** → no partial state left; whatever core
-      items applied are rolled back; clear error; no session file lingering as `active` without a contract.
+- [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles,
+      start, and **cancel the single UAC prompt** (since T6, 2026-07-07, the whole advanced tier —
+      USB + PCIe + any service suspends — rides ONE prompt). → no partial state left; whatever core
+      items applied are rolled back **with no further prompts**; clear error; no session file
+      lingering as `active` without a contract.
 - [ ] **7. UAC cancel during RESTORE.** Trigger a restore that needs UAC (advanced tier applied) and
       **cancel it.** → status `RestoreFailed`, the contract is **retained**, a clear retry path is shown,
       and it **never reports success.** Retry → completes.
@@ -51,8 +53,10 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       silent fallback / wrong plan).
 - [ ] **9. External power-plan change mid-session.** Switch power plans manually (Windows) while Gaming
       Mode is active. Stop → restore still targets the **stored** prior GUID; honest about state.
-- [ ] **10. Advanced tier is opt-in + UAC-only.** Confirm the core bundle (power plan + Game Mode +
-      Game Bar) applies with **no UAC**; only USB-SS / PCIe-ASPM prompt.
+- [ ] **10. Advanced tier is opt-in + ONE UAC prompt total.** Confirm the core bundle (power plan +
+      Game Mode + Game Bar) applies with **no UAC**; selecting any mix of USB-SS / PCIe-ASPM /
+      service suspends fires **exactly ONE prompt** at start (T6; stop/restore still prompts per
+      elevated change — expected for now).
 
 ---
 

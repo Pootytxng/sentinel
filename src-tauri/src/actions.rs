@@ -630,6 +630,26 @@ thread_local! {
     static FORCE_ELEVATION_ERROR: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
 }
 
+// Test-only: counts `run_elevated_powershell` invocations that get past the deferral sink on this
+// thread — the dispatch-layer stand-in for "how many UAC prompts would the user have seen". The
+// T6 gaming-session guard asserts this stays ≤1 across a whole session start. Never shipped.
+#[cfg(test)]
+thread_local! {
+    static ELEVATION_DISPATCH_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Read this thread's would-be-prompt count (test-only; see `ELEVATION_DISPATCH_COUNT`).
+#[cfg(test)]
+pub(crate) fn elevation_dispatch_count() -> usize {
+    ELEVATION_DISPATCH_COUNT.with(|c| c.get())
+}
+
+/// Zero this thread's would-be-prompt count at the start of a guard test (test-only).
+#[cfg(test)]
+pub(crate) fn reset_elevation_dispatch_count() {
+    ELEVATION_DISPATCH_COUNT.with(|c| c.set(0));
+}
+
 /// RAII guard that makes elevation fail on this thread for the guard's lifetime (test-only).
 #[cfg(test)]
 pub(crate) struct ForceElevationError;
@@ -722,8 +742,9 @@ impl Drop for ElevationDeferral {
 /// where an apply deliberately tolerates a step, still overrides — same semantics as today's
 /// per-item elevation). Rec ids pass `ps_safe` (allowlist shape) and the result path is
 /// single-quote-escaped; the captured commands themselves come from the audited apply_* builders
-/// unchanged. No `exit` may appear at this layer — the only exit-using elevated command
-/// (power-ultimate) is rejected by the orchestrator before composition.
+/// unchanged. No `exit` may appear at this layer — enforced structurally below (an exit-bearing
+/// command is refused at compose time; the one exit-using elevated command, power-ultimate, is
+/// ALSO rejected by the Fix orchestrator before composition ever sees it).
 pub(crate) fn compose_batch_script(
     items: &[(String, Vec<String>)],
     result_path: &str,
@@ -738,6 +759,16 @@ pub(crate) fn compose_batch_script(
         if cmds.is_empty() {
             return Err(format!("rec '{}' deferred no commands", rec_id));
         }
+        // Defense-in-depth at the COMPOSE layer (both callers): a PowerShell `exit` would kill
+        // the whole elevated process mid-script, silencing every sibling's receipt. Callers
+        // already keep exit-using commands out (history.rs hard-rejects power-ultimate; the
+        // gaming tier's three applies never exit) — this makes the property structural.
+        if cmds.iter().any(|c| contains_exit_token(c)) {
+            return Err(format!(
+                "rec '{}' uses an exit-style command that cannot ride a batch — apply it individually",
+                rec_id
+            ));
+        }
         let joined = cmds
             .iter()
             .map(|c| c.trim().trim_end_matches(';').trim_end())
@@ -748,6 +779,15 @@ pub(crate) fn compose_batch_script(
         ));
     }
     Ok(script)
+}
+
+/// PURE: whether a command contains a standalone `exit` token (case-insensitive). Tokenizes on
+/// non-identifier characters so `-ExitCode` / `$exitStatus` never false-positive, while `exit`,
+/// `exit 1` and `; exit;` all match.
+fn contains_exit_token(cmd: &str) -> bool {
+    cmd.to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-')
+        .any(|tok| tok == "exit")
 }
 
 /// Parse the batch result file: one `<rec_id>:ok` / `<rec_id>:fail` line per rec. Unknown or
@@ -798,6 +838,22 @@ pub(crate) fn elevation_outcome(
     }
 }
 
+/// Whether a `run_elevated_powershell` error PROVES the elevated process never executed — a
+/// launch-level failure (UAC decline, spawn error, or one of the two pre-launch refusals), as
+/// opposed to "the process ran and failed". Callers that recorded pending changes BEFORE the
+/// elevation (the gaming-session batch) may drop them only when this is true; the polarity is
+/// deliberately conservative — an UNRECOGNIZED error returns false, so anything ambiguous keeps
+/// its contract entries and gets restored (rollback to a captured prior is a no-op for anything
+/// that never actually changed). The recognized strings all originate in THIS file
+/// (`elevation_outcome` + the two pre-launch checks) and are pinned by tests that construct them
+/// through `elevation_outcome` itself, so they cannot silently drift apart.
+pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
+    err == ELEVATION_DECLINED_MSG
+        || err.starts_with("could not launch elevated process")
+        || err.starts_with("cannot find own exe")
+        || err.starts_with("elevated command is too long to dispatch")
+}
+
 pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     // §4 batching: an armed sink on THIS thread captures instead of elevating (see above).
     let deferred = ELEVATION_SINK.with(|s| {
@@ -811,6 +867,13 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     if deferred {
         return Ok(());
     }
+    // Test-only: count every invocation that gets PAST the sink — i.e. every call that would show
+    // a UAC prompt in production (the decline/direct seams below still count: they stand in for a
+    // real dispatch; the two pre-launch refusals further down count too — over-counting only makes
+    // the ≤1 guard stricter). This is the dispatch-layer evidence for the "≤1 elevation per
+    // gaming-session start" guard; a sink-captured call above is deliberately NOT counted.
+    #[cfg(test)]
+    ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
     // Test-only seam: deterministically simulate a UAC DECLINE without spawning runas (which would
     // pop a real Secure-Desktop prompt). Returns the same constant as a real decline so the
     // simulated and real paths can't drift. `#[cfg(test)]` removes it from the shipped binary.
@@ -1052,6 +1115,22 @@ mod batch_elevation_tests {
     }
 
     #[test]
+    fn compose_structurally_refuses_exit_bearing_commands() {
+        // A PowerShell `exit` would kill the elevated process mid-script and silence every
+        // sibling's receipt — refused at COMPOSE time (defense-in-depth for both batch callers).
+        for cmd in ["exit", "exit 1", "powercfg /x; exit", "cmdA; Exit; cmdB"] {
+            let items = vec![("power-x".to_string(), vec![cmd.to_string()])];
+            let err = compose_batch_script(&items, "rf").expect_err("exit must be refused");
+            assert!(err.contains("cannot ride a batch"), "got: {err}");
+        }
+        // Identifier lookalikes are NOT exits — never false-positive on legitimate tokens.
+        for cmd in ["cmd -ExitCode 0", "$exitStatus = 1", "Write-Output exit-lane"] {
+            let items = vec![("power-x".to_string(), vec![cmd.to_string()])];
+            assert!(compose_batch_script(&items, "rf").is_ok(), "false positive on: {cmd}");
+        }
+    }
+
+    #[test]
     fn parse_receipts_maps_ok_fail_and_ignores_garbage() {
         let r = parse_batch_receipts("fast-startup-off:ok\nhags-enable:fail\n\nnot a receipt\nx:maybe\n");
         assert_eq!(r.get("fast-startup-off"), Some(&true));
@@ -1129,6 +1208,35 @@ mod elevation_attribution_tests {
             .expect_err("launch failure is an error");
         assert!(err.contains("could not launch elevated process"), "got: {err}");
         assert!(!err.to_lowercase().contains("cancel"), "got: {err}");
+    }
+
+    // ── `elevation_error_nothing_ran` — the T6 batch's drop-staged license ──────────────
+    // Every "true" case is constructed THROUGH `elevation_outcome` (or is the literal pre-launch
+    // refusal string from `run_elevated_powershell`), so classifier and producer cannot drift.
+
+    #[test]
+    fn launch_level_failures_classify_as_nothing_ran() {
+        use super::elevation_error_nothing_ran;
+        // A UAC decline is a LAUNCH error — the elevated process never existed.
+        let decline = elevation_outcome(Err(std::io::Error::from_raw_os_error(1223))).unwrap_err();
+        assert!(elevation_error_nothing_ran(&decline));
+        // Any other spawn failure: also never executed.
+        let spawn = elevation_outcome(Err(std::io::Error::from_raw_os_error(2))).unwrap_err();
+        assert!(elevation_error_nothing_ran(&spawn));
+        // The two pre-launch refusals in run_elevated_powershell (checked before any spawn).
+        assert!(elevation_error_nothing_ran("cannot find own exe: os error 2"));
+        assert!(elevation_error_nothing_ran("elevated command is too long to dispatch"));
+    }
+
+    #[test]
+    fn ran_and_failed_or_unknown_errors_conservatively_classify_as_may_have_run() {
+        use super::elevation_error_nothing_ran;
+        // Non-zero exit = the process RAN — staged contract entries must be kept + restored.
+        let ran = elevation_outcome(Ok(ExitStatus::from_raw(1))).unwrap_err();
+        assert!(!elevation_error_nothing_ran(&ran));
+        // Unrecognized error text: fail-safe direction is "assume it may have run".
+        assert!(!elevation_error_nothing_ran("some future error nobody classified"));
+        assert!(!elevation_error_nothing_ran(""));
     }
 }
 

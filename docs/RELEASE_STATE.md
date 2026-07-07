@@ -31,10 +31,10 @@
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:500` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **live reboot-while-active QA still owner-pending.** |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1435` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1506` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:178` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
-| **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:1646` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1506` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. Since T6 (2026-07-07) session-start suspends ride the ONE batched elevation. |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1577` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:188` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:1717` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Leftovers restore** | **DARK** (`false`) | `restore_gate()` — `leftovers.rs:727` | Double-dark; detector is read-only, restore path refused + `#[cfg(test)]` bypass only. |
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key); FE `pro.ts:14`, `entitlements.ts:14` | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
@@ -50,7 +50,13 @@
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned
   (`save_history_to` `history.rs:320`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:1990`).
 - Elevation: relaunch `compy.exe --run-elevated <hex>` (windowless), 4-way honest UAC outcome
-  attribution (`elevation_outcome` `actions.rs:786`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
+  attribution (`elevation_outcome` `actions.rs:806`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
+- Gaming-session advanced tier (USB + PCIe + service suspends) batches to **ONE elevation per
+  session start** (T6, 2026-07-07): sink-staged applies → `compose_batch_script` → single
+  `run_elevated_powershell` → per-item receipts (`apply_elevated_tier`,
+  `gaming_orchestrator.rs:187`). No-partial abort+restore contract unchanged; UAC-decline drops
+  only verifiably-never-ran staged entries (`elevation_error_nothing_ran` `actions.rs:830`);
+  dispatch-layer guard `a_full_tier_dispatches_exactly_one_elevation`.
 
 ## Release blockers
 
@@ -59,7 +65,7 @@
 | Manual-mutation apply/rollback QA | **CLOSED** 2026-05-31 (owner sign-off) — `RELEASE_QA.md:3`. NOT an open blocker. |
 | Private-beta functional blockers | **NONE** for the frozen `16069fa` build (`PACKAGING_SIGNING_PLAN.md:131`). Current `main` wants its own fresh installed-build QA if shipped. |
 | Gaming Mode live reboot-while-active QA | **OPEN (owner)** — needs a physical reboot test before broad ship. Sequenced AFTER the T6 single-prompt fix (below) so it QAs the shipping UX. |
-| Gaming Mode enable fires ~5–6 UAC prompts | **OPEN** — owner-caught 2026-07-06 ("unacceptable"). Fix = batch session-start elevated work into ONE `--run-elevated` invocation (2026-07-06 train T6; mutation-boundary, full rigor; UAC *policy* settings untouched per standing rule). Gates the reboot QA + beta send. |
+| Gaming Mode enable fires ~5–6 UAC prompts | **CLOSED (code) 2026-07-07** — T6 built: session-start elevated tier batches into ONE `--run-elevated` invocation (`apply_elevated_tier`, `gaming_orchestrator.rs:187`; ≤1-dispatch cargo pin; no-partial contract + UAC-decline honesty preserved; UAC *policy* settings untouched per standing rule). Owner's live single-prompt eyeball rides the reboot-QA session (case #4). |
 | Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
 | Legal (EULA license model + jurisdiction, PRIVACY) | **OPEN** — gates PUBLIC release. DRAFTS only. |
 | Receipts security review + consent UI + payload preview + kill switch | **OPEN** — gates arming Receipts telemetry. |

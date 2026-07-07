@@ -282,7 +282,7 @@ export function GamingMode() {
               ))}
             </ul>
             <div className="gaming-advanced">
-              <div className="gaming-diff-title">Advanced (optional · adds a UAC prompt):</div>
+              <div className="gaming-diff-title">Advanced (optional · one admin OK covers everything below):</div>
               <label className="gaming-toggle">
                 <input
                   type="checkbox"
@@ -300,7 +300,7 @@ export function GamingMode() {
                 PCIe ASPM off (AC)
               </label>
               <div className="gaming-diff-title gaming-subgroup">
-                Suspend background services (optional · per session · adds a UAC prompt):
+                Suspend background services (optional · per session · same single admin OK):
               </div>
               {SUSPENDABLE_SERVICES.map((s) => (
                 <label className="gaming-toggle" key={s.name}>

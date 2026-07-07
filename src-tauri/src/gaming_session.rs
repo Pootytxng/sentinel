@@ -93,8 +93,48 @@ pub(crate) fn parse_session_json(s: &str) -> Option<SessionFile> {
     Some(f)
 }
 
+// Test-only: redirects THIS thread's session file (and the orchestrator's session-scoped batch
+// receipts, which live beside it) into a private temp dir, so CI-safe tests can exercise the REAL
+// save/load/clear path without ever touching a live session on the rig. Same RAII idiom as the
+// actions.rs seams (ForceElevationError etc.); never compiled into the shipped binary.
+#[cfg(test)]
+thread_local! {
+    static SESSION_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard installing the session-dir redirect on this thread for its lifetime (test-only).
+#[cfg(test)]
+pub(crate) struct SessionDirOverride;
+
+#[cfg(test)]
+impl SessionDirOverride {
+    pub(crate) fn begin(dir: &std::path::Path) -> Self {
+        SESSION_DIR_OVERRIDE.with(|s| *s.borrow_mut() = Some(dir.to_path_buf()));
+        SessionDirOverride
+    }
+}
+
+#[cfg(test)]
+impl Drop for SessionDirOverride {
+    fn drop(&mut self) {
+        SESSION_DIR_OVERRIDE.with(|s| *s.borrow_mut() = None);
+    }
+}
+
+/// The directory the session contract lives in — the app data dir in production; the thread's
+/// override under test. The orchestrator also parks its session-scoped elevation receipts here,
+/// keeping every session-lifetime artifact on the same redirect.
+pub(crate) fn session_data_dir() -> PathBuf {
+    #[cfg(test)]
+    if let Some(d) = SESSION_DIR_OVERRIDE.with(|s| s.borrow().clone()) {
+        return d;
+    }
+    crate::compy_data_dir()
+}
+
 fn session_path() -> PathBuf {
-    crate::compy_data_dir().join(GAMING_SESSION_FILE)
+    session_data_dir().join(GAMING_SESSION_FILE)
 }
 
 /// Load the on-disk session, if any. None on absent / corrupt / old-schema.
