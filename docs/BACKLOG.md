@@ -642,8 +642,18 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   [[detection-feasibility-walls-usermode]]). `amd_freesync.rs` ADLX FFI is read-only (FreeSync), no write path.
   Can't snapshot the true prior → must REFUSE per [[mutation-snapshot-failsafe-idiom]], not apply. Only `KMD_Chill*`
   is readable (low-value, driver-fragile). Excluded unless a full vendor-SDK write+read path is built (big project).
-- [ ] bloat removal (user-UWP uninstall + `HKCU\Run` cleanup; NO Defender/Policy) — **the ONLY genuinely-buildable
-  remaining Phase-B item; owner-nod-gated + highest blast radius** (uninstalls apps + edits Run keys). Not started.
+- [BUILT-DARK 2026-07-06] bloat removal → **preload-app removal** — owner nod given 2026-07-06 after a scope
+  discussion (spec `docs/superpowers/specs/2026-07-06-preload-app-removal-dark.md`): the `HKCU\Run` DELETION half
+  was **dropped** (the reversible startup disable already ships — `set_startup_entry_enabled`, same flag Task
+  Manager flips; deleting the leftover line buys tidiness at real rollback cost) and the buildable half is
+  **per-user UWP preload-app removal**, now built dark: `KnownPreloadApp` typed allowlist (5-app starter set,
+  Store-published + no-user-data rules; Clipchamp/To Do excluded as data-adjacent), `preload_removal_gate()`==false,
+  snapshot-or-refuse apply (live PackageFullName/FamilyName/Version read, verified-gone re-read), two-tier honest
+  undo (silent re-register verified by re-read, else Store-page hand-off returns Err so the ledger entry stays
+  active), gated `remove_known_preload_app` + read-only `get_preload_apps`, dark-safe `PreloadApps` Fix card
+  (renders nothing while dark, test-pinned). **Arming rides its own gate:** live QA harness
+  (`qa_remove_then_reinstall_round_trip`, #[ignore]) + Store ProductId link-verification + owner curates the final
+  list + explicit sign-off.
 - [~] one-click re-apply (`APPLIABLE_REC_IDS`) — **covered:** `apply_recommendations_batch` (`history.rs:528`,
   validates `APPLIABLE_REC_IDS`, single-consent + ONE UAC) wired at `App.tsx:772` on the QA-closed apply path.
   A dedicated "re-apply everything that drifted off in one click" button would be a small UI add on top if wanted.

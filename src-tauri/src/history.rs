@@ -178,6 +178,8 @@ fn applied_label_from_action(action: &Option<AppliedAction>) -> Option<String> {
         SuspendKnownService { .. } => "Stopped",
         DisableKnownService { .. } | DisableNagleOnActiveNics
         | DisableEnergyEfficientEthernet | DisableScheduledTask { .. } => "Disabled",
+        // Honest wording: the app is removed for THIS USER, not wiped from the machine.
+        RemovePreloadApp { .. } => "Removed for this user",
         // Leftovers v2 restores all return a setting to its Windows stock default.
         RestoreMemoryCompressionDefault | RestoreMmcssDefaults | RestorePrioritySeparationDefault
         | RestoreMpoDefault | RestoreCoreParkingDefault | RestoreTcpAutotuningDefault
@@ -213,8 +215,9 @@ fn payoff_label_from_action(action: &Option<AppliedAction>) -> Option<&'static s
         SetUltimatePerformancePlan | DisableUsbSelectiveSuspendOnAc | DisablePcieAspmOnAc => {
             "Power & thermal headroom"
         }
-        // Disk headroom reclaimed on the boot volume.
-        DisableReservedStorage => "Disk headroom",
+        // Disk headroom reclaimed on the boot volume. A removed preload app is the same honest
+        // kind: space (and any background refresh it did) back — never a fabricated FPS figure.
+        DisableReservedStorage | RemovePreloadApp { .. } => "Disk headroom",
         // Not a frame/latency gain — a reliability one: a clean cold boot each time.
         DisableFastStartup => "Clean-boot reliability",
         // Restore-to-stock leftovers carry NO forward payoff claim (undoing a bad past tweak is not
@@ -485,6 +488,32 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
     let change = build_applied_change(
         &format!("bloat-task:{}", task_id),
         &format!("Disable telemetry task ({})", task_id),
+        result,
+    )?;
+    history.push(change.clone());
+    save_history(&history)?;
+    Ok(into_view(change))
+}
+
+/// Phase-B preload-app removal (BUILT DARK 2026-07-06). Gated by `preload_removal_gate()` — refuses
+/// until the feature's own live QA (remove→reinstall round trip, Store links verified) + the owner's
+/// curated-list + arming sign-off (the owner's 2026-07-06 nod covered BUILDING it, LOCKED-rule-6).
+/// Reuses the audited apply/record path: the typed snapshot lands in the ledger, so the restore flows
+/// through the normal `rollback_change` → `dispatch_rollback` path (the `ReinstallPreloadApp` arm).
+/// `KnownPreloadApp::from_id` enforces the allowlist (off-list → refused before anything runs).
+#[tauri::command]
+pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeView, String> {
+    if !crate::actions::preload_removal_gate() {
+        return Err("Preinstalled-app removal isn't enabled in this build.".to_string());
+    }
+    let app = crate::actions::KnownPreloadApp::from_id(&app_id)
+        .ok_or_else(|| format!("'{}' isn't a Compy-removable preinstalled app.", app_id))?;
+    let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
+    let mut history = load_history()?;
+    let result = crate::actions::apply_remove_preload_app(app)?;
+    let change = build_applied_change(
+        &format!("preload-app:{}", app_id),
+        &format!("Remove preinstalled app ({})", app_id),
         result,
     )?;
     history.push(change.clone());

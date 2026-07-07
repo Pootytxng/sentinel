@@ -811,6 +811,30 @@ pub(crate) fn startup_entries() -> Vec<StartupEntry> {
     entries
 }
 
+// ── Phase-B preload-app removal (BUILT DARK) — read-only listing probe ──
+// Which curated preload apps are installed for this user + whether the feature is armed. The FE
+// card renders NOTHING unless armed && something installed, so the UI ships dark-safe; while the
+// gate is dark this doesn't even enumerate (zero PowerShell spawns in shipped builds).
+#[derive(Serialize)]
+struct PreloadAppsView {
+    armed: bool,
+    installed: Vec<String>,
+}
+
+#[tauri::command]
+fn get_preload_apps() -> PreloadAppsView {
+    let armed = actions::preload_removal_gate();
+    let installed = if armed {
+        actions::installed_preload_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    PreloadAppsView { armed, installed }
+}
+
 #[tauri::command]
 fn set_startup_entry_enabled(name: String, enabled: bool) -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -938,6 +962,8 @@ pub fn run() {
             history::apply_recommendations_batch,
             history::suspend_known_service,
             history::disable_known_bloat_task,
+            history::remove_known_preload_app,
+            get_preload_apps,
             rollback_change,
             get_applied_changes,
             get_startup_entries,

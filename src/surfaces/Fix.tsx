@@ -475,6 +475,82 @@ function DebloatTasks({ onWhatsThis }: { onWhatsThis: (id: string) => void }) {
   );
 }
 
+// Phase-B preload-app removal (BUILT DARK — the backend's preload_removal_gate() is false until its
+// own QA + owner sign-off). Ids match the Rust `KnownPreloadApp::from_id` allowlist — the backend
+// re-enforces it, so nothing off-list (never the Store, Game Bar, or a data-bearing app) can be
+// passed. Removal is for THIS USER only; undo lives in History (silent re-register when Windows
+// still has the files, else Compy opens the app's Store page to finish).
+export const PRELOAD_APPS: { id: string; label: string; what: string }[] = [
+  { id: "solitaire-collection", label: "Solitaire Collection", what: "preinstalled card-game bundle" },
+  { id: "feedback-hub", label: "Feedback Hub", what: "collects Windows feedback and diagnostic reports for Microsoft" },
+  { id: "bing-news", label: "Microsoft News", what: "preinstalled news-feed app" },
+  { id: "office-hub", label: "Microsoft 365 (Office) hub", what: "launcher for Office web apps" },
+  { id: "spotify-preload", label: "Spotify (preinstalled)", what: "the Store stub Windows ships — your account and playlists live on Spotify's side" },
+];
+
+// Renders NOTHING unless the backend reports the feature armed AND at least one curated app is
+// installed for this user — so shipping it dark changes zero pixels (no flag needed; the gate IS
+// the switch, and the same probe lights the card up the commit the gate arms).
+function PreloadApps() {
+  const [view, setView] = useState<{ armed: boolean; installed: string[] } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [state, setState] = useState<Record<string, "done" | string>>({});
+  useEffect(() => {
+    invoke<{ armed: boolean; installed: string[] }>("get_preload_apps")
+      .then(setView)
+      .catch(() => setView(null));
+  }, []);
+  if (!view?.armed) return null;
+  const rows = PRELOAD_APPS.filter((a) => view.installed.includes(a.id));
+  if (rows.length === 0) return null;
+  const remove = async (id: string) => {
+    setBusy(id);
+    try {
+      await invoke("remove_known_preload_app", { appId: id });
+      setState((s) => ({ ...s, [id]: "done" }));
+    } catch {
+      // Plain-English, honest: nothing changed on a refusal/failure.
+      setState((s) => ({
+        ...s,
+        [id]: "Couldn't remove it — nothing changed; try again.",
+      }));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <CollapsibleSection title="Preinstalled apps" count={rows.length}>
+      <p className="fix-refuse-intro">
+        Remove Store apps Windows preinstalled — for this user account only, reversible from History
+        (Windows restores it silently when it can; otherwise Compy opens the app&apos;s Store page to
+        finish). Compy only ever touches this curated list; never the Store itself, Xbox Game Bar, or
+        an app holding your files.
+      </p>
+      <ul className="fix-list">
+        {rows.map((a) => {
+          const st = state[a.id];
+          const done = st === "done";
+          const err = st && st !== "done" ? st : null;
+          return (
+            <li className="fix-row fix-row-advisory" key={a.id}>
+              <div className="fix-row-main">
+                <span className="fix-row-title fix-row-title-friendly">
+                  <span className="fix-row-headline">{a.label}</span>
+                  <span className="fix-row-tech">{a.what}</span>
+                </span>
+                {err && <p className="fix-row-reason">{err}</p>}
+              </div>
+              <button className="btn btn-small" disabled={busy === a.id || done} onClick={() => remove(a.id)}>
+                {done ? "Removed · undo in History" : busy === a.id ? "Removing…" : "Remove"}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </CollapsibleSection>
+  );
+}
+
 // A guided/advisory rec — Compy detected it but won't change it (vendor app / a Windows page with no
 // safe reversible switch). Carries the full where + steps + the allowlisted "Open it" deep link, so
 // classic Optimize is no longer needed for the detail (parity for the release default-flip).
@@ -1351,6 +1427,7 @@ export default function Fix({
 
       {/* Telemetry-task disable (Phase B, ARMED) — curated CEIP tasks; reversible via the Trust Ledger. */}
       <DebloatTasks onWhatsThis={onOpenLibrary} />
+      <PreloadApps />
       </>
       )}
 

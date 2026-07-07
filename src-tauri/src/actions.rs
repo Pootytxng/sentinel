@@ -110,6 +110,74 @@ impl KnownBloatTask {
     }
 }
 
+/// Allowlist of preinstalled Store apps Compy may remove FOR THE CURRENT USER ONLY — Phase-B
+/// "bloat removal", owner nod 2026-07-06 (spec `docs/superpowers/specs/2026-07-06-preload-app-removal-dark.md`).
+/// Membership rules, ALL must hold: still published in the Microsoft Store (genuinely re-gettable) ·
+/// no meaningful local user data (Mail/Photos/Sticky Notes/OneNote excluded forever; Clipchamp +
+/// To Do deliberately left off as data-adjacent) · never a framework/dependency, never the Store
+/// itself, never Xbox Game Bar / Gaming Services, never anything security-related. The owner
+/// curates this set before the feature is EVER armed (`preload_removal_gate()`=false until then),
+/// so nothing AI-guessed ships. Type-enforced: only these apps are ever removable.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum KnownPreloadApp {
+    SolitaireCollection,
+    FeedbackHub,
+    BingNews,
+    OfficeHub,
+    Spotify,
+}
+
+impl KnownPreloadApp {
+    pub(crate) const ALL: [KnownPreloadApp; 5] = [
+        KnownPreloadApp::SolitaireCollection,
+        KnownPreloadApp::FeedbackHub,
+        KnownPreloadApp::BingNews,
+        KnownPreloadApp::OfficeHub,
+        KnownPreloadApp::Spotify,
+    ];
+
+    /// The Appx package Name (`Get-AppxPackage -Name`) — fixed, well-known identifiers.
+    pub(crate) fn package_name(&self) -> &'static str {
+        match self {
+            KnownPreloadApp::SolitaireCollection => "Microsoft.MicrosoftSolitaireCollection",
+            KnownPreloadApp::FeedbackHub => "Microsoft.WindowsFeedbackHub",
+            KnownPreloadApp::BingNews => "Microsoft.BingNews",
+            KnownPreloadApp::OfficeHub => "Microsoft.MicrosoftOfficeHub",
+            KnownPreloadApp::Spotify => "SpotifyAB.SpotifyMusic",
+        }
+    }
+
+    /// Microsoft Store ProductId for the tier-2 rollback hand-off (`ms-windows-store://pdp/`).
+    /// CURATED data, not a runtime read — every id must be live-verified (link opened, right app
+    /// confirmed) during the arming QA before `preload_removal_gate()` ever flips.
+    pub(crate) fn store_product_id(&self) -> &'static str {
+        match self {
+            KnownPreloadApp::SolitaireCollection => "9WZDNCRFHWD2",
+            KnownPreloadApp::FeedbackHub => "9NBLGGH4R32N",
+            KnownPreloadApp::BingNews => "9WZDNCRFHVFW",
+            KnownPreloadApp::OfficeHub => "9WZDNCRD29V9",
+            KnownPreloadApp::Spotify => "9NCBCSZSJRSB",
+        }
+    }
+
+    /// The stable id the FE + ledger use (`preload-app:<id>` receipts).
+    pub(crate) fn id(&self) -> &'static str {
+        match self {
+            KnownPreloadApp::SolitaireCollection => "solitaire-collection",
+            KnownPreloadApp::FeedbackHub => "feedback-hub",
+            KnownPreloadApp::BingNews => "bing-news",
+            KnownPreloadApp::OfficeHub => "office-hub",
+            KnownPreloadApp::Spotify => "spotify-preload",
+        }
+    }
+
+    /// Map an id to the type-enforced allowlist — rejects everything off-list (the Store, Game Bar,
+    /// Defender, data-bearing apps, arbitrary package names can never be passed).
+    pub(crate) fn from_id(id: &str) -> Option<KnownPreloadApp> {
+        KnownPreloadApp::ALL.iter().find(|a| a.id() == id).cloned()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub(crate) enum AppliedAction {
@@ -147,6 +215,9 @@ pub(crate) enum AppliedAction {
     // OS-debloat (BUILT DARK): disable a well-known telemetry scheduled task. Reversible via
     // EnableScheduledTask. ONLY the curated KnownBloatTask set (no Defender / policy).
     DisableScheduledTask { task: KnownBloatTask },
+    // Phase-B preload-app removal (BUILT DARK 2026-07-06): per-user Remove-AppxPackage, ONLY the
+    // curated KnownPreloadApp set. Undo = ReinstallPreloadApp (two honest tiers — see the spec).
+    RemovePreloadApp { app: KnownPreloadApp },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -182,6 +253,10 @@ pub(crate) enum RollbackAction {
     RestoreTcpAutotuningFromSnapshot,
     RestorePagefileFromSnapshot,
     EnableScheduledTask { task: KnownBloatTask },
+    // Preload-app removal undo. NOT byte-identical like registry restores: tier 1 silently
+    // re-registers the still-staged package (verified by re-read), tier 2 hands off to the app's
+    // Store page and honestly returns Err so the ledger entry stays active until confirmed back.
+    ReinstallPreloadApp { app: KnownPreloadApp },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -281,6 +356,14 @@ pub(crate) enum Snapshot {
     // only a task that was actually enabled before.
     ScheduledTask {
         prior_state: String,
+    },
+    // Preload-app identity read from the LIVE system at apply time (ground truth, never a const):
+    // rollback re-registers by the recorded family name; full name + version keep the receipt honest
+    // about exactly what was removed. Apply REFUSES if this read fails (snapshot-or-refuse).
+    PreloadApp {
+        prior_full_name: String,
+        prior_family_name: String,
+        prior_version: String,
     },
 }
 
@@ -416,6 +499,10 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
             Some(format!(
                 "Fixed {prior_initial_mb}–{prior_maximum_mb} MB on {prior_drive_letter}:"
             ))
+        }
+        // The prior state IS "installed at this exact version" — say that plainly for the ledger.
+        Snapshot::PreloadApp { prior_version, .. } => {
+            Some(format!("Installed (v{prior_version})"))
         }
     }
 }
@@ -1550,6 +1637,311 @@ pub(crate) fn rollback_enable_scheduled_task_typed(
         path, name
     ))?;
     Ok(())
+}
+
+// ─── Phase-B preload-app removal (BUILT DARK, owner nod 2026-07-06) ────────
+//
+// GATE — DARK (false) until this feature's own live QA (remove→reinstall round-trip on this rig,
+// off-list rejected, not-installed refused, every Store ProductId link-verified) + the owner curates
+// the final KnownPreloadApp list + explicit arming sign-off. Mirrors bloat_removal_gate's dark phase
+// (LOCKED-rule-6; the owner's 2026-07-06 nod greenlit BUILDING it — arming rides its own sign-off).
+pub(crate) fn preload_removal_gate() -> bool {
+    false
+}
+
+/// A curated app's live per-user install identity, read from the system (never a const).
+pub(crate) struct InstalledPreloadApp {
+    pub(crate) full_name: String,
+    pub(crate) family_name: String,
+    pub(crate) version: String,
+}
+
+/// Read a curated app's install state for the CURRENT USER (non-elevated, read-only).
+/// Three-way honest contract (adversarial-review fix, 2026-07-06): `Ok(Some)` = installed
+/// (identity read) · `Ok(None)` = CONFIRMED not installed (the probe ran and said so) ·
+/// `Err` = the probe itself failed (spawn / non-zero exit / unparseable output). Callers must
+/// treat `Err` as "unknown state", never as "absent" — collapsing the two is exactly the
+/// snapshot-prior failure class [[mutation-snapshot-failsafe-idiom]] forbids.
+pub(crate) fn installed_preload_app(
+    app: &KnownPreloadApp,
+) -> Result<Option<InstalledPreloadApp>, String> {
+    // package_name is a FIXED enum constant; guard anyway before interpolation (defense in depth).
+    let name = app.package_name();
+    ps_safe(name)?;
+    let out = quiet_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            // Always emits exactly ONE JSON object ('{}' when absent), so stray host output or a
+            // short read is DETECTED as a parse failure (Err) instead of silently shifting a
+            // positional parse or reading as "not installed".
+            &format!(
+                "$p = Get-AppxPackage -Name '{}' | Select-Object -First 1; \
+                 if ($p) {{ @{{ full = \"$($p.PackageFullName)\"; family = \"$($p.PackageFamilyName)\"; version = \"$($p.Version)\" }} | ConvertTo-Json -Compress }} else {{ '{{}}' }}",
+                name
+            ),
+        ])
+        .output()
+        .map_err(|e| format!("couldn't read the app's install state: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "couldn't read the app's install state: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let json: serde_json::Value = serde_json::from_str(text.trim())
+        .map_err(|_| "couldn't read the app's install state: unexpected probe output".to_string())?;
+    let obj = json
+        .as_object()
+        .ok_or_else(|| "couldn't read the app's install state: unexpected probe output".to_string())?;
+    if obj.is_empty() {
+        return Ok(None); // the probe RAN and answered — a confirmed absence, not a guess
+    }
+    let field = |k: &str| {
+        obj.get(k)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    match (field("full"), field("family"), field("version")) {
+        (Some(full_name), Some(family_name), Some(version)) => Ok(Some(InstalledPreloadApp {
+            full_name,
+            family_name,
+            version,
+        })),
+        _ => Err("couldn't read the app's install state: unexpected probe output".to_string()),
+    }
+}
+
+/// Which curated apps are installed for this user — ONE PowerShell spawn for the whole set
+/// (the FE listing probe; per-app identity for the apply snapshot uses `installed_preload_app`).
+pub(crate) fn installed_preload_ids() -> Vec<&'static str> {
+    let mut safe_names = Vec::new();
+    for app in &KnownPreloadApp::ALL {
+        if ps_safe(app.package_name()).is_ok() {
+            safe_names.push(format!("'{}'", app.package_name()));
+        }
+    }
+    if safe_names.is_empty() {
+        return Vec::new();
+    }
+    let Ok(out) = quiet_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "foreach ($n in @({})) {{ if (Get-AppxPackage -Name $n) {{ $n }} }}",
+                safe_names.join(",")
+            ),
+        ])
+        .output()
+    else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    let found: Vec<String> = text
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    KnownPreloadApp::ALL
+        .iter()
+        .filter(|a| found.iter().any(|f| f == a.package_name()))
+        .map(|a| a.id())
+        .collect()
+}
+
+/// Remove a curated preload app FOR THE CURRENT USER (non-elevated — per-user Appx removal needs
+/// no admin). Snapshot-or-refuse: the package identity is read from the live system FIRST; an
+/// absent/unreadable package REFUSES before any mutation rather than acting on a guess
+/// ([[mutation-snapshot-failsafe-idiom]]). Success is verified by a re-read, never assumed.
+pub(crate) fn apply_remove_preload_app(app: KnownPreloadApp) -> Result<ApplyResult, String> {
+    // Snapshot-or-refuse: a failed probe (Err) and a confirmed absence (Ok(None)) BOTH refuse
+    // here, BEFORE any mutation — never act on a guess.
+    let installed = installed_preload_app(&app)?.ok_or_else(|| {
+        "that app isn't installed for this user — nothing to remove.".to_string()
+    })?;
+    // The full name came from a system read — re-guard before interpolating. Appx full names are
+    // [A-Za-z0-9._-] by construction, so ps_safe (no spaces) is the right guard.
+    ps_safe(&installed.full_name)?;
+    let out = quiet_command("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("Remove-AppxPackage -Package '{}'", installed.full_name),
+        ])
+        .output()
+        .map_err(|e| format!("couldn't run the removal: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        return Err(format!(
+            "Windows refused the removal — nothing changed. ({})",
+            err.trim()
+        ));
+    }
+    // Honest receipt: re-read after the removal. CONFIRMED-still-installed → report failure (the
+    // user's state is intact, nothing to record). A FAILED re-read (Err) does NOT discard the
+    // receipt: the removal command already reported success, and a real mutation with no ledger
+    // receipt is the worse failure (rollback-first) — recording keeps the undo available, and the
+    // undo is idempotent/harmless if the app never actually left.
+    if let Ok(Some(_)) = installed_preload_app(&app) {
+        return Err("the removal ran but the app is still installed — nothing recorded.".into());
+    }
+    Ok(ApplyResult {
+        applied_action: AppliedAction::RemovePreloadApp { app: app.clone() },
+        rollback_action: RollbackAction::ReinstallPreloadApp { app },
+        snapshot: Snapshot::PreloadApp {
+            prior_full_name: installed.full_name,
+            prior_family_name: installed.family_name,
+            prior_version: installed.version,
+        },
+        elevation_used: false,
+    })
+}
+
+/// Roll back a preload-app removal — two honest tiers (spec 2026-07-06). Tier 1: silently
+/// re-register the still-staged package by the SNAPSHOT family name; success is verified by a
+/// re-read, never assumed from exit status. Tier 2 (staging gone): open the app's Store page
+/// (curated ProductId) and return Err with plain instructions — the ledger entry honestly stays
+/// ACTIVE; a later Roll back re-verifies and closes it. Already installed → Ok (idempotent).
+pub(crate) fn rollback_reinstall_preload_app_typed(
+    app: &KnownPreloadApp,
+    prior_family_name: &str,
+) -> Result<(), String> {
+    // Only a CONFIRMED-installed read (Ok(Some)) may close the ledger entry; an unreadable probe
+    // (Err) is "unknown" and falls through to the restore attempt, which is idempotent/harmless
+    // when the app is actually present.
+    if matches!(installed_preload_app(app), Ok(Some(_))) {
+        return Ok(());
+    }
+    // Family name comes from the apply-time snapshot (a system read) — guard before interpolating.
+    if ps_safe(prior_family_name).is_ok() {
+        let _ = quiet_command("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "Add-AppxPackage -RegisterByFamilyName -MainPackage '{}' -ErrorAction Stop",
+                    prior_family_name
+                ),
+            ])
+            .output();
+        if matches!(installed_preload_app(app), Ok(Some(_))) {
+            return Ok(());
+        }
+    }
+    // Tier 2: hand off to the Store page (fixed curated ProductId — no dynamic data enters the
+    // command). Same open-via-explorer idiom as open_export_folder: no shell, no elevation.
+    let _ = std::process::Command::new("explorer")
+        .arg(format!("ms-windows-store://pdp/?ProductId={}", app.store_product_id()))
+        .spawn();
+    Err("Couldn't restore it silently — Compy opened its Microsoft Store page instead. \
+         Press Install there, then Roll back again to confirm it's back."
+        .to_string())
+}
+
+#[cfg(test)]
+mod preload_removal_tests {
+    use super::*;
+
+    #[test]
+    fn gate_is_dark_until_qa_and_owner_signoff() {
+        // The owner's 2026-07-06 nod greenlit BUILDING this; ARMING rides its own live QA
+        // (remove→reinstall round-trip, Store links verified) + curated-list sign-off.
+        assert!(!preload_removal_gate(), "preload removal must stay DARK until QA + sign-off");
+    }
+
+    #[test]
+    fn from_id_enforces_the_allowlist_and_rejects_everything_else() {
+        assert!(KnownPreloadApp::from_id("solitaire-collection").is_some());
+        assert!(KnownPreloadApp::from_id("spotify-preload").is_some());
+        // Data-bearing, security, gaming-critical, and arbitrary ids can NEVER reach the primitive.
+        for bad in [
+            "microsoft-photos",
+            "sticky-notes",
+            "windows-defender",
+            "xbox-game-bar",
+            "gaming-services",
+            "Microsoft.WindowsStore",
+            "",
+        ] {
+            assert!(KnownPreloadApp::from_id(bad).is_none(), "must reject {bad:?}");
+        }
+    }
+
+    #[test]
+    fn ids_round_trip_and_identifiers_pass_the_interpolation_guard() {
+        // Literal pin (mirrors the FE contract test in preload-apps.test.tsx) — an id rename on
+        // either side fails one of the two suites instead of silently 404ing at the IPC boundary.
+        let ids: Vec<&str> = KnownPreloadApp::ALL.iter().map(|a| a.id()).collect();
+        assert_eq!(
+            ids,
+            ["solitaire-collection", "feedback-hub", "bing-news", "office-hub", "spotify-preload"]
+        );
+        for app in &KnownPreloadApp::ALL {
+            assert_eq!(KnownPreloadApp::from_id(app.id()), Some(app.clone()));
+            // Every fixed identifier that is ever interpolated into a command must pass its guard.
+            assert!(ps_safe(app.package_name()).is_ok(), "package name {:?}", app.package_name());
+            assert!(ps_safe(app.store_product_id()).is_ok(), "product id {:?}", app.store_product_id());
+        }
+    }
+
+    #[test]
+    fn typed_contract_round_trips() {
+        let a = AppliedAction::RemovePreloadApp { app: KnownPreloadApp::FeedbackHub };
+        let back: AppliedAction = serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap();
+        assert!(matches!(back, AppliedAction::RemovePreloadApp { .. }));
+        let r = RollbackAction::ReinstallPreloadApp { app: KnownPreloadApp::BingNews };
+        let back2: RollbackAction =
+            serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
+        assert!(matches!(back2, RollbackAction::ReinstallPreloadApp { .. }));
+        let s = Snapshot::PreloadApp {
+            prior_full_name: "A_1.0_x64__pub".into(),
+            prior_family_name: "A_pub".into(),
+            prior_version: "1.0".into(),
+        };
+        let back3: Snapshot = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert!(matches!(back3, Snapshot::PreloadApp { .. }));
+    }
+
+    #[test]
+    fn dispatch_rejects_a_mismatched_snapshot() {
+        // A garbled ledger pair (reinstall action + task snapshot) must fail safe, never guess.
+        let r = RollbackAction::ReinstallPreloadApp { app: KnownPreloadApp::Spotify };
+        let s = Snapshot::ScheduledTask { prior_state: "Ready".into() };
+        assert!(dispatch_rollback(&r, &s).is_err());
+    }
+
+    // ── Live QA harness (manual; #[ignore], run at arming time) — proves the remove→reinstall
+    // round trip against a REAL installed curated app on this rig. Does NOT flip the gate.
+    #[test]
+    #[ignore = "manual: real per-user Appx mutation; run during arming QA"]
+    fn qa_remove_then_reinstall_round_trip() {
+        let Some(app) = KnownPreloadApp::ALL
+            .iter()
+            .find(|a| matches!(installed_preload_app(a), Ok(Some(_))))
+            .cloned()
+        else {
+            panic!("no curated preload app installed on this rig — install one to run the QA");
+        };
+        let result = apply_remove_preload_app(app.clone()).expect("removal applies");
+        assert!(
+            matches!(installed_preload_app(&app), Ok(None)),
+            "app should be CONFIRMED gone after removal"
+        );
+        if let Snapshot::PreloadApp { prior_family_name, .. } = &result.snapshot {
+            rollback_reinstall_preload_app_typed(&app, prior_family_name)
+                .expect("tier-1 re-register restores the app");
+        } else {
+            panic!("snapshot kind mismatch");
+        }
+        assert!(
+            matches!(installed_preload_app(&app), Ok(Some(_))),
+            "app must be CONFIRMED back after rollback"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -3428,6 +3820,9 @@ pub(crate) fn dispatch_rollback(action: &RollbackAction, snapshot: &Snapshot) ->
         ) => rollback_pagefile_typed(*prior_drive_letter, *prior_initial_mb, *prior_maximum_mb),
         (R::EnableScheduledTask { task }, S::ScheduledTask { prior_state }) => {
             rollback_enable_scheduled_task_typed(task, prior_state)
+        }
+        (R::ReinstallPreloadApp { app }, S::PreloadApp { prior_family_name, .. }) => {
+            rollback_reinstall_preload_app_typed(app, prior_family_name)
         }
         _ => Err(format!(
             "rollback action/snapshot mismatch: action={:?}, snapshot kind differs",
