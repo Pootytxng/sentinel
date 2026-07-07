@@ -46,6 +46,23 @@ describe("FirstCheck (audit M1)", () => {
     expect(screen.getByText(/won't invent work to look busy/)).toBeInTheDocument();
   });
 
+  // bug→guard (owner screenshot 2026-07-06): the verdict state stacked the live run-list AND the
+  // green collapsible — every check title rendered twice. Pin: in the verdict state each check
+  // title renders exactly once (inside the expanded green detail), never in a persisted run-list.
+  it("verdict state renders each check title exactly once (no doubled list)", async () => {
+    render(
+      <ConfirmProvider>
+        <FirstCheck onDone={vi.fn()} />
+      </ConfirmProvider>,
+    );
+    await screen.findByText("Ready to play — this rig measured clean");
+    // Collapsed: the run-list has resolved into the verdict — no check titles on screen.
+    expect(screen.queryByText("SSD check")).not.toBeInTheDocument();
+    // Expanded green detail is the ONE canonical list.
+    fireEvent.click(screen.getByRole("button", { name: /measured perfect/ }));
+    expect(screen.getAllByText("SSD check")).toHaveLength(1);
+  });
+
   it("finishing marks the first check seen (gate key) and hands off to the app", async () => {
     const onDone = vi.fn();
     render(

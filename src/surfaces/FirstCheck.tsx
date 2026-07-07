@@ -87,8 +87,12 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
           </span>
         </header>
 
-        {/* Scan rows — stream in as the (real) checks display, with a light sweep passing across. */}
-        <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
+        {/* Scan rows — stream in as the (real) checks display, with a light sweep passing across.
+            Scan phase ONLY: on verdict the run-list resolves INTO the verdict below (the green
+            collapsible carries the per-check detail) — never both stacked (owner bug, 2026-07-06). */}
+        {(running || phase === "scan") && (
+          <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
+        )}
 
         {/* Verdict — appears after the rows have streamed. */}
         {phase === "verdict" && (
