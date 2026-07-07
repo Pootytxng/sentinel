@@ -1,0 +1,67 @@
+/* ── Ambient HUD skin (T4c, spec 2026-07-06-firstcheck-monitor-mvp-train) ────────────────
+   App-wide CSS-only pass that systematizes the HUD-room DNA: feTurbulence grain beside the
+   existing whisper scanline, backdrop-filter glass on the floating layers, and holo-foil
+   verdict headlines (OKLCH, accent-driven — owner-picked R1 option; the foil is a whisper
+   tint sweep, not a rainbow). Zero deps. Same laws as hud-rooms.css (tokens-v2-guard):
+   every selector scoped [data-v2="on"][data-hud="on"], no color literals (the grain SVG is
+   colorless turbulence + alpha), fonts untouched, keyframes v2- prefixed, reduced-motion
+   static by construction (grain/scanline/glass are static; only the foil pans, and it
+   stills under [data-motion="reduced"]). */
+
+/* Grain — colorless feTurbulence at "felt not seen" alpha, laid over the four journey rooms
+   as a sibling layer to hud-rooms.css's ::after scanline (that layer keeps z-index 5; grain
+   sits under it and over the room surface). Static: baseFrequency never animates. */
+:root[data-v2="on"][data-hud="on"]
+  .v2-room:not([data-room="home"]):not([data-room="check"])::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+/* Glass — the floating layers pick up backdrop blur so the room shows through them the way
+   a HUD pane would. Dimming backdrops only + the confirm sheet; content panels stay opaque
+   (legibility outranks the effect). */
+:root[data-v2="on"][data-hud="on"] .cmp-confirm-backdrop,
+:root[data-v2="on"][data-hud="on"] .modal-backdrop,
+:root[data-v2="on"][data-hud="on"] .gaming-modal-backdrop {
+  backdrop-filter: blur(10px) saturate(1.15);
+}
+
+/* Holo-foil verdict headlines — accent-driven OKLCH tint sweep across the room verdicts
+   (all five rooms; the eyebrow/masthead register is untouched). The gradient's stops are
+   ALL token-derived mixes that stay within a whisper of --v2-text, so the headline reads
+   as ink with a live sheen, never a rainbow. The slow pan stills under reduced motion,
+   leaving a static foil — reduced-motion static by construction. */
+:root[data-v2="on"][data-hud="on"] .v2-verdict h1,
+:root[data-v2="on"][data-hud="on"] .hud-headline {
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in oklch, var(--v2-text) 78%, var(--v2-accent)) 0%,
+    var(--v2-text) 35%,
+    color-mix(in oklch, var(--v2-text) 70%, var(--v2-accent)) 55%,
+    var(--v2-text) 75%,
+    color-mix(in oklch, var(--v2-text) 82%, var(--v2-accent)) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: v2-foil-pan 14s linear infinite;
+}
+@keyframes v2-foil-pan {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 220% 0;
+  }
+}
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .v2-verdict h1,
+:root[data-v2="on"][data-hud="on"][data-motion="reduced"] .hud-headline {
+  animation: none;
+}

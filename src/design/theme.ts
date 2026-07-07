@@ -403,6 +403,34 @@ export function applyMonitorCards(on: boolean): void {
   }
 }
 
+// Hologram bay v2 (T4d, spec 2026-07-06-firstcheck-monitor-mvp-train) — the Home rig hologram
+// with the vendored holographic shader shell (theme-accent), Bloom, event-triggered Glitch on
+// explode/reassemble, and idle GPU ~0 (frameloop demand at rest; orbit is an explicit opt-in).
+// DEFAULT ON; flag off renders the v1 bay (Settings toggle / localStorage "0").
+const HOLOGRAM_V2_KEY = "compy_hologram_v2";
+
+export function readHologramV2(): boolean {
+  try {
+    return localStorage.getItem(HOLOGRAM_V2_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyHologramV2(on: boolean): void {
+  try {
+    localStorage.setItem(HOLOGRAM_V2_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:hologram-v2-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction —
 // CORRECTED: editorial retired) — the pure operator-console/HUD redesign, piloted on Home.
 // DEFAULT OFF (Settings → Appearance preview toggle, the P-series contract): flag off, every

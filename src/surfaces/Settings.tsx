@@ -21,6 +21,8 @@ import {
   applyFirstCheckTheater,
   readMonitorCards,
   applyMonitorCards,
+  readHologramV2,
+  applyHologramV2,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -142,6 +144,7 @@ export default function Settings({
   const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
   const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
   const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
+  const [holoV2, setHoloV2] = useState<boolean>(readHologramV2);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -215,6 +218,12 @@ export default function Settings({
   const changeMonitorCards = (v: boolean) => {
     setMonitorCards(v);
     applyMonitorCards(v);
+  };
+  // Hologram bay v2 — the holo-shader shell + bloom on the Home rig. Presentation only:
+  // same real parts, same honest ghosts; off renders the classic bay.
+  const changeHoloV2 = (v: boolean) => {
+    setHoloV2(v);
+    applyHologramV2(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -388,6 +397,17 @@ export default function Settings({
                   onChange={changeMonitorCards}
                   ariaLabel="Monitor summary cards"
                 />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Hologram bay v2</div>
+                  <div className="set-row-sub">
+                    The Home rig hologram with a holo-glass shell and glow, in your theme's
+                    color. Same real parts — turn off for the classic bay.
+                  </div>
+                </div>
+                <Toggle on={holoV2} onChange={changeHoloV2} ariaLabel="Hologram bay v2" />
               </div>
 
             </div>

@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
+import { EffectComposer, Bloom, Glitch } from "@react-three/postprocessing";
+import { GlitchMode } from "postprocessing";
+import { Vector2 } from "three";
 import { invoke } from "@tauri-apps/api/core";
+import HolographicMaterial from "../../design/vendor/HolographicMaterial/HolographicMaterial";
+import { readHologramV2 } from "../../design/theme";
 import type { HardwareInfo } from "../../App";
 import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-parts";
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
@@ -83,6 +88,24 @@ export function RigHologram({
   const reduced = useReducedMotion();
   const visible = useDocumentVisible();
   const [gameActive, setGameActive] = useState(false);
+  // Hologram bay v2 (T4d): holo-shader shell + Bloom + explode Glitch. Read once per mount —
+  // Settings dispatches compy:hologram-v2-changed and the Home hero remounts on nav anyway.
+  const [holoV2] = useState(readHologramV2);
+  // Event-triggered glitch: a ~450ms burst when the bay explodes/reassembles — never continuous
+  // (perf rail + honesty: the glitch marks a real state change, not ambient noise). Skipped
+  // entirely under reduced motion.
+  const [glitching, setGlitching] = useState(false);
+  const firstExplode = useRef(true);
+  useEffect(() => {
+    if (firstExplode.current) {
+      firstExplode.current = false;
+      return;
+    }
+    if (!holoV2 || reduced) return;
+    setGlitching(true);
+    const id = window.setTimeout(() => setGlitching(false), 450);
+    return () => window.clearTimeout(id);
+  }, [exploded, holoV2, reduced]);
   const [fanSensors, setFanSensors] = useState<{ label: string; rpm: number; source: string }[] | null>(
     null,
   );
@@ -202,8 +225,17 @@ export function RigHologram({
   // under reduced-motion, OR while this window is hidden/minimized — so the orbiting hologram never
   // burns GPU off-screen. (Was the highest-cost hidden-work leak: a full-rate r3f canvas painting while
   // the window was occluded.)
-  const frameloop: "always" | "demand" = gameActive || reduced || !visible ? "demand" : "always";
+  // V2 tightens the law to "idle GPU ~0": continuous frames run ONLY while something is genuinely
+  // animating (the user-opted orbit, or a glitch burst); at rest the bay renders on demand — drags
+  // and resizes invalidate, a still hologram costs nothing.
   const orbiting = autoRotate && !gameActive && !reduced;
+  const frameloop: "always" | "demand" = holoV2
+    ? (orbiting || glitching) && visible && !gameActive
+      ? "always"
+      : "demand"
+    : gameActive || reduced || !visible
+      ? "demand"
+      : "always";
 
   return (
     <Canvas
@@ -220,6 +252,27 @@ export function RigHologram({
       <pointLight position={[0, 6, -4]} intensity={28} color={colors.accent} />
 
       <group position={[0, 0.2, 0]}>
+        {/* V2 holo shell — the "bay glass" around the assembled rig, painted by the vendored
+            holographic shader in the LIVE theme accent (never the vendor default). Hidden when
+            exploded (the glitch burst covers the transition); fully static under reduced motion
+            (signalSpeed 0 + no blinking). */}
+        {holoV2 && !exploded && (
+          <mesh>
+            <boxGeometry args={[4.15, 5.35, 2.55]} />
+            <HolographicMaterial
+              hologramColor={colors.accent}
+              hologramOpacity={0.18}
+              hologramBrightness={0.9}
+              fresnelAmount={0.6}
+              fresnelOpacity={0.7}
+              scanlineSize={9}
+              signalSpeed={reduced ? 0 : 0.4}
+              enableBlinking={!reduced}
+              blinkFresnelOnly
+              side="DoubleSide"
+            />
+          </mesh>
+        )}
         <RigCase exploded={exploded} color={colors.accent} reduced={reduced} />
         {shownParts.map((p, i) => (
           <RigPart
@@ -298,6 +351,22 @@ export function RigHologram({
       {/* Fit the model to whatever container it's in (must sit AFTER OrbitControls so
           useThree().controls is registered via makeDefault). */}
       <FitCamera baseDist={cameraDist} />
+
+      {/* V2 post stack — restrained Bloom lifts the holo shell + accent lights; Glitch fires
+          ONLY during the explode/reassemble burst (event-driven, never ambient). */}
+      {holoV2 && (
+        <EffectComposer>
+          <Bloom intensity={0.35} luminanceThreshold={0.25} luminanceSmoothing={0.7} mipmapBlur />
+          <Glitch
+            active={glitching}
+            mode={GlitchMode.SPORADIC}
+            duration={new Vector2(0.15, 0.35)}
+            delay={new Vector2(0, 0.1)}
+            strength={new Vector2(0.15, 0.4)}
+            ratio={0.6}
+          />
+        </EffectComposer>
+      )}
     </Canvas>
   );
 }

@@ -50,6 +50,7 @@ const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
 const labCss = loadV2Css("surfaces", "lab-v2.css");
 const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
+const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
 
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
@@ -63,6 +64,7 @@ const V2_CSS: [string, string][] = [
   ["blackbook-v2.css", blackbookCss],
   ["lab-v2.css", labCss],
   ["hud-rooms.css", hudRoomsCss],
+  ["ambient-hud.css", ambientHudCss],
 ];
 
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
@@ -114,6 +116,7 @@ describe("v2 surface CSS consumes the token layer only (no-slop law)", () => {
     ["blackbook-v2.css", blackbookCss],
     ["lab-v2.css", labCss],
     ["hud-rooms.css", hudRoomsCss],
+    ["ambient-hud.css", ambientHudCss],
   ];
   for (const [name, css] of SURFACE_CSS) {
     it(`${name}: no color literals — every color comes from a --v2-* token`, () => {
@@ -263,16 +266,27 @@ describe("vendor hygiene (MIT + Commons Clause notice)", () => {
 
   const thirdParty = readFileSync(join(vendorDir, "THIRD_PARTY.md"), "utf8");
 
+  // The shelf now holds more than React Bits (T4d added ektogamat's holographic material) —
+  // each component's header must name its TRUE origin + author; React Bits stays the default.
+  const ORIGINS: Record<string, { from: string; author: string }> = {
+    HolographicMaterial: {
+      from: "Vendored from threejs-holographic-material",
+      author: "Anderson Mancini",
+    },
+  };
+  const DEFAULT_ORIGIN = { from: "Vendored from React Bits", author: "David Haz" };
+
   for (const comp of components) {
     it(`${comp}: every source file carries the header + THIRD_PARTY.md lists it`, () => {
       const files = (readdirSync(join(vendorDir, comp)) as string[]).filter(
         (f) => f.endsWith(".tsx") || f.endsWith(".ts") || f.endsWith(".css"),
       );
       expect(files.length).toBeGreaterThan(0);
+      const origin = ORIGINS[comp] ?? DEFAULT_ORIGIN;
       for (const f of files) {
         const head = readFileSync(join(vendorDir, comp, f), "utf8").slice(0, 300);
-        expect(head, `${comp}/${f} missing license header`).toContain("Vendored from React Bits");
-        expect(head, `${comp}/${f} missing copyright line`).toContain("David Haz");
+        expect(head, `${comp}/${f} missing license header`).toContain(origin.from);
+        expect(head, `${comp}/${f} missing copyright line`).toContain(origin.author);
       }
       expect(thirdParty, `THIRD_PARTY.md missing row for ${comp}`).toContain(`| ${comp} |`);
     });

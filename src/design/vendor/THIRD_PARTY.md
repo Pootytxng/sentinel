@@ -45,6 +45,20 @@ Adopt-list picks settled at vendor time (rationale in the V2-1 commit):
 Runtime deps these components pull (all free, MIT-family, added in V2-1): `gsap`
 (MagicBento, PillNav), `ogl` (Radar, Grainient), `motion` (DecryptedText, CountUp).
 
+## threejs-holographic-material — github.com/ektogamat/threejs-holographic-material
+
+Copyright (c) 2023 Anderson Mancini. **MIT License.** Vendored 2026-07-06 (T4d hologram bay
+v2, owner-picked R1 option; spec `2026-07-06-firstcheck-monitor-mvp-train.md`).
+
+| Component | Source | Use | Local modifications |
+|---|---|---|---|
+| HolographicMaterial | R3F gist referenced from the repo README (`gist.github.com/ektogamat/f33dce31ee3ab02ea68f7b7c18ecd016`) | The Home rig hologram's "bay glass" shell — `hologramColor` ALWAYS wired to the live theme accent (use-rig-colors), never the vendor default | Converted to TypeScript (typed props/ref); null-guarded the `useFrame` time tick (upstream crashed on the first demand-mode frame); `enableAdditive`/`side` dropped from the shader useMemo deps (mesh-level props — upstream recompiled the shader on toggle); reduced-motion contract documented (signalSpeed 0 + enableBlinking false ⇒ fully static render) |
+
+Runtime deps: `@react-three/postprocessing` (+ transitive `postprocessing`) added 2026-07-06
+for the bay's Bloom + event-triggered Glitch. NOTE: V2-1 had rejected `postprocessing`-class
+deps *for a flat texture effect* (Dither); T4d is the owner-approved exception where the dep
+buys the actual hologram post stack on an existing three.js scene — scope stays the Home bay.
+
 ### Round-2 sourcing pass (2026-07-05, owner browsing reactbits index — pre-vetted shortlist)
 
 Full catalog swept against the corrected pure-Instrument-HUD direction. **Candidates that pass

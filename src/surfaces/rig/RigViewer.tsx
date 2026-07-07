@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { HardwareInfo } from "../../App";
 import { useManualParts, MANUAL_KINDS, type ManualKind } from "./manual-parts";
+import { readHologramV2 } from "../../design/theme";
 import "./RigViewer.css";
 
 // Official download page — opened EXTERNALLY via the allowlisted opener plugin (capabilities). A fixed
@@ -22,7 +23,10 @@ const RigHologram = lazy(() =>
 // second — it only re-renders on a real hw change or its own interactions.
 export const RigViewer = memo(function RigViewer({ hw }: { hw: HardwareInfo }) {
   const [exploded, setExploded] = useState(false);
-  const [autoRotate, setAutoRotate] = useState(true);
+  // Hologram bay v2 (T4d): idle GPU ~0 — the bay rests on frameloop "demand", so continuous
+  // orbit is an explicit opt-in (the Orbit button) instead of the default. V1 (flag off)
+  // keeps its classic always-orbiting default.
+  const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
