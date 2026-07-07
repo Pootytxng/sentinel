@@ -13,6 +13,10 @@
 //   static — no scanline drift, no flicker.
 // - Vendor default hologramColor is NEVER used by Compy: callers wire the live theme accent
 //   (use-rig-colors), same law as the Stepper's token re-point.
+// - Added optional `clearSpot` uniform (Compy, 2026-07-07 — owner ask): a soft transparency
+//   window where the shell faces the camera dead-on, so the parts inside the bay stay
+//   readable. Default 0 renders byte-identical to upstream; view-dependent only (no new
+//   animation term — repaints ride the existing demand-frameloop invalidations).
 
 import { useRef, useMemo } from "react";
 import { shaderMaterial } from "@react-three/drei";
@@ -48,6 +52,9 @@ export interface HolographicMaterialProps {
   enableAdditive?: boolean;
   /** Overall opacity, 0–1. */
   hologramOpacity?: number;
+  /** Viewer-facing clear spot, 0–1 (0 = off, upstream-identical): fades the shell where it
+      faces the camera so the parts inside stay readable — a translucency spotlight. */
+  clearSpot?: number;
   side?: "FrontSide" | "BackSide" | "DoubleSide";
 }
 
@@ -64,6 +71,7 @@ export default function HolographicMaterial({
   blinkFresnelOnly = true,
   enableAdditive = true,
   hologramOpacity = 1.0,
+  clearSpot = 0.0,
   side = "FrontSide",
 }: HolographicMaterialProps) {
   const ref = useRef<HoloShaderMaterial>(null);
@@ -81,6 +89,7 @@ export default function HolographicMaterial({
         enableBlinking: enableBlinking,
         blinkFresnelOnly: blinkFresnelOnly,
         hologramOpacity: hologramOpacity,
+        clearSpotAmount: clearSpot,
       },
       /* GLSL — vertex (verbatim from upstream) */
       `
@@ -156,6 +165,7 @@ export default function HolographicMaterial({
       uniform float signalSpeed;
       uniform float hologramBrightness;
       uniform float hologramOpacity;
+      uniform float clearSpotAmount;
       uniform bool blinkFresnelOnly;
       uniform bool enableBlinking;
       uniform vec3 hologramColor;
@@ -206,7 +216,17 @@ export default function HolographicMaterial({
           finalColor = scanlineMix.rgb * blink + fresnelEffect;
         }
 
-        gl_FragColor = vec4( finalColor, hologramOpacity);
+        // Compy local mod — viewer-facing clear spot (translucency spotlight): fade the shell
+        // where it faces the camera dead-on AND sits near the view center, so whatever panel
+        // faces the viewer opens a soft window onto the parts inside. facing gates it to the
+        // camera-facing panel (grazing side panels + the rear wall keep their look); the
+        // screen-radial term shapes it into a spot. clearSpotAmount 0 = upstream-identical.
+        float facing = smoothstep(0.35, 0.92, dot(viewDirectionW, vNormalW));
+        vec2 spotNdc = vCoords * 2.0 - 1.0;
+        float spot = 1.0 - smoothstep(0.25, 0.85, length(spotNdc));
+        float clearWindow = clearSpotAmount * facing * spot;
+
+        gl_FragColor = vec4( finalColor, hologramOpacity * (1.0 - clearWindow));
 
       }`,
     );
@@ -220,6 +240,7 @@ export default function HolographicMaterial({
     enableBlinking,
     blinkFresnelOnly,
     hologramOpacity,
+    clearSpot,
   ]);
 
   extend({ HolographicMaterial: HolographicMaterialImpl });

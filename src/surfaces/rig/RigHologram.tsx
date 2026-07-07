@@ -41,7 +41,7 @@ const GLITCH_DURATION = new Vector2(0.15, 0.35);
 const GLITCH_DELAY = new Vector2(0, 0.1);
 const GLITCH_STRENGTH = new Vector2(0.15, 0.4);
 
-function FitCamera({ baseDist }: { baseDist: number }) {
+export function FitCamera({ baseDist }: { baseDist: number }) {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const controls = useThree((s) => s.controls) as { update?: () => void } | null;
@@ -270,7 +270,9 @@ export const RigHologram = memo(function RigHologram({
         {/* V2 holo shell — the "bay glass" around the assembled rig, painted by the vendored
             holographic shader in the LIVE theme accent (never the vendor default). Hidden when
             exploded (the glitch burst covers the transition); fully static under reduced motion
-            (signalSpeed 0 + no blinking). */}
+            (signalSpeed 0 + no blinking). clearSpot opens a soft translucency spotlight on
+            whatever panel faces the viewer so the parts inside stay readable (owner ask
+            2026-07-07); view-dependent only — repaints ride the existing invalidations. */}
         {holoV2 && !exploded && (
           <mesh>
             <boxGeometry args={[4.15, 5.35, 2.55]} />
@@ -284,6 +286,7 @@ export const RigHologram = memo(function RigHologram({
               signalSpeed={reduced ? 0 : 0.4}
               enableBlinking={!reduced}
               blinkFresnelOnly
+              clearSpot={0.85}
               side="DoubleSide"
             />
           </mesh>
