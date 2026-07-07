@@ -343,6 +343,66 @@ export function applySetupStepper(on: boolean): void {
   }
 }
 
+// FirstCheck boot theater (T2+T4a, spec 2026-07-06-firstcheck-monitor-mvp-train) — the
+// first-check RUN state in the stepper/HUD idiom: active check prominent with a scramble
+// reveal, completed checks compressed into a terminal stack, pending queued, HUD-bracket
+// frame. DEFAULT ON (owner-greenlit train); the classic ScanStream row list stays reachable
+// as the failsafe (Settings toggle / localStorage "0"). Presentation only — same real scan,
+// same honest elapsed, never implies measurement after it finished.
+const FIRSTCHECK_THEATER_KEY = "compy_firstcheck_theater";
+
+export function readFirstCheckTheater(): boolean {
+  try {
+    return localStorage.getItem(FIRSTCHECK_THEATER_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyFirstCheckTheater(on: boolean): void {
+  try {
+    localStorage.setItem(FIRSTCHECK_THEATER_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:firstcheck-theater-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Monitor domain cards (T3+T4b, spec 2026-07-06-firstcheck-monitor-mvp-train) — the deep
+// Monitoring panels re-laid summary-first: one compact instrument card per domain (CPU · GPU ·
+// Memory · Cores), headline + gauge + spark, with the FULL classic panel one click away.
+// DEFAULT ON (owner-greenlit train); the classic full-width panel stack stays reachable as the
+// failsafe (Settings toggle / localStorage "0"). Presentation only — same audited read-only
+// sensor polls, same cadence, every current reading still reachable in ≤1 click.
+const MONITOR_CARDS_KEY = "compy_monitor_cards";
+
+export function readMonitorCards(): boolean {
+  try {
+    return localStorage.getItem(MONITOR_CARDS_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyMonitorCards(on: boolean): void {
+  try {
+    localStorage.setItem(MONITOR_CARDS_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:monitor-cards-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction —
 // CORRECTED: editorial retired) — the pure operator-console/HUD redesign, piloted on Home.
 // DEFAULT OFF (Settings → Appearance preview toggle, the P-series contract): flag off, every

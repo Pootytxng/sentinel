@@ -113,6 +113,9 @@ export type ScanState = {
   shownRows: number;
   phase: "scan" | "verdict";
   rerun: () => Promise<void>;
+  /** Fast-forward the row reveal straight to the verdict (presentation only — the scan already
+   *  finished; a no-op while the real commands are still running). */
+  skip: () => void;
 };
 
 // The scan's fetch+compute core — shared by the live rerun and the idle pre-warm so the cached
@@ -156,8 +159,11 @@ export async function prewarmScan(): Promise<void> {
   }
 }
 
-export function useScan(opts?: { cache?: boolean }): ScanState {
+export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanState {
   const useCache = opts?.cache ?? false;
+  // Reveal pacing override (legibility only, same never-sleep rule): FirstCheck's boot theater
+  // runs a tighter 200ms/row so 16 checks land inside the ~3–4s ceiling; Check keeps the default.
+  const stagger = opts?.staggerMs ?? STAGGER_MS;
   // Seed synchronously from the cache so a cached caller (Optimize/Fixes) paints the LAST verdict
   // instantly — no re-fetch, no replayed row-by-row reveal — when re-opening the tab.
   const seed = useCache ? peekProbe<ScanResult>(SCAN_KEY) : undefined;
@@ -210,17 +216,26 @@ export function useScan(opts?: { cache?: boolean }): ScanState {
     const timers: number[] = [];
     for (let i = 0; i < n; i++) {
       timers.push(
-        window.setTimeout(() => setShownRows((c) => Math.max(c, i + 1)), i * STAGGER_MS),
+        window.setTimeout(() => setShownRows((c) => Math.max(c, i + 1)), i * stagger),
       );
     }
-    timers.push(window.setTimeout(() => setPhase("verdict"), n * STAGGER_MS + 220));
+    timers.push(window.setTimeout(() => setPhase("verdict"), n * stagger + 220));
     return () => timers.forEach((t) => window.clearTimeout(t));
     // deps are [running, readiness] (NOT phase): the `phase === "verdict"` guard above reads the
     // closure value — on a cache seed the effect runs once on mount with phase already "verdict" and
     // returns; during a real scan phase is "scan" when running flips, so the reveal proceeds. Adding
     // `phase` to deps would re-fire the effect when it flips to "verdict" and the cleanup would clear
     // the row timers mid-reveal.
+  }, [running, readiness, stagger]);
+
+  // Skip-to-verdict (boot-theater affordance): reveal everything and land the verdict NOW.
+  // Presentation only — the real commands already returned (no-op while running). Straggler
+  // row timers stay harmless (Math.max) and the final phase timer is idempotent.
+  const skip = useCallback(() => {
+    if (running || !readiness) return;
+    setShownRows(readiness.checks.length);
+    setPhase("verdict");
   }, [running, readiness]);
 
-  return { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun };
+  return { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun, skip };
 }

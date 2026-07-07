@@ -17,6 +17,10 @@ import {
   applyHud,
   readSetupStepper,
   applySetupStepper,
+  readFirstCheckTheater,
+  applyFirstCheckTheater,
+  readMonitorCards,
+  applyMonitorCards,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -136,6 +140,8 @@ export default function Settings({
   const [labBento, setLabBento] = useState<boolean>(readLabBento);
   const [hud, setHud] = useState<boolean>(readHud);
   const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
+  const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
+  const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -196,6 +202,19 @@ export default function Settings({
   const changeSetupStepper = (v: boolean) => {
     setSetupStepper(v);
     applySetupStepper(v);
+  };
+  // First-check boot theater — the run screen's HUD readout (active check prominent, finished
+  // checks stacking). Presentation only: same real checks, same honest elapsed; off renders the
+  // classic streaming row list.
+  const changeFcTheater = (v: boolean) => {
+    setFcTheater(v);
+    applyFirstCheckTheater(v);
+  };
+  // Monitor domain cards — the deep Monitoring panels summary-first (full detail one click
+  // away). Presentation only: same sensors, same cadence; off renders the classic panel stack.
+  const changeMonitorCards = (v: boolean) => {
+    setMonitorCards(v);
+    applyMonitorCards(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -336,6 +355,38 @@ export default function Settings({
                   on={setupStepper}
                   onChange={changeSetupStepper}
                   ariaLabel="Setup stepper"
+                />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">First-check boot theater</div>
+                  <div className="set-row-sub">
+                    The first check's run screen as a HUD readout — the check being measured
+                    up front, finished ones stacking below. Same real checks — turn off for
+                    the classic row list.
+                  </div>
+                </div>
+                <Toggle
+                  on={fcTheater}
+                  onChange={changeFcTheater}
+                  ariaLabel="First-check boot theater"
+                />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Monitor summary cards</div>
+                  <div className="set-row-sub">
+                    The deep Monitoring panels as compact instrument cards — one per domain,
+                    tap a card for the full readings. Same sensors — turn off for the classic
+                    full-width panels.
+                  </div>
+                </div>
+                <Toggle
+                  on={monitorCards}
+                  onChange={changeMonitorCards}
+                  ariaLabel="Monitor summary cards"
                 />
               </div>
 

@@ -6,6 +6,9 @@ import { Wordmark } from "../design/Wordmark";
 import { useConfirm } from "../design/ConfirmDialog";
 import { useScan, rowVerdict, type ScanRecLite } from "./use-scan";
 import { ScanStream } from "./ScanStream";
+import { BootTheater } from "./BootTheater";
+import { readFirstCheckTheater } from "../design/theme";
+import { useReducedMotion } from "../design/use-motion";
 import "./FirstCheck.css";
 
 // Moment 2 of the first-experience arc — the first-run "first check" landing.
@@ -18,7 +21,14 @@ import "./FirstCheck.css";
 export const FIRST_CHECK_KEY = "compy_first_check_v1";
 
 export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => void; arcV2?: boolean }) {
-  const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun } = useScan();
+  // Boot theater (T2+T4a, default ON; classic ScanStream is the failsafe). Read once at mount —
+  // this is a full-screen arc, Settings can't flip beneath it. Theater tightens the reveal to
+  // 200ms/row so 16 checks land inside the ~3–4s ceiling; a click skips to the verdict.
+  const [theater] = useState(readFirstCheckTheater);
+  const reduced = useReducedMotion();
+  const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun, skip } = useScan(
+    theater ? { staggerMs: 200 } : undefined,
+  );
   const [greenOpen, setGreenOpen] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -75,7 +85,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
 
   return (
     <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
-      <div className="fc-screen">
+      <div className={`fc-screen ${theater && (running || phase === "scan") ? "fc-screen-theater" : ""}`}>
         <header className="fc-head">
           <span className="fc-brand">
             <Wordmark size={20} />
@@ -87,12 +97,22 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
           </span>
         </header>
 
-        {/* Scan rows — stream in as the (real) checks display, with a light sweep passing across.
-            Scan phase ONLY: on verdict the run-list resolves INTO the verdict below (the green
-            collapsible carries the per-check detail) — never both stacked (owner bug, 2026-07-06). */}
-        {(running || phase === "scan") && (
-          <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
-        )}
+        {/* Scan rows — stream in as the (real) checks display. Scan phase ONLY: on verdict the
+            run-list resolves INTO the verdict below (the green collapsible carries the per-check
+            detail) — never both stacked (owner bug, 2026-07-06). Theater ON: the HUD boot readout
+            (active check prominent, completed stack, queued count); OFF: the classic light sweep. */}
+        {(running || phase === "scan") &&
+          (theater ? (
+            <BootTheater
+              readiness={readiness}
+              shownRows={shownRows}
+              running={running}
+              reduced={reduced}
+              onSkip={skip}
+            />
+          ) : (
+            <ScanStream readiness={readiness} shownRows={shownRows} running={running} phase={phase} />
+          ))}
 
         {/* Verdict — appears after the rows have streamed. */}
         {phase === "verdict" && (
