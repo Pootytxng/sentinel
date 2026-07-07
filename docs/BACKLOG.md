@@ -13,6 +13,29 @@
 
 ---
 
+## 🧰 TOOLCHAIN — Fable-window persistence pack (Cowork lane, 2026-07-06)
+
+> Owner directive: use the closing Fable-5 window to persist its judgment as toolchain assets
+> (skills/guards/scripts) so post-Fable models (Opus 4.8 / Sonnet) execute at the same floor.
+> Extend-and-consolidate, NOT replace (owner-confirmed): everything below slots beside the existing
+> self-review / impeccable / coverage-sweep stack.
+
+- [x] **5 new project skills** — `.claude/skills/{mutation-gate, gate-drift-audit, ship, guard-forge,
+  doc-sync}` + **`.claude/skills/INDEX.md`** (trigger + cheapest-executor routing for all 8 skills,
+  plus 4 tier-2 spec'd-not-built entries: receipts-copy-lint · new-tester-onboarding · council-strip ·
+  receipts-arming-review). CLAUDE.md got a pointer stanza (PROJECT SKILLS INDEX).
+- [x] **`scripts/verify-release-state.mjs`** — mechanizes layer-1 of the gate-drift audit (parses every
+  backticked `path:line` citation in RELEASE_STATE.md, binds adjacent symbols, verifies location).
+  **Proved itself on first run:** caught 6 citations drifted 77–253 lines (preload/receipt trains grew
+  actions.rs/history.rs above the cited symbols) — all re-anchored same pass, layer-2 source re-read
+  confirmed every gate VALUE unchanged (one truth fix: CSP note now quotes the literal connect-src).
+  Script now exits 0 (21/21 anchored).
+- [x] **`ship-reminder` PostToolUse(Bash) hook** — nudges the silent-reinstall law + RELEASE_STATE row
+  after any `tauri build` (same pattern/throttle as self-review-reminder; behavior-tested pos+neg).
+- [ ] ⛔ **Commit this train from the CC lane (Windows-side)** — Cowork sandbox doesn't touch git
+  (FUSE .git view unreliable, standing memory). Everything above is working-tree only until then.
+  Suggested: `feat(toolchain): Fable persistence pack — 5 skills + INDEX + gate-drift script (6 citations re-anchored) + ship hook`.
+
 ## 🔥 TOP PRIORITY LANE (owner directive 2026-07-05) — de-slop the UI, organic + unique
 
 Full spec: [`docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md`](superpowers/specs/2026-07-05-ui-deslop-organic-directive.md).
@@ -30,6 +53,35 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   - [x] 🎨 **OWNER CHECKPOINT:** Lab checkup bento — **approved (owner 2026-07-06: "all looks good")**; flipping default-ON with the rollout-train rebuild.
   - [x] Stepper (owner's 2nd reactbits prompt, pre-vetted pass) — **shipped `76cfb5e`** (2026-07-05), behind `compy_setup_stepper` (Settings → Appearance "Setup stepper (preview)", DEFAULT OFF): the Setup & Tour's footer progress row as numbered React Bits step indicators (active dot · check-marked completed steps · animated accent connectors · click hops to a step). Vendored per the law (StepIndicator/StepConnector exported; vendor purple moved out of the motion variants into token CSS, can never paint — test-pinned; reduced-motion gated). Flag-off byte-identity pinned; 7 new guards, vitest 1037; zero src-tauri. Self-review PASS at native 1500×980.
   - [x] 🎨 **OWNER CHECKPOINT:** Setup stepper — **approved (owner 2026-07-06: "all looks good")**; flipping default-ON with the rollout-train rebuild.
+
+## 🚀 LAUNCH RUNWAY — the ordered cutline to first launch (Cowork consolidation, 2026-07-06)
+
+> Owner asked for the linear path to "MVP final / first launch." Verified against code by a
+> read-only sweep 2026-07-06: **zero open code stubs** (no `todo!`/`unimplemented!`/FIXME across
+> src-tauri + src; the single TODO hit is a resolved-2026-06-11 reference, `latency.rs:944`) and
+> **no real UI gaps** — every "not yet / placeholder" string is an honest-by-design label,
+> loading-state comment, or literal input placeholder. "Unfinished" = the gated features + owner
+> decisions below, not hidden broken code. Gate booleans re-verified at source (drifted lines:
+> service_suspend `actions.rs:1435` · bloat_removal `actions.rs:1506` · preload `actions.rs:1646`).
+
+- **RUNG 0 — in flight now (CC, Fable window):** the 2026-07-06 train
+  (`docs/superpowers/specs/2026-07-06-firstcheck-monitor-mvp-train.md`) — T0 stamp-check ·
+  T1 FirstCheck dedupe · T2 FirstCheck stepper redesign · T3 Monitor summary-first ·
+  T4 owner-picked R&D components (`2026-07-06-design-rnd-options.md`) · T5 optional QA filler.
+- **RUNG 1 — THE fork (owner decision; everything sequences from it):** beta artifact = frozen
+  `16069fa` (verified, older, no Gaming Mode/Phase-B) **vs** current `main` (richer; requires
+  RUNG 2). RELEASE_STATE "Required owner decisions" #1 — no middle ground.
+- **RUNG 2 — only if `main`:** fresh full §6/§7 installed-build QA on the current installer
+  (CC-runnable parts = T5) + **owner-run reboot-while-active Gaming Mode test** (open blocker).
+- **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
+  RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
+- **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code
+  signing (Azure Trusted Signing route) · legal finalization (EULA/PRIVACY drafts → final) ·
+  GitHub repo rename + `compy.gg` domain (bundled at first public exposure, per CLAUDE.md).
+- **NOT launch blockers (each gated by its own track, deliberately dark):** Receipts arming
+  (security review + consent UI) · preload-removal arming (live QA + owner-curated list) ·
+  remote-fetch arming (production key + CDN + semver + rollout) · licensing/Pro enforcement ·
+  A4 advisory items (owner-curated data / outbound-gated) · Phase C/D money items.
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
