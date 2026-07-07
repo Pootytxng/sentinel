@@ -151,6 +151,25 @@ installed-build QA) · Gaming Mode reboot-while-active QA · code signing route 
 
 ---
 
+## TRAIN STATE (CC session handoff, 2026-07-06 ~22:35)
+
+All code is ON MAIN, pushed. T0 ✓ · T1 `8c9b711` ✓ · T2+T4a `8f37161` ✓ (self-review PASS
+end-to-end incl. fill-frame re-measure) · docs `b64f046` ✓ · T3+T4b `d170c66` ✓ (self-review
+PASS all items; the LiveCharts-duplication FAIL was fixed + guard-pinned + re-verified PASS
+live in both flag states) · T4c+T4d `bf76a07` — built, tsc clean, vitest 1071/1071, **visual
+self-review PENDING** (commit says so). GSAP approved but not used (zero-dep theater);
+`@react-three/postprocessing@3.0.4` added for T4d (THIRD_PARTY.md updated, per-origin
+vendor-hygiene guard extended).
+
+**Next steps, in order:** (1) dispatch `self-reviewer` for T4c (ambient-hud.css: grain/glass/
+holo-foil on the rooms + modals) and T4d (Home hologram bay v2: holo shell in theme accent,
+Bloom, explode-Glitch burst, orbit now opt-in, reduced-motion static) — fix anything it fails;
+(2) `npm run tauri build` then the `ship` skill (silent reinstall + stamp-verify, expect stamp
+= new HEAD); (3) `doc-sync`/RELEASE_STATE update (live-installer row; note Cowork lane also
+has uncommitted RELEASE_STATE/CLAUDE.md/.claude-skills WIP in the tree — do NOT sweep it);
+(4) T5 installed-build QA sweep if window remains. New flags (all default ON, Settings →
+Appearance): `compy_firstcheck_theater` · `compy_monitor_cards` · `compy_hologram_v2`.
+
 ## Report format (standing)
 
 Per task: `hash · 1–2 line what · one verify line (tsc/vitest/self-review/stamp) · flags`.
