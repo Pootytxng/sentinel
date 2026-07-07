@@ -30,7 +30,8 @@ The dev build runs two same-origin webviews + a small default window, so capture
 - Resize the REAL OS window (~1500×980 via MoveWindow) and capture NATIVELY with
   `docs/ui-sweep/cdp-shot.mjs`. Do NOT trust `setDeviceMetricsOverride` — it distorts when the
   real window is small (it has manufactured a false floating-panel defect AND can hide real ones).
-- Confirm the shot is the MAIN window (6 `.cc-rail-item`s visible), not the overlay.
+- Confirm the shot is the MAIN window (the nav rail present — currently 5 `.v2-nav-item`s; the
+  FPS overlay never has a rail), not the overlay.
 - For the EXACT element changed: scroll to it / zoom — look AT it, not just the page.
 
 ## The rubric — one line of EVIDENCE each. No evidence = not reviewed.
@@ -47,6 +48,16 @@ The dev build runs two same-origin webviews + a small default window, so capture
 6. **Wording** — plain, accurate, no stale references (renamed features — "Optimize", "Startup
    tab" — no longer exist).
 7. **The owner's exact ask** — decompose multi-part asks; quote each part, confirm it's met.
+8. **Canvas idle rest** (only when the diff touches the r3f canvas tree — `src/surfaces/rig/**`,
+   the HomeHud stage, or a vendored 3D material; otherwise evidence = "n/a, no canvas files in
+   diff" and the item passes) — the resting bay must not repaint (bug→guard, T1.5 idle
+   pulse/hitch: content-equal polls and referentially-new props each forced r3f invalidations).
+   Probe via `cdp-eval.mjs`: install GL draw counters
+   (`for (const fn of ['drawElements','drawArrays','drawElementsInstanced','drawArraysInstanced'])`
+   patch `WebGL2RenderingContext.prototype[fn]` to increment `window.__glProbe.draws`), go to
+   Home, hands off ≥15s → draw growth MUST be 0 (real sensor-data changes exempt — say so if
+   seen); then toggle Orbit on → draws MUST grow (the bay still animates on demand), toggle off.
+   STATE both numbers.
 
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the
@@ -66,6 +77,7 @@ SELF-REVIEW — <one-line scope>
 5 Layout: <evidence>                               PASS|FAIL
 6 Wording: <evidence>                              PASS|FAIL
 7 Ask: "<quoted part>" → <met?> (× each part)      PASS|FAIL
+8 Canvas idle: <0-draw rest + orbit-grows numbers, or n/a>  PASS|FAIL
 VERDICT: PASS | FAIL — <if FAIL: minimal precise fix list, element + property + expected value>
 ```
 

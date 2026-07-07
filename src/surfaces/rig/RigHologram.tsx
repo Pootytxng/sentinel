@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import { EffectComposer, Bloom, Glitch } from "@react-three/postprocessing";
@@ -9,6 +9,7 @@ import HolographicMaterial from "../../design/vendor/HolographicMaterial/Hologra
 import { readHologramV2 } from "../../design/theme";
 import type { HardwareInfo } from "../../App";
 import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-parts";
+import { nextFanSensors, type FanSensor } from "./fan-sensors";
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
 import { useRigColors, partColor } from "./use-rig-colors";
 import { useReducedMotion } from "../../design/use-motion";
@@ -32,6 +33,14 @@ import { RigFan, type FanInfo } from "./RigFan";
 // cameraDist is used unchanged (its framing behavior is preserved). Orbit angle + user zoom are
 // preserved between resizes (we only scale the distance along the current view direction); a resize
 // re-fits. invalidate() repaints even under frameloop="demand" (reduced motion / step-aside).
+// Glitch config as module constants: r3f diffs object props by REFERENCE, so inline
+// `new Vector2(...)` re-commits on every parent re-render and invalidates the resting
+// demand-mode canvas (the 5s idle-repaint driver — HomeHud's live mem poll re-renders
+// this tree; GL-draw-probe-proven). Same idle-repaint class as the fan-poll bail.
+const GLITCH_DURATION = new Vector2(0.15, 0.35);
+const GLITCH_DELAY = new Vector2(0, 0.1);
+const GLITCH_STRENGTH = new Vector2(0.15, 0.4);
+
 function FitCamera({ baseDist }: { baseDist: number }) {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
@@ -72,7 +81,12 @@ interface Props {
   cameraDist?: number;
 }
 
-export function RigHologram({
+// Memoized: parents re-render on live polls (HomeHud's 5s mem/GPU tick), and ANY re-render
+// that reaches the canvas re-commits referentially-new handler props on the meshes, which
+// r3f invalidates — repainting the resting demand-mode bay (GL-draw-probe-proven, T1.5).
+// With stable props the memo stops parent ticks at this boundary; the bay only re-renders
+// on real prop changes or its own state (sensor changes, interaction).
+export const RigHologram = memo(function RigHologram({
   hw,
   exploded,
   autoRotate,
@@ -106,9 +120,7 @@ export function RigHologram({
     const id = window.setTimeout(() => setGlitching(false), 450);
     return () => window.clearTimeout(id);
   }, [exploded, holoV2, reduced]);
-  const [fanSensors, setFanSensors] = useState<{ label: string; rpm: number; source: string }[] | null>(
-    null,
-  );
+  const [fanSensors, setFanSensors] = useState<FanSensor[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,8 +184,11 @@ export function RigHologram({
     if (gameActive) return;
     let cancelled = false;
     const poll = () => {
-      invoke<{ label: string; rpm: number; source: string }[]>("get_fan_sensors")
-        .then((f) => !cancelled && setFanSensors(f))
+      invoke<FanSensor[]>("get_fan_sensors")
+        // Content-equal polls keep the previous reference (nextFanSensors) — a fresh-but-equal
+        // array here re-renders the canvas tree and r3f invalidates, repainting the resting bay
+        // every 2.5s (the T1.5 idle pulse; GL-draw-probe-proven). Real changes still repaint.
+        .then((f) => !cancelled && setFanSensors((prev) => nextFanSensors(prev, f)))
         .catch(() => {});
     };
     poll();
@@ -360,13 +375,13 @@ export function RigHologram({
           <Glitch
             active={glitching}
             mode={GlitchMode.SPORADIC}
-            duration={new Vector2(0.15, 0.35)}
-            delay={new Vector2(0, 0.1)}
-            strength={new Vector2(0.15, 0.4)}
+            duration={GLITCH_DURATION}
+            delay={GLITCH_DELAY}
+            strength={GLITCH_STRENGTH}
             ratio={0.6}
           />
         </EffectComposer>
       )}
     </Canvas>
   );
-}
+});

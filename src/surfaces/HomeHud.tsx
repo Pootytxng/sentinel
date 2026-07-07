@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
@@ -194,6 +194,9 @@ export function HomeHud({
   const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Stable handler: an inline arrow here breaks RigHologram's memo, letting every 5s live-poll
+  // re-render re-commit mesh handlers and repaint the resting bay (the T1.5 idle-repaint class).
+  const onRigSelect = useCallback((id: string) => setSelectedId(id || null), []);
   const { parts: manualParts } = useManualParts();
 
   // ── pointer parallax (JARVIS depth, event-driven — no rAF loop, nothing runs on blur).
@@ -325,7 +328,7 @@ export function HomeHud({
             autoRotate={autoRotate}
             selectedId={selectedId}
             hoveredId={hoveredId}
-            onSelect={(id) => setSelectedId(id || null)}
+            onSelect={onRigSelect}
             onHover={setHoveredId}
             manualParts={manualParts}
             cameraDist={6.9}
