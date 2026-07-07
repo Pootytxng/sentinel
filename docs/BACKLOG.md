@@ -70,11 +70,14 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   (`docs/superpowers/specs/2026-07-06-firstcheck-monitor-mvp-train.md`) — T0 stamp-check ·
   T1 FirstCheck dedupe · T2 FirstCheck stepper redesign · T3 Monitor summary-first ·
   T4 owner-picked R&D components (`2026-07-06-design-rnd-options.md`) · T5 optional QA filler.
-- **RUNG 1 — THE fork (owner decision; everything sequences from it):** beta artifact = frozen
-  `16069fa` (verified, older, no Gaming Mode/Phase-B) **vs** current `main` (richer; requires
-  RUNG 2). RELEASE_STATE "Required owner decisions" #1 — no middle ground.
-- **RUNG 2 — only if `main`:** fresh full §6/§7 installed-build QA on the current installer
-  (CC-runnable parts = T5) + **owner-run reboot-while-active Gaming Mode test** (open blocker).
+- **RUNG 1 — DECIDED (owner, 2026-07-06): beta ships from CURRENT `main`** ("more complete in
+  the way I want it"). Frozen `16069fa` stays archival. Consequence: RUNG 2 is now REQUIRED.
+- **RUNG 2 — REQUIRED before any send, in order:** ① single-prompt Gaming Mode elevation fix
+  (train T6 — owner-caught 5–6 UAC prompts on enable, 2026-07-06) → ② fresh full §6/§7
+  installed-build QA on the current installer (CC-runnable parts = train T5, now mandatory) →
+  ③ **owner-run GAMING_MODE_QA.md live case #4** (start Gaming Mode → reboot → relaunch →
+  confirm restore prompt → exact prior state back). ~5 min of owner time; the only
+  live-checklist case a session cannot prove — run it against the post-T6 single-prompt build.
 - **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
   RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
 - **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code
@@ -84,6 +87,11 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   (security review + consent UI) · preload-removal arming (live QA + owner-curated list) ·
   remote-fetch arming (production key + CDN + semver + rollout) · licensing/Pro enforcement ·
   A4 advisory items (owner-curated data / outbound-gated) · Phase C/D money items.
+- **QUEUED post-runway (owner-greenlit 2026-07-07, spec'd, NOT started):** Two Futures measured
+  split view — Exebenus-inspired side-by-side hologram of measured baseline vs after, benchmark/
+  trial structs only, `compy_two_futures` default OFF, frontend-only, ~1 train (M). Spec:
+  `docs/superpowers/specs/2026-07-07-two-futures-measured-split.md`. Hard law: no measured pair →
+  no render (anti-fabrication guard test required). Pull ONLY after RUNG 2 closes.
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
@@ -728,8 +736,4 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 > **✅ Phase-A closure (verified 2026-07-01):** no unchecked, non-gated, cleanly-buildable Phase-A `[ ]` item remains — the 5 open rows are all gated/walled: safe-to-suspend data (owner-curated) · peripheral debounce/Snap-Tap/Rapid-Trigger *detection* + sensor-ID DB (user-mode firmware-read wall, same class as DPI/line 355) · ISP-speed + DNS probes (📡 outbound-gated). Remaining VALUE is Phase B/C/D (gated). Supersedes the stale "Bottom line" below.
 
 ## Bottom line (2026-06-23)
-The 1.0 lane (Phase A) is **substantially but not fully built**. A1 and A6 are done; A2 mostly done; A3 and
-A5 have scattered finishable gaps. **The real remaining bulk is A4** — Services advisory inventory, the
-entire Peripheral Audit surface, deep Network detection, and the Monitor preset/OSD/hint cards. So: no, the
-list has not been fully worked. The next-up, highest-leverage, non-gated work is **A4 + the A5 finishables
-(wire `hwchange.rs` to the UI) + A3 entry metadata**.
+The 1.0 lane (P
