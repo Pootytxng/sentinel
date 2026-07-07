@@ -1579,14 +1579,20 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
         games, no <Term id="kernel-driver">kernel driver</Term> —
         anti-cheat compatible. The overlay draws over borderless/windowed
         games (not exclusive fullscreen). Charts show the last minute.
-        <br />
+      </p>
+      </>
+      )}
+
+      {/* vendor-honesty: always rendered (LOCKED rule #5) — this line was silently unreachable for
+          weeks because it lived inside the !embedded header above while every live call site embeds
+          (self-review catch, 2026-07-07). Do not move it back under a mode gate; pinned by
+          vendor-honesty-line-guard.test.ts. */}
+      <p className="section-help">
         <span className="coverage-note">
           GPU sensor coverage: <strong>AMD — verified</strong> · NVIDIA —
           implemented, not yet hardware-verified · Intel — planned.
         </span>
       </p>
-      </>
-      )}
 
       {/* RAM-pressure warning — the invisible stutter cause; shows only when tight/critical */}
       {mem && <MemoryPressureBanner mem={mem} />}

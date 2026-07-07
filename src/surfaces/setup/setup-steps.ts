@@ -151,6 +151,7 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
       "Fewer startup apps fighting for CPU time (Compy's startup review)",
     ],
     tab: { id: "check", tie: "The Check tab scans for CPU limiters and applies the top fix." },
+    note: "One honest gap: CPU temperature needs a kernel driver to read, and Compy will never ship one — GPU temperature comes from the vendor's own SDK instead.",
   },
   {
     kind: "ram",

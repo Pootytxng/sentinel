@@ -163,11 +163,18 @@ exclusive fullscreen — by design, no injection).
 
 ## 7. UI truth surfaces
 
-- ☐ **Onboarding** (first run, or "Replay intro") — 4 steps; explains
-  Recommended vs Applied-by-Compy; explains **why there's no CPU temp**
-  (no kernel driver).
-- ☐ **Three-row strip** on rec cards — *Recommended / Current / Applied by
-  Compy* all present and correct.
+- ☐ **Onboarding** (first run, or Settings → "Re-run setup") — the 10-step tour
+  (4 setup steps + hardware lessons + recap; *re-anchored 2026-07-07 from the
+  retired "4 steps" wording*): step 2 teaches Recommended/Current + the
+  apply→ledger loop; the CPU lesson's note explains **why there's no CPU temp**
+  (kernel driver — honesty note added 2026-07-07 after the T5 sweep found it
+  missing).
+- ☐ **Rec-card truth rows** (*re-anchored 2026-07-07: the literal
+  "Recommended / Current / Applied by Compy" three-row strip was superseded by
+  the P1 slim-row redesign*) — Fixes rows (SlimRecRow) carry dot · title ·
+  proof · badge + Why-it-matters / Evidence / What-changes / Undo panels; the
+  Applied ledger card + ActionDrawer carry Active-since and Before→After. Same
+  truth, new shape — verify those instead.
 - ☐ **Provenance pills** — *Verified* / *Measured signal* / *Expected impact*
   render with the right visual weight.
 - ☐ **Rules-source pill** — shows the embedded/baseline source (remote fetch is
