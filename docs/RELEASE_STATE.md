@@ -58,7 +58,8 @@
 |---|---|
 | Manual-mutation apply/rollback QA | **CLOSED** 2026-05-31 (owner sign-off) — `RELEASE_QA.md:3`. NOT an open blocker. |
 | Private-beta functional blockers | **NONE** for the frozen `16069fa` build (`PACKAGING_SIGNING_PLAN.md:131`). Current `main` wants its own fresh installed-build QA if shipped. |
-| Gaming Mode live reboot-while-active QA | **OPEN (owner)** — needs a physical reboot test before broad ship. |
+| Gaming Mode live reboot-while-active QA | **OPEN (owner)** — needs a physical reboot test before broad ship. Sequenced AFTER the T6 single-prompt fix (below) so it QAs the shipping UX. |
+| Gaming Mode enable fires ~5–6 UAC prompts | **OPEN** — owner-caught 2026-07-06 ("unacceptable"). Fix = batch session-start elevated work into ONE `--run-elevated` invocation (2026-07-06 train T6; mutation-boundary, full rigor; UAC *policy* settings untouched per standing rule). Gates the reboot QA + beta send. |
 | Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
 | Legal (EULA license model + jurisdiction, PRIVACY) | **OPEN** — gates PUBLIC release. DRAFTS only. |
 | Receipts security review + consent UI + payload preview + kill switch | **OPEN** — gates arming Receipts telemetry. |
@@ -67,6 +68,6 @@
 
 ## Required owner decisions (live)
 
-1. **Beta artifact choice:** ship frozen `16069fa` (verified, older, no Gaming Mode / Phase-B) **vs.** current `main` (richer, needs a fresh full installed-build QA incl. Gaming Mode reboot test). No middle ground.
+1. **Beta artifact choice — DECIDED (owner, 2026-07-06): current `main`.** ("I like the current main build, it's more complete in the way I want it.") Frozen `16069fa` stays archival. Consequence armed: fresh full installed-build QA on `main` (2026-07-06 train T5, now REQUIRED) + owner-run GAMING_MODE_QA.md live case #4 (reboot-while-active) before any send.
 2. Code-signing route + legal finalization (PUBLIC gates).
 3. When/whether to arm Receipts (its own security review + owner sign-off).

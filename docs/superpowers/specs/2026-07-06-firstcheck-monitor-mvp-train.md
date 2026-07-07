@@ -11,8 +11,9 @@
 > Standing laws apply as written in CLAUDE.md (self-review before any UI done-claim ·
 > ship-reinstall + stamp-verify after any build · terse reports: hash · what · verify · flags).
 
-**HARD LINES for this train:** frontend-only — `git diff <base>..HEAD -- src-tauri/` must stay
-EMPTY · no locked-gate crossings · LOCKED aesthetic direction stands (restrained operator-console
+**HARD LINES for this train:** frontend-only for T1–T4 — their combined `git diff -- src-tauri/`
+must stay EMPTY (**T6 is the ONE sanctioned src-tauri task**, mutation boundary, full
+mutation-gate rigor, x-high effort) · no locked-gate crossings · LOCKED aesthetic direction stands (restrained operator-console
 Stark-HUD; **never gamer-RGB/neon**) · any new vendored React Bits component follows the vendor
 law (theme tokens only, vendor purple can never paint — test-pinned, reduced-motion gated) ·
 honest-measurement law: presentation pacing is fine, fabricated work/progress is not.
@@ -44,6 +45,23 @@ Verify the fix on BOTH entry paths (first run and re-run from Settings/Lab, what
 this surface).
 
 **Guard (bug→guard):** vitest pin — verdict state renders each check title exactly once.
+
+## T1.5 — Owner-caught LIVE defects (eyeball report 2026-07-06) — bug→guard applies to both
+
+Owner verdict on the live build (`394dd2f`): "everything looks really good" + TWO defects:
+
+1. **Hologram flicker (Home):** intermittent glitchy visual flicker on the hologram bay.
+   Diagnose on hardware BEFORE beautifying — do not build T4d's holo-material on top of an
+   undiagnosed flicker; fix lands with or before T4d. Leads (unconfirmed — verify, don't
+   assume): ElectricBorder animation loop · scanline overlay compositing · drag-orbit/parallax
+   rAF interplay · WebView2 GPU/driver fallback. Guard: mechanized if possible (CDP
+   frame-capture diff), else a permanent self-review rubric item (observe the bay ≥10s at
+   native res, state observed frame behavior).
+2. **Tab/room-switch delay:** perceptible lag clicking between rooms. Profile BEFORE T4c —
+   the ambient skin adds backdrop-filter layers and unbudgeted it could compound this; T4c
+   must not regress switch latency (state the measured before/after in its self-review).
+   Find the actual cost (mount-time render? effect re-init? style recalc?), fix, guard with an
+   interaction-timing check (automated if mechanizable, else rubric line with measured ms).
 
 ## T2 — FirstCheck run screen: stepper-language redesign (owner verdict: "stale and sloppy")
 
@@ -111,14 +129,48 @@ THIRD_PARTY.md entry + test pins + self-review; classic-failsafe flag where DOM 
 - **T-LATER (queued, NOT this train):** pointer-parallax/3D-tilt depth layer on cards/bento —
   owner deferred until T0–T3 have landed.
 
-## T5 — OPTIONAL Fable-window filler: fresh installed-build QA sweep on `main`
+## T5 — REQUIRED (was optional; owner decided 2026-07-06: beta ships from `main`): fresh installed-build QA sweep
 
-If T0–T4 complete with window remaining: RELEASE_STATE flags that current `main` has never had
-a fresh full §6/§7 installed-build pass (last full pass = the frozen 2026-05-31 beta). Run the
-CC-runnable parts against the live install — apply/rollback spot-checks through the audited
-path, Gaming Mode session cycle, ledger integrity, overlay, FPS capture. **Reboot-while-active
-stays owner-run.** Verification work, zero new risk surface, directly burns down a launch
-blocker.
+The owner resolved RUNG 1 — the beta artifact is **current `main`**, not the frozen `16069fa`.
+That makes this QA mandatory before any send: current `main` has never had a fresh full §6/§7
+installed-build pass (last full pass = the frozen 2026-05-31 beta). Run the CC-runnable parts
+against the live install — apply/rollback spot-checks through the audited path, Gaming Mode
+session cycle (harness cases), ledger integrity, overlay, FPS capture. **Dependency: run the
+Gaming Mode cases only AFTER T6 lands** (single-prompt elevation) — QA the shipping UX, not the
+retiring one. **GAMING_MODE_QA.md live checklist case #4 (full reboot while Active) stays
+owner-run** — prompt the owner for his 5-minute reboot test when everything else incl. T6 is
+green, then check the box in that doc.
+
+## T6 — Gaming Mode enable: collapse 5–6 UAC prompts to ONE (owner-caught 2026-07-06, BLOCKS T5's Gaming Mode cases + the owner reboot test)
+
+**Symptom (owner, live build):** enabling Gaming Mode fires ~5–6 separate UAC/PowerShell
+prompts. Owner verdict: "unacceptable and tedious... huge red flag." He's right — one intent,
+one consent.
+
+**Execution order: T6 runs BEFORE T5's Gaming Mode session-cycle cases and before asking the
+owner for the reboot test** — QA must validate the final UX, not the one being replaced.
+
+**Do:** diagnose first — enumerate exactly which actions in session-start elevate and why each
+spawns its own `run_elevated_powershell`/`--run-elevated` relaunch. Then batch: ONE elevated
+invocation carrying the session's full elevated payload, ONE UAC prompt. Semantics that MUST
+survive (this is why it's x-high at the mutation boundary):
+- **Cancel at the single prompt = no-partial** (today's proven contract, now trivially true —
+  nothing ran).
+- **Per-item honest outcomes inside the batch** — partial failure mid-batch still writes honest
+  per-action ledger records; `elevation_outcome` 4-way attribution preserved.
+- **Rollback contracts captured per action at apply time, unchanged** — each item individually
+  undoable from `history.json` alone; exact-restore re-proven (the service-suspend QA class).
+- Advanced-tier toggles (USB-SS / PCIe-ASPM): fold into the same single prompt if enabled at
+  start; a second prompt is acceptable ONLY for a genuinely separate later user action.
+
+**ABSOLUTE LINE (standing rule, precedent 2026-06-10):** the fix is batching OUR elevated work.
+NEVER touch UAC policy/system security settings (`EnableLUA`, `ConsentPromptBehaviorAdmin`,
+`PromptOnSecureDesktop`, anything under Policies\System) — not even to diagnose, not even
+reversibly. That's owner-territory welfare-check, full stop.
+
+**Guard (bug→guard):** cargo test pinning session-start requests elevation AT MOST ONCE
+(count elevated invocations per start at the dispatch layer) + the existing no-partial and
+exact-restore suites re-run green.
 
 ---
 

@@ -736,4 +736,8 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 > **✅ Phase-A closure (verified 2026-07-01):** no unchecked, non-gated, cleanly-buildable Phase-A `[ ]` item remains — the 5 open rows are all gated/walled: safe-to-suspend data (owner-curated) · peripheral debounce/Snap-Tap/Rapid-Trigger *detection* + sensor-ID DB (user-mode firmware-read wall, same class as DPI/line 355) · ISP-speed + DNS probes (📡 outbound-gated). Remaining VALUE is Phase B/C/D (gated). Supersedes the stale "Bottom line" below.
 
 ## Bottom line (2026-06-23)
-The 1.0 lane (P
+The 1.0 lane (Phase A) is **substantially but not fully built**. A1 and A6 are done; A2 mostly done; A3 and
+A5 have scattered finishable gaps. **The real remaining bulk is A4** — Services advisory inventory, the
+entire Peripheral Audit surface, deep Network detection, and the Monitor preset/OSD/hint cards. So: no, the
+list has not been fully worked. The next-up, highest-leverage, non-gated work is **A4 + the A5 finishables
+(wire `hwchange.rs` to the UI) + A3 entry metadata**.
