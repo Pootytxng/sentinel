@@ -5,6 +5,7 @@ import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { Sparkline } from "../design/Sparkline";
 import { useReducedMotion } from "../design/use-motion";
+import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
@@ -188,7 +189,9 @@ export function HomeHud({
     }
   };
   const [exploded, setExploded] = useState(false);
-  const [autoRotate, setAutoRotate] = useState(true);
+  // Orbit is an explicit opt-in under hologram v2 (bay rests on frameloop "demand", idle GPU ~0);
+  // classic (flag off) keeps its always-orbiting default — same contract as RigViewer's bay.
+  const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const { parts: manualParts } = useManualParts();
