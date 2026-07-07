@@ -43,7 +43,6 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
       "feedback-hub",
       "bing-news",
       "office-hub",
-      "spotify-preload",
     ]);
   });
 
@@ -69,7 +68,7 @@ describe("PreloadApps (Phase-B, BUILT DARK)", () => {
     expect(screen.getByText("Feedback Hub")).toBeTruthy();
     // Not installed → never offered (no "remove something that isn't there").
     expect(screen.queryByText("Microsoft News")).toBeNull();
-    expect(screen.queryByText(/Spotify/)).toBeNull();
+    expect(screen.queryByText("Microsoft 365 (Office) hub")).toBeNull();
   });
 
   it("remove flow: calls the gated command and shows the honest done state", async () => {

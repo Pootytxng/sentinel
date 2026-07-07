@@ -646,8 +646,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   discussion (spec `docs/superpowers/specs/2026-07-06-preload-app-removal-dark.md`): the `HKCU\Run` DELETION half
   was **dropped** (the reversible startup disable already ships — `set_startup_entry_enabled`, same flag Task
   Manager flips; deleting the leftover line buys tidiness at real rollback cost) and the buildable half is
-  **per-user UWP preload-app removal**, now built dark: `KnownPreloadApp` typed allowlist (5-app starter set,
-  Store-published + no-user-data rules; Clipchamp/To Do excluded as data-adjacent), `preload_removal_gate()`==false,
+  **per-user UWP preload-app removal**, now built dark: `KnownPreloadApp` typed allowlist (4-app starter set,
+  Store-published + no-user-data rules; Clipchamp/To Do excluded as data-adjacent; **Spotify cut by owner
+  curation 2026-07-06** — same package id as a real install, no honest "stub" framing), `preload_removal_gate()`==false,
   snapshot-or-refuse apply (live PackageFullName/FamilyName/Version read, verified-gone re-read), two-tier honest
   undo (silent re-register verified by re-read, else Store-page hand-off returns Err so the ledger entry stays
   active), gated `remove_known_preload_app` + read-only `get_preload_apps`, dark-safe `PreloadApps` Fix card

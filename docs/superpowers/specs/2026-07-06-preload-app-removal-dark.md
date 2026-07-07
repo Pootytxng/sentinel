@@ -23,10 +23,13 @@
 - Exact typed-enum match (`from_id`), unknown input rejected — the `KnownBloatTask` pattern.
 - The list is owner-curated before arming (starter set is a proposal, not a shipped judgment).
 
-**Starter set (5):** Solitaire Collection · Feedback Hub · Microsoft News · Microsoft 365 (Office)
-hub · Spotify preload. Store ProductIds are carried as consts and MUST be live-verified during the
-arming QA (each `ms-windows-store://pdp/` link opened + confirmed) — they are curated data, not
-runtime reads.
+**Starter set (4, owner-curated 2026-07-06):** Solitaire Collection · Feedback Hub · Microsoft
+News · Microsoft 365 (Office) hub. **Spotify CUT from the v1 proposal by owner decision
+(2026-07-06):** `SpotifyAB.SpotifyMusic` is the identical package id for the preload stub and a
+user's daily-driver install — the "Store stub" framing would be false for active users (surprise
+sign-out risk). May return later behind a usage check. Store ProductIds are carried as consts and
+MUST be live-verified during the arming QA (each `ms-windows-store://pdp/` link opened +
+confirmed) — they are curated data, not runtime reads.
 
 ## Rollback contract (two honest tiers)
 
@@ -34,9 +37,10 @@ Snapshot at apply time = the package's **PackageFullName + PackageFamilyName + V
 the live system** (ground truth, never a const). If that read fails → REFUSE before any mutation
 ([[mutation-snapshot-failsafe-idiom]]).
 
-1. **Tier 1 — silent re-register:** `Add-AppxPackage -RegisterByFamilyName -MainPackage <PFN>`
-   (works when the package is still staged on disk). Success is VERIFIED by re-reading the
-   installed state — never assumed from exit status.
+1. **Tier 1 — silent re-register:** `Add-AppxPackage -RegisterByFamilyName -MainPackage
+   <package family name>` (the snapshot's PackageFamilyName; works when the package is still
+   staged on disk). Success is VERIFIED by re-reading the installed state — never assumed from
+   exit status.
 2. **Tier 2 — Store hand-off:** if re-register fails, open the app's Store page and return `Err`
    with plain-English instructions ("press Install"). The ledger entry stays ACTIVE (honest: not
    yet rolled back); pressing Roll back again after the Store install verifies and closes it.

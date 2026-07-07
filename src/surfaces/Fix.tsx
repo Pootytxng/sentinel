@@ -485,7 +485,7 @@ export const PRELOAD_APPS: { id: string; label: string; what: string }[] = [
   { id: "feedback-hub", label: "Feedback Hub", what: "collects Windows feedback and diagnostic reports for Microsoft" },
   { id: "bing-news", label: "Microsoft News", what: "preinstalled news-feed app" },
   { id: "office-hub", label: "Microsoft 365 (Office) hub", what: "launcher for Office web apps" },
-  { id: "spotify-preload", label: "Spotify (preinstalled)", what: "the Store stub Windows ships — your account and playlists live on Spotify's side" },
+  // Spotify cut by owner curation 2026-07-06 — same package id as a real install, no honest "stub" copy.
 ];
 
 // Renders NOTHING unless the backend reports the feature armed AND at least one curated app is

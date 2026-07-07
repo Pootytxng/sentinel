@@ -124,16 +124,17 @@ pub(crate) enum KnownPreloadApp {
     FeedbackHub,
     BingNews,
     OfficeHub,
-    Spotify,
+    // Spotify was in the v1 proposal and CUT by owner curation 2026-07-06: SpotifyAB.SpotifyMusic
+    // is the same package id for the preload stub AND a user's daily-driver install — no honest
+    // "stub" framing exists. May return behind a usage check.
 }
 
 impl KnownPreloadApp {
-    pub(crate) const ALL: [KnownPreloadApp; 5] = [
+    pub(crate) const ALL: [KnownPreloadApp; 4] = [
         KnownPreloadApp::SolitaireCollection,
         KnownPreloadApp::FeedbackHub,
         KnownPreloadApp::BingNews,
         KnownPreloadApp::OfficeHub,
-        KnownPreloadApp::Spotify,
     ];
 
     /// The Appx package Name (`Get-AppxPackage -Name`) — fixed, well-known identifiers.
@@ -143,7 +144,6 @@ impl KnownPreloadApp {
             KnownPreloadApp::FeedbackHub => "Microsoft.WindowsFeedbackHub",
             KnownPreloadApp::BingNews => "Microsoft.BingNews",
             KnownPreloadApp::OfficeHub => "Microsoft.MicrosoftOfficeHub",
-            KnownPreloadApp::Spotify => "SpotifyAB.SpotifyMusic",
         }
     }
 
@@ -156,7 +156,6 @@ impl KnownPreloadApp {
             KnownPreloadApp::FeedbackHub => "9NBLGGH4R32N",
             KnownPreloadApp::BingNews => "9WZDNCRFHVFW",
             KnownPreloadApp::OfficeHub => "9WZDNCRD29V9",
-            KnownPreloadApp::Spotify => "9NCBCSZSJRSB",
         }
     }
 
@@ -167,7 +166,6 @@ impl KnownPreloadApp {
             KnownPreloadApp::FeedbackHub => "feedback-hub",
             KnownPreloadApp::BingNews => "bing-news",
             KnownPreloadApp::OfficeHub => "office-hub",
-            KnownPreloadApp::Spotify => "spotify-preload",
         }
     }
 
@@ -1717,6 +1715,9 @@ pub(crate) fn installed_preload_app(
 
 /// Which curated apps are installed for this user — ONE PowerShell spawn for the whole set
 /// (the FE listing probe; per-app identity for the apply snapshot uses `installed_preload_app`).
+/// Unlike that strict three-way probe, this one MAY collapse failure→empty: it only decides what
+/// the Fix card DISPLAYS (worst case: an installed app isn't offered) — no mutation or rollback
+/// decision ever reads it, so the fail-safe direction is simply "show nothing".
 pub(crate) fn installed_preload_ids() -> Vec<&'static str> {
     let mut safe_names = Vec::new();
     for app in &KnownPreloadApp::ALL {
@@ -1856,8 +1857,10 @@ mod preload_removal_tests {
     #[test]
     fn from_id_enforces_the_allowlist_and_rejects_everything_else() {
         assert!(KnownPreloadApp::from_id("solitaire-collection").is_some());
-        assert!(KnownPreloadApp::from_id("spotify-preload").is_some());
+        assert!(KnownPreloadApp::from_id("office-hub").is_some());
         // Data-bearing, security, gaming-critical, and arbitrary ids can NEVER reach the primitive.
+        // spotify-preload pins the owner's 2026-07-06 curation cut (same package id as a real
+        // daily-driver install — no honest "stub" framing exists).
         for bad in [
             "microsoft-photos",
             "sticky-notes",
@@ -1865,6 +1868,7 @@ mod preload_removal_tests {
             "xbox-game-bar",
             "gaming-services",
             "Microsoft.WindowsStore",
+            "spotify-preload",
             "",
         ] {
             assert!(KnownPreloadApp::from_id(bad).is_none(), "must reject {bad:?}");
@@ -1876,10 +1880,7 @@ mod preload_removal_tests {
         // Literal pin (mirrors the FE contract test in preload-apps.test.tsx) — an id rename on
         // either side fails one of the two suites instead of silently 404ing at the IPC boundary.
         let ids: Vec<&str> = KnownPreloadApp::ALL.iter().map(|a| a.id()).collect();
-        assert_eq!(
-            ids,
-            ["solitaire-collection", "feedback-hub", "bing-news", "office-hub", "spotify-preload"]
-        );
+        assert_eq!(ids, ["solitaire-collection", "feedback-hub", "bing-news", "office-hub"]);
         for app in &KnownPreloadApp::ALL {
             assert_eq!(KnownPreloadApp::from_id(app.id()), Some(app.clone()));
             // Every fixed identifier that is ever interpolated into a command must pass its guard.
@@ -1909,7 +1910,7 @@ mod preload_removal_tests {
     #[test]
     fn dispatch_rejects_a_mismatched_snapshot() {
         // A garbled ledger pair (reinstall action + task snapshot) must fail safe, never guess.
-        let r = RollbackAction::ReinstallPreloadApp { app: KnownPreloadApp::Spotify };
+        let r = RollbackAction::ReinstallPreloadApp { app: KnownPreloadApp::OfficeHub };
         let s = Snapshot::ScheduledTask { prior_state: "Ready".into() };
         assert!(dispatch_rollback(&r, &s).is_err());
     }
