@@ -250,11 +250,32 @@ tsc 0 · vitest 1099/1099 · self-reviewer PASS (fresh full pass at eb5df81). De
    run) · qa5/qa9 no-partial suites unchanged-green. `SessionDirOverride` test seam keeps CI
    runs off the live session file. Restore/stop side still elevates per change (out of T6
    scope — flagged to owner).
-2. **T5 — REQUIRED, NEXT** (beta ships from `main`, owner decision 2026-07-06): fresh
-   installed-build QA sweep, CC-runnable parts, on the post-T6 installer so it QAs the
-   shipping UX; then prompt the owner for GAMING_MODE_QA.md live case #4
-   (reboot-while-active, ~5 min, owner-run — his single-prompt eyeball rides the same
-   session).
+2. **T5 — IN FLIGHT (handoff 2026-07-07, mid-train context refresh).** Done so far:
+   T6 shipped LIVE (`e350607` stamped, ship row `293326b`) · Gaming-copy self-review
+   **8/8 PASS** · §7 sweep (self-reviewer, live build) found 3 real gaps, ALL FIXED in
+   `ff186e6` (vendor-honesty line was unreachable behind `{!embedded}` — hoisted +
+   `vendor-honesty-line-guard.test.ts`; CPU-lesson kernel-driver note added in
+   `setup-steps.ts`; RELEASE_QA §7 items 1–2 re-anchored to current UI). tsc 0 · vitest
+   1101. **A rebuild from `ff186e6` was launched in the background** — the fresh session
+   must: ① check the build finished → run `scripts/ship-reinstall.ps1` (via **pwsh**, NOT
+   powershell 5.1 — em-dash parse) → stamp-verify `ff186e6` → RELEASE_STATE Snapshot row
+   (new SHA-256, supersedes `BFA89273…5946`/`e350607`) · ② focused self-reviewer pass on
+   the two fixed surfaces (Monitor room shows the GPU-coverage line now; tour CPU lesson
+   shows the no-CPU-temp note) · ③ §6 failure-path probes on the installed build
+   (backup+corrupt `%APPDATA%\Compy\history.json` → relaunch → empty ledger no crash →
+   restore backup; same for missing; helper-crash: kill `compy.exe --fps-capture` →
+   UI reflects stopped → re-enable works; leave `gaming-session.json` UNTOUCHED) ·
+   ④ docs: RELEASE_STATE line 19 (Last full installed-build QA) + BACKLOG RUNG 2 ② +
+   this spec · ⑤ report + owner prompts. **OWNER PROMPTS PENDING (batch at report):**
+   (a) his rig shows a REAL orphan Gaming session (started 2026-07-07 07:37, his old-build
+   5-prompt enable — full advanced tier; every snapshot prior == current state, so
+   recovery changes nothing materially): click "Restore previous settings", expect up to
+   ~5 old-style prompts one last time (restore side unbatched, out of T6 scope — flagged
+   as possible T6b) · (b) GAMING_MODE_QA.md live case #4 reboot-while-active on the new
+   build + the single-prompt enable eyeball. Non-blocking observations for the report:
+   dual recovery banners (top shell + in-pane) don't dismiss together (pre-existing);
+   impeccable hook flags 3 pre-existing App.css findings (L1854/1857 gradient-text,
+   L1360 layout-transition) — not this train's diff, left unchanged.
 
 ## Report format (standing)
 
