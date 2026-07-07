@@ -13,6 +13,7 @@ import {
 import { SessionDebrief } from "./SessionDebrief";
 import { SessionTrends } from "./SessionTrends";
 import { LiveCharts } from "./LiveCharts";
+import { readMonitorCards } from "../design/theme";
 import { prettyGameName } from "./game-name";
 import { Term } from "../design/Term";
 import { type GpuVendor } from "./walkthroughs";
@@ -269,8 +270,14 @@ export default function Play({
         </div>
       )}
 
-      {/* Live telemetry charts (dashboard energy) — rolling CPU/GPU/memory from real sensors. dash_v2. */}
-      {showLive && typeof document !== "undefined" && document.documentElement.dataset.dashV2 === "on" && <LiveCharts />}
+      {/* Live telemetry charts (dashboard energy) — rolling CPU/GPU/memory from real sensors. dash_v2.
+          Superseded by the T3 domain cards (same three domains + Cores, one-click detail): when
+          compy_monitor_cards is ON, LiveCharts yields — one screen never shows the same domain
+          headlines twice (self-review catch, 2026-07-06). */}
+      {showLive &&
+        !readMonitorCards() &&
+        typeof document !== "undefined" &&
+        document.documentElement.dataset.dashV2 === "on" && <LiveCharts />}
 
       {showLive && (
       <div className="play-cards">

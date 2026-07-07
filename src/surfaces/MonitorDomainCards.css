@@ -1,0 +1,219 @@
+/* MonitorDomainCards — summary-first instrument cards for the deep Monitoring panels (T3+T4b).
+   Restrained HUD register: micro-labels, hairlines, token colors; card interactions are
+   event-driven (hover spotlight, click expand) — nothing burns GPU while you just watch. */
+
+.mdc-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mdc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+/* SpotlightCard supplies .card-spotlight (position/overflow/border); we shape it here. */
+.mdc-card {
+  border-radius: var(--r-md, 10px);
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* Whisper dot-grid card-face backdrop (T4b — flickering-grid idiom, CSS-only). One composited
+   opacity pulse per card at a long period; static under reduced motion. */
+.mdc-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--ix-accent, var(--accent)) 30%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 14px 14px;
+  opacity: 0.05;
+  animation: mdc-bg-pulse 7s ease-in-out infinite;
+}
+@keyframes mdc-bg-pulse {
+  0%,
+  100% {
+    opacity: 0.04;
+  }
+  50% {
+    opacity: 0.08;
+  }
+}
+
+.mdc-face {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px 12px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mdc-face:focus-visible {
+  outline: 1px solid var(--accent-line);
+  outline-offset: -1px;
+  border-radius: var(--r-md, 10px);
+}
+.mdc-face-open {
+  box-shadow: inset 0 -2px 0 var(--ix-accent, var(--accent));
+}
+
+.mdc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mdc-k {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.mdc-sub {
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.mdc-mid {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+}
+.mdc-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--fg);
+  display: inline-flex;
+  align-items: baseline;
+}
+.mdc-unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 3px;
+}
+
+.mdc-donut {
+  width: 56px;
+  height: 56px;
+  transform: rotate(-90deg);
+  flex: none;
+}
+.mdc-donut-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 5;
+}
+.mdc-donut-fill {
+  fill: none;
+  stroke: var(--ix-accent, var(--accent));
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.35s ease;
+}
+
+.mdc-spark {
+  overflow: hidden;
+}
+.mdc-spark .sparkline {
+  width: 100%;
+  height: 30px;
+  display: block;
+  opacity: 0.8;
+}
+
+/* Cores mini-grid face — tiny scaleY bars (composited transforms, 1 Hz value-driven). */
+.mdc-minicores {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 40px;
+  flex: 1;
+}
+.mdc-minicore {
+  flex: 1;
+  max-width: 8px;
+  height: 100%;
+  background: var(--ix-accent, var(--accent));
+  opacity: 0.7;
+  transform-origin: bottom center;
+  transition: transform 0.3s ease;
+  border-radius: 1px;
+}
+
+/* One-click detail — the classic full panel renders untouched below the grid. */
+.mdc-detail {
+  animation: mdc-reveal 0.25s ease;
+}
+@keyframes mdc-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.mdc-mem-advisory {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+/* Sliding-number reels (T4b) — event-driven digit rolls; plain text under reduced motion. */
+.sln {
+  display: inline-flex;
+}
+.sln-digit {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  line-height: 1;
+}
+.sln-reel {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  transition: transform 0.35s cubic-bezier(0.3, 0.9, 0.4, 1);
+}
+.sln-reel span {
+  height: 1em;
+}
+.sln-char {
+  line-height: 1;
+}
+
+:root[data-motion="reduced"] {
+  .mdc-bg {
+    animation: none;
+    opacity: 0.04;
+  }
+  .mdc-donut-fill,
+  .mdc-minicore,
+  .sln-reel {
+    transition: none;
+  }
+  .mdc-detail {
+    animation: none;
+  }
+}

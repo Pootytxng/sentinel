@@ -69,11 +69,16 @@ describe("FirstCheck boot theater (T2+T4a)", () => {
   it("reduced motion: the active check label renders plain (no scramble churn)", async () => {
     localStorage.setItem("compy_motion", "reduced");
     const { container } = mount();
-    await waitFor(() => expect(container.querySelector(".fct-active-label")).not.toBeNull());
-    // The reveal advances at 200ms/row, so the active row may be any fixture check by now —
-    // the pin is that it's a PLAIN label (a verbatim fixture string, no scramble characters).
-    expect(["SSD check", "Game Mode", "Power plan"]).toContain(
-      container.querySelector(".fct-active-label")!.textContent,
-    );
+    // Capture INSIDE the poll: the reveal advances at 200ms/row and resolves into the verdict,
+    // so the active row can vanish between waitFor settling and a later read (observed flake).
+    // The pin: whenever the active label was on screen, it was a PLAIN verbatim fixture string
+    // (never scramble characters).
+    let seen: string | null = null;
+    await waitFor(() => {
+      const el = container.querySelector(".fct-active-label");
+      if (el?.textContent) seen = el.textContent;
+      expect(seen).not.toBeNull();
+    });
+    expect(["SSD check", "Game Mode", "Power plan"]).toContain(seen);
   });
 });
