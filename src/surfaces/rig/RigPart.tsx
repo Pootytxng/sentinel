@@ -20,6 +20,9 @@ interface Props {
   reduced: boolean;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
+  /** Measured-emphasis glow multiplier (Two Futures per-component efficacy; default 1 =
+      neutral, existing hosts unchanged). */
+  glow?: number;
 }
 
 export function RigPart({
@@ -32,6 +35,7 @@ export function RigPart({
   reduced,
   onSelect,
   onHover,
+  glow = 1,
 }: Props) {
   const groupRef = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
@@ -80,7 +84,7 @@ export function RigPart({
         onSelect(part.id);
       }}
     >
-      <RigPartGeometry kind={part.kind} color={color} active={active} detected={part.detected} />
+      <RigPartGeometry kind={part.kind} color={color} active={active} detected={part.detected} glow={glow} />
 
       {active && (
         <Html position={[0, 0, 0]} center distanceFactor={8} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>

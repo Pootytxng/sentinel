@@ -19,16 +19,19 @@ interface BoxProps {
   color: string;
   active: boolean;
   detected: boolean;
+  /** Measured-emphasis multiplier on the emissive glow (Two Futures: per-component
+      efficacy delta). 1 = neutral — existing callers render unchanged. */
+  glow?: number;
 }
 
-function HoloBox({ args, position, rotation, color, active, detected }: BoxProps) {
+function HoloBox({ args, position, rotation, color, active, detected, glow = 1 }: BoxProps) {
   return (
     <mesh position={position} rotation={rotation}>
       <boxGeometry args={args} />
       <meshStandardMaterial
         color={color}
         emissive={color}
-        emissiveIntensity={detected ? (active ? 1.5 : 0.7) : 0.35}
+        emissiveIntensity={(detected ? (active ? 1.5 : 0.7) : 0.35) * glow}
         transparent
         opacity={fill(active, detected)}
         roughness={0.3}
@@ -48,6 +51,7 @@ function HoloCyl({
   color,
   active,
   detected,
+  glow = 1,
   segments = 28,
 }: {
   radius: number;
@@ -57,6 +61,7 @@ function HoloCyl({
   color: string;
   active: boolean;
   detected: boolean;
+  glow?: number;
   segments?: number;
 }) {
   return (
@@ -65,7 +70,7 @@ function HoloCyl({
       <meshStandardMaterial
         color={color}
         emissive={color}
-        emissiveIntensity={detected ? (active ? 1.5 : 0.7) : 0.35}
+        emissiveIntensity={(detected ? (active ? 1.5 : 0.7) : 0.35) * glow}
         transparent
         opacity={fill(active, detected) - 0.01}
         roughness={0.3}
@@ -82,13 +87,17 @@ export function RigPartGeometry({
   color,
   active,
   detected,
+  glow = 1,
 }: {
   kind: RigPartKind;
   color: string;
   active: boolean;
   detected: boolean;
+  /** Measured-emphasis glow multiplier (1 = neutral; only Two Futures passes ≠1, and only
+      from a per-component efficacy row — never implied without data). */
+  glow?: number;
 }) {
-  const p = { color, active, detected };
+  const p = { color, active, detected, glow };
   switch (kind) {
     case "board":
       return (

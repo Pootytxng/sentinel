@@ -1,0 +1,234 @@
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, cleanup } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { TwoFutures } from "./TwoFutures";
+import { BenchmarkTab } from "./Benchmark";
+import { hasMeasuredPair, partGlow } from "./two-futures-view";
+import { readTwoFutures } from "../design/theme";
+import type { BenchmarkState, Efficacy, RunReport } from "../types";
+import type { HardwareInfo } from "../App";
+
+// THE ANTI-FABRICATION GUARD (spec 2026-07-07-two-futures-measured-split, required in the same
+// train as the feature): the split view renders NOTHING but the honest empty state unless a real
+// measured pair exists — baseline + latest from DISTINCT runs with backend-computed efficacy —
+// and when it does render, every number is a struct field (no literal fallbacks, tier-1
+// source-grep below). One side measured + one side inferred must never paint.
+
+vi.mock("./rig/TwoFuturesScene", () => ({
+  default: () => <div data-testid="tf-scene" />,
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (cmd: string) => {
+    if (cmd === "get_benchmark_state")
+      return Promise.resolve({
+        running: false,
+        latest: null,
+        latest_at: null,
+        baseline: null,
+        baseline_at: null,
+        efficacy: null,
+        error: null,
+      });
+    if (cmd === "get_applied_changes") return Promise.resolve([]);
+    if (cmd === "get_recommendations") return Promise.resolve([]);
+    if (cmd === "get_appliable_rec_ids") return Promise.resolve([]);
+    if (cmd === "get_fps_status") return Promise.resolve({ active: false });
+    if (cmd === "get_hardware_info") return Promise.resolve(hw);
+    return Promise.resolve(null);
+  },
+}));
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
+
+const hw = {
+  cpu_brand: "AMD Ryzen 7 9850X3D",
+  cpu_cores_logical: 16,
+  cpu_cores_physical: 8,
+  cpu_frequency_mhz: 5100,
+  ram_total_bytes: 32 * 1024 ** 3,
+  ram_used_bytes: 16 * 1024 ** 3,
+  gpus: [{ name: "AMD Radeon RX 9070 XT", vram_bytes: 16 * 1024 ** 3 }],
+  disks: [],
+  memory_modules: [],
+  physical_disks: [],
+  os_name: "Windows",
+  os_version: "11",
+} as unknown as HardwareInfo;
+
+const run = (scores: [number, number, number, number]): RunReport => ({
+  components: [
+    { component: "cpu", score: scores[0], measured: true },
+    { component: "ram", score: scores[1], measured: true },
+    { component: "gpu", score: scores[2], measured: true },
+    { component: "disk", score: scores[3], measured: true },
+  ],
+  confidence: "clean",
+  notes: [],
+});
+
+const efficacy: Efficacy = {
+  per_component: [
+    { component: "cpu", before: 62, after: 71, delta_pct: 14.5, verdict: "improved" },
+    { component: "ram", before: 55, after: 53, delta_pct: -3.6, verdict: "regressed" },
+    { component: "gpu", before: 80, after: 80, delta_pct: 0.2, verdict: "no-measurable-change" },
+    { component: "disk", before: 47, after: 49, delta_pct: 4.3, verdict: "improved" },
+  ],
+  overall: "improved",
+  noise_floor_pct: 3,
+};
+
+const pair: BenchmarkState = {
+  running: false,
+  latest: run([71, 53, 80, 49]),
+  latest_at: "2026-07-07T18:30:00Z",
+  baseline: run([62, 55, 80, 47]),
+  baseline_at: "2026-07-01T10:00:00Z",
+  efficacy,
+  error: null,
+};
+
+describe("the one law — no measured pair → no split view, ever", () => {
+  const empties: [string, BenchmarkState | null][] = [
+    ["no state at all", null],
+    ["baseline only", { ...pair, latest: null, latest_at: null, efficacy: null }],
+    ["latest only", { ...pair, baseline: null, baseline_at: null, efficacy: null }],
+    [
+      "same run shown twice (latest_at === baseline_at)",
+      { ...pair, latest_at: pair.baseline_at },
+    ],
+    ["both runs but no backend efficacy", { ...pair, efficacy: null }],
+  ];
+
+  for (const [name, bench] of empties) {
+    it(`${name} → honest empty state, no 3D, no numbers`, () => {
+      const c = render(<TwoFutures bench={bench} hw={hw} />);
+      expect(c.getByTestId("two-futures-empty")).toBeTruthy();
+      expect(c.queryByTestId("two-futures-split")).toBeNull();
+      expect(c.queryByTestId("tf-scene")).toBeNull();
+      // The empty state pitches honestly — and shows not a single digit.
+      expect(c.getByText(/earn this view/i)).toBeTruthy();
+      expect(c.getByTestId("two-futures-empty").textContent).not.toMatch(/\d/);
+    });
+  }
+
+  it("hasMeasuredPair narrows exactly the full-pair shape", () => {
+    expect(hasMeasuredPair(pair)).toBe(true);
+    for (const [, bench] of empties) expect(hasMeasuredPair(bench)).toBe(false);
+  });
+});
+
+describe("with a measured pair — every number is a struct field", () => {
+  it("renders the split with the exact per-component before → after (±delta%) rows", async () => {
+    const c = render(<TwoFutures bench={pair} hw={hw} />);
+    expect(c.getByTestId("two-futures-split")).toBeTruthy();
+    expect(await c.findByTestId("tf-scene")).toBeTruthy(); // lazy 3D chunk resolves async
+    // CPU row: before/after/delta straight off the efficacy struct.
+    const rows = c.container.querySelectorAll(".tf-row");
+    expect(rows.length).toBe(4);
+    expect(rows[0].textContent).toContain("CPU");
+    expect(rows[0].textContent).toContain("62");
+    expect(rows[0].textContent).toContain("71");
+    expect(rows[0].textContent).toContain("+14.5%");
+    expect(rows[0].textContent).toContain("Improved");
+    expect(rows[1].textContent).toContain("-3.6%");
+    expect(rows[1].textContent).toContain("Regressed");
+    expect(rows[2].textContent).toContain("No measurable change");
+    // Noise floor comes from the struct too.
+    expect(c.getByText(/±3%/)).toBeTruthy();
+  });
+
+  it("hardware unreadable → no 3D, but the measured rail still renders", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} />);
+    expect(c.getByTestId("two-futures-split")).toBeTruthy();
+    expect(c.queryByTestId("tf-scene")).toBeNull();
+    expect(c.container.querySelectorAll(".tf-row").length).toBe(4);
+  });
+});
+
+describe("tier-1 source grep-guard — no fallback numbers, no demo data, v2 perf conventions", () => {
+  const sources = [
+    join("src", "surfaces", "TwoFutures.tsx"),
+    join("src", "surfaces", "two-futures-view.ts"),
+    join("src", "surfaces", "rig", "TwoFuturesScene.tsx"),
+  ];
+
+  it("no numeric fallback (`?? n` / `|| n`) and no placeholder/demo vocabulary", () => {
+    for (const rel of sources) {
+      const src = readFileSync(rel, "utf8");
+      expect(src, `${rel} must not fall back to a literal number`).not.toMatch(
+        /(\?\?|\|\|)\s*[\d.]/,
+      );
+      expect(src, `${rel} must not carry demo/placeholder data`).not.toMatch(
+        /\b(demo|placeholder|sample|fake|dummy)\b/i,
+      );
+    }
+  });
+
+  it("scene keeps the v2 rest law: demand frameloop, no auto-rotate", () => {
+    const scene = readFileSync(join("src", "surfaces", "rig", "TwoFuturesScene.tsx"), "utf8");
+    expect(scene).toContain('frameloop="demand"');
+    expect(scene).toContain("autoRotate={false}");
+  });
+
+  it("the Two Futures CSS block stays on theme tokens (no raw hex — no invented palette)", () => {
+    const css = readFileSync(join("src", "surfaces", "Benchmark.css"), "utf8");
+    const tf = css.slice(css.indexOf("Two Futures measured split"));
+    expect(tf.length).toBeGreaterThan(0);
+    expect(tf).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe("flag compy_two_futures — DEFAULT OFF", () => {
+  it("fresh storage reads OFF; only an explicit \"1\" opts in", () => {
+    expect(readTwoFutures()).toBe(false);
+    localStorage.setItem("compy_two_futures", "0");
+    expect(readTwoFutures()).toBe(false);
+    localStorage.setItem("compy_two_futures", "1");
+    expect(readTwoFutures()).toBe(true);
+  });
+
+  it("flag off (default): the Benchmark station renders no Two Futures section", async () => {
+    const c = render(<BenchmarkTab />);
+    await c.findByText("Baseline"); // surface settled
+    expect(c.queryByText("Two futures")).toBeNull();
+    expect(c.queryByTestId("two-futures-empty")).toBeNull();
+  });
+
+  it("flag on: the section mounts (honest empty state here — mocked state has no pair)", async () => {
+    localStorage.setItem("compy_two_futures", "1");
+    const c = render(<BenchmarkTab />);
+    expect(await c.findByText("Two futures")).toBeTruthy();
+    expect(c.getByTestId("two-futures-empty")).toBeTruthy();
+    expect(c.queryByTestId("tf-scene")).toBeNull();
+  });
+});
+
+describe("partGlow — measured emphasis only, neutral without data", () => {
+  it("no efficacy / structural parts / within-noise → exactly neutral", () => {
+    expect(partGlow(null, "cpu")).toBe(1);
+    expect(partGlow(efficacy, "board")).toBe(1);
+    expect(partGlow(efficacy, "cooler")).toBe(1);
+    expect(partGlow(efficacy, "psu")).toBe(1);
+    expect(partGlow(efficacy, "gpu")).toBe(1); // 0.2% — within noise, verdict says so
+  });
+
+  it("scales by the measured delta and clamps", () => {
+    expect(partGlow(efficacy, "cpu")).toBeCloseTo(1 + 14.5 * 0.08); // improved → brighter
+    expect(partGlow(efficacy, "ram")).toBeCloseTo(1 - 3.6 * 0.08); // regressed → dimmer
+    expect(partGlow(efficacy, "storage")).toBeCloseTo(1 + 4.3 * 0.08); // storage ↔ disk row
+    const huge: Efficacy = {
+      ...efficacy,
+      per_component: [
+        { component: "cpu", before: 10, after: 99, delta_pct: 890, verdict: "improved" },
+        { component: "ram", before: 99, after: 10, delta_pct: -89, verdict: "regressed" },
+      ],
+    };
+    expect(partGlow(huge, "cpu")).toBe(2.2);
+    expect(partGlow(huge, "ram")).toBe(0.6);
+  });
+});

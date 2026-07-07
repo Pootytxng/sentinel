@@ -23,6 +23,8 @@ import {
   applyMonitorCards,
   readHologramV2,
   applyHologramV2,
+  readTwoFutures,
+  applyTwoFutures,
   readAmbianceChoice,
   readStepAsideGame,
   persistStepAsideGame,
@@ -145,6 +147,7 @@ export default function Settings({
   const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
   const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
   const [holoV2, setHoloV2] = useState<boolean>(readHologramV2);
+  const [twoFutures, setTwoFutures] = useState<boolean>(readTwoFutures);
   const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -224,6 +227,13 @@ export default function Settings({
   const changeHoloV2 = (v: boolean) => {
     setHoloV2(v);
     applyHologramV2(v);
+  };
+  // Two Futures split preview — the Benchmark station's baseline-vs-now hologram pair.
+  // Presentation over the SAME measured benchmark structs; renders only from a real
+  // before/after pair (no pair → honest empty state). DEFAULT OFF.
+  const changeTwoFutures = (v: boolean) => {
+    setTwoFutures(v);
+    applyTwoFutures(v);
   };
   const changeStepAside = (v: boolean) => {
     setStepAside(v);
@@ -408,6 +418,22 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={holoV2} onChange={changeHoloV2} ariaLabel="Hologram bay v2" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Two futures split (preview)</div>
+                  <div className="set-row-sub">
+                    In the Lab's Benchmark station: your rig at its baseline next to how it
+                    measures now, side by side. Only renders from two real runs — no runs, no
+                    view.
+                  </div>
+                </div>
+                <Toggle
+                  on={twoFutures}
+                  onChange={changeTwoFutures}
+                  ariaLabel="Two futures split (preview)"
+                />
               </div>
 
             </div>

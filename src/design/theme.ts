@@ -431,6 +431,34 @@ export function applyHologramV2(on: boolean): void {
   }
 }
 
+// Two Futures measured split (spec 2026-07-07-two-futures-measured-split) — the Benchmark
+// station's side-by-side baseline-vs-now hologram. Renders ONLY from a measured pair
+// (BenchmarkState baseline + latest + efficacy); no pair → honest empty state, never demo
+// data. DEFAULT OFF until owner eyeball + self-review PASS (Settings preview toggle).
+const TWO_FUTURES_KEY = "compy_two_futures";
+
+export function readTwoFutures(): boolean {
+  try {
+    return localStorage.getItem(TWO_FUTURES_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyTwoFutures(on: boolean): void {
+  try {
+    localStorage.setItem(TWO_FUTURES_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:two-futures-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Instrument-HUD look (spec 2026-07-05-ui-deslop-organic-directive, LOCKED direction —
 // CORRECTED: editorial retired) — the pure operator-console/HUD redesign, piloted on Home.
 // DEFAULT OFF (Settings → Appearance preview toggle, the P-series contract): flag off, every

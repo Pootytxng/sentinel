@@ -16,8 +16,10 @@ import {
   trialReasonText,
   benchRigTier,
   fmtLocalWinTopPct,
-  type RigSpecs,
 } from "./benchmark-view";
+import { readTwoFutures } from "../design/theme";
+import { TwoFutures } from "./TwoFutures";
+import type { HardwareInfo } from "../App";
 import type {
   BenchmarkState,
   RunReport,
@@ -49,6 +51,10 @@ export function BenchmarkTab() {
   // A2 hardware-tier segmentation — the rough, transparent rig class (Entry/Mid/High) the
   // measurements are read against. Reuses the canonical rig-tier bands; LOCAL only, no cohort.
   const [rigTier, setRigTier] = useState<ReturnType<typeof benchRigTier>>(null);
+  // Two Futures split (compy_two_futures, DEFAULT OFF) — read once per mount, the flag idiom
+  // (Settings lives on another surface; navigating back remounts this one).
+  const [twoFutures] = useState(readTwoFutures);
+  const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Inline dependency (wayfinding §2): the live-game measurement needs FPS monitoring, which used to
@@ -101,13 +107,17 @@ export function BenchmarkTab() {
     refresh();
   }, [refresh]);
 
-  // Read the rig's measured specs once to segment the surface by hardware tier (A2). Existing
-  // read-only command; only three fields are used (max VRAM · physical cores · total RAM).
+  // Read the rig's measured specs once: the tier band uses three fields (max VRAM · physical
+  // cores · total RAM); the full struct also feeds the Two Futures rigs when that flag is on.
+  // Existing read-only command either way.
   useEffect(() => {
-    invoke<RigSpecs>("get_hardware_info")
-      .then((hw) => setRigTier(benchRigTier(hw)))
+    invoke<HardwareInfo>("get_hardware_info")
+      .then((h) => {
+        setHw(h);
+        setRigTier(benchRigTier(h));
+      })
       .catch(() => {
-        /* no tier band if hardware is unreadable — never a fabricated tier */
+        /* no tier band / no split rig if hardware is unreadable — never fabricated */
       });
   }, []);
 
@@ -329,6 +339,11 @@ export function BenchmarkTab() {
       {showEfficacy && state?.efficacy && (
         <EfficacyCard efficacy={state.efficacy} changes={changesSince} />
       )}
+
+      {/* Two Futures measured split — adjacent to the efficacy readout (where the data lives).
+          Flag DEFAULT OFF; with it on, the component itself enforces the one law (no measured
+          pair → honest empty state, no 3D). */}
+      {twoFutures && <TwoFutures bench={state} hw={hw} />}
 
       {state?.latest && (
         <RunCard
