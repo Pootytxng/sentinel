@@ -1,10 +1,19 @@
 # Two Futures — measured split view (Exebenus-inspired, receipts-honest)
 
 **Date:** 2026-07-07 · **Lane:** spec'd in Cowork, build owner = CC
-**Status:** SPEC — not started. **Priority: post-LAUNCH-RUNWAY.** Not a launch blocker; must not
-delay the T-train close-out (T4c/d self-review → build → ship → doc-sync) or RUNG 2 (T6 UAC fix,
-installed-build QA, reboot QA). Pull this only when the runway rungs above it are closed.
-**Flag:** `compy_two_futures` — **default OFF** until owner eyeball + self-review PASS.
+**Status:** ✅ **BUILT v1 (2026-07-07, CC): `4df5448` + fixes `eb5df81`** — owner explicitly pulled
+it ahead of RUNG 2 same day (RUNG 2 = T6/T5/reboot#4 remains REQUIRED and open; this train is
+frontend-only/flag-OFF and moves no gate). Self-reviewer **PASS** at eb5df81 (fresh full rubric
+after a first FAIL fixed: efficacy-card subsume + orbit azimuth clamp, both guard-pinned).
+**Flag:** `compy_two_futures` — **default OFF** until owner eyeball (self-review PASS ✓).
+
+**v1 scope decision (recorded at build):** the trial `MetricWindow` pair is `pub(crate)`-only —
+it never crosses IPC, so a trial-sourced split cannot render in v1 without fabricating absolutes
+from a bare effect%. **v1 pair source = benchmark `baseline`+`latest`+`efficacy` alone** (the
+delta rail shows per-component before → after scores, not the avg-FPS/p1/stutter% trial shape);
+the trial-sourced split ships with the v2 persist-latest Rust read. Also in the same train:
+the bay shell gained the `clearSpot` viewer-facing translucency window (`209e4dc`, owner ask) —
+reused on the split's "Now" shell.
 
 ## Origin & what we are (and are not) stealing
 

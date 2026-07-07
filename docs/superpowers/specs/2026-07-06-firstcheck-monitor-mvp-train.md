@@ -223,6 +223,16 @@ from `e01db2d` stamped `+dirty` — docs WIP in tree at compile time; the measur
 it, resolved by the fold + clean rebuild. GSAP approved but unused; `@react-three/
 postprocessing@3.0.4` vendored-in per THIRD_PARTY.md.)
 
+**2026-07-07 (later, CC session): Two Futures + bay clear-spot landed BETWEEN the handoff and
+T6** — owner explicitly pulled the post-runway Two Futures spec forward the same day (his order
+asserted "RUNG 2 done"; verified NOT true — T6/T5/reboot#4 remain open, but the train is
+frontend-only/flag-OFF and moves no gate, so built per the explicit order). `209e4dc` bay-shell
+`clearSpot` (owner image ask, live default) · `4df5448` Two Futures v1 (`compy_two_futures`
+DEFAULT OFF) · `eb5df81` self-review fixes (efficacy-card subsume + azimuth clamp, guard-pinned).
+tsc 0 · vitest 1099/1099 · self-reviewer PASS (fresh full pass at eb5df81). Details:
+`2026-07-07-two-futures-measured-split.md` (status + v1 scope decision recorded there).
+**Next steps below are UNCHANGED — T6 still first, still a fresh session.**
+
 **Next steps, in order:**
 
 1. **T6 — START A FRESH SESSION** (mutation boundary, x-high, `mutation-gate` skill FIRST;

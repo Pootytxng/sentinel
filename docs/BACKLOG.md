@@ -87,11 +87,17 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   (security review + consent UI) · preload-removal arming (live QA + owner-curated list) ·
   remote-fetch arming (production key + CDN + semver + rollout) · licensing/Pro enforcement ·
   A4 advisory items (owner-curated data / outbound-gated) · Phase C/D money items.
-- **QUEUED post-runway (owner-greenlit 2026-07-07, spec'd, NOT started):** Two Futures measured
-  split view — Exebenus-inspired side-by-side hologram of measured baseline vs after, benchmark/
-  trial structs only, `compy_two_futures` default OFF, frontend-only, ~1 train (M). Spec:
-  `docs/superpowers/specs/2026-07-07-two-futures-measured-split.md`. Hard law: no measured pair →
-  no render (anti-fabrication guard test required). Pull ONLY after RUNG 2 closes.
+- ✅ **Two Futures measured split — BUILT v1 2026-07-07 (`4df5448`+`eb5df81`), owner pulled it
+  AHEAD of RUNG 2 by explicit same-day order** (frontend-only, flag `compy_two_futures` DEFAULT
+  OFF, zero src-tauri — moves no gate; **RUNG 2 above stays REQUIRED + open**). Benchmark
+  station: baseline-vs-now rig pair (one canvas, ghost vs accent+shell), struct-sourced delta
+  rail, subsumes the efficacy card flag-on. THE LAW pinned by the anti-fabrication guard suite
+  (`two-futures.test.tsx`, 21 tests: empty-state truth-table, no-fallback source grep, flag
+  wiring both ways, partGlow neutrality). v1 scope note in the spec: trial `MetricWindow` never
+  crosses IPC → v1 renders from the benchmark pair only; trial-sourced split = v2 (+persist-
+  latest Rust read). Self-reviewer PASS (fresh full pass at `eb5df81` after subsume + azimuth
+  fixes). ⏳ OWNER: flip "Two futures split (preview)" in Settings → eyeball; default-ON is his
+  call. Same train, LIVE surface: bay-shell `clearSpot` viewer-facing window (`209e4dc`).
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
