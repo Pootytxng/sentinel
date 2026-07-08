@@ -57,8 +57,10 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       items applied are rolled back **with no further prompts**; clear error; no session file
       lingering as `active` without a contract.
 - [ ] **7. UAC cancel during RESTORE.** Trigger a restore that needs UAC (advanced tier applied) and
-      **cancel it.** → status `RestoreFailed`, the contract is **retained**, a clear retry path is shown,
-      and it **never reports success.** Retry → completes.
+      **cancel the single UAC prompt** (since T6b, 2026-07-08, the whole elevated restore tier rides
+      ONE prompt, mirroring #6's start side) → status `RestoreFailed`, the contract is **retained**,
+      a clear retry path is shown, it **never reports success**, and the decline is **never followed
+      by more prompts**. Retry → completes (ONE prompt again).
 - [ ] **8. Missing power plan at restore.** Apply Gaming Mode, then delete the prior power plan
       (`powercfg /delete <guid>`) before stopping. Stop → **fails safe with a clear message** (never a
       silent fallback / wrong plan).
