@@ -86,13 +86,16 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   **One §6 leg is owner-present by construction — helper-crash** (the FPS helper runs
   ELEVATED: starting it and killing it each take a UAC consent; fps.rs:11/371) — folds into
   ③'s owner session →
-  ③ **owner-run GAMING_MODE_QA.md live case #4** (start Gaming Mode → reboot → relaunch →
-  confirm restore prompt → exact prior state back). ~5 min of owner time; the only
-  live-checklist case a session cannot prove — run it against the post-T6 single-prompt build.
-  While he's at the rig: the §6 helper-crash probe (FPS on → UAC OK → Task-Manager-kill the
-  elevated `compy.exe --fps-capture` → UI shows stopped → re-enable works) + the pending
-  orphan-session "Restore previous settings" click (~5 old-style prompts, restore side
-  unbatched — T6b candidate).
+  ③ **owner-run GAMING_MODE_QA.md live case #4 — restore side VERIFIED 2026-07-07** (owner ran
+  start → reboot → "Restore now"; CC read-only-verified: session contract cleared — only
+  reachable when every restore confirms — and every probed value matches his standing ledger
+  state; the 2 restore UACs = the unbatched restore side working as flagged, his 2 elevated
+  tier items — T6b batching candidate; restore shows NO visible success confirmation → UX-gap
+  candidate). **Remaining: owner confirms the pre-reboot enable showed ONE UAC prompt** (closes
+  case #4) + the §6 helper-crash probe while he's at the rig (FPS on → UAC OK →
+  Task-Manager-kill the elevated `compy.exe --fps-capture` → UI shows stopped → re-enable
+  works). The old orphan-session file is GONE from disk (no `gaming-session.json`), so the
+  pending "~5 old-style prompts" restore-click leg is moot/absorbed by tonight's run.
 - **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
   RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
 - **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code
@@ -129,6 +132,16 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   defect scale, 0 pumps; idle rest 0 draws/16s). Installer rebuilt + silent-reinstalled,
   **stamp-verified `d557e70` live** (RELEASE_STATE row current). Owner eyeball: orbit ON on the
   bay (+ Two Futures preview shells if flipped).
+- ✅ **Per-part identity colors + see-through case — SHIPPED LIVE `48ca9ec` (2026-07-07, owner
+  round-2 directive on the bay):** fixed theme-INDEPENDENT `PART_KIND_COLORS` (board slate · cpu
+  amber · ram violet · gpu teal · storage green · cooler ice · psu copper · fan sky; ghosts keep
+  the faint ink — honesty unchanged); shell dropped to a whisper (hologramOpacity 0.08 / fresnel
+  0.2 / wireframe 0.28); theme key lights neutralized in all three rig scenes so the hues read.
+  Guard: `use-rig-colors.test.ts` rewritten (hue uniqueness · theme-independence · ghost honesty).
+  tsc 0 · vitest 1104 (148 files) · self-reviewer all-8-substantive PASS (pixel-sampled hues,
+  Violet→Emerald part-hue identity, idle rest 0 draws/15s ×2); its wording nit + sibling
+  light-wash follow-up fixed same-commit. Installer rebuilt + silent-reinstalled, **stamp-verified
+  `48ca9ec` live**. Owner eyeball: the recolored bay.
 - **PARKED — owner's Lab-establishment train (owner supplies the task list; do NOT start until
   he delivers it, after the current in-line work closes):** fully establish the Lab room — its
   capabilities and ACTUAL interactive functions/applications he has planned (his words,
