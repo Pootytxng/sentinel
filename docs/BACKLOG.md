@@ -117,6 +117,18 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   train below (the split's hologram must carry part-anchored, measured information — changed
   components visibly marked, deltas anchored to parts — not just the composition). Same train,
   LIVE surface: bay-shell `clearSpot` viewer-facing window (`209e4dc`).
+- ✅ **Hologram shell-blink flicker — ROOT-CAUSED, FIXED + SHIPPED LIVE `d557e70` (2026-07-07):**
+  the owner-clipped bay flicker (evidence `docs/superpowers/specs/assets/2026-07-07-holo-flicker/`)
+  was the vendored shader's UPSTREAM per-frame blink time-hash pumping the whole DoubleSide
+  additive shell (±2–4 mean-Y, Bloom-amplified; orbit-ON only — T1.5's idle fix had merely hidden
+  it at rest; Glitch/clearSpot/b6687b3 guards exonerated). Fix at the callers, vendor file
+  untouched: `enableBlinking={false}` on both mounts + `fresnelOpacity` 0.7→0.42 (matches the
+  approved mid-state look, not the wash peak). bug→guard `holo-shell-blink-guard.test.ts` (every
+  `<HolographicMaterial>` mount must disable blink; off-branch `': 1.0'` constant pinned). tsc 0 ·
+  vitest 1103 (148 files) · self-reviewer PASS (orbit-on luma probe: max ΔY 0.95/1.27 vs the 2–4
+  defect scale, 0 pumps; idle rest 0 draws/16s). Installer rebuilt + silent-reinstalled,
+  **stamp-verified `d557e70` live** (RELEASE_STATE row current). Owner eyeball: orbit ON on the
+  bay (+ Two Futures preview shells if flipped).
 - **PARKED — owner's Lab-establishment train (owner supplies the task list; do NOT start until
   he delivers it, after the current in-line work closes):** fully establish the Lab room — its
   capabilities and ACTUAL interactive functions/applications he has planned (his words,
