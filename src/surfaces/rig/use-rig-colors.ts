@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import type { RigPartKind } from "./rig-parts";
 
 // Resolve the active instrument theme's colours from CSS custom properties into plain hex strings
-// that three.js materials can consume (three can't read `var(--ix-*)`). This is what makes the 3D
-// hologram THEME-AWARE: it follows Midnight/Violet/Crimson/Emerald/Hearth via the same `--ix-streak`
-// palette the ambient backdrop uses, and re-resolves live when the user switches themes.
+// that three.js materials can consume (three can't read `var(--ix-*)`). The theme paints the BAY
+// (shell, case wireframe, floor grid, rim light) and re-resolves live when the user switches
+// themes — but NOT the parts: part colours are the fixed identity palette below.
 
 export interface RigColors {
   /** Controls/active accent. */
   accent: string;
-  /** A small theme palette to vary parts without leaving the theme (streak-1/2/3). */
+  /** Theme streak trio (streak-1/2/3) — paints the floor grid; parts stopped using it
+      (they wear PART_KIND_COLORS below). */
   palette: [string, string, string];
   /** Faint ink for honest "not detected" ghost parts. */
   ghost: string;
@@ -52,9 +54,26 @@ export function useRigColors(): RigColors {
   return colors;
 }
 
-// Pick a theme colour for a part: detected parts cycle the palette for lively variety; honest
-// ghosts (undetectable hardware) take the faint ink so they read as "present but unreadable".
-export function partColor(colors: RigColors, detected: boolean, index: number): string {
+// Fixed part-identity palette (owner directive 2026-07-07): every component KIND keeps its own
+// distinct hue in EVERY theme so the parts are instantly tellable apart. The old rule tinted all
+// parts from the 3-hue theme palette — near-identical hues made the model read as one blob.
+// Deliberately theme-INDEPENDENT: these never follow the accent.
+export const PART_KIND_COLORS: Record<RigPartKind, string> = {
+  board: "#8f9bb8", // slate — the structural slab stays quiet behind everything
+  cpu: "#ffb84d", // amber
+  ram: "#c77dff", // violet
+  gpu: "#3fd9c2", // teal
+  storage: "#7ee08a", // green
+  cooler: "#9adcff", // ice (visible when user-added; the auto ghost stays faint)
+  psu: "#ff8a5c", // copper (same: user-added shows it, the ghost stays faint)
+};
+
+// Fans aren't RigParts (they're live-RPM meshes) but follow the same fixed-identity rule.
+export const FAN_COLOR = "#58a6ff"; // sky
+
+// Pick a part's colour: detected parts wear their kind's fixed identity hue; honest ghosts
+// (undetectable hardware) keep the theme's faint ink so they read as "present but unreadable".
+export function partColor(colors: RigColors, detected: boolean, kind: RigPartKind): string {
   if (!detected) return colors.ghost;
-  return colors.palette[index % colors.palette.length];
+  return PART_KIND_COLORS[kind];
 }

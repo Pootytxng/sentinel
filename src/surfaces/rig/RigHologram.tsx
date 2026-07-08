@@ -11,7 +11,7 @@ import type { HardwareInfo } from "../../App";
 import { buildRigParts, type Vec3, type RigPart as RigPartData } from "./rig-parts";
 import { nextFanSensors, type FanSensor } from "./fan-sensors";
 import { type ManualPart, type ManualKind, manualGeom, manualPlacement } from "./manual-parts";
-import { useRigColors, partColor } from "./use-rig-colors";
+import { useRigColors, partColor, FAN_COLOR } from "./use-rig-colors";
 import { useReducedMotion } from "../../design/use-motion";
 import { useDocumentVisible } from "../../data/use-document-visible";
 import { fitCameraDistance } from "./camera-fit";
@@ -21,7 +21,8 @@ import { RigFan, type FanInfo } from "./RigFan";
 
 // The 3D hologram canvas — the user's REAL rig, theme-aware, doctrine-safe:
 //  • parts + specs come from buildRigParts(hw) (real hardware; honest ghosts), never fabricated.
-//  • colours follow the active instrument theme (useRigColors).
+//  • part colours are the FIXED per-kind identity palette (PART_KIND_COLORS — theme-independent,
+//    owner directive 2026-07-07); the bay itself (shell/case/grid/rim) follows the theme.
 //  • prefers-reduced-motion → no idle animation (frameloop "demand", parts snap, no auto-rotate).
 //  • STEP-ASIDE: while a game is capturing (get_fps_status.active), drop to frameloop "demand" so the
 //    hologram stops burning GPU in the background — anti-cheat-safe (ETW read only, no injection).
@@ -146,15 +147,12 @@ export const RigHologram = memo(function RigHologram({
     [parts, manualKinds],
   );
 
-  // Theme colour per part: detected parts cycle the palette; ghosts take the faint ink.
-  const partColors = useMemo(() => {
-    let detectedIndex = 0;
-    return shownParts.map((p) => {
-      const c = partColor(colors, p.detected, detectedIndex);
-      if (p.detected) detectedIndex += 1;
-      return c;
-    });
-  }, [shownParts, colors]);
+  // Colour per part: detected parts wear their kind's fixed identity hue (theme-independent —
+  // owner directive 2026-07-07: one distinct colour per component); ghosts take the faint ink.
+  const partColors = useMemo(
+    () => shownParts.map((p) => partColor(colors, p.detected, p.kind)),
+    [shownParts, colors],
+  );
 
   // User-added parts → RigPart shape, labelled "User-added" (never presented as detected).
   const manualRigParts: RigPartData[] = useMemo(() => {
@@ -262,8 +260,10 @@ export const RigHologram = memo(function RigHologram({
     >
       <fogExp2 attach="fog" args={["#0a1320", 0.045]} />
       <ambientLight intensity={0.7} />
-      <pointLight position={[5, 5, 5]} intensity={55} color={colors.palette[0]} />
-      <pointLight position={[-6, -1, 4]} intensity={38} color={colors.palette[1]} />
+      {/* Neutral key lights: theme-tinted keys washed every part toward the accent, fighting the
+          per-part identity hues. Theme flavour stays in the rim light, shell, case and grid. */}
+      <pointLight position={[5, 5, 5]} intensity={55} color="#e8edf6" />
+      <pointLight position={[-6, -1, 4]} intensity={38} color="#dfe6f2" />
       <pointLight position={[0, 6, -4]} intensity={28} color={colors.accent} />
 
       <group position={[0, 0.2, 0]}>
@@ -277,17 +277,19 @@ export const RigHologram = memo(function RigHologram({
             every frame, and on this DoubleSide additive shell the back faces carry max fresnel
             across the whole silhouette — so the "rim blink" pumped the ENTIRE case in irregular
             single frames and washed out the parts inside (owner clip 2026-07-08, Bloom-amplified;
-            holo-shell-blink-guard.test.ts). fresnelOpacity 0.42 ≈ 0.7 × the old blink's time
-            average, so the steady shell matches the approved mid-state look, not the wash peak. */}
+            holo-shell-blink-guard.test.ts).
+            Owner directive 2026-07-07 round 2: the case must be MUCH more see-through so the
+            per-part identity colours read — hologramOpacity 0.18→0.08 and fresnelOpacity
+            0.42→0.2 turn the shell into a whisper of glass; the parts inside carry the scene. */}
         {holoV2 && !exploded && (
           <mesh>
             <boxGeometry args={[4.15, 5.35, 2.55]} />
             <HolographicMaterial
               hologramColor={colors.accent}
-              hologramOpacity={0.18}
+              hologramOpacity={0.08}
               hologramBrightness={0.9}
               fresnelAmount={0.6}
-              fresnelOpacity={0.42}
+              fresnelOpacity={0.2}
               scanlineSize={9}
               signalSpeed={reduced ? 0 : 0.4}
               enableBlinking={false}
@@ -317,7 +319,7 @@ export const RigHologram = memo(function RigHologram({
             key={p.id}
             part={p}
             index={i}
-            color={colors.palette[1]}
+            color={partColor(colors, true, p.kind)}
             exploded={exploded}
             selectedId={selectedId}
             hoveredId={hoveredId}
@@ -330,7 +332,7 @@ export const RigHologram = memo(function RigHologram({
           <RigFan
             key={fp.fan.id}
             fan={fp.fan}
-            color={fp.fan.detected ? colors.palette[2] : colors.ghost}
+            color={fp.fan.detected ? FAN_COLOR : colors.ghost}
             assembled={fp.assembled}
             exploded={fp.exploded}
             isExploded={exploded}

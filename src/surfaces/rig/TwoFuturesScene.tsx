@@ -40,15 +40,11 @@ export default function TwoFuturesScene({
   // Read once per mount — Settings remounts this surface on nav (same idiom as the bay).
   const [holoV2] = useState(readHologramV2);
 
-  // "Now" side: detected parts cycle the theme palette (the bay's colour rule).
-  const nowColors = useMemo(() => {
-    let detectedIndex = 0;
-    return parts.map((p) => {
-      const c = partColor(colors, p.detected, detectedIndex);
-      if (p.detected) detectedIndex += 1;
-      return c;
-    });
-  }, [parts, colors]);
+  // "Now" side: detected parts wear their kind's fixed identity hue (the bay's colour rule).
+  const nowColors = useMemo(
+    () => parts.map((p) => partColor(colors, p.detected, p.kind)),
+    [parts, colors],
+  );
 
   const noop = () => {};
 
@@ -60,8 +56,10 @@ export default function TwoFuturesScene({
       camera={{ position: [0, 1.6, 13.8], fov: 45 }}
     >
       <ambientLight intensity={0.7} />
-      <pointLight position={[5, 5, 5]} intensity={55} color={colors.palette[0]} />
-      <pointLight position={[-6, -1, 4]} intensity={38} color={colors.palette[1]} />
+      {/* Neutral keys (same rule as the bay): theme-tinted keys wash the per-part identity
+          hues; theme flavour stays in the rim light, shells and grid. */}
+      <pointLight position={[5, 5, 5]} intensity={55} color="#e8edf6" />
+      <pointLight position={[-6, -1, 4]} intensity={38} color="#dfe6f2" />
       <pointLight position={[0, 6, -4]} intensity={28} color={colors.accent} />
 
       {/* Baseline — the same rig, desaturated to the theme's faint ghost ink (no new palette). */}

@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { partColor } from "./use-rig-colors";
+import { partColor, PART_KIND_COLORS, FAN_COLOR } from "./use-rig-colors";
 import type { RigColors } from "./use-rig-colors";
+import type { RigPartKind } from "./rig-parts";
 
-// A small, fully-synthetic RigColors fixture. Distinct hex values per slot so we can
-// prove exactly which field/index partColor returns (no real theme tokens involved).
+// Guard for the fixed part-identity palette (owner directive 2026-07-07): every component KIND
+// wears its own distinct, THEME-INDEPENDENT hue so parts are instantly tellable apart. The old
+// rule cycled the 3-hue theme palette — near-identical hues made the model read as one blob.
+// A synthetic RigColors fixture with loud, distinct slots proves exactly what partColor reads.
 const makeColors = (over: Partial<RigColors> = {}): RigColors => ({
   accent: "#111111",
   palette: ["#aa0000", "#00bb00", "#0000cc"],
@@ -11,44 +14,62 @@ const makeColors = (over: Partial<RigColors> = {}): RigColors => ({
   ...over,
 });
 
-describe("partColor", () => {
-  it("returns the ghost ink for an undetected part (regardless of index)", () => {
+const ALL_KINDS: RigPartKind[] = ["board", "cpu", "ram", "gpu", "storage", "cooler", "psu"];
+
+describe("partColor — fixed per-kind identity", () => {
+  it("returns the ghost ink for an undetected part (every kind — honesty rule)", () => {
     const c = makeColors();
-    expect(partColor(c, false, 0)).toBe(c.ghost);
-    expect(partColor(c, false, 1)).toBe(c.ghost);
-    expect(partColor(c, false, 999)).toBe(c.ghost);
+    for (const kind of ALL_KINDS) {
+      expect(partColor(c, false, kind)).toBe(c.ghost);
+    }
   });
 
-  it("returns palette[0] for a detected part at index 0", () => {
+  it("returns the kind's fixed identity hue for a detected part", () => {
     const c = makeColors();
-    expect(partColor(c, true, 0)).toBe(c.palette[0]);
+    for (const kind of ALL_KINDS) {
+      expect(partColor(c, true, kind)).toBe(PART_KIND_COLORS[kind]);
+    }
   });
 
-  it("cycles the palette by index (index % palette.length)", () => {
-    const c = makeColors();
-    expect(partColor(c, true, 0)).toBe(c.palette[0]);
-    expect(partColor(c, true, 1)).toBe(c.palette[1]);
-    expect(partColor(c, true, 2)).toBe(c.palette[2]);
+  it("is theme-independent: a detected part's colour never changes with the theme", () => {
+    // Two wildly different "themes" must produce identical detected-part colours — the uniform
+    // theme tint was exactly why the owner couldn't distinguish the model.
+    const a = makeColors();
+    const b = makeColors({ accent: "#ff00ff", palette: ["#123456", "#654321", "#0f0f0f"] });
+    for (const kind of ALL_KINDS) {
+      expect(partColor(a, true, kind)).toBe(partColor(b, true, kind));
+    }
   });
 
-  it("wraps around once index reaches palette.length", () => {
+  it("never returns the accent or a theme-palette slot for a detected part", () => {
     const c = makeColors();
-    // palette has 3 entries → index 3 wraps back to slot 0.
-    expect(partColor(c, true, 3)).toBe(c.palette[0]);
-    expect(partColor(c, true, 4)).toBe(c.palette[1]);
-    expect(partColor(c, true, 5)).toBe(c.palette[2]);
+    for (const kind of ALL_KINDS) {
+      const got = partColor(c, true, kind);
+      expect(got).not.toBe(c.accent);
+      expect(c.palette).not.toContain(got);
+    }
+  });
+});
+
+describe("PART_KIND_COLORS — the identity palette itself", () => {
+  it("covers every RigPartKind", () => {
+    for (const kind of ALL_KINDS) {
+      expect(PART_KIND_COLORS[kind]).toMatch(/^#[0-9a-f]{6}$/i);
+    }
   });
 
-  it("wraps a large index correctly (100 % 3 === 1)", () => {
-    const c = makeColors();
-    expect(partColor(c, true, 100)).toBe(c.palette[1]);
-    expect(partColor(c, true, 100)).toBe(c.palette[100 % c.palette.length]);
+  it("every kind hue is unique (incl. the fan colour) — differentiation is the whole point", () => {
+    const all = [...ALL_KINDS.map((k) => PART_KIND_COLORS[k]), FAN_COLOR].map((h) =>
+      h.toLowerCase(),
+    );
+    expect(new Set(all).size).toBe(all.length);
   });
 
-  it("does not return the accent — detected parts come from the palette, not the accent field", () => {
-    // Guard against a regression that picks colors.accent for detected parts.
-    const c = makeColors({ accent: "#abcdef" });
-    expect(partColor(c, true, 0)).not.toBe(c.accent);
-    expect(partColor(c, true, 1)).not.toBe(c.accent);
+  it("no kind hue collides with the ghost ink (detected must never read as undetected)", () => {
+    const c = makeColors();
+    for (const kind of ALL_KINDS) {
+      expect(PART_KIND_COLORS[kind].toLowerCase()).not.toBe(c.ghost.toLowerCase());
+    }
+    expect(FAN_COLOR.toLowerCase()).not.toBe(c.ghost.toLowerCase());
   });
 });

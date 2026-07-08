@@ -86,12 +86,11 @@ function AssembledRig({ parts, colors, reduced }: { parts: RigPart[]; colors: Ri
   useFrame((_, delta) => {
     if (ref.current && !reduced) ref.current.rotation.y += delta * 0.16;
   });
-  let detectedIndex = 0;
   return (
     <group ref={ref} position={[0, 0.35, 0]} rotation={[-0.04, 0.42, 0]}>
       <RigCase exploded={false} color={colors.accent} reduced={reduced} />
       {parts.map((p) => {
-        const c = partColor(colors, p.detected, p.detected ? detectedIndex++ : 0);
+        const c = partColor(colors, p.detected, p.kind);
         // Assembled = axis-aligned (NO per-part tilt — that rotation is only for the exploded view).
         // Keeping it zeroed makes the parts nest cleanly like a real build instead of scrambling.
         return (
@@ -169,8 +168,10 @@ export function HardwareTourScene({
     >
       <fogExp2 attach="fog" args={["#070b12", 0.06]} />
       <ambientLight intensity={0.65} />
-      <pointLight position={[4, 5, 5]} intensity={45} color={colors.accent} />
-      <pointLight position={[-5, 1.5, 2]} intensity={22} color={colors.palette[1]} />
+      {/* Neutral keys (same rule as the bay): theme-tinted keys wash the per-part identity
+          hues; the low fill keeps the accent for theme flavour. */}
+      <pointLight position={[4, 5, 5]} intensity={45} color="#e8edf6" />
+      <pointLight position={[-5, 1.5, 2]} intensity={22} color="#dfe6f2" />
       <pointLight position={[0, -2, 4]} intensity={12} color={colors.accent} />
 
       {focus ? (
