@@ -17,13 +17,15 @@ exe, violates two standing laws. This skill is the whole path from green build t
 
 1. **Build green first.** `npm run tauri build` completed without error; tsc/vitest/cargo already
    verified per the train's own gates.
-2. **Run the ship script** — note the call-operator quirk (`powershell -File` parse-errors in this shell):
+2. **Run the ship script — `pwsh` (PS7), NEVER `powershell` (5.1):** the script is UTF-8 without a
+   BOM and 5.1 mis-decodes its em-dashes into hard parse errors (hit live 2026-07-07; same class as
+   dev-relaunch.ps1):
 
    ```
-   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1'"
+   pwsh -NoProfile -File "C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1"
    ```
 
-   Add `-NoLaunch` inside the quotes only when the owner shouldn't get a window popped.
+   Append ` -NoLaunch` only when the owner shouldn't get a window popped.
    The script enforces, in order: **stale-build gate** (packaged exe must embed HEAD's short hash —
    cargo skips recompile on frontend/docs-only chains and re-bundles the PREVIOUS binary; on throw,
    run `cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml` then rebuild) →
