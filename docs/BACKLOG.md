@@ -76,11 +76,23 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   fix DONE 2026-07-07 (T6)** — session-start advanced tier batches to ONE elevation
   (`apply_elevated_tier`, gaming_orchestrator.rs; ≤1-dispatch cargo pin; no-partial +
   UAC-decline honesty preserved; mutation-gate 10/10; stop/restore side still elevates
-  per change — out of T6 scope, flagged to owner) → ② fresh full §6/§7 installed-build QA
-  on the post-T6 installer (CC-runnable parts = train T5, now mandatory) →
+  per change — out of T6 scope, flagged to owner) → ② ✅ **§6/§7 installed-build QA,
+  CC-runnable parts DONE 2026-07-07 (T5, on the `5f765e4` installer):** §7 all-items sweep
+  caught 3 honesty gaps (vendor-honesty line unreachable behind `{!embedded}` · tour never
+  told the no-CPU-temp story · §7 items 1–2 anchored to retired UI) → fixed `ff186e6` +
+  focused self-reviewer PASS on the shipped build; §6 corrupt ledger (fail-loud quarantine
+  to `.corrupt`, empty load, no crash) + missing ledger (empty, no crash) proven live, real
+  ledger + orphan gaming-session restored hash-identical; cancelled-apply covered by §1.
+  **One §6 leg is owner-present by construction — helper-crash** (the FPS helper runs
+  ELEVATED: starting it and killing it each take a UAC consent; fps.rs:11/371) — folds into
+  ③'s owner session →
   ③ **owner-run GAMING_MODE_QA.md live case #4** (start Gaming Mode → reboot → relaunch →
   confirm restore prompt → exact prior state back). ~5 min of owner time; the only
   live-checklist case a session cannot prove — run it against the post-T6 single-prompt build.
+  While he's at the rig: the §6 helper-crash probe (FPS on → UAC OK → Task-Manager-kill the
+  elevated `compy.exe --fps-capture` → UI shows stopped → re-enable works) + the pending
+  orphan-session "Restore previous settings" click (~5 old-style prompts, restore side
+  unbatched — T6b candidate).
 - **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
   RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
 - **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code

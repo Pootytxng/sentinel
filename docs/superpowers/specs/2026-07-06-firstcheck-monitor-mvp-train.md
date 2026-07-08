@@ -250,32 +250,37 @@ tsc 0 · vitest 1099/1099 · self-reviewer PASS (fresh full pass at eb5df81). De
    run) · qa5/qa9 no-partial suites unchanged-green. `SessionDirOverride` test seam keeps CI
    runs off the live session file. Restore/stop side still elevates per change (out of T6
    scope — flagged to owner).
-2. **T5 — IN FLIGHT (handoff 2026-07-07, mid-train context refresh).** Done so far:
-   T6 shipped LIVE (`e350607` stamped, ship row `293326b`) · Gaming-copy self-review
-   **8/8 PASS** · §7 sweep (self-reviewer, live build) found 3 real gaps, ALL FIXED in
-   `ff186e6` (vendor-honesty line was unreachable behind `{!embedded}` — hoisted +
-   `vendor-honesty-line-guard.test.ts`; CPU-lesson kernel-driver note added in
-   `setup-steps.ts`; RELEASE_QA §7 items 1–2 re-anchored to current UI). tsc 0 · vitest
-   1101. **A rebuild from `ff186e6` was launched in the background** — the fresh session
-   must: ① check the build finished → run `scripts/ship-reinstall.ps1` (via **pwsh**, NOT
-   powershell 5.1 — em-dash parse) → stamp-verify `ff186e6` → RELEASE_STATE Snapshot row
-   (new SHA-256, supersedes `BFA89273…5946`/`e350607`) · ② focused self-reviewer pass on
-   the two fixed surfaces (Monitor room shows the GPU-coverage line now; tour CPU lesson
-   shows the no-CPU-temp note) · ③ §6 failure-path probes on the installed build
-   (backup+corrupt `%APPDATA%\Compy\history.json` → relaunch → empty ledger no crash →
-   restore backup; same for missing; helper-crash: kill `compy.exe --fps-capture` →
-   UI reflects stopped → re-enable works; leave `gaming-session.json` UNTOUCHED) ·
-   ④ docs: RELEASE_STATE line 19 (Last full installed-build QA) + BACKLOG RUNG 2 ② +
-   this spec · ⑤ report + owner prompts. **OWNER PROMPTS PENDING (batch at report):**
-   (a) his rig shows a REAL orphan Gaming session (started 2026-07-07 07:37, his old-build
-   5-prompt enable — full advanced tier; every snapshot prior == current state, so
-   recovery changes nothing materially): click "Restore previous settings", expect up to
-   ~5 old-style prompts one last time (restore side unbatched, out of T6 scope — flagged
-   as possible T6b) · (b) GAMING_MODE_QA.md live case #4 reboot-while-active on the new
-   build + the single-prompt enable eyeball. Non-blocking observations for the report:
-   dual recovery banners (top shell + in-pane) don't dismiss together (pre-existing);
-   impeccable hook flags 3 pre-existing App.css findings (L1854/1857 gradient-text,
-   L1360 layout-transition) — not this train's diff, left unchanged.
+2. ~~**T5**~~ — **CC-RUNNABLE PARTS DONE 2026-07-07 (fresh session per handoff; RUNG 2 ②
+   closed for CC).** Prior session: T6 shipped LIVE (`e350607`/`293326b`) · Gaming-copy
+   self-review **8/8 PASS** · §7 sweep found 3 real gaps, ALL FIXED in `ff186e6`
+   (vendor-honesty line unreachable behind `{!embedded}` — hoisted +
+   `vendor-honesty-line-guard.test.ts`; CPU-lesson kernel-driver note in `setup-steps.ts`;
+   RELEASE_QA §7 items 1–2 re-anchored). This session: the finished ff186e6 background
+   build was stamp-stale vs HEAD (docs handoff `5f765e4` landed after) → **rebuilt from
+   `5f765e4`, ship-reinstall OK, stamp `Select-String 5f765e4` = true, installer SHA-256
+   `CC32B2D9…4331B4`**, RELEASE_STATE row + line 19 updated · **focused self-reviewer PASS
+   on the live installed build** (both fixes render byte-exact, ≥AA contrast, exactly-once;
+   tour note styled identical to the PSU reference) · **§6 probes PASS live**: corrupt
+   ledger → fail-loud quarantine to `history.json.corrupt` (H1 — recoverable bytes never
+   overwritten) + empty load (`get_applied_changes` = `[]`) + no crash; missing ledger →
+   empty + no crash; owner's real ledger + orphan `gaming-session.json` restored
+   hash-identical (SHA-256 before==after, twice); cancelled-apply covered by §1 ·
+   **helper-crash leg = owner-present by construction** (the FPS helper runs ELEVATED —
+   fps.rs:11 spawn + fps.rs:371 "non-elevated parent can't kill us"; starting AND killing
+   it each take a UAC consent an autonomous session must not trigger) — folded into the
+   owner batch below. Verify at `5f765e4`: tsc 0 · vitest **1101** (147 files, fresh run) ·
+   cargo **675** carries (src-tauri diff e350607..5f765e4 EMPTY). **OWNER BATCH (pending):**
+   (a) orphan Gaming session on his rig (started 2026-07-07 07:37, old-build 5-prompt
+   enable — full advanced tier; every snapshot prior == current state, so recovery changes
+   nothing materially): click "Restore previous settings", expect up to ~5 old-style
+   prompts one last time (restore side unbatched — T6b candidate) · (b) GAMING_MODE_QA
+   live case #4 reboot-while-active on the `5f765e4` build + the single-prompt enable
+   eyeball · (c) §6 helper-crash probe while he's there (FPS on → UAC OK →
+   Task-Manager-kill `compy.exe --fps-capture` → UI shows stopped → re-enable works).
+   Non-blocking observations: dual recovery banners (top shell + in-pane) don't dismiss
+   together (pre-existing; this session's reviewer only ever saw the top-shell one on the
+   surfaces visited); impeccable hook flags 3 pre-existing App.css findings (L1854/1857
+   gradient-text, L1360 layout-transition) — not this train's diff, left unchanged.
 
 ## Report format (standing)
 

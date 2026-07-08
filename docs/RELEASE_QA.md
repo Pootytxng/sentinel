@@ -153,11 +153,21 @@ exclusive fullscreen — by design, no injection).
 ## 6. Failure paths
 
 - ☐ **Corrupt history** — close app, replace `%APPDATA%\Compy\history.json`
-  with garbage, reopen → ledger loads **empty**, no crash. *(also unit-tested)*
-- ☐ **Missing history** — delete `history.json`, reopen → empty ledger, no crash.
+  with garbage, reopen → the app **fail-loud quarantines** the damaged file to
+  `history.json.corrupt` at load (H1 — recoverable bytes never overwritten),
+  runs with an **empty** ledger, no crash. *(also unit-tested; proven live
+  2026-07-07 on the `5f765e4` installed build — T5: quarantine observed,
+  `get_applied_changes` = `[]`, UI rendered; real ledger restored
+  hash-identical after)*
+- ☐ **Missing history** — delete `history.json`, reopen → empty ledger, no
+  crash. *(proven live 2026-07-07 on `5f765e4` — T5: clean launch with the
+  file absent, `[]` + UI rendered, no crash; ledger restored hash-identical)*
 - ☐ **Cancelled apply** — (covered in §1) no success entry on UAC cancel.
 - ☐ **Helper crash** — kill `compy.exe --fps-capture` mid-capture → app
-  reflects FPS stopped; re-enabling works (no stale session).
+  reflects FPS stopped; re-enabling works (no stale session). *(owner-present
+  by construction, noted 2026-07-07: the helper runs ELEVATED — starting it
+  and killing it each take a UAC consent an autonomous session must not
+  trigger — see fps.rs:11/371)*
 
 ---
 
