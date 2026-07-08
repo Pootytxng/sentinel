@@ -111,8 +111,19 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   wiring both ways, partGlow neutrality). v1 scope note in the spec: trial `MetricWindow` never
   crosses IPC → v1 renders from the benchmark pair only; trial-sourced split = v2 (+persist-
   latest Rust read). Self-reviewer PASS (fresh full pass at `eb5df81` after subsume + azimuth
-  fixes). ⏳ OWNER: flip "Two futures split (preview)" in Settings → eyeball; default-ON is his
-  call. Same train, LIVE surface: bay-shell `clearSpot` viewer-facing window (`209e4dc`).
+  fixes). ✅ OWNER EYEBALLED 2026-07-07: **"looks really good BUT the hologram itself has no
+  visible purpose or information integrated — just a cool split with no apparent changes
+  before/after."** Verdict: stays preview-OFF; default-ON deferred INTO the Lab-establishment
+  train below (the split's hologram must carry part-anchored, measured information — changed
+  components visibly marked, deltas anchored to parts — not just the composition). Same train,
+  LIVE surface: bay-shell `clearSpot` viewer-facing window (`209e4dc`).
+- **PARKED — owner's Lab-establishment train (owner supplies the task list; do NOT start until
+  he delivers it, after the current in-line work closes):** fully establish the Lab room — its
+  capabilities and ACTUAL interactive functions/applications he has planned (his words,
+  2026-07-07). Known folds-in: the Two Futures hologram-information feedback above · Two Futures
+  v2 (persist-latest Rust read + trial-sourced split, per the v1 scope note) · any interactive
+  hologram work honoring the honest-measurement law (no fabricated per-part data — anything
+  displayed on a part must trace to a measured struct).
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
