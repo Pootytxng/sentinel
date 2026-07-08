@@ -35,10 +35,17 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
 - [ ] **3. App crash while Active.** Start Gaming Mode, then **kill `compy.exe`** (Task Manager) mid-
       session. Relaunch → the toggle should show **Gaming Mode "on"** (live session resumed); click Stop
       → prior state restored. *(An active session resumes rather than false-prompting.)*
-- [ ] **4. Full reboot while Active. ← the headline case.** Start Gaming Mode → **reboot the PC** without
+- [x] **4. Full reboot while Active. ← the headline case.** Start Gaming Mode → **reboot the PC** without
       stopping. After reboot, launch Compy → it detects the unfinished session (`gaming-session.json`)
       and **prompts to restore**; confirm → **exact prior state restored.** *(This is the one the
       automated harness cannot prove — it's the whole reason this checklist exists.)*
+      ✅ **PASSED 2026-07-07 (owner-run on the post-T6 build, `d557e70` installer):** enable (USB+PCIe
+      advanced tier) = ONE UAC (owner-confirmed) → reboot → relaunch → restore prompt → "Restore now"
+      → CC read-only verification: session contract cleared (only reachable when every restore
+      confirms) + every probed value back at the owner's standing-ledger state (Ultimate Perf plan ·
+      USB-SS/ASPM at his applied-rec values · services at his applied-rec states). The 2 restore-side
+      UACs = per-elevated-change restore, expected (see #10) → T6b batching candidate. Finding: restore
+      success shows NO visible confirmation (owner couldn't tell it worked) — UX-gap candidate logged.
 - [ ] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
 - [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles,
       start, and **cancel the single UAC prompt** (since T6, 2026-07-07, the whole advanced tier —
@@ -53,10 +60,14 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       silent fallback / wrong plan).
 - [ ] **9. External power-plan change mid-session.** Switch power plans manually (Windows) while Gaming
       Mode is active. Stop → restore still targets the **stored** prior GUID; honest about state.
-- [ ] **10. Advanced tier is opt-in + ONE UAC prompt total.** Confirm the core bundle (power plan +
+- [x] **10. Advanced tier is opt-in + ONE UAC prompt total.** Confirm the core bundle (power plan +
       Game Mode + Game Bar) applies with **no UAC**; selecting any mix of USB-SS / PCIe-ASPM /
       service suspends fires **exactly ONE prompt** at start (T6; stop/restore still prompts per
       elevated change — expected for now).
+      ✅ **PASSED 2026-07-07:** owner-confirmed exactly ONE prompt at start with USB+PCIe selected
+      (the case-#4 run); core-bundle-no-UAC proven by the T6 harness (`qa10` + the ≤1-dispatch pin)
+      and every prior §1 start/stop. Restore side prompted once per elevated change (2 prompts for
+      his 2 items) — matches the flagged T6 scope; batching it is T6b.
 
 ---
 

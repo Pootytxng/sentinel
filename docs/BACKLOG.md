@@ -86,16 +86,17 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   **One §6 leg is owner-present by construction — helper-crash** (the FPS helper runs
   ELEVATED: starting it and killing it each take a UAC consent; fps.rs:11/371) — folds into
   ③'s owner session →
-  ③ **owner-run GAMING_MODE_QA.md live case #4 — restore side VERIFIED 2026-07-07** (owner ran
-  start → reboot → "Restore now"; CC read-only-verified: session contract cleared — only
-  reachable when every restore confirms — and every probed value matches his standing ledger
-  state; the 2 restore UACs = the unbatched restore side working as flagged, his 2 elevated
-  tier items — T6b batching candidate; restore shows NO visible success confirmation → UX-gap
-  candidate). **Remaining: owner confirms the pre-reboot enable showed ONE UAC prompt** (closes
-  case #4) + the §6 helper-crash probe while he's at the rig (FPS on → UAC OK →
-  Task-Manager-kill the elevated `compy.exe --fps-capture` → UI shows stopped → re-enable
-  works). The old orphan-session file is GONE from disk (no `gaming-session.json`), so the
-  pending "~5 old-style prompts" restore-click leg is moot/absorbed by tonight's run.
+  ③ ✅ **owner-run GAMING_MODE_QA.md live case #4 — CLOSED 2026-07-07** (owner ran start →
+  reboot → "Restore now" and confirmed the enable was exactly ONE UAC; CC read-only-verified
+  the restore: session contract cleared — only reachable when every restore confirms — and
+  every probed value matches his standing ledger state; cases #4 + #10 marked PASSED in
+  GAMING_MODE_QA.md). Findings logged: **T6b candidate** (the 2 restore UACs = unbatched
+  restore side, per elevated change) · **UX-gap candidate** (restore success shows NO visible
+  confirmation — owner couldn't tell it worked). The old orphan-session file is GONE from disk,
+  so the pending "~5 old-style prompts" restore-click leg is moot/absorbed by tonight's run.
+  **Remaining owner leg: the §6 helper-crash probe only** (FPS on → UAC OK → Task-Manager-kill
+  the elevated `compy.exe --fps-capture` → UI shows stopped → re-enable works — owner will tab
+  over between game rounds; CC verifies each step read-only).
 - **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
   RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
 - **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code
