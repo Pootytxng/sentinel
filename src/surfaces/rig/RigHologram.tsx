@@ -270,9 +270,15 @@ export const RigHologram = memo(function RigHologram({
         {/* V2 holo shell — the "bay glass" around the assembled rig, painted by the vendored
             holographic shader in the LIVE theme accent (never the vendor default). Hidden when
             exploded (the glitch burst covers the transition); fully static under reduced motion
-            (signalSpeed 0 + no blinking). clearSpot opens a soft translucency spotlight on
-            whatever panel faces the viewer so the parts inside stay readable (owner ask
-            2026-07-07); view-dependent only — repaints ride the existing invalidations. */}
+            (signalSpeed 0). clearSpot opens a soft translucency spotlight on whatever panel
+            faces the viewer so the parts inside stay readable (owner ask 2026-07-07);
+            view-dependent only — repaints ride the existing invalidations.
+            enableBlinking stays FALSE for everyone: the upstream blink re-rolls a time-hash
+            every frame, and on this DoubleSide additive shell the back faces carry max fresnel
+            across the whole silhouette — so the "rim blink" pumped the ENTIRE case in irregular
+            single frames and washed out the parts inside (owner clip 2026-07-08, Bloom-amplified;
+            holo-shell-blink-guard.test.ts). fresnelOpacity 0.42 ≈ 0.7 × the old blink's time
+            average, so the steady shell matches the approved mid-state look, not the wash peak. */}
         {holoV2 && !exploded && (
           <mesh>
             <boxGeometry args={[4.15, 5.35, 2.55]} />
@@ -281,10 +287,10 @@ export const RigHologram = memo(function RigHologram({
               hologramOpacity={0.18}
               hologramBrightness={0.9}
               fresnelAmount={0.6}
-              fresnelOpacity={0.7}
+              fresnelOpacity={0.42}
               scanlineSize={9}
               signalSpeed={reduced ? 0 : 0.4}
-              enableBlinking={!reduced}
+              enableBlinking={false}
               blinkFresnelOnly
               clearSpot={0.85}
               side="DoubleSide"

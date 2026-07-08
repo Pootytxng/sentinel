@@ -84,7 +84,10 @@ export default function TwoFuturesScene({
       </group>
 
       {/* Now — full theme accent; v2 holo shell (with the viewer-facing clear spot) when the
-          bay v2 flag is on; part glow scaled ONLY by measured per-component efficacy. */}
+          bay v2 flag is on; part glow scaled ONLY by measured per-component efficacy.
+          enableBlinking FALSE + fresnelOpacity 0.42: same fix as the bay shell — the upstream
+          per-frame blink hash pumps the whole additive DoubleSide shell in single frames
+          (owner clip 2026-07-08; holo-shell-blink-guard.test.ts pins every mount). */}
       <group position={[3.1, 0.2, 0]}>
         {holoV2 && (
           <mesh>
@@ -94,10 +97,10 @@ export default function TwoFuturesScene({
               hologramOpacity={0.18}
               hologramBrightness={0.9}
               fresnelAmount={0.6}
-              fresnelOpacity={0.7}
+              fresnelOpacity={0.42}
               scanlineSize={9}
               signalSpeed={reduced ? 0 : 0.4}
-              enableBlinking={!reduced}
+              enableBlinking={false}
               blinkFresnelOnly
               clearSpot={0.85}
               side="DoubleSide"
