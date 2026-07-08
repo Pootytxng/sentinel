@@ -163,11 +163,18 @@ exclusive fullscreen — by design, no injection).
   crash. *(proven live 2026-07-07 on `5f765e4` — T5: clean launch with the
   file absent, `[]` + UI rendered, no crash; ledger restored hash-identical)*
 - ☐ **Cancelled apply** — (covered in §1) no success entry on UAC cancel.
-- ☐ **Helper crash** — kill `compy.exe --fps-capture` mid-capture → app
+- ☑ **Helper crash** — kill `compy.exe --fps-capture` mid-capture → app
   reflects FPS stopped; re-enabling works (no stale session). *(owner-present
   by construction, noted 2026-07-07: the helper runs ELEVATED — starting it
   and killing it each take a UAC consent an autonomous session must not
-  trigger — see fps.rs:11/371)*
+  trigger — see fps.rs:11/371)* **PASSED 2026-07-08 (owner-run probe on the
+  `48ca9ec` installer, 00:37–00:40): backend side CC-verified read-only —
+  helper PID 17900 up + `fps.json` writing ~1s cadence → owner Task-Manager
+  kill → `fps.json` froze, `fps.alive` heartbeat cleaned up, zero ghost
+  process → re-enable spawned NEW helper PID 17820 writing again; owner
+  confirmed the Monitor room UI showed the FPS sensor STOPPED (not
+  frozen/false-live) after the kill. Full crash→detect→clean→recover cycle
+  proven.**
 
 ---
 

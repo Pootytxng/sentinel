@@ -94,16 +94,15 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   restore side, per elevated change) · **UX-gap candidate** (restore success shows NO visible
   confirmation — owner couldn't tell it worked). The old orphan-session file is GONE from disk,
   so the pending "~5 old-style prompts" restore-click leg is moot/absorbed by tonight's run.
-  **Remaining owner leg: the §6 helper-crash probe — IN FLIGHT 2026-07-08 00:37–00:39, backend
-  side PROVEN:** owner enabled FPS (one UAC) → elevated helper PID 17900 up, `fps.json` writing
-  at ~1s cadence (mtime 00:38:16→00:38:20 observed) → owner Task-Manager-killed 17900 →
-  `fps.json` froze at 00:39:16, `fps.alive` heartbeat cleaned up, no ghost process (only the
-  main app remained) → owner re-enabled at 00:39:51: NEW helper PID 17820, `fps.json` writing
-  again (00:40:22→00:40:25 observed) — **the full crash→detect→clean→recover cycle is
-  backend-PROVEN. PENDING to close: ONLY the owner's step-3 answer (did the Monitor room UI
-  show stopped — not frozen/false-live?).** On that answer: mark the §6 helper-crash leg closed
-  in RELEASE_QA.md §6 + the RELEASE_STATE Snapshot "Last full installed-build QA" row's Open
-  note + this line; then the owner-legs memory can be deleted.
+  **§6 helper-crash probe CLOSED 2026-07-08 — RUNG 2 fully done:** owner enabled FPS (one
+  UAC) → elevated helper PID 17900 up, `fps.json` writing at ~1s cadence (mtime
+  00:38:16→00:38:20 observed) → owner Task-Manager-killed 17900 → `fps.json` froze at
+  00:39:16, `fps.alive` heartbeat cleaned up, no ghost process (only the main app remained) →
+  owner re-enabled at 00:39:51: NEW helper PID 17820, `fps.json` writing again
+  (00:40:22→00:40:25 observed) — full crash→detect→clean→recover cycle backend-PROVEN, and
+  the owner confirmed (2026-07-08) the Monitor room UI showed the FPS sensor STOPPED after
+  the kill (not frozen/false-live). Closed in RELEASE_QA.md §6 + the RELEASE_STATE Snapshot
+  "Last full installed-build QA" row the same commit; owner-legs memories deleted.
 - **RUNG 3 — private-beta send (owner distribution act):** friends + Discord seed channel per
   RECEIPTS_DOCTRINE Phase 1 / zero-budget law. BETA_TESTER_README + TRACKER already exist.
 - **RUNG 4 — public-launch gates (owner/$-gated, parallel once beta feedback flows):** code
