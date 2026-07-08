@@ -46,6 +46,10 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       USB-SS/ASPM at his applied-rec values · services at his applied-rec states). The 2 restore-side
       UACs = per-elevated-change restore, expected (see #10) → T6b batching candidate. Finding: restore
       success shows NO visible confirmation (owner couldn't tell it worked) — UX-gap candidate logged.
+      *(Both findings BUILT 2026-07-08: T6b restore-side batching — one UAC for the whole restore,
+      `qa10` + the `a_full_elevated_restore_dispatches_exactly_one_elevation` pin — and the visible
+      restore confirmation naming every restored change on both surfaces. Next real session run
+      doubles as the live eyeball.)*
 - [ ] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
 - [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles,
       start, and **cancel the single UAC prompt** (since T6, 2026-07-07, the whole advanced tier —
@@ -62,12 +66,15 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       Mode is active. Stop → restore still targets the **stored** prior GUID; honest about state.
 - [x] **10. Advanced tier is opt-in + ONE UAC prompt total.** Confirm the core bundle (power plan +
       Game Mode + Game Bar) applies with **no UAC**; selecting any mix of USB-SS / PCIe-ASPM /
-      service suspends fires **exactly ONE prompt** at start (T6; stop/restore still prompts per
-      elevated change — expected for now).
+      service suspends fires **exactly ONE prompt** at start (T6) — and, since T6b (2026-07-08),
+      **exactly ONE prompt at stop/restore** for the whole elevated tier too.
       ✅ **PASSED 2026-07-07:** owner-confirmed exactly ONE prompt at start with USB+PCIe selected
       (the case-#4 run); core-bundle-no-UAC proven by the T6 harness (`qa10` + the ≤1-dispatch pin)
       and every prior §1 start/stop. Restore side prompted once per elevated change (2 prompts for
-      his 2 items) — matches the flagged T6 scope; batching it is T6b.
+      his 2 items) — matched the flagged T6 scope at the time; **T6b closed it 2026-07-08** (restore
+      batches through the same audited sink→compose→receipts machinery; `qa10` now pins restore
+      dispatches == 1, CI pins the decline/receipts/fallback arms). Owner live re-check rides the
+      next real session's stop.
 
 ---
 

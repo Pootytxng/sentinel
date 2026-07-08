@@ -159,6 +159,30 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-08a — IN FLIGHT, UNCOMMITTED (T6b + restore-confirmation train; session hit context refresh)
+**Working tree holds the complete, verified diff — NOT yet committed.** Files: `src-tauri/src/gaming_orchestrator.rs`
+(T6b: restore side batches contiguous elevated rollbacks → ONE UAC via the same sink→`compose_batch_script`→receipts
+machinery as T6; + rust-tauri-reviewer fixes same-tree: post-phase-1 fallback re-dispatches STAGED items only ·
+`SESSION_OP` try-lock serializes start/stop/recover · bounds-safe `contiguous_run_end` · doc precision) ·
+`src/surfaces/gaming-mode.ts` (`restoredSummary` + `GAMING_SESSION_RESOLVED_EVENT`) · `src/surfaces/GamingMode.{tsx,css}`
++ `src/App.{tsx,css}` (visible restore-success confirmation on BOTH surfaces — the owner-caught UX gap; sibling-prompt
+sync via the resolved event; global banner defers to the pane on Optimize; neutral Done hover; living-skin tint
+specificity) · guards `src/surfaces/GamingMode.test.tsx` (5 pins) + `gaming-mode.test.ts` (+3) + 6 new cargo tests ·
+`docs/GAMING_MODE_QA.md` #4/#10 notes updated. **Verify GREEN at this state: cargo 681 + clippy clean · tsc 0 ·
+vitest **1115** (149 files).** rust-tauri-reviewer: **PASS, 0 blockers** (its 2 majors/1 minor/1 nit fixed in-tree;
+noted-only leftovers: receipts TOCTOU = pre-existing arch shared with the shipped apply side · no in-script order
+assertion · qa6 GUID nit). self-reviewer round 1: FAIL items 3+4 (dual-prompt staleness · Done danger-hover) + dead
+green tint note — all three fixed in-tree. **Round-2 state (2026-07-08 ~11:00): the restored banner was ALSO found
+stacking on Optimize → both global banner gates now live in pure helpers `showGlobalRecoveryBanner` /
+`showGlobalRestoredBanner` (gaming-mode.ts, +3 tests) wired into App.tsx; the focused re-verify agent CONFIRMED the
+card tint fix but DIED (API 500) before finishing the hover + staleness screenshots — those two re-verify legs are
+STILL UNVERIFIED visually.** NEXT: (1) dispatch a FRESH focused self-reviewer: items 3 (both scenarios: fixture orphan
+on Optimize → only pane card, resolve → no stale banner on Home; fixture on Home → banner resolve → no stale pane card
+or false error) + 4 (both Done buttons hover ≠ danger red) — zero-mutation fixture technique (service changes prior
+"Stopped", never a real session); tint already re-confirmed; (2) on PASS commit code+docs; (3) `npm run tauri build` →
+`scripts/ship-reinstall.ps1` → stamp-verify; (4) ship-docs commit: RELEASE_STATE new installer row (supersedes the
+`48ca9ec` build) + this entry → ✅; (5) push; (6) flag Cowork adversarial audit (mutation-boundary diff, class #1).
+
 > Maintained by the HQ/steering session. Anchored to live `main`, not banners. Lanes: read your row,
 > stay in your file domain, rebase onto `main` before every push.
 >

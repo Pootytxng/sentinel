@@ -28,6 +28,25 @@ use crate::gaming_session::{
 /// `None`, so any `Active` session found on disk is correctly an orphan to recover.
 static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
 
+/// Process-wide serialization of the session operations (start / stop / recover).
+/// A second concurrent command — a double-click, or a startup recover racing a manual
+/// stop — errors loudly instead of interleaving two restores over the same on-disk
+/// contract + receipts files (reviewer major, 2026-07-08). `try_lock`: never blocks
+/// the IPC thread; a poisoned lock (a prior panic mid-operation) is taken over rather
+/// than refused forever — refusing would strand the user's only restore path.
+static SESSION_OP: Mutex<()> = Mutex::new(());
+
+fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    match SESSION_OP.try_lock() {
+        Ok(g) => Ok(g),
+        Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => Err(
+            "another Gaming Mode operation is still finishing — give it a second and try again"
+                .to_string(),
+        ),
+    }
+}
+
 fn set_live_session(id: &str) {
     if let Ok(mut g) = LIVE_SESSION.lock() {
         *g = Some(id.to_string());
@@ -105,7 +124,8 @@ fn push(changes: &mut Vec<SessionChange>, label: &str, r: ApplyResult) {
 // service ≤4 → the owner-caught 5–6 prompts). The tier now reuses the audited §4 batching
 // machinery the Fix batch ships on (`ElevationDeferral` sink → `compose_batch_script` →
 // `parse_batch_receipts`) while preserving the session's no-partial contract exactly: ANY
-// failure still aborts + restores the whole session.
+// failure still aborts + restores the whole session. The restore side batches the same way
+// since T6b (see `restore_elevated_run` below).
 
 /// One advanced-tier change staged for the single elevation.
 struct ElevatedItem {
@@ -299,6 +319,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 /// the partial contract is already on disk; we transition to RestorePending,
 /// undo what landed, and return the error.
 pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
+    let _op = session_op_guard()?; // held across the whole start (incl. its abort-restore)
     if load_session().is_some() {
         return Err("a Gaming Mode session already exists — recover it first".into());
     }
@@ -416,22 +437,32 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
 /// the audited `dispatch_rollback`. Idempotent (safe to re-run after a partial
 /// failure). On any failure -> RestoreFailed, contract retained, returns Err
 /// (NEVER reports success). Clears the file only after every restore confirms.
+///
+/// T6b: contiguous elevated changes ride ONE elevation (`restore_elevated_run`)
+/// instead of one UAC prompt each. Mutation order stays exactly reverse-apply
+/// order: runs execute in sequence and a batch preserves its run's internal
+/// order inside the one script. "One prompt for the whole restore" is a property
+/// of the contract shape `start()` produces (the elevated tier applies LAST →
+/// restores FIRST as one contiguous block) — an interleaved disk-edited contract
+/// legitimately yields one prompt PER elevated run, order and fail-loud semantics
+/// intact.
 pub(crate) fn restore(file: &mut SessionFile) -> Result<(), String> {
     clear_live_session(); // this session is ending/recovering — no longer resumable
     file.status = next_on_stop(file.status); // -> Ending
     save_session(file)?;
     let mut first_err: Option<String> = None;
-    for change in resolve_restore_order(&file.changes) {
-        let res = match (&change.rollback_action, &change.snapshot) {
-            (RollbackAction::RestorePowerPlanFromSnapshot, Snapshot::PowerPlan { prior_guid }) => {
-                restore_power_plan_unelevated(prior_guid)
+    let ordered = resolve_restore_order(&file.changes);
+    let mut idx = 0usize;
+    while idx < ordered.len() {
+        let run_end = contiguous_run_end(&ordered, idx);
+        if ordered[idx].elevated_restore {
+            restore_elevated_run(&ordered[idx..run_end], &file.session_id, &mut first_err);
+        } else {
+            for change in &ordered[idx..run_end] {
+                record_restore_err(&mut first_err, &change.label, restore_one_change(change));
             }
-            // All other audited changes restore via the shared typed dispatcher.
-            (action, snapshot) => actions::dispatch_rollback(action, snapshot),
-        };
-        if let Err(e) = res {
-            first_err.get_or_insert(format!("{}: {}", change.label, e));
         }
+        idx = run_end;
     }
     if let Some(e) = first_err {
         file.status = SessionStatus::RestoreFailed;
@@ -440,6 +471,204 @@ pub(crate) fn restore(file: &mut SessionFile) -> Result<(), String> {
     }
     clear_session()?; // only after every restore confirmed
     Ok(())
+}
+
+/// PURE: the end (exclusive) of the contiguous run sharing `changes[start]`'s
+/// `elevated_restore` flag. Runs PARTITION the restore order without reordering
+/// it — the property that keeps "restore == reverse of true apply order" exact
+/// under batching (an elevated change never jumps over an unelevated one).
+/// An out-of-range `start` returns `start` (an empty run) — this helper sits on the
+/// rollback boundary and must never be able to panic (reviewer minor, 2026-07-08).
+fn contiguous_run_end(changes: &[SessionChange], start: usize) -> usize {
+    let Some(first) = changes.get(start) else {
+        return start;
+    };
+    let flag = first.elevated_restore;
+    start
+        + changes[start..]
+            .iter()
+            .take_while(|c| c.elevated_restore == flag)
+            .count()
+}
+
+/// Restore ONE change from its stored contract — the single dispatch point BOTH the
+/// inline (unelevated) path and the batch's phase 1 go through, so a change restores
+/// through exactly the same code regardless of how its `elevated_restore` flag routes
+/// it (a mislabeled power-plan change still takes the NON-elevated path, defers
+/// nothing, and simply confirms inline). Everything else = audited `dispatch_rollback`.
+fn restore_one_change(change: &SessionChange) -> Result<(), String> {
+    match (&change.rollback_action, &change.snapshot) {
+        (RollbackAction::RestorePowerPlanFromSnapshot, Snapshot::PowerPlan { prior_guid }) => {
+            restore_power_plan_unelevated(prior_guid)
+        }
+        // All other audited changes restore via the shared typed dispatcher.
+        (action, snapshot) => actions::dispatch_rollback(action, snapshot),
+    }
+}
+
+/// Collect-and-continue error semantics (unchanged from the pre-T6b loop): every change
+/// is attempted; the FIRST failure becomes the reported error.
+fn record_restore_err(first_err: &mut Option<String>, label: &str, res: Result<(), String>) {
+    if let Err(e) = res {
+        first_err.get_or_insert(format!("{label}: {e}"));
+    }
+}
+
+// ─── T6b — the restore side rides ONE elevation too ─────────────────────────
+// Before T6b, restore fired one UAC prompt per elevated change (stop / "Restore now"
+// after a session with USB + PCIe + service suspends = the owner-counted multiple
+// prompts, flagged at T6 as out-of-scope). Same audited §4 machinery as the apply
+// tier: `ElevationDeferral` sink → `compose_batch_script` → per-item file receipts.
+// Restore-time conservatism throughout (the mirror of apply-time refusal): any
+// infrastructure failure BEFORE the elevation falls back to the pre-T6b per-item
+// path — a restore must stay maximally possible — while a failure OF the one
+// elevation is final for this attempt (never followed by per-item re-prompts on
+// exactly the path where the user just declined); the contract is retained and a
+// later retry is idempotent.
+
+/// Per-change outcome of the one restore elevation, PURE so every arm is CI-pinnable
+/// without a real UAC prompt. `items` = (receipt id, user-facing label) per staged
+/// change. Fail-safe polarity: only an explicit `ok` receipt under a SUCCESSFUL
+/// elevation counts as restored — a declined/failed elevation or a `fail`/missing
+/// receipt keeps the change failed (→ RestoreFailed, contract retained, retry later).
+fn resolve_restore_batch(
+    elevation: Result<(), String>,
+    receipts_text: &str,
+    items: &[(String, String)],
+) -> Vec<(String, Result<(), String>)> {
+    match elevation {
+        Err(e) => items
+            .iter()
+            .map(|(_, label)| (label.clone(), Err(e.clone())))
+            .collect(),
+        Ok(()) => {
+            let receipts = actions::parse_batch_receipts(receipts_text);
+            items
+                .iter()
+                .map(|(id, label)| {
+                    let res = if receipts.get(id.as_str()) == Some(&true) {
+                        Ok(())
+                    } else {
+                        Err("the elevated restore step didn't finish".to_string())
+                    };
+                    (label.clone(), res)
+                })
+                .collect()
+        }
+    }
+}
+
+/// Restore a contiguous run of elevated changes under ONE UAC prompt. Phase 1: each
+/// rollback runs with the deferral sink armed — its reads happen, its elevated
+/// command parks (no mutation). Phase 2: the parked commands run in run order under
+/// a single elevation with per-item receipts. Failures land in `first_err` per change
+/// (the same collect-and-continue semantics as the inline path); the caller's
+/// RestoreFailed / retain / never-false-success contract is unchanged.
+fn restore_elevated_run(
+    run: &[SessionChange],
+    session_id: &str,
+    first_err: &mut Option<String>,
+) {
+    // Phase 1 — sink armed: reads + parking only, no elevated mutation.
+    struct Staged<'a> {
+        change: &'a SessionChange,
+        cmds: std::ops::Range<usize>,
+    }
+    // Restore-time conservatism, in two scopes (reviewer major, 2026-07-08): BEFORE
+    // phase 1 has dispatched anything, an unusable sink degrades the WHOLE run to the
+    // pre-T6b per-item path. AFTER phase 1, infrastructure failures (unsafe session id,
+    // receipts dir failure, compose refusal, attribution mismatch) re-dispatch ONLY the
+    // STAGED changes — an item that already completed inline during phase 1 (a rollback
+    // that mutated without deferring, reachable only from a mislabeled/disk-edited
+    // contract) must not execute twice, and read-time failures are already recorded.
+    // Staged items' parked commands never ran, so re-dispatching them is safe.
+    let staged_fallback = |staged: &[Staged], first_err: &mut Option<String>| {
+        for s in staged {
+            record_restore_err(first_err, &s.change.label, restore_one_change(s.change));
+        }
+    };
+    let mut staged: Vec<Staged> = Vec::new();
+    let all_cmds: Vec<String> = {
+        let guard = match actions::ElevationDeferral::begin() {
+            Ok(g) => g,
+            Err(_) => {
+                // Nothing has been dispatched yet — the whole run takes the per-item path.
+                for change in run {
+                    record_restore_err(first_err, &change.label, restore_one_change(change));
+                }
+                return;
+            }
+        };
+        let mut cursor = 0usize;
+        for change in run {
+            let res = restore_one_change(change);
+            let now = guard.deferred_count();
+            match res {
+                // Ok + parked command(s) → staged for the one elevation.
+                Ok(()) if now > cursor => staged.push(Staged { change, cmds: cursor..now }),
+                // Ok + nothing parked → the rollback completed without needing elevation
+                // (e.g. a suspended service whose prior state was already Stopped) —
+                // confirmed inline, nothing to stage.
+                Ok(()) => {}
+                // A rollback that refused during its reads fails this change alone; any
+                // commands it parked before refusing are DISCARDED below (they never ran —
+                // running a refused rollback's parked tail would mutate on a path the
+                // rollback itself abandoned).
+                Err(e) => record_restore_err(first_err, &change.label, Err(e)),
+            }
+            cursor = now;
+        }
+        guard.take_deferred()
+    };
+    if staged.is_empty() {
+        return; // nothing needed elevation (all inline no-ops or read-time failures)
+    }
+
+    // Checked (never indexed) command attribution — same invariant as the apply tier.
+    let mut script_items: Vec<(String, Vec<String>)> = Vec::with_capacity(staged.len());
+    let mut id_labels: Vec<(String, String)> = Vec::with_capacity(staged.len());
+    for (i, s) in staged.iter().enumerate() {
+        let Some(cmds) = all_cmds.get(s.cmds.clone()) else {
+            // Impossible by construction — abort to the per-item path before anything runs.
+            return staged_fallback(&staged, first_err);
+        };
+        let id = format!("r{i}"); // ps_safe-shaped by construction
+        script_items.push((id.clone(), cmds.to_vec()));
+        id_labels.push((id, s.change.label.clone()));
+    }
+
+    // Session-scoped receipts, beside the contract (DATA out, never input in — §4
+    // precedent). The id is internally generated ("gm-<millis>"), but shape-guard it
+    // before it enters a filename so a disk-loaded contract can never open a traversal.
+    if actions::ps_safe(session_id).is_err() {
+        return staged_fallback(&staged, first_err);
+    }
+    let receipts_path = crate::gaming_session::session_data_dir()
+        .join(format!("gaming-restore-{session_id}.receipts"));
+    if let Some(dir) = receipts_path.parent() {
+        if std::fs::create_dir_all(dir).is_err() {
+            return staged_fallback(&staged, first_err);
+        }
+    }
+    let _ = std::fs::remove_file(&receipts_path);
+    let script =
+        match actions::compose_batch_script(&script_items, &receipts_path.to_string_lossy()) {
+            Ok(s) => s,
+            Err(_) => return staged_fallback(&staged, first_err),
+        };
+
+    // Phase 2 — the ONE elevation. Its outcome is final for this attempt: no per-item
+    // fallback past this point (a decline must never be followed by more prompts).
+    let elevation = actions::run_elevated_powershell(&script);
+    let receipts_text = if elevation.is_ok() {
+        std::fs::read_to_string(&receipts_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let _ = std::fs::remove_file(&receipts_path);
+    for (label, res) in resolve_restore_batch(elevation, &receipts_text, &id_labels) {
+        record_restore_err(first_err, &label, res);
+    }
 }
 
 /// Startup probe: returns an orphaned session (if any) so the UI can PROMPT.
@@ -454,12 +683,14 @@ pub(crate) fn recover(confirm: bool) -> Result<(), String> {
     if !confirm {
         return Ok(());
     }
+    let _op = session_op_guard()?;
     let mut file = load_session().ok_or("no session to recover")?;
     restore(&mut file)
 }
 
 /// Normal end of a live session.
 pub(crate) fn stop() -> Result<(), String> {
+    let _op = session_op_guard()?;
     let mut file = load_session().ok_or("no active Gaming Mode session")?;
     restore(&mut file)
 }
@@ -798,6 +1029,176 @@ mod elevation_batch_tests {
             other => panic!("a missing receipt must abort, got {other:?}"),
         }
     }
+
+    // THE T6b PIN: a contract with THREE elevated changes restores through EXACTLY ONE
+    // elevation dispatch (the forced decline stands in for the real prompt; sink-captured
+    // calls are deliberately not counted). The decline also proves the fail-loud contract:
+    // RestoreFailed + retained on disk, honest decline attribution, never a false success.
+    #[test]
+    fn a_full_elevated_restore_dispatches_exactly_one_elevation() {
+        let dir = temp_session_dir("restore-one-dispatch");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let mut file = fixture_file("gm-t6b-restore");
+        for svc in [KnownService::WSearch, KnownService::SysMain, KnownService::DiagTrack] {
+            file.changes.push(SessionChange {
+                label: format!("Suspend {} for this session", svc.name()),
+                rollback_action: RollbackAction::ResumeServiceFromSnapshot { service: svc },
+                snapshot: Snapshot::Service {
+                    prior_state: "Running".into(),
+                    prior_start_mode: "Manual".into(),
+                },
+                elevated_restore: true,
+            });
+        }
+        save_session(&file).expect("fixture save");
+
+        reset_elevation_dispatch_count();
+        let res = {
+            let _decline = ForceElevationError::begin();
+            restore(&mut file)
+        };
+        assert_eq!(
+            elevation_dispatch_count(),
+            1,
+            "3 elevated restores must ride ONE elevation dispatch — the T6b contract"
+        );
+        let err = res.expect_err("a declined elevation during restore must fail loudly");
+        assert!(err.contains(ELEVATION_DECLINED_MSG), "honest decline attribution: {err}");
+        assert_eq!(file.status, SessionStatus::RestoreFailed, "status must be RestoreFailed");
+        assert!(load_session().is_some(), "the contract must be RETAINED for a later retry");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // A change whose rollback needs NO elevated command (service already Stopped at snapshot
+    // time) confirms inline: zero dispatches, contract cleared — batching must not turn a
+    // no-op restore into a prompt.
+    #[test]
+    fn a_noop_elevated_restore_dispatches_nothing_and_clears() {
+        let dir = temp_session_dir("restore-noop");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let mut file = fixture_file("gm-t6b-noop");
+        file.changes.push(SessionChange {
+            label: "Suspend WSearch for this session".into(),
+            rollback_action: RollbackAction::ResumeServiceFromSnapshot {
+                service: KnownService::WSearch,
+            },
+            snapshot: Snapshot::Service {
+                prior_state: "Stopped".into(), // was not running → resume is a no-op
+                prior_start_mode: "Manual".into(),
+            },
+            elevated_restore: true,
+        });
+        save_session(&file).expect("fixture save");
+
+        reset_elevation_dispatch_count();
+        let res = restore(&mut file);
+        assert_eq!(elevation_dispatch_count(), 0, "a no-op restore must not prompt");
+        res.expect("a no-op restore succeeds");
+        assert!(load_session().is_none(), "contract cleared after every restore confirmed");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // The pure restore-batch decision — every arm pinned (no elevation needed). Fail-safe
+    // polarity: only an explicit `ok` receipt under a successful elevation counts as restored.
+    #[test]
+    fn restore_batch_arms_are_pinned() {
+        let items = vec![
+            ("r0".to_string(), "USB selective suspend off (AC)".to_string()),
+            ("r1".to_string(), "PCIe ASPM off (AC)".to_string()),
+        ];
+        // Declined (or failed) elevation → EVERY staged change fails with the honest message.
+        let declined = resolve_restore_batch(Err(ELEVATION_DECLINED_MSG.into()), "", &items);
+        assert_eq!(declined.len(), 2);
+        assert!(declined
+            .iter()
+            .all(|(_, r)| r.as_ref().is_err_and(|e| e == ELEVATION_DECLINED_MSG)));
+        // Every receipt ok → every change restored.
+        let ok = resolve_restore_batch(Ok(()), "r0:ok\nr1:ok\n", &items);
+        assert!(ok.iter().all(|(_, r)| r.is_ok()));
+        // A `fail` receipt fails ONLY its own change (collect-and-continue, per item).
+        let mixed = resolve_restore_batch(Ok(()), "r0:ok\nr1:fail\n", &items);
+        assert!(mixed[0].1.is_ok());
+        assert!(mixed[1].1.is_err(), "a fail receipt must fail its change");
+        assert_eq!(mixed[1].0, "PCIe ASPM off (AC)", "the failure must carry its label");
+        // A MISSING receipt = not restored (fail-safe direction).
+        let missing = resolve_restore_batch(Ok(()), "r0:ok\n", &items);
+        assert!(missing[0].1.is_ok());
+        assert!(missing[1].1.is_err(), "a missing receipt must fail its change");
+    }
+
+    // Runs PARTITION the restore order without reordering it — an elevated change never
+    // jumps over an unelevated one, so "restore == reverse of true apply order" holds
+    // exactly under batching.
+    #[test]
+    fn contiguous_runs_partition_without_reordering() {
+        let stub = |elevated: bool| SessionChange {
+            label: (if elevated { "E" } else { "U" }).into(),
+            rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+            snapshot: Snapshot::GameMode { prior_enabled: None, prior_allow: None },
+            elevated_restore: elevated,
+        };
+        let changes = vec![stub(true), stub(true), stub(false), stub(true)];
+        assert_eq!(contiguous_run_end(&changes, 0), 2, "leading elevated run of 2");
+        assert_eq!(contiguous_run_end(&changes, 2), 3, "single unelevated run");
+        assert_eq!(contiguous_run_end(&changes, 3), 4, "trailing elevated run");
+        // Partitioning covers the slice exactly, in order.
+        let single = vec![stub(false)];
+        assert_eq!(contiguous_run_end(&single, 0), 1);
+        // Out-of-range start = empty run, never a panic (rollback boundary).
+        assert_eq!(contiguous_run_end(&changes, 4), 4);
+        assert_eq!(contiguous_run_end(&[], 0), 0);
+    }
+
+    // Post-phase-1 infrastructure failure (here: a session id the ps_safe filename guard
+    // refuses) falls back to the pre-T6b PER-ITEM path for the STAGED changes — restore
+    // stays possible: one dispatch per staged item instead of one batch, still fail-loud
+    // under the forced decline.
+    #[test]
+    fn infra_failure_falls_back_to_per_item_restore() {
+        let dir = temp_session_dir("restore-fallback");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let mut file = fixture_file("gm bad id"); // space → ps_safe refuses the receipts filename
+        for svc in [KnownService::WSearch, KnownService::SysMain] {
+            file.changes.push(SessionChange {
+                label: format!("Suspend {} for this session", svc.name()),
+                rollback_action: RollbackAction::ResumeServiceFromSnapshot { service: svc },
+                snapshot: Snapshot::Service {
+                    prior_state: "Running".into(),
+                    prior_start_mode: "Manual".into(),
+                },
+                elevated_restore: true,
+            });
+        }
+        save_session(&file).expect("fixture save");
+
+        reset_elevation_dispatch_count();
+        let res = {
+            let _decline = ForceElevationError::begin();
+            restore(&mut file)
+        };
+        assert_eq!(
+            elevation_dispatch_count(),
+            2,
+            "per-item fallback: one dispatch per STAGED change, not one batch"
+        );
+        assert!(res.is_err(), "declined per-item restores must still fail loudly");
+        assert_eq!(file.status, SessionStatus::RestoreFailed);
+        assert!(load_session().is_some(), "contract retained for retry");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // The session-op lock: a second concurrent command is refused loudly instead of
+    // interleaving two restores over the same contract/receipts files. (try_lock on the
+    // same thread returns WouldBlock — safe to pin without threads.)
+    #[test]
+    fn concurrent_session_command_is_refused_loudly() {
+        let _held = SESSION_OP.try_lock().expect("test acquires the op lock");
+        let err = stop().expect_err("a concurrent session command must be refused");
+        assert!(err.contains("still finishing"), "got: {err}");
+        let err = recover(true).expect_err("recover must be serialized too");
+        assert!(err.contains("still finishing"), "got: {err}");
+        assert!(recover(false).is_ok(), "declining recovery takes no lock — always safe");
+    }
 }
 
 // ─── §7 mutation-QA harness (dev-rig only) ───────────────────────────────────
@@ -982,19 +1383,25 @@ mod gaming_mode_qa {
         );
 
         // ALWAYS restore before asserting, so a failed assert can't leave the rig mutated.
-        // (The restore side still elevates per change — out of T6 scope.)
+        // T6b: the restore side batches too — expect exactly ONE more prompt here.
+        reset_elevation_dispatch_count();
         let stop_res = {
             let _direct = ForceDirectElevation::begin();
             stop()
         };
+        let restore_dispatches = elevation_dispatch_count();
         let after = snapshot();
         eprintln!(
-            "[QA10] restored: plan={:?} game_mode_on={} game_bar_off={}",
+            "[QA10] restored: dispatches={restore_dispatches} plan={:?} game_mode_on={} game_bar_off={}",
             after.0, after.1, after.2
         );
 
         let file = started.expect("start() with the advanced tier should succeed");
         assert_eq!(dispatches, 1, "the WHOLE session start must ride ONE elevation");
+        assert_eq!(
+            restore_dispatches, 1,
+            "the WHOLE restore must ride ONE elevation — the T6b contract"
+        );
         assert!(file.changes.iter().any(|c| c.label == "USB selective suspend off (AC)"));
         assert!(file.changes.iter().any(|c| c.label == "PCIe ASPM off (AC)"));
         stop_res.expect("stop()/restore should succeed");

@@ -126,6 +126,39 @@
   font-size: 13px;
 }
 
+/* Restore-success confirmation (owner-caught gap 2026-07-07: a successful restore showed
+   nothing). Ready-status tint on the card hairline; body copy stays the normal register.
+   The `:root[data-living="on"]` variant outranks the living-instrument skin's own
+   `.ds-card` repaint (0,3,0) — without it the green tint is dead under the default-on
+   skin and the card silently reverts to the room accent (self-review catch, 2026-07-08). */
+.gaming-restored.ds-card,
+:root[data-living="on"] .gaming-restored.ds-card {
+  border-color: var(--status-ready-line, var(--border-strong));
+  background:
+    linear-gradient(180deg, var(--status-ready-soft, transparent), transparent 60%),
+    var(--surface, transparent);
+}
+.gaming-restored .gaming-card-head {
+  color: var(--status-ready);
+}
+/* Dismissing a success confirmation is benign — keep the generic .btn-small danger
+   hover away from Done (self-review catch, 2026-07-08). */
+.gaming-restored .btn-small:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.gaming-restored p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ix-text-2, var(--fg-2, inherit));
+}
+.gaming-restored .gaming-diff {
+  margin-top: 6px;
+}
+.gaming-restored-check {
+  font-weight: 700;
+}
+
 .gaming-modal-backdrop {
   position: fixed;
   inset: 0;

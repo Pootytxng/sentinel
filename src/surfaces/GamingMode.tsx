@@ -5,9 +5,12 @@ import { WhatsThis } from "../design/WhatsThis";
 import { useLibrary } from "./library-context";
 import {
   summarizeChanges,
+  restoredSummary,
   statusLabel,
+  GAMING_SESSION_RESOLVED_EVENT,
   SUSPENDABLE_SERVICES,
   type GamingSessionFile,
+  type RestoredSummary,
   type StartOptions,
 } from "./gaming-mode";
 import { routeSession } from "../data/gaming-session-route";
@@ -34,6 +37,9 @@ const SERVICE_LEARN: Record<string, string> = {
 export function GamingMode() {
   const [session, setSession] = useState<GamingSessionFile | null>(null);
   const [recovery, setRecovery] = useState<GamingSessionFile | null>(null);
+  // Restore-success confirmation (owner-caught UX gap: a successful restore showed nothing).
+  // Set ONLY after the backend confirms a full restore; cleared on dismiss or next start.
+  const [restored, setRestored] = useState<RestoredSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
@@ -77,6 +83,18 @@ export function GamingMode() {
     };
   }, []);
 
+  // Another surface (the App-level "Restore now" banner) resolved the session →
+  // drop our stale prompts. Never touches `restored`: the acting surface owns the
+  // one visible confirmation, this listener only prevents the stale-prompt trap.
+  useEffect(() => {
+    const onResolved = () => {
+      setRecovery(null);
+      setSession(null);
+    };
+    window.addEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
+    return () => window.removeEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
+  }, []);
+
   // Esc closes the first-use consent modal (a11y parity with the app's other modals).
   useEffect(() => {
     if (!needConsent) return;
@@ -95,6 +113,7 @@ export function GamingMode() {
   const doStart = async () => {
     setBusy(true);
     setError(null);
+    setRestored(null);
     try {
       const opts: StartOptions = {
         advancedUsb: advUsb,
@@ -130,9 +149,13 @@ export function GamingMode() {
   const onStop = async () => {
     setBusy(true);
     setError(null);
+    // Capture the labels BEFORE the call — after a confirmed restore the session is gone.
+    const changes = session?.changes ?? [];
     try {
       await invoke("stop_gaming_session");
       setSession(null);
+      setRestored(restoredSummary(changes)); // backend confirmed: every change restored
+      window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear sibling prompts
     } catch (e) {
       failGaming(
         "Couldn't fully restore your settings — they may still be changed. Try Stop again; if it keeps failing, relaunch and use the recovery prompt.",
@@ -146,10 +169,15 @@ export function GamingMode() {
   const onRecover = async (confirm: boolean) => {
     setBusy(true);
     setError(null);
+    const changes = recovery?.changes ?? [];
     try {
       await invoke("recover_gaming_session", { confirm });
       setRecovery(null);
-      if (confirm) setSession(null);
+      if (confirm) {
+        setSession(null);
+        setRestored(restoredSummary(changes)); // backend confirmed: every change restored
+        window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear sibling prompts
+      }
     } catch (e) {
       failGaming(
         "Couldn't finish restoring your settings — try again. Your session is still tracked, so nothing is lost.",
@@ -166,9 +194,11 @@ export function GamingMode() {
   const onResume = async () => {
     setBusy(true);
     setError(null);
+    setRestored(null); // heading back into an active session — the honesty line takes over
     try {
       await invoke("recover_gaming_session", { confirm: true });
       setRecovery(null);
+      window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear sibling prompts
       const opts: StartOptions = {
         advancedUsb: advUsb,
         advancedPcie: advPcie,
@@ -225,6 +255,33 @@ export function GamingMode() {
             </button>
             <button className="link-btn" disabled={busy} onClick={() => onRecover(false)}>
               Not now
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Restore-success confirmation — the visible "it worked" a silent restore lacked */}
+      {restored && !session && (
+        <Card className="gaming-restored">
+          <div role="status">
+            <div className="gaming-card-head">
+              <span className="gaming-restored-check" aria-hidden="true">
+                ✓
+              </span>{" "}
+              {restored.headline}
+            </div>
+            <p>{restored.detail}</p>
+            {restored.labels.length > 0 && (
+              <ul className="gaming-diff">
+                {restored.labels.map((label) => (
+                  <li key={label}>{label}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="gaming-actions">
+            <button className="btn-small" onClick={() => setRestored(null)}>
+              Done
             </button>
           </div>
         </Card>

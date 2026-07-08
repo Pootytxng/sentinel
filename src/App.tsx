@@ -50,7 +50,16 @@ import Play from "./surfaces/Play";
 import Monitor from "./surfaces/Monitor";
 import Lab from "./surfaces/Lab";
 import Settings from "./surfaces/Settings";
-import { type GamingSessionFile, isRecoverable, statusLabel } from "./surfaces/gaming-mode";
+import {
+  type GamingSessionFile,
+  type RestoredSummary,
+  GAMING_SESSION_RESOLVED_EVENT,
+  isRecoverable,
+  restoredSummary,
+  showGlobalRecoveryBanner,
+  showGlobalRestoredBanner,
+  statusLabel,
+} from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/doorknob.css";
 import { KonamiWhisper } from "./design/KonamiWhisper";
@@ -586,19 +595,40 @@ function App() {
       })
       .catch(() => {});
   }, [gamingEnabled]);
+  // Visible restore-success confirmation (owner-caught UX gap 2026-07-07: "Restore now"
+  // succeeded silently — he couldn't tell it worked). Set only once the backend confirms.
+  const [gamingRestored, setGamingRestored] = useState<RestoredSummary | null>(null);
+  // Restore in flight — disables the button so a double-click can't race two restores
+  // (the backend also serializes via its session-op lock; this is the polite layer).
+  const [gamingRestoring, setGamingRestoring] = useState(false);
   const recoverGaming = async (confirm: boolean) => {
     if (!confirm) {
       setGamingRecovery(null);
       return;
     }
+    const changes = gamingRecovery?.changes ?? [];
+    setGamingRestoring(true);
     try {
       await invoke("recover_gaming_session", { confirm: true });
       setGamingRecovery(null); // cleared only once restore confirms
+      setGamingRestored(restoredSummary(changes)); // backend confirmed: every change restored
+      window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear the pane's prompts
     } catch (e) {
       // leave the banner up so the user can retry / Review
       fail("Couldn't finish restoring your settings just now — try again, or use Review.", e);
+    } finally {
+      setGamingRestoring(false);
     }
   };
+  // The Gaming pane resolved the session (Stop / Return to normal / Resume) → drop the
+  // global banner's stale prompt, or it would re-prompt for an already-restored session
+  // on the next tab switch (self-review catch, 2026-07-08). Never touches gamingRestored:
+  // the surface the user acted on shows the one confirmation.
+  useEffect(() => {
+    const onResolved = () => setGamingRecovery(null);
+    window.addEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
+    return () => window.removeEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
+  }, []);
 
   const onExport = async () => {
     setExporting(true);
@@ -1211,24 +1241,52 @@ function App() {
         </div>
       )}
 
-      {gamingRecovery && (
+      {/* Defers to the Gaming pane's own richer prompt (Resume / Return / Not now) while the
+          Optimize room hosting it is open — two simultaneous prompts for one event read as a
+          bug (self-review catch, 2026-07-08). Every other tab keeps the launch-greeting banner. */}
+      {showGlobalRecoveryBanner(gamingRecovery !== null, activeTab) && gamingRecovery && (
         <div className="gaming-recovery-banner" role="alert">
           <span>
             A Gaming Mode session didn't end cleanly — {statusLabel(gamingRecovery.status)}. Restore
             your settings?
           </span>
           <span className="gaming-recovery-actions">
-            <button className="btn-small btn-small-on" onClick={() => recoverGaming(true)}>
-              Restore now
+            <button
+              className="btn-small btn-small-on"
+              disabled={gamingRestoring}
+              onClick={() => recoverGaming(true)}
+            >
+              {gamingRestoring ? "Restoring…" : "Restore now"}
             </button>
             <button
               className="btn-small"
+              disabled={gamingRestoring}
               onClick={() => {
                 setActiveTab("Optimize");
                 setGamingRecovery(null);
               }}
             >
               Review
+            </button>
+          </span>
+        </div>
+      )}
+
+      {/* Restore-success confirmation — names exactly what came back (never a silent success).
+          Defers to the Gaming pane's own confirmation card on Optimize, same as the recovery
+          banner above (self-review catch, round 2, 2026-07-08). */}
+      {showGlobalRestoredBanner(gamingRestored !== null, gamingRecovery !== null, activeTab) &&
+        gamingRestored && (
+        <div className="gaming-restored-banner" role="status">
+          <span>
+            <strong>✓ {gamingRestored.headline}.</strong>{" "}
+            {gamingRestored.labels.length > 0
+              ? `${gamingRestored.detail} ${gamingRestored.labels.join(" · ")}.`
+              : gamingRestored.detail}
+          </span>
+          <span className="gaming-recovery-actions">
+            <button className="btn-small" onClick={() => setGamingRestored(null)}>
+              Done
             </button>
           </span>
         </div>

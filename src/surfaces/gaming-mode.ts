@@ -67,6 +67,69 @@ export function summarizeChanges(changes: SessionChange[]): ChangeSummary {
   return { line, needsUac, rows };
 }
 
+export type RestoredSummary = {
+  headline: string;
+  detail: string;
+  /** The exact restored changes, for the named list (never a bare count-only claim). */
+  labels: string[];
+};
+
+/**
+ * Fired on window whenever ANY surface successfully resolves the on-disk session
+ * (stop, recovery restore, or resume's restore leg). The App-level banner and the
+ * Gaming pane detect orphans INDEPENDENTLY (by design — recovery must greet the user
+ * on any tab), so without this signal, resolving on one surface left the other's
+ * prompt stale — and acting on the stale prompt fired a second recover against the
+ * already-cleared contract, surfacing a FALSE "couldn't finish restoring" error
+ * (self-review catch, 2026-07-08). Listeners clear their own stale prompt; the
+ * surface the user acted on shows the one confirmation.
+ */
+export const GAMING_SESSION_RESOLVED_EVENT = "compy:gaming-session-resolved";
+
+/**
+ * Pure: the visible restore-success confirmation (owner-caught UX gap, 2026-07-07:
+ * a successful restore showed NOTHING — he couldn't tell it worked). Only called
+ * after the backend confirmed EVERY change restored (restore() clears the contract
+ * solely on full success), so "restored" here is a proven claim, not an assumption.
+ */
+export function restoredSummary(changes: SessionChange[]): RestoredSummary {
+  const labels = changes.map((c) => c.label);
+  const n = labels.length;
+  if (n === 0) {
+    return {
+      headline: "Session ended",
+      detail: "This session hadn't changed anything, so there was nothing to restore.",
+      labels,
+    };
+  }
+  return {
+    headline: "Your settings are back",
+    detail: `Restored ${n} change${n === 1 ? "" : "s"} to exactly how ${
+      n === 1 ? "it was" : "they were"
+    } before:`,
+    labels,
+  };
+}
+
+/**
+ * Pure: should the App-level global banners render? Both DEFER to the Gaming pane's
+ * own card whenever Optimize is the active surface — otherwise the same message shows
+ * twice, stacked above the pane (self-review catches, 2026-07-08: recovery banner in
+ * round 1, restored banner in round 2 — the gate must live on BOTH, so it lives here).
+ */
+export function showGlobalRecoveryBanner(hasRecovery: boolean, activeTab: string): boolean {
+  return hasRecovery && activeTab !== "Optimize";
+}
+
+export function showGlobalRestoredBanner(
+  hasRestored: boolean,
+  hasRecovery: boolean,
+  activeTab: string,
+): boolean {
+  // A pending recovery outranks the success confirmation; never show both.
+  return hasRestored && !hasRecovery && activeTab !== "Optimize";
+}
+
 /** Pure: human label for a session status (used in recovery / status messaging). */
 export function statusLabel(status: GamingSessionStatus): string {
   switch (status) {

@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   summarizeChanges,
+  restoredSummary,
+  showGlobalRecoveryBanner,
+  showGlobalRestoredBanner,
   statusLabel,
   isRecoverable,
   type SessionChange,
@@ -39,6 +42,51 @@ describe("summarizeChanges", () => {
     expect(s.line.toLowerCase()).toContain("no changes");
     expect(s.rows).toHaveLength(0);
     expect(s.needsUac).toBe(false);
+  });
+});
+
+describe("restoredSummary", () => {
+  it("names every restored change (never a bare count-only claim)", () => {
+    const s = restoredSummary([ch("Power plan → max performance"), ch("Windows Game Mode on")]);
+    expect(s.headline).toBe("Your settings are back");
+    expect(s.detail).toContain("Restored 2 changes");
+    expect(s.detail).toContain("they were");
+    expect(s.labels).toEqual(["Power plan → max performance", "Windows Game Mode on"]);
+  });
+
+  it("uses singular grammar for one change", () => {
+    const s = restoredSummary([ch("Windows Game Mode on")]);
+    expect(s.detail).toContain("Restored 1 change");
+    expect(s.detail).toContain("it was");
+  });
+
+  it("is honest about a session that changed nothing", () => {
+    const s = restoredSummary([]);
+    expect(s.headline).toBe("Session ended");
+    expect(s.detail).toContain("nothing to restore");
+    expect(s.labels).toHaveLength(0);
+  });
+});
+
+// bug→guard (self-review catches 2026-07-08: recovery banner round 1, restored banner
+// round 2): BOTH global banners must defer to the Gaming pane's own card on Optimize —
+// otherwise the same message renders twice, stacked. The gate lives in one pure helper
+// per banner so it can't silently be dropped from either render condition again.
+describe("global banner defers to the Gaming pane on Optimize", () => {
+  it("recovery banner shows on other tabs, never on Optimize, never without a recovery", () => {
+    expect(showGlobalRecoveryBanner(true, "Overview")).toBe(true);
+    expect(showGlobalRecoveryBanner(true, "Optimize")).toBe(false);
+    expect(showGlobalRecoveryBanner(false, "Overview")).toBe(false);
+  });
+
+  it("restored banner shows on other tabs, never on Optimize", () => {
+    expect(showGlobalRestoredBanner(true, false, "Overview")).toBe(true);
+    expect(showGlobalRestoredBanner(true, false, "Optimize")).toBe(false);
+    expect(showGlobalRestoredBanner(false, false, "Overview")).toBe(false);
+  });
+
+  it("a pending recovery outranks the success confirmation — never both", () => {
+    expect(showGlobalRestoredBanner(true, true, "Overview")).toBe(false);
   });
 });
 
