@@ -247,7 +247,7 @@ export function LabBench({
         {showOptimize && (
           <ParticleCard
             className="lab-bench-card lab-bench-hero"
-            style={glowStyle}
+            style={{ ...glowStyle, "--bay-i": 0 } as CSSProperties}
             disableAnimations={reduced}
             particleCount={6}
             glowColor={rgb}
@@ -275,16 +275,20 @@ export function LabBench({
             <ParticleCard
               key={k}
               className="lab-bench-card lab-bench-measure"
-              style={glowStyle}
+              style={{ ...glowStyle, "--bay-i": n } as CSSProperties}
               disableAnimations={reduced}
               particleCount={5}
               glowColor={rgb}
-              enableTilt={false}
-              enableMagnetism={false}
+              // Task 3 — the JARVIS reactivity the owner missed: small tilt + magnetism on the
+              // compact doors (the vendor's built-in low factors), motion-branch only. The hero
+              // stays tilt-free (tilting a form-filled bay is nauseating).
+              enableTilt={!reduced}
+              enableMagnetism={!reduced}
               clickEffect={!reduced}
             >
               <button
                 className="lab-bench-door"
+                data-reactive={reduced ? "off" : "on"}
                 onClick={() => openMeasure(k)}
                 aria-label={`Open station ${n} — ${LAB_STATIONS[k].name}`}
                 aria-pressed={openStation === k}

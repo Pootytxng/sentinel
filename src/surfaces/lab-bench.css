@@ -210,7 +210,52 @@
   padding: 16px 20px 18px;
 }
 
-/* Reduced motion: no hover transitions, no glow (the pointer handler is skipped in JS too). */
-:root[data-v2="on"] .lab-bench-grid[data-motion="reduced"] .lab-bench-card {
+/* ── Task 3: the bench comes ALIVE — bolder cursor reactivity + staggered reveal ──
+   The JARVIS layer the owner missed: a hover-lift, a dim on the non-hovered siblings (the
+   MagicBento move), and a staggered mount reveal so the bench assembles itself on entry. The
+   ParticleCard's own tilt/magnetism (JS) ride on top. ALL gated so the reduced branch stays a
+   flat static bench. */
+
+/* Hover-lift — the compact doors rise + swell (spring-ish ease); the hero lifts gentler (no
+   scale — its click targets must not shift under a form). */
+:root[data-v2="on"] .lab-bench-grid[data-motion="full"] .lab-bench-measure:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 10px 26px -14px rgba(var(--glow-rgb), 0.5);
+  border-color: rgba(var(--glow-rgb), 0.5);
+}
+:root[data-v2="on"] .lab-bench-grid[data-motion="full"] .lab-bench-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -18px rgba(var(--glow-rgb), 0.45);
+}
+
+/* Dim the non-hovered siblings so the focused bay leads (only while the grid is hovered). */
+:root[data-v2="on"] .lab-bench-grid[data-motion="full"]:hover .lab-bench-card:not(:hover) {
+  opacity: 0.72;
+}
+
+/* Staggered mount reveal — each bay rises + fades in on entry, delayed by its bench index
+   (--bay-i, set inline: hero 0, then the measure doors). The bench assembles left-to-right. */
+@keyframes v2-bench-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+:root[data-v2="on"] .lab-bench-grid[data-motion="full"] .lab-bench-card {
+  animation: v2-bench-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--bay-i, 0) * 65ms);
+}
+
+/* Reduced motion: no hover-lift, no dim, no reveal, no glow (the JS pointer + particle handlers
+   are skipped too) — a flat, immediate, static bench. */
+:root[data-v2="on"] .lab-bench-grid[data-motion="reduced"] .lab-bench-card,
+:root[data-v2="on"] .lab-bench-grid[data-motion="reduced"] .lab-bench-card:hover {
   transition: none;
+  transform: none;
+  animation: none;
+  opacity: 1;
 }

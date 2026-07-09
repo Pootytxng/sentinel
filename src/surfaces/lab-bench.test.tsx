@@ -141,4 +141,23 @@ describe("LabBench — bento grid of station bays", () => {
     const c = renderBench();
     expect(c.innerHTML).not.toContain("132, 0, 255");
   });
+
+  // Task 3 — bolder reactivity, reduced-motion-gated. The measure doors expose data-reactive
+  // mirroring the ParticleCard tilt/magnetism state (on = !reduced), so the reduced contract is
+  // pinned in the DOM without reaching into vendor internals.
+  it("reduced motion disables tilt/magnetism — every measure door is data-reactive='off'", () => {
+    localStorage.setItem("compy_motion", "reduced");
+    const c = renderBench();
+    expect(c.querySelector(".lab-bench-grid")!.getAttribute("data-motion")).toBe("reduced");
+    const doors = Array.from(c.querySelectorAll(".lab-bench-door"));
+    expect(doors).toHaveLength(5);
+    expect(doors.every((d) => d.getAttribute("data-reactive") === "off")).toBe(true);
+  });
+
+  it("full motion enables reactivity — every measure door is data-reactive='on'", () => {
+    const c = renderBench(); // default pref is "full" (motion on, override OS)
+    expect(c.querySelector(".lab-bench-grid")!.getAttribute("data-motion")).toBe("full");
+    const doors = Array.from(c.querySelectorAll(".lab-bench-door"));
+    expect(doors.every((d) => d.getAttribute("data-reactive") === "on")).toBe(true);
+  });
 });
