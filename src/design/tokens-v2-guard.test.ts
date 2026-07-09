@@ -49,6 +49,7 @@ const optimizeCss = loadV2Css("surfaces", "optimize-v2.css");
 const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
 const labCss = loadV2Css("surfaces", "lab-v2.css");
+const labBenchCss = loadV2Css("surfaces", "lab-bench.css");
 const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
 
@@ -63,6 +64,7 @@ const V2_CSS: [string, string][] = [
   ["monitor-v2.css", monitorCss],
   ["blackbook-v2.css", blackbookCss],
   ["lab-v2.css", labCss],
+  ["lab-bench.css", labBenchCss],
   ["hud-rooms.css", hudRoomsCss],
   ["ambient-hud.css", ambientHudCss],
 ];

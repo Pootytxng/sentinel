@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import Lab from "./Lab";
+import { LabBench } from "./LabBench";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
@@ -86,11 +86,11 @@ export function LabGround(props: LabFastPathProps & {
       sub={verdict.sub}
       measured={measured}
     >
-      {/* ONE cohesive spine — station 1 "Optimize" (the fast path) leads the numbered progression
-          in-place; the measure→prove instruments follow as the optional utility, all in one room. */}
-      <Lab
-        v2
-        ground
+      {/* THE INSTRUMENT BENCH (spec 2026-07-09, Phase 1) — a bento grid of living station bays,
+          replacing the linear numbered spine. The hero bay is station 1 "Optimize" (the enable-all
+          fast path, inline); the measure→prove instruments are compact door bays around it. Same
+          audited apply path, zero new IPC. */}
+      <LabBench
         fast={fast}
         diagnostics={diagnostics}
         diagnosticsCaptured={diagnosticsCaptured}

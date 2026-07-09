@@ -105,11 +105,11 @@ describe("Lab `ground` mode renders the ONE linear spine", () => {
   });
 });
 
-describe("LabGround BLENDED room — station 1 'Optimize' is a native member of the spine (§8)", () => {
-  // The owner rejected the first build's SEAM (a `.lg-fast` box stacked over a `.lg-utility` box).
-  // The blended room has NO seam: the tweak-apply is station 1 of the Lab's own numbered spine, so
-  // these guards pin (a) the seam classes are GONE, (b) with tweaks present, station 1 "Optimize"
-  // LEADS the spine, and (c) the empty/no-recs case degrades to the bare measure spine, no crash.
+describe("LabGround INSTRUMENT BENCH — LabBench replaces the linear spine (spec 2026-07-09)", () => {
+  // The Instrument Bench (Phase 1) swaps the linear numbered spine for a bento grid of station
+  // bays. These guards pin (a) the old seam classes stay GONE, (b) with tweaks present the HERO bay
+  // is station 1 "Optimize" (inline), (c) the empty/no-recs case degrades to the measure bays only
+  // with no crash, and (d) the RoomShell verdict + no-Gallery invariants hold through the swap.
   const SAFE_REC = {
     id: "game-mode",
     title: "Game Mode",
@@ -159,37 +159,30 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
     expect(c.querySelector(".lg-utility-kicker")).toBeNull();
   });
 
-  it("with tweaks present, station 1 'Optimize' LEADS the one spine (native station, no seam)", () => {
+  it("with tweaks present, the HERO bay is station 1 'Optimize' (inline); verdict present", () => {
     const c = renderMerged([SAFE_REC]);
-    // Station 1 is Optimize — first station card + first station number "1".
-    const names = Array.from(c.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
-    expect(names[0]).toBe("Optimize");
-    const nums = Array.from(c.querySelectorAll(".lab-station-num")).map((n) => n.textContent);
-    expect(nums[0]).toBe("1");
-    // It carries the same four-line station contract as every other station (native member).
-    const firstLines = c.querySelector(".lab-card")!.querySelector(".lab-station-lines");
-    expect(firstLines).not.toBeNull();
-    // The router gained its ground-only lead row pointing at optimize.
-    const stations = Array.from(c.querySelectorAll(".lab-router-station")).map((s) => s.textContent);
-    expect(stations[0]).toBe("Optimize");
-    // One idiom: the retired faces stay absent.
+    // The hero bay is Optimize, rendered inline as the dominant bay.
+    expect(c.querySelector(".lab-bench-hero")).not.toBeNull();
+    expect(c.querySelector(".lab-bench-hero-name")!.textContent).toBe("Optimize");
+    // The measure/prove stations render as compact door bays around it.
+    const measure = Array.from(c.querySelectorAll(".lab-bench-name")).map((n) => n.textContent);
+    expect(measure).toEqual(["Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
+    // One idiom: the retired linear-spine + bento faces stay absent.
+    expect(c.querySelector(".lab-router")).toBeNull();
     expect(c.querySelector(".lab-bento")).toBeNull();
     expect(c.querySelector(".lab-welcome")).toBeNull();
-    // Station 1 leads OPEN so the enable-all hero shows without a click (the fast path leads).
-    expect(c.querySelector(".lab-card.lab-card-open")).not.toBeNull();
     // RoomShell verdict present.
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
 
-  it("empty state (no recs): degrades to the bare measure spine — no Optimize station, no throw", () => {
+  it("empty state (no recs): no hero bay — just the measure bays, no throw, verdict present", () => {
     const c = renderMerged();
-    // No tweaks to offer → station 1 is NOT prepended; the router lead is dropped too.
-    const names = Array.from(c.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
-    expect(names).not.toContain("Optimize");
-    const stations = Array.from(c.querySelectorAll(".lab-router-station")).map((s) => s.textContent);
-    expect(stations).not.toContain("Optimize");
-    // Still the one linear spine, no retired idioms, verdict present.
-    expect(c.querySelector(".lab-router")).not.toBeNull();
+    // No tweaks to offer → no hero bay; the bench degrades to the measure doors only.
+    expect(c.querySelector(".lab-bench-hero")).toBeNull();
+    const measure = Array.from(c.querySelectorAll(".lab-bench-name")).map((n) => n.textContent);
+    expect(measure).toEqual(["Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
+    // The bench grid + verdict are still present; no retired idioms.
+    expect(c.querySelector(".lab-bench-grid")).not.toBeNull();
     expect(c.querySelector(".lab-bento")).toBeNull();
     expect(c.querySelector(".lab-welcome")).toBeNull();
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
@@ -212,18 +205,17 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
     expect(off.querySelector(".lab-optimize-power")).toBeNull();
   });
 
-  it("the ground spine leads with Optimize when tweaks exist and has NO Gallery station (removed 2026-07-09)", () => {
+  it("the bench leads with the Optimize hero when tweaks exist and has NO Gallery bay (removed 2026-07-09)", () => {
     // Gallery (the drag telemetry trophy room) was deleted with the Instrument Bench redesign; the
-    // ground spine is now optimize (when there are tweaks) + the 5 measure stations, nothing after.
-    const withTweaks = Array.from(renderMerged([SAFE_REC]).querySelectorAll(".lab-card-name")).map(
-      (n) => n.textContent,
-    );
-    expect(withTweaks[0]).toBe("Optimize"); // fast path leads
-    expect(withTweaks).not.toContain("Gallery"); // gallery gone
-    expect(withTweaks[withTweaks.length - 1]).toBe("Black Box"); // measure spine ends here
+    // bench is now the Optimize hero (when there are tweaks) + the 5 measure bays, nothing else.
+    const withTweaks = renderMerged([SAFE_REC]);
+    expect(withTweaks.querySelector(".lab-bench-hero-name")!.textContent).toBe("Optimize"); // hero leads
+    expect(withTweaks.innerHTML).not.toContain("Gallery"); // gallery gone
+    const measure = Array.from(withTweaks.querySelectorAll(".lab-bench-name")).map((n) => n.textContent);
+    expect(measure[measure.length - 1]).toBe("Black Box"); // measure bays end here
     cleanup();
-    const bare = Array.from(renderMerged().querySelectorAll(".lab-card-name")).map((n) => n.textContent);
-    expect(bare).not.toContain("Optimize");
-    expect(bare).not.toContain("Gallery");
+    const bare = renderMerged();
+    expect(bare.querySelector(".lab-bench-hero")).toBeNull(); // no tweaks → no hero
+    expect(bare.innerHTML).not.toContain("Gallery");
   });
 });
