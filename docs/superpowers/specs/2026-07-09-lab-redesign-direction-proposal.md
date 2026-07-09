@@ -157,11 +157,20 @@ build the bays share-card-shaped (Receipts Phase 1 reuse). Not a 🔴 (flag OFF,
 
 ---
 
-## 7. Open questions for the owner (plain English — his go/no-go)
-See the chat message accompanying this doc. In brief: (Q1) direction confirm — "Instrument Bench" bento of
-living bays? (Q2) motion intensity — restrained vs bolder? (Q3) the rejected gallery — delete vs salvage as
-a static results bay? (Q4) which look north-star resonates most (Vercel-restraint / Teenage-Engineering
-industrial / film-HUD brackets)? (Q5) proceed with the parallel docs cleanup now?
+## 7. Owner decisions — ANSWERED 2026-07-09 (go/no-go passed)
+- **Q1 direction → "Yes, spec it."** "The Instrument Bench" (bento of living bays) is APPROVED. Proceed to
+  a Phase-1 plan; eyeball before anything visible ships.
+- **Q2 motion intensity → "Bolder / more alive."** Push the wow, especially on the hero bay + rig hologram.
+  The Contrarian's cap is REFRAMED, not dropped: bolder is fine, but the binding rail stays **every
+  animation bound to a real measured number** — that is both the honesty law and the thing that makes bold
+  motion read as *instrument* rather than *screensaver*. Not "less motion," but "no unmotivated motion."
+- **Q3 rejected gallery → "Delete it entirely."** No salvage, no static results bay. The panoramic drag
+  gallery (`330cd5c` §3: `TelemetryGallery.*`, `gallery-pieces.*`, `fly-camera.tsx`) is removed as the bento
+  bench replaces the `compy_lab_ground` room (folded into the P1 room-rebuild so the wiring is touched once,
+  not twice). The `docs/ui-sweep/shots/lab-gallery-*.png` captures get cleared in the docs pass.
+- **Q4 look north-star → deferred into the phase eyeballs** (owner chose motion level, not a single look
+  brand; I'll pilot the restraint-palette + industrial-HUD chrome he already ships and let him react on P1).
+- **Q5 docs cleanup → "Yes, do it now."** Running in parallel per §8.
 
 ---
 
