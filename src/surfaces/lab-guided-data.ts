@@ -11,18 +11,13 @@ import type { BenchmarkState, BlackBoxReport, LatencyReport, Verdict } from "../
 // enable-all fast path, a native member of the spine with the same four-line contract as the
 // measure stations. It is GROUND-ONLY: it never enters LAB_STATION_ORDER (so classic/guided/bento
 // are byte-identical), and Lab prepends it to the spine only in `ground` mode when recs exist.
-// "gallery" (spec 2026-07-08 §3, the COLLECT stage) is the merged-room's trophy room + completion
-// signal — the terminal station where proven wins, sessions, receipts and honest crash records live
-// as pieces in a draggable 3D space. Like "optimize" it is GROUND-ONLY: never in LAB_STATION_ORDER
-// (so classic/guided/bento stay byte-identical), appended to the spine only in `ground` mode.
 export type LabStationKey =
   | "optimize"
   | "diagnostics"
   | "benchmark"
   | "latency"
   | "tuning"
-  | "blackbox"
-  | "gallery";
+  | "blackbox";
 
 // The bench order tells a story: know your rig → measure change → chase input lag → tame heat →
 // explain a failure. Benchmark is the spine the others plug into. NOTE: "optimize" is deliberately
@@ -83,13 +78,6 @@ export const LAB_STATIONS: Record<LabStationKey, LabStationInfo> = {
     forLine: "Understand a crash or freeze after it happens.",
     whenLine: "It crashed or froze and you don't know why.",
     connectsLine: "Check Diagnostics for the rig state behind what it finds.",
-  },
-  gallery: {
-    name: "Gallery",
-    forLine: "See everything you've proven — your measured wins, sessions and receipts in one space.",
-    whenLine: "You want to look back at what you've measured and what actually moved.",
-    // Closes the loop: an empty gallery sends you back to the bench to earn your first piece.
-    connectsLine: "Empty? Prove a tweak at the Benchmark station and your first piece lands here.",
   },
 };
 
@@ -154,10 +142,6 @@ export type LabStationFacts = {
   // optimize station, so these stay 0/false there.
   safeReady: number;
   stackApplied: boolean;
-  // Gallery station (§3): the cheap "do you have any measured history yet?" signal (active receipts
-  // OR sessions with data) — decides the reading's invitation vs. "you have history" copy without
-  // the gallery's own lazy reads. Derived by the caller (galleryHasHistory); zero new IPC.
-  galleryHasHistory: boolean;
 };
 
 const VERDICT_READING: Record<Verdict, string> = {
@@ -208,11 +192,5 @@ export function stationReading(key: LabStationKey, f: LabStationFacts): string {
         ? "1 incident recorded — read what happened in plain English."
         : `${n} incidents recorded — read what happened in plain English.`;
     }
-    case "gallery":
-      // Honest, no fabricated total (the full piece set is assembled lazily inside the station):
-      // just the invitation vs. "you have history" fork off the cheap signal.
-      return f.galleryHasHistory
-        ? "You've got measured history — open it to explore your wins, sessions and receipts."
-        : "Empty for now — prove a tweak or play a session to earn your first piece.";
   }
 }

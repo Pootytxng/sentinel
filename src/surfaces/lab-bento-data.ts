@@ -29,10 +29,6 @@ export function stationHasReading(key: LabStationKey, f: LabStationFacts): boole
       return f.tuningHeadline != null;
     case "blackbox":
       return f.crash != null;
-    // Ground-only station (§3) — never in a bento/guided keys array, but the switch must be
-    // exhaustive. "Read" = the user has measured history to collect.
-    case "gallery":
-      return f.galleryHasHistory;
   }
 }
 
@@ -53,9 +49,6 @@ export const LAB_NOTES: Record<LabStationKey, string> = {
     "Undervolting asks the chip to do the same work on less power — often cooler and just as fast. How far yours goes is the silicon lottery.",
   blackbox:
     "Windows keeps a flight recorder of every crash and freeze. Almost nobody ever reads it — this station does, in plain English.",
-  // Ground-only — never rendered by a bento card, but the Record must be exhaustive.
-  gallery:
-    "Every win here is measured, not claimed — only changes that beat the noise floor earn a piece. It's your rig's real track record, nothing invented.",
 };
 
 export type BentoCard = {

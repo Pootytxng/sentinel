@@ -212,17 +212,18 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
     expect(off.querySelector(".lab-optimize-power")).toBeNull();
   });
 
-  it("the Gallery (COLLECT) always closes the ground spine — even with no recs (the completion signal)", () => {
-    // Gallery is the terminal station: present with tweaks AND on the bare measure spine, since the
-    // trophy room is the room's completion signal (an empty gallery still invites the first piece).
+  it("the ground spine leads with Optimize when tweaks exist and has NO Gallery station (removed 2026-07-09)", () => {
+    // Gallery (the drag telemetry trophy room) was deleted with the Instrument Bench redesign; the
+    // ground spine is now optimize (when there are tweaks) + the 5 measure stations, nothing after.
     const withTweaks = Array.from(renderMerged([SAFE_REC]).querySelectorAll(".lab-card-name")).map(
       (n) => n.textContent,
     );
     expect(withTweaks[0]).toBe("Optimize"); // fast path leads
-    expect(withTweaks[withTweaks.length - 1]).toBe("Gallery"); // COLLECT closes
+    expect(withTweaks).not.toContain("Gallery"); // gallery gone
+    expect(withTweaks[withTweaks.length - 1]).toBe("Black Box"); // measure spine ends here
     cleanup();
     const bare = Array.from(renderMerged().querySelectorAll(".lab-card-name")).map((n) => n.textContent);
     expect(bare).not.toContain("Optimize");
-    expect(bare[bare.length - 1]).toBe("Gallery");
+    expect(bare).not.toContain("Gallery");
   });
 });
