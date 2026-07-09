@@ -105,18 +105,35 @@ describe("Lab `ground` mode renders the ONE linear spine", () => {
   });
 });
 
-describe("LabGround merged room composes both paths (incl. the empty/no-fixes state)", () => {
-  // The self-reviewer couldn't exercise the empty path live (its rig had every fix applied) — so
-  // this guard renders the merged room with recs=[] / nothing appliable and proves it degrades
-  // cleanly: the fast-path + utility sections both mount, one idiom below, no crash.
+describe("LabGround BLENDED room — station 1 'Optimize' is a native member of the spine (§8)", () => {
+  // The owner rejected the first build's SEAM (a `.lg-fast` box stacked over a `.lg-utility` box).
+  // The blended room has NO seam: the tweak-apply is station 1 of the Lab's own numbered spine, so
+  // these guards pin (a) the seam classes are GONE, (b) with tweaks present, station 1 "Optimize"
+  // LEADS the spine, and (c) the empty/no-recs case degrades to the bare measure spine, no crash.
+  const SAFE_REC = {
+    id: "game-mode",
+    title: "Game Mode",
+    category: "system",
+    severity: "safe",
+    description: "d",
+    impact: "i",
+    downside: null,
+    applies_to: "all",
+    currently_applied: false,
+    provenance: "verified",
+    eligible: true,
+  } as never;
+
   const renderMerged = (recs: never[] = []) =>
     render(
       <ConfirmProvider>
       <LabGround
-        isAppliable={() => false}
+        isAppliable={() => true}
         onOpenLibrary={() => {}}
         onChanged={() => {}}
         vendor="amd"
+        sessions={[]}
+        gpus={[]}
         recs={recs}
         startup={[]}
         changes={[]}
@@ -134,17 +151,46 @@ describe("LabGround merged room composes both paths (incl. the empty/no-fixes st
       </ConfirmProvider>,
     ).container;
 
-  it("empty state: fast path + utility spine both render, one idiom, no throw", () => {
+  it("the rejected seam is gone — no `.lg-fast` / `.lg-utility` boxes anywhere", () => {
+    const c = renderMerged([SAFE_REC]);
+    expect(c.querySelector(".lg-fast")).toBeNull();
+    expect(c.querySelector(".lg-utility")).toBeNull();
+    expect(c.querySelector(".lg-utility-kicker")).toBeNull();
+  });
+
+  it("with tweaks present, station 1 'Optimize' LEADS the one spine (native station, no seam)", () => {
+    const c = renderMerged([SAFE_REC]);
+    // Station 1 is Optimize — first station card + first station number "1".
+    const names = Array.from(c.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
+    expect(names[0]).toBe("Optimize");
+    const nums = Array.from(c.querySelectorAll(".lab-station-num")).map((n) => n.textContent);
+    expect(nums[0]).toBe("1");
+    // It carries the same four-line station contract as every other station (native member).
+    const firstLines = c.querySelector(".lab-card")!.querySelector(".lab-station-lines");
+    expect(firstLines).not.toBeNull();
+    // The router gained its ground-only lead row pointing at optimize.
+    const stations = Array.from(c.querySelectorAll(".lab-router-station")).map((s) => s.textContent);
+    expect(stations[0]).toBe("Optimize");
+    // One idiom: the retired faces stay absent.
+    expect(c.querySelector(".lab-bento")).toBeNull();
+    expect(c.querySelector(".lab-welcome")).toBeNull();
+    // Station 1 leads OPEN so the enable-all hero shows without a click (the fast path leads).
+    expect(c.querySelector(".lab-card.lab-card-open")).not.toBeNull();
+    // RoomShell verdict present.
+    expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
+  });
+
+  it("empty state (no recs): degrades to the bare measure spine — no Optimize station, no throw", () => {
     const c = renderMerged();
-    // Fast path (the tweaks) and the utility (prove it yourself) both present.
-    expect(c.querySelector(".lg-fast")).not.toBeNull();
-    expect(c.querySelector(".lg-utility")).not.toBeNull();
-    expect(c.querySelector(".lg-utility-kicker")).not.toBeNull();
-    // The utility renders the ONE linear spine, not the retired idioms.
+    // No tweaks to offer → station 1 is NOT prepended; the router lead is dropped too.
+    const names = Array.from(c.querySelectorAll(".lab-card-name")).map((n) => n.textContent);
+    expect(names).not.toContain("Optimize");
+    const stations = Array.from(c.querySelectorAll(".lab-router-station")).map((s) => s.textContent);
+    expect(stations).not.toContain("Optimize");
+    // Still the one linear spine, no retired idioms, verdict present.
     expect(c.querySelector(".lab-router")).not.toBeNull();
     expect(c.querySelector(".lab-bento")).toBeNull();
     expect(c.querySelector(".lab-welcome")).toBeNull();
-    // RoomShell verdict present (fixes-first, honest all-clear with zero appliable).
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
 });

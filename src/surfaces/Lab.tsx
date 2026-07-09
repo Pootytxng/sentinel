@@ -18,6 +18,7 @@ import { measureTuning, tuningEvidence } from "../data/tuning-measure";
 import { labLatestReadings } from "./lab-v2-data";
 import {
   LAB_ROUTER,
+  LAB_ROUTER_LEAD_OPTIMIZE,
   LAB_STATION_ORDER,
   LAB_STATIONS,
   stationReading,
@@ -27,6 +28,9 @@ import { readLabGuided, readLabBento } from "../design/theme";
 import { useReducedMotion } from "../design/use-motion";
 import { LabBento } from "./LabBento";
 import { TuningInstrument } from "./TuningInstrument";
+import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
+import { safeFixesReady } from "./optimize-v2-data";
+import { deriveReverted } from "./use-scan";
 import { type GpuVendor } from "./walkthroughs";
 import "./Lab.css";
 
@@ -65,6 +69,7 @@ export default function Lab({
   onBenchState,
   diagnosticsCaptured = false,
   ground = false,
+  fast,
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
@@ -86,6 +91,11 @@ export default function Lab({
   // instruments, same reads — the merged room just leads with the tweaks and offers the
   // measure→prove utility beside them.
   ground?: boolean;
+  // The fast-path prop bundle (§8.3) — the SAME audited apply handlers the OptimizeV2 room gets.
+  // Used ONLY in `ground` mode to render station 1's <OptimizeStation> body + derive its live
+  // reading; every non-ground path leaves it undefined and never reads it (byte-identity holds by
+  // construction). Optional so classic/guided/bento callers pass nothing.
+  fast?: LabFastPathProps;
 }) {
   // Seed from the probe cache so re-opening Advanced paints last-known instantly instead of cold-
   // re-running get_latency_diagnostics (a synchronous MSI/timer/USB scan) every visit.
@@ -208,9 +218,34 @@ export default function Lab({
   const stationKeys = LAB_STATION_ORDER.filter(
     (k) => (k !== "tuning" || !!tuningGuide) && (k !== "diagnostics" || !!diagnostics),
   );
-  // The identical instrument bodies the classic path renders — one source for both layouts.
+
+  // §8 the blended spine — station 1 "Optimize" is prepended to the spine in GROUND mode only, and
+  // only when there are tweaks to offer (recs loaded + non-empty). This is the ONLY place the
+  // measure order gains a member; non-ground faces use the untouched 5-station `stationKeys`, so
+  // classic/guided/bento are byte-identical by construction.
+  const showOptimize = ground && !!fast?.recs && fast.recs.length > 0;
+  const spineKeys: LabStationKey[] = showOptimize ? ["optimize", ...stationKeys] : stationKeys;
+  // The intake router, ground-only lead prepended so "just make it fast" is the first choice.
+  const routerRows = showOptimize ? [LAB_ROUTER_LEAD_OPTIMIZE, ...LAB_ROUTER] : LAB_ROUTER;
+  // Station 1's live reading (§8.1) — the SAME measured count the room verdict shows (safeFixesReady
+  // over the same recs, excluding drifted). Derived here, zero new IPC.
+  const groundReverted = deriveReverted(fast?.changes ?? []);
+  const safeReady =
+    fast?.recs != null
+      ? safeFixesReady(
+          fast.recs,
+          fast.isAppliable ?? (() => false),
+          new Set(groundReverted.map((r) => r.rec_id)),
+        )
+      : 0;
+  const stackApplied = showOptimize && safeReady === 0;
+
+  // The identical instrument bodies the classic path renders — one source for both layouts. Station
+  // 1 "Optimize" renders the fast-path apply surface (ground mode only; `fast` is present there).
   const stationBody = (k: LabStationKey): ReactNode => {
     switch (k) {
+      case "optimize":
+        return fast ? <OptimizeStation {...fast} /> : null;
       case "diagnostics":
         return diagnostics;
       case "benchmark":
@@ -274,6 +309,9 @@ export default function Lab({
               tuningHeadline: measurement?.headline ?? null,
               crash: bbReport,
               diagnosticsCaptured,
+              // Bento is non-ground → no optimize card; the fields are inert here.
+              safeReady: 0,
+              stackApplied: false,
             }}
             onOpen={openBentoStation}
             openStation={openStation}
@@ -332,7 +370,7 @@ export default function Lab({
             <p className="lab-router-sub">
               Pick the line that sounds like you — it opens the right tool below.
             </p>
-            {LAB_ROUTER.filter((r) => stationKeys.includes(r.station)).map((r) => (
+            {routerRows.filter((r) => spineKeys.includes(r.station)).map((r) => (
               <button
                 key={r.station}
                 className="lab-router-row cmp-door"
@@ -389,13 +427,17 @@ export default function Lab({
             Numbering is computed over the stations this rig actually has (vendor/diagnostics
             gates unchanged) — never hardcoded. */}
         {((guided && !bento) || ground) &&
-          stationKeys.map((k, i) => (
+          spineKeys.map((k, i) => (
             <Fragment key={k}>
               <LabSection
                 icon={STATION_ICON[k]}
                 name={LAB_STATIONS[k].name}
                 anchorId={`lab-station-${k}`}
                 openPulse={pulses[k]}
+                // Station 1 "Optimize" is the fast path the owner came for — it LEADS open so the
+                // enable-all hero is visible without a click (Directive 2); the measure stations
+                // stay collapsed accordions. Shared card frame + number + contract = one spine.
+                defaultOpen={k === "optimize"}
                 station={{
                   n: i + 1,
                   forLine: LAB_STATIONS[k].forLine,
@@ -406,6 +448,8 @@ export default function Lab({
                     tuningHeadline: measurement?.headline ?? null,
                     crash: bbReport,
                     diagnosticsCaptured,
+                    safeReady,
+                    stackApplied,
                   }),
                   connectsLine: LAB_STATIONS[k].connectsLine,
                 }}
@@ -518,6 +562,7 @@ export default function Lab({
 
 // Station → icon, reusing the exact glyphs the classic cards wear (same instrument, same face).
 const STATION_ICON: Record<LabStationKey, string> = {
+  optimize: "bolt",
   diagnostics: "terminal",
   benchmark: "chart",
   latency: "pulse",
@@ -526,6 +571,8 @@ const STATION_ICON: Record<LabStationKey, string> = {
 };
 
 const ICONS: Record<string, ReactNode> = {
+  // Bolt — station 1 "Optimize": one tap, the safe stack goes live.
+  bolt: <path d="M13 2L5 14h6l-1 8 8-12h-6l1-8z" />,
   chart: (
     <>
       <line x1="4" y1="20" x2="20" y2="20" />
@@ -580,6 +627,7 @@ function LabSection({
   openPulse,
   children,
   onFirstOpen,
+  defaultOpen,
 }: {
   icon: string;
   name: string;
@@ -597,8 +645,11 @@ function LabSection({
   // Fired the FIRST time this section is expanded — lets Lab retire the welcome band once the reader
   // has found a door. Opt-in (undefined = no-op), so the section stays a self-contained collapsible.
   onFirstOpen?: () => void;
+  // §8: station 1 "Optimize" starts EXPANDED so the enable-all hero leads without a click; every
+  // other station stays collapsed. Still a real toggle — the user can fold the hero away.
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!defaultOpen);
   const toggle = () =>
     setOpen((o) => {
       if (!o) onFirstOpen?.(); // opening (not closing) is the "found a door" signal

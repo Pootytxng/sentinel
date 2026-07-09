@@ -15,6 +15,10 @@ import {
 // as "a reading exists" (a baseline counts for Benchmark: it's a measured state, not a verdict).
 export function stationHasReading(key: LabStationKey, f: LabStationFacts): boolean {
   switch (key) {
+    // Ground-only station — never in a bento/guided keys array, but the switch must be exhaustive.
+    // "Read" = the safe stack is applied (the loop's completion signal for the fast path).
+    case "optimize":
+      return f.stackApplied;
     case "diagnostics":
       return f.diagnosticsCaptured;
     case "benchmark":
@@ -32,6 +36,9 @@ export function stationHasReading(key: LabStationKey, f: LabStationFacts): boole
 // lines about how PCs work; deliberately never a claim about THIS rig (the live reading line
 // owns rig-specific truth). Guard-tested for presence + the no-numbers-about-your-rig property.
 export const LAB_NOTES: Record<LabStationKey, string> = {
+  // Ground-only — never rendered by a bento card, but the Record must be exhaustive.
+  optimize:
+    "Most \"best settings\" guides are generic and one-size-fits-all. These tweaks are the ones vetted safe AND reversible for a rig like yours — every one snapshots its prior state before it touches anything.",
   diagnostics:
     "Most people never see their PC's real parts list. This is the honest inventory — read straight from the machine, nothing installed.",
   benchmark:

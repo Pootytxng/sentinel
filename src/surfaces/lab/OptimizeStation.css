@@ -1,0 +1,53 @@
+/* OptimizeStation — station 1 of the blended Lab spine (spec 2026-07-08 §8). Layout only: the card
+   frame, number badge, and contract lines come from Lab.css (.lab-card / .lab-station-*), and the
+   apply surface inside wears the room's HUD instrument skin (hud-rooms.css) — so there is NO new
+   chrome here, only the spacing that keeps the hero above the optional "More cleanup" disclosure. */
+
+.lab-optimize {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* The optional system-hygiene scan, demoted a step below the enable-all hero. A hairline rule +
+   a quiet mono summary reads as "the bonus", never a competing action. */
+.lab-optimize-more {
+  border-top: 1px solid var(--v2-line, var(--ix-glass-border, rgba(255, 255, 255, 0.08)));
+  padding-top: 12px;
+}
+
+.lab-optimize-more-summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+  transition: color 0.15s ease;
+}
+
+.lab-optimize-more-summary:hover {
+  color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
+}
+
+/* Native marker off; a rotating caret keeps the door grammar (doorknob law) consistent with the
+   room's other collapsibles. */
+.lab-optimize-more-summary::-webkit-details-marker {
+  display: none;
+}
+.lab-optimize-more-summary::before {
+  content: "▸";
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+.lab-optimize-more[open] > .lab-optimize-more-summary::before {
+  transform: rotate(90deg);
+}
+
+.lab-optimize-more-body {
+  margin-top: 12px;
+}

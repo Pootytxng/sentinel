@@ -33,6 +33,8 @@ const NO_FACTS: LabStationFacts = {
   tuningHeadline: null,
   crash: null,
   diagnosticsCaptured: false,
+  safeReady: 0,
+  stackApplied: false,
 };
 
 describe("compy_lab_bento flag-off byte-identity (the classic failsafe)", () => {
@@ -185,6 +187,8 @@ describe("pure data (one source, no drift)", () => {
       tuningHeadline: "held",
       crash: { incidents: [] } as never,
       diagnosticsCaptured: true,
+      safeReady: 0,
+      stackApplied: true,
     };
     const report = labCheckup(labBentoCards(LAB_STATION_ORDER, full));
     expect(report.headline).toBe("Full checkup complete — every station has a reading.");
