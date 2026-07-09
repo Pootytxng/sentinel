@@ -51,3 +51,15 @@
 .lab-optimize-more-body {
   margin-top: 12px;
 }
+
+/* §5 Power-features bay — a hair more separation from "More cleanup" above it, and a quiet intro
+   line that frames these as the same reversible controls from Play, gathered to be proven here. */
+.lab-optimize-power {
+  margin-top: 4px;
+}
+.lab-optimize-power-intro {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}

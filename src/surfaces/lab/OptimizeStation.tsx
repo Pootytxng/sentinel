@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Fix from "../Fix";
 import Check from "../Check";
+import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import type {
   Recommendation,
@@ -43,12 +44,20 @@ export type LabFastPathProps = {
   sessions: SessionSummary[];
   gpus: { name: string; driver_age_days: number | null }[];
   vendor: GpuVendor;
+  // §5 armed-feature bay (spec 2026-07-08 §5, owner nod "all three"): whether Gaming Mode is armed
+  // (gaming_mode_gate LIVE). When true, station 1 offers the "Power features" bay — Gaming Mode +
+  // service-suspend as read-first, apply-behind-confirm, reversible changes you can prove right in
+  // the Lab. Optional so non-App callers (tests) pass nothing; the bay just doesn't render.
+  gamingEnabled?: boolean;
 };
 
 export function OptimizeStation(props: LabFastPathProps) {
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
   // "turned off outside Compy" group, never double-counted as ready (one-mention law).
   const reverted = useMemo(() => deriveReverted(props.changes), [props.changes]);
+  // §5 Power-features bay: lazy-mount Gaming Mode only when the user opens the disclosure, so the
+  // Lab tab never spins up its session-state poll while the bay sits collapsed (the perf rails).
+  const [powerOpen, setPowerOpen] = useState(false);
 
   return (
     <div className="lab-optimize">
@@ -77,7 +86,8 @@ export function OptimizeStation(props: LabFastPathProps) {
       {/* Secondary to the enable-all (Directive 2: most users apply the safe stack and never look
           back). The broader system-hygiene scan — startup load, telemetry tasks, preinstalled
           apps, past tweaks, driver freshness — lives one disclosure away so it never crowds the
-          hero. Same audited apply path inside; read-only where it advises. */}
+          hero. Same audited apply path inside; read-only where it advises. (The ARMED telemetry-task
+          disable — the "bloat" of §5 — already lives in the fixes surface above.) */}
       <details className="lab-optimize-more">
         <summary className="lab-optimize-more-summary">More cleanup (optional)</summary>
         <div className="lab-optimize-more-body">
@@ -93,6 +103,28 @@ export function OptimizeStation(props: LabFastPathProps) {
           />
         </div>
       </details>
+
+      {/* §5 Power features (spec 2026-07-08 §5, owner nod) — the bigger reversible changes you can
+          make AND prove in the proving ground: Gaming Mode (foreground boost) + service-suspend,
+          the same audited controls from Play, gathered here so you can measure them at the Benchmark
+          station. Read-first, apply-behind-confirm (Gaming Mode owns its own confirm/undo flow),
+          fully reversible. Only shown when Gaming Mode is armed; Gaming Mode mounts lazily on open so
+          the collapsed bay never polls. */}
+      {props.gamingEnabled && (
+        <details
+          className="lab-optimize-more lab-optimize-power"
+          onToggle={(e) => setPowerOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary className="lab-optimize-more-summary">Power features — Gaming Mode (advanced, reversible)</summary>
+          <div className="lab-optimize-more-body">
+            <p className="lab-optimize-power-intro">
+              Bigger changes you can make and prove here. These are the same reversible controls from
+              Play — apply one, then run the Benchmark station to measure what it did on your rig.
+            </p>
+            {powerOpen && <GamingMode />}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

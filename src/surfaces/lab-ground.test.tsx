@@ -124,7 +124,7 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
     eligible: true,
   } as never;
 
-  const renderMerged = (recs: never[] = []) =>
+  const renderMerged = (recs: never[] = [], gamingEnabled = false) =>
     render(
       <ConfirmProvider>
       <LabGround
@@ -143,6 +143,7 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
         onToggleStartup={() => {}}
         onRollback={() => {}}
         onApplyBatch={async () => ({ applied: 0, skipped: [] })}
+        gamingEnabled={gamingEnabled}
         readiness={null}
         activeCount={0}
         diagnostics={<div data-testid="diag" />}
@@ -192,6 +193,23 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
     expect(c.querySelector(".lab-bento")).toBeNull();
     expect(c.querySelector(".lab-welcome")).toBeNull();
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
+  });
+
+  it("§5 Power-features bay shows in station 1 ONLY when Gaming Mode is armed; the bay stays collapsed (Gaming Mode lazy-mounts)", () => {
+    // Armed → the read-first Power-features disclosure is offered in station 1 (Gaming Mode +
+    // service-suspend, provable in the Lab). Closed by default so Gaming Mode never mounts/polls
+    // until opened.
+    const armed = renderMerged([SAFE_REC], true);
+    const summaries = Array.from(armed.querySelectorAll(".lab-optimize-more-summary")).map(
+      (s) => s.textContent,
+    );
+    expect(summaries.some((t) => t?.includes("Power features"))).toBe(true);
+    expect(armed.querySelector(".lab-optimize-power")).not.toBeNull();
+    expect((armed.querySelector(".lab-optimize-power") as HTMLDetailsElement).open).toBe(false);
+    cleanup();
+    // Disarmed (default) → no Power-features bay at all.
+    const off = renderMerged([SAFE_REC], false);
+    expect(off.querySelector(".lab-optimize-power")).toBeNull();
   });
 
   it("the Gallery (COLLECT) always closes the ground spine — even with no recs (the completion signal)", () => {

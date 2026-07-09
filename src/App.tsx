@@ -1441,6 +1441,7 @@ function App() {
                     onToggleStartup={toggleStartup}
                     onRollback={rollback}
                     onApplyBatch={applyBatch}
+                    gamingEnabled={gamingEnabled}
                     activeCount={activeChangeCount(changes)}
                     diagnostics={<DiagnosticsTab sections={diagnostics} />}
                     diagnosticsCaptured={diagnostics.length > 0}
