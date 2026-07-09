@@ -59,11 +59,20 @@ changes before/after."* Must show part-anchored MEASURED deltas (changed compone
 before it graduates from preview. Folded into the Lab-establishment train (below).
 Source: `docs/BACKLOG.md:115-129`, `docs/superpowers/specs/2026-07-07-two-futures-measured-split.md`.
 
-### C. Lab room establishment — owner supplies the task list (PARKED on him)
-Owner (2026-07-07) has a plan for what the Lab room should actually DO (interactive functions/apps).
-The whole "Lab-establishment train" is parked awaiting his list. Folds in B above + Two Futures v2
-(persist-latest Rust read + trial-sourced split). **Owner-bound.**
-Source: `docs/OWNER_ACTION_CHECKLIST.md:38-44`, `docs/BACKLOG.md:152-158`.
+### C. Lab room = the PROVING GROUND — HANDED OVER + designed (2026-07-08), building
+Owner (2026-07-08) handed over the Lab train with a full directive: research the framework, decide the
+best linear guided pathing, optimize fluidity/intuitive access, incorporate the gallery, and let users
+**make actual measured+reversible changes and prove them, all in the Lab.** Researched (two Explore
+maps) + designed: **the Lab becomes a proving ground** — one linear spine (Intake router → Measure →
+Test-a-tweak → Prove via the Two Futures measured split → COLLECT in the telemetry gallery), collapsing
+the three competing nav idioms into one. **Key finding: the measure→change→prove loop already exists +
+is safe** (Benchmark tweak trial, 16 catalog recs, auto-rollback). Gallery = the trophy/results space +
+the terminal room's missing completion signal, built on existing R3F primitives + cross-IPC measured
+data. Subsumes B (Two Futures hologram gets its purpose) + the panoramic gallery (§A.1) lands HERE.
+Full spec: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md`. Mutation scope: builds on the safe
+16 recs + already-armed gates; NEW tweaks beyond the frozen catalog stay a LOCKED-rule-6 owner decision.
+Build: flag `compy_lab_ground` DEFAULT OFF, 4 phases, P-series eyeball. **No longer owner-bound — mine to
+build.**
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,
