@@ -41,8 +41,16 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 - **Honest-measurement law → Receipts law:** never fabricate, never claim what we haven't measured —
   AND amplify what we HAVE measured as loudly as the data allows (share cards, before/afters,
   aggregate stats, time-and-sample-qualified). Silence about real wins is now a violation too.
-- **Frozen risky-tweak catalog:** kept, reframed as the **liability shield** (brand insurance).
-  Advisory/read-only growth continues upward as before.
+  + **Aggregate-stack measured gain is now a first-class marketing engine (2026-07-09, catalog
+    opened — CLAUDE.md rule 6 / ★ PRIMARY BLUEPRINT Directive 1):** the honest vehicle for the
+    now-open catalog is the whole enabled stack's real before/after A/B delta (not per-tweak claims
+    below the noise floor). "Measured X% faster on YOUR rig" — cumulative, per-rig, true — is exactly
+    the loud-but-honest Receipts story, and the aggregate delta is what the opt-in telemetry
+    aggregates into "RX 6600 rigs measured +X% after the safe stack — N=412."
+- **Risky-tweak catalog:** the FREEZE is LIFTED (measurable-benefit-under-rails, 2026-07-09) but the
+  **liability shield stands** — the shield is now the RAILS + the mutation-gate + measured proof, not
+  the freeze. A tweak joins only by measurable benefit AND every safety rail; unmeasured snake-oil is
+  still barred. Advisory/read-only growth continues upward as before, now beside measured additions.
 
 ### UNTOUCHABLE (now business-critical, not just safety)
 - Rollback-first integrity (the moat; B2B's entire purchase reason).

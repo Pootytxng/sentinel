@@ -4,22 +4,37 @@
 > (monetization-first core — the Receipts Doctrine). The upward-growth thesis below is unchanged;
 > where any text here conflicts with the doctrine, **the doctrine wins.**
 
+> **⚠ CATALOG OPENED (owner decision 2026-07-09):** the frozen-catalog language below is
+> SUPERSEDED by the **measurable-benefit-under-rails** policy (CLAUDE.md LOCKED rule 6, ★ PRIMARY
+> BLUEPRINT `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` Directive 1). The catalog now
+> grows **both** upward (below) AND by **measured additions**: a tweak earns inclusion by measurable
+> benefit — even individually-negligible; the cumulative measured stack is the point — **on top of**
+> the permanent safety rails (reversible · no-kernel/no-injection/anti-cheat-safe · non-security-
+> weakening · stability-safe), each riding the full mutation-gate. "Sideways into more switches" is
+> **re-permitted when measured + safe**. Where any text below says the catalog is frozen, this
+> pointer wins.
+
 **Thesis:** Compy grows **upward** into a *gaming readiness, monitoring, rollback, and
-safe-configuration control center* — not **sideways** into more Windows tweak switches. The
-recommendation catalog is one part of the value, not the product. The module refactor and the
-locked safety model make higher-level features *safer* to add, not impossible.
+safe-configuration control center* — and now **also** by *measured* catalog additions (see the
+pointer above). The recommendation catalog is one part of the value, not the product. The module
+refactor and the locked safety model make higher-level features *safer* to add, not impossible.
 
-> **Catalog discipline ≠ feature freeze.** "No more tweaks" means no more low-quality
-> tweak-stuffing. It does **not** mean Compy stops adding value. What is locked is the
-> **safety model**, not the **product scope**.
+> **Catalog quality bar ≠ feature freeze.** The catalog is OPEN (measurable-benefit-under-rails),
+> but the bar is **proof**: no low-quality tweak-stuffing, no unmeasured snake-oil. What is locked is
+> the **safety model**; a tweak joins only by clearing measurable benefit AND every safety rail.
 
-## Hard anti-goals — the "optimizer rot" blocklist (do NOT add)
+## Hard anti-goals — the blocklist, now SPLIT (measurable benefit does NOT override safety)
 
-These increase weight and lower trust. Adding any of them is a regression in product quality:
-timer hacks, HPET toggles, `bcdedit` edits, MMCSS registry edits, global NIC offload packs,
-forced core parking, Defender disable, MPO disable, fixed pagefile, TCP "mega-pack" edits, or
-any unsigned/AI-generated/arbitrary registry-service-PowerShell action. Compy is not a
-registry clown car.
+The old "optimizer rot" blocklist splits in two under the opened-catalog policy:
+
+- **Stays barred regardless of measured fps** (excluded for SAFETY/STABILITY/SECURITY/ANTI-CHEAT):
+  timer hacks, HPET toggles, `bcdedit` edits, MMCSS registry abuse, **core-parking writes**, Defender
+  disable, MPO disable, fixed pagefile forcing, kernel-level anything, anything that trips
+  EAC/BattlEye, and any unsigned/AI-generated/arbitrary registry-service-PowerShell action.
+  **Measurement does not make these safe** — Compy is not a registry clown car.
+- **Becomes a candidate** once it proves measurable benefit AND clears the safety rails: anything
+  previously excluded merely as unmeasured "snake-oil." It still rides the per-tweak mutation-gate
+  (rollback contract + apply/rollback QA + welfare-check) before shipping.
 
 ## Foundation already in place (these features compose it; they don't re-derive it)
 
