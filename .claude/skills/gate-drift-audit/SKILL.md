@@ -35,8 +35,9 @@ A gate can flip value while its line number stays valid. For each **Gate matrix*
 gate function body at source and compare against the row's State column:
 
 - `gaming_mode_gate()` · `service_suspend_gate()` · `bloat_removal_gate()` · `preload_removal_gate()`
-  · `restore_gate()` · `receipts_gate()` · `licensing_armed()` · `remote_fetch_enabled()` — does the
-  returned value match LIVE/ARMED/DARK/OFF as printed?
+  · `restore_gate()` · `receipts_gate()` · `licensing_armed()` · `remote_fetch_enabled()`
+  · `benchmark_trial::stack_trial_gate()` (§2a aggregate-stack A/B — DARK) — does the returned value
+  match LIVE/ARMED/DARK/OFF as printed?
 - Outbound-network row: still no HTTP client in `Cargo.toml`, CSP still `connect-src 'self' ipc:`?
 - Updater row: still no updater plugin/dep?
 

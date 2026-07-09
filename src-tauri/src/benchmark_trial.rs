@@ -249,6 +249,240 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
         });
 }
 
+// ── §2a AGGREGATE-STACK A/B — the honest cumulative-benefit trial ────────────────────────────────
+//
+// Applies the WHOLE enabled safe stack at once (one UAC, via the audited `apply_recommendations_batch`
+// orchestration — NO new mutation primitive), measures the game with the stack ON, then rolls back
+// EVERY change it made. The point is the Receipts-doctrine story: "your rig measured X% faster with
+// the safe stack, and here's the proof" — the cumulative delta of individually-negligible tweaks,
+// measured honestly, never claimed. Rollback-first is preserved by a multi-change Drop-guard that
+// undoes exactly the entries the batch created (diffed from the ledger), on every exit path.
+//
+// Ships DARK: `stack_trial_gate()` returns false, so the command refuses and the FE renders nothing
+// until live QA + owner sign-off flips it (mutation-gate item 7). Arming is a separate reviewable
+// commit, never a side effect of this one.
+
+/// DARK gate for the aggregate-stack A/B trial (§2a). While false the `start_stack_trial` command
+/// refuses and no aggregate mutation can run. FULLY REVERSIBLE: flip to `true` (a deliberate,
+/// reviewed commit) only after live apply/rollback QA on a real rig + owner sign-off.
+pub(crate) fn stack_trial_gate() -> bool {
+    false
+}
+
+/// The stack analogue of `RollbackGuard`: rolls back EVERY change the stack apply created, on any
+/// exit path (success, early return, cancel, panic unwind), in REVERSE apply order (LIFO) so a
+/// measurement never leaves the rig changed. Each rollback goes through the same audited
+/// `history::rollback_change` boundary; a partial failure is surfaced loudly (undo the rest in the
+/// Ledger) rather than silently swallowed.
+struct StackRollbackGuard {
+    change_ids: Vec<String>, // apply order; drained in reverse on drop
+}
+
+impl Drop for StackRollbackGuard {
+    fn drop(&mut self) {
+        if self.change_ids.is_empty() {
+            return;
+        }
+        let mut failed: Vec<String> = Vec::new();
+        for id in std::mem::take(&mut self.change_ids).into_iter().rev() {
+            if let Err(e) = crate::history::rollback_change(id.clone()) {
+                failed.push(format!("{id}: {e}"));
+            }
+        }
+        if failed.is_empty() {
+            set(|s| {
+                s.rolled_back = true;
+                s.status = "Done — the stack was measured and fully rolled back.".into();
+            });
+        } else {
+            set(|s| {
+                s.rolled_back = false;
+                s.error = Some(format!(
+                    "Measurement finished, but rolling {} change(s) back FAILED: {}. Undo them \
+                     manually in the Trust Ledger.",
+                    failed.len(),
+                    failed.join("; ")
+                ));
+                s.status = "Rollback failed — see the Ledger.".into();
+            });
+        }
+    }
+}
+
+/// The batch-safe subset of the requested stack: appliable, de-duplicated, and excluding
+/// `power-ultimate` (the one exit-using elevated rec that `apply_recommendations_batch` refuses to
+/// batch by design). Pure so the filtering contract is unit-testable without elevation.
+pub(crate) fn stack_trial_items(
+    requested: &[(String, String)],
+) -> Vec<crate::history::BatchApplyItem> {
+    let mut seen = std::collections::HashSet::new();
+    requested
+        .iter()
+        .filter(|(id, _)| id != "power-ultimate")
+        .filter(|(id, _)| crate::history::APPLIABLE_REC_IDS.contains(&id.as_str()))
+        .filter(|(id, _)| seen.insert(id.clone()))
+        .map(|(id, title)| crate::history::BatchApplyItem {
+            rec_id: id.clone(),
+            rec_title: title.clone(),
+        })
+        .collect()
+}
+
+/// Start an aggregate-stack A/B trial. Measures the game with the stack OFF, applies the whole safe
+/// stack in ONE elevation, measures again, then ALWAYS rolls back every change (Drop-guarded). Needs
+/// the FPS capture active + a game presenting. No-op if a trial is already running, or if the gate
+/// is dark.
+pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
+    if !stack_trial_gate() {
+        return; // DARK: the aggregate trial is not armed
+    }
+    let items = stack_trial_items(&requested);
+    if items.is_empty() {
+        set(|s| {
+            s.running = false;
+            s.error = Some("No appliable safe tweaks to measure as a stack.".into());
+            s.status = "Nothing to apply.".into();
+        });
+        return;
+    }
+    {
+        let Ok(mut s) = state().lock() else {
+            return;
+        };
+        if s.running {
+            return;
+        }
+        *s = TrialState {
+            running: true,
+            kind: "stack".into(),
+            status: "Starting…".into(),
+            target: PER_SIDE * 2,
+            ..Default::default()
+        };
+    }
+    cancel_flag().store(false, Ordering::Relaxed);
+    let _ = std::thread::Builder::new()
+        .name("bench-stack".into())
+        .spawn(move || {
+            // 1. Baseline — stack off. No mutation yet: a cancel/bail here leaves the rig untouched.
+            set(|s| s.status = "Measuring baseline (stack off)…".into());
+            let baseline = collect_windows(PER_SIDE, "Baseline");
+            if cancel_flag().load(Ordering::Relaxed) {
+                set(|s| {
+                    s.running = false;
+                    s.status = "Cancelled.".into();
+                });
+                return;
+            }
+            if baseline.len() < PER_SIDE {
+                set(|s| {
+                    s.running = false;
+                    s.status = "No frames.".into();
+                    s.error = Some(
+                        "Couldn't collect baseline frames. Turn on FPS monitoring with a game running."
+                            .into(),
+                    );
+                });
+                return;
+            }
+            // 2. Apply the whole stack in one batch (one UAC). Diff the ledger around it so the guard
+            //    rolls back EXACTLY the entries this batch created — never anything pre-existing.
+            //    The diff's isolation relies on apply_recommendations_batch holding HISTORY_LOCK for
+            //    its whole duration (so no unrelated write interleaves the two reads); if a future
+            //    refactor shrinks that lock scope, revisit this.
+            set(|s| s.status = "Applying the safe stack…".into());
+            // The "before" read is fallible on purpose: a corrupt/unreadable ledger must ABORT here,
+            // BEFORE any mutation — never swallow to [] and then apply against an orphaned ledger
+            // (rust-tauri-reviewer, §2a). No mutation has happened yet, so this is a clean bail.
+            let before: std::collections::HashSet<String> = match crate::history::all_change_ids() {
+                Ok(ids) => ids.into_iter().collect(),
+                Err(e) => {
+                    set(|s| {
+                        s.running = false;
+                        s.error = Some(format!(
+                            "Couldn't read the Trust Ledger before measuring — refusing to change \
+                             anything until it's readable. ({e})"
+                        ));
+                        s.status = "Ledger unreadable — nothing changed.".into();
+                    });
+                    return;
+                }
+            };
+            if let Err(e) = crate::history::apply_recommendations_batch(items) {
+                set(|s| {
+                    s.running = false;
+                    s.error = Some(format!("Couldn't apply the stack: {e}"));
+                    s.status = "Apply failed.".into();
+                });
+                return;
+            }
+            // New entries, in apply order (all_change_ids preserves on-disk order). The apply just
+            // persisted a valid ledger, so this read should succeed; if it somehow can't, the changes
+            // ARE recorded (each individually rollback-able), so surface it loudly rather than
+            // pretending nothing was applied — the user undoes them in the Ledger.
+            let after = match crate::history::all_change_ids() {
+                Ok(ids) => ids,
+                Err(e) => {
+                    set(|s| {
+                        s.running = false;
+                        s.error = Some(format!(
+                            "The stack was applied, but the ledger couldn't be re-read to roll it \
+                             back automatically — undo it in the Trust Ledger. ({e})"
+                        ));
+                        s.status = "Applied — roll back manually in the Ledger.".into();
+                    });
+                    return;
+                }
+            };
+            let new_ids: Vec<String> =
+                after.into_iter().filter(|id| !before.contains(id)).collect();
+            if new_ids.is_empty() {
+                // Nothing actually applied (every item skipped, e.g. UAC declined) → nothing to
+                // measure or roll back. Honest bail, no guard.
+                set(|s| {
+                    s.running = false;
+                    s.status = "Nothing applied.".into();
+                    s.error = Some(
+                        "The stack didn't apply — nothing was changed, so there's nothing to measure."
+                            .into(),
+                    );
+                });
+                return;
+            }
+            // ARMED: from here, every exit path rolls back every applied change.
+            let applied_n = new_ids.len();
+            let _guard = StackRollbackGuard { change_ids: new_ids };
+
+            // 3. Warmup — discard while the stack settles.
+            set(|s| s.status = "Letting it settle…".into());
+            let _ = collect_windows(WARMUP_WINDOWS, "Settling");
+
+            // 4. Treatment (stack on). A cancel here just yields fewer windows → the guard still
+            //    rolls back below.
+            set(|s| s.status = "Measuring with the stack on…".into());
+            let treatment = collect_windows(PER_SIDE, "Treatment");
+            if treatment.len() < PER_SIDE {
+                set(|s| {
+                    s.running = false;
+                    s.status = "No frames.".into();
+                    s.error = Some("Couldn't collect frames with the stack on.".into());
+                });
+                return; // _guard rolls back
+            }
+
+            // 5. Verdict, then roll back (the guard, on drop). The aggregate delta is the honest
+            //    cumulative story; it is NOT banked to the scoreboard (that firewall is per-tweak
+            //    Keep verdicts only — an aggregate isn't attributable to one rec).
+            let verdict = Trial { baseline, treatment }.verdict();
+            set(|s| {
+                s.running = false;
+                s.verdict = Some(verdict);
+                s.status = format!("Rolling back the {applied_n}-tweak stack…");
+            });
+            // _guard drops here → rollback finalizes the status / surfaces any rollback failure.
+        });
+}
+
 /// Collect `n` window snapshots from the live frametime stream, `WINDOW_INTERVAL` apart. Returns
 /// fewer if the game stops presenting or the run is cancelled.
 fn collect_windows(n: usize, label: &str) -> Vec<MetricWindow> {
@@ -323,5 +557,42 @@ mod trial_tests {
         let tight = vec![win(99.0), win(100.0), win(101.0)];
         let loose = vec![win(70.0), win(100.0), win(130.0)];
         assert!(run_to_run_noise(&loose) > run_to_run_noise(&tight));
+    }
+
+    // ── §2a aggregate-stack A/B guards (mutation-gate item 7 + 8) ──
+
+    #[test]
+    fn stack_trial_ships_dark() {
+        // The aggregate trial must be OFF until live QA + owner sign-off flips it deliberately.
+        assert!(!stack_trial_gate(), "stack_trial_gate must ship false (dark)");
+    }
+
+    #[test]
+    fn start_stack_trial_refuses_while_dark() {
+        // With the gate dark, starting the trial is a no-op: it never sets the running "stack" state
+        // and never touches the machine (the gate short-circuits before any state write or apply).
+        start_stack_trial(vec![("game-mode".into(), "Game Mode".into())]);
+        let s = trial_state();
+        assert_ne!(s.kind, "stack", "dark stack trial must not enter the running state");
+    }
+
+    #[test]
+    fn stack_trial_items_filters_to_the_batch_safe_subset() {
+        let requested = vec![
+            ("game-mode".to_string(), "Game Mode".to_string()),
+            ("power-ultimate".to_string(), "Ultimate".to_string()), // refused by the batch → dropped
+            ("not-a-real-rec".to_string(), "Bogus".to_string()),    // not appliable → dropped
+            ("game-mode".to_string(), "Game Mode".to_string()),     // duplicate → dropped
+            ("hags-enable".to_string(), "HAGS".to_string()),
+        ];
+        let items = stack_trial_items(&requested);
+        let ids: Vec<&str> = items.iter().map(|i| i.rec_id.as_str()).collect();
+        assert_eq!(ids, vec!["game-mode", "hags-enable"]);
+    }
+
+    #[test]
+    fn stack_trial_items_empty_when_nothing_appliable() {
+        let requested = vec![("power-ultimate".to_string(), "Ultimate".to_string())];
+        assert!(stack_trial_items(&requested).is_empty());
     }
 }

@@ -806,6 +806,20 @@ pub(crate) fn applied_changes_summary() -> AppliedChangesSummary {
     summarize_history(&load_history().unwrap_or_default())
 }
 
+/// Read-only: every ledger entry's id, in on-disk (apply) order. Used by the aggregate-stack A/B
+/// trial (§2a) to diff which changes a batch apply created — after − before — so its rollback guard
+/// undoes EXACTLY those entries and nothing pre-existing. Introduces no mutation; the rollback
+/// itself still goes through the audited `rollback_change` boundary.
+///
+/// Returns the load ERROR rather than swallowing it (rust-tauri-reviewer, §2a): an unreadable ledger
+/// must NOT read as "empty" here — `load_history` quarantines a corrupt `history.json` (rename →
+/// `.corrupt`) as a read side effect, and a caller that took `[]` and then applied would orphan the
+/// user's real prior ledger and mutate against a blank one. The trial propagates this Err and refuses
+/// to apply (see `start_stack_trial`), so a corrupt ledger can never chain into an un-tracked mutation.
+pub(crate) fn all_change_ids() -> Result<Vec<String>, String> {
+    Ok(load_history()?.into_iter().map(|c| c.id).collect())
+}
+
 // Collapse history to the LATEST entry per rec_id, then summarize current state.
 // Readiness reflects each setting's CURRENT effective state — not every historical
 // apply/rollback — so re-applying OR rolling back a setting actually resolves it.

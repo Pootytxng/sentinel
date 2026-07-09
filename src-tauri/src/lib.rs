@@ -681,6 +681,26 @@ fn start_tweak_trial(rec_id: String, rec_title: String) {
     benchmark_trial::start_tweak_trial(rec_id, rec_title);
 }
 
+// §2a aggregate-stack A/B trial: measure the game, apply the WHOLE safe stack in one UAC, re-measure
+// the cumulative delta, then ALWAYS roll back every change (multi-Drop-guarded). Mutating — ships
+// DARK behind benchmark_trial::stack_trial_gate() (returns false), so this refuses until live QA +
+// owner sign-off arms it. See benchmark_trial.
+#[tauri::command]
+fn start_stack_trial(items: Vec<history::BatchApplyItem>) {
+    if !benchmark_trial::stack_trial_gate() {
+        return; // dark: aggregate trial not armed
+    }
+    let pairs = items.into_iter().map(|it| (it.rec_id, it.rec_title)).collect();
+    benchmark_trial::start_stack_trial(pairs);
+}
+
+// True only when the aggregate-stack trial is armed — the FE renders the stack-A/B affordance ONLY
+// when this is true (dark by default, mirrors gaming_mode_enabled / preload_removal_gate).
+#[tauri::command]
+fn stack_trial_armed() -> bool {
+    benchmark_trial::stack_trial_gate()
+}
+
 // The rec_ids the trial can apply/measure/roll-back (the verified appliable catalog) — the
 // Benchmark tab's tweak picker filters its rec list to these.
 #[tauri::command]
@@ -990,6 +1010,8 @@ pub fn run() {
             start_calibration,
             cancel_trial,
             start_tweak_trial,
+            start_stack_trial,
+            stack_trial_armed,
             get_appliable_rec_ids,
             get_scoreboard,
             clear_scoreboard,
