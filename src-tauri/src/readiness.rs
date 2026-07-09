@@ -50,6 +50,13 @@ pub(crate) struct ReadinessCheck {
     action_uri: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     action_label: Option<&'static str>,
+    /// For the "applied-changes" drift row ONLY: the exact rec titles that were applied via
+    /// Compy and have since drifted off. Downstream advisory layers (priorities) read this to
+    /// dedup a drifted rec OUT of "safe tweaks not applied" — a drifted setting is
+    /// applied-then-reverted, NOT never-applied, and listing it as both is contradictory.
+    /// Empty on every other check.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    drifted_titles: Vec<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -100,6 +107,7 @@ fn check(
         value,
         action_uri: None,
         action_label: None,
+        drifted_titles: Vec::new(),
     }
 }
 
@@ -682,6 +690,7 @@ pub(crate) fn evaluate_readiness(
                 value: Some("FreeSync: on".into()),
                 action_uri: Some("ms-settings:display-advancedgraphics"),
                 action_label: Some("Open VRR settings"),
+                drifted_titles: Vec::new(),
             },
             Some(false) => ReadinessCheck {
                 id: "vrr",
@@ -697,6 +706,7 @@ pub(crate) fn evaluate_readiness(
                 value: Some("FreeSync: off".into()),
                 action_uri: Some("ms-settings:display-advancedgraphics"),
                 action_label: Some("Turn on VRR"),
+                drifted_titles: Vec::new(),
             },
             None => {
                 let detail = match hw.display.as_ref() {
@@ -719,6 +729,7 @@ pub(crate) fn evaluate_readiness(
                     value: Some("Verify in GPU panel".into()),
                     action_uri: Some("ms-settings:display-advancedgraphics"),
                     action_label: Some("Open VRR settings"),
+                    drifted_titles: Vec::new(),
                 }
             }
         };
@@ -835,7 +846,7 @@ pub(crate) fn evaluate_readiness(
                     hist.externally_reverted
                 )
             };
-            check(
+            let mut ac = check(
                 "applied-changes",
                 "Applied Compy changes",
                 ReadinessStatus::Attention,
@@ -844,7 +855,10 @@ pub(crate) fn evaluate_readiness(
                     "{} on / {} drifted",
                     hist.active, hist.externally_reverted
                 )),
-            )
+            );
+            // Structured so the priorities layer can dedup these out of "not applied".
+            ac.drifted_titles = hist.drifted_titles.clone();
+            ac
         } else if hist.total == 0 {
             check(
                 "applied-changes",
@@ -1268,6 +1282,9 @@ mod readiness_tests {
         assert!(!c.detail.contains("setting(s)"), "no vague count: {}", c.detail);
         assert!(!c.detail.contains("Tune"), "no stale room name: {}", c.detail);
         assert!(c.detail.contains("Optimize"), "points at the real room: {}", c.detail);
+        // Structured drift titles are exposed so the priorities layer can dedup the drifted rec
+        // out of "safe tweaks not applied" (owner-caught double-listing, 2026-07-08).
+        assert_eq!(c.drifted_titles, vec!["Enable Windows Game Mode".to_string()]);
     }
 
     #[test]

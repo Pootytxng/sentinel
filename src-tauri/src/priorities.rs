@@ -174,6 +174,22 @@ fn check(readiness: &Value, id: &str) -> Option<(String, String, String)> {
         })
 }
 
+/// Titles the "applied-changes" drift row already names (applied-via-Compy, now drifted off).
+/// The pending-safe-recs rule excludes these so one setting is never listed as both
+/// "you applied it and it drifted" AND "you haven't applied it" (owner-caught 2026-07-08).
+fn drifted_rec_titles(readiness: &Value) -> std::collections::HashSet<String> {
+    readiness
+        .get("checks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|c| c.get("id").and_then(Value::as_str) == Some("applied-changes"))
+        .and_then(|c| c.get("drifted_titles"))
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default()
+}
+
 /// Pure: assemble the ranked priorities from already-gathered signals.
 pub(crate) fn build_priorities(
     readiness: &Value,
@@ -218,13 +234,20 @@ pub(crate) fn build_priorities(
     // Rule 8: safe, appliable recommendations visible but not yet applied.
     {
         let recs = recommendations.as_array().map(Vec::as_slice).unwrap_or(&[]);
+        let drifted = drifted_rec_titles(readiness);
         let pending: Vec<&Value> = recs
             .iter()
             .filter(|r| {
                 let id = r.get("id").and_then(Value::as_str).unwrap_or("");
                 let applied = r.get("currently_applied").and_then(Value::as_bool).unwrap_or(false);
                 let severity = r.get("severity").and_then(Value::as_str).unwrap_or("");
-                APPLIABLE_REC_IDS.contains(&id) && !applied && severity == "safe"
+                let title = r.get("title").and_then(Value::as_str).unwrap_or("");
+                // A drifted rec is applied-then-reverted — the "Applied Compy changes" row owns it
+                // with the right framing; never also list it here as "not applied".
+                APPLIABLE_REC_IDS.contains(&id)
+                    && !applied
+                    && severity == "safe"
+                    && !drifted.contains(title)
             })
             .collect();
         if pending.is_empty() {
@@ -249,7 +272,11 @@ pub(crate) fn build_priorities(
                 Bucket::Limiter(8),
                 PriorityItem {
                     id: "pending-safe-recs",
-                    title: format!("{} safe one-click tweak(s) not applied", pending.len()),
+                    title: format!(
+                        "{} safe {} not applied",
+                        pending.len(),
+                        if pending.len() == 1 { "tweak" } else { "tweaks" }
+                    ),
                     reason: format!(
                         "Compy has safe, reversible tweaks you haven't applied: {}{}.",
                         titles.join(", "),
@@ -422,6 +449,21 @@ mod priority_tests {
     fn readiness(checks: Vec<Value>) -> Value {
         json!({ "ready_count": 0, "attention_count": 0, "unknown_count": 0, "advisory": "adv", "checks": checks })
     }
+    /// An "applied-changes" attention row that names the drifted rec titles (mirrors the
+    /// structured field readiness.rs now emits) — so the dedup path is exercised.
+    fn chk_drift(titles: &[&str]) -> Value {
+        json!({
+            "id": "applied-changes", "status": "attention", "label": "Applied Compy changes",
+            "detail": "drifted", "value": null,
+            "drifted_titles": titles.iter().map(|t| json!(t)).collect::<Vec<_>>()
+        })
+    }
+    fn rec_titled(id: &str, title: &str, applied: bool, severity: &str) -> Value {
+        json!({ "id": id, "title": title, "currently_applied": applied, "severity": severity })
+    }
+    fn limiter_title(p: &Priorities, id: &str) -> Option<String> {
+        p.limiters.iter().find(|i| i.id == id).map(|i| i.title.clone())
+    }
     fn rec(id: &str, applied: bool, severity: &str) -> Value {
         json!({ "id": id, "title": id, "currently_applied": applied, "severity": severity })
     }
@@ -577,6 +619,63 @@ mod priority_tests {
         assert_eq!(ids.first().copied(), Some("applied-changes"));
         assert!(ids.contains(&"pending-safe-recs"));
         assert!(ids.iter().position(|x| *x == "applied-changes") < ids.iter().position(|x| *x == "pending-safe-recs"));
+    }
+
+    // owner-caught 2026-07-08: the Home priority queue listed Game Mode as BOTH "you applied it
+    // and it drifted off" AND "you haven't applied it" — contradictory. A rec the drift row already
+    // names must NOT also appear in "safe tweaks not applied".
+    #[test]
+    fn a_drifted_rec_is_not_also_listed_as_not_applied() {
+        let r = readiness(vec![chk_drift(&["Enable Windows Game Mode"])]);
+        let recs = json!([rec_titled("game-mode", "Enable Windows Game Mode", false, "safe")]);
+        let p = build_priorities(&r, &recs, &json!([]), &json!([]));
+        let ids = limiter_ids(&p);
+        // The drift row owns it; the pending-safe aggregate must be absent (nothing left to list).
+        assert!(ids.contains(&"applied-changes"), "drift row still shown");
+        assert!(!ids.contains(&"pending-safe-recs"), "drifted rec must not double-list as not-applied");
+    }
+
+    // A genuinely-never-applied safe rec alongside a DIFFERENT drifted rec still shows both — the
+    // dedup keys on the specific setting, it doesn't suppress the whole aggregate.
+    #[test]
+    fn a_never_applied_rec_survives_when_a_different_rec_drifted() {
+        let r = readiness(vec![chk_drift(&["Enable Windows Game Mode"])]);
+        let recs = json!([
+            rec_titled("game-mode", "Enable Windows Game Mode", false, "safe"),
+            rec_titled("hags-enable", "Hardware-accelerated GPU scheduling", false, "safe"),
+        ]);
+        let p = build_priorities(&r, &recs, &json!([]), &json!([]));
+        assert!(limiter_ids(&p).contains(&"pending-safe-recs"), "the non-drifted rec still lists");
+        // …and the count reflects ONE rec, grammar-correct (no "(s)").
+        assert_eq!(limiter_title(&p, "pending-safe-recs").as_deref(), Some("1 safe tweak not applied"));
+    }
+
+    // flags-name-it law: no "N setting(s)" pluralization artifact. Singular vs plural is real grammar.
+    #[test]
+    fn pending_safe_title_uses_real_grammar_never_paren_s() {
+        let one = build_priorities(
+            &readiness(vec![]),
+            &json!([rec_titled("game-mode", "Enable Windows Game Mode", false, "safe")]),
+            &json!([]),
+            &json!([]),
+        );
+        assert_eq!(limiter_title(&one, "pending-safe-recs").as_deref(), Some("1 safe tweak not applied"));
+        let two = build_priorities(
+            &readiness(vec![]),
+            &json!([
+                rec_titled("game-mode", "Enable Windows Game Mode", false, "safe"),
+                rec_titled("hags-enable", "Hardware-accelerated GPU scheduling", false, "safe"),
+            ]),
+            &json!([]),
+            &json!([]),
+        );
+        assert_eq!(limiter_title(&two, "pending-safe-recs").as_deref(), Some("2 safe tweaks not applied"));
+        for t in [limiter_title(&one, "pending-safe-recs"), limiter_title(&two, "pending-safe-recs")]
+            .into_iter()
+            .flatten()
+        {
+            assert!(!t.contains("(s)"), "no pluralization artifact: {t}");
+        }
     }
 
     #[test]

@@ -551,25 +551,26 @@
   color: var(--v2-muted);
   padding: 14px 2px;
 }
+/* Quiet mono readout tags, NOT filled alert badges (owner de-slop catch 2026-07-08: the amber
+   filled uppercase pills read as alarms and shouted). No fill, no uppercase, no warn-color —
+   the rank meaning is carried by a faint accent on the #1 tag and muted ink on the rest, in the
+   same instrument-mono register as the rank numerals. */
 :root[data-v2="on"][data-hud="on"] .hud-pill {
   flex: none;
-  font: 600 10px var(--v2-font-sans);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 8px;
-  border-radius: 2px;
+  font: 500 10.5px var(--v2-font-mono);
+  letter-spacing: 0.02em;
+  color: var(--v2-faint);
+  padding: 0;
+  background: none;
+  white-space: nowrap;
 }
+/* #1 row — a quiet accent, the only signal it needs to read as "the top one". */
 :root[data-v2="on"][data-hud="on"] .hud-pill-warn {
-  background: var(--v2-warn-dim);
-  color: var(--v2-warn);
+  color: var(--v2-accent);
 }
-:root[data-v2="on"][data-hud="on"] .hud-pill-ok {
-  background: var(--v2-ok-dim);
-  color: var(--v2-ok);
-}
+:root[data-v2="on"][data-hud="on"] .hud-pill-ok,
 :root[data-v2="on"][data-hud="on"] .hud-pill-info {
-  background: var(--v2-info-dim);
-  color: var(--v2-info);
+  color: var(--v2-faint);
 }
 
 /* ── Buttons — quiet instrument chrome ── */
