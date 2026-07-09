@@ -59,7 +59,7 @@ changes before/after."* Must show part-anchored MEASURED deltas (changed compone
 before it graduates from preview. Folded into the Lab-establishment train (below).
 Source: `docs/BACKLOG.md:115-129`, `docs/superpowers/specs/2026-07-07-two-futures-measured-split.md`.
 
-### C. Lab room = the PROVING GROUND — HANDED OVER + designed (2026-07-08), building
+### C. Lab room = the PROVING GROUND — 🟢 PHASE 1 SHIPPED behind flag (2026-07-09); phases 2–5 open
 Owner (2026-07-08) handed over the Lab train with a full directive: research the framework, decide the
 best linear guided pathing, optimize fluidity/intuitive access, incorporate the gallery, and let users
 **make actual measured+reversible changes and prove them, all in the Lab.** Researched (two Explore
@@ -73,6 +73,15 @@ Full spec: `docs/superpowers/specs/2026-07-08-lab-proving-ground.md`. Mutation s
 16 recs + already-armed gates; NEW tweaks beyond the frozen catalog stay a LOCKED-rule-6 owner decision.
 Build: flag `compy_lab_ground` DEFAULT OFF, 4 phases, P-series eyeball. **No longer owner-bound — mine to
 build.**
+**🟢 PHASE 1 SHIPPED behind flag (`d0e30f5`, LIVE 2026-07-09, DEFAULT OFF):** Optimize merged INTO the Lab as
+ONE slim room — FAST PATH (Check + Fix "Apply all safe fixes" enable-all, no benchmark, zero new IPC, rollback-first
+intact) beside the UTILITY PATH (the measure→prove `ground` spine: intake router + numbered stations, collapsing
+bento/guided/classic into one). Frontend-only (`git diff -- src-tauri` EMPTY), flag-off byte-identity test-pinned;
+tsc 0 · vitest 1128 · self-reviewer PASS. **Slice-1 scoping (reversible, awaiting owner confirm):** Optimize's
+CONTENT is in the Lab, but the Optimize rail TAB removal + full rail collapse is DEFERRED to a next slice — during
+preview both surfaces exist, undo stays reachable. **Phases 2 (prove utility + aggregate-stack A/B) · 3 (telemetry
+gallery = §A.1 panoramic lands here) · 4 (catalog-expansion pipeline) · 5 (armed-feature bays) remain OPEN.**
+⏳ Owner: flip Settings → Appearance → "Lab proving ground (preview)", open Lab, react + confirm the slice-1 direction.
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,

@@ -159,6 +159,43 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-09a — ✅ SHIPPED `d0e30f5` + ship-docs (Lab overhaul PHASE 1 — Optimize merged into the Lab proving ground, DEFAULT OFF)
+**Code `d0e30f5` · installer SHA-256 `B932EDA0…FD8F0` · LIVE (stamp-verified 2026-07-09: installed exe embeds
+`d0e30f5`, `f13d10a` absent, ship-reinstall stale-build gate passed, Desktop holds exactly one installer).**
+Note: the prior session's `d05871c` resume-breadcrumb commit was folded back (`reset --soft` to `d0e30f5`, both
+local-only, 0 behind origin) so the exe stamp == HEAD at ship time and the doc rows land as the ship-docs commit
+on top — the established `<commit> + ship-docs` pattern. Flag off → app byte-identical, NO live look change until
+the owner flips the preview toggle.
+- **What landed (`d0e30f5`, frontend-only, `git diff -- src-tauri` EMPTY):** phase 1 of the Lab overhaul
+  (★ PRIMARY BLUEPRINT `docs/superpowers/specs/2026-07-08-lab-proving-ground.md`, Directive 2) behind
+  **`compy_lab_ground` DEFAULT OFF**. New `src/surfaces/LabGround.tsx`+`.css` = the merged room: FAST PATH
+  (`Check`+`Fix view="fixes"` = safe tweaks + the existing "Apply all safe fixes" enable-all, no benchmark,
+  reuses `applyBatch`→`apply_recommendations_batch`, ZERO new IPC) + UTILITY (Lab's new additive `ground`
+  mode = intake router + numbered station spine, collapses bento/guided/classic into one). App swaps the Lab
+  tab `LabV2`→`LabGround` when the flag is on (`App.tsx` ~L1406); Settings preview toggle added
+  (`Settings.tsx`). Cohesion fix: `hud-rooms.css` fix-room HUD skin broadened to `:is(.v2-room[data-room="fix"],
+  .v2-room[data-room="lab"] :where(.lg-fast))` (specificity-neutral → fix-room byte-unchanged);
+  `tokens-v2-guard.test.ts` comma-split made paren-aware.
+- **Verified:** tsc 0 · vitest **1128** (152 files, +6 `lab-ground.test.tsx` guards: flag-off byte-identity,
+  ground-spine-only, ground-overrides-bento, empty-state) · tokens-v2-guard 52 green · self-reviewer **PASS**
+  (fast-path leads, cohesion seam caught + fixed, re-verified with computed 3px/transparent evidence matching
+  the Optimize tab; one idiom below; honest fixes-first verdict). Shots `docs/ui-sweep/shots/lab-ground/`.
+- **Step 0 (`6d7397b`):** CLAUDE.md rule 6 + PRODUCT_DIRECTION + RECEIPTS re-synced to the opened-catalog
+  (measurable-benefit-under-rails) policy.
+- **✅ SHIPPED 2026-07-09 (all resume steps done):** (1) `scripts/ship-reinstall.ps1` ran green — stale-build
+  gate passed, graceful close, one installer staged, silent `/S` install, launched; (2) stamp-verified live ==
+  `d0e30f5` via the embedded `COMPY_GIT_HASH` (installed exe: `d0e30f5` present, `f13d10a` absent); (3) doc rows
+  landed this same ship-docs commit — RELEASE_STATE.md Snapshot row (SHA-256 `B932EDA0…FD8F0`, built-from
+  `d0e30f5`, Installed by Claude + LIVE, supersedes `f13d10a`), this entry flipped ✅ SHIPPED, `UI_VISION_BACKLOG.md`
+  item C marked phase-1-shipped-behind-flag.
+- **⏳ OWNER (eyeball + a scoping welfare-check):** flip **Settings → Appearance → "Lab proving ground
+  (preview)"**, open the **Lab** tab, react to the merged room. **Scoping call made (slice 1, reversible):**
+  merges Optimize's CONTENT into the Lab behind the preview; the Optimize rail TAB removal + full rail
+  collapse is DEFERRED to a next slice (wider App/rail surgery), so during preview BOTH the Optimize tab and
+  the merged Lab exist. Undo stays reachable (Optimize/History tabs + per-row toggle-off). Confirm this
+  direction before default-ON / before removing the Optimize tab. Remaining: phases 2 (prove utility +
+  aggregate-stack A/B) · 3 (telemetry gallery) · 4 (catalog-expansion pipeline) · 5 (armed-feature bays).
+
 ### Cycle 2026-07-08c — ✅ SHIPPED `f13d10a` + ship-docs (sibling spotlight-tag de-slop sweep — "sweep the rest")
 **Code `f13d10a` · installer SHA-256 `E65D649C…9C7EA` · LIVE (stamp-verified 2026-07-08).** The §D sibling
 slop the previous cycle logged: the same "#1 BIGGEST LIMITER" alert-badge pattern the owner caught + retired on
