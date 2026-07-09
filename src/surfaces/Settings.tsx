@@ -13,6 +13,8 @@ import {
   readLabBento,
   applyLabBento,
   applyLabGuided,
+  readLabGround,
+  applyLabGround,
   readHud,
   applyHud,
   readSetupStepper,
@@ -142,6 +144,7 @@ export default function Settings({
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
   const [labBento, setLabBento] = useState<boolean>(readLabBento);
+  const [labGround, setLabGround] = useState<boolean>(readLabGround);
   const [hud, setHud] = useState<boolean>(readHud);
   const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
   const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
@@ -195,6 +198,14 @@ export default function Settings({
   const changeLabBento = (v: boolean) => {
     setLabBento(v);
     applyLabBento(v);
+  };
+  // Lab proving ground preview (spec 2026-07-08-lab-proving-ground, phase 1) — merges the Optimize
+  // room INTO the Lab: the "enable all the good tweaks" fast path (no benchmark required) leads,
+  // the measure→prove instruments sit beside it as one linear spine. Same audited apply path, same
+  // instruments; off renders the classic separate Lab + Optimize rooms byte-identical.
+  const changeLabGround = (v: boolean) => {
+    setLabGround(v);
+    applyLabGround(v);
   };
   // Instrument-HUD preview — the de-slop redesign pilot (Home first; editorial retired,
   // CORRECTED direction). Presentation only: the same measured numbers, the same probes;
@@ -347,6 +358,22 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={labBento} onChange={changeLabBento} ariaLabel="Lab checkup bento" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Lab proving ground (preview)</div>
+                  <div className="set-row-sub">
+                    Merges Optimize into the Lab: enable all the safe tweaks in one tap (no
+                    benchmarking needed), with the measure-and-prove instruments right beside them.
+                    Same tweaks, same undo — turn off for the separate Lab and Optimize rooms.
+                  </div>
+                </div>
+                <Toggle
+                  on={labGround}
+                  onChange={changeLabGround}
+                  ariaLabel="Lab proving ground preview"
+                />
               </div>
 
               <div className="set-row set-row-inset">

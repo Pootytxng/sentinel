@@ -64,6 +64,7 @@ export default function Lab({
   v2 = false,
   onBenchState,
   diagnosticsCaptured = false,
+  ground = false,
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
@@ -77,6 +78,14 @@ export default function Lab({
   // Whether the system report behind the diagnostics slot actually has sections (fill pass,
   // spec 2026-07-05) — the strip must never claim "captured" for an empty report.
   diagnosticsCaptured?: boolean;
+  // Proving-ground mode (spec 2026-07-08-lab-proving-ground, phase 1): rendered ONLY inside the
+  // merged LabGround room (behind `compy_lab_ground`, DEFAULT OFF). Collapses the three nav idioms
+  // into ONE slim linear spine — the intake router as front door + the numbered station
+  // progression — suppressing bento/guided/classic/welcome/readings. Additive: `ground` defaults
+  // false, so every existing (flag-off) render path is byte-identical (test-pinned). Same
+  // instruments, same reads — the merged room just leads with the tweaks and offers the
+  // measure→prove utility beside them.
+  ground?: boolean;
 }) {
   // Seed from the probe cache so re-opening Advanced paints last-known instantly instead of cold-
   // re-running get_latency_diagnostics (a synchronous MSI/timer/USB scan) every visit.
@@ -226,8 +235,9 @@ export default function Lab({
   return (
     <section
       className="lab-root"
-      data-guided={guided || bento || undefined}
-      data-bento={bento || undefined}
+      data-guided={(!ground && (guided || bento)) || undefined}
+      data-bento={(!ground && bento) || undefined}
+      data-ground={ground || undefined}
     >
       <div className="lab-dotgrid" aria-hidden="true" />
       <div className="lab-inner">
@@ -255,7 +265,7 @@ export default function Lab({
         {/* Bento checkup face (flag-on): station cards left→right in bench order + the
             synthesized checkup report. Cards are doors onto the SAME router jump the guided
             rows use; the grid subsumes the router (one navigation idiom per room). */}
-        {bento && (
+        {bento && !ground && (
           <LabBento
             keys={stationKeys}
             facts={{
@@ -272,7 +282,7 @@ export default function Lab({
 
         {/* Bento detail — ONE station at a time (owner feedback: no duplicate standing list
             under the grid). Header + the identical instrument body; close returns to the menu. */}
-        {bento && openStation && (
+        {bento && !ground && openStation && (
           <div
             className="lab-card lab-bento-detail"
             id="lab-bento-detail"
@@ -314,8 +324,9 @@ export default function Lab({
             contract lines and is gone; asking what you're here to do and jumping you straight to
             the right tool IS the guided experience). Rows are doors — click scrolls to and
             expands that station in place (never teleports). Filtered to the stations this rig
-            has, so a row can never point at a missing tool. */}
-        {guided && !bento && (
+            has, so a row can never point at a missing tool. Proving-ground (`ground`) mode reuses
+            this exact front door — the one intake idiom for the merged room. */}
+        {((guided && !bento) || ground) && (
           <nav className="lab-router" aria-label="What are you here to do?">
             <div className="lab-router-title">What are you here to do?</div>
             <p className="lab-router-sub">
@@ -342,7 +353,7 @@ export default function Lab({
             reader has opened any instrument (welcomeSeen): it just renames the cards below it.
             Guided bench: hidden — every station's own contract lines carry the same signposting,
             so the band would state each instrument's purpose twice on one screen. */}
-        {!welcomeSeen && !guided && !bento && (
+        {!welcomeSeen && !guided && !bento && !ground && (
         <div className="lab-welcome">
           <span className="lab-welcome-row">
             <span className="lab-welcome-term">Benchmark</span>
@@ -377,7 +388,7 @@ export default function Lab({
             renders (same components, same reads); only the header contract around them is new.
             Numbering is computed over the stations this rig actually has (vendor/diagnostics
             gates unchanged) — never hardcoded. */}
-        {guided && !bento &&
+        {((guided && !bento) || ground) &&
           stationKeys.map((k, i) => (
             <Fragment key={k}>
               <LabSection
@@ -405,7 +416,7 @@ export default function Lab({
             </Fragment>
           ))}
 
-        {!guided && !bento && (
+        {!guided && !bento && !ground && (
         <>
         <LabSection
           icon="chart"
@@ -483,7 +494,7 @@ export default function Lab({
             above already made (zero new IPC). V2 rooms only; classic Lab renders untouched.
             Guided bench: absent — each station's "what the reading means" line carries the same
             live value, so the strip would state every reading twice (superseded per the spec). */}
-        {v2 && !guided && !bento && (
+        {v2 && !guided && !bento && !ground && (
           <div className="lab-readings">
             <span className="lab-readings-k">Latest readings</span>
             {labLatestReadings({

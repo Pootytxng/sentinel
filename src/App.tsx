@@ -24,7 +24,7 @@ import {
   type CpuTemp,
 } from "./surfaces/monitor-panels";
 import { MonitorDomainCards } from "./surfaces/MonitorDomainCards";
-import { readMonitorCards } from "./design/theme";
+import { readMonitorCards, readLabGround } from "./design/theme";
 import { useReducedMotion } from "./design/use-motion";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -33,6 +33,7 @@ import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
 import { BlackbookV2 } from "./surfaces/BlackbookV2";
 import { LabV2 } from "./surfaces/LabV2";
+import { LabGround } from "./surfaces/LabGround";
 import Fix from "./surfaces/Fix";
 import Learn from "./surfaces/Learn";
 import Check from "./surfaces/Check";
@@ -507,6 +508,18 @@ function App() {
   // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
   // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
   const optimizeMerged = readOptimizeMerged();
+  // Lab proving ground (spec 2026-07-08-lab-proving-ground, phase 1, DEFAULT OFF): when on, the Lab
+  // tab renders the merged LabGround room — Optimize's fixes + the "enable all the good tweaks"
+  // one-action fast path folded INTO the Lab, beside the measure→prove instruments (one slim room).
+  // Flag off → the untouched LabV2 + OptimizeV2 rooms render (byte-identical). Live-reactive to the
+  // Settings preview toggle (compy:lab-ground-changed) so flipping it re-swaps an already-mounted
+  // app without a reload — the same P-series pattern Lab uses for its guided/bento flags.
+  const [labGround, setLabGround] = useState(readLabGround);
+  useEffect(() => {
+    const onChange = () => setLabGround(readLabGround());
+    window.addEventListener("compy:lab-ground-changed", onChange);
+    return () => window.removeEventListener("compy:lab-ground-changed", onChange);
+  }, []);
   // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. DEFAULT ON
   // (owner sign-off 2026-06-21). Escape hatch: compy_monitor="0" restores the classic single Play surface.
   // Guarded readers — a bare getItem in the render body throws (→ blank app) on storage-disabled WebView2.
@@ -1403,13 +1416,42 @@ function App() {
               {/* V2-7: the Lab room on RoomShell — Lab composes verbatim (its v2 prop trims the
                   standalone head; RoomShell's verdict is the ONE summary). Mounts per-visit like
                   the classic path; no door — Lab is the journey's last chapter. */}
-              {activeTab === "Lab" && (
-                <LabV2
-                  diagnostics={<DiagnosticsTab sections={diagnostics} />}
-                  vendor={detectedVendor}
-                  diagnosticsCaptured={diagnostics.length > 0}
-                />
-              )}
+              {activeTab === "Lab" &&
+                (labGround ? (
+                  // Proving-ground merge (phase 1, DEFAULT OFF): Optimize's fixes + the enable-all
+                  // fast path fold INTO the Lab. Same audited apply/batch handlers OptimizeV2 gets
+                  // (zero new IPC) + Lab's own instruments. Flag off → the LabV2 branch below.
+                  <LabGround
+                    isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                    onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
+                    onChanged={refresh}
+                    vendor={detectedVendor}
+                    sessions={sessions}
+                    gpus={hw?.gpus ?? []}
+                    recs={recs}
+                    readiness={readiness}
+                    startup={startup}
+                    changes={changes}
+                    busyId={busyId}
+                    activeChangeFor={findActiveChangeForRec}
+                    onToggleRec={(recId) => {
+                      const r = (recs ?? []).find((x) => x.id === recId);
+                      if (r) toggleRec(r);
+                    }}
+                    onToggleStartup={toggleStartup}
+                    onRollback={rollback}
+                    onApplyBatch={applyBatch}
+                    activeCount={activeChangeCount(changes)}
+                    diagnostics={<DiagnosticsTab sections={diagnostics} />}
+                    diagnosticsCaptured={diagnostics.length > 0}
+                  />
+                ) : (
+                  <LabV2
+                    diagnostics={<DiagnosticsTab sections={diagnostics} />}
+                    vendor={detectedVendor}
+                    diagnosticsCaptured={diagnostics.length > 0}
+                  />
+                ))}
               {!(activeTab === "Optimize" && optimizeMerged) &&
                 !(activeTab === "Play" && v2Monitor) &&
                 activeTab !== "Learn" &&

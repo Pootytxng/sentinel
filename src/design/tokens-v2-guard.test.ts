@@ -87,8 +87,26 @@ describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {
               buf = "";
               continue;
             }
-            // every comma-separated selector in the header must carry the scope
-            for (const part of sel.split(",")) {
+            // every comma-separated selector in the header must carry the scope. Split on
+            // TOP-LEVEL commas only — a comma inside :is()/:where()/:not() is not a selector-list
+            // separator (hud-rooms.css scopes the fix-room instrument skin to also match the merged
+            // Lab proving-ground fast path via `:is(.v2-room[data-room="fix"], .v2-room[data-room="lab"]
+            // :where(.lg-fast))`; that whole rule is still under the leading :root[data-v2="on"]).
+            const parts: string[] = [];
+            let cur = "";
+            let paren = 0;
+            for (const c of sel) {
+              if (c === "(") paren++;
+              else if (c === ")") paren--;
+              if (c === "," && paren === 0) {
+                parts.push(cur);
+                cur = "";
+              } else {
+                cur += c;
+              }
+            }
+            parts.push(cur);
+            for (const part of parts) {
               if (!part.includes('[data-v2="on"]')) offenders.push(part.trim());
             }
           }

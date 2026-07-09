@@ -311,6 +311,38 @@ export function applyLabBento(on: boolean): void {
   }
 }
 
+// Lab proving ground (spec 2026-07-08-lab-proving-ground, ★ PRIMARY BLUEPRINT, phase 1) — the
+// Lab overhaul: the Optimize room MERGES into the Lab as one slim room. The "enable all the good
+// tweaks" fast path (no benchmark required) leads; the measure→test→prove instruments are the
+// adjacent utility, collapsed from three nav idioms (bento/guided/classic) into one linear spine.
+// DEFAULT OFF behind `compy_lab_ground` (Settings → Appearance preview toggle, the P-series
+// contract): flag off, the Lab + Optimize rooms render byte-identical to today (App swaps in the
+// merged LabGround room ONLY when the flag is on). Frontend only — the existing apply/batch path
+// is unchanged, zero new IPC, zero new mutation primitive.
+const LAB_GROUND_KEY = "compy_lab_ground";
+
+export function readLabGround(): boolean {
+  try {
+    return localStorage.getItem(LAB_GROUND_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyLabGround(on: boolean): void {
+  try {
+    localStorage.setItem(LAB_GROUND_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:lab-ground-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass) — the tour's
 // footer progress row as numbered step indicators with animated connectors + check marks,
 // replacing the anonymous ticks. DEFAULT OFF behind `compy_setup_stepper` (Settings →
