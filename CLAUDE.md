@@ -274,6 +274,7 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 - **Live gate / build / release state:** `docs/RELEASE_STATE.md` — the single authoritative matrix (every gate, the current installer, the blockers). All other docs defer to it on current state.
 - **What's next:** `docs/BACKLOG.md` — the living status ledger; pull the next non-gated `[ ]` item.
+- **Owner's open items (things only Kuya can do — surface these, never let them drop):** `docs/OWNER_ACTION_CHECKLIST.md` — the ONE consolidated index of everything waiting on the owner (his hands/eyes, his input, his money/legal calls). Born 2026-07-08 after he flagged that lists he'd made were scattered across six docs and got dropped. When he asks "show my checklist" or you finish a train, read this and tell him what's still on him. Every other task-list doc points back to it.
 - **Money / product direction:** `docs/RECEIPTS_DOCTRINE.md`.
 - **Dated state banners + full change history** (this file's former "CURRENT STATE" pile, 2026-06-01 → 2026-06-26): **`docs/CHANGELOG.md`**. Point-in-time records — verify against code before relying on any specific claim.
 
@@ -281,4 +282,5 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 
 1. Read `docs/RELEASE_STATE.md` (the gate matrix) for current state.
 2. Read `docs/BACKLOG.md` and take the next non-gated `[ ]` item. Per the false-done protocol, never declare "done" without enumerating remaining + gated items.
-3. Treat any file:line claim as point-in-time — verify against current code before asserting.
+3. Skim `docs/OWNER_ACTION_CHECKLIST.md` — the owner-facing open items. Don't silently pass over them; if one is now unblocked or the owner asks, surface it.
+4. Treat any file:line claim as point-in-time — verify against current code before asserting.

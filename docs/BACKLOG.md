@@ -159,6 +159,25 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-08b — ✅ SHIPPED `a5352cb` + ship-docs (Home priority-queue de-slop + Game Mode double-listing + task-list consolidation)
+**Code `a5352cb` · installer SHA-256 `A1D6EA55…BD7C4` · LIVE (stamp-verified 2026-07-08).** Owner caught THREE
+defects in one Home priority-queue screenshot: (1) filled UPPERCASE amber ALERT badges ("BIGGEST LIMITER" /
+"MEDIUM CONFIDENCE") = the loud AI-slop pattern the de-slop directive retired everywhere else → now quiet mono
+tags, no fill/uppercase/warn-color, #1 keeps a faint accent (`home-hud.css`; guard `home-hud-pill-quiet-guard.test.ts`).
+(2) Game Mode listed twice contradictorily — "you applied it and it drifted off" (`readiness.rs` drift row) AND
+"you haven't applied it" (`priorities.rs` pending-safe aggregate) → `readiness.rs` now exposes drifted rec titles
+structurally; `priorities.rs` excludes them from pending-safe (the drift row owns the setting). (3) "1 safe one-click
+tweak(s) not applied" = the exact `N setting(s)` grammar the flags-name-it law bans → real singular/plural. **Advisory
+surface — mutation/rollback boundary untouched** (`git diff bdc9daa..a5352cb -- actions.rs history.rs` EMPTY). Verify:
+cargo **684** + clippy clean · tsc 0 · vitest **1118** (150 files, +4 tests) · self-reviewer **PASS**. **Also this cycle:
+task-list consolidation** — owner flagged that lists he'd made were scattered and dropped. A read-only sweep found 6
+genuinely-dropped owner lists (OWNER_ACTION_CHECKLIST sign-off phrases never said · GAMING_MODE_QA 8/10 unrun ·
+BETA_SMOKE 0/24 · funnel go-live parked since 06-15 · Lab train awaiting his list · 2 substituted asks). Rewrote
+[`OWNER_ACTION_CHECKLIST.md`](OWNER_ACTION_CHECKLIST.md) as the ONE consolidated index (every scattered list points
+back to it) and **wired it into CLAUDE.md's resume path** (root cause: it was never linked, so no session surfaced it).
+⏳ OWNER: eyeball the quieted Home tags; the §A–§D checklist is now your single "what's on me" view. Sibling slop
+(FirstCheck/SetupTour `#1 BIGGEST LIMITER` uppercase) logged in §D — say "sweep the rest" to quiet them too.
+
 ### Cycle 2026-07-08a — ✅ SHIPPED `bdc9daa` + ship-docs (T6b + restore-confirmation train)
 **Code `bdc9daa` · installer SHA-256 `4BB38FC3…A7CD5` · LIVE (stamp-verified 2026-07-08). Train COMPLETE — parallel
 lanes: do NOT re-dispatch the re-verify or re-ship; the ~11:00 "legs STILL UNVERIFIED" note is superseded below.**
