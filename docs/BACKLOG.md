@@ -161,6 +161,34 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-09e — ✅ Instrument Bench Phase 1 Tasks 2–5 COMPLETE + SHIPPED `403be45` (DEFAULT OFF, owner eyeball pending)
+**✅ DONE 2026-07-09 · installer SHA-256 `2EF72796…B9231` · LIVE (stamp-verified: installed exe embeds `403be45`, prior
+`77d0233` absent, ship-reinstall stale-build gate passed, Desktop holds exactly one installer).** Built straight through
+Tasks 2–5 of `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`, flag `compy_lab_ground` **DEFAULT OFF** the
+whole time (owner's live look byte-identical). What landed:
+- **T2 `LabBench` bento grid (`02a1129`):** `LabGround` renders a new `LabBench` — a bento grid of living station bays —
+  in place of `<Lab v2 ground>`'s linear spine. HERO bay = station 1 "Optimize" (enable-all fast path inline, same
+  audited `apply_recommendations_batch`, ZERO new IPC); 5 measure bays (Diagnostics/Benchmark/Latency/Tuning/Black Box)
+  as compact doors, one detail at a time, no Gallery. `lab-bench.css` scoped under `[data-v2="on"]` (tokens-v2 guard).
+  Engineering note: `LabBench` now owns the measure-station on-mount reads (the same probes Lab did); Lab's `ground` mode
+  is now dead code (left inert for Phase 1, a reviewer can prune).
+- **T3 bolder reactivity (`3cb01eb`):** accent spotlight + tilt/magnetism (measure doors) + hover-lift + sibling-dim +
+  staggered mount reveal (`@keyframes v2-bench-rise`, per-bay delay), ALL reduced-motion-gated (static bench when reduced).
+- **T4 data-reactive hero gauge (`77d0233`):** new `useCountTo` GSAP hook drives a ring gauge bound to the measured
+  applied/total safe stack — honesty rail: `null` source ⇒ renders nothing (no placeholder number ever animates).
+- **T5 self-review + ship (`403be45`):** self-reviewer FAILed on 3 real defects → the 2 in-scope fixed CSS-only + 3
+  bug→guard source pins → re-review **PASS** (computed evidence): (i) hero 2×2 span shared grid rows with the measure
+  bays → inflated them to 804px → hero is now a full-width banner + compact 128px doors; (ii) `animation-fill-mode:both`
+  on the reveal permanently blocked the `:hover` lift/dim → `backwards`; (iii) vendor-purple `.particle-container:hover`
+  box-shadow leaked under reduced motion → base `box-shadow:none` on `.lab-bench-card` outranks it.
+- **Verify:** tsc 0 · full vitest **1151** (154 files, +18 across T2–T5) · cargo **688** + clippy clean · `git diff
+  f16d158..403be45 -- src-tauri/` EMPTY (mutation/rollback boundary untouched).
+- **⏳ OWNER (eyeball + ONE deferred decision):** flip **Settings → Appearance → "Lab proving ground (preview)"**, open
+  **Lab**, react to The Instrument Bench (bento of bays · living hero gauge · reactive motion). **Open decision (owner-gated
+  deferral, self-review re-surfaced):** with the preview on, the standalone **Optimize** rail tab still coexists with the
+  Lab hero (same enable-all surface in two places) — confirm whether to drop the tab when the flag's on before default-ON.
+  Tracked in `docs/OWNER_ACTION_CHECKLIST.md` + `docs/UI_VISION_BACKLOG.md` §C. Phases 2–4 of the plan remain open.
+
 ### Cycle 2026-07-09d — ✅ Lab redesign APPROVED ("Instrument Bench") + P1 Task 1 shipped-to-tree; Tasks 2–5 → fresh session
 Owner approved the researched direction (see the direction gate below in 09c). This cycle:
 - **Research + council + proposal + plan (all committed):** cited direction proposal

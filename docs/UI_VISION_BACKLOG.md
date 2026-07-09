@@ -121,6 +121,33 @@ cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — re
 enable-all + Power features, the measure stations follow, the Gallery closes the room. React + confirm the deferred
 Optimize-tab call before it flips default-ON.
 
+**🟢 REDIRECTED → "THE INSTRUMENT BENCH" Phase 1 SHIPPED behind flag (`f16d158`→`403be45`, installer `2EF72796…B9231`,
+DEFAULT OFF, 2026-07-09):** the owner eyeballed the blended-spine marathon and **rejected the UI direction** (the
+telemetry gallery "makes 0 sense"; the linear spine was the binned one; none of it read JARVIS). Researched + council +
+owner-approved a new direction — **The Instrument Bench** (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`,
+plan `…/plans/2026-07-09-lab-instrument-bench-p1.md`): a **bento grid of living station bays** replacing the linear spine.
+Phase 1 (Tasks 2–5) built + shipped behind the SAME `compy_lab_ground` flag:
+- **Task 1 — gallery DELETED (`2de8d17`):** the rejected drag telemetry gallery removed entirely (this UNBUILDS the §A.1
+  realization above — the panoramic-gallery ask is retired, not shipped; the JARVIS motion is redirected onto the real
+  bench + hologram per the approved proposal, not a sister-site scroll clone).
+- **Task 2 — `LabBench` bento grid (`02a1129`):** replaces `<Lab v2 ground>`'s linear spine. HERO bay = station 1
+  "Optimize" (enable-all fast path, inline, same audited `apply_recommendations_batch`, zero new IPC); 5 measure bays
+  (Diagnostics/Benchmark/Latency/Tuning/Black Box) as compact doors, one detail at a time. Vendor purple can never paint.
+- **Task 3 — bolder reactivity (`3cb01eb`):** accent spotlight + tilt/magnetism + hover-lift + staggered mount reveal
+  (this DELIVERS a first slice of the JARVIS motion the §A stack was missing — GSAP-driven, reduced-motion-gated).
+- **Task 4 — data-reactive hero gauge (`77d0233`):** a GSAP count-up ring (A.2 realized, honestly) bound to the measured
+  applied/total safe stack — `null` source ⇒ renders nothing (honesty rail: no fabricated number ever animates).
+- **Task 5 — self-review + ship (`403be45`):** self-reviewer caught 3 real defects (hero row-stretch, dead hover-lift,
+  vendor-purple hover leak) → fixed CSS-only + 3 bug→guard pins → re-review **PASS**. tsc 0 · vitest **1151** · cargo
+  **688** · `git diff f16d158..403be45 -- src-tauri` EMPTY. Stamp-verified `403be45` LIVE, one installer on the Desktop.
+
+**Still 🔴 OPEN after Phase 1:** phases 2–4 of the Instrument-Bench plan (data-reactivity across ALL bays · decode-text +
+magnetic cursor A.3 · hologram inertia A.4/OrbitControls + room-transition wipe A.6 · Lenis spine A.5). **Still the ONE
+open owner decision (unchanged):** the standalone **Optimize** rail tab still coexists with the Lab hero during preview —
+confirm dropping it when the flag is on before default-ON.
+⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — react to **The Instrument
+Bench** (the bento of bays, the living hero gauge, the reactive motion). This is the taste gate before default-ON + phases 2–4.
+
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,
 backlog candidate post-P6, owner call" — and then never mentioned again anywhere.
