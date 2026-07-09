@@ -12,6 +12,64 @@ flag-gated `compy_lab_ground` DEFAULT OFF (P-series pattern), owner eyeballs the
 
 ---
 
+## ★ PRIMARY BLUEPRINT — owner course-setter (2026-07-09)
+
+> **This is the blueprint the owner named as the one to "set course on for the big overhaul." It amends
+> and outranks the original design below where they differ. Verbatim intent:**
+>
+> *"I'm entirely willing to open the catalog if it's within measurable benefit for any user. Even if the
+> individual tweak is negligible, the accumulative measurement of negligible changes theoretically becomes
+> considerable. Also I've had thoughts looking into combining the Optimize tab merged into the Lab but
+> still allowing the user to have the option to just enable all the tweaks without benchmarking as a
+> requirement — but just the utility that can be used in tandem or parallel to the tweaks. This promotes
+> the organized and slim easy-to-navigate motto I've been trying to stick to and encourages users to
+> explore the utility simply because it's all in the same room with the stuff they really came for
+> (assuming most users will want to just enable all the tweaks and never look back)."*
+
+### Directive 1 — OPEN THE CATALOG (owner product decision, lifts the LOCKED-rule-6 freeze)
+
+The frozen-catalog vow is **lifted** by explicit owner decision. New law: **a tweak earns catalog
+inclusion by measurable benefit** — even individually-negligible; the **cumulative measured stack** is the
+point. The honest vehicle: **aggregate before/after A/B** (measure the whole enabled stack's real delta,
+not each tweak in isolation below the noise floor) — this is the loud-but-true Receipts story
+("measured X% faster on YOUR rig").
+
+**"Measurable benefit" is an ADD criterion ON TOP OF the permanent safety rails — never instead of them.**
+Every catalog tweak MUST still be:
+- **Reversible** — captured typed rollback contract + snapshot at apply time (LOCKED rule 3). No rollback → no catalog.
+- **No kernel driver / no injection / anti-cheat-safe** (LOCKED rules 1–2).
+- **Non-security-weakening** — the UAC/Defender/firewall/`Policies` security-gate stands (the security/system-settings rule).
+- **Stability-safe.**
+
+**The old hard blocklist splits in two:**
+- **Stays barred regardless of measured fps** (excluded for SAFETY/STABILITY/SECURITY/ANTI-CHEAT, not for
+  being unmeasured): timer/HPET hacks, bcdedit boot params, MMCSS abuse, **core-parking writes**, Defender
+  disable, MPO disable, fixed pagefile forcing, kernel-level anything, anything that trips EAC/BattlEye.
+  Measurement does not make these safe.
+- **Becomes a candidate** once it proves measurable benefit AND clears the rails: anything previously
+  excluded merely as unmeasured "optimizer-rot / snake-oil."
+
+**Per-tweak rigor is unchanged:** every new tweak rides the full **mutation-gate** — its own apply/rollback
+QA + welfare-check — before it ships. Opening the catalog is a POLICY change, not a license to add tweaks
+without the per-tweak proof + safety contract.
+
+### Directive 2 — MERGE OPTIMIZE INTO THE LAB (one slim room)
+
+The **Optimize room merges into the Lab.** The Lab becomes the single destination for both paths, so the
+"organized, slim, easy-to-navigate, one room" motto holds:
+- **Fast path (the default most users want):** **"enable all the good tweaks" in one action, NO benchmarking
+  required.** Apply the safe stack and never look back. Benchmarking is a **tool, not a toll** — never a gate
+  in front of applying tweaks.
+- **Utility path (parallel/in-tandem, optional):** the measure→test→prove loop + the telemetry gallery sit
+  right there in the same room — **discoverable precisely because it's beside the thing users came for.**
+  Power users prove the stack; casual users ignore it. Both live in one room.
+
+This **re-weights the spine below:** "apply tweaks (incl. enable-all)" is the PRIMARY surface; the
+measurement/proving loop is the powerful adjacent UTILITY, not the required entry. The gallery still crowns
+the loop.
+
+---
+
 ## 0. The one finding that reframes everything
 
 **The "make a real change, test it, prove it" loop already exists and is already inside the Lab.**
@@ -133,27 +191,38 @@ the front. That circular pathing (gallery → bench → gallery) is the Lab's co
   safety decision** (their gates are already `true`, same `actions.rs`/`history.rs` boundary). This
   widens "actual changes you can make and prove" meaningfully, within the locks.
 
-**NOT built without an explicit owner product decision (LOCKED rule 6 — frozen ~29 catalog, no new risky
-tweaks):** widening the tweak *set itself* — any new tweak beyond the frozen catalog. If living with the
-proving-ground makes the owner want *more* levers than the safe set offers, that is a deliberate
-catalog-expansion decision (welfare-check, per-tweak apply/rollback QA) — surfaced to him, never taken
-unilaterally. **The Lab as designed fully delivers his ask on the safe set; catalog expansion is an
-optional later escalation, not a prerequisite.**
+**Catalog EXPANSION — now GREEN (owner decision 2026-07-09, ★ Directive 1 above).** The freeze is lifted:
+new measurable-benefit tweaks may be ADDED, under the permanent safety rails (reversible · no-kernel ·
+anti-cheat-safe · non-security-weakening · stability-safe). This is the biggest change from the original
+scope — the Lab's proving loop is now also the **pipeline that qualifies new catalog tweaks** (a candidate
+tweak proves measurable benefit on the bench → clears the rails → rides the mutation-gate QA → joins the
+catalog). Each addition is still per-tweak-gated (rollback contract + QA + welfare-check); the POLICY is
+open, the per-tweak RIGOR is not relaxed. **Still barred regardless of measurement:** the safety/stability/
+security/anti-cheat blocklist (Directive 1). **Still structurally impossible:** GPU-profile apply
+(unreadable AMD prior → can't satisfy rollback-first).
 
 **Structurally impossible (don't attempt):** GPU-profile *apply* — AMD profile state isn't user-mode
 readable, so it can't satisfy rollback-first (LOCKED rule 3) regardless of rule 6 (`BACKLOG.md:824`).
 
 ## 6. Build phases (flag-gated `compy_lab_ground` DEFAULT OFF; each verifiable, P-series eyeball)
 
-1. **Spine refactor** — collapse bento/guided/classic into the one linear proving-ground layout behind
-   the flag; router promoted to front door; canonical order; progress-leading "next"; flag-off
-   byte-identity guard. *(Frontend only; zero src-tauri.)*
-2. **Benchmark-as-centerpiece** — elevate the measure→tweak→prove loop; wire the Two Futures measured
-   split as the "prove" visual with real `Efficacy` per-part emphasis. *(Frontend; reuses existing IPC.)*
+1. **Merge + fast path (★ the primary surface)** — merge the Optimize room into the Lab; **"enable all the
+   good tweaks" in one action, no benchmarking required** as the lead affordance; collapse the
+   bento/guided/classic nav idioms into one slim linear spine; intake router as front door; flag-off
+   byte-identity guard. *(Frontend re-org; the existing apply path is unchanged — no new mutation
+   primitive.)*
+2. **Prove utility (parallel, optional)** — the measure→tweak→prove loop beside the tweaks, incl.
+   **aggregate-stack A/B** (measure the whole enabled stack's real delta, the honest cumulative-benefit
+   story); wire the Two Futures measured split as the "prove" visual with real `Efficacy` per-part
+   emphasis. *(Frontend; reuses existing IPC; may add an aggregate-trial backend path → mutation-gate.)*
 3. **The gallery** — the panoramic drag-shell + `TourCamera` fly-to-piece, populated from scoreboard /
    sessions / ledger / black-box (all existing IPC); anti-fabrication empty-state; reduced-motion grid
    fallback; the completion-signal wiring. *(Frontend; new R3F shell over existing primitives.)*
-4. **Armed-feature test bays (optional, owner nod)** — surface gaming_mode/service_suspend/bloat as
+4. **Catalog-expansion pipeline (★ Directive 1)** — the mechanism to qualify + ADD new measurable-benefit
+   tweaks: candidate → proves benefit on the bench → clears the safety rails → rides per-tweak
+   mutation-gate QA → joins the catalog. Each addition touches `actions.rs`/`history.rs` → **mutation-gate
+   + welfare-check per tweak.** Also updates the frozen-catalog doctrine docs (see §7).
+5. **Armed-feature test bays (optional, owner nod)** — surface gaming_mode/service_suspend/bloat as
    provable changes in the Lab. *(Wiring of already-armed gates; no new mutation primitive.)*
 
 **Rails (non-negotiable, inherited):** honest measurement (every number measured or honestly absent, no
@@ -164,3 +233,21 @@ mutation boundary untouched (phases 1–3 are zero-src-tauri) · all-original, p
 **Verification per phase:** tsc 0 · full vitest (no regress) · flag-off byte-identity guard ·
 `self-reviewer` PASS at native 1500×980 · `git diff -- src-tauri` empty for phases 1–3 · ship via the
 `ship` skill (silent reinstall + stamp verify) at each eyeball checkpoint.
+
+## 7. Doctrine docs this overhaul must re-sync (the catalog freeze is lifted)
+
+Opening the catalog (★ Directive 1) contradicts the standing "frozen catalog" language in several places —
+drift is the project's #1 named risk, so these get updated as tracked step 0 of the build (with the exact
+safety-rail framing above; the security/system-settings + rollback-first + no-kernel/no-injection LOCKED
+rules are UNCHANGED — only the *freeze* on additions is lifted):
+- **`CLAUDE.md` LOCKED rule 6** ("Tweak catalog is frozen (~29 recs) — no new risky tweaks") → reworded to
+  the measurable-benefit-under-rails policy. An amendment pointer was added 2026-07-09; the full rule
+  rewrite rides the build so the LOCKED wording is changed deliberately, not in passing.
+- **`docs/PRODUCT_DIRECTION.md`** (frozen-catalog / "grows upward not sideways" framing) → the catalog now
+  also grows by *measured* additions; "sideways into more switches" is re-permitted **when measured + safe**.
+- **`docs/RECEIPTS_DOCTRINE.md`** → the aggregate-stack measured-gain is now a first-class marketing engine
+  (cumulative "measured X% faster on YOUR rig"); fits the doctrine, worth an explicit line.
+- **`docs/RELEASE_STATE.md`** — the mutation-safety posture note references the frozen allowlist; update
+  when the first new tweak actually lands (not before — the allowlist is still literally 16 until then).
+- **The blocklist** stays documented as-is but reframed: split into "safety/anti-cheat (permanent)" vs
+  "unmeasured-until-proven (candidate)."
