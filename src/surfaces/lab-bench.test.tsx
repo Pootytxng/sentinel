@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 // Guards for the Instrument Bench (spec 2026-07-09-lab-redesign-direction-proposal, Phase 1) —
 // LabBench replaces the Lab's linear ground spine with a bento grid of living station bays. The
@@ -182,5 +184,26 @@ describe("hero gauge (honesty rail, Task 4)", () => {
     const c = renderBench(MODERATE_ONLY);
     expect(c.querySelector(".lab-bench-hero")).not.toBeNull(); // hero renders (recs present)
     expect(c.querySelector(".lab-gauge")).toBeNull(); // but no measured source → no gauge
+  });
+});
+
+// bug→guard: the three defects the self-reviewer caught 2026-07-09 (computed evidence). These are
+// CSS-source pins — the regressions live in the stylesheet cascade (a :hover the DOM snapshot can't
+// see, a grid-track coupling, a vendor :hover rule), so they're guarded at the source.
+describe("lab-bench.css regression guards (self-review 2026-07-09)", () => {
+  const benchCss = readFileSync(join("src", "surfaces", "lab-bench.css"), "utf8");
+
+  it("hero is a full-width banner, not a 2×2 span that stretched the measure doors to 804px", () => {
+    expect(benchCss).toMatch(/\.lab-bench-hero\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+    expect(benchCss).not.toMatch(/\.lab-bench-hero\s*\{[^}]*grid-row:\s*span/);
+  });
+
+  it("the staggered reveal uses `backwards` fill (not `both`) so the hover-lift survives mount", () => {
+    expect(benchCss).toMatch(/v2-bench-rise[^;]*backwards/);
+    expect(benchCss).not.toMatch(/v2-bench-rise[^;]*\bboth\b/);
+  });
+
+  it("the card neutralizes box-shadow so the vendor purple :hover glow can never paint", () => {
+    expect(benchCss).toMatch(/\.lab-bench-card\s*\{[^}]*box-shadow:\s*none/);
   });
 });
