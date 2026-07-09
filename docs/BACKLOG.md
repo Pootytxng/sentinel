@@ -159,6 +159,22 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-08c — ✅ SHIPPED `f13d10a` + ship-docs (sibling spotlight-tag de-slop sweep — "sweep the rest")
+**Code `f13d10a` · installer SHA-256 `E65D649C…9C7EA` · LIVE (stamp-verified 2026-07-08).** The §D sibling
+slop the previous cycle logged: the same "#1 BIGGEST LIMITER" alert-badge pattern the owner caught + retired on
+Home still shouted on the first-run **FirstCheck** verdict card and the **Setup & Tour** first-check step. Quieted to
+match the approved Home `.hud-pill` fix — text → lowercase "#1 biggest limiter" (`FirstCheck.tsx`, both `SetupTour.tsx`
+variants); `SetupTour.css .st-spotlight-tag` de-ambered `--ix-amber` → muted `--ix-text-3` at 0.14em (its own
+`.st-tweaks-head` micro-label register); the `.st-spotlight` card keeps its subtle tint to carry attention (esp. the
+drift variant); FirstCheck's tag left card-coherent green (only the uppercase literal was the shout). **Advisory/onboarding
+surfaces — zero src-tauri** (`git diff a5352cb..f13d10a -- src-tauri/` EMPTY; mutation/rollback boundary untouched).
+bug→guard `spotlight-tag-quiet-guard.test.ts` (+4 tests) pins no uppercase "BIGGEST LIMITER", lowercase tag present, no
+uppercase text-transform, no `--ix-amber` on the tag. Verify: tsc 0 · vitest **1122** (151 files, +1 file) · self-reviewer
+**PASS 8/8** (FirstCheck tag green 10.2:1 · SetupTour tag muted `rgb(130,136,150)` 5.0:1 not amber · `textTransform:none`
+both · no overflow · both SetupTour variants render). RELEASE_STATE Snapshot row updated the same ship-docs commit;
+OWNER_ACTION_CHECKLIST §D closed. ⏳ OWNER: eyeball only if you re-trigger onboarding (first run / tour) — the live LOOK
+of the main app is otherwise unchanged.
+
 ### Cycle 2026-07-08b — ✅ SHIPPED `a5352cb` + ship-docs (Home priority-queue de-slop + Game Mode double-listing + task-list consolidation)
 **Code `a5352cb` · installer SHA-256 `A1D6EA55…BD7C4` · LIVE (stamp-verified 2026-07-08).** Owner caught THREE
 defects in one Home priority-queue screenshot: (1) filled UPPERCASE amber ALERT badges ("BIGGEST LIMITER" /

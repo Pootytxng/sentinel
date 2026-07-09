@@ -80,9 +80,11 @@ These gate **public** release only (not the local app you use daily). Full list:
 ## §D — Taste / visual sign-offs (as they come up)
 Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
 exact hexes, anything where your eye is the authority.
-- ⬜ **Sibling slop sweep (Claude-run, your eyeball after):** the same loud-badge treatment just
-  fixed on Home's priority queue still exists as `#1 BIGGEST LIMITER` uppercase tags in **FirstCheck**
-  and the **Setup Tour** spotlight. Say "sweep the rest" and Claude quiets them to match.
+- ✅ **Sibling slop sweep — DONE + SHIPPED `f13d10a` (2026-07-08).** The `#1 BIGGEST LIMITER` uppercase
+  tags in **FirstCheck** and the **Setup Tour** spotlight are now quiet lowercase "#1 biggest limiter"
+  mono tags matching Home's fix (SetupTour de-ambered too); self-reviewer PASS 8/8, guard-pinned, live.
+  Your eyeball is optional — you'll only see these on a first run / tour re-trigger; the main app's live
+  look is unchanged.
 
 ---
 
