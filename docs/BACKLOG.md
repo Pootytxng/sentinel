@@ -161,6 +161,31 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-09d — ✅ Lab redesign APPROVED ("Instrument Bench") + P1 Task 1 shipped-to-tree; Tasks 2–5 → fresh session
+Owner approved the researched direction (see the direction gate below in 09c). This cycle:
+- **Research + council + proposal + plan (all committed):** cited direction proposal
+  `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` (owner Q1–Q5 answered: **"Instrument
+  Bench" bento-of-living-bays APPROVED · BOLDER motion bound to real data · DELETE the gallery · cleanup now**)
+  + Phase-1 plan `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md` (5 tasks, flag `compy_lab_ground`
+  DEFAULT OFF, zero new deps — gsap/motion/three all already installed).
+- **Docs cleanup (`cec32c9`):** killed the stale-spec drift that misled the last train — SUPERSEDED banners
+  on `2026-07-08-lab-proving-ground.md` (§2/§3/§8 UI dead; catalog/§2a/mutation parts stand) + CLAUDE.md rule-6
+  pointer scoped + 4 stale Lab-status copies (OWNER_ACTION_CHECKLIST A3/B5, UI_VISION A.1, RELEASE_STATE
+  amendment) corrected + 6 stale gallery screenshots deleted.
+- **✅ P1 Task 1 — gallery DELETED (`2de8d17`, shipped-to-tree, NOT installed):** removed TelemetryGallery +
+  gallery-pieces + the "gallery" LabStationKey/facts/wiring across Lab.tsx / lab-guided-data / lab-bento-data;
+  KEPT `lab/fly-camera.tsx` (shared with HardwareTourScene — plan was wrong to list it for deletion); tests
+  updated. **tsc 0 · vitest 1133 (was 1145, −12 gallery tests) · `git diff -- src-tauri` EMPTY.** Flag still
+  DEFAULT OFF → owner's live app byte-identical; nothing installed this cycle.
+- **⛳ RESUME (fresh session) — build P1 Tasks 2–5 from the plan** (`2026-07-09-lab-instrument-bench-p1.md`):
+  (2) new `LabBench` bento grid replaces `<Lab v2 ground>` in `LabGround.tsx` (hero bay = Optimize station 1,
+  measure bays around it; model the bento on the existing `LabBento.tsx` + vendored `MagicBento`); (3) bolder
+  reactivity (accent spotlight + tilt/magnetism ON — they ship OFF today — + staggered reveal, reduced-motion
+  static); (4) one GSAP data-reactive hero gauge bound to a measured number (`null` ⇒ render nothing); (5)
+  self-reviewer PASS + `ship` skill + owner eyeball. Keep flag DEFAULT OFF; `git diff -- src-tauri` must stay
+  EMPTY. Note: after Task 2, Lab.tsx's `ground` mode becomes dead code (only LabGround used it) — remove or
+  leave inert, reviewer's call.
+
 ### Cycle 2026-07-09c — ⛔ Owner REJECTED the blended-Lab marathon — REDESIGN via research+council, approval-gate FIRST
 **Owner eyeballed `f16d158` and rejected the direction (not a live regression — flag was DEFAULT OFF).** Verbatim
 concerns: the **telemetry gallery "makes 0 sense / looks terrible"** — he had **explicitly said NOT to clone the
