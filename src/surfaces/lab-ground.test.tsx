@@ -193,4 +193,18 @@ describe("LabGround BLENDED room — station 1 'Optimize' is a native member of 
     expect(c.querySelector(".lab-welcome")).toBeNull();
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
+
+  it("the Gallery (COLLECT) always closes the ground spine — even with no recs (the completion signal)", () => {
+    // Gallery is the terminal station: present with tweaks AND on the bare measure spine, since the
+    // trophy room is the room's completion signal (an empty gallery still invites the first piece).
+    const withTweaks = Array.from(renderMerged([SAFE_REC]).querySelectorAll(".lab-card-name")).map(
+      (n) => n.textContent,
+    );
+    expect(withTweaks[0]).toBe("Optimize"); // fast path leads
+    expect(withTweaks[withTweaks.length - 1]).toBe("Gallery"); // COLLECT closes
+    cleanup();
+    const bare = Array.from(renderMerged().querySelectorAll(".lab-card-name")).map((n) => n.textContent);
+    expect(bare).not.toContain("Optimize");
+    expect(bare[bare.length - 1]).toBe("Gallery");
+  });
 });

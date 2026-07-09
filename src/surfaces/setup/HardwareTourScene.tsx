@@ -7,6 +7,7 @@ import { buildRigParts, type RigPart, type RigPartKind } from "../rig/rig-parts"
 import { RigPartGeometry } from "../rig/RigPartGeometry";
 import { RigCase } from "../rig/RigCase";
 import { useRigColors, partColor, type RigColors } from "../rig/use-rig-colors";
+import { FlyCamera } from "../lab/fly-camera";
 
 // Onboarding tour scene — a CLEAN, single-component showcase (not the scattered exploded rig). Leg 1
 // shows the machine assembled inside its case (calm turntable); Leg 2 isolates ONE real component at
@@ -128,17 +129,16 @@ const SHOWCASE_LOOK = new THREE.Vector3(0, 0, 0);
 const OVERVIEW_CAM = new THREE.Vector3(0, 0.7, 9.4);
 const OVERVIEW_LOOK = new THREE.Vector3(0, 0.1, 0);
 
+// The tour camera is now just the shared FlyCamera pointed at one of two presets (overview ⇄ the
+// isolated showcase). Same lerp math as before — FlyCamera was lifted straight out of here.
 function TourCamera({ showcase, reduced }: { showcase: boolean; reduced: boolean }) {
-  const look = useRef(new THREE.Vector3().copy(OVERVIEW_LOOK));
-  useFrame((state, delta) => {
-    const camTarget = showcase ? SHOWCASE_CAM : OVERVIEW_CAM;
-    const lookTarget = showcase ? SHOWCASE_LOOK : OVERVIEW_LOOK;
-    const k = reduced ? 1 : Math.min(1, delta * 2.2);
-    state.camera.position.lerp(camTarget, k);
-    look.current.lerp(lookTarget, k);
-    state.camera.lookAt(look.current);
-  });
-  return null;
+  return (
+    <FlyCamera
+      target={showcase ? SHOWCASE_CAM : OVERVIEW_CAM}
+      look={showcase ? SHOWCASE_LOOK : OVERVIEW_LOOK}
+      reduced={reduced}
+    />
+  );
 }
 
 export function HardwareTourScene({

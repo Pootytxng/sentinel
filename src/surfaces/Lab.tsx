@@ -29,6 +29,8 @@ import { useReducedMotion } from "../design/use-motion";
 import { LabBento } from "./LabBento";
 import { TuningInstrument } from "./TuningInstrument";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
+import { TelemetryGallery } from "./lab/TelemetryGallery";
+import { galleryHasHistory } from "./lab/gallery-pieces";
 import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { type GpuVendor } from "./walkthroughs";
@@ -224,7 +226,12 @@ export default function Lab({
   // measure order gains a member; non-ground faces use the untouched 5-station `stationKeys`, so
   // classic/guided/bento are byte-identical by construction.
   const showOptimize = ground && !!fast?.recs && fast.recs.length > 0;
-  const spineKeys: LabStationKey[] = showOptimize ? ["optimize", ...stationKeys] : stationKeys;
+  // Ground spine: optimize (when there are tweaks) leads, the measure stations follow, and the
+  // gallery (COLLECT — the trophy room + completion signal) always closes the room. Non-ground
+  // faces use the untouched 5-station measure order, so classic/guided/bento are byte-identical.
+  const spineKeys: LabStationKey[] = ground
+    ? [...(showOptimize ? (["optimize"] as LabStationKey[]) : []), ...stationKeys, "gallery"]
+    : stationKeys;
   // The intake router, ground-only lead prepended so "just make it fast" is the first choice.
   const routerRows = showOptimize ? [LAB_ROUTER_LEAD_OPTIMIZE, ...LAB_ROUTER] : LAB_ROUTER;
   // Station 1's live reading (§8.1) — the SAME measured count the room verdict shows (safeFixesReady
@@ -239,6 +246,10 @@ export default function Lab({
         )
       : 0;
   const stackApplied = showOptimize && safeReady === 0;
+  // Gallery station reading signal (§3) — the cheap "do you have any measured history?" fork, off
+  // the data Lab already holds (active receipts from fast.changes + sessions with frames). Zero new
+  // IPC; the full piece set (awards + incidents) is assembled lazily inside the station on open.
+  const galleryHistory = galleryHasHistory(fast?.changes ?? null, fast?.sessions ?? null);
 
   // The identical instrument bodies the classic path renders — one source for both layouts. Station
   // 1 "Optimize" renders the fast-path apply surface (ground mode only; `fast` is present there).
@@ -267,6 +278,17 @@ export default function Lab({
         ) : null;
       case "blackbox":
         return <BlackBox onReport={setBbReport} />;
+      case "gallery":
+        // COLLECT (§3) — the trophy room. Its own lazy reads (scoreboard + crash) fire on open;
+        // sessions + applied receipts thread from the fast bundle Lab already holds. onJump loops
+        // an empty gallery back to the bench (the front door of the prove-it loop).
+        return (
+          <TelemetryGallery
+            sessions={fast?.sessions ?? sessions}
+            changes={fast?.changes ?? null}
+            onJump={jumpToStation}
+          />
+        );
     }
   };
 
@@ -312,9 +334,10 @@ export default function Lab({
               tuningHeadline: measurement?.headline ?? null,
               crash: bbReport,
               diagnosticsCaptured,
-              // Bento is non-ground → no optimize card; the fields are inert here.
+              // Bento is non-ground → no optimize/gallery card; the fields are inert here.
               safeReady: 0,
               stackApplied: false,
+              galleryHasHistory: false,
             }}
             onOpen={openBentoStation}
             openStation={openStation}
@@ -453,6 +476,7 @@ export default function Lab({
                     diagnosticsCaptured,
                     safeReady,
                     stackApplied,
+                    galleryHasHistory: galleryHistory,
                   }),
                   connectsLine: LAB_STATIONS[k].connectsLine,
                 }}
@@ -571,6 +595,7 @@ const STATION_ICON: Record<LabStationKey, string> = {
   latency: "pulse",
   tuning: "tune",
   blackbox: "blackbox",
+  gallery: "gallery",
 };
 
 const ICONS: Record<string, ReactNode> = {
@@ -606,6 +631,15 @@ const ICONS: Record<string, ReactNode> = {
     <>
       <rect x="3" y="6" width="18" height="12" rx="2" />
       <path d="M6 12h2l1.5-3 2 6 1.5-3H18" />
+    </>
+  ),
+  // Gallery — a grid of framed pieces: the trophy room of proven results.
+  gallery: (
+    <>
+      <rect x="3" y="3" width="8" height="8" rx="1" />
+      <rect x="13" y="3" width="8" height="8" rx="1" />
+      <rect x="3" y="13" width="8" height="8" rx="1" />
+      <rect x="13" y="13" width="8" height="8" rx="1" />
     </>
   ),
 };
