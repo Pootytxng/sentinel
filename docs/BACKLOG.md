@@ -159,6 +159,25 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-09c — ⛔ Owner REJECTED the blended-Lab marathon — REDESIGN via research+council, approval-gate FIRST
+**Owner eyeballed `f16d158` and rejected the direction (not a live regression — flag was DEFAULT OFF).** Verbatim
+concerns: the **telemetry gallery "makes 0 sense / looks terrible"** — he had **explicitly said NOT to clone the
+scroll/drag gallery from his sister's site**, only to *reference the type/level* of its animation + design language;
+I **removed the bento layout he liked and reverted to the linear "spine" we'd already binned**; and **none of it reads
+JARVIS / Tony-Stark / high-tech** — the animated reactive feel he's described repeatedly is absent.
+- **Root cause:** I executed `2026-07-08-lab-proving-ground.md`'s UI direction ("retire bento → one linear spine →
+  build the drag gallery") faithfully — but that spec **contradicted his verbal direction.** Doc drift steered the work.
+- **The corrected process (owner's ask): NO more building yet.** Research + **council** (`docs/COUNCIL_PROTOCOL.md`) →
+  draw up a direction he's confident fits, **with cited references/examples to show him** → **detailed plain-English
+  questions for his go/no-go BEFORE any code.** Full brief + his requirements: **`docs/superpowers/specs/2026-07-09-lab-redesign-COURSE-CORRECTION.md`** (SUPERSEDES the 2026-07-08 spec's UI direction; the catalog/§2a/safety parts stand).
+- **PARALLEL ask:** full `docs/` + sentinel-directory **maintenance** — organize/refine/optimize the .md files, kill
+  contradictions/stale/superseded direction (the thing that misled me). Slice 0 = the course-correction brief above.
+- **Shipped `f16d158` stays inert** (flag OFF, app byte-identical) — do NOT reflexively revert; the redesign decides
+  what to keep (§2a DARK backend + mutation-safety = fine; §3 gallery + bento→spine collapse = replace).
+- **⛳ RESUME (fresh session):** invoke **brainstorming** + council; research the JARVIS/high-tech animated language +
+  confirm the bento basis + clarify the **"exebenus"** reference he named (unknown — ask, don't guess); produce a
+  referenced proposal + a short question set for his approval. No code until he passes it.
+
 ### Cycle 2026-07-09b — ✅ Lab BLENDED-ROOM marathon COMPLETE + SHIPPED `f16d158` (DEFAULT OFF, owner eyeball pending)
 
 **✅ DONE 2026-07-09 · installer SHA-256 `0B4D15A0…6BD9` · LIVE (stamp-verified: installed exe embeds `f16d158`,
