@@ -9,6 +9,71 @@
   gap: 14px;
 }
 
+/* ── Data-reactive hero gauge (Task 4): your safe stack, applied vs total ──
+   A ring swept by GSAP-tweened stroke-dashoffset (the value comes from useCountTo, bound to a real
+   measured count). Accent stroke, monospace value — the HUD instrument voice. Renders only when a
+   measured source exists (the component gates it), so there is never a fabricated number here. */
+.lab-gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lab-gauge {
+  position: relative;
+  flex-shrink: 0;
+  width: 76px;
+  height: 76px;
+}
+.lab-gauge-ring {
+  transform: rotate(-90deg); /* start the sweep at 12 o'clock */
+}
+.lab-gauge-track {
+  fill: none;
+  stroke: var(--ix-glass-border, rgba(255, 255, 255, 0.1));
+  stroke-width: 6;
+}
+.lab-gauge-fill {
+  fill: none;
+  stroke: var(--ix-accent, #7c5cff);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.lab-gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+}
+.lab-gauge-num {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ix-text-1, var(--v2-text, #fff));
+  line-height: 1;
+}
+.lab-gauge-den {
+  font-size: 12px;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+.lab-gauge-caption {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
+}
+.lab-gauge-caption-k {
+  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
+}
+
 /* The optional system-hygiene scan, demoted a step below the enable-all hero. A hairline rule +
    a quiet mono summary reads as "the bonus", never a competing action. */
 .lab-optimize-more {

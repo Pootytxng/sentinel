@@ -161,3 +161,26 @@ describe("LabBench — bento grid of station bays", () => {
     expect(doors.every((d) => d.getAttribute("data-reactive") === "on")).toBe(true);
   });
 });
+
+// Task 4 — the honesty rail: the hero gauge animates a REAL measured number (safe stack applied vs
+// total) and renders ONLY when that source exists. No fabricated/placeholder value ever paints.
+const MODERATE_ONLY = [
+  { ...(SAFE_RECS[0] as Record<string, unknown>), id: "moderate-only", severity: "moderate" },
+] as never[];
+
+describe("hero gauge (honesty rail, Task 4)", () => {
+  it("renders the gauge when a measured safe stack exists — applied vs total", () => {
+    const c = renderBench(); // 2 safe, none applied → 0 / 2
+    const gauge = c.querySelector(".lab-gauge");
+    expect(gauge).not.toBeNull();
+    expect(gauge!.getAttribute("aria-label")).toBe("0 of 2 safe tweaks applied");
+    expect(c.querySelector(".lab-gauge-num")!.textContent).toBe("0");
+    expect(c.querySelector(".lab-gauge-den")!.textContent).toBe("/2");
+  });
+
+  it("NO gauge when there's no safe stack (hero still present) — never a placeholder", () => {
+    const c = renderBench(MODERATE_ONLY);
+    expect(c.querySelector(".lab-bench-hero")).not.toBeNull(); // hero renders (recs present)
+    expect(c.querySelector(".lab-gauge")).toBeNull(); // but no measured source → no gauge
+  });
+});

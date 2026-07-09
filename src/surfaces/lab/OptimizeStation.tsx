@@ -3,6 +3,8 @@ import Fix from "../Fix";
 import Check from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
+import { useReducedMotion } from "../../design/use-motion";
+import { useCountTo } from "./use-count-to";
 import type {
   Recommendation,
   StartupEntry,
@@ -51,6 +53,10 @@ export type LabFastPathProps = {
   gamingEnabled?: boolean;
 };
 
+// The hero gauge ring geometry (a static SVG circle swept by stroke-dashoffset).
+const GAUGE_R = 32;
+const GAUGE_C = 2 * Math.PI * GAUGE_R;
+
 export function OptimizeStation(props: LabFastPathProps) {
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
   // "turned off outside Compy" group, never double-counted as ready (one-mention law).
@@ -58,9 +64,63 @@ export function OptimizeStation(props: LabFastPathProps) {
   // §5 Power-features bay: lazy-mount Gaming Mode only when the user opens the disclosure, so the
   // Lab tab never spins up its session-state poll while the bay sits collapsed (the perf rails).
   const [powerOpen, setPowerOpen] = useState(false);
+  const reduced = useReducedMotion();
+
+  // Data-reactive hero gauge (Task 4) — bound to a REAL measured number: how much of THIS rig's
+  // safe, one-click stack is already applied. The stack = safe-tier, eligible, appliable recs; the
+  // gauge fills to applied / total. HONESTY RAIL: the gauge renders ONLY when that measured source
+  // exists — recs still loading (null) or no safe stack for this rig → target null → nothing
+  // animates (no placeholder zero). Every animated value traces to the catalog eval, not a guess.
+  const safeStack = useMemo(
+    () =>
+      (props.recs ?? []).filter(
+        (r) => r.severity === "safe" && r.eligible !== false && props.isAppliable(r.id),
+      ),
+    [props.recs, props.isAppliable],
+  );
+  const totalSafe = safeStack.length;
+  const appliedSafe = safeStack.filter((r) => r.currently_applied).length;
+  const gaugeTarget = props.recs == null || totalSafe === 0 ? null : appliedSafe;
+  const gaugeValue = useCountTo(gaugeTarget, { reduced });
+  const gaugeRatio = totalSafe > 0 && gaugeValue != null ? Math.min(1, Math.max(0, gaugeValue / totalSafe)) : 0;
 
   return (
     <div className="lab-optimize">
+      {/* The one measured gauge (honesty-bound): your safe stack, applied vs total. Absent while
+          the catalog loads or when this rig has no safe stack — never a fabricated number. */}
+      {gaugeValue != null && (
+        <div className="lab-gauge-row">
+          <div
+            className="lab-gauge"
+            role="img"
+            aria-label={`${appliedSafe} of ${totalSafe} safe tweaks applied`}
+          >
+            <svg className="lab-gauge-ring" viewBox="0 0 76 76" width="76" height="76" aria-hidden="true">
+              <circle className="lab-gauge-track" cx="38" cy="38" r={GAUGE_R} />
+              <circle
+                className="lab-gauge-fill"
+                cx="38"
+                cy="38"
+                r={GAUGE_R}
+                style={{
+                  strokeDasharray: GAUGE_C,
+                  strokeDashoffset: GAUGE_C * (1 - gaugeRatio),
+                }}
+              />
+            </svg>
+            <span className="lab-gauge-center" aria-hidden="true">
+              <span className="lab-gauge-num">{Math.round(gaugeValue)}</span>
+              <span className="lab-gauge-den">/{totalSafe}</span>
+            </span>
+          </div>
+          <p className="lab-gauge-caption">
+            <span className="lab-gauge-caption-k">Your safe stack</span>
+            {appliedSafe >= totalSafe
+              ? "Fully applied — your rig is set."
+              : `${totalSafe - appliedSafe} left to enable below — one tap each, reversible.`}
+          </p>
+        </div>
+      )}
       {/* The hero: the vetted safe stack + the one-action "Apply reviewed" enable-all. This IS the
           audited Fix fixes surface — same components, same apply/rollback path — re-homed into the
           station. Under the room's HUD skin (default on) it already wears the instrument language,
