@@ -249,7 +249,10 @@ export default function Lab({
       case "diagnostics":
         return diagnostics;
       case "benchmark":
-        return <BenchmarkTab />;
+        // In the proving ground, Benchmark is the "prove it" station — the Two Futures measured
+        // split (per-part efficacy emphasis) is its payoff, so surface it regardless of the
+        // standalone compy_two_futures flag (§2). Non-ground keeps the flag-gated behavior.
+        return <BenchmarkTab provingGround={ground} />;
       case "latency":
         return <LatencyTab />;
       case "tuning":

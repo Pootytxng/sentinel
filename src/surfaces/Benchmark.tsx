@@ -35,7 +35,7 @@ const POLL_MS = 700;
 // Measured-efficacy loop: run a benchmark → change something → re-measure → an honest
 // "did it actually help?" verdict. Absolute scores are rough (placeholder references); the
 // real signal is the comparison vs your saved baseline, which is reference-independent.
-export function BenchmarkTab() {
+export function BenchmarkTab({ provingGround = false }: { provingGround?: boolean } = {}) {
   const [state, setState] = useState<BenchmarkState | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
   const [trial, setTrial] = useState<TrialState | null>(null);
@@ -346,8 +346,11 @@ export function BenchmarkTab() {
 
       {/* Two Futures measured split — where the efficacy readout lives (spec placement).
           Flag DEFAULT OFF; with it on, the component itself enforces the one law (no measured
-          pair → honest empty state, no 3D). */}
-      {twoFutures && <TwoFutures bench={state} hw={hw} changes={changesSince} />}
+          pair → honest empty state, no 3D). In the merged proving ground (spec 2026-07-08 §2)
+          the split IS the loop's "prove it" payoff — the changed rig part emphasized by its real
+          per-component efficacy (partGlow) — so it renders regardless of the standalone flag. The
+          one law still holds: no measured pair → the honest empty state, no fabricated trophy. */}
+      {(twoFutures || provingGround) && <TwoFutures bench={state} hw={hw} changes={changesSince} />}
 
       {state?.latest && (
         <RunCard
