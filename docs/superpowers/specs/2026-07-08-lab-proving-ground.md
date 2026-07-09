@@ -251,3 +251,131 @@ rules are UNCHANGED — only the *freeze* on additions is lifted):
   when the first new tweak actually lands (not before — the allowlist is still literally 16 until then).
 - **The blocklist** stays documented as-is but reframed: split into "safety/anti-cheat (permanent)" vs
   "unmeasured-until-proven (candidate)."
+
+---
+
+## 8. ★ PHASE-1 REDO — the blended spine (concrete build design, 2026-07-09)
+
+> **Why this section exists.** The first phase-1 build (`d0e30f5`) was a **verbatim merge** — `LabGround.tsx`
+> literally stacked `<Check embedded>` + `<Fix view="fixes">` in a `.lg-fast` box ABOVE a demoted
+> `<Lab v2 ground>` in a `.lg-utility` box, joined by a paragraph. **The owner rejected it (2026-07-09):**
+> *"do not just copy paste over the merge … recreate a blended and brand new LAB with the migration of the
+> optimize tab features incorporated into the lab."* Two surfaces bolted together is not the blend. This
+> section is the concrete architecture that makes it ONE cohesive room. **The owner does not want a preview
+> ping until the WHOLE marathon (this + §2/§3/§5) is complete** — build straight through, flag stays
+> `compy_lab_ground` DEFAULT OFF the entire time (his live look never changes), self-review + ship + eyeball
+> only at the very end. Memory: [[lab-no-copypaste-full-marathon]].
+
+### 8.1 The core move — ONE numbered spine, the fast path is station #1
+
+Collapse "fast path above / utility below" into a **single numbered progression** where the tweak-apply IS
+the first station, in the Lab's own instrument language. The re-weighted spine (Directive 2 — the stuff
+users came for leads; proving is the adjacent utility):
+
+```
+  1 OPTIMIZE          2 DIAGNOSTICS   3 BENCHMARK      4 LATENCY    5 TUNING     6 BLACK BOX
+  "make my PC     →   know your   →   prove a       →  cut input →  cool+quiet → explain a
+   faster, safely"    rig             change moved      lag         (AMD)        crash
+  enable the safe     (existing measure→prove instruments, unchanged bodies, renumbered)
+  stack in one tap
+  (no benchmark)      ← this whole tail is the OPTIONAL "prove it yourself" utility →
+```
+
+- **Station 1 "Optimize" is a NEW `LabStationKey`** added to `lab-guided-data.ts` — same four-line station
+  contract (`for` / `when` / live `reading` / `connects`) as every other station, so it reads as a native
+  member of the spine, not an embedded foreign room:
+  - `forLine`: "Enable the safe, vetted tweaks for your rig — in one tap."
+  - `whenLine`: "You just want it faster and safe, without fiddling."
+  - `connectsLine`: "Prove the stack you just applied → Benchmark (station 3)." *(threads INTO the utility —
+    this is the cohesion: the fast path points at the proving loop.)*
+  - live `reading` (new `stationReading` branch, one-source from the same `recs`/`changes`/`activeCount`
+    the verdict uses): unapplied safe tweaks → "N safe tweak(s) ready to enable."; all applied →
+    "Safe stack applied — your rig is set. Prove it below, or you're done."; honest singular/plural, no `(s)`.
+- **The intake router (`LAB_ROUTER`) gains a LEAD row** routing to `optimize`:
+  `symptom` "I just want my PC faster — safely, no fiddling" · `station: "optimize"` · `because` "it enables
+  the safe, vetted tweaks for your rig in one tap — undo any time." This makes "just make it fast" the first,
+  most prominent intake choice (the assumed-majority path), and every other row still routes into the
+  measure spine. The router already filters to stations the rig has, so `optimize` shows whenever recs exist.
+- **Numbering is computed** over `stationKeys` (already gate-filtered) exactly as today — station 1 falls out
+  of the order array, never hardcoded.
+
+### 8.2 Station-1 body — reuse the audited apply logic, NOT the Optimize look
+
+The body of station 1 renders the tweak-apply UI, but presented as a Lab station (this is the "native, not
+pasted" requirement):
+- **Logic reused (must NOT be forked — it is the audited rollback-first mutation path):** the same
+  `onApplyBatch` → `apply_recommendations_batch` (ONE UAC), per-row `onToggleRec`/`onRollback` undo, the
+  pre-ticked safe batch. Threaded down from `App.tsx` (LabGround already receives every one of these props).
+- **Presentation unified to the Lab:** the station body is a purpose-built **`OptimizeStation` component**
+  (new, `src/surfaces/lab/OptimizeStation.tsx`) that renders the enable-all hero action + the safe-tweak
+  review list in the **Lab station's visual language** (station-card rows, hairline log register, mono tags —
+  the `hud-rooms.css` instrument skin), NOT the `.ov2-*`/`.slim` Optimize chrome. It composes the existing
+  **row/apply primitives** where they are already Lab-neutral (the slim reviewed-list row from `Fix.tsx`
+  is a candidate to extract into a shared `TweakRow`; if extraction is too broad for this pass, wrap
+  `<Fix view="fixes">` but re-skin its container under `[data-room="lab"]` so it inherits the station look —
+  the CSS-only cohesion approach, already used for the fix-room skin, extended so there is NO visual seam).
+  **The bar to clear: a screenshot of station 1 must read as the same room as stations 2–6 — same card
+  radii, same type register, same accent behavior — with zero "this is the old Optimize panel" tell.**
+- Check's broader system-hygiene categories (startup / bloat / preload / leftovers / nic) are **secondary**
+  to the enable-all — fold them under a "More cleanup (optional)" disclosure inside station 1, so the hero
+  stays the one-tap safe stack (Directive 2: most users enable-all and never look back).
+
+### 8.3 Wiring + files
+
+- `lab-guided-data.ts` — add `"optimize"` to `LabStationKey` + lead of `LAB_STATION_ORDER` (ground mode
+  only — see below), `LAB_STATIONS.optimize` contract, `LAB_ROUTER` lead row, `stationReading` branch
+  (new `LabStationFacts` fields: `safeReady: number`, `stackApplied: boolean` — pure, derived by the caller
+  from `recs`/`isAppliable`/`activeCount`/`reverted`, zero new IPC).
+- **The 5-station measure spine must stay byte-identical when NOT in ground mode.** `optimize` is a
+  ground-only station: `LAB_STATION_ORDER` stays the 5-station measure order; ground mode prepends
+  `"optimize"` via a `groundStationKeys` derivation (`ground ? ["optimize", ...stationKeys] : stationKeys`)
+  so classic/guided/bento (all non-ground) are provably untouched — flag-off byte-identity holds by
+  construction and the existing `lab-guided`/`lab-bento` guards keep passing.
+- `Lab.tsx` — accept the fast-path props (`recs`, `startup`, `changes`, `busyId`, `isAppliable`,
+  `activeChangeFor`, `onToggleRec`, `onToggleStartup`, `onRollback`, `onApplyBatch`, `onOpenLibrary`,
+  `sessions`, `gpus`, `readiness`, `activeCount`) as **optional** props used ONLY in `ground` mode to render
+  station 1's `<OptimizeStation>` body via `stationBody("optimize")`; `STATION_ICON.optimize` (a "bolt"/
+  "spark" glyph). Non-ground paths never read them → untouched.
+- `LabGround.tsx` — becomes thin: it no longer stacks Check/Fix/Lab; it renders `RoomShell(room="lab")` with
+  the unified verdict + `<Lab v2 ground {...fastPathProps} diagnostics=… />`. The `.lg-fast`/`.lg-utility`
+  seam sections and `LabGround.css` are DELETED (the seam is the defect). The verdict stays fixes-first
+  (`optimizeVerdict`) — correct under Directive 2.
+- CSS — retire `LabGround.css`; the station-1 skin lives in `lab-v2.css`/`hud-rooms.css` (existing guarded
+  files) or a new `lab-optimize-station.css` **added to `tokens-v2-guard.test.ts`'s `V2_CSS` array** (§8 of
+  the inventory — any new V2 stylesheet must be in the guard or scoping goes unchecked).
+
+### 8.4 Guards + verification (this phase)
+
+- Flag-off byte-identity: `compy_lab_ground` OFF → App mounts `LabV2`, the 5-station measure spine and the
+  Optimize room are provably unchanged (extend `lab-ground.test.tsx`).
+- Ground-mode spine: station order is `["optimize", ...gatedMeasureStations]`; router lead row present +
+  routes to `optimize`; `stationReading("optimize", …)` singular/plural + honest "applied" state; the
+  apply batch still calls `apply_recommendations_batch` (one UAC) unchanged.
+- `stationBody("optimize")` renders `OptimizeStation` and NONE of the other nav idioms leak the station.
+- tsc 0 · full vitest no-regress · `tokens-v2-guard` green (new CSS registered) · **`git diff -- src-tauri`
+  EMPTY** (phase 1 is pure frontend re-org; the apply path is untouched) · `self-reviewer` PASS at native
+  1500×980 with the explicit **"station 1 reads as the same room as 2–6, no Optimize-panel tell"** check.
+- **No ship / no owner ping at this phase** — the marathon continues into §2 (prove-utility + aggregate A/B +
+  Two Futures per-part), §3 (gallery), §5 (armed bays). Ship + stamp + doc rows + eyeball happen ONCE at the
+  end, when the whole blended environment is cohesive.
+
+### 8.5 Build order for the marathon (no preview pings between)
+
+1. **§8 blended spine** (this section) — the cohesive room + native station 1.
+2. **§2 prove-utility** — aggregate-stack A/B (the honest cumulative-benefit story) + wire the Two Futures
+   measured split as the "prove" visual (`RigPart glow` ← `partGlow(efficacy, partId)`, per-part emphasis).
+3. **§3 telemetry gallery** — panoramic drag-shell over the existing rig primitives + the `TourCamera`
+   fly-to-piece (lift `HardwareTourScene`'s `TourCamera` into a shared helper); populate from scoreboard /
+   sessions / ledger / black-box (all existing IPC, `src/types.ts`); anti-fabrication empty state
+   ("prove a tweak to earn your first piece" → loops to station 1); reduced-motion static grid; the
+   completion-signal wiring (a proven Keep lights the gallery — the terminal room's missing payoff).
+4. **§5 armed-feature bays** — surface `gaming_mode`/`service_suspend`/`bloat` as provable changes (wiring
+   of already-armed gates; no new mutation primitive).
+5. **Finalize** — full self-review, all guards green, `git diff -- src-tauri` empty (phases 1–3) / mutation-
+   gate for anything in 5 that touches the boundary, ship via the `ship` skill (reinstall + stamp), doc rows
+   (RELEASE_STATE / BACKLOG / UI_VISION), THEN the single owner eyeball of the finished Lab.
+
+**Phase 4 (catalog EXPANSION — real new tweaks) is a SEPARATE gated track, not part of this UI marathon:**
+every new tweak crosses the mutation boundary and needs its own welfare-check + apply/rollback QA + mutation-
+gate (Directive 1 + LOCKED rule 6). The proving-ground UI built here is the *pipeline* that qualifies
+candidates; adding actual tweaks still comes to the owner per-tweak.

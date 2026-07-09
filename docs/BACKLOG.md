@@ -159,6 +159,39 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-09b — ⏳ Lab BLENDED-ROOM marathon (owner REJECTED the verbatim phase-1 merge) — RESUME HERE
+**Owner 2026-07-09, verbatim:** *"im not satisfied with this whatsoever do not just copy paste over the merge
+… recreate a blended and brand new LAB with the migration of the optimize tab features incorporated into the
+lab … i dont want you to ping me for preview of the lab until you have fully completed the whole design marathon
+that you should refer to from all the relative MD files."* The shipped `d0e30f5` LabGround **stacked
+`<Check>`+`<Fix>` above a demoted `<Lab>`** with a paragraph seam = two surfaces bolted together, not a blend.
+
+- **DESIGN LOCKED** (this commit): `docs/superpowers/specs/2026-07-08-lab-proving-ground.md` **§8 — the
+  blended-spine architecture.** Core: **ONE numbered spine, the fast path is station #1** ("Optimize — enable
+  the safe stack in one tap") in the Lab's own instrument language, with stations 2–6 the existing
+  measure→prove instruments; the intake router gets a LEAD row routing to `optimize`; one verdict, one
+  numbering, no seam. Station-1 body REUSES the audited `apply_recommendations_batch`/per-row-undo path (never
+  forks the mutation boundary) but is RE-PRESENTED as a Lab station (new `OptimizeStation`, Lab skin — must
+  read as the same room as stations 2–6, zero Optimize-panel tell). Full wiring/files/guards in §8.1–8.5.
+- **CADENCE (owner directive):** flag `compy_lab_ground` stays **DEFAULT OFF the entire marathon** (his live
+  look never changes); **NO preview ping until the WHOLE thing is done** (§8 blended spine → §2 prove-utility
+  + aggregate A/B + Two Futures per-part → §3 telemetry gallery → §5 armed bays → finalize/ship/eyeball ONCE).
+  Multi-session build; hand off with this ledger, never ping mid-way. Memory: [[lab-no-copypaste-full-marathon]].
+- **⛳ RESUME — build §8 first (fresh session, full runway):** (1) `lab-guided-data.ts` — add `"optimize"`
+  `LabStationKey` (ground-only, prepended via `groundStationKeys`, so the 5-station measure spine stays
+  byte-identical off-ground), its `LAB_STATIONS` contract, the `LAB_ROUTER` lead row, the `stationReading`
+  branch (+ `safeReady`/`stackApplied` facts, pure). (2) New `src/surfaces/lab/OptimizeStation.tsx` = enable-all
+  hero + safe-tweak review list in Lab skin (reuse `onApplyBatch`/`onToggleRec`/`onRollback`; Check's
+  startup/bloat/preload/leftovers/nic fold under a "More cleanup" disclosure). (3) `Lab.tsx` accepts the
+  fast-path props as OPTIONAL, used only in `ground` to render `stationBody("optimize")`; `STATION_ICON.optimize`.
+  (4) `LabGround.tsx` goes thin (RoomShell + `<Lab v2 ground {...fastPathProps}>`); DELETE `.lg-fast`/`.lg-utility`
+  + `LabGround.css`. (5) New CSS → register in `tokens-v2-guard.test.ts` `V2_CSS`. Verify: tsc 0 · vitest
+  no-regress · flag-off byte-identity · `git diff -- src-tauri` EMPTY · self-reviewer "same-room" check. NO ship.
+- **Then §2 → §3 → §5 → finalize** per spec §8.5. Phase 4 (real new catalog tweaks) is a SEPARATE per-tweak
+  owner-gated track, NOT part of this UI marathon.
+- **The shipped `d0e30f5` build stays live** (flag OFF → byte-identical to the prior look; harmless). Do NOT
+  re-ship until the blended Lab is complete.
+
 ### Cycle 2026-07-09a — ✅ SHIPPED `d0e30f5` + ship-docs (Lab overhaul PHASE 1 — Optimize merged into the Lab proving ground, DEFAULT OFF)
 **Code `d0e30f5` · installer SHA-256 `B932EDA0…FD8F0` · LIVE (stamp-verified 2026-07-09: installed exe embeds
 `d0e30f5`, `f13d10a` absent, ship-reinstall stale-build gate passed, Desktop holds exactly one installer).**
