@@ -38,9 +38,11 @@ tech stack, then bypassed — the shipped work used CSS/native React instead. **
    gauge + CountUp shipped instead. **NOT BUILT as specified.**
 3. **Magnetic cursor + mouse-tilt parallax** — only a small event-parallax on Home's annotation
    plane shipped. Magnetic cursor: **NEVER BUILT (VERIFIED 0 files).**
-4. **Rig hologram: click-a-component-for-live-specs + boot/scan sweep** — drag-orbit + scan sweep
-   shipped; click-a-part-for-specs is **partial/unconfirmed** (RigPart/RigViewer exist; the
-   specs-on-click interaction needs verification).
+4. ~~Rig hologram: click-a-component-for-live-specs + boot/scan sweep~~ — **SHIPPED (verified
+   2026-07-08).** Clicking a part pins its live spec card (`RigPart.tsx:82` `onClick`→`onSelect`,
+   card renders while `active`); drag-orbit + scan sweep shipped. **Only residual: a copy gap** —
+   `RigViewer.tsx:81` hint reads "hover a part for its live specs," never mentions click. Fold a
+   one-line fix ("hover or click") into the motion train.
 5. **Lenis smooth-scroll spine** tying the rooms together. **NEVER BUILT (VERIFIED 0 files).**
 6. **Room-transition "instrument retune" wipe** + Monitor meters as living oscilloscope traces
    (Home got one trace; Monitor rollout is partial). **NOT BUILT / partial.**
@@ -86,38 +88,38 @@ an owner-empowered trigger (*"only if §B underwhelms the owner"*) that **no lat
 Site work belongs to the compy.gg web phase, but the trigger is dangling and should be resolved (still
 armed? dropped?). Source: `docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md:31-80`.
 
-### H. Onboarding HoloLens Setup & Tour redesign — shipped-status unconfirmed
-Owner (2026-06-19) redesigned the hardware-tour to fly the camera across the user's REAL rig in his
-specified order (**power → storage → graphics → processor → memory**), re-runnable from Home in a
-HoloLens style. SetupTour exists live, but whether the full hardware-tour redesign as specced shipped
-is **unconfirmed by any doc** — needs verification.
-Source: `docs/superpowers/specs/2026-06-19-onboarding-holo-setup-tour.md:3-7,29-53`.
+### H. ~~Onboarding HoloLens Setup & Tour redesign~~ — ✅ SHIPPED (verified 2026-07-08)
+The hardware-tour flies the camera across the user's REAL rig in the owner's order — `HARDWARE_LESSONS`
+literally ordered psu→storage→gpu→cpu→ram (`setup-steps.ts:103`), parts from `buildRigParts(hw)` real
+hardware, `TourCamera` lerps per `focusId` (`HardwareTourScene.tsx:131`), re-runnable from both Home
+surfaces via `compy:start-tour` (`SetupLauncherCard.tsx`, `App.tsx:558`). Not open work.
 
 ---
 
-## 🟡 NEEDS VERIFICATION — owner asks whose "done" is claimed-but-code-unchecked
+## ✅ VERIFIED SHIPPED (2026-07-08 code check — were "claimed-done," now confirmed)
 
-Pulled from spec status lines; verify against `main` before trusting. Move each to ✅ or 🔴 once checked.
+- **V2 "four asks"** — ALL shipped: two-tier elevation layering (`tokens-v2.css:15` `--v2-panel`/`-2`
+  used across every room CSS) · hologram auto-scales (`RigHologram.tsx:45` `FitCamera` reads window
+  size) · "What's this?" in-place hover popover, nav only on explicit "More →" (`WhatsThis.tsx:37`) ·
+  Optimize nav-jank fixed via keepalive mount (`App.tsx:1325`). Plus V2 shipped as default + failsafe
+  removed (`main.tsx:67`).
+- **Hardware grid on Home** — built + wired (`HardwareGrid.tsx` in HomeV2/HomeHud), reachable via the
+  Cards↔3D toggle; **3D hologram is the default stage** (`compy_home_rig_3d !== "0"`). Not a regression;
+  it's the alternate segment. (If you want the grid visible by default, that's a one-line default flip —
+  say so.)
+- **"What's this?" / HoloLens tour / click-for-specs** — see ✅ items above and §A.4.
 
-- **"Full tidy" — inherent left-to-right usage order** (like reading a book, know the sequence).
-  Ground-up rewrite was rejected in favor of the P6 Journey "forward-doors" pass — a substitution.
-  `docs/superpowers/specs/2026-07-02-full-tidy-directive.md:1-8`.
-- **V2 "four asks"** — flat/blanket sections need real layering; hologram auto-scale to any window;
-  "What's this?" in-place hover not a context-yanking link; Optimize nav jank.
-  `docs/superpowers/specs/2026-07-03-v2-default-and-polish-sweep.md:7-19`.
-- **Restore the hardware grid (CPU/Memory/Graphics/Network) to Home** — owner-caught regression.
-  `docs/superpowers/specs/2026-06-08-restore-hardware-grid-home.md` (acceptance line unticked in-doc).
-- **Monitor room default = Sessions, not Live** (owner pick). `docs/superpowers/specs/2026-06-21-monitor-restructure-design.md:3`.
-- **Elastic/erratic-window adaptive layout** — "adapt structure as the window is dragged/stretched."
-  `docs/superpowers/specs/2026-06-06-elastic-window-pass.md` (reads resolved-in-doc, final blessing uncaptured).
-- **Intuitiveness sweep** — full-app "weed out even the slightest confusion" mandate.
-  `docs/superpowers/specs/2026-06-20-intuitiveness-sweep.md:1-3`.
-- **Beta Feedback #3** six-part list (clean-exit ghosts, exact Learn links, flatten Play dropdown,
-  Apply-all, Learn progressive-disclosure, Settings wordmark, URL-paste honesty).
-  `docs/superpowers/specs/2026-06-06-beta-feedback-3.md`.
-- **"Show me" walkthroughs** (VRR etc.), **naming** (Fix→Tune, Learn→Blackbook, Ledger→"Receipts"),
-  **icon** heartbeat-inside-the-C + "the C is so plain" redesign, **Hearth "Warm Ember"** hand-tuned hex.
-  `2026-06-06-show-me-walkthroughs.md` · `2026-06-12-naming-proposals.md` · `2026-06-06-halfway-home.md:81-87` · `2026-06-05-compy-design-system.md:133-148`.
+## 🟡 STILL UNVERIFIED — older asks not yet code-checked (lower priority)
+
+- **"Full tidy" left-to-right usage order** — ground-up rewrite rejected for the P6 Journey
+  "forward-doors" pass (a substitution; P6 shipped). `2026-07-02-full-tidy-directive.md:1-8`.
+- **Elastic/erratic-window adaptive layout** — reads resolved-in-doc, final blessing uncaptured.
+  `2026-06-06-elastic-window-pass.md`.
+- **Intuitiveness sweep** (full-app confusion weed-out) · **Beta Feedback #3** six-part list ·
+  **"Show me" walkthroughs** · **naming** (Fix→Tune / Learn→Blackbook / Ledger→"Receipts") · **icon**
+  heartbeat-in-the-C · **Hearth "Warm Ember"** hex. Older, likely shipped — spot-check when touched.
+- **Monitor room default** — spec said Sessions-default, but owner REVERSED to **Live-default**
+  2026-06-26 (`Monitor.tsx:14` comment). Code matches the newer ruling. **Not open — resolved.**
 
 ---
 
