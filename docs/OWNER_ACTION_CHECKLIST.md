@@ -31,6 +31,16 @@ copy on first launch). Only matters when you're actually ready to send the beta 
 here so it isn't forgotten at send time.
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
+### A3. Lab proving-ground — eyeball + ONE deferred call  ·  ⏳  ·  full detail: [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) item C
+The blended-Lab marathon is **DONE + shipped** (`f16d158`, DEFAULT OFF so your live app is unchanged until you look).
+- **Eyeball:** flip **Settings → Appearance → "Lab proving ground (preview)"**, open the **Lab** tab. Station 1
+  "Optimize" leads (the enable-all + a new "Power features" bay), the measure stations follow, the **Gallery** closes
+  the room. Does it feel like ONE cohesive room?
+- **The one decision:** during preview the old standalone **Optimize** tab still sits in the left rail *alongside*
+  Lab station 1 (a deliberate slice-1 deferral, so undo stayed reachable). Want me to **complete the merge** — drop
+  the Optimize tab when the flag's on — or keep both for now?
+- **Result → tell Claude:** "Lab looks good, flip it default-on" (and "drop the Optimize tab" / "keep both").
+
 ---
 
 ## §B — Waiting on input only you can give

@@ -76,12 +76,48 @@ build.**
 **🟢 PHASE 1 SHIPPED behind flag (`d0e30f5`, LIVE 2026-07-09, DEFAULT OFF):** Optimize merged INTO the Lab as
 ONE slim room — FAST PATH (Check + Fix "Apply all safe fixes" enable-all, no benchmark, zero new IPC, rollback-first
 intact) beside the UTILITY PATH (the measure→prove `ground` spine: intake router + numbered stations, collapsing
-bento/guided/classic into one). Frontend-only (`git diff -- src-tauri` EMPTY), flag-off byte-identity test-pinned;
-tsc 0 · vitest 1128 · self-reviewer PASS. **Slice-1 scoping (reversible, awaiting owner confirm):** Optimize's
-CONTENT is in the Lab, but the Optimize rail TAB removal + full rail collapse is DEFERRED to a next slice — during
-preview both surfaces exist, undo stays reachable. **Phases 2 (prove utility + aggregate-stack A/B) · 3 (telemetry
-gallery = §A.1 panoramic lands here) · 4 (catalog-expansion pipeline) · 5 (armed-feature bays) remain OPEN.**
-⏳ Owner: flip Settings → Appearance → "Lab proving ground (preview)", open Lab, react + confirm the slice-1 direction.
+bento/guided/classic into one). Frontend-only (`git diff -- src-tauri` EMPTY), flag-off byte-identity test-pinned.
+
+**🟢 BLENDED-SPINE MARATHON COMPLETE + SHIPPED behind flag (`d0e30f5`→`f16d158`, installer `0B4D15A0…6BD9`, DEFAULT
+OFF, 2026-07-09):** the owner rejected the phase-1 "verbatim merge" seam (`.lg-fast` box stacked over `.lg-utility`)
+and asked for a *blended* room. Rebuilt on ONE numbered spine + the marathon phases landed:
+
+- **§8 blended spine (`4410bec`):** the tweak-apply is now **station 1 "Optimize"** — a NATIVE member of the Lab's
+  numbered spine (same four-line contract/badge/frame as stations 2–6, no seam); `LabGround` is thin, `LabGround.css`
+  deleted.
+- **§2b Two Futures measured split (`47c57f5`):** wired as the Benchmark station's "prove it" payoff (per-part
+  measured `Efficacy` emphasis) — this is item **B** above, resolved inside the Lab.
+- **§2a aggregate-stack A/B (`6d49f10`, DARK, `stack_trial_gate` OFF):** the honest cumulative-benefit engine — apply
+  the whole safe stack in one UAC → measure the cumulative delta → roll it ALL back (multi-change Drop-guard; reuses
+  the audited batch path, NO new mutation primitive; mutation-gate 10/10 + rust-tauri-reviewer CONFIRMED-fix). Arming
+  is a separate reviewed commit after live QA + owner sign-off.
+- **§3 telemetry GALLERY (`330cd5c`) — this realizes item §A.1:** a panoramic drag-shell (OrbitControls) + fly-to-piece
+  (the `TourCamera` primitive lifted into a shared `FlyCamera`), populated from scoreboard / sessions / ledger /
+  black-box (all existing IPC). THE LAW held: every piece traces to a real measured struct (`buildGalleryPieces`,
+  hard-tested), empty→empty, incidents never glow, reduced-motion static grid. **Honest realization note:** pieces are
+  anchored to their rig part by **part-identity colour** (a ring of tiles), NOT by literal 3D placement at the rig
+  mesh — the "drag to explore a measured space + click a piece to inspect" feel is delivered; a rig-geometry-anchored
+  variant would be a follow-up if the owner wants it.
+- **§5 armed-feature Power bay (`0412e0f`, FE-only):** gaming_mode + service-suspend surfaced as a read-first,
+  apply-behind-confirm "Power features" bay in station 1 (debloat/telemetry-task disable already lives in the fixes
+  surface) — the same audited reversible controls, gathered to be proven at the Benchmark station.
+
+- **Finalize self-review (`f16d158`):** the finalize self-reviewer FAILed on 2 real defects I introduced → both
+  fixed + bug→guard'd, re-review PASS: (i) duplicate Gaming-Mode recovery banner on the Lab tab (§5 embed) — the
+  suppression now covers a `TABS_EMBEDDING_GAMING_MODE` set; (ii) gallery captions unreadable on a big history (§3) —
+  3D scene capped to the 24 most-recent tiles + ring radius ≤10.5 + closer rest camera + bigger caption font (the
+  full set stays in the reduced-motion grid, honest "showing N most recent" footer).
+
+tsc 0 · full vitest **1145/1145** · cargo **688** + clippy clean · flag-off byte-identity test-pinned · `git diff --
+src-tauri` empty for §3/§5/§8 (the only src-tauri change is §2a's DARK-gated trial) · self-reviewer **PASS** (re-review
+f16d158). **Still OPEN:** Phase 4 (catalog-expansion pipeline — a SEPARATE gated track, per-tweak mutation-gate); the
+slice-1 Optimize-rail TAB removal + full rail collapse (**deferred, owner call — the standalone Optimize tab still
+coexists with Lab station 1 during preview; this is the ONE open eyeball decision**). **Still NOT built from §A (this
+marathon only realized A.1's gallery):** the rest of the JARVIS motion stack — GSAP data-reactivity (A.2), magnetic
+cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — remain 🔴 OPEN.
+⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — station 1 leads with the
+enable-all + Power features, the measure stations follow, the Gallery closes the room. React + confirm the deferred
+Optimize-tab call before it flips default-ON.
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,

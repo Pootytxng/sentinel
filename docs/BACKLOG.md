@@ -159,7 +159,34 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-09b — ⏳ Lab BLENDED-ROOM marathon (owner REJECTED the verbatim phase-1 merge) — RESUME HERE
+### Cycle 2026-07-09b — ✅ Lab BLENDED-ROOM marathon COMPLETE + SHIPPED `f16d158` (DEFAULT OFF, owner eyeball pending)
+
+**✅ DONE 2026-07-09 · installer SHA-256 `0B4D15A0…6BD9` · LIVE (stamp-verified: installed exe embeds `f16d158`,
+ship-reinstall stale-build gate passed, Desktop holds exactly one installer).** The whole marathon built straight
+through on ONE numbered spine, flag `compy_lab_ground` **DEFAULT OFF the entire time** (his live look never changed),
+no preview pings between phases — per the owner's cadence directive. What landed:
+
+- **§8 blended spine** (`4410bec`): tweak-apply is now station 1 "Optimize", a NATIVE member of the numbered spine
+  (same contract/badge/frame as 2–6, no seam); `LabGround` thin, `LabGround.css` deleted; `OptimizeStation.tsx` new.
+- **§2b Two Futures measured split** (`47c57f5`): wired as the Benchmark station's "prove it" payoff (item B closed).
+- **§2a aggregate-stack A/B** (`6d49f10`, **DARK** `stack_trial_gate()` OFF): apply whole safe stack in one UAC →
+  measure cumulative delta → roll all back; reuses the audited batch path (NO new mutation primitive); mutation-gate
+  10/10 + rust-tauri-reviewer CONFIRMED-fix (corrupt-ledger read aborts before mutating). Arming = later gated commit.
+- **§3 telemetry GALLERY** (`330cd5c`): panoramic drag-shell + fly-to-piece over scoreboard/sessions/ledger/black-box
+  (all existing IPC); `buildGalleryPieces` anti-fabrication law; reduced-motion grid; empty-state loops to the bench.
+- **§5 armed-feature Power bay** (`0412e0f`): gaming_mode + service-suspend read-first in station 1 (debloat already
+  in the fixes surface). All three armed features now provable from the Lab.
+- **Finalize self-review** (`f16d158`): FAILed on 2 real defects I introduced → fixed + bug→guard'd (duplicate Lab
+  recovery banner; gallery caption legibility — 24-tile cap + radius cap + closer camera). Re-review **PASS**.
+- **Verify:** tsc 0 · full vitest **1145** · cargo **688** + clippy clean · `git diff -- src-tauri` empty for §3/§5/§8
+  (§2a is the only src-tauri change, dark-gated).
+- **⏳ OWNER (2 things):** (1) eyeball — flip **Settings → Appearance → "Lab proving ground (preview)"**, open Lab,
+  react. (2) one deferred slice-1 call: the standalone **Optimize** rail tab still coexists with Lab station 1
+  (documented deferral from `d0e30f5`) — confirm whether to complete the merge (drop the tab when the flag's on)
+  before default-ON. Both tracked in `docs/OWNER_ACTION_CHECKLIST.md` + `docs/UI_VISION_BACKLOG.md` item C.
+
+<details><summary>Original marathon brief (owner reject of the verbatim phase-1 merge, 2026-07-09) — kept for the record</summary>
+
 **Owner 2026-07-09, verbatim:** *"im not satisfied with this whatsoever do not just copy paste over the merge
 … recreate a blended and brand new LAB with the migration of the optimize tab features incorporated into the
 lab … i dont want you to ping me for preview of the lab until you have fully completed the whole design marathon
