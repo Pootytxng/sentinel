@@ -132,7 +132,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
             {/* #1 biggest limiter spotlight */}
             {top && (
               <div className="fc-spotlight">
-                <div className="fc-spotlight-tag">#1 BIGGEST LIMITER</div>
+                <div className="fc-spotlight-tag">#1 biggest limiter</div>
                 <div className="fc-spotlight-title">{top.title}</div>
                 <p className="fc-spotlight-reason">{top.reason}</p>
                 <div className="fc-spotlight-foot">

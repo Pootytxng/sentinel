@@ -375,7 +375,7 @@ function StepCheck() {
       </h2>
       {driftTop ? (
         <div className="st-spotlight">
-          <div className="st-spotlight-tag">#1 BIGGEST LIMITER</div>
+          <div className="st-spotlight-tag">#1 biggest limiter</div>
           <div className="st-spotlight-title">
             {reverted.length === 1
               ? `“${reverted[0].title}” turned itself back off`
@@ -413,7 +413,7 @@ function StepCheck() {
         </div>
       ) : top ? (
         <div className="st-spotlight">
-          <div className="st-spotlight-tag">#1 BIGGEST LIMITER</div>
+          <div className="st-spotlight-tag">#1 biggest limiter</div>
           <div className="st-spotlight-title">{top.title}</div>
           <p className="st-spotlight-reason">{top.reason}</p>
           <div className="st-spotlight-foot">

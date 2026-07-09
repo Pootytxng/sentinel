@@ -318,11 +318,14 @@
   border: 1px solid color-mix(in srgb, var(--ix-amber, #fbbf3c) 45%, transparent);
   background: color-mix(in srgb, var(--ix-amber, #fbbf3c) 8%, transparent);
 }
+/* Quiet mono readout tag, NOT a loud amber alert (owner de-slop catch 2026-07-08, sibling of the
+   Home .hud-pill fix): no uppercase shout, no warn-color — the card's own tint carries any
+   attention, the tag stays a muted micro-label in the same register as .st-tweaks-head. */
 .st-spotlight-tag {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 10px;
-  letter-spacing: 0.16em;
-  color: var(--ix-amber, #fbbf3c);
+  letter-spacing: 0.14em;
+  color: var(--ix-text-3, #8b95a8);
 }
 .st-spotlight-title {
   font-weight: 700;
