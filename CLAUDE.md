@@ -275,6 +275,7 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 - **Live gate / build / release state:** `docs/RELEASE_STATE.md` — the single authoritative matrix (every gate, the current installer, the blockers). All other docs defer to it on current state.
 - **What's next:** `docs/BACKLOG.md` — the living status ledger; pull the next non-gated `[ ]` item.
 - **Owner's open items (things only Kuya can do — surface these, never let them drop):** `docs/OWNER_ACTION_CHECKLIST.md` — the ONE consolidated index of everything waiting on the owner (his hands/eyes, his input, his money/legal calls). Born 2026-07-08 after he flagged that lists he'd made were scattered across six docs and got dropped. When he asks "show my checklist" or you finish a train, read this and tell him what's still on him. Every other task-list doc points back to it.
+- **Owner's UI / design vision (the visual work backlog):** `docs/UI_VISION_BACKLOG.md` — the ONE home for every owner-authored UI/design/visual ask, with honest status. Born 2026-07-08 after he caught that a UI task list had been dropped: his direction was scattered across ~20 specs and the redesign lane was marked "COMPLETE" after only the Instrument-HUD *reskin* shipped, while the **motion/interaction layer he was most excited about (the sister-site-style panoramic drag telemetry gallery + the JARVIS stack: magnetic cursor, Lenis, GSAP data-reactivity) was never built.** Its 🔴 OPEN section is the real remaining visual work. **A "COMPLETE" redesign checkbox that leaves 🔴 items here is a false-done — a reskin is not the vision.** When shipping a simpler thing than he asked, log it here as a substitution needing sign-off, never silently close it.
 - **Money / product direction:** `docs/RECEIPTS_DOCTRINE.md`.
 - **Dated state banners + full change history** (this file's former "CURRENT STATE" pile, 2026-06-01 → 2026-06-26): **`docs/CHANGELOG.md`**. Point-in-time records — verify against code before relying on any specific claim.
 
@@ -283,4 +284,5 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 1. Read `docs/RELEASE_STATE.md` (the gate matrix) for current state.
 2. Read `docs/BACKLOG.md` and take the next non-gated `[ ]` item. Per the false-done protocol, never declare "done" without enumerating remaining + gated items.
 3. Skim `docs/OWNER_ACTION_CHECKLIST.md` — the owner-facing open items. Don't silently pass over them; if one is now unblocked or the owner asks, surface it.
-4. Treat any file:line claim as point-in-time — verify against current code before asserting.
+4. For anything UI/visual — read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN section. Do NOT report the UI as "done"/"queue empty" off RELEASE_STATE alone; those track the shipped reskin, not the owner's unbuilt motion/interaction vision.
+5. Treat any file:line claim as point-in-time — verify against current code before asserting.

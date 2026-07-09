@@ -62,6 +62,20 @@ push:
 - **"Upgrade-path engine"** (your Optimize feedback, 2026-07-03): the advisory upgrade block exists,
   but the fuller engine was deferred to "its own spec" and never built. Want it built, or leave it?
 
+### B5. Your UI vision — pick what to build next  ·  ⏳  ·  [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md)
+You caught (2026-07-08) that a UI task list you'd made had been dropped. It had — your design
+direction was scattered across ~20 specs and the redesign lane was marked "COMPLETE" after only the
+*look* (Instrument-HUD reskin) shipped, while the **motion/interaction layer you were most excited
+about was never built.** Now consolidated into [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) — its
+🔴 OPEN section is the real remaining work. The headliner: the **panoramic drag-to-explore telemetry
+gallery** (the feel from the site you built for your sister) + the JARVIS motion stack (magnetic
+cursor, Lenis scroll, GSAP data-reactivity) — all verified 0-files-built. Also open there:
+CommandPalette, the site-glow/"full overhaul" gate, and the HoloLens tour status.
+- **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
+  the 🔴 list is complete or still short an item, then pick the first build target** (my rec: the drag
+  gallery, flag-gated for your eyeball). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
+  is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
+
 ---
 
 ## §C — Release gates — your money / legal calls  ·  🔒
@@ -94,6 +108,7 @@ exact hexes, anything where your eye is the authority.
 | Gaming Mode QA cases | [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md) |
 | Beta smoke pass | [`BETA_SMOKE_CHECKLIST.md`](BETA_SMOKE_CHECKLIST.md) |
 | What's next / status ledger | [`BACKLOG.md`](BACKLOG.md) |
+| **Owner's UI / design vision** | [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) |
 | Live gate/build state | [`RELEASE_STATE.md`](RELEASE_STATE.md) |
 | Funnel go-live steps | [`archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md`](archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md) |
 | NVIDIA validation (needs NVIDIA hardware) | [`NVIDIA_VALIDATION_PLAN.md`](NVIDIA_VALIDATION_PLAN.md) |
