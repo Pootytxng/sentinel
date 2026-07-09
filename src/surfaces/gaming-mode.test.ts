@@ -88,6 +88,17 @@ describe("global banner defers to the Gaming pane on Optimize", () => {
   it("a pending recovery outranks the success confirmation — never both", () => {
     expect(showGlobalRestoredBanner(true, true, "Overview")).toBe(false);
   });
+
+  // bug→guard (2026-07-09 self-review): the Lab §5 Power-features bay ALSO embeds the Gaming Mode
+  // pane, so BOTH global banners must defer on "Lab" exactly as on "Optimize" — else the same
+  // recovery/restored event renders twice on the Lab tab (screenshot-confirmed duplicate).
+  it("both banners defer on the Lab tab too (it embeds the Gaming Mode pane)", () => {
+    expect(showGlobalRecoveryBanner(true, "Lab")).toBe(false);
+    expect(showGlobalRestoredBanner(true, false, "Lab")).toBe(false);
+    // …still shown on a tab that does NOT embed the pane.
+    expect(showGlobalRecoveryBanner(true, "Play")).toBe(true);
+    expect(showGlobalRestoredBanner(true, false, "Play")).toBe(true);
+  });
 });
 
 describe("statusLabel + isRecoverable", () => {

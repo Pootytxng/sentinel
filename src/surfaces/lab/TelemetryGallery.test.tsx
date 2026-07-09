@@ -17,7 +17,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   }),
 }));
 
-const { TelemetryGallery } = await import("./TelemetryGallery");
+const { TelemetryGallery, ringRadius, MAX_GALLERY_TILES } = await import("./TelemetryGallery");
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -56,6 +56,18 @@ describe("TelemetryGallery — honest empty state", () => {
     expect(cta).not.toBeNull();
     fireEvent.click(cta);
     expect(onJump).toHaveBeenCalledWith("benchmark");
+  });
+});
+
+describe("TelemetryGallery — 3D legibility caps (bug→guard 2026-07-09 self-review)", () => {
+  it("ring radius is capped so captions never shrink below legibility on a huge history", () => {
+    expect(ringRadius(1)).toBeGreaterThanOrEqual(4.6);
+    expect(ringRadius(75)).toBeLessThanOrEqual(10.5); // 75 pieces must NOT blow the ring out
+    expect(ringRadius(1000)).toBeLessThanOrEqual(10.5);
+  });
+  it("the 3D scene shows a bounded number of tiles (the rest stay in the grid)", () => {
+    expect(MAX_GALLERY_TILES).toBeGreaterThan(0);
+    expect(MAX_GALLERY_TILES).toBeLessThanOrEqual(30);
   });
 });
 

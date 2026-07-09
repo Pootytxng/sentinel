@@ -117,8 +117,15 @@ export function restoredSummary(changes: SessionChange[]): RestoredSummary {
  * twice, stacked above the pane (self-review catches, 2026-07-08: recovery banner in
  * round 1, restored banner in round 2 — the gate must live on BOTH, so it lives here).
  */
+// The tabs that embed the full Gaming Mode pane (which renders its OWN recovery/restored card) — the
+// global banner must defer to it there, or the SAME event shows twice (bug caught 2026-07-09 self-
+// review: the Lab §5 Power-features bay embeds GamingMode too, but the old guard hardcoded only
+// "Optimize", so both the global banner AND the embedded card fired on Lab). Named here so the next
+// rename can't silently re-break it — add the tab, not another `!==` scattered across two guards.
+const TABS_EMBEDDING_GAMING_MODE = new Set(["Optimize", "Lab"]);
+
 export function showGlobalRecoveryBanner(hasRecovery: boolean, activeTab: string): boolean {
-  return hasRecovery && activeTab !== "Optimize";
+  return hasRecovery && !TABS_EMBEDDING_GAMING_MODE.has(activeTab);
 }
 
 export function showGlobalRestoredBanner(
@@ -127,7 +134,7 @@ export function showGlobalRestoredBanner(
   activeTab: string,
 ): boolean {
   // A pending recovery outranks the success confirmation; never show both.
-  return hasRestored && !hasRecovery && activeTab !== "Optimize";
+  return hasRestored && !hasRecovery && !TABS_EMBEDDING_GAMING_MODE.has(activeTab);
 }
 
 /** Pure: human label for a session status (used in recovery / status messaging). */

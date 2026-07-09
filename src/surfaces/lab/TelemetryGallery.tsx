@@ -42,8 +42,20 @@ const KIND_LABEL: Record<GalleryPiece["kind"], string> = {
   incident: "Record",
 };
 
-// Ring layout: pieces evenly around a circle in the XZ plane, radius growing with the count so a
-// full gallery never crowds. A gentle y-wave lifts the ring off a dead-flat line.
+// The 3D ring only shows the most-recent pieces so captions stay READABLE at rest — a huge history
+// on one giant ring shrinks every tile below legibility (bug caught 2026-07-09 self-review: 75 pieces
+// → radius ~46 → ~30px captions). The full set always lives in the reduced-motion grid + the footer
+// says how many are held back. buildGalleryPieces already sorts newest-first, so this is the newest.
+export const MAX_GALLERY_TILES = 24;
+
+// Ring radius, CAPPED so it never grows past a readable framing (the front arc must stay legible at
+// the rest camera; drag reveals the far side). Exported for the legibility guard.
+export function ringRadius(n: number): number {
+  return Math.max(4.6, Math.min(10.5, n * 0.62));
+}
+
+// Ring layout: pieces evenly around a circle in the XZ plane. A gentle y-wave lifts the ring off a
+// dead-flat line.
 function ringPosition(i: number, n: number, radius: number): THREE.Vector3 {
   const theta = (i / Math.max(1, n)) * Math.PI * 2;
   const y = Math.sin(i * 1.3) * 0.5;
@@ -106,8 +118,9 @@ function Tile({
             roughness={0.5}
           />
         </mesh>
-        {/* Caption — crisp DOM text billboarded with the tile. Title + the one measured line. */}
-        <Html position={[0, 0, 0.06]} center distanceFactor={7} zIndexRange={[50, 0]} style={{ pointerEvents: "none" }}>
+        {/* Caption — crisp DOM text billboarded with the tile. Title + the one measured line.
+            distanceFactor sized so the front-arc captions read at the rest camera. */}
+        <Html position={[0, 0, 0.06]} center distanceFactor={9} zIndexRange={[50, 0]} style={{ pointerEvents: "none" }}>
           <div className="tg-cap" style={{ opacity: dimmed ? 0.5 : 1, borderColor: color }}>
             <div className="tg-cap-kind" style={{ color }}>{KIND_LABEL[piece.kind]}</div>
             <div className="tg-cap-title">{piece.title}</div>
@@ -138,12 +151,14 @@ function GalleryScene({
   onSelect: (p: GalleryPiece) => void;
   onBackground: () => void;
 }) {
-  const radius = Math.max(4.6, pieces.length * 0.62);
+  const radius = ringRadius(pieces.length);
   const positions = useMemo(
     () => pieces.map((_, i) => ringPosition(i, pieces.length, radius)),
     [pieces, radius],
   );
-  const overview = useMemo(() => new THREE.Vector3(0, 2.6, radius + 5.5), [radius]);
+  // Pull the rest camera close enough that the front arc's captions read; the far side stays small
+  // (drag to bring it around). Distance scales gently with radius but stays tight.
+  const overview = useMemo(() => new THREE.Vector3(0, 2.2, radius + 3.4), [radius]);
   const focusIdx = focus ? pieces.findIndex((p) => p.id === focus.id) : -1;
   // Fly target: pull the camera out along the focused tile's radial line so the billboarded face
   // squares up to the lens; look straight at the tile.
@@ -315,6 +330,9 @@ export function TelemetryGallery({
   const detail = focus;
   // Reduced motion (or a hidden window at mount) → the static grid; else the panoramic 3D space.
   const useGrid = reduced;
+  // The 3D scene shows only the most-recent tiles so captions stay legible; the grid shows all.
+  const scenePieces = useMemo(() => pieces.slice(0, MAX_GALLERY_TILES), [pieces]);
+  const capped = !useGrid && pieces.length > scenePieces.length;
 
   return (
     <div className="tg-root">
@@ -323,7 +341,7 @@ export function TelemetryGallery({
           <GalleryGrid pieces={pieces} colors={colors} onSelect={setFocus} focus={focus} />
         ) : (
           <GalleryScene
-            pieces={pieces}
+            pieces={scenePieces}
             focus={focus}
             flying={flying}
             reduced={reduced}
@@ -359,7 +377,11 @@ export function TelemetryGallery({
 
       <p className="tg-foot">
         {pieces.length} {pieces.length === 1 ? "piece" : "pieces"} — every one measured, none invented.
-        {useGrid ? " Tap a card to read its numbers." : " Drag to explore; click a piece to inspect it."}
+        {capped
+          ? ` Showing your ${scenePieces.length} most recent — turn on reduced motion (Settings) for the full grid.`
+          : useGrid
+            ? " Tap a card to read its numbers."
+            : " Drag to explore; click a piece to inspect it."}
       </p>
     </div>
   );
