@@ -121,12 +121,17 @@ Pulled from spec status lines; verify against `main` before trusting. Move each 
 
 ---
 
-## ⚠️ THE ORIGINAL LIST THAT ISN'T IN THE REPO
-`docs/superpowers/plans/2026-06-21-roadmap-sequencing.md:4` sources the whole 150-item plan from the
-owner's **"Feature Roadmap Checklist (CC Brief)"** — but that original document is **nowhere in the
-repo**; only Claude's derived Phase A/B/C/D re-classification survives. If "the list you made" is this
-CC Brief, it is not recoverable from git — **the owner would need to re-share it.** (Mostly backend/
-feature scope, not visual, but flagged because it's the one genuinely-missing source document.)
+## ✅ THE "CC BRIEF" IS RECOVERED (correction, 2026-07-08)
+The owner's **"Feature Roadmap Checklist (CC Brief)"** is NOT missing — its full content lives in
+`docs/superpowers/plans/2026-06-21-roadmap-sequencing.md` (a 17-agent classification of every item
+into Phase A/B/C/D). It is **mostly backend/feature scope, not visual** — Phase A's ~137 allowed-now
+items (detection, measurement, content, advisory surfaces) were largely shipped in the 2026-06-25
+lane bursts; Phases B/C/D are the gated-mutation / telemetry / money tracks tracked in
+`docs/RELEASE_STATE.md` + `docs/BACKLOG.md`. So the CC Brief is a **separate, largely-delivered
+backend roadmap** — the owner's *visual/UI* vision (this file's 🔴 OPEN section) is the part that was
+actually dropped. Residual Phase-A items with a UI surface are folded into the 🟡 verification list
+above where relevant. (An earlier version of this file wrongly said the brief was unrecoverable — it
+isn't; do not ask the owner to re-share it.)
 
 ---
 
