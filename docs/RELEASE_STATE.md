@@ -10,6 +10,14 @@
 
 ## Snapshot
 
+> **AMENDMENT 2026-07-09 (same day as the `f16d158` ship below):** the owner eyeballed this build and
+> **REJECTED the Lab UI direction** (drag gallery + linear spine) — see
+> `docs/superpowers/specs/2026-07-09-lab-redesign-COURSE-CORRECTION.md` + the APPROVED
+> `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` ("Instrument Bench"; Phase-1 plan
+> `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`). The installed build / flag state below is
+> UNCHANGED (flag `compy_lab_ground` stays DEFAULT OFF, app byte-identical) — only the forward plan changed;
+> the "deferred slice-1 / Optimize-tab" call in the row below is **moot**, superseded by the coming rebuild.
+
 | Field | Value |
 |---|---|
 | Git HEAD | `f16d158` + this ship-docs commit (branch `main`, 2026-07-09 — the live installer is built from exactly `f16d158`) |

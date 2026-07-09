@@ -31,15 +31,13 @@ copy on first launch). Only matters when you're actually ready to send the beta 
 here so it isn't forgotten at send time.
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
-### A3. Lab proving-ground — eyeball + ONE deferred call  ·  ⏳  ·  full detail: [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) item C
-The blended-Lab marathon is **DONE + shipped** (`f16d158`, DEFAULT OFF so your live app is unchanged until you look).
-- **Eyeball:** flip **Settings → Appearance → "Lab proving ground (preview)"**, open the **Lab** tab. Station 1
-  "Optimize" leads (the enable-all + a new "Power features" bay), the measure stations follow, the **Gallery** closes
-  the room. Does it feel like ONE cohesive room?
-- **The one decision:** during preview the old standalone **Optimize** tab still sits in the left rail *alongside*
-  Lab station 1 (a deliberate slice-1 deferral, so undo stayed reachable). Want me to **complete the merge** — drop
-  the Optimize tab when the flag's on — or keep both for now?
-- **Result → tell Claude:** "Lab looks good, flip it default-on" (and "drop the Optimize tab" / "keep both").
+### A3. Lab redesign — REJECTED, new direction APPROVED, Phase 1 pending  ·  ✅ nothing on you right now
+The blended-Lab marathon (`f16d158`, flag OFF) was **rejected 2026-07-09** (drag gallery + linear-spine
+direction). A new **"Instrument Bench"** bento direction was researched + council-reviewed + **APPROVED same
+day** (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`; Phase-1 plan
+`docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`). **Nothing needed from you right now** — Phase 1
+builds next and you'll get a per-phase eyeball. The old "drop the Optimize tab?" question is **moot** — the whole
+room is being rebuilt. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-09c.
 
 ---
 
@@ -77,13 +75,14 @@ You caught (2026-07-08) that a UI task list you'd made had been dropped. It had 
 direction was scattered across ~20 specs and the redesign lane was marked "COMPLETE" after only the
 *look* (Instrument-HUD reskin) shipped, while the **motion/interaction layer you were most excited
 about was never built.** Now consolidated into [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) — its
-🔴 OPEN section is the real remaining work. The headliner: the **panoramic drag-to-explore telemetry
-gallery** (the feel from the site you built for your sister) + the JARVIS motion stack (magnetic
-cursor, Lenis scroll, GSAP data-reactivity) — all verified 0-files-built. Also open there:
+🔴 OPEN section is the real remaining work. **Direction now DECIDED (2026-07-09):** the drag gallery was
+built then rejected + **deleted**; the JARVIS motion stack (magnetic cursor, GSAP data-reactivity, hologram
+inertia — Lenis dropped as unneeded) is being built via the APPROVED **Instrument Bench** redesign
+(`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`). Also open there:
 CommandPalette, the site-glow/"full overhaul" gate, and the HoloLens tour status.
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
-  the 🔴 list is complete or still short an item, then pick the first build target** (my rec: the drag
-  gallery, flag-gated for your eyeball). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
+  the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
+  Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
   is NOT in the repo — if *that's* the list you meant, you'd need to re-share it.
 
 ---

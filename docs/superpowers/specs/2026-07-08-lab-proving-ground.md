@@ -1,5 +1,12 @@
 # The Lab as a Proving Ground — architecture, linear pathing + the telemetry gallery
 
+> **STATUS (2026-07-09): UI/layout direction is SUPERSEDED.** §2 ("one linear spine"), §3 (telemetry
+> gallery), and §8 (blended-spine build) are REJECTED by the owner — see
+> `docs/superpowers/specs/2026-07-09-lab-redesign-COURSE-CORRECTION.md` and the APPROVED replacement
+> `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` ("The Instrument Bench" — bento
+> basis, gallery DELETED entirely). §0 (the measure-loop finding), Directive 1 (catalog policy), §2a
+> (aggregate-stack A/B backend), and §5–§7 (mutation scope / doctrine-sync) still stand as written.
+
 **Owner directive (2026-07-08, verbatim intent):** research the full Lab framework I built, decide the
 best **linear pathing** to introduce its guided utility, **optimize for fluidity + intuitive access**,
 and **incorporate the gallery** into its architecture so the Lab is a **cohesive, sensibly constructed

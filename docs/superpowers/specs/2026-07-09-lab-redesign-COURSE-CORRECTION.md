@@ -5,6 +5,12 @@
 > benefit policy, §2a aggregate A/B, the safety rails) still stand. But its **layout/UX direction —
 > "retire the bento, collapse to ONE linear accordion spine, build a drag/scroll telemetry gallery" —
 > is REJECTED.** Do not build from it. This file is the source of truth for the redesign.
+>
+> **RESOLVED 2026-07-09:** the owner answered the go/no-go in
+> `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` — "The Instrument Bench" is
+> APPROVED (bento basis, BOLDER motion bound to real data, drag gallery DELETED). This file is now the
+> historical rejection record; **the direction-proposal is the live source of truth**, and
+> `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md` is the Phase-1 build plan.
 
 ## What the owner rejected (verbatim intent, 2026-07-09)
 

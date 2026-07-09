@@ -29,10 +29,12 @@ The **motion/interaction effect plan** the owner was most excited about was scop
 tech stack, then bypassed — the shipped work used CSS/native React instead. **VERIFIED 0 files in
 `src/`** for panoramic / magnetic-cursor / Lenis (2026-07-08). His ranked plan:
 
-1. **Panoramic inertia-drag telemetry gallery** — the "drag to explore a 3D space" feel from the
-   site he built for his sister (`sister-site-tau.vercel.app` / Prickly Creations, reviewed
-   2026-07-05, `:120-125`), pointed at benchmarks / sessions / receipts as clickable pieces in a
-   draggable telemetry space. *His own "highest wow" item.* **NEVER BUILT (VERIFIED).**
+1. **Panoramic inertia-drag telemetry gallery** — BUILT then REJECTED. The marathon shipped a literal
+   clone of the sister-site effect (`330cd5c`, flag `compy_lab_ground` OFF); owner rejected it 2026-07-09
+   (he wanted the *type/level* of effect referenced, not the feature cloned) and ordered it **deleted
+   entirely** (direction-proposal Q3). The redirect: drag/inertia lands on the real rig hologram
+   (`drei OrbitControls` damping) instead — see the approved **Instrument Bench** proposal, principle 6
+   (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`).
 2. **GSAP data-reactivity** — gauge sweeps / count-ups / shader uniforms animated FROM live metrics
    (honesty win: motion serves real data). Chosen stack `:135-137`. GSAP was "deferred"; a CSS ring
    gauge + CountUp shipped instead. **NOT BUILT as specified.**

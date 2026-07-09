@@ -149,13 +149,15 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
   Violet→Emerald part-hue identity, idle rest 0 draws/15s ×2); its wording nit + sibling
   light-wash follow-up fixed same-commit. Installer rebuilt + silent-reinstalled, **stamp-verified
   `48ca9ec` live**. Owner eyeball: the recolored bay.
-- **PARKED — owner's Lab-establishment train (owner supplies the task list; do NOT start until
-  he delivers it, after the current in-line work closes):** fully establish the Lab room — its
-  capabilities and ACTUAL interactive functions/applications he has planned (his words,
-  2026-07-07). Known folds-in: the Two Futures hologram-information feedback above · Two Futures
-  v2 (persist-latest Rust read + trial-sourced split, per the v1 scope note) · any interactive
-  hologram work honoring the honest-measurement law (no fabricated per-part data — anything
-  displayed on a part must trace to a measured struct).
+- ~~**PARKED — owner's Lab-establishment train**~~ — **RESOLVED:** owner delivered direction verbally
+  2026-07-08 (`2026-07-08-lab-proving-ground.md`); the train built + shipped `f16d158` (flag OFF), owner
+  **REJECTED the UI direction 2026-07-09** (drag gallery + linear spine), and a new **"Instrument Bench"**
+  direction was researched + council-reviewed + **APPROVED same day**
+  (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`; Phase-1 plan
+  `docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`). See the 🛰️ HQ STEERING LOG below
+  (Cycle 2026-07-09c) for the live thread. Still-honored folds-in: Two Futures hologram-information
+  feedback · Two Futures v2 · interactive hologram work under the honest-measurement law (anything on a
+  part must trace to a measured struct).
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
