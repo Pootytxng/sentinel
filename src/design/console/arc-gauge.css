@@ -3,13 +3,17 @@
    V2_CSS array — that registration (plus resolving the --v2-warn/--ready literal fallbacks below
    against the guard's no-literal-color rule) is Task 4's job, not this one's. */
 :root[data-v2="on"] .arc-gauge { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
-:root[data-v2="on"] .arc-gauge > svg { width: 56px; height: 56px; grid-row: span 2; }
+/* svg and .ag-ctr BOTH occupy column 1 / rows 1–2 so the number/unit render centered ON the ring.
+   Without an explicit grid-column here the svg auto-flows to column 2 (number ends up beside the
+   ring, not on it) — a real layout bug caught by visual self-review, not by a diff-only read. */
+:root[data-v2="on"] .arc-gauge > svg { width: 56px; height: 56px; grid-column: 1; grid-row: 1 / span 2; }
 :root[data-v2="on"] .ag-tick { stroke: var(--ix-text-3); stroke-width: 1; opacity: .5; }
 :root[data-v2="on"] .ag-track { fill: none; stroke: var(--ix-glass-border); stroke-width: 3; }
 :root[data-v2="on"] .ag-fill { fill: none; stroke: var(--ix-accent); stroke-width: 3; stroke-linecap: round;
   transition: stroke-dashoffset .3s ease; }
 :root[data-v2="on"] .ag-warn .ag-fill { stroke: var(--v2-warn, #f5c542); }
 :root[data-v2="on"] .ag-good .ag-fill { stroke: var(--ready, #46d98a); }
+:root[data-v2="on"] .ag-neutral .ag-fill { stroke: var(--ix-text-2); }
 :root[data-v2="on"] .ag-ctr { position: relative; grid-column: 1; grid-row: 1 / span 2;
   place-self: center; text-align: center; pointer-events: none; width: 56px; }
 :root[data-v2="on"] .ag-v { font-family: var(--ix-mono); font-size: 18px; font-weight: 600;

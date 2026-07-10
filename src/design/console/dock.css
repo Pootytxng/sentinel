@@ -1,5 +1,5 @@
 /* Console kit — Dock. Game-style action bar of station nodes; the primary node glows in the theme
-   accent (never gamer-RGB). Scoped under [data-v2="on"]; registered in tokens-v2-guard V2_CSS. */
+   accent (never gamer-RGB). Scoped under [data-v2="on"]; V2_CSS registration deferred to Task 4. */
 :root[data-v2="on"] .dock {
   display: flex;
   justify-content: center;
