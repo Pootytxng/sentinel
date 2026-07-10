@@ -17,6 +17,7 @@
 import type { ReactNode } from "react";
 import type { HomeRailId } from "./homeRail";
 import { useV2Nav } from "./ShellV2";
+import { useLabGroundFlag } from "./use-hud";
 
 // The journey door map — copy + destinations are the P6 spec table, pinned literally by
 // room-shell.test.tsx so a copy/destination drift fails CI. Keyed by rail id (home/fix/play/
@@ -29,6 +30,15 @@ export const DOOR_MAP: Record<HomeRailId, { to: HomeRailId; label: string } | nu
   lab: null, // last chapter — the rail is the way home
   check: null, // legacy escape-hatch room (merge-off only) — outside the journey, no door
 };
+
+// Ground-aware door resolution (the proving-ground rail, 2026-07-10 flip): the standalone
+// Optimize room is gone, so home's door — same invitation — leads to the Lab, where the
+// Optimize station now lives. Every other door is unchanged; the "fix" room itself is
+// unreachable under ground so its entry never renders. Pure; pinned by room-shell.test.tsx.
+export function doorFor(room: HomeRailId, ground: boolean): { to: HomeRailId; label: string } | null {
+  if (ground && room === "home") return { to: "lab", label: "Find what's worth fixing" };
+  return DOOR_MAP[room];
+}
 
 // The forward door: quiet chrome (text + arrow, no accent fill — a doorknob, not a CTA), and it
 // navigates via the SAME rail handler (V2Nav context) — navigation never teleports.
@@ -62,7 +72,8 @@ export function RoomShell({
   doorOpen?: boolean;
   children: ReactNode;
 }) {
-  const door = doorOpen ? DOOR_MAP[room] : null;
+  const ground = useLabGroundFlag();
+  const door = doorOpen ? doorFor(room, ground) : null;
   return (
     <section className="v2-room" data-room={room}>
       <header className="v2-verdict">

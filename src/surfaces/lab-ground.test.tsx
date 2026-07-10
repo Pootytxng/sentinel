@@ -2,13 +2,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
 import { readLabGround, applyLabGround } from "../design/theme";
 
-// Guard for phase 1 of the Lab overhaul (spec 2026-07-08-lab-proving-ground): the merged
-// proving-ground room behind `compy_lab_ground` (DEFAULT OFF). The flag lives at the App level —
-// App swaps LabV2 → LabGround for the Lab tab — so the byte-identity contract has TWO parts:
-//   1. the flag defaults OFF (readLabGround), and
+// Guard for the Lab overhaul (spec 2026-07-08-lab-proving-ground): the merged proving-ground
+// room behind `compy_lab_ground` — DEFAULT ON since the 2026-07-10 flip (owner round-4 verdict);
+// "0" is the classic failsafe. The flag lives at the App level — App swaps LabV2 → LabGround for
+// the Lab tab — so the failsafe contract has TWO parts:
+//   1. the flag reader honors the "0" failsafe (readLabGround), and
 //   2. Lab.tsx's new `ground` mode is purely additive — Lab WITHOUT the prop renders identically
 //      regardless of the compy_lab_ground value (Lab.tsx never reads the flag; only App does), so
-//      the whole flag-off app stays byte-identical.
+//      the whole flag-"0" app stays byte-identical to the classic tree.
 // Plus: `ground` mode renders the ONE linear spine (router + numbered stations) and NONE of the
 // three retired nav idioms (bento / guided-welcome / classic accordion / readings strip).
 
@@ -52,17 +53,18 @@ const renderGround = () =>
   ).container;
 
 describe("compy_lab_ground flag reader", () => {
-  it("defaults OFF (absent → false)", () => {
+  it("defaults ON (absent → true — the 2026-07-10 flip, ship-approved-work-as-the-build)", () => {
     localStorage.removeItem("compy_lab_ground");
-    expect(readLabGround()).toBe(false);
+    expect(readLabGround()).toBe(true);
   });
 
-  it("'1' → true, '0' → false; applyLabGround round-trips", () => {
+  it("'1' → true, '0' → false (the classic failsafe); applyLabGround round-trips", () => {
     applyLabGround(true);
     expect(readLabGround()).toBe(true);
     expect(localStorage.getItem("compy_lab_ground")).toBe("1");
     applyLabGround(false);
     expect(readLabGround()).toBe(false);
+    expect(localStorage.getItem("compy_lab_ground")).toBe("0");
   });
 });
 
@@ -217,6 +219,22 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     fireEvent.click(optimizeNode);
     expect(c.querySelector(".lc-detail")).not.toBeNull();
     expect(c.querySelector(".lc-detail-name")!.textContent).toBe("Optimize");
+  });
+
+  it("undo stays reachable via the Lab panel (owner decision 2026-07-10, guard for the self-review catch): the opened Optimize panel carries the Applied & history ledger disclosure", () => {
+    // The standalone Optimize tab is dropped at default-ON — this panel is the ONE door to the
+    // toggles, so it must also carry the record/undo surface the classic room's "Applied" segment
+    // had (Fix view="ledger"). Caught missing by the self-reviewer on the flip train.
+    const c = renderMerged([SAFE_REC]);
+    const optimizeNode = Array.from(c.querySelectorAll<HTMLButtonElement>(".dock-node")).find((b) =>
+      b.textContent?.includes("Optimize"),
+    )!;
+    fireEvent.click(optimizeNode);
+    const ledger = c.querySelector(".lab-optimize-ledger");
+    expect(ledger).not.toBeNull();
+    expect(ledger!.querySelector(".lab-optimize-more-summary")!.textContent).toContain(
+      "Applied & history",
+    );
   });
 
   it("§5 Power-features bay shows in the opened Optimize panel ONLY when Gaming Mode is armed; stays collapsed (lazy-mounts)", () => {

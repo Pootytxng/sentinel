@@ -312,22 +312,23 @@ export function applyLabBento(on: boolean): void {
 }
 
 // Lab proving ground (spec 2026-07-08-lab-proving-ground, ★ PRIMARY BLUEPRINT, phase 1) — the
-// Lab overhaul: the Optimize room MERGES into the Lab as one slim room. The "enable all the good
-// tweaks" fast path (no benchmark required) leads; the measure→test→prove instruments are the
-// adjacent utility, collapsed from three nav idioms (bento/guided/classic) into one linear spine.
-// DEFAULT OFF behind `compy_lab_ground` (Settings → Appearance preview toggle, the P-series
-// contract): flag off, the Lab + Optimize rooms render byte-identical to today (App swaps in the
-// merged LabGround room ONLY when the flag is on). Frontend only — the existing apply/batch path
-// is unchanged, zero new IPC, zero new mutation primitive.
+// Lab overhaul: the Optimize room MERGES into the Lab as one slim room (the Ops Console). The
+// "enable all the good tweaks" fast path (no benchmark required) leads; the measure→test→prove
+// instruments are the adjacent utility, collapsed from three nav idioms (bento/guided/classic).
+// DEFAULT ON (owner verdict 2026-07-10 round 4 "ALL GOOD" — ship-approved-work-as-the-build);
+// with the flip the standalone Optimize tab DROPS (owner decision 2026-07-10): the Lab's Optimize
+// station is the one door to the safe-tweak toggles. The classic separate Lab + Optimize rooms
+// stay the failsafe: Settings → Appearance toggle / localStorage "0". Frontend only — the
+// existing apply/batch path is unchanged, zero new IPC, zero new mutation primitive.
 const LAB_GROUND_KEY = "compy_lab_ground";
 
 export function readLabGround(): boolean {
   try {
-    return localStorage.getItem(LAB_GROUND_KEY) === "1";
+    return localStorage.getItem(LAB_GROUND_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyLabGround(on: boolean): void {

@@ -4,13 +4,14 @@ import { join } from "path";
 
 // bug -> guard (2026-06-20). After the classic-surface retirement, user-facing copy kept naming
 // standalone tabs that no longer exist ("Startup tab", "Latency tab" — owner/audit-caught).
-// Current rooms (after the Check+Tune→Optimize merge, 2026-06-21): Home / Optimize / Monitor /
-// Blackbook / Advanced. This guard forbids the Blackbook data copy from naming a RETIRED standalone
-// tab, so the class can't recur. ("Check" + "Tune" are now retired — they merged into "Optimize";
-// "Optimize" is a CURRENT room again, so it left this list.)
+// Current rooms (after the proving-ground flip, 2026-07-10): Home / Monitor / Blackbook / Lab.
+// This guard forbids the Blackbook data copy from naming a RETIRED standalone tab, so the class
+// can't recur. ("Check" + "Tune" merged into "Optimize" 2026-06-21; "Optimize" itself retired
+// 2026-07-10 when it folded into the Lab's Optimize station — the STATION name in prose is fine,
+// only "<name> tab" is forbidden.)
 //
-// Matches only "<Retired> tab" — NOT "<Retired> section" (Benchmark/Latency/Diagnostics still exist as
-// CARDS inside Advanced), NOT "Optimize Drives" (a real Windows tool), and NOT current rooms.
+// Matches only "<Retired> tab" — NOT "<Retired> section"/"station" (the instruments still exist as
+// stations inside the Lab), NOT "Optimize Drives" (a real Windows tool), and NOT current rooms.
 
 // The Blackbook data sources. Add new src/data/*.json here when one is introduced.
 const DATA_FILES = [
@@ -23,7 +24,7 @@ const DATA_FILES = [
 ];
 
 const RETIRED_TAB =
-  /\b(Check|Tune|Readiness|Priorities|Sessions|Monitoring|Benchmark|Latency|Diagnostics|Garage|Overview|Startup) tab\b/g;
+  /\b(Check|Tune|Optimize|Readiness|Priorities|Sessions|Monitoring|Benchmark|Latency|Diagnostics|Garage|Overview|Startup) tab\b/g;
 
 describe("no stale references to retired tabs (Blackbook data copy)", () => {
   for (const file of DATA_FILES) {

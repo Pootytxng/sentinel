@@ -8,7 +8,7 @@ import { Wordmark } from "../../design/Wordmark";
 import { NavGlyph } from "../../design/NavGlyph";
 import { HOME_RAIL, railFor, type HomeRailId } from "../../design/homeRail";
 import { readOptimizeMerged } from "../../data/nav-flags";
-import { readSetupStepper } from "../../design/theme";
+import { readSetupStepper, readLabGround } from "../../design/theme";
 import { StepIndicator, StepConnector } from "../../design/vendor/Stepper/Stepper";
 import { TrustSwitch } from "../../design/TrustSwitch";
 import { useConfirm } from "../../design/ConfirmDialog";
@@ -37,13 +37,19 @@ const HardwareTourScene = lazy(() =>
 );
 
 export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[]; onDone: () => void }) {
-  // The tour follows the rail the user actually has (P6 §4 alignment): merged = the five-room
-  // journey recap; the compy_optimize="0" escape hatch keeps the classic six-room tour.
+  // The tour follows the rail the user actually has (P6 §4 alignment): ground (the default) = the
+  // four-room proving-ground rail; merged = the five-room journey recap; the compy_optimize="0"
+  // escape hatch keeps the classic six-room tour.
   const merged = useMemo(() => readOptimizeMerged(), []);
-  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw), merged), [hw, merged]);
-  // The room that holds the ledger, named by its CURRENT rail label ("Optimize" merged / "Tune"
-  // classic) — so the seatbelt step never names a tab the rail doesn't show.
-  const fixLabel = useMemo(() => railFor(merged).find((r) => r.id === "fix")!.label, [merged]);
+  const ground = useMemo(() => readLabGround(), []);
+  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw), merged, ground), [hw, merged, ground]);
+  // The room that holds the ledger, named by its CURRENT rail label ("Lab" on the proving-ground
+  // rail — its Optimize station owns the toggles + ledger; "Optimize" merged / "Tune" classic) —
+  // so the seatbelt step never names a tab the rail doesn't show.
+  const fixLabel = useMemo(
+    () => (ground ? "Lab" : railFor(merged).find((r) => r.id === "fix")!.label),
+    [merged, ground],
+  );
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useReducedMotion();

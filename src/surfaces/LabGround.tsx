@@ -24,8 +24,9 @@ import "./lab-v2.css";
 // stuff users came for leads) and hands every fast-path handler down to Lab's `ground` mode, which
 // renders station 1's <OptimizeStation> body from the SAME audited apply path (zero new IPC, zero
 // new mutation primitive). Rendered by App for the Lab tab ONLY when `compy_lab_ground` is on
-// (DEFAULT OFF, P-series preview) — flag off, App renders the untouched LabV2 + OptimizeV2 rooms, so
-// the app is byte-identical (test-pinned).
+// (DEFAULT ON since the 2026-07-10 flip; with it the standalone Optimize tab drops — this room's
+// Optimize station is the one door) — flag "0" is the failsafe: App renders the untouched classic
+// LabV2 + OptimizeV2 rooms, byte-identical (test-pinned).
 
 export function LabGround(props: LabFastPathProps & {
   readiness: GameReadiness | null;

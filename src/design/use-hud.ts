@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { readHud } from "./theme";
+import { readHud, readLabGround } from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
 // directive, CORRECTED direction). The Home pilot uses this to swap presentation the moment
@@ -11,6 +11,20 @@ export function useHudFlag(): boolean {
     const sync = () => setOn(readHud());
     window.addEventListener("compy:hud-changed", sync);
     return () => window.removeEventListener("compy:hud-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Lab proving-ground flag as live React state (same contract as useHudFlag: the Settings
+// toggle fires compy:lab-ground-changed so consumers re-render without a reload). App owns the
+// tab/rail swap; RoomShell uses this for the ground-aware forward door (home's door points at
+// the Lab when the standalone Optimize room is gone from the rail).
+export function useLabGroundFlag(): boolean {
+  const [on, setOn] = useState(readLabGround);
+  useEffect(() => {
+    const sync = () => setOn(readLabGround());
+    window.addEventListener("compy:lab-ground-changed", sync);
+    return () => window.removeEventListener("compy:lab-ground-changed", sync);
   }, []);
   return on;
 }

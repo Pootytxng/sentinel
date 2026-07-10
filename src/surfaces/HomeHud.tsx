@@ -50,6 +50,8 @@ type Props = {
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
+  /** Where the "See in …" buttons land: "Lab" on the proving-ground rail, "Optimize" classic. */
+  fixRoomLabel?: string;
 };
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
@@ -143,6 +145,7 @@ export function HomeHud({
   changes,
   onRunCheck,
   onSeeInFix,
+  fixRoomLabel = "Optimize",
 }: Props) {
   const reduced = useReducedMotion();
   const accent = useV2Accent();
@@ -639,7 +642,7 @@ export function HomeHud({
                     {i === 0 ? "biggest limiter" : `${l.confidence} confidence`}
                   </span>
                   <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
-                    See in Optimize
+                    See in {fixRoomLabel}
                   </button>
                 </div>
               ))}

@@ -162,6 +162,32 @@ export function OptimizeStation(props: LabFastPathProps) {
         reverted={reverted}
       />
 
+      {/* The record half of the room (owner decision 2026-07-10: with the standalone Optimize tab
+          dropped, "undo stays reachable via the Lab panel" — this IS that path). The same audited
+          ledger surface the classic room's "Applied" segment rendered (Fix view="ledger": active
+          changes with per-row undo + the full history), one disclosure below the toggles it
+          records. Zero new IPC; rollback resolves from history.json alone, same as everywhere. */}
+      <details className="lab-optimize-more lab-optimize-ledger">
+        <summary className="lab-optimize-more-summary">Applied &amp; history — every change, undoable</summary>
+        <div className="lab-optimize-more-body">
+          <Fix
+            recs={props.recs ?? []}
+            startup={props.startup}
+            changes={props.changes}
+            busyId={props.busyId}
+            isAppliable={props.isAppliable}
+            activeChangeFor={props.activeChangeFor}
+            onToggleRec={props.onToggleRec}
+            onToggleStartup={props.onToggleStartup}
+            onRollback={props.onRollback}
+            onApplyBatch={props.onApplyBatch}
+            onOpenLibrary={props.onOpenLibrary}
+            vendor={props.vendor}
+            view="ledger"
+          />
+        </div>
+      </details>
+
       {/* Secondary to the enable-all (Directive 2: most users apply the safe stack and never look
           back). The broader system-hygiene scan — startup load, telemetry tasks, preinstalled
           apps, past tweaks, driver freshness — lives one disclosure away so it never crowds the

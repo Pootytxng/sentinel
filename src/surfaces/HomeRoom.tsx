@@ -18,6 +18,9 @@ type Props = {
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
+  /** The room the "See in …" limiter buttons land in — "Lab" under the proving-ground rail
+   *  (no standalone Optimize tab), "Optimize" on the classic compy_lab_ground="0" failsafe. */
+  fixRoomLabel?: string;
 };
 
 export function HomeRoom(props: Props) {

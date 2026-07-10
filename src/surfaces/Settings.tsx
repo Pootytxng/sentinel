@@ -362,17 +362,18 @@ export default function Settings({
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Lab proving ground (preview)</div>
+                  <div className="set-row-title">Lab proving ground</div>
                   <div className="set-row-sub">
-                    Merges Optimize into the Lab: enable all the safe tweaks in one tap (no
-                    benchmarking needed), with the measure-and-prove instruments right beside them.
-                    Same tweaks, same undo — turn off for the separate Lab and Optimize rooms.
+                    The Lab as one Ops Console: enable all the safe tweaks at its Optimize station
+                    in one tap (no benchmarking needed), with the measure-and-prove instruments
+                    right beside them. Same tweaks, same undo — turn off for the classic separate
+                    Lab and Optimize rooms.
                   </div>
                 </div>
                 <Toggle
                   on={labGround}
                   onChange={changeLabGround}
-                  ariaLabel="Lab proving ground preview"
+                  ariaLabel="Lab proving ground"
                 />
               </div>
 

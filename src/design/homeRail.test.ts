@@ -50,3 +50,29 @@ describe("railFor — Optimize merge collapse", () => {
     expect(HOME_RAIL.some((r) => r.id === "check")).toBe(true);
   });
 });
+
+// The proving-ground rail (owner decision 2026-07-10, ships WITH the compy_lab_ground default-ON
+// flip): the standalone Optimize room drops from the rail entirely — the Lab's Optimize station
+// is the ONE door to the safe-tweak toggles. Four rooms, relative order preserved (the Lab stays
+// the last chapter). compy_lab_ground="0" restores the classic rails above.
+describe("railFor — proving ground drops the standalone Optimize room", () => {
+  it("ground: Home · Monitor · Blackbook · Lab — no check, no fix, order preserved", () => {
+    const rail = railFor(true, true);
+    expect(rail.map((r) => r.id)).toEqual(["home", "play", "learn", "lab"]);
+    expect(rail.map((r) => r.label)).toEqual(["Home", "Monitor", "Blackbook", "Lab"]);
+  });
+
+  it("ground wins over the merge flag (same rail either way)", () => {
+    expect(railFor(false, true)).toEqual(railFor(true, true));
+  });
+
+  it("ground=false keeps both classic shapes untouched", () => {
+    expect(railFor(false, false)).toBe(HOME_RAIL);
+    expect(railFor(true, false).map((r) => r.id)).toEqual(["home", "fix", "play", "learn", "lab"]);
+  });
+
+  it("does not mutate HOME_RAIL", () => {
+    railFor(true, true);
+    expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
+  });
+});

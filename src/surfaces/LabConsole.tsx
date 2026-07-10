@@ -46,7 +46,8 @@ import "./lab-console.css";
 //
 // The probe reads + facts derivation below are ported VERBATIM from the deleted LabBench.tsx — only
 // the render changed, from a bento grid of bays to this console. Rendered by LabGround for the Lab
-// tab ONLY when `compy_lab_ground` is on (DEFAULT OFF) — flag off, the untouched LabV2 renders.
+// tab ONLY when `compy_lab_ground` is on (DEFAULT ON since 2026-07-10) — flag "0", the untouched
+// classic LabV2 renders.
 
 // A small local icon map — the guided/bento data modules don't define one (checked before writing
 // this). Presentation-only; never gates behavior.

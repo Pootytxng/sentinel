@@ -32,6 +32,12 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
 export const MERGED_FIX_BLURB =
   "Check what's holding your games back, then apply the safe fixes — every change undoable in the ledger.";
 
+// The proving-ground Lab absorbs the whole Optimize room (2026-07-10 flip: no standalone Optimize
+// tab), so ITS blurb must cover check + fix + prove — the lab-id blurb above only describes the
+// instruments half.
+export const GROUND_LAB_BLURB =
+  "Check what's holding your games back and apply the safe fixes — every change undoable — then prove it with benchmarks, latency and diagnostics.";
+
 export interface HardwareLesson {
   /** Which rig part kind this lesson focuses (the showcase shows the first part of this kind). */
   kind: RigPartKind;
@@ -81,8 +87,10 @@ const SETUP_STEPS: readonly SetupStep[] = [
     id: "setup-seatbelt",
     leg: "setup",
     kind: "seatbelt",
+    // Body is data-only (StepSeatbelt renders its own copy, naming the live rail's ledger room via
+    // fixLabel) — kept tab-neutral so it can never name a room the rail doesn't show.
     title: "One click to apply. One click to take it back.",
-    body: "Every change Compy makes is logged in the Optimize tab's ledger and undoes in one click.",
+    body: "Every change Compy makes is logged in its ledger and undoes in one click.",
   },
   {
     id: "setup-rules",
@@ -167,14 +175,20 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
 ];
 
 // The recap tabs — labels/icons from the SAME rail selector the app renders (railFor, single
-// source), blurbs from TAB_BLURB. Merged = the five journey rooms; the recap can never show a
-// room the rail doesn't have.
-export function buildTabs(merged: boolean): TabInfo[] {
-  return railFor(merged).map((r) => ({
+// source), blurbs from TAB_BLURB. Merged = the five journey rooms; ground = the four-room
+// proving-ground rail (the Lab's blurb covers the absorbed Optimize). The recap can never show
+// a room the rail doesn't have.
+export function buildTabs(merged: boolean, ground = false): TabInfo[] {
+  return railFor(merged, ground).map((r) => ({
     id: r.id,
     label: r.label,
     icon: r.icon,
-    blurb: merged && r.id === "fix" ? MERGED_FIX_BLURB : TAB_BLURB[r.id],
+    blurb:
+      ground && r.id === "lab"
+        ? GROUND_LAB_BLURB
+        : merged && r.id === "fix"
+          ? MERGED_FIX_BLURB
+          : TAB_BLURB[r.id],
   }));
 }
 
@@ -182,10 +196,23 @@ export function buildTabs(merged: boolean): TabInfo[] {
 // A lesson whose kind isn't present is skipped (cooler/psu placeholders are always emitted).
 // Under the merged rail the standalone Check room doesn't exist, so a lesson tied to it re-ties to
 // the merged Optimize room (same diagnose-first meaning, the room the rail actually shows).
-export function buildHardwareSteps(parts: RigPart[], merged = true): SetupStep[] {
+// Under the proving-ground rail (2026-07-10 flip) neither Check nor Optimize exists — both re-tie
+// to the Lab, whose Optimize station now holds the toggles and the scan.
+export function buildHardwareSteps(parts: RigPart[], merged = true, ground = false): SetupStep[] {
   return HARDWARE_LESSONS.flatMap((rawLesson) => {
-    const lesson: HardwareLesson =
-      merged && rawLesson.tab.id === "check"
+    const lesson: HardwareLesson = ground
+      ? rawLesson.tab.id === "check"
+        ? {
+            ...rawLesson,
+            tab: { id: "lab", tie: "The Lab scans for CPU limiters and applies the top fix." },
+          }
+        : rawLesson.tab.id === "fix"
+          ? {
+              ...rawLesson,
+              tab: { id: "lab", tie: "Apply or undo these at the Lab's Optimize station — all in the ledger." },
+            }
+          : rawLesson
+      : merged && rawLesson.tab.id === "check"
         ? {
             ...rawLesson,
             tab: { id: "fix", tie: "Optimize scans for CPU limiters and applies the top fix." },
@@ -223,18 +250,27 @@ export function buildHardwareSteps(parts: RigPart[], merged = true): SetupStep[]
 export const JOURNEY_RECAP_BODY =
   "The rail reads top to bottom: Home for the glance, Optimize to check and fix, Monitor to watch it live, Blackbook for what actually works, the Lab to go deeper.";
 
+// The proving-ground recap (2026-07-10 flip) — the four-room rail in ITS order, the Lab as the
+// workshop at the end of the row.
+export const GROUND_RECAP_BODY =
+  "The rail reads top to bottom: Home for the glance, Monitor to watch it live, Blackbook for what actually works, the Lab to check, fix and prove it.";
+
 // The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
-export function buildSetupSteps(parts: RigPart[], merged = true): SetupStep[] {
+export function buildSetupSteps(parts: RigPart[], merged = true, ground = false): SetupStep[] {
   return [
     ...SETUP_STEPS,
-    ...buildHardwareSteps(parts, merged),
+    ...buildHardwareSteps(parts, merged, ground),
     {
       id: "tour-tabmap",
       leg: "tour",
       kind: "tabmap",
       title: "Your way around Compy",
-      body: merged ? JOURNEY_RECAP_BODY : "Six rooms, one job each. Here's where everything lives.",
-      tabs: buildTabs(merged),
+      body: ground
+        ? GROUND_RECAP_BODY
+        : merged
+          ? JOURNEY_RECAP_BODY
+          : "Six rooms, one job each. Here's where everything lives.",
+      tabs: buildTabs(merged, ground),
     },
   ];
 }

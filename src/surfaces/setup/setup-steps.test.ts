@@ -6,7 +6,9 @@ import {
   HARDWARE_LESSONS,
   TAB_BLURB,
   MERGED_FIX_BLURB,
+  GROUND_LAB_BLURB,
   JOURNEY_RECAP_BODY,
+  GROUND_RECAP_BODY,
 } from "./setup-steps";
 import { HOME_RAIL, railFor } from "../../design/homeRail";
 import type { RigPart, RigPartKind } from "../rig/rig-parts";
@@ -167,5 +169,60 @@ describe("buildHardwareSteps", () => {
   it("skips lessons whose component kind is absent from the rig", () => {
     const noGpu = PARTS.filter((p) => p.kind !== "gpu");
     expect(buildHardwareSteps(noGpu).some((s) => s.lesson?.kind === "gpu")).toBe(false);
+  });
+});
+
+// The proving-ground tour (2026-07-10 flip: no standalone Optimize tab — the Lab's Optimize
+// station is the one door). Same law as the merged alignment: no lesson or recap may name a
+// room the rail doesn't show.
+describe("proving-ground tour alignment (ground=true)", () => {
+  const steps = buildSetupSteps(PARTS, true, true);
+
+  it("recap = the four ground rooms in rail order, body names that journey", () => {
+    const last = steps[steps.length - 1];
+    expect(last.kind).toBe("tabmap");
+    expect(last.tabs?.map((t) => t.id)).toEqual(["home", "play", "learn", "lab"]);
+    expect(last.body).toBe(GROUND_RECAP_BODY);
+    for (const label of ["Home", "Monitor", "Blackbook", "Lab"]) {
+      expect(last.body).toContain(label);
+    }
+    // The dead room never appears in the recap copy.
+    expect(last.body).not.toContain("Optimize");
+  });
+
+  it("the Lab's recap blurb covers the absorbed Optimize: check + fix + undo + prove", () => {
+    const lab = buildTabs(true, true).find((t) => t.id === "lab")!;
+    expect(lab.blurb).toBe(GROUND_LAB_BLURB);
+    expect(lab.blurb).toMatch(/check/i);
+    expect(lab.blurb).toMatch(/undoable/i);
+    expect(lab.blurb).toMatch(/prove/i);
+  });
+
+  it("every ground lesson tie targets a room present on the ground rail", () => {
+    const groundIds = new Set(railFor(true, true).map((r) => r.id));
+    for (const s of buildHardwareSteps(PARTS, true, true)) {
+      expect(groundIds.has(s.lesson!.tab.id), `lesson ${s.lesson!.kind}`).toBe(true);
+    }
+  });
+
+  it("re-ties the Check and Optimize lessons to the Lab", () => {
+    const ground = buildHardwareSteps(PARTS, true, true);
+    const cpu = ground.find((s) => s.lesson?.kind === "cpu");
+    expect(cpu?.lesson?.tab.id).toBe("lab");
+    expect(cpu?.lesson?.tab.tie).toBe("The Lab scans for CPU limiters and applies the top fix.");
+    const storage = ground.find((s) => s.lesson?.kind === "storage");
+    expect(storage?.lesson?.tab.id).toBe("lab");
+    expect(storage?.lesson?.tab.tie).toBe(
+      "Apply or undo these at the Lab's Optimize station — all in the ledger.",
+    );
+  });
+
+  it("align, don't add: same step count as the merged tour", () => {
+    expect(steps.length).toBe(buildSetupSteps(PARTS, true, false).length);
+  });
+
+  it("ground=false leaves the merged and classic tours byte-identical to before", () => {
+    expect(buildSetupSteps(PARTS, true, false)).toEqual(buildSetupSteps(PARTS, true));
+    expect(buildSetupSteps(PARTS, false, false)).toEqual(buildSetupSteps(PARTS, false));
   });
 });

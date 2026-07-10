@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { RoomShell, ForwardDoor, DOOR_MAP } from "./room-shell";
+import { RoomShell, ForwardDoor, DOOR_MAP, doorFor } from "./room-shell";
 import { ShellV2 } from "./ShellV2";
 import { railFor } from "./homeRail";
 
@@ -26,6 +26,24 @@ describe("DOOR_MAP — the journey pinned literally (P6 spec table)", () => {
       lab: null,
       check: null,
     });
+  });
+});
+
+describe("doorFor — the ground-aware door (proving-ground rail, 2026-07-10 flip)", () => {
+  it("ground: home's door leads to the Lab (the Optimize station's room), same invitation", () => {
+    expect(doorFor("home", true)).toEqual({ to: "lab", label: "Find what's worth fixing" });
+  });
+
+  it("ground: every other room keeps its DOOR_MAP entry; Lab stays doorless", () => {
+    for (const room of ["fix", "play", "learn", "lab", "check"] as const) {
+      expect(doorFor(room, true), `room ${room}`).toEqual(DOOR_MAP[room]);
+    }
+  });
+
+  it("classic ('0' failsafe): doorFor is DOOR_MAP verbatim for every room", () => {
+    for (const room of ["home", "fix", "play", "learn", "lab", "check"] as const) {
+      expect(doorFor(room, false), `room ${room}`).toEqual(DOOR_MAP[room]);
+    }
   });
 });
 

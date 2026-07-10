@@ -24,7 +24,8 @@ import {
   type CpuTemp,
 } from "./surfaces/monitor-panels";
 import { MonitorDomainCards } from "./surfaces/MonitorDomainCards";
-import { readMonitorCards, readLabGround } from "./design/theme";
+import { readMonitorCards } from "./design/theme";
+import { useLabGroundFlag } from "./design/use-hud";
 import { useReducedMotion } from "./design/use-motion";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
@@ -508,18 +509,14 @@ function App() {
   // Merged Optimize tab is the DEFAULT (owner sign-off 2026-06-21). Escape hatch: set
   // compy_optimize="0" to fall back to the classic separate Check + Tune tabs (fully reversible).
   const optimizeMerged = readOptimizeMerged();
-  // Lab proving ground (spec 2026-07-08-lab-proving-ground, phase 1, DEFAULT OFF): when on, the Lab
-  // tab renders the merged LabGround room — Optimize's fixes + the "enable all the good tweaks"
-  // one-action fast path folded INTO the Lab, beside the measure→prove instruments (one slim room).
-  // Flag off → the untouched LabV2 + OptimizeV2 rooms render (byte-identical). Live-reactive to the
-  // Settings preview toggle (compy:lab-ground-changed) so flipping it re-swaps an already-mounted
-  // app without a reload — the same P-series pattern Lab uses for its guided/bento flags.
-  const [labGround, setLabGround] = useState(readLabGround);
-  useEffect(() => {
-    const onChange = () => setLabGround(readLabGround());
-    window.addEventListener("compy:lab-ground-changed", onChange);
-    return () => window.removeEventListener("compy:lab-ground-changed", onChange);
-  }, []);
+  // Lab proving ground (spec 2026-07-08-lab-proving-ground; DEFAULT ON since 2026-07-10, owner
+  // round-4 verdict): when on, the Lab tab renders the merged LabGround room — Optimize's fixes +
+  // the "enable all the good tweaks" one-action fast path folded INTO the Lab, beside the
+  // measure→prove instruments — and the standalone Check/Optimize tabs drop from the rail (the
+  // Lab's Optimize station is the one door). Flag "0" → the classic LabV2 + OptimizeV2 rooms and
+  // rail render (the failsafe). Live-reactive to the Settings toggle (compy:lab-ground-changed)
+  // so flipping it re-swaps an already-mounted app without a reload.
+  const labGround = useLabGroundFlag();
   // Monitor restructure (tab #2): segments the Monitor surface into Sessions(default)/Live. DEFAULT ON
   // (owner sign-off 2026-06-21). Escape hatch: compy_monitor="0" restores the classic single Play surface.
   // Guarded readers — a bare getItem in the render body throws (→ blank app) on storage-disabled WebView2.
@@ -849,13 +846,19 @@ function App() {
     // Optimize merge (phase 1a): when merged, Check folds INTO the "Optimize" slot — there is no
     // standalone Check tab, and the Optimize tab is present whenever EITHER half has content. When
     // off, the two stay separate exactly as before.
+    // Proving ground (owner decision 2026-07-10, ships with the default-ON flip): NO standalone
+    // Check/Optimize tab at all — the Lab's Optimize station is the one door to the toggles (its
+    // panel carries Fix + the ledger History; Check lives under "More cleanup"). Ground wins over
+    // the merge flag; compy_lab_ground="0" restores the classic tabs.
     const hasCheck = !!(readiness || priorities);
     const hasTune = (recs?.length ?? 0) > 0 || startup.length > 0 || gamingEnabled;
-    if (optimizeMerged) {
-      if (hasCheck || hasTune) list.push("Optimize");
-    } else {
-      if (hasCheck) list.push("Check"); // Check consolidates Readiness + Priorities into one section.
-      if (hasTune) list.push("Optimize");
+    if (!labGround) {
+      if (optimizeMerged) {
+        if (hasCheck || hasTune) list.push("Optimize");
+      } else {
+        if (hasCheck) list.push("Check"); // Check consolidates Readiness + Priorities into one section.
+        if (hasTune) list.push("Optimize");
+      }
     }
     // Learn is a rail room now (one-rail §1b) and is ALWAYS available — the knowledge library is
     // static/offline. Must be in visibleTabs or the reset effect would bounce it back to Overview.
@@ -866,7 +869,7 @@ function App() {
     if (diagnostics.length > 0) list.push("Diagnostics");
     if (changes.length > 0) list.push("History");
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, optimizeMerged]);
+  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, optimizeMerged, labGround]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -894,14 +897,19 @@ function App() {
         ? "Overview"
         : id === "check"
           ? // Merged: the rail has no standalone Check room, but map check→Optimize defensively
-            // (e.g. a stale persisted location) so it always lands on the merged tab.
-            optimizeMerged
-            ? "Optimize"
-            : "Check"
+            // (e.g. a stale persisted location) so it always lands on the merged tab. Ground: the
+            // toggles live in the Lab's Optimize station — check/fix both land on the Lab.
+            labGround
+            ? "Lab"
+            : optimizeMerged
+              ? "Optimize"
+              : "Check"
           : id === "play"
             ? "Play"
             : id === "fix"
-              ? "Optimize"
+              ? labGround
+                ? "Lab"
+                : "Optimize"
               : id === "learn"
                 ? "Learn"
                 : "Lab",
@@ -910,11 +918,12 @@ function App() {
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
     // Merged: Check has no rail room of its own — it folds into the "fix"-id Optimize room, so it
-    // highlights that one. Off: Check highlights its own room.
-    Check: optimizeMerged ? "fix" : "check",
+    // highlights that one. Off: Check highlights its own room. Ground: the fix room itself is gone
+    // from the rail — anything fix-flavored highlights the Lab (the one door to the toggles).
+    Check: labGround ? "lab" : optimizeMerged ? "fix" : "check",
     Play: "play",
-    Optimize: "fix",
-    History: "fix",
+    Optimize: labGround ? "lab" : "fix",
+    History: labGround ? "lab" : "fix",
     Learn: "learn",
     Lab: "lab",
     Diagnostics: "lab",
@@ -1275,7 +1284,9 @@ function App() {
               className="btn-small"
               disabled={gamingRestoring}
               onClick={() => {
-                setActiveTab("Optimize");
+                // Ground: the Gaming pane lives in the Lab's Optimize station (there is no
+                // standalone Optimize tab to review on).
+                setActiveTab(labGround ? "Lab" : "Optimize");
                 setGamingRecovery(null);
               }}
             >
@@ -1329,7 +1340,7 @@ function App() {
         // Home is the first V2 room (V2-3 — hologram hero + stats + priorities on RoomShell);
         // the remaining rooms still render their classic elements until V2-4..V2-7.
         <ShellV2
-          items={railFor(optimizeMerged)}
+          items={railFor(optimizeMerged, labGround)}
           activeId={activeHomeId}
           onNavigate={navHome}
           ledgerCount={changes.length}
@@ -1379,7 +1390,8 @@ function App() {
               sessions={sessions}
               changes={changes}
               onRunCheck={() => setShowFirstCheck(true)}
-              onSeeInFix={() => setActiveTab("Optimize")}
+              onSeeInFix={() => setActiveTab(labGround ? "Lab" : "Optimize")}
+              fixRoomLabel={labGround ? "Lab" : "Optimize"}
             />
           ) : (
             <>
