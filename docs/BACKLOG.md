@@ -175,10 +175,11 @@ rollout; bento un-retired as an option for OTHER surfaces, not the Lab). **Phase
   **self-review-fix** (RigViewer `chromeless` mode — footer form collided with corner gauges; + spotlight reset) `1b8c102`.
   Kit under `src/design/console/`; room `src/surfaces/LabConsole.{tsx,css}`. Verify at `1b8c102`: **tsc 0 · vitest 1157 ·
   `git diff b23a97e..HEAD -- src-tauri` EMPTY** (mutation boundary untouched, zero IPC).
-- **⛳ RESUME — Task 6 mid-flight (self-review → ship → owner eyeball):** self-review #1 FAILed (chromeless fix landed `1b8c102`),
-  a focused **re-review is running in the background** (self-reviewer agent `a2080315d9cae7054`, resumed — read its output file
-  or re-dispatch a self-review if lost). **NEXT:** (1) confirm re-review **PASS** (if FAIL, fix per its verdict + re-review);
-  (2) `npm run tauri build` → `scripts/ship-reinstall.ps1` → stamp-verify live==HEAD via embedded `COMPY_GIT_HASH`; (3) update
+- **⛳ RESUME — Task 6: self-review DONE (PASS), ship next.** self-review #1 FAILed → chromeless fix `1b8c102` →
+  **re-review PASSED all items** (DOM/rect/computed evidence: 0 caption/control/form nodes in the stage, all 4 corner gauges
+  legible over the bare hologram canvas, spotlight `--glow-intensity` resets to 0 on mid-session reduced flip, reticle absent
+  under reduced, no regressions; idle-rest 0-draw carried from pass #1). **NEXT (no more self-review needed — go straight to
+  ship):** (1) `npm run tauri build` → `scripts/ship-reinstall.ps1` → stamp-verify live==HEAD via embedded `COMPY_GIT_HASH`; (2) update
   `RELEASE_STATE.md` Snapshot + this steering log + `UI_VISION_BACKLOG.md` §C in the ship-docs commit; (4) owner eyeball: flip
   **Settings → Appearance → "Lab proving ground (preview)"**, open **Lab**. Then **final whole-branch review**
   (superpowers:requesting-code-review, most-capable model, base `b23a97e`). Two owner-deferred calls live in the spec's Open
