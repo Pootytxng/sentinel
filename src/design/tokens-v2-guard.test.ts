@@ -45,6 +45,7 @@ const hudTokensCss = loadV2Css("design", "tokens-hud.css");
 const shellCss = loadV2Css("design", "shell-v2.css");
 const homeCss = loadV2Css("surfaces", "home-v2.css");
 const homeHudCss = loadV2Css("surfaces", "home-hud.css");
+const homeConsoleCss = loadV2Css("surfaces", "home-console.css");
 const optimizeCss = loadV2Css("surfaces", "optimize-v2.css");
 const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
@@ -63,6 +64,7 @@ const V2_CSS: [string, string][] = [
   ["shell-v2.css", shellCss],
   ["home-v2.css", homeCss],
   ["home-hud.css", homeHudCss],
+  ["home-console.css", homeConsoleCss],
   ["optimize-v2.css", optimizeCss],
   ["monitor-v2.css", monitorCss],
   ["blackbook-v2.css", blackbookCss],

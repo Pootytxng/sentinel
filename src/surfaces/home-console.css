@@ -1,0 +1,330 @@
+/* Home console cold-open (compy_home_console, plan 2026-07-10-console-hud-phase2-home, Task 2+).
+   The Lab Ops Console's language on the app's opening screen: a bracketed stage holding the real
+   3D hologram center-stage + four honest corner arc gauges, instrument annotations on the edges,
+   and (Task 3) the room Dock below. EVERY selector is scoped under [data-v2="on"] (guard-pinned in
+   tokens-v2-guard.test.ts). Deliberately NOT scoped under [data-hud="on"] — the console flag is
+   independent of the Instrument-HUD flag, so the masthead register is ported here into hc- classes
+   instead of borrowing home-hud.css's data-hud-gated rules. Tokens only — no color literals; no
+   accent fills behind text. */
+
+/* The console kit (ArcGauge/Dock/ReticleCursor) reads the instrument layer (--ix-*). The home room
+   never adopted the lab/blackbook remap, so the console carries it — without this the kit would
+   paint the raw instrument.css theme (teal) instead of the live v2 accent. Same mapping as
+   lab-v2.css's room block, trimmed to what the kit + this sheet consume. */
+:root[data-v2="on"] .home-console {
+  --ix-glass-fill: var(--v2-panel);
+  --ix-glass-border: var(--v2-line);
+  --ix-glass-top: var(--v2-line-strong);
+  --ix-radius: var(--v2-r);
+  --ix-text-1: var(--v2-text);
+  --ix-text-2: var(--v2-muted);
+  --ix-text-3: var(--v2-faint);
+  --ix-accent: var(--v2-accent);
+  --ix-mono: var(--v2-font-mono);
+}
+
+:root[data-v2="on"] .home-console {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Masthead — HomeHud's proven system-console register, in the console's namespace ── */
+:root[data-v2="on"] .hc-masthead-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+  margin-bottom: 10px;
+}
+:root[data-v2="on"] .hc-masthead-eyebrow .hc-mono {
+  font: 10px var(--v2-font-mono);
+  letter-spacing: 0.08em;
+}
+:root[data-v2="on"] .hc-eyebrow-sep {
+  color: var(--v2-accent);
+  letter-spacing: 0;
+}
+/* The verdict speaks in sentence case — calm confidence, not a shouted banner (the round-1
+   type-voice correction carried over from the HUD masthead). */
+:root[data-v2="on"] .v2-verdict h1:has(.hc-headline) {
+  display: block;
+  margin: 0 0 6px;
+  font: 650 clamp(24px, 2.8vw, 32px) / 1.15 var(--v2-font-sans);
+  letter-spacing: -0.01em;
+  color: var(--v2-text);
+  max-width: 34ch;
+  text-wrap: balance;
+}
+:root[data-v2="on"] .hc-headline {
+  display: block;
+}
+:root[data-v2="on"] .hc-mono {
+  font-family: var(--v2-font-mono);
+}
+/* The readout strip — measured provenance as segmented instrument fields. */
+:root[data-v2="on"] .v2-measured:has(.hc-readout-seg) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  border-block: 1px solid var(--v2-line);
+  padding: 7px 2px;
+  margin-bottom: 22px;
+}
+:root[data-v2="on"] .hc-readout-seg {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hc-readout-seg .hc-mono {
+  font: 11px var(--v2-font-mono);
+  color: var(--v2-text);
+  letter-spacing: 0.02em;
+}
+:root[data-v2="on"] .hc-readout-seg + .hc-readout-seg {
+  border-left: 1px solid var(--v2-line);
+  padding-left: 18px;
+}
+:root[data-v2="on"] .hc-readout-warn,
+:root[data-v2="on"] .hc-readout-warn .hc-mono {
+  color: var(--v2-warn);
+}
+
+/* Status LEDs — real state only (scan while checks run, warn on flagged attention). */
+:root[data-v2="on"] .hc-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+:root[data-v2="on"] .hc-led-ok {
+  background: var(--v2-ok);
+  box-shadow: 0 0 5px var(--v2-ok-dim);
+}
+:root[data-v2="on"] .hc-led-warn {
+  background: var(--v2-warn);
+  box-shadow: 0 0 5px var(--v2-warn-dim);
+}
+:root[data-v2="on"] .hc-led-scan {
+  background: var(--v2-accent);
+  box-shadow: 0 0 5px var(--v2-accent-dim);
+}
+
+/* Buttons — quiet instrument chrome (HomeHud's register). */
+:root[data-v2="on"] .hc-btn {
+  font: 600 12px var(--v2-font-sans);
+  letter-spacing: 0.01em;
+  color: var(--v2-text);
+  background: transparent;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 3px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+:root[data-v2="on"] .hc-btn:hover {
+  border-color: var(--v2-accent-line);
+  background: var(--v2-accent-dim);
+}
+:root[data-v2="on"] .hc-btn-ghost {
+  flex: none;
+  font-weight: 500;
+  color: var(--v2-muted);
+  padding: 5px 11px;
+}
+:root[data-v2="on"] .hc-btn-ghost:hover {
+  color: var(--v2-text);
+}
+
+/* ── The console stage — bracketed frame, hologram centered, gauges pinned to the corners ── */
+:root[data-v2="on"] .hc-stage {
+  position: relative;
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+}
+
+:root[data-v2="on"] .hc-rig {
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+}
+:root[data-v2="on"] .hc-stage-cards {
+  padding: var(--v2-pad);
+  overflow-y: auto;
+  width: 100%;
+  max-height: 420px;
+}
+:root[data-v2="on"] .hc-stage-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--v2-faint);
+  font-size: 12px;
+}
+
+/* Corner brackets — the HUD framing device, two 1px edges per corner. */
+:root[data-v2="on"] .hc-brk {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: var(--ix-accent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+:root[data-v2="on"] .hc-brk-tl {
+  top: 10px;
+  left: 10px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+:root[data-v2="on"] .hc-brk-tr {
+  top: 10px;
+  right: 10px;
+  border-top: 2px solid;
+  border-right: 2px solid;
+}
+:root[data-v2="on"] .hc-brk-bl {
+  bottom: 10px;
+  left: 10px;
+  border-bottom: 2px solid;
+  border-left: 2px solid;
+}
+:root[data-v2="on"] .hc-brk-br {
+  bottom: 10px;
+  right: 10px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+
+:root[data-v2="on"] .hc-corner {
+  position: absolute;
+  z-index: 2;
+}
+:root[data-v2="on"] .hc-tl {
+  top: 22px;
+  left: 22px;
+}
+:root[data-v2="on"] .hc-tr {
+  top: 22px;
+  right: 22px;
+}
+:root[data-v2="on"] .hc-bl {
+  bottom: 22px;
+  left: 22px;
+}
+:root[data-v2="on"] .hc-br {
+  bottom: 22px;
+  right: 22px;
+}
+
+/* ── Instrument annotations — vertically centered on the stage edges, between the corner
+   gauges; the parallax plane (Task 4). Never intercept drag-orbit. ── */
+:root[data-v2="on"] .hc-ann {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+:root[data-v2="on"] .hc-ann-left {
+  left: 16px;
+  align-items: flex-start;
+}
+:root[data-v2="on"] .hc-ann-right {
+  right: 16px;
+  align-items: flex-end;
+}
+:root[data-v2="on"] .hc-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 200px;
+}
+:root[data-v2="on"] .hc-ann-left .hc-callout {
+  border-left: 1px solid var(--v2-line-strong);
+  padding-left: 9px;
+}
+:root[data-v2="on"] .hc-ann-right .hc-callout {
+  border-right: 1px solid var(--v2-line-strong);
+  padding-right: 9px;
+  align-items: flex-end;
+  text-align: right;
+}
+:root[data-v2="on"] .hc-callout-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .hc-callout-head b {
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+:root[data-v2="on"] .hc-callout-detail {
+  color: var(--v2-muted);
+  font-size: 11px;
+}
+:root[data-v2="on"] .hc-callout-v {
+  font-size: 12px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .hc-callout-v-ok {
+  color: var(--v2-ok);
+}
+:root[data-v2="on"] .hc-callout-v-warn {
+  color: var(--v2-warn);
+}
+
+/* ── Quiet view controls — bottom-center, between the two lower gauges ── */
+:root[data-v2="on"] .hc-controls {
+  position: absolute;
+  bottom: 14px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+}
+:root[data-v2="on"] .hc-seg-group {
+  display: flex;
+  gap: 4px;
+}
+:root[data-v2="on"] .hc-seg {
+  font: 600 11px var(--v2-font-sans);
+  letter-spacing: 0.01em;
+  color: var(--v2-muted);
+  background: transparent;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .hc-seg:hover {
+  color: var(--v2-text);
+  border-color: var(--v2-accent-line);
+}
+:root[data-v2="on"] .hc-seg-on {
+  background: var(--v2-accent-dim);
+  border-color: var(--v2-accent-line);
+  color: var(--v2-text);
+}
