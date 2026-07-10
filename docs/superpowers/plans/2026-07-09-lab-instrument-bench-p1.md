@@ -1,9 +1,10 @@
 # Lab "Instrument Bench" — Phase 1 Implementation Plan
 
-> **⛔ SUPERSEDED 2026-07-09 — this bento "Instrument Bench" plan was built (Phase 1, `403be45`) and
-> the owner REJECTED it on eyeball as generic slop. Its Phases 2–4 are DEAD — do NOT build them. The
-> live direction is the app-wide Ops Console HUD: spec `../specs/2026-07-09-compy-console-hud-direction.md`;
-> the Phase-1 plan for THAT is the one to build. Kept for the record only.**
+> **⚠️ NOT THE CURRENT LAB PLAN (updated 2026-07-09).** This bento "Instrument Bench" Phase 1 was built
+> (`403be45`) and the owner rejected it **as the Lab**; its Phases 2–4 are not being built. The Lab's
+> live plan is the Ops Console — spec `../specs/2026-07-09-compy-console-hud-direction.md` + its Phase-1
+> plan. **Bento itself is NOT retired** (owner, 2026-07-09) — the tile-grid pattern stays available for
+> other surfaces where it fits. Kept as reference.
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.

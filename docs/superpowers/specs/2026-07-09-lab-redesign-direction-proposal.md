@@ -1,11 +1,11 @@
 # Lab redesign — DIRECTION PROPOSAL (research + council, approval-gate BEFORE build)
 
-> **⛔ SUPERSEDED 2026-07-09 — the "Instrument Bench" bento direction below was BUILT (Phase 1,
-> `403be45`) and REJECTED by the owner on eyeball ("same old generic slop … wide horizontal boxes …
-> bento templates at the bottom"). The live direction is now `2026-07-09-compy-console-hud-direction.md`
-> (the app-wide Ops Console HUD — a spatial game-HUD cockpit, real 3D hologram center, magnify Dock,
-> arc gauges; Optimize+Benchmark merged in the Lab). Root cause of this doc's failure: it approved a
-> bento/glass-card vocabulary, which IS the slop. Kept for the record only — do NOT build from it.**
+> **⚠️ NOT THE CURRENT LAB DIRECTION (updated 2026-07-09).** The "Instrument Bench" bento below was
+> built (Phase 1, `403be45`) and the owner rejected it **as the Lab** ("same old generic slop … wide
+> horizontal boxes … bento templates at the bottom"). The Lab's live direction is now the Ops Console
+> HUD — `2026-07-09-compy-console-hud-direction.md`. **Bento is NOT retired, though** (owner, 2026-07-09):
+> a tidy tile grid stays a LIVE option for OTHER surfaces where it genuinely fits — this doc is kept as
+> a reference for that, not deleted. Just don't rebuild the *Lab* from it.
 >
 > **Status: PROPOSAL awaiting owner go/no-go. NO code until the owner passes on the direction.**
 > This is the deliverable the course-correction brief (`2026-07-09-lab-redesign-COURSE-CORRECTION.md`)

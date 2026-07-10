@@ -2,9 +2,11 @@
 
 > **Status: DIRECTION LOCKED (owner, 2026-07-09).** This is the summary interpretation the owner
 > signed off on after three rejected Lab attempts (drag gallery → linear spine → bento). It
-> **SUPERSEDES the visual/layout direction of** `2026-07-09-lab-redesign-direction-proposal.md`
+> **SUPERSEDES the Lab's visual/layout direction from** `2026-07-09-lab-redesign-direction-proposal.md`
 > ("The Instrument Bench" bento) and the still-open UI parts of `2026-07-08-lab-proving-ground.md`.
 > The catalog/§2a-dark/mutation-safety parts of those specs still stand — only the *look* changes here.
+> **Bento was rejected AS THE LAB, not banned outright** — a tidy tile grid stays a live option for
+> other surfaces where it genuinely fits (owner, 2026-07-09).
 >
 > **Visual reference (living mockup):** the Ops Console pitch — <https://claude.ai/code/artifact/e2830b73-cfc0-43c6-b263-5b59a1075639>
 > (Scene A is the approved direction; the centered rig is a stand-in for the real 3D hologram).
