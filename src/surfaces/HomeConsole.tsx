@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
@@ -14,6 +14,7 @@ import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Dock, type DockNode } from "../design/console/Dock";
+import { ReticleCursor } from "../design/console/ReticleCursor";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -114,6 +115,54 @@ export function HomeConsole({
   rooms,
 }: Props) {
   const reduced = useReducedMotion();
+
+  // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
+  // (LabConsole's exact mechanism). Custom props only; skipped entirely under reduced motion.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    // Reduced motion (incl. a mid-session flip): clear any stale glow the pointer handler left
+    // set, and attach nothing.
+    if (reduced) {
+      stage.style.setProperty("--glow-intensity", "0");
+      return;
+    }
+    const onMove = (e: PointerEvent) => {
+      const r = stage.getBoundingClientRect();
+      stage.style.setProperty("--glow-x", `${((e.clientX - r.left) / r.width) * 100}%`);
+      stage.style.setProperty("--glow-y", `${((e.clientY - r.top) / r.height) * 100}%`);
+      stage.style.setProperty("--glow-intensity", "1");
+    };
+    const onLeave = () => stage.style.setProperty("--glow-intensity", "0");
+    stage.addEventListener("pointermove", onMove);
+    stage.addEventListener("pointerleave", onLeave);
+    return () => {
+      stage.removeEventListener("pointermove", onMove);
+      stage.removeEventListener("pointerleave", onLeave);
+      stage.style.setProperty("--glow-intensity", "0");
+    };
+  }, [reduced]);
+
+  // ── pointer parallax (JARVIS depth, event-driven — no rAF loop, nothing runs on blur).
+  // HomeHud's exact mechanism: writes two CSS vars on the stage; ONLY the annotation plane
+  // consumes them, so the canvas (drag-orbit's home) never moves under the cursor.
+  const onStageMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (reduced || e.pointerType !== "mouse") return;
+    const el = stageRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * 2 - 1;
+    const py = ((e.clientY - r.top) / r.height) * 2 - 1;
+    el.style.setProperty("--hc-px", px.toFixed(3));
+    el.style.setProperty("--hc-py", py.toFixed(3));
+  };
+  const onStageLeave = () => {
+    const el = stageRef.current;
+    if (!el) return;
+    el.style.setProperty("--hc-px", "0");
+    el.style.setProperty("--hc-py", "0");
+  };
 
   // ── live probes (existing read-only commands; a failure just omits the value) — HomeHud's
   // 5s poll, ported verbatim ──
@@ -292,7 +341,12 @@ export function HomeConsole({
         {/* CONSOLE STAGE — bracketed frame, the real 3D hologram center, four honest corner
             gauges. No lede (owner header-slop law 2026-07-10): the console opens straight on
             the stage. */}
-        <div className="hc-stage">
+        <div
+          className="hc-stage"
+          ref={stageRef}
+          onPointerMove={onStageMove}
+          onPointerLeave={onStageLeave}
+        >
           <span className="hc-brk hc-brk-tl" aria-hidden="true" />
           <span className="hc-brk hc-brk-tr" aria-hidden="true" />
           <span className="hc-brk hc-brk-bl" aria-hidden="true" />
@@ -431,6 +485,9 @@ export function HomeConsole({
               </div>
             )}
           </div>
+          {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
+              + the rAF pointerleave stop — Phase-1's review fix). */}
+          <ReticleCursor scopeRef={stageRef} />
         </div>
 
         {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}

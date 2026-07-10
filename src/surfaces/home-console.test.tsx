@@ -296,6 +296,21 @@ describe("HomeConsole — the Dock into the rooms (navigation, honest doors)", (
   });
 });
 
+describe("HomeConsole — motion contract (Task 4)", () => {
+  it("reduced motion → the console root carries data-motion='reduced' (still page)", () => {
+    // use-motion is mocked reduced=true for this whole file — the still-page branch.
+    const c = mount().container;
+    expect(c.querySelector(".home-console")!.getAttribute("data-motion")).toBe("reduced");
+    // The reticle Target Cursor renders nothing under reduced motion (kit contract).
+    expect(c.querySelector(".lc-reticle")).toBeNull();
+  });
+
+  it("never paints the vendor MagicBento purple — the console is token-only", () => {
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(c.innerHTML).not.toMatch(/132\s*,\s*0\s*,\s*255/);
+  });
+});
+
 describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)", () => {
   it("renders the top limiter's real title, quiet confidence tag, and the jump control", () => {
     const jump = vi.fn();

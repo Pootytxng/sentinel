@@ -113,6 +113,21 @@
 :root[data-v2="on"] .hc-led-scan {
   background: var(--v2-accent);
   box-shadow: 0 0 5px var(--v2-accent-dim);
+  animation: v2-hc-pulse 1.4s ease-in-out infinite;
+}
+/* The masthead lives outside .home-console (RoomShell's verdict slot), so its LED stills via
+   the root data-motion attribute the motion system stamps. */
+:root[data-v2="on"][data-motion="reduced"] .hc-led-scan {
+  animation: none;
+}
+@keyframes v2-hc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* Buttons — quiet instrument chrome (HomeHud's register). */
@@ -370,3 +385,75 @@
   border-color: var(--v2-accent-line);
   color: var(--v2-text);
 }
+
+/* ── Task 4: the console comes ALIVE — cursor-follow spotlight · staggered reveal · parallax ──
+   ALL gated under .home-console[data-motion="full"]; the reduced branch (data-motion="reduced")
+   simply never matches, so it stays a flat still page (no explicit disable needed). The reticle
+   Target Cursor is a separate component (reticle.css), null under reduced motion. */
+
+/* Cursor-follow spotlight — a border-masked accent glow whose opacity tracks pointer proximity
+   via --glow-intensity (set by HomeConsole's pointer handler; LabConsole's exact mechanism). */
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage {
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+}
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: radial-gradient(320px circle at var(--glow-x) var(--glow-y), var(--ix-accent) 0%, transparent 58%);
+  opacity: calc(var(--glow-intensity) * 0.55);
+  transition: opacity 0.25s ease;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Annotation-plane parallax — ±6px against the pointer, transform-only, event-driven from the
+   component (no rAF loop). ONLY the annotation plane consumes the vars: the canvas (drag-orbit's
+   home) and the gauges never move under the cursor. Composes with the base translateY centering. */
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-ann {
+  transform: translate3d(
+    calc(var(--hc-px, 0) * -6px),
+    calc(-50% + var(--hc-py, 0) * -4px),
+    0
+  );
+  transition: transform 0.12s linear;
+}
+
+/* Staggered mount reveal — the stage, then the four corner gauges, then the limiter readout and
+   the dock rise + fade in. `backwards` fill holds the hidden FROM state through the delay without
+   pinning the end state afterward (a `both`/`forwards` fill would permanently outrank later
+   state — the bench's old hover-blocking bug). */
+@keyframes v2-hc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage,
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-corner,
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter,
+:root[data-v2="on"] .home-console[data-motion="full"] .dock {
+  animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-tl { animation-delay: 0.12s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-tr { animation-delay: 0.19s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-bl { animation-delay: 0.26s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-br { animation-delay: 0.33s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter { animation-delay: 0.26s; }
+:root[data-v2="on"] .home-console[data-motion="full"] .dock { animation-delay: 0.3s; }
