@@ -121,12 +121,30 @@ cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — re
 enable-all + Power features, the measure stations follow, the Gallery closes the room. React + confirm the deferred
 Optimize-tab call before it flips default-ON.
 
-**🟢 REDIRECTED → "THE INSTRUMENT BENCH" Phase 1 SHIPPED behind flag (`f16d158`→`403be45`, installer `2EF72796…B9231`,
-DEFAULT OFF, 2026-07-09):** the owner eyeballed the blended-spine marathon and **rejected the UI direction** (the
-telemetry gallery "makes 0 sense"; the linear spine was the binned one; none of it read JARVIS). Researched + council +
-owner-approved a new direction — **The Instrument Bench** (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`,
-plan `…/plans/2026-07-09-lab-instrument-bench-p1.md`): a **bento grid of living station bays** replacing the linear spine.
-Phase 1 (Tasks 2–5) built + shipped behind the SAME `compy_lab_ground` flag:
+**🟢 REDIRECTED AGAIN → "OPS CONSOLE" Phase 1 SHIPPED behind flag (`403be45`→`72eab61`, installer `7D29222E…19F28`,
+DEFAULT OFF, 2026-07-09):** the owner eyeballed the Instrument-Bench bento and **rejected it too** ("generic slop / wide
+horizontal boxes"). Brainstorming → 3 interactive HUD mockups (Artifact `e2830b73…`) → owner picked **A · Ops Console**:
+a spatial game-HUD — the real 3D rig hologram at center, corner arc gauges, a magnify Dock of stations. Direction LOCKED
+spec `docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`, plan `…/plans/2026-07-09-console-hud-phase1-lab.md`.
+Phase 1 (Tasks 1–6) built + shipped behind the SAME `compy_lab_ground` flag:
+- **`LabConsole` — the Ops Console (`b18f498`):** replaces the rejected `LabBench` bento (**DELETED**). Real `RigViewer`
+  hologram (chromeless) at center in a bracketed stage · four honest corner **ArcGauge**s (Readiness · Avg FPS · Safe stack ·
+  1% low — `null` source ⇒ honest NOT-YET, never a fabricated number) · a magnify **Dock** (Optimize the glowing theme-accent
+  primary, **opens on click** not always-on; measure bays Diagnostics/Benchmark/Latency/Tuning/Black Box, one detail at a time,
+  no Gallery). Reusable Console kit `src/design/console/` (ArcGauge/Sparkline/Dock/ReticleCursor).
+- **Reactivity + reticle (`e0f5a62`):** cursor-follow accent spotlight + staggered mount reveal (`@keyframes v2-lc-rise`) +
+  a stage-scoped **reticle Target Cursor** (a real slice of the JARVIS motion the §A stack was missing) — all
+  reduced-motion-gated, vendor purple `132,0,255` can never paint (test-pinned).
+- **Self-review + ship (`1b8c102`→`72eab61`):** pass #1 FAILed (RigViewer footer form collided with the corner gauges) →
+  chromeless RigViewer mode + spotlight reset → re-review **PASS** all items (0 chrome nodes in the stage, 4 gauges legible,
+  spotlight resets to 0 on mid-session reduced flip, reticle absent under reduced, idle-rest 0-draw). tsc 0 · vitest **1157**
+  (158 files) · `git diff b23a97e..72eab61 -- src-tauri` EMPTY. Stamp-verified `72eab61` LIVE, one installer on the Desktop.
+
+<details><summary>Superseded interim: "The Instrument Bench" bento Phase 1 (`403be45`) — owner-rejected on eyeball</summary>
+
+The prior redirect after the blended-spine marathon: a **bento grid of living station bays**
+(`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`). Shipped `403be45` (installer `2EF72796…B9231`),
+then owner-rejected as generic slop — replaced by the Ops Console above. Phase 1 (Tasks 2–5) as built:
 - **Task 1 — gallery DELETED (`2de8d17`):** the rejected drag telemetry gallery removed entirely (this UNBUILDS the §A.1
   realization above — the panoramic-gallery ask is retired, not shipped; the JARVIS motion is redirected onto the real
   bench + hologram per the approved proposal, not a sister-site scroll clone).
@@ -141,12 +159,16 @@ Phase 1 (Tasks 2–5) built + shipped behind the SAME `compy_lab_ground` flag:
   vendor-purple hover leak) → fixed CSS-only + 3 bug→guard pins → re-review **PASS**. tsc 0 · vitest **1151** · cargo
   **688** · `git diff f16d158..403be45 -- src-tauri` EMPTY. Stamp-verified `403be45` LIVE, one installer on the Desktop.
 
-**Still 🔴 OPEN after Phase 1:** phases 2–4 of the Instrument-Bench plan (data-reactivity across ALL bays · decode-text +
-magnetic cursor A.3 · hologram inertia A.4/OrbitControls + room-transition wipe A.6 · Lenis spine A.5). **Still the ONE
-open owner decision (unchanged):** the standalone **Optimize** rail tab still coexists with the Lab hero during preview —
-confirm dropping it when the flag is on before default-ON.
-⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — react to **The Instrument
-Bench** (the bento of bays, the living hero gauge, the reactive motion). This is the taste gate before default-ON + phases 2–4.
+</details>
+
+**Still 🔴 OPEN after Ops Console Phase 1:** Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
+real `Oscilloscope` kit bound to live telemetry · History/Black Box flight-recorder log · Gaming Mode arm/engage console ·
+Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). Still folds in the remaining §A JARVIS stack
+(decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5). **Two open owner-gated calls
+(unchanged):** the standalone **Optimize** rail tab still coexists with the Lab hero during preview (confirm dropping it at
+default-ON), and whether the Optimize panel open-on-click feels right vs always-visible.
+⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — react to the **Ops Console** (the
+real 3D hologram at center, the honest corner gauges, the Dock, the reticle). This is the taste gate before default-ON + phases 2–4.
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,

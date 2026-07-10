@@ -161,7 +161,7 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-09f — 🔨 Lab "Ops Console" redesign: DIRECTION LOCKED + Phase-1 Tasks 1–5 BUILT (main, flag OFF), Task 6 mid-flight
+### Cycle 2026-07-09f — ✅ Lab "Ops Console" Phase 1 COMPLETE + SHIPPED `72eab61` (DEFAULT OFF, owner eyeball pending)
 **Owner rejected the built bento Instrument Bench (`403be45`) as "generic slop / wide horizontal boxes."** Ran brainstorming
 → 3 interactive HUD mockups (Artifact <https://claude.ai/code/artifact/e2830b73-cfc0-43c6-b263-5b59a1075639>) → owner picked
 **A · Ops Console** (spatial game-HUD: real 3D hologram center + corner arc gauges + magnify Dock; reactbits-referenced), center =
@@ -175,16 +175,18 @@ rollout; bento un-retired as an option for OTHER surfaces, not the Lab). **Phase
   **self-review-fix** (RigViewer `chromeless` mode — footer form collided with corner gauges; + spotlight reset) `1b8c102`.
   Kit under `src/design/console/`; room `src/surfaces/LabConsole.{tsx,css}`. Verify at `1b8c102`: **tsc 0 · vitest 1157 ·
   `git diff b23a97e..HEAD -- src-tauri` EMPTY** (mutation boundary untouched, zero IPC).
-- **⛳ RESUME — Task 6: self-review DONE (PASS), ship next.** self-review #1 FAILed → chromeless fix `1b8c102` →
-  **re-review PASSED all items** (DOM/rect/computed evidence: 0 caption/control/form nodes in the stage, all 4 corner gauges
-  legible over the bare hologram canvas, spotlight `--glow-intensity` resets to 0 on mid-session reduced flip, reticle absent
-  under reduced, no regressions; idle-rest 0-draw carried from pass #1). **NEXT (no more self-review needed — go straight to
-  ship):** (1) `npm run tauri build` → `scripts/ship-reinstall.ps1` → stamp-verify live==HEAD via embedded `COMPY_GIT_HASH`; (2) update
-  `RELEASE_STATE.md` Snapshot + this steering log + `UI_VISION_BACKLOG.md` §C in the ship-docs commit; (4) owner eyeball: flip
-  **Settings → Appearance → "Lab proving ground (preview)"**, open **Lab**. Then **final whole-branch review**
-  (superpowers:requesting-code-review, most-capable model, base `b23a97e`). Two owner-deferred calls live in the spec's Open
-  section: Optimize panel open-on-click vs always-visible · drop the standalone Optimize tab at default-on. **Phases 2–4
-  (per-tab rollout) each get their own plan AFTER this eyeball.**
+- **✅ SHIPPED 2026-07-09 · installer SHA-256 `7D29222E…19F28` · LIVE** (stamp-verified: installed exe embeds `72eab61`,
+  ship-reinstall stale-build gate passed, Desktop holds exactly one installer). Task 6 done: self-review #1 FAILed →
+  chromeless fix `1b8c102` → **re-review PASSED all items** (DOM/rect/computed evidence: 0 caption/control/form nodes in the
+  stage, all 4 corner gauges legible over the bare hologram canvas, spotlight `--glow-intensity` resets to 0 on mid-session
+  reduced flip, reticle absent under reduced, idle-rest 0-draw). Full verify at `72eab61`: **tsc 0 · vitest 1157 (158 files) ·
+  `git diff b23a97e..72eab61 -- src-tauri` EMPTY** (cargo unchanged by construction). RELEASE_STATE Snapshot + this log +
+  `UI_VISION_BACKLOG.md` §C updated in the ship-docs commit.
+- **⛳ RESUME (fresh session):** (1) **OWNER EYEBALL** — flip **Settings → Appearance → "Lab proving ground (preview)"**, open
+  the **Lab** tab, react to the Ops Console. Two owner-gated calls in the spec's Open section: Optimize panel open-on-click vs
+  always-visible · drop the standalone Optimize tab at default-ON. (2) **Final whole-branch review**
+  (`superpowers:requesting-code-review`, most-capable model, base `b23a97e`). (3) **Phases 2–4 (per-tab Console rollout)** each
+  get their own plan AFTER the eyeball.
 
 ### Cycle 2026-07-09e — ✅ Instrument Bench Phase 1 Tasks 2–5 COMPLETE + SHIPPED `403be45` (DEFAULT OFF, owner eyeball pending)
 **✅ DONE 2026-07-09 · installer SHA-256 `2EF72796…B9231` · LIVE (stamp-verified: installed exe embeds `403be45`, prior
