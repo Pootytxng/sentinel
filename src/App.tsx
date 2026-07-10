@@ -1392,6 +1392,13 @@ function App() {
               onRunCheck={() => setShowFirstCheck(true)}
               onSeeInFix={() => setActiveTab(labGround ? "Lab" : "Optimize")}
               fixRoomLabel={labGround ? "Lab" : "Optimize"}
+              // Console-only (compy_home_console): the Home dock's doors are the rail the app
+              // actually shows (railFor — the 4-room ground rail at default-ON) minus Home
+              // itself, navigating through the SAME navHome mapping the rail uses.
+              onNavigate={(k) => navHome(k as HomeRailId)}
+              rooms={railFor(optimizeMerged, labGround)
+                .filter((r) => r.id !== "home")
+                .map((r) => ({ key: r.id, name: r.label }))}
             />
           ) : (
             <>

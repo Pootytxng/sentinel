@@ -294,6 +294,48 @@
   color: var(--v2-warn);
 }
 
+/* ── The #1-limiter readout — a context row beside the dock: micro-label · the measured
+   title · quiet confidence tag (never the retired uppercase alert-badge) · jump control.
+   Clean state renders nothing, so there is no empty-state styling. ── */
+:root[data-v2="on"] .hc-limiter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+}
+:root[data-v2="on"] .hc-limiter-label {
+  font: 600 10px var(--v2-font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+  flex: none;
+}
+:root[data-v2="on"] .hc-limiter-title {
+  font-size: 13px;
+  color: var(--v2-text);
+  min-width: 0;
+}
+:root[data-v2="on"] .hc-limiter-tag {
+  font-size: 10px;
+  color: var(--v2-faint);
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex: none;
+}
+:root[data-v2="on"] .hc-limiter .hc-btn-ghost {
+  margin-left: auto;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  font: 500 12px var(--v2-font-sans);
+}
+
 /* ── Quiet view controls — bottom-center, between the two lower gauges ── */
 :root[data-v2="on"] .hc-controls {
   position: absolute;

@@ -13,6 +13,7 @@ import { gradeFps, gradeLow1, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
+import { Dock, type DockNode } from "../design/console/Dock";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -43,6 +44,10 @@ type Props = {
   onSeeInFix: () => void;
   /** Where limiter jumps land: "Lab" on the proving-ground rail, "Optimize" classic. */
   fixRoomLabel?: string;
+  /** Rail navigation — App's navHome. The Dock is doors, not panels. */
+  onNavigate?: (key: string) => void;
+  /** The rooms the rail actually shows (railFor minus home itself) — honest doors only. */
+  rooms?: { key: string; name: string }[];
 };
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
@@ -103,6 +108,10 @@ export function HomeConsole({
   sessions,
   changes,
   onRunCheck,
+  onSeeInFix,
+  fixRoomLabel = "Optimize",
+  onNavigate,
+  rooms,
 }: Props) {
   const reduced = useReducedMotion();
 
@@ -220,6 +229,22 @@ export function HomeConsole({
     sysDisk && sysDisk.total_bytes > 0
       ? Math.round(((sysDisk.total_bytes - sysDisk.available_bytes) / sysDisk.total_bytes) * 100)
       : null;
+
+  // ── the Dock into the rooms — doors, not panels (Task 3). Nodes come from the rail App
+  // actually shows (honest doors: a room off the rail gets no door); the guided-action room
+  // glows primary — the "fix" room when the rail has one, else the Lab (the proving-ground
+  // rail's one door to the toggles). Home never marks a room active (activeKey stays null —
+  // these are exits, not an open panel).
+  const primaryKey = rooms?.some((r) => r.key === "fix") ? "fix" : "lab";
+  const dockNodes: DockNode[] = (rooms ?? []).map((r) => ({
+    key: r.key,
+    name: r.name,
+    primary: r.key === primaryKey,
+  }));
+
+  // The #1 measured limiter — a context row beside the dock: measured fact + its fix route.
+  // Clean or still-loading renders NOTHING (the verdict owns "measured clean" — one-owner law).
+  const topLimiter = priorities?.limiters?.[0] ?? null;
 
   return (
     <RoomShell
@@ -407,6 +432,23 @@ export function HomeConsole({
             )}
           </div>
         </div>
+
+        {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
+        {topLimiter && (
+          <div className="hc-limiter">
+            <span className="hc-limiter-label">top limiter</span>
+            <span className="hc-limiter-title">{topLimiter.title}</span>
+            <span className="hc-limiter-tag hc-mono">{topLimiter.confidence} confidence</span>
+            <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
+              See in {fixRoomLabel}
+            </button>
+          </div>
+        )}
+
+        {/* THE DOCK — navigate into the rooms the rail actually shows. */}
+        {dockNodes.length > 0 && onNavigate && (
+          <Dock nodes={dockNodes} activeKey={null} onOpen={onNavigate} />
+        )}
       </div>
     </RoomShell>
   );

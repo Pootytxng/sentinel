@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import { ShellV2 } from "../design/ShellV2";
 import { railFor } from "../design/homeRail";
 import { postureLine } from "./command-center-data";
@@ -152,6 +152,9 @@ const props: {
   changes: AppliedChange[];
   onRunCheck: () => void;
   onSeeInFix: () => void;
+  fixRoomLabel?: string;
+  onNavigate?: (key: string) => void;
+  rooms?: { key: string; name: string }[];
 } = {
   hw,
   readiness,
@@ -230,5 +233,89 @@ describe("HomeConsole — the console stage (hologram center + honest corner gau
     const c = mount().container;
     await waitFor(() => expect(c.querySelector(".hc-br .ag-v")!.textContent).toBe("62"));
     expect(c.querySelector(".hc-br .ag-tag-ny")).toBeNull();
+  });
+});
+
+// The ground rail's rooms minus home itself — what App threads at default-ON (Task 3).
+const groundRooms = [
+  { key: "play", name: "Monitor" },
+  { key: "learn", name: "Blackbook" },
+  { key: "lab", name: "Lab" },
+];
+
+// The ShellV2 rail renders buttons with the same room names, so every dock assertion scopes
+// to the .dock subtree (the console's doors, not the app rail).
+const dockNode = (c: HTMLElement, name: string): HTMLElement | null => {
+  const nodes = Array.from(c.querySelectorAll<HTMLElement>(".dock .dock-node"));
+  return nodes.find((n) => n.querySelector(".dock-nm")?.textContent === name) ?? null;
+};
+
+describe("HomeConsole — the Dock into the rooms (navigation, honest doors)", () => {
+  it("renders one dock door per passed room and clicking fires onNavigate with that key", () => {
+    const nav = vi.fn();
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: nav }).container;
+    expect(c.querySelectorAll(".dock .dock-node")).toHaveLength(3);
+    fireEvent.click(dockNode(c, "Monitor")!);
+    expect(nav).toHaveBeenCalledWith("play");
+    fireEvent.click(dockNode(c, "Blackbook")!);
+    expect(nav).toHaveBeenCalledWith("learn");
+  });
+
+  it("no door for a room not in the list; no rooms → no dock at all (honest doors)", () => {
+    const c = mount({
+      ...props,
+      rooms: [{ key: "play", name: "Monitor" }],
+      onNavigate: () => {},
+    }).container;
+    expect(dockNode(c, "Monitor")).not.toBeNull();
+    expect(dockNode(c, "Blackbook")).toBeNull();
+    cleanup();
+    const bare = mount().container;
+    expect(bare.querySelector(".dock")).toBeNull();
+  });
+
+  it("the guided-action room glows primary: 'fix' when the rail has one, else the Lab (ground)", () => {
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(dockNode(c, "Lab")!.className).toContain("dock-node-primary");
+    expect(dockNode(c, "Monitor")!.className).not.toContain("dock-node-primary");
+    cleanup();
+    const classic = mount({
+      ...props,
+      rooms: [
+        { key: "fix", name: "Optimize" },
+        ...groundRooms.filter((r) => r.key !== "lab"),
+      ],
+      onNavigate: () => {},
+    }).container;
+    expect(dockNode(classic, "Optimize")!.className).toContain("dock-node-primary");
+  });
+
+  it("Home never marks a room active (activeKey stays null)", () => {
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(c.querySelector(".dock-node-active")).toBeNull();
+  });
+});
+
+describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)", () => {
+  it("renders the top limiter's real title, quiet confidence tag, and the jump control", () => {
+    const jump = vi.fn();
+    const c = mount({ ...props, onSeeInFix: jump, fixRoomLabel: "Lab" }).container;
+    const row = c.querySelector(".hc-limiter")!;
+    expect(row).not.toBeNull();
+    expect(row.textContent).toContain("C: drive is 87% full");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("high confidence");
+    fireEvent.click(row.querySelector("button")!);
+    expect(jump).toHaveBeenCalled();
+  });
+
+  it("renders NOTHING when limiters are empty or priorities are still loading (no placeholder)", () => {
+    const clean = mount({
+      ...props,
+      priorities: { ...(priorities as Priorities), limiters: [] },
+    }).container;
+    expect(clean.querySelector(".hc-limiter")).toBeNull();
+    cleanup();
+    const loading = mount({ ...props, priorities: null }).container;
+    expect(loading.querySelector(".hc-limiter")).toBeNull();
   });
 });

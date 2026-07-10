@@ -24,6 +24,10 @@ type Props = {
   /** The room the "See in …" limiter buttons land in — "Lab" under the proving-ground rail
    *  (no standalone Optimize tab), "Optimize" on the classic compy_lab_ground="0" failsafe. */
   fixRoomLabel?: string;
+  /** Console-only (compy_home_console): rail navigation for the Dock — App's navHome. */
+  onNavigate?: (key: string) => void;
+  /** Console-only: the rooms the rail actually shows (railFor minus home) — honest doors. */
+  rooms?: { key: string; name: string }[];
 };
 
 export function HomeRoom(props: Props) {
