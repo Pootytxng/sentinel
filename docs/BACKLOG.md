@@ -161,6 +161,30 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10c — ✅ Console round-3 owner catches SHIPPED `889de10` (dock false-highlight · gauge readout over the ring stroke · drift-aware caption)
+
+**Owner round-3 eyeball caught 2 bugs on the `626b83c` build** ("the optimize box seems to be default
+highlighted before actually clicking it" · "the 8/9 safe stack icon is distorted") + asked for a self-run
+abnormality sweep, green-lit continuing. Root causes (live CDP rect/computed evidence, systematic-debugging):
+(1) `.dock-node-primary` wore the EXACT accent border `.dock-node-active` uses → resting primary now a 35%
+color-mix border (accent ink kept); active alone gets full accent border + 14% tinted fill. (2)
+`.lab-gauge-center` single-line `align-items: baseline` flex anchored the readout to the TOP of the 76px ring
+box — "8/9" painted over the ring stroke (num rect y == box y, proven) → outer box centers, new
+`.lab-gauge-txt` inner group owns the baseline. (3) Sweep catch (self-reviewer, the abnormality class the
+owner asked for): with a drifted rec the ring caption said "1 left to enable below" while the corner gauge
+said "0 ready" — the caption re-framed the drift group's item as a fresh enable → caption now splits
+freshPending vs driftedPending ("1 was turned off outside Compy — restore it below." / mixed branch).
+bug→guard: `optimize-gauge-dock-guard.test.tsx` (7 tests — structural pin, CSS pins both files, all three
+caption branches). Verify: tsc 0 · vitest **1168** (159 files; the one full-suite red was
+`export-library.test.mjs` hook-timeout under dev-server contention, green in 21s once dev stopped) ·
+`git diff -- src-tauri` EMPTY · self-reviewer **PASS ×2** (native 1500×980: resting primary border
+`color(srgb …/0.35)` vs active full accent + tint, active look moves station-to-station; readout center
+±1px of ring center; drift caption live-verified against the rig's real drifted Game Mode).
+- **✅ SHIPPED 2026-07-10 · installer SHA-256 `945E86B1767362391318E18EBC36EB58AAFA1E909D563DA562DB3B0352E81A5C` ·
+  LIVE** — stamp-verified `889de10` in the installed exe, stale-build gate passed, one installer on the Desktop.
+- **⛳ RESUME:** owner eyeball round 4 on this build (`compy_lab_ground` stays ON). Phase-2 Home plan
+  (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`) stays entry-gated on his verdict.
+
 ### Cycle 2026-07-10b — ✅ Title-header law SHIPPED `626b83c` (owner round-2: "header = a title, not a description/notification") — built + guarded + self-review PASS + LIVE
 
 **Owner round-2 feedback (verbatim):** header must be a TITLE; "1 change you applied was turned off outside compy"
