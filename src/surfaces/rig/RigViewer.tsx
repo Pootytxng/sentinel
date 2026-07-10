@@ -47,6 +47,9 @@ export const RigViewer = memo(function RigViewer({
   // No fan sensors publishing → no monitor running → offer the honest "light up sensors" nudge.
   const [noMonitor, setNoMonitor] = useState(false);
   useEffect(() => {
+    // The only consumer of noMonitor is the fan/monitor nudge, which lives behind {!chromeless}.
+    // In chromeless mode (the Ops Console) polling get_fan_sensors every 6s buys nothing — skip it.
+    if (chromeless) return;
     let cancelled = false;
     const poll = () => {
       invoke<{ label: string; rpm: number; source: string }[]>("get_fan_sensors")
@@ -59,7 +62,7 @@ export const RigViewer = memo(function RigViewer({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [chromeless]);
 
   const onAdd = (e: FormEvent) => {
     e.preventDefault();

@@ -262,10 +262,11 @@ export function LabConsole({
         <div className="lc-corner lc-bl">
           <ArcGauge
             label="Safe stack"
-            value={safeReady}
+            value={fast.recs != null ? safeReady : null}
             max={Math.max(1, safeReady)}
             unit="ready"
             tone="accent"
+            measured={fast.recs != null}
           />
         </div>
         <div className="lc-corner lc-br">

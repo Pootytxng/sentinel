@@ -44,6 +44,12 @@ export function ReticleCursor({ scopeRef }: { scopeRef: RefObject<HTMLElement | 
     const onLeave = () => {
       scope.classList.remove("lc-has-reticle");
       el.style.opacity = "0";
+      // Stop the rAF loop while the pointer is away — an invisible reticle must not write a
+      // transform every frame for the tab's whole lifetime (idle-GPU discipline). onEnter restarts it.
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
     };
     const isTarget = (e: Event) =>
       e.target instanceof Element && !!e.target.closest("[data-target], button");

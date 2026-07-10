@@ -158,10 +158,26 @@ describe("LabConsole", () => {
     expect(screen.getAllByText(/not yet/i).length).toBeGreaterThan(0);
   });
 
-  it("the safe-stack gauge always shows a real number, never a placeholder", () => {
+  it("the safe-stack gauge shows the real remaining count when recs are loaded", () => {
     renderConsole();
-    // safeReady is always a number (2 unapplied safe recs here) — its gauge is never empty.
-    expect(screen.getByText("Safe stack")).toBeInTheDocument();
+    // Two unapplied safe recs in the fixture → the gauge reads "2 · measured", never NOT-YET.
+    const bl = document.querySelector(".lc-bl")!;
+    expect(bl.textContent).toContain("Safe stack");
+    expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
+    expect(bl.querySelector(".ag-tag-ny")).toBeNull(); // NOT the NOT-YET tag
+  });
+
+  it("the safe-stack gauge is honest NOT-YET (never a fabricated 0) while recs are not loaded — bug→guard 2026-07-09", () => {
+    // recs load independently of hw in App (App gates LabGround on hw only), so before
+    // get_recommendations resolves — or permanently if it errors — fast.recs is null. The gauge must
+    // read NOT-YET, never "0 ready · measured" (the honesty-rail violation the branch review caught).
+    renderConsole({
+      ...base,
+      fast: { ...fast, recs: null as unknown as LabFastPathProps["recs"] },
+    });
+    const bl = document.querySelector(".lc-bl")!;
+    expect(bl.querySelector(".ag-tag-ny")).not.toBeNull(); // the NOT-YET tag is present
+    expect(bl.querySelector(".ag-v")!.textContent).not.toBe("0"); // never a fabricated 0
   });
 
   it("reduced motion is threaded through (no throw, console still renders every station)", () => {
