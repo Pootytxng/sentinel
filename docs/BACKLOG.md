@@ -182,8 +182,12 @@ caption branches). Verify: tsc 0 · vitest **1168** (159 files; the one full-sui
 ±1px of ring center; drift caption live-verified against the rig's real drifted Game Mode).
 - **✅ SHIPPED 2026-07-10 · installer SHA-256 `945E86B1767362391318E18EBC36EB58AAFA1E909D563DA562DB3B0352E81A5C` ·
   LIVE** — stamp-verified `889de10` in the installed exe, stale-build gate passed, one installer on the Desktop.
-- **⛳ RESUME:** owner eyeball round 4 on this build (`compy_lab_ground` stays ON). Phase-2 Home plan
-  (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`) stays entry-gated on his verdict.
+- **✅ OWNER VERDICT 2026-07-10 (round 4): "ALL GOOD"** — the Ops Console eyeball gate is CLEARED.
+- **⛳ RESUME (next train, FRESH session per the Lab-overhaul law):** (1) flip `compy_lab_ground`
+  **default-ON** + **drop the standalone Optimize tab** in the same train (both DECIDED 2026-07-10 —
+  the removal ships WITH the flip; classic stays the `"0"` failsafe); (2) then build **Phase 2 Home
+  cold-open** (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`, flag
+  `compy_home_console` DEFAULT OFF) — its entry gate (the owner's console verdict) is now open.
 
 ### Cycle 2026-07-10b — ✅ Title-header law SHIPPED `626b83c` (owner round-2: "header = a title, not a description/notification") — built + guarded + self-review PASS + LIVE
 
