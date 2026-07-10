@@ -161,6 +161,30 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-09f — 🔨 Lab "Ops Console" redesign: DIRECTION LOCKED + Phase-1 Tasks 1–5 BUILT (main, flag OFF), Task 6 mid-flight
+**Owner rejected the built bento Instrument Bench (`403be45`) as "generic slop / wide horizontal boxes."** Ran brainstorming
+→ 3 interactive HUD mockups (Artifact <https://claude.ai/code/artifact/e2830b73-cfc0-43c6-b263-5b59a1075639>) → owner picked
+**A · Ops Console** (spatial game-HUD: real 3D hologram center + corner arc gauges + magnify Dock; reactbits-referenced), center =
+the real recognizable hologram. **Direction LOCKED spec: [`docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`](superpowers/specs/2026-07-09-compy-console-hud-direction.md)**
+(app-wide language; Lab merges Optimize toggles + Benchmark, each individually accessible; build order = Lab first then per-tab
+rollout; bento un-retired as an option for OTHER surfaces, not the Lab). **Phase-1 plan: [`docs/superpowers/plans/2026-07-09-console-hud-phase1-lab.md`](superpowers/plans/2026-07-09-console-hud-phase1-lab.md)** (6 tasks, TDD, subagent-driven; ledger `.superpowers/sdd/progress.md`).
+- **BUILT + committed on `main`, all behind `compy_lab_ground` DEFAULT OFF (live app byte-identical):** T1 ArcGauge `9558cfa` ·
+  T2 Sparkline `9e2eb64` · T3 Dock `7b85cf9` · kit-fix (ArcGauge centering, CDP-caught) `6bbb1e7` · **T4 LabConsole** (real
+  hologram center + 4 honest corner gauges + station Dock; Optimize primary, opens on click; **bento DELETED**) `b18f498` ·
+  **T5 reactivity+reticle** (accent spotlight + staggered reveal `@keyframes v2-lc-rise` + stage-scoped ReticleCursor) `e0f5a62` ·
+  **self-review-fix** (RigViewer `chromeless` mode — footer form collided with corner gauges; + spotlight reset) `1b8c102`.
+  Kit under `src/design/console/`; room `src/surfaces/LabConsole.{tsx,css}`. Verify at `1b8c102`: **tsc 0 · vitest 1157 ·
+  `git diff b23a97e..HEAD -- src-tauri` EMPTY** (mutation boundary untouched, zero IPC).
+- **⛳ RESUME — Task 6 mid-flight (self-review → ship → owner eyeball):** self-review #1 FAILed (chromeless fix landed `1b8c102`),
+  a focused **re-review is running in the background** (self-reviewer agent `a2080315d9cae7054`, resumed — read its output file
+  or re-dispatch a self-review if lost). **NEXT:** (1) confirm re-review **PASS** (if FAIL, fix per its verdict + re-review);
+  (2) `npm run tauri build` → `scripts/ship-reinstall.ps1` → stamp-verify live==HEAD via embedded `COMPY_GIT_HASH`; (3) update
+  `RELEASE_STATE.md` Snapshot + this steering log + `UI_VISION_BACKLOG.md` §C in the ship-docs commit; (4) owner eyeball: flip
+  **Settings → Appearance → "Lab proving ground (preview)"**, open **Lab**. Then **final whole-branch review**
+  (superpowers:requesting-code-review, most-capable model, base `b23a97e`). Two owner-deferred calls live in the spec's Open
+  section: Optimize panel open-on-click vs always-visible · drop the standalone Optimize tab at default-on. **Phases 2–4
+  (per-tab rollout) each get their own plan AFTER this eyeball.**
+
 ### Cycle 2026-07-09e — ✅ Instrument Bench Phase 1 Tasks 2–5 COMPLETE + SHIPPED `403be45` (DEFAULT OFF, owner eyeball pending)
 **✅ DONE 2026-07-09 · installer SHA-256 `2EF72796…B9231` · LIVE (stamp-verified: installed exe embeds `403be45`, prior
 `77d0233` absent, ship-reinstall stale-build gate passed, Desktop holds exactly one installer).** Built straight through
