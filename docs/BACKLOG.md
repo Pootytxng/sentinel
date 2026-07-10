@@ -161,11 +161,11 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-10b — 🔄 IN FLIGHT: title-header law (owner round-2: "header = a title, not a description/notification") — built + guarded + self-review PASS + COMMITTED; ship pending
+### Cycle 2026-07-10b — ✅ Title-header law SHIPPED `626b83c` (owner round-2: "header = a title, not a description/notification") — built + guarded + self-review PASS + LIVE
 
 **Owner round-2 feedback (verbatim):** header must be a TITLE; "1 change you applied was turned off outside compy"
 (the optimizeVerdict drift headline standing as the Lab h1) relocates somewhere sensible; sweep the class app-wide.
-**Built (working tree, NOT yet committed):** hud-on h1 = room title in all 5 v2 rooms (`LabGround`/`OptimizeV2`/
+**Built (`626b83c`):** hud-on h1 = room title in all 5 v2 rooms (`LabGround`/`OptimizeV2`/
 `MonitorV2`/`BlackbookV2`/`LabV2` — "Lab"/"Optimize"/"Monitor"/"Blackbook"); header `sub` dropped under hud; classic
 `compy_editorial="0"` failsafe keeps verdict headers. Relocations: drift guidance + "never re-applies" → Fix drift
 intro; undo promise → Fix consent line (`lc-detail-note` trimmed to read-only-room fact, no double-say); Monitor's
@@ -177,11 +177,13 @@ lab-ground "Lab" pin · lab-console note pin. Law: self-reviewer rubric 6 upgrad
 files) · `git diff -- src-tauri` EMPTY. Self-review round 1: FAIL on the hero-hide only → fixed + bug→guard'd →
 **re-review PASS** (hero row live-verified "Smooth · 1m 44s · live estimate" w=1074 h=26, ×1 on screen; classic "0"
 hide re-applies; guards 14/14; flags left `compy_lab_ground="1"`, `compy_editorial` default).
-- **⛳ RESUME (ship only):** (1) `npm run tauri build` → `ship` skill (silent reinstall, stamp-verify live == HEAD,
-  ONE installer on the Desktop); (2) ship-docs commit — this entry ✅ SHIPPED + RELEASE_STATE Snapshot row;
-  (3) owner eyeball round 3: Lab preview toggle should already be ON (reviewer restored it) — verify, else he
-  re-flips. Phase-2 Home plan (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`) stays entry-gated
-  on his verdict.
+- **✅ SHIPPED 2026-07-10 · installer SHA-256 `9D5434ED59F0BBD0078A0C146FE79CCE57657EFE15A771250EE2CD34A9626522` ·
+  LIVE** — stamp-verified: `626b83c` embedded in the installed exe (`Select-String` true), ship-reinstall
+  stale-build gate passed, exactly one installer on the Desktop.
+- **⛳ RESUME:** owner eyeball round 3 — the Lab preview toggle should already be ON (the review left
+  `compy_lab_ground="1"`); if the Lab tab doesn't show the Ops Console, re-flip Settings → Appearance →
+  "Lab proving ground (preview)". Phase-2 Home plan
+  (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`) stays entry-gated on his verdict.
 
 ### Cycle 2026-07-10a — ✅ Header-slop law SHIPPED `1a9f44f` (owner round-1 Ops Console feedback; open-on-click CONFIRMED)
 
