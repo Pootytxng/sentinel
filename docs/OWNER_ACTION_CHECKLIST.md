@@ -31,14 +31,13 @@ copy on first launch). Only matters when you're actually ready to send the beta 
 here so it isn't forgotten at send time.
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
-### A3. Lab Ops Console — round-2 eyeball  ·  ⏳ (one toggle flip + a look)
-The Lab's **Ops Console** is LIVE behind the preview flag (`63585e9`, header-slop sweep `1a9f44f` on top —
-the direction you picked from the three HUD mockups; the Instrument-Bench bento was rejected + deleted).
-**On you:** flip **Settings → Appearance → "Lab proving ground (preview)"** back ON — the self-review run
-reset it to OFF — open the **Lab** tab, and react (round 2, after your header-slop feedback landed).
-Both spec calls are now decided: open-on-click ✅ ("cleaner", 2026-07-10) · **drop the standalone Optimize
-tab at default-ON ✅ (your call, 2026-07-10)** — the tab drop ships with the default-ON flip, after this
-eyeball. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-10a.
+### A3. Lab Ops Console — ✅ RESOLVED (your round-4 "ALL GOOD", 2026-07-10) → default-ON SHIPPED
+The eyeball gate is cleared and both your calls shipped in `59249bb` (2026-07-10, live on your Desktop
+build): the **Ops Console Lab is the default** and the **standalone Optimize tab is gone** — the rail is
+Home · Monitor · Blackbook · Lab, and the Lab's Optimize station (open-on-click, your "cleaner" call) is
+the one door to the toggles, with "Applied & history" undo inside the panel. Nothing on you here anymore;
+if anything feels off, Settings → Appearance → "Lab proving ground" OFF restores the classic look
+instantly. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-10a–d.
 
 ---
 

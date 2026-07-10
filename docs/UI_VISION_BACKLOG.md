@@ -176,8 +176,10 @@ Settings quiet chrome · then the app-wide viewport HUD frame + global reticle).
 2026-07-10:** Optimize panel **open-on-click confirmed** ("cleaner") · the standalone **Optimize rail tab DROPS at
 default-ON** (owner call; the removal ships with the default-ON flip, after the eyeball). Phase-2 (Home cold-open) plan
 committed: `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (entry-gated on the round-2 eyeball).
-⏳ Owner eyeball round 2: **re-flip** Settings → Appearance → "Lab proving ground (preview)" (the self-review run reset it),
-open Lab — react to the **Ops Console** post header-slop sweep (`1a9f44f`). This is the taste gate before default-ON + phases 2–4.
+✅ **Eyeball gate CLEARED (owner round-4 "ALL GOOD", 2026-07-10) → default-ON + tab drop SHIPPED LIVE `59249bb`:**
+the Ops Console Lab is the default, the rail is Home · Monitor · Blackbook · Lab, and the Lab's Optimize station is
+the one door (with the "Applied & history" ledger disclosure inside — the self-reviewer's reachability catch, fixed
+pre-ship). `compy_lab_ground="0"` = the classic failsafe. Phases 2–4 are UNBLOCKED; Phase-2 Home cold-open is next.
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,

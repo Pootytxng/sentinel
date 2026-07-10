@@ -161,6 +161,32 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10d — ✅ PROVING GROUND DEFAULT-ON + standalone Optimize tab DROPPED, SHIPPED LIVE `59249bb` (installer SHA-256 `8D5F8938…75D6B5`, stamp-verified)
+
+**Both decided 2026-07-10 calls shipped in one train** (round-4 "ALL GOOD" cleared the gate):
+`compy_lab_ground` **DEFAULT ON** (`readLabGround` → `!== "0"`) + the **standalone Optimize tab
+REMOVED** — rail = Home · Monitor · Blackbook · Lab (`railFor(merged, ground)`, order preserved, Lab
+stays the last chapter); the Lab's Optimize station is the ONE door. Re-routed under ground: Home
+limiter buttons ("See in Lab") · Home forward door (`doorFor` → Lab) · gaming-recovery "Review" →
+Lab · navHome/HOME_FOR_TAB fallbacks · Setup & Tour (4-room recap, lesson ties, seatbelt names the
+Lab's ledger) · Settings row sheds "(preview)". **Self-reviewer round-1 FAIL fixed pre-ship:** the
+decided "undo stays reachable via the Lab panel" had no ledger surface in the station →
+OptimizeStation gained the "Applied & history — every change, undoable" disclosure rendering the
+classic room's audited `<Fix view="ledger">` (bug→guard pin in `lab-ground.test.tsx`).
+stale-reference-guard: "Optimize" re-joins the retired-tab regex. `compy_lab_ground="0"` = full
+classic failsafe (rail/tabs/rooms/tour restore live, round-trip live-verified, no reload).
+Verify: tsc 0 · vitest **1182** (159 files, +14 pins) · `git diff -- src-tauri` EMPTY (zero new
+IPC/mutation primitive) · self-reviewer round-2 **PASS** (native 1500×980; noted caveat: the Home
+"See in Lab" button proven by source-read + equivalent-path clicks — rig had 0 open limiters).
+- **⛳ NEXT (this session continues): Phase-2 Home cold-open** per
+  `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`, flag `compy_home_console`
+  **DEFAULT OFF** — its entry gate (the console verdict) is open.
+- **📌 Carried note for the T6c global-banner train:** on the Lab tab the global recovery banner
+  defers to the embedded Gaming pane (`TABS_EMBEDDING_GAMING_MODE`), but in the console the pane
+  only mounts once Optimize station + Power features are opened — a pending recovery is invisible
+  while sitting on the Lab (visible on every other tab; pre-existing shape, now live at default-ON).
+  Fold the fix into T6c's banner rework.
+
 ### Cycle 2026-07-10c — ✅ Console round-3 owner catches SHIPPED `889de10` (dock false-highlight · gauge readout over the ring stroke · drift-aware caption)
 
 **Owner round-3 eyeball caught 2 bugs on the `626b83c` build** ("the optimize box seems to be default
