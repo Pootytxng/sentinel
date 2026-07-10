@@ -294,6 +294,18 @@ describe("HomeConsole — the Dock into the rooms (navigation, honest doors)", (
     const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
     expect(c.querySelector(".dock-node-active")).toBeNull();
   });
+
+  it("ONE forward affordance: the dock suppresses RoomShell's ForwardDoor; no dock → door stays (bug→guard, self-reviewer 2026-07-10)", () => {
+    // With the dock rendered, RoomShell's own "Find what's worth fixing → Lab" door would be a
+    // second go-to-Lab control stacked right under the Lab dock node — the duplication catch.
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    expect(c.querySelector(".dock")).not.toBeNull();
+    expect(c.querySelector(".v2-door")).toBeNull();
+    cleanup();
+    const bare = mount().container;
+    expect(bare.querySelector(".dock")).toBeNull();
+    expect(bare.querySelector(".v2-door")).not.toBeNull();
+  });
 });
 
 describe("HomeConsole — motion contract (Task 4)", () => {

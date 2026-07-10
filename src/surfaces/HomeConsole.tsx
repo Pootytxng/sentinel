@@ -295,9 +295,16 @@ export function HomeConsole({
   // Clean or still-loading renders NOTHING (the verdict owns "measured clean" — one-owner law).
   const topLimiter = priorities?.limiters?.[0] ?? null;
 
+  // The Dock IS this room's doors — when it renders, RoomShell's own ForwardDoor would be a
+  // second "go to Lab" affordance stacked right under it (self-reviewer catch 2026-07-10,
+  // rubric 3; guard-pinned in home-console.test.tsx). No dock (isolated mounts) → the plain
+  // door stays, so Home always has exactly ONE forward affordance.
+  const dockRenders = dockNodes.length > 0 && !!onNavigate;
+
   return (
     <RoomShell
       room="home"
+      doorOpen={!dockRenders}
       verdict={
         <>
           <span className="hc-masthead-eyebrow">
