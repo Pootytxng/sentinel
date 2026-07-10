@@ -121,7 +121,7 @@ cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — re
 enable-all + Power features, the measure stations follow, the Gallery closes the room. React + confirm the deferred
 Optimize-tab call before it flips default-ON.
 
-**🟢 REDIRECTED AGAIN → "OPS CONSOLE" Phase 1 SHIPPED behind flag (`403be45`→`72eab61`, installer `7D29222E…19F28`,
+**🟢 REDIRECTED AGAIN → "OPS CONSOLE" Phase 1 SHIPPED behind flag (`403be45`→`63585e9`, installer `62DF3FF1…604DD`,
 DEFAULT OFF, 2026-07-09):** the owner eyeballed the Instrument-Bench bento and **rejected it too** ("generic slop / wide
 horizontal boxes"). Brainstorming → 3 interactive HUD mockups (Artifact `e2830b73…`) → owner picked **A · Ops Console**:
 a spatial game-HUD — the real 3D rig hologram at center, corner arc gauges, a magnify Dock of stations. Direction LOCKED
@@ -135,10 +135,12 @@ Phase 1 (Tasks 1–6) built + shipped behind the SAME `compy_lab_ground` flag:
 - **Reactivity + reticle (`e0f5a62`):** cursor-follow accent spotlight + staggered mount reveal (`@keyframes v2-lc-rise`) +
   a stage-scoped **reticle Target Cursor** (a real slice of the JARVIS motion the §A stack was missing) — all
   reduced-motion-gated, vendor purple `132,0,255` can never paint (test-pinned).
-- **Self-review + ship (`1b8c102`→`72eab61`):** pass #1 FAILed (RigViewer footer form collided with the corner gauges) →
-  chromeless RigViewer mode + spotlight reset → re-review **PASS** all items (0 chrome nodes in the stage, 4 gauges legible,
-  spotlight resets to 0 on mid-session reduced flip, reticle absent under reduced, idle-rest 0-draw). tsc 0 · vitest **1157**
-  (158 files) · `git diff b23a97e..72eab61 -- src-tauri` EMPTY. Stamp-verified `72eab61` LIVE, one installer on the Desktop.
+- **Self-review + ship + whole-branch review (`1b8c102`→`63585e9`):** self-review pass #1 FAILed (RigViewer footer form
+  collided with the corner gauges) → chromeless RigViewer mode + spotlight reset → re-review **PASS**. Final whole-branch review
+  (opus, base `b23a97e`) then caught a CRITICAL honesty-rail bug — the Safe-stack gauge showed a fabricated "0 · measured" while
+  recs were unloaded — fixed to honest NOT-YET in `63585e9` (+ reticle rAF stop-on-leave + chromeless fan-poll skip; 2 bug→guard
+  pins); post-fix self-reviewer **PASS**. tsc 0 · vitest **1158** (158 files) · `git diff b23a97e..63585e9 -- src-tauri` EMPTY.
+  Stamp-verified `63585e9` LIVE, one installer on the Desktop.
 
 <details><summary>Superseded interim: "The Instrument Bench" bento Phase 1 (`403be45`) — owner-rejected on eyeball</summary>
 
