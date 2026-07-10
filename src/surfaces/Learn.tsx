@@ -672,6 +672,7 @@ export default function Learn({
   asPanel = false,
   vendor = "any",
   v2 = false,
+  keepRecord = false,
   onAutopsyRecorded,
 }: {
   onClose: () => void;
@@ -683,6 +684,11 @@ export default function Learn({
   // the in-panel autopsy record yield to it (one-mention law). The record feeds the room
   // verdict live through onAutopsyRecorded instead.
   v2?: boolean;
+  // Title-header law (owner 2026-07-10 round 2): with the HUD header reduced to a title, the
+  // RoomShell verdict no longer carries the autopsy record/coaching — the in-panel record and
+  // the browse-mode Autopsy hint return to their context here (still ONE mention: panel, not
+  // header). Only meaningful with v2; classic ignores it.
+  keepRecord?: boolean;
   onAutopsyRecorded?: (ledger: AutopsyLedgerEntry[]) => void;
 }) {
   // The room (asPanel) restores its last mode so returning mid-autopsy isn't an empty browse view
@@ -819,9 +825,10 @@ export default function Learn({
 
           {/* Surface the Autopsy — Blackbook's most distinctive trick (paste a guide, get it graded
               offline) otherwise hides behind the mode tab. One quiet honest line, browse-only.
-              Under v2 the RoomShell verdict sub already coaches "paste a whole guide" and the mode
-              tab sits right here — the hint would be a third mention, so it yields (one-mention). */}
-          {mode === "browse" && !v2 && (
+              Under v2 the RoomShell verdict sub coached "paste a whole guide" so the hint yielded
+              (one-mention) — under the title-header HUD (keepRecord) that sub is gone, so the hint
+              returns as the coaching's one home. */}
+          {mode === "browse" && (!v2 || keepRecord) && (
             <button className="lx-autopsy-hint cmp-door" onClick={() => setMode("autopsy")}>
               Got a guide to fact-check? Try Autopsy
               <span className="cmp-door-chevron" aria-hidden="true">→</span>
@@ -848,7 +855,11 @@ export default function Learn({
           </div>
 
           {mode === "autopsy" ? (
-            <AutopsyPanel onNavigate={navigateTo} hideRecord={v2} onRecorded={onAutopsyRecorded} />
+            <AutopsyPanel
+              onNavigate={navigateTo}
+              hideRecord={v2 && !keepRecord}
+              onRecorded={onAutopsyRecorded}
+            />
           ) : (
             <>
               <input

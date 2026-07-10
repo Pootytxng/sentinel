@@ -188,10 +188,12 @@ describe("LabConsole", () => {
   it("no lede line — the console opens straight on the stage (owner header-slop law 2026-07-10)", () => {
     const { container } = renderConsole();
     expect(container.querySelector(".lab-console-lede")).toBeNull();
-    // The undo/read-only promise lives in the Optimize panel (its context), not the header:
+    // The room's read-only promise lives in the Optimize panel (its context), not the header;
+    // the undo half moved to Fix's consent line (title-header law) so the panel says it once.
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // closed → nowhere
     fireEvent.click(screen.getByRole("button", { name: /optimize/i }));
-    expect(container.querySelector(".lc-detail-note")!.textContent).toMatch(/undo first/i);
+    expect(container.querySelector(".lc-detail-note")!.textContent).toMatch(/everything else just reads/i);
+    expect(container.querySelector(".lc-detail-note")!.textContent).not.toMatch(/undo/i);
     fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // measure stations: no note
   });

@@ -49,11 +49,11 @@ export function LabGround(props: LabFastPathProps & {
   const reduced = useReducedMotion();
   const hud = useHudFlag();
 
-  // Verdict = the fixes state (the primary surface). Drifted rows are named, never counted as
-  // "ready to apply" (the one-mention law) — same pure helper the Optimize room uses.
-  // Header = eyebrow + headline ONLY (owner header-slop law 2026-07-10): the undo-promise sub
-  // relocated into the Optimize station panel (its context — next to the apply control), and the
-  // measured micro-strip is carried by the console's corner gauges, not a header text line.
+  // The fixes-state verdict still drives the LED (a real room state) — but under the HUD the
+  // HEADER carries a title only (owner title-header law 2026-07-10 round 2: "the header just
+  // needs to be a title, not a description or notification statement"). The verdict's facts
+  // live in their context: ready counts on the Safe-stack gauge + the station rows, drift in
+  // Fix's "Applied — turned off outside Compy" group inside the Optimize panel.
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
   const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted);
 
@@ -64,8 +64,9 @@ export function LabGround(props: LabFastPathProps & {
     <RoomShell
       room="lab"
       verdict={(() => {
-        const headline =
-          reduced || !verdict.settled ? (
+        if (!hud) {
+          // Flag off: the exact pre-rollout tree (verdict sentence as the h1, classic contract).
+          return reduced || !verdict.settled ? (
             verdict.headline
           ) : (
             <DecryptedText
@@ -77,14 +78,14 @@ export function LabGround(props: LabFastPathProps & {
               useOriginalCharsOnly
             />
           );
-        if (!hud) return headline; // flag off: the exact pre-rollout tree
+        }
         return (
           <>
             <HudMasthead
               label="Proving ground"
               led={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
             />
-            <span className="hud-headline">{headline}</span>
+            <span className="hud-headline">Lab</span>
           </>
         );
       })()}

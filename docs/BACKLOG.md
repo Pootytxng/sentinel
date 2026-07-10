@@ -161,6 +161,28 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10b — 🔄 IN FLIGHT: title-header law (owner round-2: "header = a title, not a description/notification") — built + guarded + self-review PASS + COMMITTED; ship pending
+
+**Owner round-2 feedback (verbatim):** header must be a TITLE; "1 change you applied was turned off outside compy"
+(the optimizeVerdict drift headline standing as the Lab h1) relocates somewhere sensible; sweep the class app-wide.
+**Built (working tree, NOT yet committed):** hud-on h1 = room title in all 5 v2 rooms (`LabGround`/`OptimizeV2`/
+`MonitorV2`/`BlackbookV2`/`LabV2` — "Lab"/"Optimize"/"Monitor"/"Blackbook"); header `sub` dropped under hud; classic
+`compy_editorial="0"` failsafe keeps verdict headers. Relocations: drift guidance + "never re-applies" → Fix drift
+intro; undo promise → Fix consent line (`lc-detail-note` trimmed to read-only-room fact, no double-say); Monitor's
+last-session answer + "· live estimate" → Play hero (`monitor-v2.css` hide rescoped `:not([data-hud="on"])` — the
+self-review CATCH: the old one-mention rule swallowed the relocated line); Blackbook record + autopsy hint restored
+via new Learn `keepRecord` prop. Guards: hud-rooms-flag title contract ×4 + hint pin + CSS-source pin ·
+lab-ground "Lab" pin · lab-console note pin. Law: self-reviewer rubric 6 upgraded + memory + direction-spec addendum
+(Home masthead verdict KEPT — cold-open answer, flagged for owner taste). Verify: tsc 0 · vitest **1161** (158
+files) · `git diff -- src-tauri` EMPTY. Self-review round 1: FAIL on the hero-hide only → fixed + bug→guard'd →
+**re-review PASS** (hero row live-verified "Smooth · 1m 44s · live estimate" w=1074 h=26, ×1 on screen; classic "0"
+hide re-applies; guards 14/14; flags left `compy_lab_ground="1"`, `compy_editorial` default).
+- **⛳ RESUME (ship only):** (1) `npm run tauri build` → `ship` skill (silent reinstall, stamp-verify live == HEAD,
+  ONE installer on the Desktop); (2) ship-docs commit — this entry ✅ SHIPPED + RELEASE_STATE Snapshot row;
+  (3) owner eyeball round 3: Lab preview toggle should already be ON (reviewer restored it) — verify, else he
+  re-flips. Phase-2 Home plan (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`) stays entry-gated
+  on his verdict.
+
 ### Cycle 2026-07-10a — ✅ Header-slop law SHIPPED `1a9f44f` (owner round-1 Ops Console feedback; open-on-click CONFIRMED)
 
 **✅ DONE 2026-07-10 · installer SHA-256 `0B16E904…48AE6` · LIVE (stamp-verified `1a9f44f`, one installer on the Desktop).**

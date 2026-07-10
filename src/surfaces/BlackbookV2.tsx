@@ -47,35 +47,39 @@ export function BlackbookV2({
     <RoomShell
       room="learn"
       verdict={(() => {
-        // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
-        // real output; the animation never alters what is claimed.
-        const headline = reduced ? (
-          verdict.headline
-        ) : (
-          <DecryptedText
-            key={verdict.headline}
-            text={verdict.headline}
-            animateOn="view"
-            sequential
-            speed={22}
-            useOriginalCharsOnly
-          />
-        );
-        if (!hud) return headline; // flag off: the exact pre-rollout tree
-        // HUD masthead (four-room rollout) — no LED: a record count is not a health state,
-        // and this room computes no live status to honestly light one from.
+        if (!hud) {
+          // Flag off: the exact pre-rollout tree — the verdict sentence as the h1, with the
+          // verdict-only DecryptedText moment (the adopt-list law).
+          return reduced ? (
+            verdict.headline
+          ) : (
+            <DecryptedText
+              key={verdict.headline}
+              text={verdict.headline}
+              animateOn="view"
+              sequential
+              speed={22}
+              useOriginalCharsOnly
+            />
+          );
+        }
+        // HUD header = title only (owner title-header law 2026-07-10 round 2). The autopsy
+        // record moves back into its context — the Autopsy panel's own record rollup (Learn's
+        // keepRecord below un-trims it). No LED: a record count is not a health state, and this
+        // room computes no live status to honestly light one from.
         return (
           <>
             <HudMasthead label="Field records" />
-            <span className="hud-headline">{headline}</span>
+            <span className="hud-headline">Blackbook</span>
           </>
         );
       })()}
-      sub={verdict.sub}
+      sub={hud ? undefined : verdict.sub}
     >
       <Learn
         asPanel
         v2
+        keepRecord={hud}
         focusId={focusId}
         vendor={vendor}
         onClose={onClose}

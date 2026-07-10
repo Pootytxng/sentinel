@@ -189,11 +189,10 @@ export function OptimizeV2({
         room="fix"
         doorOpen={verdict.allClear}
         verdict={(() => {
-          // The "measurement arriving" moment (adopt list: verdict lines ONLY) — resolves
-          // character-by-character once the catalog has actually settled. The text is the
-          // pure helper's real output; the animation never alters what is claimed.
-          const headline =
-            reduced || !verdict.settled ? (
+          if (!hud) {
+            // Flag off: the exact pre-rollout tree — the verdict sentence as the h1, with the
+            // "measurement arriving" DecryptedText moment (adopt list: verdict lines ONLY).
+            return reduced || !verdict.settled ? (
               verdict.headline
             ) : (
               <DecryptedText
@@ -205,20 +204,22 @@ export function OptimizeV2({
                 useOriginalCharsOnly
               />
             );
-          if (!hud) return headline; // flag off: the exact pre-rollout tree
-          // HUD masthead (four-room rollout) — LED is the room's REAL state: scan while the
-          // catalog is still measuring, warn while actionable fixes remain, ok at all-clear.
+          }
+          // HUD header = title only (owner title-header law 2026-07-10 round 2: a title, never a
+          // status/notification sentence). The verdict's facts live in their context: ready/drift
+          // state on the fix rows + section intros, the undo promise on the consent line beside
+          // the apply controls. LED stays the room's REAL state: scan · warn · ok.
           return (
             <>
               <HudMasthead
                 label="Repair bay"
                 led={!verdict.settled ? "scan" : verdict.allClear ? "ok" : "warn"}
               />
-              <span className="hud-headline">{headline}</span>
+              <span className="hud-headline">Optimize</span>
             </>
           );
         })()}
-        sub={verdict.sub}
+        sub={hud ? undefined : verdict.sub}
         primaryAction={
           activeCount > 0 ? (
             <button

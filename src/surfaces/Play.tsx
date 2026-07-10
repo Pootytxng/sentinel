@@ -247,7 +247,10 @@ export default function Play({
         <div className="play-hero">
           <div className="play-hero-top">
             <span className="play-hero-game">{prettyGameName(latest.process_name) || "Last session"}</span>
-            <span className="play-hero-verdict">{shortVerdict(latest)} · {fmtDur(latest.duration_secs)}</span>
+            {/* "live estimate" = the F3 honesty framing, re-homed from the room verdict sub
+                (title-header law 2026-07-10): a 1 Hz sampler's grade never overclaims benchmark
+                precision, and the hero is where that grade lives now. */}
+            <span className="play-hero-verdict">{shortVerdict(latest)} · {fmtDur(latest.duration_secs)} · live estimate</span>
           </div>
           <div className="play-hero-metrics">
             <div className="play-hero-metric">

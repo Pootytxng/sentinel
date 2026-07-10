@@ -979,8 +979,14 @@ export default function Fix({
             </p>
           )}
           {/* Standing approval reassurance, re-homed here from the global footer (halfway-home §0) —
-              it belongs where approval actually happens. */}
-          <p className="fix-consent">Compy never changes anything without your explicit approval.</p>
+              it belongs where approval actually happens. The undo promise joined it 2026-07-10
+              (title-header law): with the room header reduced to a title, the verdict sub that
+              carried "every apply captures its undo first" is gone — this consent line beside the
+              apply controls is its context. */}
+          <p className="fix-consent">
+            Compy never changes anything without your explicit approval — and every apply captures
+            its undo first, so anything here rolls back from Applied.
+          </p>
         </div>
       </header>
       )}
@@ -998,7 +1004,8 @@ export default function Fix({
           <p className="fix-refuse-intro">
             You turned {drifted.length === 1 ? "this" : "these"} on with Compy; something outside
             Compy switched {drifted.length === 1 ? "it" : "them"} back off. Flip{" "}
-            {drifted.length === 1 ? "it" : "any"} back on — or leave it, your call.
+            {drifted.length === 1 ? "it" : "any"} back on — or leave it, your call. Compy never
+            re-applies on its own.
           </p>
           <ul className="fix-list">
             {drifted.map((rec) => (

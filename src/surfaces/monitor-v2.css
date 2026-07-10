@@ -75,13 +75,15 @@
   gap: var(--v2-gap);
 }
 
-/* ── one-mention law (V2-4b, carried forward) ─────────────────────────────────────────
-   The RoomShell verdict already states the last session's game + grade + duration; the
-   sessions-hero top row repeats exactly that DIRECTLY under it — under v2 it yields (the 4
-   graded metrics below stay). MonitorBasic's last-session DOOR keeps its label text: a door
-   naming where it goes is information scent, not a stacked summary (live-reviewed — hiding
-   it left an empty-looking bar). Flag-off renders everything untouched. */
-:root[data-v2="on"] .v2-room[data-room="play"] .play-hero-top {
+/* ── one-mention law (V2-4b) — CLASSIC HEADER ONLY since the title-header law ─────────
+   With the HUD flag off, the RoomShell verdict sentence still states the last session's game +
+   grade + duration, and the sessions-hero top row would repeat exactly that DIRECTLY under it —
+   so it yields (the 4 graded metrics below stay). Under the HUD (data-hud="on") the header is a
+   TITLE and carries no session summary, so the hero top row is the line's ONE home (incl. the
+   "live estimate" honesty framing) and must render — the 2026-07-10 self-review caught this rule
+   swallowing it. MonitorBasic's last-session DOOR keeps its label text either way: a door naming
+   where it goes is information scent, not a stacked summary. */
+:root[data-v2="on"]:not([data-hud="on"]) .v2-room[data-room="play"] .play-hero-top {
   display: none;
 }
 

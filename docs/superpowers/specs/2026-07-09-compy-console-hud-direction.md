@@ -117,12 +117,26 @@ Every tab keeps its own honesty rails and reduced-motion path.
   reachable via the Lab panel + History. The tab removal ships WITH the `compy_lab_ground`
   default-ON flip (after the round-2 eyeball), not before.
 
-## Addendum — header-slop law (owner, 2026-07-10 eyeball feedback)
+## Addendum — title-header law (owner, 2026-07-10 eyeball feedback, TWO rounds)
 
-App-wide text law folded into the Console rollout: **a tab's opening header space carries
-header-format text only** (eyebrow / headline / a sub that qualifies THIS headline's measured fact).
-Small always-on descriptive/explainer lines ("perceptually insignificant format") are a bad habit —
-**relocate each to its relative context element, prioritize clean minimal text.** First enforcement
-(2026-07-10 train): the `.v2-measured` header strips removed from Optimize/Monitor/Blackbook/LabV2 +
-LabGround, the LabConsole lede deleted (its undo promise moved into the Optimize station panel).
-Enforced ongoing as self-reviewer rubric item 6; every Phase 2…N tab adoption must pass it.
+App-wide text law folded into the Console rollout, tightened by the round-2 eyeball:
+
+- **Round 1 (header-slop):** a tab's opening header space carries header-format text only. Small
+  always-on descriptive/explainer lines ("perceptually insignificant format") are a bad habit —
+  relocate each to its relative context element, prioritize clean minimal text. First enforcement:
+  the `.v2-measured` strips removed from Optimize/Monitor/Blackbook/LabV2 + LabGround, the
+  LabConsole lede deleted.
+- **Round 2 (title headers):** *"the header just needs to be a title, not a whole description or
+  notification statement."* The h1 under the HUD is the room's NAME (Optimize / Monitor / Blackbook
+  / Lab) — never a dynamic verdict/status sentence (the caught defect: "1 change you applied was
+  turned off outside Compy" standing as the Lab h1). Every such sentence lives in its body context
+  instead: drift → Fix's "Applied — turned off outside Compy" group intro (+ "Compy never
+  re-applies on its own") · undo promise → Fix's consent line beside the apply controls ·
+  Monitor's last-session answer → Play's hero (with the "live estimate" honesty framing) ·
+  Blackbook's record/coaching → the in-panel autopsy record + restored browse hint. Header subs are
+  gone under the HUD. The classic `compy_editorial="0"` failsafe keeps its pre-rollout verdict
+  headers. Home's masthead display verdict stays — Home is the answer-first cold-open; its verdict
+  IS the content, not a room description (owner may extend the law there; flag on eyeball).
+
+Enforced ongoing as self-reviewer rubric item 6 + vitest pins (`hud-rooms-flag.test.tsx` title
+contract per room, `lab-ground.test.tsx` "Lab" pin); every Phase 2…N tab adoption must pass it.

@@ -52,31 +52,33 @@ export function LabV2({
     <RoomShell
       room="lab"
       verdict={(() => {
-        // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
-        // real output; the animation never alters what is claimed.
-        const headline = reduced ? (
-          verdict.headline
-        ) : (
-          <DecryptedText
-            key={verdict.headline}
-            text={verdict.headline}
-            animateOn="view"
-            sequential
-            speed={22}
-            useOriginalCharsOnly
-          />
-        );
-        if (!hud) return headline; // flag off: the exact pre-rollout tree
-        // HUD masthead (four-room rollout) — no LED: the instruments below own their own
-        // states; the room itself computes no live status to honestly light one from.
+        if (!hud) {
+          // Flag off: the exact pre-rollout tree — the verdict sentence as the h1, with the
+          // verdict-only DecryptedText moment (the adopt-list law).
+          return reduced ? (
+            verdict.headline
+          ) : (
+            <DecryptedText
+              key={verdict.headline}
+              text={verdict.headline}
+              animateOn="view"
+              sequential
+              speed={22}
+              useOriginalCharsOnly
+            />
+          );
+        }
+        // HUD header = title only (owner title-header law 2026-07-10 round 2). The last graded
+        // benchmark lives in its context — the station list's own readings (the same
+        // stationReading source). No LED: the instruments below own their own states.
         return (
           <>
             <HudMasthead label="Test bench" />
-            <span className="hud-headline">{headline}</span>
+            <span className="hud-headline">Lab</span>
           </>
         );
       })()}
-      sub={verdict.sub}
+      sub={hud ? undefined : verdict.sub}
     >
       <Lab
         v2

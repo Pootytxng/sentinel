@@ -46,11 +46,16 @@ The dev build runs two same-origin webviews + a small default window, so capture
    on a primary action). Say which you checked.
 5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
 6. **Wording** — plain, accurate, no stale references (renamed features — "Optimize", "Startup
-   tab" — no longer exist). **Header-slop law (owner 2026-07-10):** a tab's opening header space
-   carries header-format text only (eyebrow / headline / a sub that qualifies THIS headline's
-   measured fact). Any always-on small descriptive/explainer line stacked under a header (ledes,
-   provenance taglines, standing promises in micro-text) is a FAIL — such lines relocate to the
-   element they actually describe. Check any header/lede area the diff touches.
+   tab" — no longer exist). **Title-header law (owner 2026-07-10, round 2 — supersedes the
+   round-1 header-slop wording, both enforced):** a tab/room header is (a) a TITLE — the h1/
+   headline must be the surface's name, NEVER a dynamic status/notification/description sentence
+   ("1 change you applied was turned off outside Compy" as an h1 = the caught defect; such
+   sentences live in their context element in the body) — and (b) header-format text only around
+   it (eyebrow / title; no sub sentences, no always-on descriptive/explainer lines, ledes,
+   provenance taglines, or standing promises in micro-text). Any of these is a FAIL — the text
+   relocates to the element it actually describes. Check any header/lede area the diff touches.
+   (The classic `compy_editorial="0"` failsafe keeps its pre-rollout verdict headers — only
+   HUD-on surfaces are held to this.)
 7. **The owner's exact ask** — decompose multi-part asks; quote each part, confirm it's met.
 8. **Canvas idle rest** (only when the diff touches the r3f canvas tree — `src/surfaces/rig/**`,
    the HomeHud stage, or a vendored 3D material; otherwise evidence = "n/a, no canvas files in

@@ -301,11 +301,12 @@ export function LabConsole({
           </div>
           <div className="lab-card-body">
             {openStation === "optimize" && (
-              /* The undo/read-only promise, relocated from the header (owner header-slop law
-                 2026-07-10) to its context: the one station that changes anything. */
+              /* The room's read-only promise, relocated from the header (owner header-slop law
+                 2026-07-10) to its context: the one station that changes anything. The undo half
+                 moved to Fix's consent line beside the apply controls (title-header law) — this
+                 note keeps only the room-scope fact so the panel never says undo twice. */
               <p className="lc-detail-note">
-                The only station here that changes anything — every apply snapshots its undo first,
-                and everything else in this room just reads.
+                The only station in this room that changes anything — everything else just reads.
               </p>
             )}
             {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}

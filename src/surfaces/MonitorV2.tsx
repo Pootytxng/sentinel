@@ -80,31 +80,34 @@ export function MonitorV2(props: Props) {
       room="play"
       doorOpen={!capturing}
       verdict={(() => {
-        // Verdict-only DecryptedText (the adopt-list law) — the text is the pure helper's
-        // real output; the animation never alters what is claimed.
-        const headline = reduced ? (
-          verdict.headline
-        ) : (
-          <DecryptedText
-            key={verdict.headline}
-            text={verdict.headline}
-            animateOn="view"
-            sequential
-            speed={22}
-            useOriginalCharsOnly
-          />
-        );
-        if (!hud) return headline; // flag off: the exact pre-rollout tree
-        // HUD masthead (four-room rollout) — the LED breathes ONLY while a capture is
-        // actually recording (the room's one live state); otherwise no LED, never fabricated.
+        if (!hud) {
+          // Flag off: the exact pre-rollout tree — the verdict sentence as the h1, with the
+          // verdict-only DecryptedText moment (the adopt-list law).
+          return reduced ? (
+            verdict.headline
+          ) : (
+            <DecryptedText
+              key={verdict.headline}
+              text={verdict.headline}
+              animateOn="view"
+              sequential
+              speed={22}
+              useOriginalCharsOnly
+            />
+          );
+        }
+        // HUD header = title only (owner title-header law 2026-07-10 round 2). The last-session
+        // answer lives in its context — Play's last-session hero + the session rows grade with
+        // the SAME shortVerdict (one source, can't disagree). LED breathes ONLY while a capture
+        // is actually recording (the room's one live state); otherwise no LED, never fabricated.
         return (
           <>
             <HudMasthead label="Live telemetry" led={capturing ? "scan" : null} />
-            <span className="hud-headline">{headline}</span>
+            <span className="hud-headline">Monitor</span>
           </>
         );
       })()}
-      sub={verdict.sub}
+      sub={hud ? undefined : verdict.sub}
       quiet={
         !basic ? (
           <>

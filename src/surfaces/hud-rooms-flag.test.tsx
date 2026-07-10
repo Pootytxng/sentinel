@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { render, cleanup } from "@testing-library/react";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { OptimizeV2 } from "./OptimizeV2";
 import { MonitorV2 } from "./MonitorV2";
 import { BlackbookV2 } from "./BlackbookV2";
@@ -12,9 +14,11 @@ import type { SessionSummary } from "../types";
 // Pins, per room:
 //   1. Flag "0" renders the pre-rollout tree with zero HUD DOM — the reversibility contract,
 //      same as home-hud-flag.test.tsx; flag absent (the shipped default) renders the HUD.
-//   2. Flag on adds ONLY the masthead eyebrow + the .hud-headline wrapper — removing them
-//      restores the flag-off tree byte-for-byte (presentation-only proof: same verdict text,
-//      same body, nothing else moved).
+//   2. TITLE-HEADER LAW (owner 2026-07-10 round 2, bug→guard: he caught "1 change you applied
+//      was turned off outside compy" standing as a header): under the HUD the room h1 is the
+//      room TITLE and nothing else — never a status/notification/description sentence. The
+//      header sub is gone (its facts live in body context). Flag "0" keeps the classic
+//      contract: the verdict sentence IS the h1.
 //   3. LED honesty: the eyebrow LED renders only from a REAL room state — Optimize scan
 //      while the catalog loads / ok at all-clear; Monitor, Blackbook and Lab (no live state
 //      computed at the shell) render no LED.
@@ -86,15 +90,17 @@ const optimizeProps = {
   activeCount: 0,
 };
 
-const ROOMS: { name: string; label: string; mount: () => HTMLElement }[] = [
+const ROOMS: { name: string; label: string; title: string; mount: () => HTMLElement }[] = [
   {
     name: "OptimizeV2",
     label: "Repair bay",
+    title: "Optimize",
     mount: () => render(<OptimizeV2 {...optimizeProps} />).container,
   },
   {
     name: "MonitorV2",
     label: "Live telemetry",
+    title: "Monitor",
     mount: () =>
       render(
         <MonitorV2
@@ -115,11 +121,13 @@ const ROOMS: { name: string; label: string; mount: () => HTMLElement }[] = [
   {
     name: "BlackbookV2",
     label: "Field records",
+    title: "Blackbook",
     mount: () => render(<BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} />).container,
   },
   {
     name: "LabV2",
     label: "Test bench",
+    title: "Lab",
     mount: () => render(<LabV2 vendor="amd" />).container,
   },
 ];
@@ -146,23 +154,48 @@ describe("HUD four-room rollout: flag-off byte-identity (the classic failsafe)",
   }
 });
 
-describe("HUD four-room rollout: flag-on adds ONLY the masthead (presentation-only proof)", () => {
+describe("HUD four-room rollout: title-header law (h1 = the room title, never a status sentence)", () => {
   for (const room of ROOMS) {
-    it(`${room.name}: eyebrow reads "${room.label}", and removing masthead + unwrapping the headline restores the flag-off tree`, () => {
-      const off = mountWithFlag(room, "0").innerHTML;
+    it(`${room.name}: flag on → eyebrow "${room.label}", h1 exactly "${room.title}", no header sub; flag '0' keeps the classic verdict-sentence h1`, () => {
+      // Classic contract: the verdict SENTENCE is the h1 (never the bare title).
+      const off = mountWithFlag(room, "0");
+      const offH1 = off.querySelector(".v2-verdict h1");
+      expect(offH1).not.toBeNull();
+      expect(offH1!.textContent!.trim()).not.toBe(room.title);
       cleanup();
+      // HUD contract (owner title-header law 2026-07-10): header = eyebrow + TITLE, nothing else.
       const on = mountWithFlag(room, "1");
       const eyebrow = on.querySelector(".hud-masthead-eyebrow");
       expect(eyebrow).not.toBeNull();
       expect(eyebrow!.textContent).toContain(room.label);
       const headline = on.querySelector(".hud-headline");
       expect(headline).not.toBeNull();
-      // Strip exactly what the flag added; everything left must be the flag-off tree.
-      eyebrow!.remove();
-      headline!.replaceWith(...Array.from(headline!.childNodes));
-      expect(on.innerHTML).toBe(off);
+      expect(headline!.textContent).toBe(room.title);
+      // The header carries no sub — verdict facts live in their body context now.
+      expect(on.querySelector(".v2-verdict-sub")).toBeNull();
     });
   }
+
+  it("Monitor: the sessions-hero top row is hidden ONLY under the classic verdict header (bug→guard, 2026-07-10 self-review catch)", () => {
+    // The relocated last-session line (incl. "live estimate") lives on .play-hero-top; the old
+    // one-mention hide must key off the CLASSIC header still carrying the summary — under the
+    // HUD's title header the row is the line's one home and must not be display:none'd.
+    const css = readFileSync(join("src", "surfaces", "monitor-v2.css"), "utf8");
+    const rule = css
+      .split("}")
+      .find((block) => block.includes(".play-hero-top") && block.includes("display: none"));
+    expect(rule).toBeDefined();
+    expect(rule).toContain(':not([data-hud="on"])');
+  });
+
+  it("BlackbookV2: the browse-mode Autopsy hint returns under the HUD (its coaching left the header)", () => {
+    const on = mountWithFlag(ROOMS[2], "1");
+    expect(on.querySelector(".lx-autopsy-hint")).not.toBeNull();
+    cleanup();
+    // Classic v2 (flag '0'): the RoomShell verdict sub still coaches — the hint stays yielded.
+    const off = mountWithFlag(ROOMS[2], "0");
+    expect(off.querySelector(".lx-autopsy-hint")).toBeNull();
+  });
 });
 
 describe("HUD four-room rollout: LED honesty (real state or no LED)", () => {
