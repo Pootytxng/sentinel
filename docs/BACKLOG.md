@@ -188,6 +188,20 @@ caption branches). Verify: tsc 0 · vitest **1168** (159 files; the one full-sui
   the removal ships WITH the flip; classic stays the `"0"` failsafe); (2) then build **Phase 2 Home
   cold-open** (`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`, flag
   `compy_home_console` DEFAULT OFF) — its entry gate (the owner's console verdict) is now open.
+- **🆕 OWNER DIRECTIVE 2026-07-10 — one-click "Resume Gaming Mode" on the GLOBAL recovery banner
+  (T6c candidate):** verbatim: *"the resume gaming mode option just auto enabled the gaming mode
+  instead of doing the rollback and needing the user to re enable … unless it does do that."*
+  **Code-verified state: it HALF does.** The Gaming pane's recovery card already has one-click
+  **Resume Gaming Mode** as primary (`GamingMode.tsx` `onResume` — recover(confirm) → immediate
+  `start_gaming_session`; the internal rollback is deliberate so the fresh session snapshots TRUE
+  priors — rollback-first). **The GAP:** the app-level global banner (`App.tsx`
+  `gaming-recovery-banner` — what the owner actually sees after a reboot on any other tab) offers
+  only "Restore now" / "Review", no Resume → his lived flow was restore-then-re-enable-by-hand.
+  Build: add the same one-click Resume (primary) to the global banner, reusing the pane's audited
+  recover+start flow, resuming with the interrupted session's own tiers; keep "Restore now" as the
+  secondary. NEVER zero-click auto-apply on launch (elevation + consent laws). Reuses audited
+  commands only (no new mutation primitive) but session-boundary behavior → self-review + the
+  gaming-mode test pins; its own train, not folded into the Lab flip.
 
 ### Cycle 2026-07-10b — ✅ Title-header law SHIPPED `626b83c` (owner round-2: "header = a title, not a description/notification") — built + guarded + self-review PASS + LIVE
 
