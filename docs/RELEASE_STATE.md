@@ -10,6 +10,26 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-10 (T6c one-click Resume + mount-aware banner deferral SHIPPED `80c69f1` — installer SHA-256
+> `B7F0148A1F8F50ED76267E2B7580A4636463FB71D9F4E02FD5DA61E895BDCFA0`, stamp-verified LIVE, installed by Claude,
+> supersedes the `72d9b6e` installer):** the owner's 2026-07-10 directive built — the GLOBAL gaming-recovery
+> banner (`src/App.tsx`, `.gaming-recovery-banner`) now leads with one-click **"Resume Gaming Mode"** (the pane's
+> audited `recover_gaming_session(confirm)` → `start_gaming_session` sequence verbatim — rollback-first, restore
+> to TRUE priors, then an explicit user-clicked restart; never zero-click on launch), keeps "Restore now" as
+> secondary, and "Review" no longer clears the recovery (no dead-end behind a closed disclosure). Resume restarts
+> with the interrupted session's OWN tiers via `resumeOptionsFrom` (`src/surfaces/gaming-mode.ts`) — derived from
+> its recorded change labels; the pane's checkboxes reset on remount and silently downgraded a resumed
+> advanced-tier session (pane's `onResume` fixed too). The 2026-07-10d **carried note is RESOLVED**: banner
+> deferral is now MOUNT-AWARE (pane announces via `GAMING_PANE_(UN)MOUNTED_EVENT`) — a pending recovery is no
+> longer invisible on the Lab/Optimize tabs outside the gaming door. Round-1 self-review caught a pre-existing
+> app-wide cascade bug: bare `.btn-small-on` lost the tie to the later `.btn-small` base rule (accent ink dead on
+> all 7 call sites) and the generic hover painted the primary danger-red → `.btn-small.btn-small-on` double-class
+> + hover override (`src/App.css`), guard-pinned in `src/button-legibility-guard.test.ts`. Zero src-tauri (no new
+> IPC/mutation primitive — audited commands only). Verify: tsc 0 · vitest **1208** (161 files, +5 pins net) ·
+> self-reviewer round-2 **PASS** (computed accent proof at rest+hover; one-prompt-at-a-time proven live against a
+> REAL orphaned session found on the rig — the owner will be greeted by this exact banner, with Resume, on next
+> look). T6b (batched restore-side elevation) remains a separate open candidate.
+>
 > **UPDATE 2026-07-10 (Phase-2 Home console cold-open BUILT + SHIPPED `72d9b6e`, flag `compy_home_console` DEFAULT OFF):**
 > the Console HUD's Phase 2 (plan `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`) is on the live
 > installer behind a NEW preview flag — **flag off (the shipped default), Home is byte-identical to the previous

@@ -161,6 +161,37 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10f — ✅ T6c ONE-CLICK RESUME + MOUNT-AWARE BANNER DEFERRAL SHIPPED LIVE `80c69f1` (installer SHA-256 `B7F0148A…BDCFA0`, stamp-verified; supersedes `72d9b6e`)
+
+**The 2026-07-10c owner directive built as its own train** (no Home-console verdict had landed, all
+remaining backlog `[ ]` are gated — this was the next non-gated item): the GLOBAL gaming-recovery
+banner leads with one-click **"Resume Gaming Mode"** (primary; the pane's audited
+`recover_gaming_session(confirm)` → `start_gaming_session` sequence verbatim — rollback-first, then
+an explicit user-clicked restart, never zero-click on launch), "Restore now" secondary, "Review" no
+longer clears the recovery (dead-end fixed: the banner persists until the pane's own card takes
+over). NEW pure `resumeOptionsFrom`: resume restarts with the interrupted session's OWN tiers
+derived from its recorded change labels (backend-pinned constants) — the pane's checkboxes reset to
+core-only on remount and silently downgraded a resumed advanced-tier session (pane's `onResume`
+fixed too). **The 2026-07-10d carried note is RESOLVED:** deferral is mount-aware
+(`GAMING_PANE_(UN)MOUNTED_EVENT` counter in App) — the old tab-name set hid a pending recovery
+anywhere on Lab/Optimize outside the gaming door. **Round-1 self-review catch (pre-existing,
+app-wide):** bare `.btn-small-on` lost the cascade tie to the later `.btn-small` base rule (accent
+ink DEAD on all 7 call sites) + the generic hover painted the primary danger-red →
+`.btn-small.btn-small-on` double-class + hover override, bug→guard in
+`button-legibility-guard.test.ts`. Guards: resumeOptionsFrom truth-table + anchored-label pins ·
+pane mount-announce pin · resume-order + derived-tiers IPC pin · mount-aware defer truth-table.
+Verify: tsc 0 · vitest **1208** (161 files, +5 net) · `git diff -- src-tauri` EMPTY (zero new
+IPC/mutation primitive) · self-reviewer round-2 **PASS** (computed accent at rest+hover on 3 live
+sites; one-prompt-at-a-time proven live).
+- **⚠️ NOTE for the owner:** a REAL orphaned Gaming Mode session ("still applied — not yet
+  restored") sits on this rig right now — the self-reviewer found it read-only and never touched
+  it. Next time he looks at the app, THIS new banner greets him: one click "Resume Gaming Mode" or
+  "Restore now". His settings are currently still in the gaming-session state.
+- **⏳ Still open from 2026-07-10e:** owner eyeball on the Home console preview (Settings →
+  Appearance → "Home console (preview)") — the taste gate before `compy_home_console` default-ON
+  and Phase 3 (Monitor oscilloscope).
+- **📌 T6b stays a candidate** (batched restore-side elevation — restore still elevates per change).
+
 ### Cycle 2026-07-10e — ✅ PHASE-2 HOME CONSOLE COLD-OPEN BUILT + SHIPPED LIVE `72d9b6e` (installer SHA-256 `12B47273…68BAFF`, stamp-verified; flag `compy_home_console` DEFAULT OFF)
 
 **The 2026-07-10d resume pointer executed end-to-end in one fresh session** (plan
