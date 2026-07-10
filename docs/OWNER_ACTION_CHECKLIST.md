@@ -39,6 +39,15 @@ the one door to the toggles, with "Applied & history" undo inside the panel. Not
 if anything feels off, Settings → Appearance → "Lab proving ground" OFF restores the classic look
 instantly. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-10a–d.
 
+### A4. Home console preview — your eyeball  ·  ⏳ (shipped `72d9b6e`, 2026-07-10)
+Phase 2 of the Console rollout is on your live build, **off by default — nothing looks different
+until you flip it**: Settings → Appearance → **"Home console (preview)"**, then open Home. You should
+see your rig hologram center-stage with four corner gauges, the top limiter with a "See in Lab"
+jump, and a dock of room doors below. React with taste: "all good" flips it to the default look and
+unlocks Phase 3 (Monitor); "needs changes" gets a fix train first. Toggle OFF restores today's Home
+instantly.
+- **Result → tell Claude:** your verdict on the Home console.
+
 ---
 
 ## §B — Waiting on input only you can give

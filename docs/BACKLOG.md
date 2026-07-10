@@ -161,6 +161,30 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10e — ✅ PHASE-2 HOME CONSOLE COLD-OPEN BUILT + SHIPPED LIVE `72d9b6e` (installer SHA-256 `12B47273…68BAFF`, stamp-verified; flag `compy_home_console` DEFAULT OFF)
+
+**The 2026-07-10d resume pointer executed end-to-end in one fresh session** (plan
+`docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`, 5 tasks TDD, entry gate was open):
+`5b79d58` flag plumbing + HomeRoom console branch (byte-identity pinned BOTH `compy_editorial`
+states) · `917fa99` the console stage — HomeHud's masthead ported to flag-independent `hc-` classes,
+lazy hologram center, 4 honesty-pinned corner gauges (Readiness ratio · Avg FPS · 1% low · GPU temp;
+absent ⇒ NOT-YET, NVIDIA neutral per rule 5), edge annotations, `--ix→--v2` kit remap ·
+`1ae489c` the room Dock (doors = `railFor(optimizeMerged, labGround)` minus Home — the 4-room ground
+rail resolution from the resume pointer; Lab primary; navigates via navHome; activeKey null) + the
+#1-limiter context row (quiet tag + "See in Lab" jump; clean renders nothing) · `594c7f0` motion
+layer (spotlight · staggered reveal `backwards` fill · stage reticle · annotation parallax; reduced ⇒
+still page; vendor-purple pin) · `72d9b6e` **self-reviewer round-1 duplication catch fixed** (the
+Dock stacked above RoomShell's ForwardDoor — two go-to-Lab controls; now `doorOpen={!dockRenders}`,
+ONE forward affordance, bug→guard both branches).
+Verify: tsc 0 · full vitest **1203** (161 files, +21 pins) · cargo **688** · `git diff -- src-tauri`
+EMPTY (zero new IPC) · self-reviewer round-2 **PASS** (fresh full pass at `72d9b6e` incl. the canvas
+idle probe: 0 GL draws/16s at rest, Orbit re-engages; flag left OFF as it ships).
+- **⏳ OWNER eyeball (the taste gate before default-ON and before Phase 3 Monitor):** Settings →
+  Appearance → **"Home console (preview)"** ON, open Home, react.
+- **⛳ RESUME (after the eyeball):** verdict "ALL GOOD" → flip `compy_home_console` default-ON per
+  [[ship-approved-work-as-the-build]]; then Phase 3 (Monitor — gauges + the `Oscilloscope` kit
+  component on live telemetry) gets its own plan. "Needs changes" → fold into a fix train first.
+
 ### Cycle 2026-07-10d — ✅ PROVING GROUND DEFAULT-ON + standalone Optimize tab DROPPED, SHIPPED LIVE `59249bb` (installer SHA-256 `8D5F8938…75D6B5`, stamp-verified)
 
 **Both decided 2026-07-10 calls shipped in one train** (round-4 "ALL GOOD" cleared the gate):
