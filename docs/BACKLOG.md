@@ -161,6 +161,22 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10a — ✅ Header-slop law SHIPPED `1a9f44f` (owner round-1 Ops Console feedback; open-on-click CONFIRMED)
+
+**✅ DONE 2026-07-10 · installer SHA-256 `0B16E904…48AE6` · LIVE (stamp-verified `1a9f44f`, one installer on the Desktop).**
+Owner's eyeball feedback did two things: (1) **CONFIRMED Optimize open-on-click** ("cleaner") — recorded in the direction
+spec's Open section; (2) decreed the **header-slop law**: tab header space = header-format text only (eyebrow / headline /
+a sub that qualifies THIS headline's measured fact); small always-on descriptive lines are banned and relocate to their
+context element. Shipped: `.v2-measured` strips removed from Optimize/Monitor/Blackbook/LabV2 (facts already in the
+bodies) · Lab (Ops Console) header cut to eyebrow + headline · console lede DELETED, its undo/read-only promise relocated
+to `.lc-detail-note` inside the Optimize station panel (panel-only, test-pinned) · Home's masthead readout untouched
+(formatted instrument data) · dead `*MeasuredLine` helpers deleted · bug→guard: `.v2-measured`-absence pins ×4 +
+lede/note pin · **law mechanized as self-reviewer rubric item 6** + memory `header-slop-law-no-micro-descriptive-text`.
+Verify: tsc 0 · vitest **1158** · `git diff 63585e9..1a9f44f -- src-tauri` EMPTY · self-reviewer **PASS** (8/8, native
+1500×980). ⚠️ The review reset the `compy_lab_ground` preview toggle to OFF — owner re-flips it to keep eyeballing.
+- **⛳ RESUME:** owner eyeball round 2 (re-flip the Lab preview) · the ONE open owner call: drop the standalone Optimize
+  tab at default-ON · Phases 2–4 per-tab Console rollout (each must pass the header-slop exit check).
+
 ### Cycle 2026-07-09f — ✅ Lab "Ops Console" Phase 1 COMPLETE + SHIPPED `63585e9` (post whole-branch review; DEFAULT OFF, owner eyeball pending)
 **Owner rejected the built bento Instrument Bench (`403be45`) as "generic slop / wide horizontal boxes."** Ran brainstorming
 → 3 interactive HUD mockups (Artifact <https://claude.ai/code/artifact/e2830b73-cfc0-43c6-b263-5b59a1075639>) → owner picked

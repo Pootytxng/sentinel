@@ -163,6 +163,12 @@ then owner-rejected as generic slop — replaced by the Ops Console above. Phase
 
 </details>
 
+**🟢 Owner round-1 feedback landed (2026-07-10) → shipped same day (`1a9f44f`):** **Optimize open-on-click CONFIRMED**
+("cleaner") + the new **header-slop law** — tab header space carries header-format text only; small always-on
+descriptive lines relocate to their context element. Shipped: the four rooms' `.v2-measured` strips removed, the Lab
+header cut to eyebrow + headline, the console lede deleted (undo promise → the Optimize panel), law mechanized as
+self-reviewer rubric item 6. Every Phase 2…N tab adoption must pass this as an exit check.
+
 **Still 🔴 OPEN after Ops Console Phase 1:** Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
 real `Oscilloscope` kit bound to live telemetry · History/Black Box flight-recorder log · Gaming Mode arm/engage console ·
 Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). Still folds in the remaining §A JARVIS stack
