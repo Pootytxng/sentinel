@@ -46,7 +46,11 @@ The dev build runs two same-origin webviews + a small default window, so capture
    on a primary action). Say which you checked.
 5. **Layout** — alignment, spacing, no clipping/overflow; empty + loading states hold.
 6. **Wording** — plain, accurate, no stale references (renamed features — "Optimize", "Startup
-   tab" — no longer exist).
+   tab" — no longer exist). **Header-slop law (owner 2026-07-10):** a tab's opening header space
+   carries header-format text only (eyebrow / headline / a sub that qualifies THIS headline's
+   measured fact). Any always-on small descriptive/explainer line stacked under a header (ledes,
+   provenance taglines, standing promises in micro-text) is a FAIL — such lines relocate to the
+   element they actually describe. Check any header/lede area the diff touches.
 7. **The owner's exact ask** — decompose multi-part asks; quote each part, confirm it's met.
 8. **Canvas idle rest** (only when the diff touches the r3f canvas tree — `src/surfaces/rig/**`,
    the HomeHud stage, or a vendored 3D material; otherwise evidence = "n/a, no canvas files in

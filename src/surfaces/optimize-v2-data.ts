@@ -1,4 +1,4 @@
-import type { GameReadiness, Recommendation } from "../types";
+import type { Recommendation } from "../types";
 
 // Pure verdict/measured derivations for the V2 Optimize room (V2-4, spec
 // 2026-07-02-v2-shell-sourcing-and-plan). Same contract as postureLine for Home: measured
@@ -99,13 +99,6 @@ export function optimizeVerdict(
   };
 }
 
-// The provenance line under the verdict: real check counts + the real evaluated-catalog size.
-// Nothing measured yet → says so; never a fabricated count.
-export function optimizeMeasuredLine(
-  readiness: GameReadiness | null,
-  recs: Recommendation[] | null,
-): string {
-  if (readiness == null || recs == null) return "running checks…";
-  const measured = readiness.checks.length - readiness.unknown_count;
-  return `${measured}/${readiness.checks.length} checks measured · ${recs.length} vetted tweaks evaluated`;
-}
+// (The former measured-line header strip was retired 2026-07-10 — owner header-slop law: header
+// space carries header-format text only. The check/catalog counts are the visible check list and
+// fix rows themselves; Home's HUD masthead readout still carries the checks-measured count.)

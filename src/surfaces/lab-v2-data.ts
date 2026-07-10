@@ -82,13 +82,9 @@ export function labVerdict(bench: BenchmarkState | null): LabVerdictLine {
   };
 }
 
-// The provenance line under the verdict: how many instruments this rig gets (the count is
-// computed by the room from the same gates the body uses — vendor + diagnostics — never
-// hardcoded) and the room's standing read-only guarantee, stated plainly.
-export function labMeasuredLine(instruments: number): string {
-  const count = instruments === 1 ? "1 instrument" : `${instruments} instruments`;
-  return `${count} · they only measure — nothing in the Lab changes your PC`;
-}
+// (The former measured-line header strip was retired 2026-07-10 — owner header-slop law: header
+// space carries header-format text only. The read-only guarantee already lives in the Lab body's
+// own copy; the instrument count is the visible instrument list itself.)
 
 // ── Latest readings (fill pass, spec 2026-07-05-v2-nits-fill-pass) ──
 // The newest value each instrument produced, consolidated for the foot-of-room glance strip.

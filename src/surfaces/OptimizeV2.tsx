@@ -18,7 +18,7 @@ import { useHudFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { SidePileContext } from "./side-pile";
 import { buildSetupSummary, deriveReverted } from "./use-scan";
-import { optimizeVerdict, optimizeMeasuredLine } from "./optimize-v2-data";
+import { optimizeVerdict } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./optimize-v2.css";
 
@@ -141,7 +141,6 @@ export function OptimizeV2({
   // must never be announced as "ready to apply".
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
   const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted);
-  const measured = optimizeMeasuredLine(readiness, recs);
   // Setup summary — a record of what the check measured, so it lives with the records on
   // Applied (owner: it felt unrelated in the fixes flow). Same pure builder Check used.
   const setupSummary = buildSetupSummary(readiness, priorities);
@@ -220,7 +219,6 @@ export function OptimizeV2({
           );
         })()}
         sub={verdict.sub}
-        measured={measured}
         primaryAction={
           activeCount > 0 ? (
             <button

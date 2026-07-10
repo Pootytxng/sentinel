@@ -185,6 +185,17 @@ describe("LabConsole", () => {
     expect(document.querySelector(".lab-console")!.getAttribute("data-motion")).toBe("reduced");
   });
 
+  it("no lede line — the console opens straight on the stage (owner header-slop law 2026-07-10)", () => {
+    const { container } = renderConsole();
+    expect(container.querySelector(".lab-console-lede")).toBeNull();
+    // The undo/read-only promise lives in the Optimize panel (its context), not the header:
+    expect(container.querySelector(".lc-detail-note")).toBeNull(); // closed → nowhere
+    fireEvent.click(screen.getByRole("button", { name: /optimize/i }));
+    expect(container.querySelector(".lc-detail-note")!.textContent).toMatch(/undo first/i);
+    fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
+    expect(container.querySelector(".lc-detail-note")).toBeNull(); // measure stations: no note
+  });
+
   it("never paints the vendor MagicBento purple — the console is token-only (Task 5)", () => {
     const { container } = renderConsole();
     // No 132,0,255 (the vendored gamer-RGB default) anywhere in the rendered tree — the console uses

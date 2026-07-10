@@ -110,7 +110,17 @@ Every tab keeps its own honesty rails and reduced-motion path.
 
 ## Open (to confirm at the Phase-1 plan / eyeball)
 
-- Does the Optimize **toggle panel open-on-click** (my call, keeps the console clean) feel right, or
-  should the safe-tweak list sit always-visible beside the rig? (Decide on the built eyeball.)
+- ~~Does the Optimize **toggle panel open-on-click** feel right?~~ ✅ **OWNER CONFIRMED 2026-07-10:
+  "open on click is cleaner"** — the open-on-click panel is the locked form.
 - The standalone **Optimize rail tab**: once the merged Lab is default-on, drop the separate Optimize
-  tab (the merge's endpoint) — confirm at rollout.
+  tab (the merge's endpoint) — confirm at rollout. (STILL OPEN.)
+
+## Addendum — header-slop law (owner, 2026-07-10 eyeball feedback)
+
+App-wide text law folded into the Console rollout: **a tab's opening header space carries
+header-format text only** (eyebrow / headline / a sub that qualifies THIS headline's measured fact).
+Small always-on descriptive/explainer lines ("perceptually insignificant format") are a bad habit —
+**relocate each to its relative context element, prioritize clean minimal text.** First enforcement
+(2026-07-10 train): the `.v2-measured` header strips removed from Optimize/Monitor/Blackbook/LabV2 +
+LabGround, the LabConsole lede deleted (its undo promise moved into the Optimize station panel).
+Enforced ongoing as self-reviewer rubric item 6; every Phase 2…N tab adoption must pass it.

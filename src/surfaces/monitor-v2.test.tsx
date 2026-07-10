@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vite
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { MonitorV2 } from "./MonitorV2";
 import Monitor from "./Monitor";
-import { monitorVerdict, monitorMeasuredLine } from "./monitor-v2-data";
+import { monitorVerdict } from "./monitor-v2-data";
 import type { SessionSummary } from "../types";
 
 // V2-5 guards (bug→guard tier 1): the V2 Monitor room composes RoomShell (one verdict, one
@@ -142,17 +142,10 @@ describe("monitorVerdict — pure, measured, branch-proper copy", () => {
     expect(v.sub).toContain("not a benchmark");
   });
 
-  it("measured line branches singular/plural properly — never '(s)'", () => {
-    expect(monitorMeasuredLine([])).toBe(
-      "no sessions on record · live meters read this rig once a second while you watch",
-    );
-    expect(monitorMeasuredLine([session()])).toContain("1 session on record");
-    expect(monitorMeasuredLine([session(), session()])).toContain("2 sessions on record");
+  it("never '(s)' across every branch", () => {
     for (const sessions of [[], [session()], [session(), session()]]) {
       const v = monitorVerdict(sessions);
-      expect(`${v.headline} ${v.sub ?? ""} ${monitorMeasuredLine(sessions)}`).not.toContain(
-        "(s)",
-      );
+      expect(`${v.headline} ${v.sub ?? ""}`).not.toContain("(s)");
     }
   });
 });
@@ -169,12 +162,10 @@ describe("MonitorV2 — RoomShell composition", () => {
     expect(doors[0].textContent).toContain("See what changed");
   });
 
-  it("measured line renders under the verdict", () => {
+  it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {
     useReduced();
-    mount();
-    expect(
-      screen.getByText("1 session on record · live meters read this rig once a second while you watch"),
-    ).toBeTruthy();
+    const { container } = mount();
+    expect(container.querySelector(".v2-measured")).toBeNull();
   });
 
   it("no primary action — the room's actions live with their tiles (one-mention law)", () => {

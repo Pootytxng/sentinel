@@ -5,17 +5,17 @@ import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { peekProbe } from "../data/probe-cache";
-import { tuningGuideForVendor } from "../data/tuning-guides";
-import { labVerdict, labMeasuredLine } from "./lab-v2-data";
+import { labVerdict } from "./lab-v2-data";
 import type { BenchmarkState } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./lab-v2.css";
 
 // LabV2 (V2-7, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Lab room on the V2 shell:
-// verdict (the last graded benchmark, honest nothing-graded state) → measured line (instrument
-// count + the read-only guarantee) → the room's working face. NO forward door — Lab is the last
-// chapter (DOOR_MAP: lab → null; the rail is the way home).
+// verdict (the last graded benchmark, honest nothing-graded state) → the room's working face.
+// NO forward door — Lab is the last chapter (DOOR_MAP: lab → null; the rail is the way home).
+// No measured-line header strip (owner header-slop law 2026-07-10) — the read-only guarantee
+// lives in the Lab body's own copy; the instrument count is the visible instrument list.
 //
 // This is the classic Lab composed VERBATIM with the same props and the same audited read-only
 // probes (get_benchmark_state / get_latency_diagnostics / session reads — zero new IPC, nothing
@@ -47,9 +47,6 @@ export function LabV2({
     () => peekProbe("benchmark-state") ?? null,
   );
   const verdict = labVerdict(bench);
-  // The same gates the body uses (vendor for Tuning, the diagnostics slot) — computed, never
-  // hardcoded. Benchmark + Black Box + Latency are always present.
-  const instruments = 3 + (tuningGuideForVendor(vendor) ? 1 : 0) + (diagnostics ? 1 : 0);
 
   return (
     <RoomShell
@@ -80,7 +77,6 @@ export function LabV2({
         );
       })()}
       sub={verdict.sub}
-      measured={labMeasuredLine(instruments)}
     >
       <Lab
         v2

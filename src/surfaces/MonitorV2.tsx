@@ -9,14 +9,15 @@ import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
-import { monitorVerdict, monitorMeasuredLine } from "./monitor-v2-data";
+import { monitorVerdict } from "./monitor-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./monitor-v2.css";
 
 // MonitorV2 (V2-5, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Monitor room on the V2
-// shell: verdict (last-session answer, honest empty state) → measured line → the room's working
-// faces → quiet Tuning-presets expander → forward door (RoomShell, from DOOR_MAP: play → learn,
-// "See what changed").
+// shell: verdict (last-session answer, honest empty state) → the room's working faces → quiet
+// Tuning-presets expander → forward door (RoomShell, from DOOR_MAP: play → learn, "See what
+// changed"). No measured-line header strip (owner header-slop law 2026-07-10) — the session
+// count is the visible Sessions list itself.
 //
 // This is the classic Monitor shell's EXACT composition on RoomShell — Play, MonitorBasic and
 // TuningPresets render verbatim with the same props and the same audited read-only sensor +
@@ -104,7 +105,6 @@ export function MonitorV2(props: Props) {
         );
       })()}
       sub={verdict.sub}
-      measured={monitorMeasuredLine(props.sessions)}
       quiet={
         !basic ? (
           <>

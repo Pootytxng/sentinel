@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { BlackbookV2 } from "./BlackbookV2";
 import Learn from "./Learn";
-import { blackbookVerdict, blackbookMeasuredLine } from "./blackbook-v2-data";
+import { blackbookVerdict } from "./blackbook-v2-data";
 import { KNOWLEDGE } from "../data/knowledge";
 import { recordAutopsy, type AutopsyLedgerEntry } from "../data/autopsy-ledger";
 import { autopsyScan } from "../data/knowledge-autopsy";
@@ -102,7 +102,7 @@ describe("blackbookVerdict — pure, measured, branch-proper copy", () => {
     );
   });
 
-  it("never '(s)' across every branch, and the measured count is the real corpus size", () => {
+  it("never '(s)' across every branch", () => {
     const branches = [
       [],
       [entry({ real: 1 })],
@@ -112,12 +112,9 @@ describe("blackbookVerdict — pure, measured, branch-proper copy", () => {
     ];
     for (const ledger of branches) {
       const v = blackbookVerdict(ledger);
-      expect(`${v.headline} ${v.sub ?? ""} ${blackbookMeasuredLine()}`).not.toContain("(s)");
+      expect(`${v.headline} ${v.sub ?? ""}`).not.toContain("(s)");
     }
     expect(KNOWLEDGE.length).toBeGreaterThan(0);
-    expect(blackbookMeasuredLine()).toBe(
-      `${KNOWLEDGE.length} verified entries on file · answers come from this PC, never the internet`,
-    );
   });
 });
 
@@ -133,10 +130,10 @@ describe("BlackbookV2 — RoomShell composition", () => {
     expect(doors[0].textContent).toContain("Open the instruments");
   });
 
-  it("measured line renders the computed corpus count under the verdict", () => {
+  it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {
     useReduced();
-    mount();
-    expect(screen.getByText(blackbookMeasuredLine())).toBeTruthy();
+    const { container } = mount();
+    expect(container.querySelector(".v2-measured")).toBeNull();
   });
 
   it("no primary action — the P6 spec names Blackbook the room that may have none", () => {

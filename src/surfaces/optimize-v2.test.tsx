@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { OptimizeV2 } from "./OptimizeV2";
-import { optimizeVerdict, optimizeMeasuredLine, safeFixesReady } from "./optimize-v2-data";
+import { optimizeVerdict, safeFixesReady } from "./optimize-v2-data";
 import type { AppliedChange, GameReadiness, Recommendation } from "../types";
 
 // V2-4 guards (bug→guard tier 1): the V2 Optimize room composes RoomShell (one verdict, one
@@ -172,14 +172,6 @@ describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
     }
   });
 
-  it("measured line derives from real counts; unresolved → running", () => {
-    expect(optimizeMeasuredLine(readiness, recsFixture)).toBe(
-      "2/3 checks measured · 5 vetted tweaks evaluated",
-    );
-    expect(optimizeMeasuredLine(null, recsFixture)).toBe("running checks…");
-    expect(optimizeMeasuredLine(readiness, null)).toBe("running checks…");
-  });
-
   // V2-8 (P6 §2): allClear is the door signal — true ONLY once the catalog settled with no safe
   // one-click fix left (active changes or a clean rig both count as chapter-finished).
   it("allClear: false while loading or fixes remain; true when nothing is left to apply", () => {
@@ -241,17 +233,16 @@ describe("OptimizeV2 — RoomShell composition", () => {
     expect(container.querySelectorAll(".v2-door").length).toBe(0);
   });
 
-  it("measured line renders under the verdict", () => {
+  it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {
     useReduced();
-    mount();
-    expect(screen.getByText("2/3 checks measured · 5 vetted tweaks evaluated")).toBeTruthy();
+    const { container } = mount();
+    expect(container.querySelector(".v2-measured")).toBeNull();
   });
 
-  it("recs unresolved → loading verdict + running measured line, nothing fabricated", () => {
+  it("recs unresolved → loading verdict, nothing fabricated", () => {
     useReduced();
     mount({ recs: null, readiness: null });
     expect(screen.getByText("Checking what's safe to change…")).toBeTruthy();
-    expect(screen.getByText("running checks…")).toBeTruthy();
   });
 });
 

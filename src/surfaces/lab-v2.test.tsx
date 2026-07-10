@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(nul
 
 import { LabV2 } from "./LabV2";
 import Lab from "./Lab";
-import { labVerdict, labMeasuredLine, labLatestReadings } from "./lab-v2-data";
+import { labVerdict, labLatestReadings } from "./lab-v2-data";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
 import type { BenchmarkState, Efficacy, LatencyReport } from "../types";
 
@@ -137,7 +137,7 @@ describe("labVerdict — pure, measured, evidence named in the same breath", () 
     );
   });
 
-  it("never '(s)' across every branch, and the measured line is branch-proper", () => {
+  it("never '(s)' across every branch", () => {
     const branches: (BenchmarkState | null)[] = [
       null,
       state(),
@@ -150,11 +150,6 @@ describe("labVerdict — pure, measured, evidence named in the same breath", () 
       const v = labVerdict(bench);
       expect(`${v.headline} ${v.sub ?? ""}`).not.toContain("(s)");
     }
-    expect(labMeasuredLine(3)).toBe(
-      "3 instruments · they only measure — nothing in the Lab changes your PC",
-    );
-    expect(labMeasuredLine(1)).toContain("1 instrument ·");
-    expect(labMeasuredLine(1)).not.toContain("(s)");
   });
 });
 
@@ -174,15 +169,10 @@ describe("LabV2 — RoomShell composition", () => {
     expect(container.querySelector(".v2-verdict-action")).toBeNull();
   });
 
-  it("measured line: the instrument count is computed from the body's own gates", () => {
+  it("no measured-line header strip — header space is header-format text only (owner law 2026-07-10)", () => {
     useReduced();
-    // AMD + diagnostics slot: Benchmark + Black Box + Latency + Tuning + Diagnostics = 5.
-    render(<LabV2 vendor="amd" diagnostics={<div>diag</div>} />);
-    expect(screen.getByText(labMeasuredLine(5))).toBeTruthy();
-    cleanup();
-    // Non-AMD, no diagnostics: the always-on three.
-    render(<LabV2 vendor="nvidia" />);
-    expect(screen.getByText(labMeasuredLine(3))).toBeTruthy();
+    const { container } = render(<LabV2 vendor="amd" diagnostics={<div>diag</div>} />);
+    expect(container.querySelector(".v2-measured")).toBeNull();
   });
 
   it("one-mention law: Lab's standalone head yields to the room verdict", () => {

@@ -43,12 +43,6 @@ export function monitorVerdict(sessions: SessionSummary[]): MonitorVerdictLine {
   };
 }
 
-// The provenance line under the verdict: how much real data this room is standing on. The
-// 1 Hz cadence is the code's actual poll interval (Play/MonitorBasic/LiveCharts), stated
-// plainly; "while you watch" is literal — the pollers are demand-gated on tab + visibility.
-export function monitorMeasuredLine(sessions: SessionSummary[]): string {
-  const meters = "live meters read this rig once a second while you watch";
-  if (sessions.length === 0) return `no sessions on record · ${meters}`;
-  if (sessions.length === 1) return `1 session on record · ${meters}`;
-  return `${sessions.length} sessions on record · ${meters}`;
-}
+// (The former measured-line header strip was retired 2026-07-10 — owner header-slop law: header
+// space carries header-format text only. The session count is the visible Sessions list itself;
+// the meter-cadence explainer was standing slop.)

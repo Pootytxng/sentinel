@@ -242,10 +242,9 @@ export function LabConsole({
 
   return (
     <div className="lab-console" data-motion={reduced ? "reduced" : "full"}>
-      <p className="lab-console-lede">
-        Your rig's console. Everything here only <em>reads</em> — measure freely. The one tap that
-        changes anything snapshots its undo first.
-      </p>
+      {/* No lede (owner header-slop law 2026-07-10): the console opens straight on the stage —
+          header space above carries header-format text only; the undo/read-only promise lives in
+          the Optimize panel, next to the one control it qualifies. */}
 
       {/* CONSOLE STAGE — bracketed frame, real 3D hologram center, four corner arc gauges. */}
       <div className="lc-stage" ref={stageRef}>
@@ -301,6 +300,14 @@ export function LabConsole({
             </button>
           </div>
           <div className="lab-card-body">
+            {openStation === "optimize" && (
+              /* The undo/read-only promise, relocated from the header (owner header-slop law
+                 2026-07-10) to its context: the one station that changes anything. */
+              <p className="lc-detail-note">
+                The only station here that changes anything — every apply snapshots its undo first,
+                and everything else in this room just reads.
+              </p>
+            )}
             {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}
           </div>
         </div>

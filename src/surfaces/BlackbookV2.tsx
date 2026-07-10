@@ -5,15 +5,16 @@ import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
-import { blackbookVerdict, blackbookMeasuredLine } from "./blackbook-v2-data";
+import { blackbookVerdict } from "./blackbook-v2-data";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./blackbook-v2.css";
 
 // BlackbookV2 (V2-6, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Blackbook room on the
-// V2 shell: verdict (the reader's own autopsy record, honest no-record state) → measured line
-// (corpus size + where answers come from) → the room's working face → forward door (RoomShell,
-// from DOOR_MAP: learn → lab, "Open the instruments").
+// V2 shell: verdict (the reader's own autopsy record, honest no-record state) → the room's
+// working face → forward door (RoomShell, from DOOR_MAP: learn → lab, "Open the instruments").
+// No measured-line header strip (owner header-slop law 2026-07-10) — the corpus size and the
+// never-the-internet promise live in the body's own copy.
 //
 // This is the classic Blackbook (Learn) composed VERBATIM with the same props and the same
 // locked read-only cores (searchKnowledge / autopsyScan / KNOWLEDGE — zero IPC, zero network,
@@ -71,7 +72,6 @@ export function BlackbookV2({
         );
       })()}
       sub={verdict.sub}
-      measured={blackbookMeasuredLine()}
     >
       <Learn
         asPanel

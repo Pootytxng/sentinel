@@ -5,7 +5,7 @@ import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { deriveReverted } from "./use-scan";
-import { optimizeVerdict, optimizeMeasuredLine } from "./optimize-v2-data";
+import { optimizeVerdict } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
 import type { GameReadiness } from "../types";
@@ -51,9 +51,11 @@ export function LabGround(props: LabFastPathProps & {
 
   // Verdict = the fixes state (the primary surface). Drifted rows are named, never counted as
   // "ready to apply" (the one-mention law) — same pure helper the Optimize room uses.
+  // Header = eyebrow + headline ONLY (owner header-slop law 2026-07-10): the undo-promise sub
+  // relocated into the Optimize station panel (its context — next to the apply control), and the
+  // measured micro-strip is carried by the console's corner gauges, not a header text line.
   const reverted = useMemo(() => deriveReverted(changes), [changes]);
   const verdict = optimizeVerdict(recs, isAppliable, activeCount, reverted);
-  const measured = optimizeMeasuredLine(readiness, recs);
 
   // The whole fast-path bundle threaded to Lab's ground mode (station 1's body).
   const fast: LabFastPathProps = { recs, changes, isAppliable, vendor, ...rest };
@@ -86,8 +88,6 @@ export function LabGround(props: LabFastPathProps & {
           </>
         );
       })()}
-      sub={verdict.sub}
-      measured={measured}
     >
       {/* THE OPS CONSOLE (spec 2026-07-09, Phase 1, Task 4) — a real 3D hologram center-stage with
           four corner arc gauges + a Dock of stations (Optimize primary, the measure→prove

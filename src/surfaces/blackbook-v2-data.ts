@@ -1,4 +1,3 @@
-import { KNOWLEDGE } from "../data/knowledge";
 import { autopsyStats, type AutopsyLedgerEntry } from "../data/autopsy-ledger";
 
 // Pure verdict/measured derivations for the V2 Blackbook room (V2-6, spec
@@ -50,8 +49,6 @@ export function blackbookVerdict(ledger: AutopsyLedgerEntry[]): BlackbookVerdict
   };
 }
 
-// The provenance line under the verdict: how much verified knowledge this room stands on, and
-// where answers come from. The count is computed from the shipped corpus, never hardcoded.
-export function blackbookMeasuredLine(): string {
-  return `${KNOWLEDGE.length} verified entries on file · answers come from this PC, never the internet`;
-}
+// (The former measured-line header strip was retired 2026-07-10 — owner header-slop law: header
+// space carries header-format text only. Its facts already live in the body: Learn's search states
+// the corpus size, and its link/refuse copy states "never fetches the internet".)
