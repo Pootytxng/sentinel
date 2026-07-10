@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   summarizeChanges,
   restoredSummary,
+  resumeOptionsFrom,
   showGlobalRecoveryBanner,
   showGlobalRestoredBanner,
   statusLabel,
@@ -68,36 +69,64 @@ describe("restoredSummary", () => {
   });
 });
 
-// bug→guard (self-review catches 2026-07-08: recovery banner round 1, restored banner
-// round 2): BOTH global banners must defer to the Gaming pane's own card on Optimize —
-// otherwise the same message renders twice, stacked. The gate lives in one pure helper
-// per banner so it can't silently be dropped from either render condition again.
-describe("global banner defers to the Gaming pane on Optimize", () => {
-  it("recovery banner shows on other tabs, never on Optimize, never without a recovery", () => {
-    expect(showGlobalRecoveryBanner(true, "Overview")).toBe(true);
-    expect(showGlobalRecoveryBanner(true, "Optimize")).toBe(false);
-    expect(showGlobalRecoveryBanner(false, "Overview")).toBe(false);
+// bug→guard lineage: self-review 2026-07-08 (duplicate banner over the pane's card, rounds
+// 1+2) then the T6c carried note 2026-07-10 — the tab-name deferral was a BLIND SPOT: the
+// pane only mounts inside a doored segment / opened disclosure, so a pending recovery was
+// invisible anywhere on the Lab/Optimize tabs outside the gaming door. The contract is now
+// mount-aware: defer exactly while a pane is on screen, greet everywhere else.
+describe("global banners defer to the Gaming pane only while one is MOUNTED", () => {
+  it("recovery banner greets while no pane is mounted, defers while one is", () => {
+    expect(showGlobalRecoveryBanner(true, false)).toBe(true);
+    expect(showGlobalRecoveryBanner(true, true)).toBe(false);
+    expect(showGlobalRecoveryBanner(false, false)).toBe(false);
   });
 
-  it("restored banner shows on other tabs, never on Optimize", () => {
-    expect(showGlobalRestoredBanner(true, false, "Overview")).toBe(true);
-    expect(showGlobalRestoredBanner(true, false, "Optimize")).toBe(false);
-    expect(showGlobalRestoredBanner(false, false, "Overview")).toBe(false);
+  it("restored banner greets while no pane is mounted, defers while one is", () => {
+    expect(showGlobalRestoredBanner(true, false, false)).toBe(true);
+    expect(showGlobalRestoredBanner(true, false, true)).toBe(false);
+    expect(showGlobalRestoredBanner(false, false, false)).toBe(false);
   });
 
   it("a pending recovery outranks the success confirmation — never both", () => {
-    expect(showGlobalRestoredBanner(true, true, "Overview")).toBe(false);
+    expect(showGlobalRestoredBanner(true, true, false)).toBe(false);
+  });
+});
+
+// bug→guard (T6c, 2026-07-10): "Resume Gaming Mode" must re-apply the interrupted session's
+// OWN tiers, derived from its recorded changes — the pane's checkboxes reset to core-only on
+// remount, which silently downgraded a resumed advanced-tier session. Labels here are pinned
+// byte-identical to the backend's (gaming_orchestrator.rs) — if a label drifts, this breaks
+// loudly instead of the resume silently dropping a tier.
+describe("resumeOptionsFrom", () => {
+  it("a core-only session resumes core-only", () => {
+    expect(
+      resumeOptionsFrom([ch("Power plan → max performance"), ch("Windows Game Mode on")]),
+    ).toEqual({ advancedUsb: false, advancedPcie: false, suspendServices: [] });
   });
 
-  // bug→guard (2026-07-09 self-review): the Lab §5 Power-features bay ALSO embeds the Gaming Mode
-  // pane, so BOTH global banners must defer on "Lab" exactly as on "Optimize" — else the same
-  // recovery/restored event renders twice on the Lab tab (screenshot-confirmed duplicate).
-  it("both banners defer on the Lab tab too (it embeds the Gaming Mode pane)", () => {
-    expect(showGlobalRecoveryBanner(true, "Lab")).toBe(false);
-    expect(showGlobalRestoredBanner(true, false, "Lab")).toBe(false);
-    // …still shown on a tab that does NOT embed the pane.
-    expect(showGlobalRecoveryBanner(true, "Play")).toBe(true);
-    expect(showGlobalRestoredBanner(true, false, "Play")).toBe(true);
+  it("derives every advanced tier from the session's recorded changes", () => {
+    const opts = resumeOptionsFrom([
+      ch("Power plan → max performance"),
+      ch("USB selective suspend off (AC)", true),
+      ch("PCIe ASPM off (AC)", true),
+      ch("Suspend WSearch for this session", true),
+      ch("Suspend SysMain for this session", true),
+    ]);
+    expect(opts.advancedUsb).toBe(true);
+    expect(opts.advancedPcie).toBe(true);
+    expect(opts.suspendServices).toEqual(["WSearch", "SysMain"]);
+  });
+
+  it("never invents a tier from an empty or unrelated contract", () => {
+    expect(resumeOptionsFrom([])).toEqual({
+      advancedUsb: false,
+      advancedPcie: false,
+      suspendServices: [],
+    });
+    // A label that merely CONTAINS the words must not match (anchored, exact).
+    expect(
+      resumeOptionsFrom([ch("Suspend nothing"), ch("USB selective suspend off (AC) legacy")]),
+    ).toEqual({ advancedUsb: false, advancedPcie: false, suspendServices: [] });
   });
 });
 

@@ -563,7 +563,15 @@ html, body, #root {
   align-items: center;
   gap: 10px;
 }
-.btn-small-on {
+/* Double-class specificity is load-bearing: the base `.btn-small` rule is declared LATER in
+   this file and a bare `.btn-small-on` loses the equal-specificity tie — the accent was dead
+   app-wide (self-review computed-proof, T6c train 2026-07-10). The hover override is too:
+   the generic `.btn-small:hover` flips to --danger, wrong for a positive/primary action. */
+.btn-small.btn-small-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-small.btn-small-on:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
 }

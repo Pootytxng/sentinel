@@ -87,6 +87,42 @@ export type RestoredSummary = {
 export const GAMING_SESSION_RESOLVED_EVENT = "compy:gaming-session-resolved";
 
 /**
+ * Fired by the Gaming Mode pane on mount/unmount so the App-level banners know when the
+ * pane's own richer card is ACTUALLY on screen. The old tab-name deferral was a blind spot:
+ * the pane only mounts inside a doored segment (classic Optimize) or an opened disclosure
+ * (the Lab's Optimize station → Power features), so "the Lab tab embeds the pane" was true
+ * of the tab but false of the screen — a pending recovery was invisible while sitting on
+ * the Lab (owner-lived gap, carried note 2026-07-10 → this train).
+ */
+export const GAMING_PANE_MOUNTED_EVENT = "compy:gaming-pane-mounted";
+export const GAMING_PANE_UNMOUNTED_EVENT = "compy:gaming-pane-unmounted";
+
+// The exact per-item labels the backend writes into the session contract (pinned
+// byte-identical in gaming_orchestrator.rs tests) — the only bridge from an interrupted
+// session's recorded changes back to the StartOptions that produced them.
+const USB_LABEL = "USB selective suspend off (AC)";
+const PCIE_LABEL = "PCIe ASPM off (AC)";
+const SUSPEND_LABEL = /^Suspend (.+) for this session$/;
+
+/**
+ * Pure: reconstruct StartOptions from an interrupted session's OWN recorded changes, so
+ * "Resume Gaming Mode" re-applies what the session actually had on — not whatever the
+ * pane's checkboxes happen to say after a remount (they reset to core-only, silently
+ * downgrading the resume). Honest by construction: derived only from changes the backend
+ * confirmed applied; the backend re-enforces the service allowlist on start, so a
+ * disk-edited label can never suspend anything off-list.
+ */
+export function resumeOptionsFrom(changes: SessionChange[]): StartOptions {
+  return {
+    advancedUsb: changes.some((c) => c.label === USB_LABEL),
+    advancedPcie: changes.some((c) => c.label === PCIE_LABEL),
+    suspendServices: changes
+      .map((c) => SUSPEND_LABEL.exec(c.label)?.[1])
+      .filter((n): n is string => Boolean(n)),
+  };
+}
+
+/**
  * Pure: the visible restore-success confirmation (owner-caught UX gap, 2026-07-07:
  * a successful restore showed NOTHING — he couldn't tell it worked). Only called
  * after the backend confirmed EVERY change restored (restore() clears the contract
@@ -112,29 +148,26 @@ export function restoredSummary(changes: SessionChange[]): RestoredSummary {
 }
 
 /**
- * Pure: should the App-level global banners render? Both DEFER to the Gaming pane's
- * own card whenever Optimize is the active surface — otherwise the same message shows
- * twice, stacked above the pane (self-review catches, 2026-07-08: recovery banner in
- * round 1, restored banner in round 2 — the gate must live on BOTH, so it lives here).
+ * Pure: should the App-level global banners render? Both DEFER to the Gaming pane's own
+ * card whenever a pane is ACTUALLY MOUNTED — otherwise the same message shows twice,
+ * stacked above the pane (self-review catches, 2026-07-08 rounds 1+2). Mount-aware, not
+ * tab-aware: the old tab-name set ("Optimize"/"Lab") deferred on the whole tab while the
+ * pane only mounts inside a doored segment / opened disclosure there, so a pending
+ * recovery was INVISIBLE anywhere on those tabs outside the gaming door (owner-lived on
+ * the Lab, 2026-07-10). `paneMounted` comes from GAMING_PANE_(UN)MOUNTED_EVENT tracking
+ * in App — the deferral now follows the pane itself through any future re-homing.
  */
-// The tabs that embed the full Gaming Mode pane (which renders its OWN recovery/restored card) — the
-// global banner must defer to it there, or the SAME event shows twice (bug caught 2026-07-09 self-
-// review: the Lab §5 Power-features bay embeds GamingMode too, but the old guard hardcoded only
-// "Optimize", so both the global banner AND the embedded card fired on Lab). Named here so the next
-// rename can't silently re-break it — add the tab, not another `!==` scattered across two guards.
-const TABS_EMBEDDING_GAMING_MODE = new Set(["Optimize", "Lab"]);
-
-export function showGlobalRecoveryBanner(hasRecovery: boolean, activeTab: string): boolean {
-  return hasRecovery && !TABS_EMBEDDING_GAMING_MODE.has(activeTab);
+export function showGlobalRecoveryBanner(hasRecovery: boolean, paneMounted: boolean): boolean {
+  return hasRecovery && !paneMounted;
 }
 
 export function showGlobalRestoredBanner(
   hasRestored: boolean,
   hasRecovery: boolean,
-  activeTab: string,
+  paneMounted: boolean,
 ): boolean {
   // A pending recovery outranks the success confirmation; never show both.
-  return hasRestored && !hasRecovery && !TABS_EMBEDDING_GAMING_MODE.has(activeTab);
+  return hasRestored && !hasRecovery && !paneMounted;
 }
 
 /** Pure: human label for a session status (used in recovery / status messaging). */

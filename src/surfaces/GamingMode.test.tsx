@@ -13,7 +13,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("./library-context", () => ({ useLibrary: () => ({ openLibrary: () => {} }) }));
 
 import { GamingMode } from "./GamingMode";
-import { GAMING_SESSION_RESOLVED_EVENT, type GamingSessionFile } from "./gaming-mode";
+import {
+  GAMING_SESSION_RESOLVED_EVENT,
+  GAMING_PANE_MOUNTED_EVENT,
+  GAMING_PANE_UNMOUNTED_EVENT,
+  type GamingSessionFile,
+} from "./gaming-mode";
 
 const session = (status: GamingSessionFile["status"]): GamingSessionFile => ({
   schema_version: 2,
@@ -126,5 +131,67 @@ describe("GamingMode restore-success confirmation", () => {
       expect(screen.getByText(/Couldn't fully restore your settings/).textContent).toBeTruthy(),
     );
     expect(screen.queryByText("Your settings are back")).toBeNull();
+  });
+});
+
+// bug→guard (T6c, 2026-07-10): the App-level banners defer to the pane only while one is
+// ACTUALLY mounted — that contract depends on the pane announcing itself. If these events
+// stop firing, the global banner either duplicates the pane's card or (worse) a pending
+// recovery goes invisible on the Lab again.
+describe("GamingMode announces mount/unmount to the App-level banner gate", () => {
+  it("dispatches MOUNTED on mount and UNMOUNTED on unmount, symmetrically", async () => {
+    const mounted = vi.fn();
+    const unmounted = vi.fn();
+    window.addEventListener(GAMING_PANE_MOUNTED_EVENT, mounted);
+    window.addEventListener(GAMING_PANE_UNMOUNTED_EVENT, unmounted);
+    try {
+      invokeMock.mockImplementation(() => Promise.resolve(null));
+      const { unmount } = render(<GamingMode />);
+      expect(mounted).toHaveBeenCalledTimes(1);
+      expect(unmounted).not.toHaveBeenCalled();
+      unmount();
+      expect(unmounted).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener(GAMING_PANE_MOUNTED_EVENT, mounted);
+      window.removeEventListener(GAMING_PANE_UNMOUNTED_EVENT, unmounted);
+    }
+  });
+});
+
+// bug→guard (T6c, 2026-07-10): the pane's "Resume Gaming Mode" must restart with the
+// interrupted session's OWN tiers, derived from its recorded changes — the advanced
+// checkboxes reset to core-only on remount, so reading them silently downgraded the
+// resumed session (USB/PCIe/service suspensions quietly dropped).
+describe("GamingMode resume restarts with the interrupted session's own tiers", () => {
+  it("recover leg confirms first, then start carries the tiers derived from the contract", async () => {
+    const calls: { cmd: string; args?: unknown }[] = [];
+    invokeMock.mockImplementation((cmd, args) => {
+      calls.push({ cmd, args });
+      if (cmd === "get_gaming_session_state")
+        return Promise.resolve({
+          ...session("restore-pending"),
+          changes: [
+            { label: "Power plan → max performance", elevated_restore: false },
+            { label: "USB selective suspend off (AC)", elevated_restore: true },
+            { label: "Suspend WSearch for this session", elevated_restore: true },
+          ],
+        });
+      if (cmd === "start_gaming_session") return Promise.resolve(session("active"));
+      return Promise.resolve(null);
+    });
+    render(<GamingMode />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume Gaming Mode" }));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.cmd === "start_gaming_session")).toBe(true),
+    );
+    const recoverAt = calls.findIndex((c) => c.cmd === "recover_gaming_session");
+    const startAt = calls.findIndex((c) => c.cmd === "start_gaming_session");
+    expect(recoverAt).toBeGreaterThanOrEqual(0); // rollback-first: restore precedes the restart
+    expect(recoverAt).toBeLessThan(startAt);
+    expect(calls[startAt].args).toEqual({
+      opts: { advancedUsb: true, advancedPcie: false, suspendServices: ["WSearch"] },
+    });
   });
 });

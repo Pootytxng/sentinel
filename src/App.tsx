@@ -56,11 +56,15 @@ import {
   type GamingSessionFile,
   type RestoredSummary,
   GAMING_SESSION_RESOLVED_EVENT,
+  GAMING_PANE_MOUNTED_EVENT,
+  GAMING_PANE_UNMOUNTED_EVENT,
   isRecoverable,
   restoredSummary,
+  resumeOptionsFrom,
   showGlobalRecoveryBanner,
   showGlobalRestoredBanner,
   statusLabel,
+  summarizeChanges,
 } from "./surfaces/gaming-mode";
 import "./App.css";
 import "./design/doorknob.css";
@@ -622,6 +626,7 @@ function App() {
       await invoke("recover_gaming_session", { confirm: true });
       setGamingRecovery(null); // cleared only once restore confirms
       setGamingRestored(restoredSummary(changes)); // backend confirmed: every change restored
+      setGamingResumed(null); // one confirmation at a time — restore supersedes a stale resume
       window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear the pane's prompts
     } catch (e) {
       // leave the banner up so the user can retry / Review
@@ -639,6 +644,60 @@ function App() {
     window.addEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
     return () => window.removeEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
   }, []);
+  // Is a Gaming pane actually on screen? The global banners defer to its richer cards ONLY
+  // while one is mounted — the old tab-name deferral hid a pending recovery anywhere on the
+  // Lab/Optimize tabs outside the gaming door (owner-lived gap, T6c train 2026-07-10). A
+  // counter (not a boolean) stays honest through StrictMode's symmetric dev double-mount.
+  const [gamingPanes, setGamingPanes] = useState(0);
+  useEffect(() => {
+    const up = () => setGamingPanes((n) => n + 1);
+    const down = () => setGamingPanes((n) => Math.max(0, n - 1));
+    window.addEventListener(GAMING_PANE_MOUNTED_EVENT, up);
+    window.addEventListener(GAMING_PANE_UNMOUNTED_EVENT, down);
+    return () => {
+      window.removeEventListener(GAMING_PANE_MOUNTED_EVENT, up);
+      window.removeEventListener(GAMING_PANE_UNMOUNTED_EVENT, down);
+    };
+  }, []);
+  const gamingPaneMounted = gamingPanes > 0;
+  // One-click Resume on the global banner (owner directive 2026-07-10): the pane's audited
+  // recover→start sequence, verbatim — roll the interrupted session back to the TRUE prior
+  // state first (rollback-first: the fresh session snapshots normal settings, never the
+  // half-applied ones), then start anew with the interrupted session's OWN tiers
+  // (resumeOptionsFrom). Explicit click only — never zero-click auto-apply on launch.
+  const [gamingResuming, setGamingResuming] = useState(false);
+  const [gamingResumed, setGamingResumed] = useState<string | null>(null); // honesty line
+  const resumeGaming = async () => {
+    if (!gamingRecovery) return;
+    const opts = resumeOptionsFrom(gamingRecovery.changes);
+    setGamingResuming(true);
+    try {
+      await invoke("recover_gaming_session", { confirm: true });
+    } catch (e) {
+      // Restore leg failed → the banner stays up so every option is still one click away.
+      fail("Couldn't finish restoring your settings just now — try again, or use Review.", e);
+      setGamingResuming(false);
+      return;
+    }
+    setGamingRecovery(null); // cleared only once the restore leg confirms
+    window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear the pane's prompts
+    try {
+      const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
+      setGamingResumed(summarizeChanges(file.changes).line);
+      setGamingRestored(null); // one confirmation at a time — the live session supersedes it
+    } catch (e) {
+      // Start leg failed AFTER a confirmed restore — settings are safely back; say exactly
+      // that, and point at the one door to try again (never a vague "resume failed").
+      fail(
+        `Your settings were restored, but Gaming Mode couldn't start again — turn it on from ${
+          labGround ? "the Lab" : "Optimize"
+        } when you're ready.`,
+        e,
+      );
+    } finally {
+      setGamingResuming(false);
+    }
+  };
 
   const onExport = async () => {
     setExporting(true);
@@ -1263,31 +1322,43 @@ function App() {
         </div>
       )}
 
-      {/* Defers to the Gaming pane's own richer prompt (Resume / Return / Not now) while the
-          Optimize room hosting it is open — two simultaneous prompts for one event read as a
-          bug (self-review catch, 2026-07-08). Every other tab keeps the launch-greeting banner. */}
-      {showGlobalRecoveryBanner(gamingRecovery !== null, activeTab) && gamingRecovery && (
+      {/* Defers to the Gaming pane's own richer prompt (Resume / Return / Not now) while a
+          pane is actually MOUNTED — two simultaneous prompts for one event read as a bug
+          (self-review catch, 2026-07-08). Mount-aware, not tab-aware: outside the gaming
+          door the pane isn't on screen, so the banner keeps greeting there (T6c, 2026-07-10).
+          Resume is primary (owner directive 2026-07-10) — his lived flow was
+          restore-then-re-enable-by-hand. */}
+      {showGlobalRecoveryBanner(gamingRecovery !== null, gamingPaneMounted) && gamingRecovery && (
         <div className="gaming-recovery-banner" role="alert">
           <span>
-            A Gaming Mode session didn't end cleanly — {statusLabel(gamingRecovery.status)}. Restore
-            your settings?
+            A Gaming Mode session didn't end cleanly — {statusLabel(gamingRecovery.status)}. Resume
+            it, or restore your settings?
           </span>
           <span className="gaming-recovery-actions">
             <button
               className="btn-small btn-small-on"
-              disabled={gamingRestoring}
+              disabled={gamingRestoring || gamingResuming}
+              onClick={resumeGaming}
+            >
+              {gamingResuming ? "Resuming…" : "Resume Gaming Mode"}
+            </button>
+            <button
+              className="btn-small"
+              disabled={gamingRestoring || gamingResuming}
               onClick={() => recoverGaming(true)}
             >
               {gamingRestoring ? "Restoring…" : "Restore now"}
             </button>
             <button
               className="btn-small"
-              disabled={gamingRestoring}
+              disabled={gamingRestoring || gamingResuming}
               onClick={() => {
                 // Ground: the Gaming pane lives in the Lab's Optimize station (there is no
-                // standalone Optimize tab to review on).
+                // standalone Optimize tab to review on). The recovery is NOT cleared here —
+                // the banner keeps greeting until the pane's own card takes over on mount,
+                // so Review can never dead-end the restore (the old clear did exactly that
+                // when the pane stayed behind a closed disclosure).
                 setActiveTab(labGround ? "Lab" : "Optimize");
-                setGamingRecovery(null);
               }}
             >
               Review
@@ -1296,10 +1367,28 @@ function App() {
         </div>
       )}
 
+      {/* Resume-success confirmation — the honest counterpart of the restored banner below:
+          names the live session's measured change count (summarizeChanges of the contract
+          the backend returned), never a bare "it worked". */}
+      {showGlobalRestoredBanner(gamingResumed !== null, gamingRecovery !== null, gamingPaneMounted) &&
+        gamingResumed && (
+        <div className="gaming-restored-banner" role="status">
+          <span>
+            <strong>✓ Gaming Mode is back on.</strong> {gamingResumed} — stop it from{" "}
+            {labGround ? "the Lab" : "Optimize"} when you're done.
+          </span>
+          <span className="gaming-recovery-actions">
+            <button className="btn-small" onClick={() => setGamingResumed(null)}>
+              Done
+            </button>
+          </span>
+        </div>
+      )}
+
       {/* Restore-success confirmation — names exactly what came back (never a silent success).
-          Defers to the Gaming pane's own confirmation card on Optimize, same as the recovery
-          banner above (self-review catch, round 2, 2026-07-08). */}
-      {showGlobalRestoredBanner(gamingRestored !== null, gamingRecovery !== null, activeTab) &&
+          Defers to the Gaming pane's own confirmation card while one is mounted, same as the
+          recovery banner above (self-review catch, round 2, 2026-07-08). */}
+      {showGlobalRestoredBanner(gamingRestored !== null, gamingRecovery !== null, gamingPaneMounted) &&
         gamingRestored && (
         <div className="gaming-restored-banner" role="status">
           <span>

@@ -6,8 +6,11 @@ import { useLibrary } from "./library-context";
 import {
   summarizeChanges,
   restoredSummary,
+  resumeOptionsFrom,
   statusLabel,
   GAMING_SESSION_RESOLVED_EVENT,
+  GAMING_PANE_MOUNTED_EVENT,
+  GAMING_PANE_UNMOUNTED_EVENT,
   SUSPENDABLE_SERVICES,
   type GamingSessionFile,
   type RestoredSummary,
@@ -80,6 +83,17 @@ export function GamingMode() {
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // Tell the App-level banners a pane is on screen (they defer to our richer cards while
+  // mounted, and ONLY while mounted — the tab-name deferral left recovery invisible on the
+  // Lab outside the Power-features disclosure). Symmetric events keep a counter honest in
+  // App even through StrictMode's dev double-mount.
+  useEffect(() => {
+    window.dispatchEvent(new Event(GAMING_PANE_MOUNTED_EVENT));
+    return () => {
+      window.dispatchEvent(new Event(GAMING_PANE_UNMOUNTED_EVENT));
     };
   }, []);
 
@@ -191,7 +205,12 @@ export function GamingMode() {
   // Resume = roll the interrupted session back to the clean prior state FIRST (so the new session
   // snapshots normal settings, not the half-applied ones), then start a fresh session. Reuses the
   // same audited recover + start commands — no new mutation path, restore contract unchanged.
+  // Tiers come from the interrupted session's OWN recorded changes (resumeOptionsFrom), not the
+  // checkboxes — those reset to core-only on remount, which silently downgraded a resumed
+  // advanced-tier session (T6c train, 2026-07-10).
   const onResume = async () => {
+    if (!recovery) return;
+    const opts: StartOptions = resumeOptionsFrom(recovery.changes);
     setBusy(true);
     setError(null);
     setRestored(null); // heading back into an active session — the honesty line takes over
@@ -199,11 +218,6 @@ export function GamingMode() {
       await invoke("recover_gaming_session", { confirm: true });
       setRecovery(null);
       window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear sibling prompts
-      const opts: StartOptions = {
-        advancedUsb: advUsb,
-        advancedPcie: advPcie,
-        suspendServices: suspendSvcs,
-      };
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
