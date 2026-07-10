@@ -54,6 +54,7 @@ const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
 const consoleArcGaugeCss = loadV2Css("design", "console", "arc-gauge.css");
 const consoleDockCss = loadV2Css("design", "console", "dock.css");
+const consoleReticleCss = loadV2Css("design", "console", "reticle.css");
 
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
@@ -71,6 +72,7 @@ const V2_CSS: [string, string][] = [
   ["ambient-hud.css", ambientHudCss],
   ["console/arc-gauge.css", consoleArcGaugeCss],
   ["console/dock.css", consoleDockCss],
+  ["console/reticle.css", consoleReticleCss],
 ];
 
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {

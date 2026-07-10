@@ -140,7 +140,59 @@
   padding: 16px 20px 18px;
 }
 
-/* Reduced motion: the stage/dock/gauges already gate their own motion internally (ArcGauge's
-   useCountTo, Dock's data-motion hover-lift) — nothing additional to disable here. No bare @media
-   (the scoping guard parses depth-0 headers; the app window is desktop-fixed, matching every other
-   v2 surface stylesheet). */
+/* ── Task 5: the console comes ALIVE — cursor-follow accent spotlight + staggered mount reveal ──
+   ALL gated under .lab-console[data-motion="full"]; the reduced branch (data-motion="reduced") simply
+   never matches, so it stays a flat static console (no explicit disable needed). The reticle Target
+   Cursor is a separate component (reticle.css), null under reduced motion. */
+
+/* Cursor-follow spotlight — a border-masked accent glow whose opacity tracks pointer proximity via
+   --glow-intensity (set by LabConsole's pointer handler). Masked to the stage border ring only. */
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-stage {
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+}
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: radial-gradient(320px circle at var(--glow-x) var(--glow-y), var(--ix-accent) 0%, transparent 58%);
+  opacity: calc(var(--glow-intensity) * 0.55);
+  transition: opacity 0.25s ease;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Staggered mount reveal — the stage, then the four corner gauges, then the dock rise + fade in.
+   `backwards` fill holds the hidden FROM state through the delay without pinning the end state
+   afterward (a `both`/`forwards` fill would permanently outrank later state — the bench's old bug). */
+@keyframes v2-lc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-stage,
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-corner,
+:root[data-v2="on"] .lab-console[data-motion="full"] .dock {
+  animation: v2-lc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-tl { animation-delay: 0.12s; }
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-tr { animation-delay: 0.19s; }
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-bl { animation-delay: 0.26s; }
+:root[data-v2="on"] .lab-console[data-motion="full"] .lc-br { animation-delay: 0.33s; }
+:root[data-v2="on"] .lab-console[data-motion="full"] .dock { animation-delay: 0.3s; }

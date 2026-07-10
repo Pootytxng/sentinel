@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
 import { Dock, type DockNode } from "../design/console/Dock";
+import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
@@ -81,6 +82,28 @@ export function LabConsole({
   readiness?: GameReadiness | null;
 }) {
   const reduced = useReducedMotion();
+
+  // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
+  // (the JARVIS "alive" the owner missed). Custom props only; skipped entirely under reduced motion.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (reduced) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onMove = (e: PointerEvent) => {
+      const r = stage.getBoundingClientRect();
+      stage.style.setProperty("--glow-x", `${((e.clientX - r.left) / r.width) * 100}%`);
+      stage.style.setProperty("--glow-y", `${((e.clientY - r.top) / r.height) * 100}%`);
+      stage.style.setProperty("--glow-intensity", "1");
+    };
+    const onLeave = () => stage.style.setProperty("--glow-intensity", "0");
+    stage.addEventListener("pointermove", onMove);
+    stage.addEventListener("pointerleave", onLeave);
+    return () => {
+      stage.removeEventListener("pointermove", onMove);
+      stage.removeEventListener("pointerleave", onLeave);
+    };
+  }, [reduced]);
 
   // v1 ships the AMD undervolt guide only (locked rule #5) — Tuning is a station only on AMD.
   const tuningGuide = tuningGuideForVendor(vendor);
@@ -219,7 +242,7 @@ export function LabConsole({
       </p>
 
       {/* CONSOLE STAGE — bracketed frame, real 3D hologram center, four corner arc gauges. */}
-      <div className="lc-stage">
+      <div className="lc-stage" ref={stageRef}>
         <span className="lc-brk lc-brk-tl" />
         <span className="lc-brk lc-brk-tr" />
         <span className="lc-brk lc-brk-bl" />
@@ -252,6 +275,7 @@ export function LabConsole({
         <div className="lc-rig">
           <RigViewer hw={hw} />
         </div>
+        <ReticleCursor scopeRef={stageRef} />
       </div>
 
       {/* DOCK — Optimize primary + the measure stations. */}

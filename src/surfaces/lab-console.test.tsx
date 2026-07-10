@@ -168,4 +168,11 @@ describe("LabConsole", () => {
     renderConsole();
     expect(document.querySelector(".lab-console")!.getAttribute("data-motion")).toBe("reduced");
   });
+
+  it("never paints the vendor MagicBento purple — the console is token-only (Task 5)", () => {
+    const { container } = renderConsole();
+    // No 132,0,255 (the vendored gamer-RGB default) anywhere in the rendered tree — the console uses
+    // only the theme accent via ArcGauge/Dock/ReticleCursor, no MagicBento ParticleCard.
+    expect(container.innerHTML).not.toMatch(/132\s*,\s*0\s*,\s*255/);
+  });
 });

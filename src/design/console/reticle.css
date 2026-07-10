@@ -1,0 +1,58 @@
+/* Console kit — ReticleCursor. A Target Cursor drawn as four corner brackets + a center dot, in the
+   theme accent (never gamer-RGB). Positioned absolute inside its scope container (which must be
+   position:relative); the JS lerps its transform toward the pointer and toggles the scale on snap.
+   Scoped under [data-v2="on"]; registered in tokens-v2-guard V2_CSS with the rest of the kit. */
+:root[data-v2="on"] .lc-has-reticle {
+  cursor: none;
+}
+:root[data-v2="on"] .lc-reticle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+:root[data-v2="on"] .lc-ret-c {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--ix-accent);
+}
+:root[data-v2="on"] .lc-ret-c.tl {
+  left: 0;
+  top: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+:root[data-v2="on"] .lc-ret-c.tr {
+  right: 0;
+  top: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+:root[data-v2="on"] .lc-ret-c.bl {
+  left: 0;
+  bottom: 0;
+  border-right: 0;
+  border-top: 0;
+}
+:root[data-v2="on"] .lc-ret-c.br {
+  right: 0;
+  bottom: 0;
+  border-left: 0;
+  border-top: 0;
+}
+:root[data-v2="on"] .lc-ret-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 2px;
+  background: var(--ix-accent);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
