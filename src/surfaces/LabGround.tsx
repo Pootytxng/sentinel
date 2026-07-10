@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { LabBench } from "./LabBench";
+import { LabConsole } from "./LabConsole";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
@@ -9,6 +9,7 @@ import { optimizeVerdict, optimizeMeasuredLine } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
 import type { GameReadiness } from "../types";
+import type { HardwareInfo } from "../App";
 import "./lab-v2.css";
 
 // LabGround — the Lab as ONE cohesive PROVING GROUND (spec 2026-07-08-lab-proving-ground, ★ PRIMARY
@@ -31,6 +32,7 @@ export function LabGround(props: LabFastPathProps & {
   activeCount: number;
   diagnostics?: ReactNode;
   diagnosticsCaptured?: boolean;
+  hw: HardwareInfo;
 }) {
   const {
     recs,
@@ -41,6 +43,7 @@ export function LabGround(props: LabFastPathProps & {
     diagnostics,
     diagnosticsCaptured = false,
     vendor = "any",
+    hw,
     ...rest
   } = props;
   const reduced = useReducedMotion();
@@ -86,15 +89,17 @@ export function LabGround(props: LabFastPathProps & {
       sub={verdict.sub}
       measured={measured}
     >
-      {/* THE INSTRUMENT BENCH (spec 2026-07-09, Phase 1) — a bento grid of living station bays,
-          replacing the linear numbered spine. The hero bay is station 1 "Optimize" (the enable-all
-          fast path, inline); the measure→prove instruments are compact door bays around it. Same
-          audited apply path, zero new IPC. */}
-      <LabBench
+      {/* THE OPS CONSOLE (spec 2026-07-09, Phase 1, Task 4) — a real 3D hologram center-stage with
+          four corner arc gauges + a Dock of stations (Optimize primary, the measure→prove
+          instruments beside it), replacing the Instrument Bench bento. Same audited apply path,
+          zero new IPC. */}
+      <LabConsole
         fast={fast}
         diagnostics={diagnostics}
         diagnosticsCaptured={diagnosticsCaptured}
         vendor={vendor}
+        hw={hw}
+        readiness={readiness}
       />
     </RoomShell>
   );

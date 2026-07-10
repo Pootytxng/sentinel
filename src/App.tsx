@@ -1421,7 +1421,11 @@ function App() {
                   // Proving-ground merge (phase 1, DEFAULT OFF): Optimize's fixes + the enable-all
                   // fast path fold INTO the Lab. Same audited apply/batch handlers OptimizeV2 gets
                   // (zero new IPC) + Lab's own instruments. Flag off → the LabV2 branch below.
+                  // hw-gated: the Ops Console's center hologram (RigViewer) needs the real hardware
+                  // read; hw is null only for the brief detection window before first refresh.
+                  hw && (
                   <LabGround
+                    hw={hw}
                     isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                     onOpenLibrary={(focusId) => libraryApi.openLibrary(focusId)}
                     onChanged={refresh}
@@ -1446,6 +1450,7 @@ function App() {
                     diagnostics={<DiagnosticsTab sections={diagnostics} />}
                     diagnosticsCaptured={diagnostics.length > 0}
                   />
+                  )
                 ) : (
                   <LabV2
                     diagnostics={<DiagnosticsTab sections={diagnostics} />}

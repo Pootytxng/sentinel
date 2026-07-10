@@ -49,9 +49,11 @@ const optimizeCss = loadV2Css("surfaces", "optimize-v2.css");
 const monitorCss = loadV2Css("surfaces", "monitor-v2.css");
 const blackbookCss = loadV2Css("surfaces", "blackbook-v2.css");
 const labCss = loadV2Css("surfaces", "lab-v2.css");
-const labBenchCss = loadV2Css("surfaces", "lab-bench.css");
+const labConsoleCss = loadV2Css("surfaces", "lab-console.css");
 const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
+const consoleArcGaugeCss = loadV2Css("design", "console", "arc-gauge.css");
+const consoleDockCss = loadV2Css("design", "console", "dock.css");
 
 // EVERY v2 stylesheet must obey the scoping law. New v2 CSS files get added here (V2-2+).
 const V2_CSS: [string, string][] = [
@@ -64,9 +66,11 @@ const V2_CSS: [string, string][] = [
   ["monitor-v2.css", monitorCss],
   ["blackbook-v2.css", blackbookCss],
   ["lab-v2.css", labCss],
-  ["lab-bench.css", labBenchCss],
+  ["lab-console.css", labConsoleCss],
   ["hud-rooms.css", hudRoomsCss],
   ["ambient-hud.css", ambientHudCss],
+  ["console/arc-gauge.css", consoleArcGaugeCss],
+  ["console/dock.css", consoleDockCss],
 ];
 
 describe("v2 CSS scoping (flag-off byte-identity mechanism)", () => {

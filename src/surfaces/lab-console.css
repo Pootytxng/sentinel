@@ -1,0 +1,146 @@
+/* Ops Console (compy_lab_ground, spec 2026-07-09-lab-redesign-direction-proposal, Phase 1, Task 4).
+   The Lab's face as a console room: a bracketed stage holding the real 3D hologram center-stage +
+   four corner arc gauges, a Dock of stations below, and one open detail panel. EVERY selector is
+   scoped under [data-v2="on"] (the flag-off byte-identity mechanism, guard-pinned in
+   tokens-v2-guard.test.ts). Tokens only — no color literals (--ix-glass-fill, --ix-glass-border,
+   --ix-accent, --ix-radius) — the vendor purple can never paint (there is no vendor here to begin
+   with; ArcGauge/Dock already carry their own token-only styling). No accent FILLS behind text (no
+   ink-contrast hazard) — corner gauges and the dock sit on glass, never a solid accent panel. */
+
+:root[data-v2="on"] .lab-console {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+:root[data-v2="on"] .lab-console-lede {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+:root[data-v2="on"] .lab-console-lede em {
+  font-style: normal;
+  color: var(--ix-accent);
+}
+
+/* The stage — a relative box with a bracketed corner frame, the rig hologram centered, and the four
+   arc gauges pinned to the corners. */
+:root[data-v2="on"] .lc-stage {
+  position: relative;
+  min-height: 380px;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+}
+
+:root[data-v2="on"] .lc-rig {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
+
+/* Corner brackets — a HUD framing device, drawn as two 1px edges per corner (no image asset). */
+:root[data-v2="on"] .lc-brk {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: var(--ix-accent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+:root[data-v2="on"] .lc-brk-tl {
+  top: 10px;
+  left: 10px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+:root[data-v2="on"] .lc-brk-tr {
+  top: 10px;
+  right: 10px;
+  border-top: 2px solid;
+  border-right: 2px solid;
+}
+:root[data-v2="on"] .lc-brk-bl {
+  bottom: 10px;
+  left: 10px;
+  border-bottom: 2px solid;
+  border-left: 2px solid;
+}
+:root[data-v2="on"] .lc-brk-br {
+  bottom: 10px;
+  right: 10px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+
+:root[data-v2="on"] .lc-corner {
+  position: absolute;
+  z-index: 1;
+}
+:root[data-v2="on"] .lc-tl {
+  top: 22px;
+  left: 22px;
+}
+:root[data-v2="on"] .lc-tr {
+  top: 22px;
+  right: 22px;
+}
+:root[data-v2="on"] .lc-bl {
+  bottom: 22px;
+  left: 22px;
+}
+:root[data-v2="on"] .lc-br {
+  bottom: 22px;
+  right: 22px;
+}
+
+/* ── Detail — the ONE open station (header + instrument body), same idiom as the deleted bento's
+   detail panel. ── */
+:root[data-v2="on"] .lc-detail {
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+}
+:root[data-v2="on"] .lc-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ix-glass-border);
+}
+:root[data-v2="on"] .lc-detail-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ix-text-1);
+  letter-spacing: -0.01em;
+}
+:root[data-v2="on"] .lc-detail-close {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--ix-glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ix-text-2);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+:root[data-v2="on"] .lc-detail-close:hover {
+  color: var(--ix-text-1);
+  border-color: var(--ix-glass-top);
+}
+:root[data-v2="on"] .lc-detail .lab-card-body {
+  padding: 16px 20px 18px;
+}
+
+/* Reduced motion: the stage/dock/gauges already gate their own motion internally (ArcGauge's
+   useCountTo, Dock's data-motion hover-lift) — nothing additional to disable here. No bare @media
+   (the scoping guard parses depth-0 headers; the app window is desktop-fixed, matching every other
+   v2 surface stylesheet). */

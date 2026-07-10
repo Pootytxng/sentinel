@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, fireEvent } from "@testing-library/react";
 import { readLabGround, applyLabGround } from "../design/theme";
 
 // Guard for phase 1 of the Lab overhaul (spec 2026-07-08-lab-proving-ground): the merged
@@ -13,6 +13,9 @@ import { readLabGround, applyLabGround } from "../design/theme";
 // three retired nav idioms (bento / guided-welcome / classic accordion / readings strip).
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
+// LabGround's ground mode now always renders the Ops Console (LabConsole), whose center hologram
+// lazily loads the ~600KB three.js bundle — stub it so this stays a fast DOM test (Task 4).
+vi.mock("./rig/RigViewer", () => ({ RigViewer: () => <div data-testid="rig-hologram" /> }));
 
 // RoomShell's verdict animates via DecryptedText (animateOn="view") → IntersectionObserver, which
 // jsdom lacks. A no-op stub lets the merged room mount; the text is the pure helper's real output.
@@ -105,11 +108,13 @@ describe("Lab `ground` mode renders the ONE linear spine", () => {
   });
 });
 
-describe("LabGround INSTRUMENT BENCH — LabBench replaces the linear spine (spec 2026-07-09)", () => {
-  // The Instrument Bench (Phase 1) swaps the linear numbered spine for a bento grid of station
-  // bays. These guards pin (a) the old seam classes stay GONE, (b) with tweaks present the HERO bay
-  // is station 1 "Optimize" (inline), (c) the empty/no-recs case degrades to the measure bays only
-  // with no crash, and (d) the RoomShell verdict + no-Gallery invariants hold through the swap.
+describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench bento (spec 2026-07-09, Task 4)", () => {
+  // The Ops Console (Task 4) swaps the bento grid of station bays for a console room: a real
+  // hologram + corner gauges, and a Dock of stations (Optimize primary, the measure/prove stations
+  // beside it). These guards pin (a) the old seam classes stay GONE, (b) every station gets a dock
+  // node regardless of whether tweaks exist (no crash on the empty-recs case), (c) Optimize opens
+  // inline on click (it is NOT always-on), and (d) the RoomShell verdict + no-Gallery invariants
+  // hold through the swap.
   const SAFE_REC = {
     id: "game-mode",
     title: "Game Mode",
@@ -124,10 +129,19 @@ describe("LabGround INSTRUMENT BENCH — LabBench replaces the linear spine (spe
     eligible: true,
   } as never;
 
+  const hw = {
+    cpu_brand: "AMD Ryzen 7 9850X3D",
+    cpu_cores_logical: 16,
+    cpu_cores_physical: 8,
+    ram_total_bytes: 32 * 1024 ** 3,
+    gpus: [{ name: "AMD Radeon RX 9070 XT", vram_bytes: 16 * 1024 ** 3 }],
+  } as never;
+
   const renderMerged = (recs: never[] = [], gamingEnabled = false) =>
     render(
       <ConfirmProvider>
       <LabGround
+        hw={hw}
         isAppliable={() => true}
         onOpenLibrary={() => {}}
         onChanged={() => {}}
@@ -159,40 +173,48 @@ describe("LabGround INSTRUMENT BENCH — LabBench replaces the linear spine (spe
     expect(c.querySelector(".lg-utility-kicker")).toBeNull();
   });
 
-  it("with tweaks present, the HERO bay is station 1 'Optimize' (inline); verdict present", () => {
+  it("the hologram + a dock node per station render; Optimize is primary; verdict present", () => {
     const c = renderMerged([SAFE_REC]);
-    // The hero bay is Optimize, rendered inline as the dominant bay.
-    expect(c.querySelector(".lab-bench-hero")).not.toBeNull();
-    expect(c.querySelector(".lab-bench-hero-name")!.textContent).toBe("Optimize");
-    // The measure/prove stations render as compact door bays around it.
-    const measure = Array.from(c.querySelectorAll(".lab-bench-name")).map((n) => n.textContent);
-    expect(measure).toEqual(["Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
-    // One idiom: the retired linear-spine + bento faces stay absent.
+    expect(c.querySelector('[data-testid="rig-hologram"]')).not.toBeNull();
+    const nodeNames = Array.from(c.querySelectorAll(".dock-node .dock-nm")).map((n) => n.textContent);
+    expect(nodeNames).toEqual(["Optimize", "Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
+    expect(c.querySelector(".dock-node-primary")!.textContent).toContain("Optimize");
+    // One idiom: the retired linear-spine + bento + gallery faces stay absent.
     expect(c.querySelector(".lab-router")).toBeNull();
     expect(c.querySelector(".lab-bento")).toBeNull();
     expect(c.querySelector(".lab-welcome")).toBeNull();
+    expect(c.innerHTML).not.toContain("Gallery");
     // RoomShell verdict present.
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
 
-  it("empty state (no recs): no hero bay — just the measure bays, no throw, verdict present", () => {
+  it("empty state (no recs): every dock node still renders, no throw, verdict present", () => {
     const c = renderMerged();
-    // No tweaks to offer → no hero bay; the bench degrades to the measure doors only.
-    expect(c.querySelector(".lab-bench-hero")).toBeNull();
-    const measure = Array.from(c.querySelectorAll(".lab-bench-name")).map((n) => n.textContent);
-    expect(measure).toEqual(["Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
-    // The bench grid + verdict are still present; no retired idioms.
-    expect(c.querySelector(".lab-bench-grid")).not.toBeNull();
-    expect(c.querySelector(".lab-bento")).toBeNull();
-    expect(c.querySelector(".lab-welcome")).toBeNull();
+    const nodeNames = Array.from(c.querySelectorAll(".dock-node .dock-nm")).map((n) => n.textContent);
+    expect(nodeNames).toEqual(["Optimize", "Diagnostics", "Benchmark", "Latency", "Tuning", "Black Box"]);
     expect(c.querySelector(".v2-room[data-room='lab']")).not.toBeNull();
   });
 
-  it("§5 Power-features bay shows in station 1 ONLY when Gaming Mode is armed; the bay stays collapsed (Gaming Mode lazy-mounts)", () => {
-    // Armed → the read-first Power-features disclosure is offered in station 1 (Gaming Mode +
-    // service-suspend, provable in the Lab). Closed by default so Gaming Mode never mounts/polls
-    // until opened.
+  it("Optimize is NOT always-on — its detail panel opens only when its dock node is clicked", () => {
+    const c = renderMerged([SAFE_REC]);
+    expect(c.querySelector(".lc-detail")).toBeNull();
+    const optimizeNode = Array.from(c.querySelectorAll<HTMLButtonElement>(".dock-node")).find((b) =>
+      b.textContent?.includes("Optimize"),
+    )!;
+    fireEvent.click(optimizeNode);
+    expect(c.querySelector(".lc-detail")).not.toBeNull();
+    expect(c.querySelector(".lc-detail-name")!.textContent).toBe("Optimize");
+  });
+
+  it("§5 Power-features bay shows in the opened Optimize panel ONLY when Gaming Mode is armed; stays collapsed (lazy-mounts)", () => {
+    // Armed → the read-first Power-features disclosure is offered inside the opened Optimize panel
+    // (Gaming Mode + service-suspend, provable in the Lab). Closed by default so Gaming Mode never
+    // mounts/polls until opened.
     const armed = renderMerged([SAFE_REC], true);
+    const optimizeNode = Array.from(armed.querySelectorAll<HTMLButtonElement>(".dock-node")).find((b) =>
+      b.textContent?.includes("Optimize"),
+    )!;
+    fireEvent.click(optimizeNode);
     const summaries = Array.from(armed.querySelectorAll(".lab-optimize-more-summary")).map(
       (s) => s.textContent,
     );
@@ -200,22 +222,12 @@ describe("LabGround INSTRUMENT BENCH — LabBench replaces the linear spine (spe
     expect(armed.querySelector(".lab-optimize-power")).not.toBeNull();
     expect((armed.querySelector(".lab-optimize-power") as HTMLDetailsElement).open).toBe(false);
     cleanup();
-    // Disarmed (default) → no Power-features bay at all.
+    // Disarmed (default) → no Power-features bay at all, even with the panel open.
     const off = renderMerged([SAFE_REC], false);
+    const offNode = Array.from(off.querySelectorAll<HTMLButtonElement>(".dock-node")).find((b) =>
+      b.textContent?.includes("Optimize"),
+    )!;
+    fireEvent.click(offNode);
     expect(off.querySelector(".lab-optimize-power")).toBeNull();
-  });
-
-  it("the bench leads with the Optimize hero when tweaks exist and has NO Gallery bay (removed 2026-07-09)", () => {
-    // Gallery (the drag telemetry trophy room) was deleted with the Instrument Bench redesign; the
-    // bench is now the Optimize hero (when there are tweaks) + the 5 measure bays, nothing else.
-    const withTweaks = renderMerged([SAFE_REC]);
-    expect(withTweaks.querySelector(".lab-bench-hero-name")!.textContent).toBe("Optimize"); // hero leads
-    expect(withTweaks.innerHTML).not.toContain("Gallery"); // gallery gone
-    const measure = Array.from(withTweaks.querySelectorAll(".lab-bench-name")).map((n) => n.textContent);
-    expect(measure[measure.length - 1]).toBe("Black Box"); // measure bays end here
-    cleanup();
-    const bare = renderMerged();
-    expect(bare.querySelector(".lab-bench-hero")).toBeNull(); // no tweaks → no hero
-    expect(bare.innerHTML).not.toContain("Gallery");
   });
 });
