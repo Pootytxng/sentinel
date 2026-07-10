@@ -21,7 +21,17 @@ const RigHologram = lazy(() =>
 // never on the 1 Hz monitoring tick). So the parent dashboard's per-second self-tick (which repaints
 // the live charts) no longer drags the whole react-three-fiber rig scene through a reconcile every
 // second — it only re-renders on a real hw change or its own interactions.
-export const RigViewer = memo(function RigViewer({ hw }: { hw: HardwareInfo }) {
+export const RigViewer = memo(function RigViewer({
+  hw,
+  chromeless = false,
+}: {
+  hw: HardwareInfo;
+  // chromeless: render ONLY the 3D hologram canvas (no control bar, honesty caption, monitor nudge,
+  // or "add a part" form) — for host surfaces that frame the hologram themselves (the Lab Ops
+  // Console, whose corner gauges would otherwise collide with the viewer's bottom form). Manual
+  // parts still render in the model; only the management CHROME is hidden.
+  chromeless?: boolean;
+}) {
   const [exploded, setExploded] = useState(false);
   // Hologram bay v2 (T4d): idle GPU ~0 — the bay rests on frameloop "demand", so continuous
   // orbit is an explicit opt-in (the Orbit button) instead of the default. V1 (flag off)
@@ -61,25 +71,27 @@ export const RigViewer = memo(function RigViewer({ hw }: { hw: HardwareInfo }) {
 
   return (
     <div className="rig-viewer">
-      <div className="rig-controls">
-        <button
-          type="button"
-          className={`btn-small ${exploded ? "btn-small-on" : ""}`}
-          onClick={() => setExploded((v) => !v)}
-        >
-          {exploded ? "Reassemble" : "Exploded view"}
-        </button>
-        <button
-          type="button"
-          className={`btn-small ${autoRotate ? "btn-small-on" : ""}`}
-          onClick={() => setAutoRotate((v) => !v)}
-          aria-pressed={autoRotate}
-          title="Toggle auto-rotate"
-        >
-          Orbit
-        </button>
-        <span className="rig-hint">Drag to orbit · hover a part for its live specs</span>
-      </div>
+      {!chromeless && (
+        <div className="rig-controls">
+          <button
+            type="button"
+            className={`btn-small ${exploded ? "btn-small-on" : ""}`}
+            onClick={() => setExploded((v) => !v)}
+          >
+            {exploded ? "Reassemble" : "Exploded view"}
+          </button>
+          <button
+            type="button"
+            className={`btn-small ${autoRotate ? "btn-small-on" : ""}`}
+            onClick={() => setAutoRotate((v) => !v)}
+            aria-pressed={autoRotate}
+            title="Toggle auto-rotate"
+          >
+            Orbit
+          </button>
+          <span className="rig-hint">Drag to orbit · hover a part for its live specs</span>
+        </div>
+      )}
 
       <div className="rig-canvas">
         <Suspense fallback={<div className="rig-loading">Initializing hologram…</div>}>
@@ -96,6 +108,8 @@ export const RigViewer = memo(function RigViewer({ hw }: { hw: HardwareInfo }) {
         </Suspense>
       </div>
 
+      {!chromeless && (
+        <>
       <p className="rig-honesty">
         Tailored to your rig — parts and specs read live from your PC. Fans spin at their real RPM
         when HWiNFO or LibreHardwareMonitor is running; without one they stay faint placeholders. A
@@ -193,6 +207,8 @@ export const RigViewer = memo(function RigViewer({ hw }: { hw: HardwareInfo }) {
           </ul>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 });

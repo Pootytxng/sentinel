@@ -87,9 +87,14 @@ export function LabConsole({
   // (the JARVIS "alive" the owner missed). Custom props only; skipped entirely under reduced motion.
   const stageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (reduced) return;
     const stage = stageRef.current;
     if (!stage) return;
+    // Reduced motion (incl. a mid-session flip): clear any stale glow the pointer handler left set,
+    // and attach nothing.
+    if (reduced) {
+      stage.style.setProperty("--glow-intensity", "0");
+      return;
+    }
     const onMove = (e: PointerEvent) => {
       const r = stage.getBoundingClientRect();
       stage.style.setProperty("--glow-x", `${((e.clientX - r.left) / r.width) * 100}%`);
@@ -102,6 +107,7 @@ export function LabConsole({
     return () => {
       stage.removeEventListener("pointermove", onMove);
       stage.removeEventListener("pointerleave", onLeave);
+      stage.style.setProperty("--glow-intensity", "0");
     };
   }, [reduced]);
 
@@ -273,7 +279,10 @@ export function LabConsole({
           />
         </div>
         <div className="lc-rig">
-          <RigViewer hw={hw} />
+          {/* chromeless — just the recognizable 3D hologram; the console frames it (brackets +
+              corner gauges), so the viewer's own control bar / caption / "add a part" form are
+              hidden (they collided with the corner gauges). */}
+          <RigViewer hw={hw} chromeless />
         </div>
         <ReticleCursor scopeRef={stageRef} />
       </div>
