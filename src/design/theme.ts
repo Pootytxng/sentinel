@@ -527,6 +527,34 @@ export function applyHud(on: boolean): void {
   }
 }
 
+// Home console cold-open (plan 2026-07-10-console-hud-phase2-home, Phase 2 of the Console HUD) —
+// Home as the console cold-open: the real rig hologram center-stage, honest corner arc gauges,
+// and a Dock into the rooms. DEFAULT OFF until the owner eyeball (Settings → Appearance preview
+// toggle): ON only when the key is literally "1" — the OPPOSITE polarity of readHud's default-ON.
+const HOME_CONSOLE_KEY = "compy_home_console";
+
+export function readHomeConsole(): boolean {
+  try {
+    return localStorage.getItem(HOME_CONSOLE_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyHomeConsole(on: boolean): void {
+  try {
+    localStorage.setItem(HOME_CONSOLE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:home-console-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
 // prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
 // DEFAULT OFF behind `compy_dash_v2`; toggled for review. Evolves the existing app — nothing scrapped.

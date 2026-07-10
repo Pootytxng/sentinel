@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { readHud, readLabGround } from "./theme";
+import { readHud, readLabGround, readHomeConsole } from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
 // directive, CORRECTED direction). The Home pilot uses this to swap presentation the moment
@@ -25,6 +25,20 @@ export function useLabGroundFlag(): boolean {
     const sync = () => setOn(readLabGround());
     window.addEventListener("compy:lab-ground-changed", sync);
     return () => window.removeEventListener("compy:lab-ground-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Home console cold-open flag as live React state (plan 2026-07-10-console-hud-phase2-home,
+// same contract as useHudFlag: the Settings preview toggle fires compy:home-console-changed so
+// HomeRoom re-branches without a reload). DEFAULT OFF the whole phase — off, HomeRoom renders
+// today's tree byte-identical (pinned by home-console-flag.test.tsx).
+export function useHomeConsoleFlag(): boolean {
+  const [on, setOn] = useState(readHomeConsole);
+  useEffect(() => {
+    const sync = () => setOn(readHomeConsole());
+    window.addEventListener("compy:home-console-changed", sync);
+    return () => window.removeEventListener("compy:home-console-changed", sync);
   }, []);
   return on;
 }

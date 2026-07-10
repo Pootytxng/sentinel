@@ -1,14 +1,17 @@
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
-import { useHudFlag } from "../design/use-hud";
+import { useHudFlag, useHomeConsoleFlag } from "../design/use-hud";
 import { HomeV2 } from "./HomeV2";
 import { HomeHud } from "./HomeHud";
+import { HomeConsole } from "./HomeConsole";
 
-// HomeRoom — the Instrument-HUD switch for the Home room (spec
-// 2026-07-05-ui-deslop-organic-directive, CORRECTED direction; P-series preview contract).
-// Flag off (absent or "0"), HomeV2 renders byte-identical — pinned by home-hud-flag.test.tsx.
-// Flag on, the pure-HUD pilot renders over the SAME props (presentation only). The Settings
-// toggle fires compy:hud-changed so the swap is live, no reload.
+// HomeRoom — the presentation switch for the Home room. Highest priority: the Home console
+// cold-open (plan 2026-07-10-console-hud-phase2-home, compy_home_console DEFAULT OFF — its
+// Settings toggle fires compy:home-console-changed). Console off: the Instrument-HUD switch
+// (spec 2026-07-05-ui-deslop-organic-directive, CORRECTED direction; P-series preview
+// contract) — hud flag off ("0" failsafe), HomeV2 renders byte-identical. All three branches
+// render over the SAME props (presentation only); pins: home-console-flag.test.tsx +
+// home-hud-flag.test.tsx.
 
 type Props = {
   hw: HardwareInfo;
@@ -24,6 +27,8 @@ type Props = {
 };
 
 export function HomeRoom(props: Props) {
+  const homeConsole = useHomeConsoleFlag();
   const hud = useHudFlag();
+  if (homeConsole) return <HomeConsole {...props} />;
   return hud ? <HomeHud {...props} /> : <HomeV2 {...props} />;
 }

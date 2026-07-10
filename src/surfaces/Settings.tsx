@@ -17,6 +17,8 @@ import {
   applyLabGround,
   readHud,
   applyHud,
+  readHomeConsole,
+  applyHomeConsole,
   readSetupStepper,
   applySetupStepper,
   readFirstCheckTheater,
@@ -146,6 +148,7 @@ export default function Settings({
   const [labBento, setLabBento] = useState<boolean>(readLabBento);
   const [labGround, setLabGround] = useState<boolean>(readLabGround);
   const [hud, setHud] = useState<boolean>(readHud);
+  const [homeConsole, setHomeConsole] = useState<boolean>(readHomeConsole);
   const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
   const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
   const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
@@ -213,6 +216,13 @@ export default function Settings({
   const changeHud = (v: boolean) => {
     setHud(v);
     applyHud(v);
+  };
+  // Home console preview (Phase 2 of the Console HUD, DEFAULT OFF until the owner eyeball) —
+  // Home as the console cold-open. Presentation only: same measured numbers, same probes;
+  // off renders today's Home byte-identical.
+  const changeHomeConsole = (v: boolean) => {
+    setHomeConsole(v);
+    applyHomeConsole(v);
   };
   // Setup stepper preview — the Setup & Tour's progress row as numbered step indicators.
   // Presentation only: same steps, same content, same navigation.
@@ -387,6 +397,22 @@ export default function Settings({
                   </div>
                 </div>
                 <Toggle on={hud} onChange={changeHud} ariaLabel="Instrument HUD" />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Home console (preview)</div>
+                  <div className="set-row-sub">
+                    Home as the console cold-open: your rig hologram center-stage with corner
+                    gauges and a dock into the rooms. Same numbers, same measurements — turn
+                    off for the current Home.
+                  </div>
+                </div>
+                <Toggle
+                  on={homeConsole}
+                  onChange={changeHomeConsole}
+                  ariaLabel="Home console (preview)"
+                />
               </div>
 
               <div className="set-row set-row-inset">
