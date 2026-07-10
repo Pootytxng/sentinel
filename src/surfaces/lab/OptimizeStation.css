@@ -42,10 +42,14 @@
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center; /* center the readout IN the ring — baseline here anchored it to the box top, over the ring stroke */
   justify-content: center;
-  gap: 1px;
   font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
+}
+.lab-gauge-txt {
+  display: flex;
+  align-items: baseline; /* the /total sits on the big number's baseline */
+  gap: 1px;
 }
 .lab-gauge-num {
   font-size: 22px;

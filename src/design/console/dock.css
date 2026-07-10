@@ -52,8 +52,12 @@
   border-color: var(--ix-accent);
   color: var(--ix-text-1);
 }
+/* Primary (resting) vs active (open) MUST read differently — the full accent border on a resting
+   primary made Optimize look pre-selected on entry (owner-caught 2026-07-10). Resting primary
+   keeps its accent IDENTITY (name/icon ink + a faint accent-mixed border); only the node whose
+   panel is actually open earns the full accent border + tinted fill. */
 :root[data-v2="on"] .dock-node-primary {
-  border-color: var(--ix-accent);
+  border-color: color-mix(in srgb, var(--ix-accent) 35%, transparent);
   color: var(--ix-accent);
 }
 :root[data-v2="on"] .dock-node-primary .dock-nm {
@@ -61,4 +65,5 @@
 }
 :root[data-v2="on"] .dock-node-active {
   border-color: var(--ix-accent);
+  background: color-mix(in srgb, var(--ix-accent) 14%, var(--ix-glass-fill));
 }

@@ -80,6 +80,13 @@ export function OptimizeStation(props: LabFastPathProps) {
   );
   const totalSafe = safeStack.length;
   const appliedSafe = safeStack.filter((r) => r.currently_applied).length;
+  // Split the not-applied remainder by drift (the one-mention law: Fix's "turned off outside
+  // Compy" group OWNS a drifted rec — the caption must not re-frame it as a fresh "enable",
+  // which read as contradicting the corner gauge's ready count; owner-sweep catch 2026-07-10).
+  const revertedIds = useMemo(() => new Set(reverted.map((r) => r.rec_id)), [reverted]);
+  const pendingSafe = safeStack.filter((r) => !r.currently_applied);
+  const driftedPending = pendingSafe.filter((r) => revertedIds.has(r.id)).length;
+  const freshPending = pendingSafe.length - driftedPending;
   const gaugeTarget = props.recs == null || totalSafe === 0 ? null : appliedSafe;
   const gaugeValue = useCountTo(gaugeTarget, { reduced });
   const gaugeRatio = totalSafe > 0 && gaugeValue != null ? Math.min(1, Math.max(0, gaugeValue / totalSafe)) : 0;
@@ -109,15 +116,27 @@ export function OptimizeStation(props: LabFastPathProps) {
               />
             </svg>
             <span className="lab-gauge-center" aria-hidden="true">
-              <span className="lab-gauge-num">{Math.round(gaugeValue)}</span>
-              <span className="lab-gauge-den">/{totalSafe}</span>
+              {/* Inner wrapper: the outer box centers the readout in the ring (a single-line
+                  baseline flex anchors to the TOP of the 76px box — the readout painted over the
+                  ring's top stroke, owner-caught 2026-07-10); baseline alignment between the big
+                  number and its /total lives here. */}
+              <span className="lab-gauge-txt">
+                <span className="lab-gauge-num">{Math.round(gaugeValue)}</span>
+                <span className="lab-gauge-den">/{totalSafe}</span>
+              </span>
             </span>
           </div>
           <p className="lab-gauge-caption">
             <span className="lab-gauge-caption-k">Your safe stack</span>
             {appliedSafe >= totalSafe
               ? "Fully applied — your rig is set."
-              : `${totalSafe - appliedSafe} left to enable below — one tap each, reversible.`}
+              : driftedPending === 0
+                ? `${freshPending} left to enable below — one tap each, reversible.`
+                : freshPending === 0
+                  ? driftedPending === 1
+                    ? "1 was turned off outside Compy — restore it below."
+                    : `${driftedPending} were turned off outside Compy — restore them below.`
+                  : `${freshPending + driftedPending} left below — ${freshPending} to enable, ${driftedPending} turned off outside Compy.`}
           </p>
         </div>
       )}
