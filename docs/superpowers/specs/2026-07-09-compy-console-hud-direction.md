@@ -1,0 +1,114 @@
+# Compy Console — app-wide HUD direction (owner-approved 2026-07-09)
+
+> **Status: DIRECTION LOCKED (owner, 2026-07-09).** This is the summary interpretation the owner
+> signed off on after three rejected Lab attempts (drag gallery → linear spine → bento). It
+> **SUPERSEDES the visual/layout direction of** `2026-07-09-lab-redesign-direction-proposal.md`
+> ("The Instrument Bench" bento) and the still-open UI parts of `2026-07-08-lab-proving-ground.md`.
+> The catalog/§2a-dark/mutation-safety parts of those specs still stand — only the *look* changes here.
+>
+> **Visual reference (living mockup):** the Ops Console pitch — <https://claude.ai/code/artifact/e2830b73-cfc0-43c6-b263-5b59a1075639>
+> (Scene A is the approved direction; the centered rig is a stand-in for the real 3D hologram).
+
+## Why the earlier attempts were slop (root cause, so we don't repeat it)
+
+Every prior Lab attempt was assembled from **trendy template components** — MagicBento glass cards,
+glass disclosure boxes, a grid of rounded panels — with "reactivity" bolted on top. That vocabulary
+*is* the generic-AI-slop look the owner has been rejecting since the 2026-07-05 de-slop directive.
+Adding tilt to a glass card does not make it a HUD. The fix is a different building block, not a
+re-skin: a **spatial game-HUD cockpit**, not cards-in-a-grid.
+
+## The locked visual language — the "Console kit" (build once, reuse everywhere)
+
+A shared kit every tab draws from, each tab arranging it for its own features:
+
+- **Ground & register:** dark blue-biased cockpit ground; a **mono instrument register** for
+  readouts/labels (tabular nums, tracked uppercase micro-labels); clean sans for body prose only.
+- **Instruments, not decorations:** **arc gauges** (ticked rings that sweep to a value), **sparklines**,
+  an **oscilloscope trace** where a live signal exists. Every instrument is a real reading.
+- **Persistent HUD frame:** thin coordinate brackets at the viewport corners (build id · rig id · a
+  running clock · session), a live status ticker in the header.
+- **Navigation = a magnify Dock** (reactbits Dock): station nodes that rise on hover; the primary
+  action node glows. This replaces the "wide horizontal boxes" the owner rejected.
+- **Reticle Target Cursor** (reactbits) that snaps to interactive targets.
+- **Animated readouts:** count-up numbers, decrypt-in headlines (mount-guarded per
+  [[visual-anomaly-is-a-defect-signal]]).
+- **Accent:** always the user's live theme accent (Midnight/Violet/Crimson/Emerald/Hearth).
+  **Never gamer-RGB / neon; vendor purple can never paint** (test-pinned, existing law).
+- **Honesty rail (LOCKED):** an instrument shows a number ONLY when it is actually measured; no
+  fabricated fallback ever animates (see the amber **NOT YET** GPU-temp gauge in the mockup).
+- **Reduced-motion:** a flat, static, immediate console — no cursor, no sweeps, no reveals — gated
+  via the app's resolved reduced-motion ([[motion-on-by-default-override-os]]).
+
+## The Lab — flagship room: Optimize + Benchmark, merged but each freely its own
+
+One room, the Ops Console layout:
+
+- **Center:** the **real 3D orbitable rig hologram** Compy already ships (the Home/bay model with
+  per-part identity colors), dropped into the console frame with corner brackets + a scan sweep. It
+  must read instantly as "that's my PC" — recognizable components, not an abstract schematic.
+- **Corners:** live **arc-gauge readouts** — FPS + 1% low (measured), safe-stack-ready count, and an
+  honest **NOT YET** gauge for anything unmeasured.
+- **Bottom:** a **Dock of stations.** **Optimize (the toggle tweaks)** is the glowing primary node;
+  **Benchmark** is its own node right beside it; then **Diagnostics · Latency · Tuning · Black Box**.
+
+**The merge (owner's core ask):** Optimize's toggle tweaks and the Benchmark lab **coexist in one
+room but stay individually, freely accessible.** Click Optimize → the safe-tweak toggle list opens as
+a tidy HUD panel (NOT an always-on form dominating the screen — that dominating form was the rejected
+problem). Click Benchmark → the A/B runs. **One detail panel open at a time**, the dock is the menu,
+the rig + gauges are always the backdrop. Result: tune your rig and prove-it-with-a-benchmark side by
+side, each one tap away, clean and smooth to navigate.
+
+- **Reuse, don't fork:** Optimize's apply path stays the **existing audited
+  `apply_recommendations_batch` / per-row-undo** (zero new IPC, zero new mutation primitive). This is
+  presentation over the same safe backend.
+- Check's deeper cleanup (startup / bloat / preload / leftovers / NIC) folds under a "more cleanup"
+  disclosure inside the Optimize panel, not on the main console.
+
+## Rolling the language to every tab — tailored to each tab's job (not copy-pasted)
+
+Exit rule for each: **no generic template slop remains in that tab.**
+
+| Tab | How the console language suits ITS features |
+|---|---|
+| **Home** | The console "cold open" — rig hologram + top gauges (readiness, biggest limiter) + a dock into the rooms. |
+| **Monitor** | The language is *literally native*: the arc gauges + oscilloscope traces are real live telemetry (fps, frametime, sensors), not decoration. |
+| **Lab** | The merged Optimize + Benchmark console above (flagship). |
+| **History / Black Box** | A flight-recorder log — each applied change a timestamped entry with its rollback; "field records" framing. |
+| **Gaming Mode** | An arm/engage console — one clear engage control + status readouts for the armed tier. |
+| **Settings / Setup & Tour** | Quieter console chrome — same frame + type + honest register, but calm forms; settings are operated, not performed. |
+
+Every tab keeps its own honesty rails and reduced-motion path.
+
+## Build order — Lab first, then roll out (owner-chosen 2026-07-09)
+
+1. **Phase 1:** build the shared **Console kit** + the **merged Optimize/Benchmark Lab**, behind the
+   existing `compy_lab_ground` preview flag (DEFAULT OFF). Owner eyeballs the real built room.
+2. **Phases 2…N:** once the owner loves the Lab, roll the same kit to each remaining tab — **one tab
+   per phase**, each behind its own preview flag, each ending in a `self-review` PASS and the
+   "no-slop-remains" exit check. Each phase gets its own plan.
+
+## Rails & laws honored (non-negotiable)
+
+- **Frontend/presentation only** — the mutation/rollback boundary (`actions.rs`/`history.rs`) is
+  never touched by this work; `git diff -- src-tauri` stays empty for the UI phases (Optimize reuses
+  the audited batch path). Any exception is its own gated, mutation-gate-reviewed change.
+- **Flag-gated + reversible** — every phase ships behind a DEFAULT-OFF preview flag with flag-off
+  byte-identity test-pinned; classic look stays the failsafe until the owner flips default-on.
+- **Honesty rail · reduced-motion · theme-accent (no vendor purple)** — all test-pinned per existing
+  guards.
+- **`self-review` before any done-claim; `ship` skill for the silent reinstall** (owner never installs).
+
+## Owner calls (resolved this session)
+
+- Direction: **A · Ops Console.** ✅
+- Center: **the real recognizable 3D hologram.** ✅
+- Merge: **Optimize toggles + Benchmark coexist in the Lab, individually accessible.** ✅
+- Build order: **Lab first, then per-tab rollout.** ✅
+- Scope guarantee: **no generic slop remains anywhere in the app** — enforced as each tab's exit rule.
+
+## Open (to confirm at the Phase-1 plan / eyeball)
+
+- Does the Optimize **toggle panel open-on-click** (my call, keeps the console clean) feel right, or
+  should the safe-tweak list sit always-visible beside the rig? (Decide on the built eyeball.)
+- The standalone **Optimize rail tab**: once the merged Lab is default-on, drop the separate Optimize
+  tab (the merge's endpoint) — confirm at rollout.

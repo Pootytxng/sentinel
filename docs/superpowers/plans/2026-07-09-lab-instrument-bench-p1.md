@@ -1,5 +1,10 @@
 # Lab "Instrument Bench" — Phase 1 Implementation Plan
 
+> **⛔ SUPERSEDED 2026-07-09 — this bento "Instrument Bench" plan was built (Phase 1, `403be45`) and
+> the owner REJECTED it on eyeball as generic slop. Its Phases 2–4 are DEAD — do NOT build them. The
+> live direction is the app-wide Ops Console HUD: spec `../specs/2026-07-09-compy-console-hud-direction.md`;
+> the Phase-1 plan for THAT is the one to build. Kept for the record only.**
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 > **Design source of truth:** `docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md` (owner-
