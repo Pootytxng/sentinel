@@ -108,12 +108,14 @@ Every tab keeps its own honesty rails and reduced-motion path.
 - Build order: **Lab first, then per-tab rollout.** ✅
 - Scope guarantee: **no generic slop remains anywhere in the app** — enforced as each tab's exit rule.
 
-## Open (to confirm at the Phase-1 plan / eyeball)
+## Open (to confirm at the Phase-1 plan / eyeball) — ALL RESOLVED
 
 - ~~Does the Optimize **toggle panel open-on-click** feel right?~~ ✅ **OWNER CONFIRMED 2026-07-10:
   "open on click is cleaner"** — the open-on-click panel is the locked form.
-- The standalone **Optimize rail tab**: once the merged Lab is default-on, drop the separate Optimize
-  tab (the merge's endpoint) — confirm at rollout. (STILL OPEN.)
+- ~~The standalone **Optimize rail tab**~~ ✅ **OWNER DECIDED 2026-07-10: DROP it at default-ON** —
+  the merge's endpoint. One door (the Lab's Optimize station) to the safe-tweak toggles; undo stays
+  reachable via the Lab panel + History. The tab removal ships WITH the `compy_lab_ground`
+  default-ON flip (after the round-2 eyeball), not before.
 
 ## Addendum — header-slop law (owner, 2026-07-10 eyeball feedback)
 

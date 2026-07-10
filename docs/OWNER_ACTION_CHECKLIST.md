@@ -31,25 +31,25 @@ copy on first launch). Only matters when you're actually ready to send the beta 
 here so it isn't forgotten at send time.
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
-### A3. Lab redesign — REJECTED, new direction APPROVED, Phase 1 pending  ·  ✅ nothing on you right now
-The blended-Lab marathon (`f16d158`, flag OFF) was **rejected 2026-07-09** (drag gallery + linear-spine
-direction). A new **"Instrument Bench"** bento direction was researched + council-reviewed + **APPROVED same
-day** (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`; Phase-1 plan
-`docs/superpowers/plans/2026-07-09-lab-instrument-bench-p1.md`). **Nothing needed from you right now** — Phase 1
-builds next and you'll get a per-phase eyeball. The old "drop the Optimize tab?" question is **moot** — the whole
-room is being rebuilt. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-09c.
+### A3. Lab Ops Console — round-2 eyeball  ·  ⏳ (one toggle flip + a look)
+The Lab's **Ops Console** is LIVE behind the preview flag (`63585e9`, header-slop sweep `1a9f44f` on top —
+the direction you picked from the three HUD mockups; the Instrument-Bench bento was rejected + deleted).
+**On you:** flip **Settings → Appearance → "Lab proving ground (preview)"** back ON — the self-review run
+reset it to OFF — open the **Lab** tab, and react (round 2, after your header-slop feedback landed).
+Both spec calls are now decided: open-on-click ✅ ("cleaner", 2026-07-10) · **drop the standalone Optimize
+tab at default-ON ✅ (your call, 2026-07-10)** — the tab drop ships with the default-ON flip, after this
+eyeball. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-10a.
 
 ---
 
 ## §B — Waiting on input only you can give
 
-### B1. The Lab room — hand over your task list  ·  ⏳
-You said (2026-07-07) you have a plan for what the **Lab room** should actually *do* — its real
-interactive functions/applications. Claude parked the whole Lab-establishment train waiting on that
-list ([`BACKLOG.md`](BACKLOG.md) "PARKED"). Folded into it once you deliver: the **Two Futures
-hologram** feedback you gave — *"looks really good BUT the hologram has no visible purpose or
-information integrated"* (it needs part-anchored, measured info, not just a cool split).
-- **Result → hand Claude the Lab task list**, or say "start the Lab train with what you know."
+### B1. The Lab room — hand over your task list  ·  ✅ resolved (direction delivered verbally 2026-07-08)
+You delivered the Lab direction verbally 2026-07-08 (the proving-ground brief) and steered the redesign
+through three rounds to the approved **Ops Console** (see A3) — the parked train is long since moving.
+Still folded in and NOT yet built: the **Two Futures hologram** feedback — *"looks really good BUT the
+hologram has no visible purpose or information integrated"* (needs part-anchored, measured info) — it
+rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 
 ### B2. Beta send — go / no-go  ·  ⏳
 [`BACKLOG.md`](BACKLOG.md) RUNG 3: private-beta to friends + your Discord. The decision "ship from
@@ -77,8 +77,9 @@ direction was scattered across ~20 specs and the redesign lane was marked "COMPL
 about was never built.** Now consolidated into [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) — its
 🔴 OPEN section is the real remaining work. **Direction now DECIDED (2026-07-09):** the drag gallery was
 built then rejected + **deleted**; the JARVIS motion stack (magnetic cursor, GSAP data-reactivity, hologram
-inertia — Lenis dropped as unneeded) is being built via the APPROVED **Instrument Bench** redesign
-(`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`). Also open there:
+inertia — Lenis dropped as unneeded) is being built via the APPROVED **Ops Console** rollout
+(`docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`; the Instrument-Bench bento was
+rejected on sight). Also open there:
 CommandPalette, the site-glow/"full overhaul" gate, and the HoloLens tour status.
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument

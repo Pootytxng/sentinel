@@ -174,8 +174,11 @@ to `.lc-detail-note` inside the Optimize station panel (panel-only, test-pinned)
 lede/note pin · **law mechanized as self-reviewer rubric item 6** + memory `header-slop-law-no-micro-descriptive-text`.
 Verify: tsc 0 · vitest **1158** · `git diff 63585e9..1a9f44f -- src-tauri` EMPTY · self-reviewer **PASS** (8/8, native
 1500×980). ⚠️ The review reset the `compy_lab_ground` preview toggle to OFF — owner re-flips it to keep eyeballing.
-- **⛳ RESUME:** owner eyeball round 2 (re-flip the Lab preview) · the ONE open owner call: drop the standalone Optimize
-  tab at default-ON · Phases 2–4 per-tab Console rollout (each must pass the header-slop exit check).
+- **⛳ RESUME:** owner eyeball round 2 (re-flip the Lab preview) · ~~the ONE open owner call~~ ✅ **DECIDED 2026-07-10:
+  the standalone Optimize tab DROPS at default-ON** (removal ships WITH the default-ON flip, after the eyeball; both spec
+  calls now resolved in the direction spec's Open section) · **Phase 2 (Home cold-open) PLANNED** —
+  `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (`d1e91ce`), entry-gated on the round-2 eyeball; build
+  once it approves. Phases 3–4 follow per-tab (each must pass the header-slop exit check).
 
 ### Cycle 2026-07-09f — ✅ Lab "Ops Console" Phase 1 COMPLETE + SHIPPED `63585e9` (post whole-branch review; DEFAULT OFF, owner eyeball pending)
 **Owner rejected the built bento Instrument Bench (`403be45`) as "generic slop / wide horizontal boxes."** Ran brainstorming

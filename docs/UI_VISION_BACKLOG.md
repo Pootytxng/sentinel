@@ -172,11 +172,12 @@ self-reviewer rubric item 6. Every Phase 2…N tab adoption must pass this as an
 **Still 🔴 OPEN after Ops Console Phase 1:** Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
 real `Oscilloscope` kit bound to live telemetry · History/Black Box flight-recorder log · Gaming Mode arm/engage console ·
 Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). Still folds in the remaining §A JARVIS stack
-(decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5). **Two open owner-gated calls
-(unchanged):** the standalone **Optimize** rail tab still coexists with the Lab hero during preview (confirm dropping it at
-default-ON), and whether the Optimize panel open-on-click feels right vs always-visible.
-⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — react to the **Ops Console** (the
-real 3D hologram at center, the honest corner gauges, the Dock, the reticle). This is the taste gate before default-ON + phases 2–4.
+(decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5). **Both owner-gated calls RESOLVED
+2026-07-10:** Optimize panel **open-on-click confirmed** ("cleaner") · the standalone **Optimize rail tab DROPS at
+default-ON** (owner call; the removal ships with the default-ON flip, after the eyeball). Phase-2 (Home cold-open) plan
+committed: `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (entry-gated on the round-2 eyeball).
+⏳ Owner eyeball round 2: **re-flip** Settings → Appearance → "Lab proving ground (preview)" (the self-review run reset it),
+open Lab — react to the **Ops Console** post header-slop sweep (`1a9f44f`). This is the taste gate before default-ON + phases 2–4.
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,
