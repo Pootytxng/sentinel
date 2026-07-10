@@ -178,9 +178,11 @@ classic failsafe (rail/tabs/rooms/tour restore live, round-trip live-verified, n
 Verify: tsc 0 · vitest **1182** (159 files, +14 pins) · `git diff -- src-tauri` EMPTY (zero new
 IPC/mutation primitive) · self-reviewer round-2 **PASS** (native 1500×980; noted caveat: the Home
 "See in Lab" button proven by source-read + equivalent-path clicks — rig had 0 open limiters).
-- **⛳ NEXT (this session continues): Phase-2 Home cold-open** per
-  `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`, flag `compy_home_console`
-  **DEFAULT OFF** — its entry gate (the console verdict) is open.
+- **⛳ RESUME (next train, FRESH session — heavy-context handoff per the usage-economics law):
+  Phase-2 Home cold-open** per `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md`
+  (5 tasks, TDD, flag `compy_home_console` **DEFAULT OFF**). Its entry gate is OPEN: the round-2/4
+  eyeball approved the direction and the Optimize-tab call is recorded + shipped — the Home dock's
+  room list at default-ON is the 4-room ground rail (`railFor(merged, ground)`).
 - **📌 Carried note for the T6c global-banner train:** on the Lab tab the global recovery banner
   defers to the embedded Gaming pane (`TABS_EMBEDDING_GAMING_MODE`), but in the console the pane
   only mounts once Optimize station + Power features are opened — a pending recovery is invisible
