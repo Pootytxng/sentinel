@@ -8,7 +8,6 @@ import { Term } from "./design/Term";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
-import { HardwareSection } from "./surfaces/HardwareSection";
 import { fmtGB } from "./surfaces/hardware-format";
 // Deep Monitoring panels + their sensor types — moved verbatim to surfaces/monitor-panels (T3)
 // so the summary-first MonitorDomainCards can reuse them as its expanded detail.
@@ -1142,7 +1141,6 @@ function App() {
   // panels stay the one source of truth for what a room shows (the shell only wraps them).
   const roomPanels = hw && (
     <>
-      {activeTab === "Overview" && <OverviewTab hw={hw} />}
       {/* Check renders standalone ONLY when the Optimize merge is off; when merged it folds
           into the Optimize shell below (the Check tab is unreachable then anyway). */}
       {activeTab === "Check" && !optimizeMerged && (
@@ -1599,16 +1597,6 @@ function App() {
 
 
 // ─── Tabs ────────────────────────────────────────────────────────────────
-
-function OverviewTab({ hw }: { hw: HardwareInfo }) {
-  // The "Your hardware" grid now lives in the shared HardwareGrid (rendered here AND on the
-  // CommandCenter Home) so the two surfaces can never drift apart again.
-  return (
-    <section className="tab-pane">
-      <HardwareSection hw={hw} />
-    </section>
-  );
-}
 
 // Monitoring poll cadence and rolling-window size. 1 Hz is plenty granular
 // for "is my GPU thermal-throttling" / "is my game CPU-bound" trends; faster

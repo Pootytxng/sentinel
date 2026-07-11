@@ -19,7 +19,7 @@ export type DrawerRec = {
 };
 
 // Per-surface chip TONE only. The label + honesty note come from the shared source of truth
-// (src/data/provenance.ts) so they can't drift from the Fix row / CommandCenter wording.
+// (src/data/provenance.ts) so they can't drift from the Fix row / Home limiter wording.
 const TONE: Record<Provenance, string> = {
   verified: "ready",
   "measured-signal": "accent",

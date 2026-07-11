@@ -171,24 +171,6 @@
   margin: 0 auto;
 }
 
-/* ── Classic-room neutralization while rooms await their V2-3..7 rebuild ──
-   Home (CommandCenter) renders INSIDE the shell until V2-3: its own rail and the
-   hyperspeed backdrop would double the chrome, so the shell suppresses them. Purely
-   additive — flag off, CommandCenter is untouched. */
-:root[data-v2="on"] .v2-content .cc-root {
-  min-height: 0;
-}
-:root[data-v2="on"] .v2-content .cc-rail {
-  display: none;
-}
-:root[data-v2="on"] .v2-content .cc-shell {
-  grid-template-columns: 1fr;
-}
-:root[data-v2="on"] .v2-content .ix-aurora,
-:root[data-v2="on"] .v2-content .ix-vignette {
-  display: none;
-}
-
 /* ── RoomShell skin (rooms adopt it from V2-3 on) ── */
 :root[data-v2="on"] .v2-verdict {
   display: flex;

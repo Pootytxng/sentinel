@@ -1,6 +1,6 @@
 // The six-home rail — THE single source of truth for the app's primary navigation (one-rail pass §1).
-// Both the CommandCenter rail and the app-shell rail render from this list, so they're identical by
-// construction (the rail-parity guard test asserts this list stays the blessed set/order/labels).
+// The app-shell rail renders from this list, so a private second map can't drift (the rail-parity
+// guard test asserts this list stays the blessed set/order/labels).
 // Settings is a separate gear at the bottom of the rail; Export is a header action — neither lives here.
 
 export type HomeRailId = "home" | "check" | "play" | "fix" | "learn" | "lab";
@@ -24,8 +24,8 @@ export const HOME_RAIL: HomeRailItem[] = [
   { id: "lab", label: "Lab", icon: "lab" },
 ];
 
-// railFor — THE single source for the rendered rail, shared by the app-shell rail AND the
-// CommandCenter rail (parity by construction). When the Optimize merge (phase 1a) is off, this is
+// railFor — THE single source for the rendered rail (the app-shell rail and the Home console's
+// room dock both resolve through it). When the Optimize merge (phase 1a) is off, this is
 // HOME_RAIL verbatim (the blessed six-home set). When on, Check + Tune collapse into ONE room: the
 // standalone `check` entry drops and the `fix` entry is relabeled "Optimize" AND moves into Check's
 // slot (position 2) — the spec order Home · Optimize · Monitor · Blackbook · Lab (5), keeping the

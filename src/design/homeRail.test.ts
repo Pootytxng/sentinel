@@ -4,10 +4,10 @@ import { join } from "path";
 import { HOME_RAIL, railFor } from "./homeRail";
 
 // Rail-parity guard (one-rail §1, owner condition): the six-home rail is THE single navigation set,
-// and both the CommandCenter rail and the app-shell rail must render from it — so they can't drift.
-// Fails on any change to the blessed set/order/labels, and if either rail stops sourcing the shared
-// rail. Both rails now route through railFor (which is built FROM HOME_RAIL), so the guard accepts
-// either name as proof the rail isn't a private second map.
+// and the app-shell rail must render from it — so a private second map can't drift. Fails on any
+// change to the blessed set/order/labels, and if the rail stops sourcing the shared list. (The
+// guard's second rail, the CommandCenter Home, was deleted with the dead-surface cleanup 2026-07-11
+// — the shell rail is the ONE rail now.)
 describe("home rail parity", () => {
   it("is the blessed six-home set, in order", () => {
     expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
@@ -16,10 +16,8 @@ describe("home rail parity", () => {
     expect(HOME_RAIL.map((r) => r.label)).toEqual(["Home", "Check", "Monitor", "Tune", "Blackbook", "Lab"]);
   });
 
-  it("BOTH the CommandCenter rail and the app-shell rail render from the shared rail (no second map)", () => {
-    const cc = readFileSync(join("src", "surfaces", "CommandCenter.tsx"), "utf8");
+  it("the app-shell rail renders from the shared rail (no second map)", () => {
     const app = readFileSync(join("src", "App.tsx"), "utf8");
-    expect(cc, "CommandCenter must source the shared rail").toMatch(/HOME_RAIL|railFor/);
     expect(app, "the app shell must source the shared rail").toMatch(/HOME_RAIL|railFor/);
   });
 });

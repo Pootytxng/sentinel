@@ -126,7 +126,7 @@ function humanizeWhen(iso: string): string {
 }
 
 // Labels come from the shared provenance source of truth so they can't drift from the
-// CommandCenter / ActionDrawer wording; the CSS class stays local to this surface.
+// Home limiter / ActionDrawer wording; the CSS class stays local to this surface.
 const EVIDENCE: Record<Rec["provenance"], { label: string; cls: string }> = {
   verified: { label: PROVENANCE_LABEL.verified, cls: "verified" },
   "measured-signal": { label: PROVENANCE_LABEL["measured-signal"], cls: "measured" },

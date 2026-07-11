@@ -183,28 +183,6 @@
   }
 }
 
-/* Home's CommandCenter rail is a SECOND rail (matched-rails design) — give it the
-   identical simplified treatment so Home and the rest of the app stay consistent. */
-:root[data-living="on"] .cc-rail-item-on {
-  color: var(--accent-bright);
-}
-:root[data-living="on"] .cc-rail-advanced {
-  color: var(--faint);
-}
-@media (min-width: 721px) and (max-width: 1080px) {
-  /* Match the shell rail: Advanced is an equal-flex peer, sized like the other room cells. */
-  :root[data-living="on"] .cc-rail-advanced {
-    flex: 1 1 0;
-  }
-  :root[data-living="on"] .cc-rail-item {
-    min-width: max-content;
-  }
-  :root[data-living="on"] .cc-rail-item span {
-    overflow: visible;
-    text-overflow: clip;
-  }
-}
-
 /* ── Friendly rec titles (Tune) — plain headline over a quiet technical tag ────── */
 /* Owner direction: friendly-first, real name kept visible-but-muted. The headline reads big; the
    technical name sits quietly beneath so power users still see it without tapping "What's this?". */

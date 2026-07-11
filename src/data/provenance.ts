@@ -1,6 +1,6 @@
 // Single source of truth for the three evidence/provenance tiers' user-facing wording — so the
-// chip LABEL and the honesty NOTE can never drift across surfaces (the Fix row, the CommandCenter
-// limiter, and the ActionDrawer "Details" sheet all read from here).
+// chip LABEL and the honesty NOTE can never drift across surfaces (the Fix row, the Home limiter,
+// and the ActionDrawer "Details" sheet all read from here).
 //
 // Mirrors the Rust Provenance enum doc in src-tauri/src/recommendations.rs: "Verified" means Compy
 // directly observes the FACT the rec claims (current vs max refresh, free disk space, driver age) —

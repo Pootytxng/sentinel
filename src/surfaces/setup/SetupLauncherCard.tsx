@@ -1,8 +1,8 @@
 import "./SetupLauncherCard.css";
 
 // The always-present Home affordance that opens the Setup & Tour. Dispatches a window event (mirrors
-// the app's `compy:open-settings` pattern) so it needs no prop threading through CommandCenter →
-// DashboardV2. This is the "front door" that fixes onboarding being buried in Settings.
+// the app's `compy:open-settings` pattern) so it needs no prop threading through the Home surfaces.
+// This is the "front door" that fixes onboarding being buried in Settings.
 
 export const START_TOUR_EVENT = "compy:start-tour";
 

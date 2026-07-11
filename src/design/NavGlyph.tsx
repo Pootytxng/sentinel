@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
-// Shared six-home nav glyphs — used by BOTH the CommandCenter rail and the app-shell rail so the two
-// render identical icons (one-rail pass §1, matched-rails approach). One glyph source = no drift.
+// Shared six-home nav glyphs for the app-shell rail (one-rail pass §1). One glyph source = no drift.
 const NAV_ICONS: Record<string, ReactNode> = {
   gauge: (<><path d="M4 18a8 8 0 1 1 16 0" /><line x1="12" y1="18" x2="15.5" y2="11" /></>),
   check: (<><circle cx="12" cy="12" r="8.5" /><path d="M8.5 12l2.5 2.5 4.5-5" /></>),

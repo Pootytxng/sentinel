@@ -6,11 +6,11 @@ import { fmtGB, fmtGHz } from "./hardware-format";
 import { rigTierLine } from "../data/rig-tier";
 import { Term } from "../design/Term";
 
-// The detailed "Your hardware" card grid — the SINGLE source for both the classic Overview surface
-// and the CommandCenter Home, so the two can never drift (the regression this restores: the grid was
-// only in the classic Overview, so it vanished from the shipped Home). Reuses the existing card markup
-// + the count-agnostic elastic §6 grid (incl. the Network card). `hw` is the same object both Homes
-// already pass — zero new IPC. Responsive via the global `.grid` (flex-wrap, min-width:0).
+// The detailed "Your hardware" card grid — the SINGLE source every Home surface renders, so they
+// can never drift (the regression this restores: the grid once lived only in the classic Overview,
+// so it vanished from the shipped Home). Reuses the existing card markup + the count-agnostic
+// elastic §6 grid (incl. the Network card). `hw` is the same object every Home already passes —
+// zero new IPC. Responsive via the global `.grid` (flex-wrap, min-width:0).
 
 // Driver version + coarse age. Grid-only formatter (kept here, not in the shared module).
 const fmtDriver = (g: GpuInfo) => {
