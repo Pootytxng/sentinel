@@ -46,6 +46,9 @@ export function Oscilloscope({
   reduced,
   budget,
   spikes = false,
+  scrub = null,
+  sel = null,
+  stageProps,
 }: {
   /** Already-real values, newest last — the caller buffers from its existing poll. */
   samples: number[];
@@ -59,6 +62,14 @@ export function Oscilloscope({
   budget?: number;
   /** Mark exact-moment spikes (>= 2× window median AND >= budget) + worst-spike ms callout. */
   spikes?: boolean;
+  /** Scrub crosshair at this x-fraction of the drawn window (snaps to the nearest REAL sample);
+   *  the CALLER owns the readout — this stays a pure render. */
+  scrub?: number | null;
+  /** Drag-selection band as x-fractions (order-free) — the caller's zoom-in-progress. */
+  sel?: { start: number; end: number } | null;
+  /** Escape hatch for interactive callers (the Monitor deck): spread onto the stage div so
+   *  pointer math shares the exact drawn geometry. The component itself stays stateless. */
+  stageProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const win = samples.length > cap ? samples.slice(-cap) : samples;
   const empty = win.length === 0;
@@ -107,7 +118,7 @@ export function Oscilloscope({
           </span>
         )}
       </figcaption>
-      <div className="osc-stage">
+      <div className="osc-stage" {...stageProps}>
         <svg
           className="osc-grid"
           viewBox={`0 0 ${W} ${H}`}
@@ -130,6 +141,26 @@ export function Oscilloscope({
             />
           )}
           {!empty && <polyline className="osc-trace" points={pts} fill="none" />}
+          {!empty && sel != null && (
+            <rect
+              className="osc-sel"
+              x={(Math.min(sel.start, sel.end) * W).toFixed(1)}
+              y="0"
+              width={(Math.abs(sel.end - sel.start) * W).toFixed(1)}
+              height={H}
+            />
+          )}
+          {!empty &&
+            scrub != null &&
+            (() => {
+              const i = Math.round(Math.min(1, Math.max(0, scrub)) * (win.length - 1));
+              return (
+                <g className="osc-cursor-g">
+                  <line className="osc-cursor" x1={toX(i)} y1="0" x2={toX(i)} y2={H} />
+                  <circle className="osc-cursor-dot" cx={toX(i)} cy={toY(win[i])} r="2.5" />
+                </g>
+              );
+            })()}
           {spikeIdx.map((i) => (
             <line
               key={`s${i}`}

@@ -18,17 +18,21 @@ import { Oscilloscope } from "../design/console/Oscilloscope";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
 import { readoutStats, type ReadoutStats } from "./monitor-console-data";
-import { SessionWaterfall } from "./monitor/SessionWaterfall";
+import { DeckScope } from "./monitor/DeckScope";
+import { SessionStack } from "./monitor/SessionStack";
+import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
-import { shortVerdict, fmtDur } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
 import "./monitor-console.css";
 
-// MonitorConsole — the Monitor room's Live face as the console instrument cluster (plan
-// 2026-07-10-console-hud-phase3-monitor; direction spec 2026-07-09-compy-console-hud-direction,
-// Monitor row: the arc gauges + oscilloscope traces are REAL live telemetry, not decoration —
-// deliberately NO hologram, NO parallax). Behind compy_monitor_console, DEFAULT OFF; flag off,
-// MonitorV2 renders exactly today's faces (pinned by monitor-console-flag.test.tsx).
+// MonitorConsole — the Monitor room as v5 "Flight Deck + Session Stack" (owner pick 2026-07-11,
+// plan 2026-07-11-monitor-v5-deck-stack; replaces the rejected v4 Session Waterfall). ONE face,
+// two halves, no mode toggle: the FLIGHT DECK on top (readout strip · the full-width frametime
+// scope hero with scrub + drag-zoom · the plain-number session delta row) and the SESSION STACK
+// below (every recent session a flat row on ONE shared 1%-low axis — the stack IS the session
+// shelf). Chain law from v3→v4: no depth/perspective over data ink on this face, ever again.
+// Behind compy_monitor_console, DEFAULT OFF; flag off, MonitorV2 renders exactly today's faces
+// (pinned by monitor-console-flag.test.tsx).
 //
 // Honesty contract: presentation only over the SAME audited read-only polls MonitorBasic /
 // Play's live card run — the identical three 1 Hz commands, cadence, cancellation, and
@@ -258,7 +262,9 @@ export function MonitorConsole({
   const ramPct = cpu?.ram_total_bytes
     ? Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100)
     : null;
-  const latest = sessions[0] ?? null;
+  // The deck's delta row is SESSION-scoped, not live-scoped: it debriefs the last COMPLETED
+  // session against its comparable prior, so it holds steady while capture starts/stops.
+  const deck = deckDeltaFrom(sessions);
 
   const gpuGrade = gradeGpuTempForVendor(vendor, gpu?.temperature_c ?? null);
   const low1Grade: Grade = sample ? gradeLow1(sample.low1_fps, sample.fps) : "neutral";
@@ -362,17 +368,39 @@ export function MonitorConsole({
           </div>
         </div>
 
-        {/* THE HERO — the v4 Session Waterfall (owner-picked concept B + A's drag-segment,
-            plan 2026-07-10-monitor-v4-session-waterfall; the v3 ribbon is deleted). LIVE mode
-            recedes the same real per-frame window; SESSIONS mode compares the last games'
-            recorded timelines. Always mounted — each mode carries its own honest empty. */}
-        <SessionWaterfall
+        {/* THE HERO — the full-width frametime scope (v5 Flight Deck): real ms axis, dashed
+            budget line, exact-moment spike pins, hover scrub + drag-zoom (ported from the
+            deleted waterfall's front trace). Always mounted — it carries its own honest empty. */}
+        <DeckScope
           ftWin={ftWin.current}
           live={live}
           budget={ftBudget}
-          sessions={sessions}
+          tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
           reduced={reduced}
+          cap={FT_CAP}
         />
+
+        {/* The deck's plain-number delta row — recorded facts only; renders NOTHING without a
+            prior session, and a cross-game prior is labeled so a genre gap never reads as a
+            regression (the v4 law, carried). */}
+        {deck && (
+          <div className="mc-delta">
+            <span className="mc-delta-k">
+              VS YOUR LAST{" "}
+              {(prettyGameName(deck.prev.process_name) || "unknown game").toUpperCase()} SESSION
+              {!deck.sameGame && " (DIFFERENT GAME)"}
+            </span>
+            <span className="mc-delta-v">AVG FPS {fmtDeltaGlyph(deck.avgFps)}</span>
+            <span className="mc-delta-v">1% LOW {fmtDeltaGlyph(deck.low1)}</span>
+            <span className="mc-delta-v">SPIKES {fmtDeltaGlyph(deck.spikes)}</span>
+            {deck.changesOn > 0 && (
+              <span className="mc-delta-tag">
+                {deck.changesOn} {deck.changesOn === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mc-scopes">
           <Oscilloscope
             samples={live ? fpsH.current : []}
@@ -381,16 +409,6 @@ export function MonitorConsole({
             unit="fps"
             tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
             reduced={reduced}
-          />
-          <Oscilloscope
-            samples={live ? ftWin.current : []}
-            cap={FT_CAP}
-            label="frametime"
-            unit="ms"
-            tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
-            reduced={reduced}
-            budget={ftBudget}
-            spikes
           />
         </div>
 
@@ -443,15 +461,15 @@ export function MonitorConsole({
         <Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.
       </p>
 
-      {/* Basic collapses Sessions away, so it keeps MonitorBasic's door (never a dead end);
-          Advanced reaches sessions via its own tab. */}
-      {mode === "basic" && latest && (
+      {/* THE SESSION STACK — the face's second half (the stack IS the session shelf): every
+          recent session a flat row on ONE shared axis, in BOTH modes. */}
+      <SessionStack sessions={sessions} reduced={reduced} />
+
+      {/* Basic collapses the Sessions tab away, so it keeps a door into the full face (never
+          a dead end); Advanced reaches it via its own tab. */}
+      {mode === "basic" && sessions.length > 0 && (
         <button type="button" className="mc-last cmp-door" onClick={onOpenSessions}>
-          <span className="mc-last-k">Last session</span>
-          <span className="mc-last-v">
-            {prettyGameName(latest.process_name) || "Unknown game"} · {shortVerdict(latest)} ·{" "}
-            {fmtDur(latest.duration_secs)} · {latest.avg_fps.toFixed(0)} avg
-          </span>
+          <span className="mc-last-k">Session history</span>
           <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">
             ▸
           </span>

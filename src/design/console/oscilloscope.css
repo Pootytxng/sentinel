@@ -24,6 +24,11 @@
 :root[data-v2="on"] .osc-nosignal { position: absolute; inset: 0; display: grid; place-items: center;
   font-family: var(--ix-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--ix-text-3); }
+/* Interactive chrome (the Monitor deck's scrub + drag-zoom) — drawn only when the caller
+   passes scrub/sel; the component itself stays a pure render. */
+:root[data-v2="on"] .osc-sel { fill: var(--ix-accent); opacity: .14; }
+:root[data-v2="on"] .osc-cursor { stroke: var(--ix-text-2); stroke-width: .75; opacity: .7; }
+:root[data-v2="on"] .osc-cursor-dot { fill: var(--ix-accent); }
 /* The alive layer (glow) rides the trace only when motion is on — reduced kills it entirely. */
 :root[data-v2="on"] .oscilloscope:not([data-reduced]) .osc-trace {
   filter: drop-shadow(0 0 3px var(--ix-accent-dim, var(--ix-accent)));
