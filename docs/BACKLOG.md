@@ -161,6 +161,33 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10i — 🟡 MONITOR v3 "TELEMETRY RIBBON" CODE-COMPLETE `4c051e0`, SHIP IN FLIGHT (reinstall deferred: owner mid-game)
+
+**Owner picked the 3D-ribbon concept and said "continue" — built same session** (plan
+`docs/superpowers/plans/2026-07-10-monitor-v3-ribbon.md`, entry gate cleared): `66966ea` Oscilloscope
+v2 (full-width window — his caught bug — budget line, exact-moment spike markers, pure `spikeIndices`)
+· `c266898` consumer-term readouts (MAX FPS / AVG FPS / LOWEST LATENCY / SPIKES, `readoutStats`,
+em-dash never 0) · `8fe63d7` `FrametimeRibbon` (lazy r3f, real per-frame extrusion, spike cones,
+budget plane, orbit, `frameloop="demand"`; pure `ribbon-profile.ts`) · `215e36d` face assembly
+(ribbon hero mounts only when live · overlay toggle + corner picker ported verbatim · uniform stage
+tilt, data ink never warped) · `4c051e0` **self-review round-1 FAIL fixed** (content-equal 1 Hz polls
+repainted the demand canvas — `ftWin` content-stable ref + reference-identity bug→guard).
+Verify: tsc 0 · vitest **1252** (166 files) · `git diff -- src-tauri` EMPTY · self-reviewer round-2
+**PASS 8/8** (GL probe: idle flat 15s on content-equal pushes, repaints on real change, orbit
+animates; full-width trace x=239/240; overlay toggle exercised live). Spec amendment landed: the
+direction spec's Monitor row now carries the owner's 2026-07-10 3D/parallax amendment; UI_VISION
+§A0 item 1 closed with the density/backdrop residual logged explicitly.
+- **⛳ SHIP REMAINING (next session picks this up):** release build from `4c051e0` was running in the
+  background (artifact: `src-tauri/target/release/bundle/nsis/Compy_0.1.0_x64-setup.exe` — verify it
+  exists/finished; docs-only files were dirty at build time, so the stamp may read `4c051e0`+dirty).
+  **Reinstall was DEFERRED — the owner was mid-Palworld** (step-aside: no kill/relaunch focus-steal
+  mid-game; note: round-2 review had to stop his live fps capture for the GL probe — his session
+  recording was cut, partial debrief in Sessions). When the game is closed: `scripts/ship-reinstall.ps1`
+  → stamp-verify `4c051e0` → RELEASE_STATE Snapshot UPDATE + Git HEAD/Current installer rows (SHA-256
+  from the reinstall output) → this cycle flips ✅.
+- **⏳ Then: owner eyeball** on Settings → Appearance → "Monitor console (preview)" (ideally mid-capture
+  — the ribbon + spike markers need live frames). Taste gate before default-ON.
+
 ### Cycle 2026-07-10h — ✅ PHASE-3 MONITOR CONSOLE BUILT + SHIPPED LIVE `3fbd371` (installer SHA-256 `7E74216C…97295D`, stamp-verified; supersedes `bce72d6`; flag `compy_monitor_console` DEFAULT OFF)
 
 **The 2026-07-10g resume pointer executed end-to-end in one fresh session** (plan

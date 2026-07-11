@@ -46,10 +46,10 @@ full response ive written here seeing how things seem to get lost in translation
 
 **Decomposed (each its own tracked item — none may be silently dropped or substituted):**
 
-1. **Overlay controls missing on the console face** — with "Monitor console (preview)" ON, the
-   in-game overlay's controls (which live on the classic Advanced → Live face) are hidden. The
-   overlay itself IS in the build, unchanged. Fix: the console face gets the overlay control
-   (same audited show/hide/corner commands, not forked). Rides the v3 train.
+1. **Overlay controls missing on the console face** — ✅ BUILT in v3 (`215e36d`): on/off toggle +
+   corner picker on the console face, same audited commands, not forked. **Explicit residual
+   (NOT silently closed): the density/backdrop overlay config still lives only on the classic
+   Advanced → Live face** — fold into the console face if the owner wants it there.
 2. **v3 rework — surpass "satisfactory":** classic tiles = liked; Phase-3 instrument cluster =
    satisfactory; he wants a third option that beats both. Spitballed same day per the per-tab law;
    **owner CHOSE the "3D ribbon graph" concept (2026-07-10)** — plan written:
