@@ -54,6 +54,7 @@ const labConsoleCss = loadV2Css("surfaces", "lab-console.css");
 const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
 const consoleArcGaugeCss = loadV2Css("design", "console", "arc-gauge.css");
+const consoleOscilloscopeCss = loadV2Css("design", "console", "oscilloscope.css");
 const consoleDockCss = loadV2Css("design", "console", "dock.css");
 const consoleReticleCss = loadV2Css("design", "console", "reticle.css");
 
@@ -73,6 +74,7 @@ const V2_CSS: [string, string][] = [
   ["hud-rooms.css", hudRoomsCss],
   ["ambient-hud.css", ambientHudCss],
   ["console/arc-gauge.css", consoleArcGaugeCss],
+  ["console/oscilloscope.css", consoleOscilloscopeCss],
   ["console/dock.css", consoleDockCss],
   ["console/reticle.css", consoleReticleCss],
 ];
