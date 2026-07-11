@@ -6,8 +6,14 @@
 > (owner-approved; Monitor row: *"The language is literally native: the arc gauges + oscilloscope
 > traces are real live telemetry (fps, frametime, sensors), not decoration."*) + the header-slop +
 > title-header law addenda (both already enforced on MonitorV2 — do not regress them).
-> **ENTRY GATE: OPEN.** Phase 2 (Home console) passed the owner eyeball 2026-07-10 ("everything
-> looks good") and shipped default-ON (`bce72d6`). Build Phase 3 in a FRESH session.
+> **ENTRY GATE: the per-tab concept check (owner directive 2026-07-10 — the "per-tab signature
+> law" addendum in the direction spec).** Phase 2 passed the eyeball and shipped default-ON
+> (`bce72d6`), but the owner then decreed: no copy-pasting the 3D-hologram/parallax stage across
+> tabs — each tab's console face must be a signature instrument native to its purpose, spitballed
+> with him BEFORE building. Monitor's concept (this plan): the **instrument cluster** — the motion
+> IS the data (live traces + gauges), deliberately NO hologram and NO parallax. **Open the session
+> by confirming his go on that concept (he has the spitball sheet from the 2026-07-10 chat; a
+> one-line "go" clears this gate), fold any reactions into the tasks, then build.**
 
 **Goal:** the Monitor room's LIVE face adopts the Console language with real instruments: a NEW
 `Oscilloscope` kit component drawing rolling traces from the live fps/frametime stream, and honest

@@ -140,3 +140,31 @@ App-wide text law folded into the Console rollout, tightened by the round-2 eyeb
 
 Enforced ongoing as self-reviewer rubric item 6 + vitest pins (`hud-rooms-flag.test.tsx` title
 contract per room, `lab-ground.test.tsx` "Lab" pin); every Phase 2…N tab adoption must pass it.
+
+## Addendum — per-tab signature law (owner, 2026-07-10, after the Home default-ON)
+
+**Owner directive (verbatim):** *"i just want to make sure were not literally copy and pasting the
+same 3d parralax model thing every time for every tab id like if we came up with something unique
+and more relative to each tabs purpose and spitball ideas to support that so it all makes sense
+before we do it."*
+
+**The law:** the shared Console LANGUAGE (frame, type, honest register, HUD micro-labels, motion
+grammar) rolls out app-wide — but the **centerpiece of each tab must be a signature instrument
+native to THAT tab's function.** The 3D rig hologram + parallax stage is NOT the template; a tab
+whose console face could be swapped with another tab's without anyone noticing has failed this law.
+
+**Per-tab signature concepts (spitball sheet — each phase presents its tab's concept for the
+owner's go/no-go BEFORE Task 1; these are starting points, not locked designs):**
+
+| Tab | Signature instrument (native to its purpose) | Explicitly NOT |
+|---|---|---|
+| **Home** (shipped) | The cold-open: rig hologram center + verdict masthead + gauges + dock. The ONE identity/status view — "here's your machine and the answer." | — (this IS the hologram's home) |
+| **Lab** (shipped, evolves) | The bench: today it centers the same hologram as Home — DIFFERENTIATE, don't duplicate: the Lab's rig becomes the **instrumented specimen** — part-anchored measured annotations, changed components visibly marked, deltas pinned to parts (the standing Two Futures hologram-information fold-in). Home shows the machine; the Lab shows the machine **under test**. | A second identical status hologram |
+| **Monitor** | The **instrument cluster**: rolling `Oscilloscope` traces on live fps/frametime + sensor arc gauges — the motion IS the data (traces sweep when live, go dead-still when stopped). Like a bench scope / EKG. | Hologram, parallax over data, decorative motion |
+| **Blackbook / History** | The **flight recorder**: timestamped tape-log of applied changes + sessions, each entry carrying its rollback; scrub/browse like pulling a black-box tape; the autopsy record as the deep-read. | Any 3D scene; dashboard gauges |
+| **Gaming Mode** (in the Lab's Power bay) | The **arm/engage panel**: one staged engage control, armed-tier readouts, the session contract as a live checklist, restore guarantee as the standing light. Cockpit arming, not dashboards. | Hologram, traces |
+| **Settings / Setup & Tour** | **Quiet console chrome**: same frame + type + honesty, calm forms. Settings are operated, not performed. | Any centerpiece theater |
+
+**Process rule this adds:** each remaining phase (3…N) opens with a short concept check against
+this sheet — what the tab's signature is, what it deliberately does NOT reuse — and gets the
+owner's go before code. Motion stays reduced-motion-gated and idle-honest everywhere.
