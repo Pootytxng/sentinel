@@ -117,6 +117,11 @@ export function MonitorConsole({
   );
   // Caller-owned trace buffer (Oscilloscope is a pure render): real polled fps values only.
   const fpsH = useRef<number[]>([]);
+  // The frametime window with a CONTENT-STABLE reference (self-review round-1 catch, bug→guard):
+  // every 1 Hz poll deserializes a fresh array even when the frames didn't change, and a
+  // reference-new-but-equal array rebuilt the ribbon geometry + repainted the demand-mode canvas
+  // every tick. Keep the previous array unless the VALUES differ, so downstream memos hold.
+  const ftWin = useRef<number[]>([]);
   const visible = useDocumentVisible();
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -172,8 +177,14 @@ export function MonitorConsole({
           // the buffer clears, so the trace goes to its no-signal state (never frozen-as-live).
           if (f.active && f.sample) {
             fpsH.current = [...fpsH.current, f.sample.fps].slice(-FPS_CAP);
+            const next = f.sample.recent_frametimes_ms;
+            const prev = ftWin.current;
+            if (prev.length !== next.length || prev.some((v, i) => v !== next[i])) {
+              ftWin.current = next;
+            }
           } else if (!f.active) {
             fpsH.current = [];
+            ftWin.current = [];
           }
           setFps(f);
         })
@@ -230,6 +241,7 @@ export function MonitorConsole({
       if (fps?.active) {
         await invoke("stop_fps_capture");
         fpsH.current = [];
+        ftWin.current = [];
         setFps((p) => (p ? { ...p, active: false, sample: null } : p));
       } else {
         await invoke("start_fps_capture");
@@ -256,7 +268,7 @@ export function MonitorConsole({
   // floor and the trace's budget line. Consumer-term readouts derive from the same real windows.
   const ftBudget = rig.refreshHz ? 1000 / rig.refreshHz : undefined;
   const stats: ReadoutStats = live
-    ? readoutStats(fpsH.current, sample.recent_frametimes_ms, ftBudget)
+    ? readoutStats(fpsH.current, ftWin.current, ftBudget)
     : { maxFps: null, avgFps: null, lowestLatencyMs: null, spikeCount: null };
   const ink = (g: Grade) => {
     const c = gradeColor(g);
@@ -354,10 +366,10 @@ export function MonitorConsole({
         {/* THE HERO — the 3D frametime ribbon (owner-chosen v3 concept): real per-frame
             geometry, spike peaks, the rig's budget plane; orbit is the user's. Renders ONLY
             when a live window exists — stopped/empty falls to the strips' no-signal states. */}
-        {live && sample.recent_frametimes_ms.length >= 2 && (
+        {live && ftWin.current.length >= 2 && (
           <div className="mc-ribbon">
             <Suspense fallback={<div className="mc-ribbon-loading">loading the 3D ribbon…</div>}>
-              <FrametimeRibbon samples={sample.recent_frametimes_ms} budget={ftBudget} />
+              <FrametimeRibbon samples={ftWin.current} budget={ftBudget} />
             </Suspense>
           </div>
         )}
@@ -371,7 +383,7 @@ export function MonitorConsole({
             reduced={reduced}
           />
           <Oscilloscope
-            samples={live ? sample.recent_frametimes_ms : []}
+            samples={live ? ftWin.current : []}
             cap={FT_CAP}
             label="frametime"
             unit="ms"

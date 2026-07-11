@@ -10,13 +10,20 @@ import type { SessionSummary } from "../types";
 // (c) capture state keeps mirroring up via onFpsActive (the V2-8 door); (d) NVIDIA GPU temp
 // stays ungraded (LOCKED rule 5); (e) header-slop pin — no headings/ledes in the subtree.
 
-const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+const { invokeMock, ribbonWindows } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  ribbonWindows: [] as number[][],
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 // jsdom has no WebGL — the lazy 3D hero is covered by ribbon-profile.test.ts (pure geometry)
-// + the live self-review; here we pin its mount/unmount contract.
+// + the live self-review; here we pin its mount/unmount contract AND the samples-reference
+// identity it receives (the idle-canvas bug→guard below).
 vi.mock("./monitor/FrametimeRibbon", () => ({
-  FrametimeRibbon: () => <div data-testid="frametime-ribbon" />,
+  FrametimeRibbon: (props: { samples: number[] }) => {
+    ribbonWindows.push(props.samples);
+    return <div data-testid="frametime-ribbon" />;
+  },
 }));
 
 const cpuSnap = {
@@ -85,6 +92,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   invokeMock.mockReset();
+  ribbonWindows.length = 0;
 });
 
 describe("MonitorConsole — live stream feeds real instruments (a)", () => {
@@ -153,6 +161,22 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     );
     expect(localStorage.getItem("compy_overlay_corner")).toBe("bottom-right");
   });
+
+  it("content-equal polls keep the ribbon's samples REFERENCE stable (idle-canvas bug→guard, self-review round-1 catch)", async () => {
+    // Every poll deserializes a FRESH but value-identical window — exactly what the real
+    // 1 Hz get_fps_status does when no new frames landed. The ribbon must receive the SAME
+    // array reference each time, or demand-mode r3f rebuilds + repaints every second.
+    mockPolls(() => ({
+      ...liveFps,
+      sample: { ...liveFps.sample, recent_frametimes_ms: [...liveFps.sample.recent_frametimes_ms] },
+    }));
+    mount();
+    await screen.findByTestId("frametime-ribbon");
+    await waitFor(() => expect(ribbonWindows.length).toBeGreaterThanOrEqual(3), {
+      timeout: 4000,
+    });
+    expect(new Set(ribbonWindows).size).toBe(1);
+  }, 8000);
 
   it("capture ON mirrors up via onFpsActive (c)", async () => {
     mockPolls(() => liveFps);
