@@ -180,12 +180,14 @@ committed: `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (entry
 the Ops Console Lab is the default, the rail is Home · Monitor · Blackbook · Lab, and the Lab's Optimize station is
 the one door (with the "Applied & history" ledger disclosure inside — the self-reviewer's reachability catch, fixed
 pre-ship). `compy_lab_ground="0"` = the classic failsafe. Phases 2–4 are UNBLOCKED; Phase-2 Home cold-open is next.
-🟢 **Phase-2 Home cold-open BUILT + SHIPPED `72d9b6e` (2026-07-10), behind `compy_home_console` DEFAULT OFF —
-awaiting the owner eyeball** (Settings → Appearance → "Home console (preview)"): hologram center-stage in the
-bracketed console stage, 4 honest corner gauges, HomeHud's masthead register, #1-limiter readout with the Lab
-jump, and the room Dock (Monitor · Blackbook · Lab doors, Lab primary; ONE forward affordance — the ForwardDoor
+🟢 **Phase-2 Home cold-open BUILT + SHIPPED `72d9b6e` (2026-07-10)** — hologram center-stage in the bracketed
+console stage, 4 honest corner gauges, HomeHud's masthead register, #1-limiter readout with the Lab jump, and
+the room Dock (Monitor · Blackbook · Lab doors, Lab primary; ONE forward affordance — the ForwardDoor
 suppression was the self-reviewer's duplication catch, guard-pinned). Motion: spotlight · reveal · reticle ·
-parallax, reduced ⇒ still. Taste gate before default-ON and before Phase 3 (Monitor oscilloscope).
+parallax, reduced ⇒ still. ✅ **OWNER APPROVED 2026-07-10 ("everything looks good") → DEFAULT ON shipped
+`bce72d6`** (Settings row now "Home console"; "0" = the classic failsafe). **Phase 3 (Monitor) is next — plan
+written:** `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` (flag `compy_monitor_console`
+DEFAULT OFF · NEW `Oscilloscope` kit component on the real live telemetry · builds in a fresh session).
 
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,

@@ -161,6 +161,28 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10g — ✅ OWNER VERDICT IN ("everything looks good and gaming mode worked") → HOME CONSOLE DEFAULT-ON SHIPPED LIVE `bce72d6` (installer SHA-256 `2DA1340D…E6F3E4`, stamp-verified; supersedes `80c69f1`) + PHASE-3 PLAN WRITTEN
+
+**Both pending gates cleared by one verdict (2026-07-10):** the T6c Resume worked live on his real
+orphaned session, and the Home-console eyeball (A4) approved. Shipped per
+[[ship-approved-work-as-the-build]]:
+- **`compy_home_console` DEFAULT ON** (`readHomeConsole` → `!== "0"`); Settings row drops
+  "(preview)" (title/aria "Home console"); **"0" = the classic-Home failsafe**, byte-identical for
+  both `compy_editorial` states. Pins re-anchored: `home-console-flag.test.tsx` (new default
+  contract: absent === "1" === console root), `home-hud-flag.test.tsx` +
+  `hologram-orbit-optin-guard.test.tsx` pin the "0" failsafe for the layers they guard, + NEW
+  console-stage orbit pin (T4d contract on the now-default screen). OWNER_ACTION_CHECKLIST **A4 →
+  ✅ DONE**. Verify: tsc 0 · vitest **1210** (161 files) · zero src-tauri · self-reviewer **PASS**
+  (settings round-trip live both ways no reload, "(preview)" grep-clean, console idle 0 GL
+  draws/16s, orbit opt-in holds).
+- **⛳ RESUME (next train, FRESH session):** build **Phase 3 (Monitor)** from
+  `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` — NEW flag
+  `compy_monitor_console` DEFAULT OFF · NEW `Oscilloscope` kit component (pure real-sample trace,
+  no-signal honest state) · MonitorConsole over the existing live polls (verbatim port, zero new
+  IPC) · title-header/header-slop exit checks · self-review + ship + owner eyeball. Entry gate OPEN.
+- **📌 Open candidates unchanged:** T6b (batched restore-side elevation) · the gated backlog `[ ]`
+  items (owner-curated data / outbound walls).
+
 ### Cycle 2026-07-10f — ✅ T6c ONE-CLICK RESUME + MOUNT-AWARE BANNER DEFERRAL SHIPPED LIVE `80c69f1` (installer SHA-256 `B7F0148A…BDCFA0`, stamp-verified; supersedes `72d9b6e`)
 
 **The 2026-07-10c owner directive built as its own train** (no Home-console verdict had landed, all

@@ -10,6 +10,22 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-10 (Home console DEFAULT-ON, SHIPPED `bce72d6` — installer SHA-256
+> `2DA1340D8BC5AA3337AFACF0C36FAE450684E50ED73E54A517AE98F6ACE6F3E4`, stamp-verified LIVE, installed by
+> Claude, supersedes the `80c69f1` installer):** the owner's verdict ("everything looks good", 2026-07-10,
+> which also confirmed the T6c gaming-mode Resume worked live) cleared the Phase-2 eyeball gate →
+> **`compy_home_console` is DEFAULT ON** (`readHomeConsole` → `!== "0"`, `src/design/theme.ts:536`) per
+> ship-approved-work-as-the-build. Home opens as the console cold-open for everyone; **Settings →
+> Appearance → "Home console" (row dropped "(preview)") set to OFF is the classic-Home failsafe** —
+> byte-identical to the pre-console tree for BOTH `compy_editorial` states, live round-trip verified no
+> reload. Pins re-anchored in `home-console-flag.test.tsx` (new default contract) +
+> `home-hud-flag.test.tsx` / `hologram-orbit-optin-guard.test.tsx` (the "0" failsafe for the layers they
+> guard; NEW console-stage orbit pin — fresh default = no unattended rotation, idle 0 GL draws/16s).
+> Zero src-tauri. Verify: tsc 0 · vitest **1210** (161 files) · self-reviewer **PASS** (dev-webview
+> evidence; settings round-trip both ways, "(preview)" grep-clean). **Phase 3 (Monitor) is planned:**
+> `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` — new flag `compy_monitor_console`
+> DEFAULT OFF, `Oscilloscope` kit component on the real live telemetry, builds in a FRESH session.
+>
 > **UPDATE 2026-07-10 (T6c one-click Resume + mount-aware banner deferral SHIPPED `80c69f1` — installer SHA-256
 > `B7F0148A1F8F50ED76267E2B7580A4636463FB71D9F4E02FD5DA61E895BDCFA0`, stamp-verified LIVE, installed by Claude,
 > supersedes the `72d9b6e` installer):** the owner's 2026-07-10 directive built — the GLOBAL gaming-recovery
