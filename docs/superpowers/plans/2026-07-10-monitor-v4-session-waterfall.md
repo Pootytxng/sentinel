@@ -1,0 +1,104 @@
+# Monitor v4 — "Session Waterfall" (concept B refined into the working hero)
+
+**Entry gate: CLEARED 2026-07-10.** Owner verdict on concept round 2 (Artifact `a8e6acf7…`),
+verbatim:
+
+> i really like the concept for B and how the previous sessions or added in visual context i also
+> like how you can drag and segment a specific area on the scanline in A. id like to see a more
+> refined version focusing towards the B concept and leaning more into the previous session
+> comparison which could have many ways of being beneficial for users trying to do exactly that. i
+> want you to spend time really refining that as a working implementation and making it more
+> comprehensive nisually and systematicaly
+
+Decomposed (none may be dropped): **(1)** B "Depth Waterfall" is the direction — depth axis = time,
+front trace flat + readable; **(2)** A's drag-to-segment (zoom a region of the scanline) folds INTO
+the front trace; **(3)** LEAN INTO previous-session comparison — this is the feature, not garnish;
+**(4)** refined + comprehensive, visually and systematically — this train takes the time.
+
+The v3 ribbon is REJECTED (owner 2026-07-10, verbatim + failure diagnosis in UI_VISION §A0 item 2):
+an extruded mound with no axis — unreadable. Root lesson for v4: **3D may only ever be
+presentational depth BEHIND a flat, axis-anchored readable layer. Nothing readable is ever warped.**
+
+## Honest data inventory (verified at source, 2026-07-10)
+
+| Data | Where | Shape | Verified |
+|---|---|---|---|
+| Live per-frame frametimes | `fps.rs` `recent_frametimes_ms` | last **240** frames (ms), oldest→newest, per report tick | `fps.rs:176,191-194` |
+| Per-session per-second timeline | `sessions.rs` `stutter_timeline` | `Vec<(elapsed_secs, 1%-low fps)>`, kept for the **most-recent 5** sessions, stripped older (`sessions.rs:194-196`) | `sessions.rs:60-63` |
+| Per-session dip signals | `sessions.rs` `stutter_events` | `{at_secs, kind, label}` (`stutter.rs:12-15`) | same |
+| Session aggregates | `SessionSummary` | avg_fps · avg_frametime_ms · low1_fps_est · duration · process_name · started_at · **compy_changes_active** | `sessions.rs:36-66` |
+| FE availability | sessions already cross IPC with the timeline fields (fixture `src/data/sessionTrends.test.ts:21-22`) | — | ✓ |
+
+**Zero new IPC. Zero src-tauri.** Everything above already reaches the frontend via the same
+audited read-only polls/commands MonitorConsole uses today.
+
+## Design — one waterfall, two modes (units NEVER mix in one scene)
+
+Hero replaces the deleted ribbon on the console face (same flag `compy_monitor_console`, DEFAULT
+OFF). A small segmented control picks the mode:
+
+### Mode LIVE — "this session, receding" (axis: frametime ms)
+- **Front layer** = the real `recent_frametimes_ms` window: flat 2D scope, real ms axis, dashed
+  budget line at `1000/refreshHz`, **exact-moment spike markers** (existing `spikeIndices`), area
+  fill. This layer IS the Precision-Scope treatment.
+- **A's segment interaction**: drag horizontally on the front trace → zoom that region (window
+  narrows), double-click → reset; hover scrubs a crosshair with `ms · fps · SPIKE` readout.
+- **Depth layers** = earlier snapshots of the SAME capture, buffered client-side: every N seconds
+  (N ≈ window span) the current front window pushes back one step; keep ≤6 layers. Spike pins
+  persist on receding layers. Honest: same measured stream, no synthesis; buffer clears when
+  capture stops (never frozen-as-live — the v2 contract).
+- Mouse-move tilts the stack (presentational parallax ONLY on depth offsets, never on the front
+  layer's y values). `reduced` ⇒ no tilt, layers static, no sweep.
+
+### Mode SESSIONS — "compare your last games" (axis: 1%-low FPS)
+The lean-in. Depth layers = the last ≤5 sessions' real `stutter_timeline` series, most recent in
+front, each normalized to elapsed-time on x (label carries true duration).
+- **Layer labels** (mono micro-label at each layer's left edge): `process_name · started_at
+  (relative: "yesterday") · avg fps`. Hover a layer → it lifts to full opacity + its readout row
+  shows avg FPS / 1% low / duration / spikes-equivalent (dips).
+- **Dip pins**: `stutter_events` at their exact `at_secs` on their own layer, with the real label
+  ("OneDrive.exe starting") in the hover readout — measured forensics, already computed.
+- **Delta strip** (front vs the previous comparable session): `AVG FPS +7 · 1% LOW +4 ·` — computed
+  from the two structs, em-dash when either side is absent. If ≥2 layers share `process_name`, a
+  "same game only" toggle filters to them (THE comparison a user actually wants).
+- **Compy-context tag**: a layer whose session ran with `compy_changes_active > 0` gets a quiet
+  `N COMPY CHANGES ON` tag — honest before/after context (receipts-adjacent, no claims, just the
+  recorded fact).
+- Empty states: 0 sessions ⇒ honest "no sessions on record yet — play with capture on"; sessions
+  whose timeline was stripped (>5 back) simply don't appear as layers (the Sessions face still
+  lists them); 1 session ⇒ single layer + "one more session unlocks comparison".
+
+### Rendering: 2D canvas, NOT r3f
+The mock proved the look needs only a perspective projection. 2D canvas: dodges the demand-canvas
+repaint class outright (the v3 bug), drops the lazy 890 kB r3f chunk from this face, and redraws
+only on data/pointer change. DPR-scaled, token inks only (trace/spike/budget from CSS vars), vendor
+purple can never paint.
+
+## Tasks (TDD, subagent-driven where the law routes)
+
+1. **T1 `waterfall-profile.ts`** — pure module: layer projection math, zoom windowing
+   (`zoomWindow(buf, sel)`), dip/spike index derivation for both modes, delta computation,
+   same-game grouping, relative-date label. Full vitest truth-tables (empty/1-session/stripped/
+   mixed-game/absent-aggregates).
+2. **T2 `SessionWaterfall.tsx` + CSS — LIVE mode**: canvas render (front scope + receding
+   snapshots), scrub/drag-zoom/dblclick/tilt pointer layer, spike pins, honest empties,
+   reduced-motion still. Content-stable redraw guard (reference-identity on equal polls — the v3
+   bug→guard class, pinned).
+3. **T3 SESSIONS mode**: timeline layers + labels + dip pins + delta strip + same-game toggle +
+   compy-context tag. Guards: never-mix-units pin (mode ⇒ single axis), fabricated-zero
+   truth-table (absent ⇒ em-dash/NOT-YET), stripped-timeline exclusion.
+4. **T4 assembly**: MonitorConsole hero = SessionWaterfall; **DELETE `FrametimeRibbon.tsx` +
+   `ribbon-profile.ts` + their tests** (rejected UI dies, per the Lab precedent); readouts strip +
+   overlay control + capture toggle untouched; flag-off byte-identity re-pinned BOTH
+   `compy_editorial` states; `holo-shell-blink-guard` unaffected (no HolographicMaterial here).
+5. **T5 finalize**: full tsc/vitest · `git diff -- src-tauri` EMPTY · self-review (dispatch
+   self-reviewer; GL/repaint probe replaced by a canvas-redraw-count probe: idle flat on
+   content-equal polls, redraw on real change, tilt only on pointer) · ship-reinstall + stamp
+   verify + RELEASE_STATE row + UI_VISION §A0 item 2 status.
+
+## Exit checks
+- Owner's four decomposed asks each demonstrably present (map them in the report).
+- Header-slop/title laws untouched; consumer readouts stay (MAX FPS · AVG FPS · LOWEST LATENCY ·
+  SPIKES).
+- Flag stays DEFAULT OFF — owner eyeball (ideally mid-capture AND with ≥2 recorded sessions) is
+  the next gate; default-ON only on his verdict.

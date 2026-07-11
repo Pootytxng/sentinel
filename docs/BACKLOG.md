@@ -175,8 +175,16 @@ the extruded mound had no y-axis/scale, perspective warped magnitude — zero re
 persist) · **C Bar Skyline** (per-frame columns vs a labeled ms wall on a gridded floor,
 drag-orbit, spikes print exact ms). Same simulated feed, budget line, exact-moment markers,
 consumer readouts across all three.
-- **⏳ GATE: owner picks A/B/C (or combines) → v4 plan + build in a FRESH session.** Ribbon stays
-  live-but-preview-OFF (`compy_monitor_console` DEFAULT OFF — nothing rejected is default-visible).
+- ~~⏳ GATE: owner picks A/B/C~~ → **✅ PICKED same day (owner, 2026-07-10): B + A's drag-segment,
+  "leaning more into the previous session comparison … really refining that as a working
+  implementation … more comprehensive visually and systematically"** (verbatim retained in the v4
+  plan). **⛳ RESUME (next train, FRESH session): build Monitor v4 "Session Waterfall" from
+  `docs/superpowers/plans/2026-07-10-monitor-v4-session-waterfall.md`** — entry gate CLEARED; same
+  flag `compy_monitor_console` DEFAULT OFF; 2D-canvas waterfall, LIVE mode (front = real 240-frame
+  `recent_frametimes_ms` scope w/ drag-zoom + spike moments; depth = same-capture snapshots) +
+  SESSIONS mode (depth layers = the last ≤5 sessions' real `stutter_timeline`, dip pins from
+  `stutter_events`, delta strip, same-game filter, compy-changes-active tag); ribbon component
+  DELETED in T4. Zero new IPC, zero src-tauri.
   Phase 4 (Blackbook console) stays queued behind the Monitor verdict chain.
 
 ### Cycle 2026-07-10j — ✅ A0 item 6 CLOSED: consumer-terms preset relabel + rig-hint fix (next non-gated item; Monitor-v3 eyeball still the pending gate)

@@ -68,8 +68,13 @@ full response ive written here seeing how things seem to get lost in translation
    time; front trace flat/readable, history recedes, spike pins persist) · C "Bar Skyline"
    (per-frame columns on a gridded floor vs a labeled ms wall, drag-orbit, spike columns print
    their exact ms). All three: same feed, budget line, exact-moment markers, consumer readouts.
-   ⏳ **Owner picks (or combines) before any v4 build** — the ribbon stays live-but-preview-OFF
-   until then.
+   ✅ **Owner PICKED same day: B + A's drag-segment, lean into previous-session comparison**
+   ("really refining that as a working implementation … more comprehensive visually and
+   systematically" — full verbatim in the plan). **v4 plan written + entry gate cleared:**
+   `docs/superpowers/plans/2026-07-10-monitor-v4-session-waterfall.md` (LIVE mode: real 240-frame
+   scope + drag-zoom + receding same-capture snapshots · SESSIONS mode: the last ≤5 sessions' real
+   `stutter_timeline` as depth layers, `stutter_events` dip pins, delta strip, same-game filter —
+   zero new IPC). Builds in a FRESH session; ribbon deleted in its T4.
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
