@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { readDisplayRefreshHz } from "../design/theme";
@@ -18,6 +18,7 @@ import { Oscilloscope } from "../design/console/Oscilloscope";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
 import { readoutStats, type ReadoutStats } from "./monitor-console-data";
+import { SessionWaterfall } from "./monitor/SessionWaterfall";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
@@ -53,12 +54,6 @@ type FpsSample = {
   recent_frametimes_ms: number[];
 };
 type FpsLite = { active: boolean; status: string; sample: FpsSample | null };
-
-// v3 hero (plan 2026-07-10-monitor-v3-ribbon): the 3D frametime ribbon, lazy like RigHologram —
-// the three.js module loads only when a live window actually exists to draw.
-const FrametimeRibbon = lazy(() =>
-  import("./monitor/FrametimeRibbon").then((m) => ({ default: m.FrametimeRibbon })),
-);
 
 // Same corner set as Play's overlay config (ported, not forked).
 const CORNERS: [string, string][] = [
@@ -96,7 +91,8 @@ export function MonitorConsole({
   vendor?: GpuVendor;
   /** Basic shows the core instrument set; Advanced the full cluster (the existing faces' split). */
   mode: "basic" | "advanced";
-  /** Basic's last-session door content (Advanced reaches sessions via its own tab). */
+  /** Session history (newest-first): the waterfall's SESSIONS layers in both modes, plus
+   *  Basic's last-session door content (Advanced reaches the list via its own tab). */
   sessions?: SessionSummary[];
   /** Mirrors the room's live capture state up to MonitorV2 (the V2-8 forward-door rule). */
   onFpsActive?: (active: boolean) => void;
@@ -363,16 +359,17 @@ export function MonitorConsole({
           </div>
         </div>
 
-        {/* THE HERO — the 3D frametime ribbon (owner-chosen v3 concept): real per-frame
-            geometry, spike peaks, the rig's budget plane; orbit is the user's. Renders ONLY
-            when a live window exists — stopped/empty falls to the strips' no-signal states. */}
-        {live && ftWin.current.length >= 2 && (
-          <div className="mc-ribbon">
-            <Suspense fallback={<div className="mc-ribbon-loading">loading the 3D ribbon…</div>}>
-              <FrametimeRibbon samples={ftWin.current} budget={ftBudget} />
-            </Suspense>
-          </div>
-        )}
+        {/* THE HERO — the v4 Session Waterfall (owner-picked concept B + A's drag-segment,
+            plan 2026-07-10-monitor-v4-session-waterfall; the v3 ribbon is deleted). LIVE mode
+            recedes the same real per-frame window; SESSIONS mode compares the last games'
+            recorded timelines. Always mounted — each mode carries its own honest empty. */}
+        <SessionWaterfall
+          ftWin={ftWin.current}
+          live={live}
+          budget={ftBudget}
+          sessions={sessions}
+          reduced={reduced}
+        />
         <div className="mc-scopes">
           <Oscilloscope
             samples={live ? fpsH.current : []}

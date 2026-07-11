@@ -10,19 +10,20 @@ import type { SessionSummary } from "../types";
 // (c) capture state keeps mirroring up via onFpsActive (the V2-8 door); (d) NVIDIA GPU temp
 // stays ungraded (LOCKED rule 5); (e) header-slop pin — no headings/ledes in the subtree.
 
-const { invokeMock, ribbonWindows } = vi.hoisted(() => ({
+const { invokeMock, waterfallProps } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
-  ribbonWindows: [] as number[][],
+  waterfallProps: [] as { ftWin: number[]; live: boolean }[],
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
-// jsdom has no WebGL — the lazy 3D hero is covered by ribbon-profile.test.ts (pure geometry)
-// + the live self-review; here we pin its mount/unmount contract AND the samples-reference
-// identity it receives (the idle-canvas bug→guard below).
-vi.mock("./monitor/FrametimeRibbon", () => ({
-  FrametimeRibbon: (props: { samples: number[] }) => {
-    ribbonWindows.push(props.samples);
-    return <div data-testid="frametime-ribbon" />;
+// The v4 waterfall hero has its own guard suite (session-waterfall.test.tsx); here we pin the
+// CONTRACT MonitorConsole owes it: always mounted, honest live flag + cleared window when the
+// helper stops, and the content-stable ftWin REFERENCE on content-equal polls (the v3
+// idle-canvas bug→guard class — a fresh-but-equal array must never reach the canvas).
+vi.mock("./monitor/SessionWaterfall", () => ({
+  SessionWaterfall: (props: { ftWin: number[]; live: boolean }) => {
+    waterfallProps.push({ ftWin: props.ftWin, live: props.live });
+    return <div data-testid="session-waterfall" data-live={String(props.live)} />;
   },
 }));
 
@@ -92,7 +93,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   invokeMock.mockReset();
-  ribbonWindows.length = 0;
+  waterfallProps.length = 0;
 });
 
 describe("MonitorConsole — live stream feeds real instruments (a)", () => {
@@ -137,15 +138,21 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     expect(values[3]).toBe("0");
   });
 
-  it("the 3D ribbon hero mounts ONLY on a live window; stopped ⇒ gone (v3 T4)", async () => {
+  it("the waterfall hero stays mounted; stopped ⇒ live=false + a CLEARED window, never frozen-as-live (v4 T4)", async () => {
     let live = true;
     mockPolls(() => (live ? liveFps : stoppedFps));
     mount();
-    expect(await screen.findByTestId("frametime-ribbon")).toBeTruthy();
-    live = false;
-    await waitFor(() => expect(screen.queryByTestId("frametime-ribbon")).toBeNull(), {
-      timeout: 3000,
+    await waitFor(() => {
+      const el = screen.getByTestId("session-waterfall");
+      expect(el.getAttribute("data-live")).toBe("true");
     });
+    live = false;
+    await waitFor(
+      () => expect(screen.getByTestId("session-waterfall").getAttribute("data-live")).toBe("false"),
+      { timeout: 3000 },
+    );
+    const last = waterfallProps[waterfallProps.length - 1];
+    expect(last.ftWin).toEqual([]);
   }, 8000);
 
   it("overlay control rides the same audited commands (v3 T4): show on toggle, corner picker persists", async () => {
@@ -162,20 +169,21 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     expect(localStorage.getItem("compy_overlay_corner")).toBe("bottom-right");
   });
 
-  it("content-equal polls keep the ribbon's samples REFERENCE stable (idle-canvas bug→guard, self-review round-1 catch)", async () => {
+  it("content-equal polls keep the waterfall's ftWin REFERENCE stable (idle-canvas bug→guard, v3 self-review round-1 catch)", async () => {
     // Every poll deserializes a FRESH but value-identical window — exactly what the real
-    // 1 Hz get_fps_status does when no new frames landed. The ribbon must receive the SAME
-    // array reference each time, or demand-mode r3f rebuilds + repaints every second.
+    // 1 Hz get_fps_status does when no new frames landed. The waterfall must receive the
+    // SAME array reference each time, or its draw effect repaints the canvas every second.
     mockPolls(() => ({
       ...liveFps,
       sample: { ...liveFps.sample, recent_frametimes_ms: [...liveFps.sample.recent_frametimes_ms] },
     }));
     mount();
-    await screen.findByTestId("frametime-ribbon");
-    await waitFor(() => expect(ribbonWindows.length).toBeGreaterThanOrEqual(3), {
-      timeout: 4000,
-    });
-    expect(new Set(ribbonWindows).size).toBe(1);
+    await screen.findByTestId("session-waterfall");
+    await waitFor(
+      () => expect(waterfallProps.filter((p) => p.ftWin.length > 0).length).toBeGreaterThanOrEqual(3),
+      { timeout: 4000 },
+    );
+    expect(new Set(waterfallProps.filter((p) => p.ftWin.length > 0).map((p) => p.ftWin)).size).toBe(1);
   }, 8000);
 
   it("capture ON mirrors up via onFpsActive (c)", async () => {

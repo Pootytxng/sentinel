@@ -81,6 +81,11 @@ export type SessionSummary = {
     display: string;
   } | null;
   stutter_insight?: string | null;
+  /** Per-second (elapsed_secs, 1%-low fps) pairs — serde tuples; kept for the most-recent 5
+   *  sessions only, stripped (empty) for older ones (sessions.rs). */
+  stutter_timeline?: [number, number][];
+  /** Timestamped signals observed during the session (stutter.rs StutterEvent). */
+  stutter_events?: { at_secs: number; kind: string; label: string }[];
 };
 
 // Recommendation provenance — the honesty level of a rec's IMPACT claim.

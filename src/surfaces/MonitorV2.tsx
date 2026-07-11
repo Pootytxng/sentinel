@@ -190,6 +190,7 @@ export function MonitorV2(props: Props) {
             active={props.active}
             vendor={props.vendor ?? "any"}
             mode="advanced"
+            sessions={props.sessions}
             onFpsActive={setCapturing}
           />
         ) : (

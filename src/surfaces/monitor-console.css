@@ -18,11 +18,42 @@
 :root[data-v2="on"] .mc-ov-corner:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
 :root[data-v2="on"] .mc-ov-corner-on { border-color: var(--ix-accent); color: var(--ix-accent); }
 
-:root[data-v2="on"] .mc-ribbon { height: 260px; border: 1px solid var(--ix-glass-border); min-width: 0; }
-:root[data-v2="on"] .mc-ribbon canvas { display: block; }
-:root[data-v2="on"] .mc-ribbon-loading { height: 100%; display: grid; place-items: center;
-  font-family: var(--ix-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--ix-text-3); }
+/* ── Session Waterfall (v4 hero) — 2D canvas depth stack; token inks only. The front trace is
+   flat + axis-anchored; depth is presentational offset BEHIND it (the v3 root lesson). ── */
+:root[data-v2="on"] .sw { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+:root[data-v2="on"] .sw-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+:root[data-v2="on"] .sw-modes { display: inline-flex; border: 1px solid var(--ix-glass-border); }
+:root[data-v2="on"] .sw-mode-btn { font-family: var(--ix-mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; padding: 4px 12px; cursor: pointer; background: transparent;
+  color: var(--ix-text-2); border: 0; }
+:root[data-v2="on"] .sw-mode-btn:hover { color: var(--ix-text-1); }
+:root[data-v2="on"] .sw-mode-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
+:root[data-v2="on"] .sw-samegame, :root[data-v2="on"] .sw-zoomreset { font-family: var(--ix-mono);
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 4px 10px; cursor: pointer;
+  background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
+:root[data-v2="on"] .sw-samegame:hover, :root[data-v2="on"] .sw-zoomreset:hover {
+  border-color: var(--ix-accent); color: var(--ix-text-1); }
+:root[data-v2="on"] .sw-samegame-on { border-color: var(--ix-accent); color: var(--ix-accent); }
+:root[data-v2="on"] .sw-axis { margin-left: auto; font-family: var(--ix-mono); font-size: 9px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-3);
+  font-variant-numeric: tabular-nums; }
+:root[data-v2="on"] .sw-stage { position: relative; height: 280px; border: 1px solid var(--ix-glass-border);
+  min-width: 0; overflow: hidden; }
+:root[data-v2="on"] .sw-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+:root[data-v2="on"] .sw[data-mode="live"] .sw-canvas { cursor: crosshair; }
+:root[data-v2="on"] .sw-layer-label { position: absolute; font-family: var(--ix-mono); font-size: 9px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ix-text-3); background: transparent;
+  border: 0; padding: 1px 4px; cursor: pointer; white-space: nowrap; text-align: left; }
+:root[data-v2="on"] .sw-layer-label:hover, :root[data-v2="on"] .sw-layer-label-on { color: var(--ix-text-1); }
+:root[data-v2="on"] .sw-compy-tag { margin-left: 8px; color: var(--ix-accent); opacity: .85; }
+:root[data-v2="on"] .sw-empty { position: absolute; inset: 0; display: grid; place-items: center;
+  margin: 0; font-family: var(--ix-mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ix-text-3); padding: 0 24px; text-align: center; }
+:root[data-v2="on"] .sw-readout { min-height: 16px; font-family: var(--ix-mono); font-size: 11px;
+  letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
+:root[data-v2="on"] .sw-scrub { color: var(--ix-text-1); }
+:root[data-v2="on"] .sw-delta b { font-weight: 600; color: var(--ix-text-1); }
+:root[data-v2="on"] .sw-hint { color: var(--ix-text-3); }
 
 :root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px;
   padding: 16px; border: 1px solid var(--ix-glass-border); }
