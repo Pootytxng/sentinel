@@ -46,7 +46,7 @@ instantly. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-
 Approved and **shipped default-ON** (`bce72d6` live): Home now opens as the console for everyone;
 Settings → Appearance → "Home console" OFF restores the classic Home instantly (the failsafe).
 
-### A5. Monitor console — pick the round-3 concept  ·  ⏳ OPEN (updated 2026-07-11: v4 round-2 verdict landed = not working out)
+### A5. Monitor console — eyeball the v5 "Flight Deck + Session Stack" build  ·  ⏳ OPEN (updated 2026-07-11: v5 SHIPPED `960734c`, flag OFF — your look is the gate)
 The chain so far: v2 cluster ("satisfactory") → v3 ribbon (rejected) → v4 waterfall round 1
 (rejected) → v4 rework round 2 → **your 2026-07-11 verdict: "doesnt seem to be working out like i
 presumed … maybe just re work the whole thing to something else thats more likely to be
@@ -59,8 +59,11 @@ MAX FPS-style terms, session comparison, overlay control, honest empties).
 - ~~Result → tell Claude: "A" / "B" / "C" / a combine~~ → ✅ **PICKED 2026-07-11: "A's top +
   B's stack"** ("ooooo ya i like the mockups"). Build plan:
   [`2026-07-11-monitor-v5-deck-stack.md`](superpowers/plans/2026-07-11-monitor-v5-deck-stack.md).
-  **Next thing on you here: the v5 eyeball once it ships** (same Settings → Appearance →
-  "Monitor console (preview)" toggle).
+- **→ v5 SHIPPED 2026-07-11 (`960734c`) — the eyeball is now on you:** your live app already has
+  it; flip Settings → Appearance → "Monitor console (preview)" and open Monitor. Top half = live
+  flight deck (hover the frametime graph to scrub exact frames, drag to zoom); bottom half = your
+  last 5 sessions as flat rows on one shared axis (your real Sand/Marvel/Palworld history is
+  already in there — click a row for its detail). Verdict → tell Claude looks-good / what's off.
 
 ---
 

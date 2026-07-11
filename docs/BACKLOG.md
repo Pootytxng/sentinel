@@ -161,6 +161,26 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-11d — ✅ MONITOR v5 "FLIGHT DECK + SESSION STACK" BUILT + SHIPPED `960734c` (flag OFF) — owner eyeball = the open gate
+
+**The 2026-07-11c resume ran to completion:** v5 built from
+`docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md`, T1→T5 TDD, one commit each
+(`d06a63c` pure data `monitor-stack-profile.ts` 33-test truth-table · `69c8f90` `SessionStack`
+small multiples · `255a400` Flight Deck assembly — `DeckScope` scrub/drag-zoom port onto the
+frametime Oscilloscope, session-scoped delta row, stack replaces the shelf, **SessionWaterfall +
+`waterfall-profile` deleted**, no mode toggle · `0c68553` height/motion polish · `960734c`
+recorded-span coverage fix). Self-review on REAL 5-session data (the law the v4 rejection wrote):
+round 1 **FAIL** — the 10.5 h Sand session's backend-capped timeline (~2 h recorded) drew as a
+sliver (x normalized to `duration_secs`, a shape no fixture exercised); fix = rows draw the
+RECORDED span + "first 2h 0m recorded" stated on the row + detail line, pins anchor only inside
+coverage, guard-pinned in the profile + stack suites → round 2 **PASS 8/8**. Ship: installer
+`A4D3BF98…D147E0`, silent-reinstalled, **stamp-verified `960734c` live**, one installer on the
+Desktop. Verify: tsc 0 · vitest 1305 (165 files) · cargo 688. Flag `compy_monitor_console`
+**DEFAULT OFF** (flag-off byte-identity re-pinned both `compy_editorial` states).
+- **⏳ GATE: owner eyeball of v5** — Settings → Appearance → "Monitor console (preview)", both
+  modes; the stack half shines with his real 5-session history on screen. Phase 4 (Blackbook
+  console) still queues behind this verdict.
+
 ### Cycle 2026-07-11c — ❌ MONITOR v4 ROUND-2 VERDICT: "not working out" → CONCEPT ROUND 3 OUT (mockup-first, owner pick pending)
 
 **Owner round-2 eyeball on the `915cb96` rework (verbatim, retained in UI_VISION §A0 item 2):**
@@ -180,11 +200,9 @@ combine flagged (A's top + B's stack). Same simulated feed across all three, lab
 OWNER_ACTION_CHECKLIST §A5 updated to the pick.
 - ~~⏳ GATE: owner picks A / B / C / combine~~ → **✅ PICKED same day (owner, 2026-07-11):
   "A's top + B's stack"** (mockups verdict: "ooooo ya i like the mockups you sent me").
-  **⛳ RESUME (next train, FRESH session): build Monitor v5 "Flight Deck + Session Stack" from
-  `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md`** — entry gate CLEARED; same flag
-  `compy_monitor_console` DEFAULT OFF; one face, two halves (live deck + flat same-axis session
-  stack), NO mode toggle, SessionWaterfall DELETED in T3; zero new IPC, zero src-tauri.
-  Phase 4 (Blackbook console) still queues behind the Monitor verdict chain.
+  ~~**⛳ RESUME (next train, FRESH session): build Monitor v5 "Flight Deck + Session Stack" from
+  `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md`**~~ → ✅ **RAN — see Cycle
+  2026-07-11d** (built + shipped `960734c`, flag OFF, owner eyeball open).
 
 ### Cycle 2026-07-11b — ✅ DEAD-SURFACE HYGIENE TRAIN (`eb5e62a`+`4a9a6ed`+`257ab32`) — the 2026-07-10j logged candidate executed; Monitor v4 eyeball still the open gate
 

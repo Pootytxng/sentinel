@@ -10,6 +10,30 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (Monitor v5 "FLIGHT DECK + SESSION STACK" SHIPPED `960734c` — installer
+> SHA-256 `A4D3BF98DCE1CF57740C9163CF4393F5F7499168946630EA485D974706D147E0`, live exe
+> stamp-verified `960734c` (embedded-hash proof), installed by Claude, supersedes the
+> `C2E0FF70…3E90238` installer; flag `compy_monitor_console` still **DEFAULT OFF**):** the owner's
+> round-3 pick **"A's top + B's stack"** built per plan
+> `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md` (T1–T5: `d06a63c` pure data ·
+> `69c8f90` SessionStack · `255a400` Flight Deck assembly · `0c68553` polish · `960734c`
+> coverage fix). ONE face, two halves, NO mode toggle: **Flight Deck** (consumer readouts ·
+> `DeckScope` full-width frametime hero w/ hover scrub + nested drag-zoom + stated ms-span/budget
+> · session-scoped plain-number delta row, cross-game labeled "(DIFFERENT GAME)", changes-on tag)
+> + **Session Stack** (last ≤5 sessions as flat rows on ONE shared 1%-low axis, ONE worst-dip pin
+> w/ exact clock time per row, VS PREVIOUS chips, current-game filter, expand-detail). The v4
+> **SessionWaterfall + `waterfall-profile` are DELETED** (Now/Compare toggle gone; surviving
+> guards re-anchored in `monitor-stack-profile.test.ts` / `session-stack.test.tsx` /
+> `deck-scope.test.tsx`). Self-review round 1 **FAIL — the real-density law caught a real one**:
+> the 10.5 h Sand session's timeline (backend-capped at ~2 h) drew as a sliver because row x
+> normalized to `duration_secs`; fixed (`960734c`: rows draw the RECORDED span, partial coverage
+> STATED — "first 2h 0m recorded" + detail-line note, pins only anchor inside coverage) +
+> guard-pinned (coverage<<duration truth-table the old fixtures never exercised) → round 2
+> **PASS 8/8 on the real 5-session data**. Flag-off byte-identity re-pinned BOTH
+> `compy_editorial` states (`monitor-console-flag.test.tsx`). Verify: tsc 0 · vitest **1305**
+> (165 files) · cargo **688**. **⏳ OWNER eyeball is the open gate** — Settings → Appearance →
+> "Monitor console (preview)", both modes.
+>
 > **UPDATE 2026-07-11 (v4 waterfall READABILITY REWORK SHIPPED `915cb96` — installer SHA-256
 > `C2E0FF709DDF65256E757E2D3903CCA133207DEB614B2C59A6AE5666C3E90238`, live exe stamp-verified
 > `915cb96` (embedded-hash proof), installed by Claude, supersedes the `44610BF6…D370A30`

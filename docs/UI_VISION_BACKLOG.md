@@ -113,6 +113,19 @@ full response ive written here seeing how things seem to get lost in translation
    Build plan: `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md` (v5 "Flight Deck +
    Session Stack" — one face, two halves, no mode toggle, waterfall deleted; builds in a FRESH
    session).
+   **→ v5 BUILT + SHIPPED 2026-07-11 (`960734c`, installer `A4D3BF98…D147E0`, stamp-verified
+   live; flag `compy_monitor_console` still DEFAULT OFF):** the picked combine as specified —
+   Flight Deck top (readout strip · full-width frametime scope hero with hover scrub + drag-zoom
+   ported from the waterfall's front trace · session-scoped plain-number delta row w/ cross-game
+   "(DIFFERENT GAME)" labeling + changes-on tag) + Session Stack below (≤5 flat rows on ONE
+   shared 1%-low axis, ONE worst-dip pin w/ exact clock time per row, VS PREVIOUS chips,
+   current-game filter, click-to-expand detail; the stack IS the session shelf, both modes).
+   SessionWaterfall + Now/Compare toggle DELETED; chain law held (flat 2D, no depth over data
+   ink). Self-review on the REAL 5-session history: round 1 FAIL — the real-density law caught
+   the 10.5 h Sand session's backend-capped timeline (~2 h recorded) drawing as a sliver; fixed
+   (rows draw the RECORDED span; partial coverage stated on-row: "first 2h 0m recorded") +
+   guard-pinned → round 2 PASS 8/8. **⏳ OWNER eyeball of v5 is the open gate** (Settings →
+   Appearance → "Monitor console (preview)").
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
