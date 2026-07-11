@@ -22,6 +22,56 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
+### A0. Monitor console v3 — "up the ante" rework (owner, 2026-07-10, post-Phase-3 ship) 🔴 OPEN
+
+**Owner's FULL response, retained verbatim at his explicit request** ("please be sure to retain the
+full response ive written here seeing how things seem to get lost in translation in the past"):
+
+> so is the overlay just not in the current build yet for me to view also? and to be honest i sort
+> of liked how it looked before but this one also is satisfactory. so i wonder if there is a way to
+> up the ante and improve or rework for a 3rd option for how it can look that will surpass the
+> satisfactory rating. i think graphs are a muust or some sort of measurable finite detail because
+> when measuring frametime latency spikes its important to see the exact moment indicator for the
+> "spike" also just a side note for the current frametime graph in the preview it doesnt seem to
+> stretch along the whole grid on the graph it just stops short about halfway whereas the fps graph
+> is the full length. just something to note when remaking the next one. and as for the self review
+> negating any form of 3d or parralax style telemetry. unless there is a specific reason for that i
+> think the stuff thats been most appealing and on par with the design direction has been due to
+> the enabling of that sort of stuff so it shouldnt be ruled out as an option unless reasonably so.
+> also note that for the wording between visual fidelity, smooth or clarity. i think more consumer
+> interest targeted terms would be better such as "MAX FPS" "Lowest latency" "HIGH RESOLUTION" ARE
+> MORE POPULAR SOUGHT AFTER TERMS IN THIS MARKET. please be sure to retain the full response ive
+> written here seeing how things seem to get lost in translation in the past probably due to the
+> length of my response or whatever reason.
+
+**Decomposed (each its own tracked item — none may be silently dropped or substituted):**
+
+1. **Overlay controls missing on the console face** — with "Monitor console (preview)" ON, the
+   in-game overlay's controls (which live on the classic Advanced → Live face) are hidden. The
+   overlay itself IS in the build, unchanged. Fix: the console face gets the overlay control
+   (same audited show/hide/corner commands, not forked). Rides the v3 train.
+2. **v3 rework — surpass "satisfactory":** classic tiles = liked; Phase-3 instrument cluster =
+   satisfactory; he wants a third option that beats both. Per the per-tab signature law the v3
+   concept is spitballed with him BEFORE building (concept check gates the phase).
+3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
+   frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
+   an average). This is a hard requirement for v3, not a nice-to-have.
+4. **Bug (fold into v3): frametime trace stops ~halfway across the grid** while the fps trace runs
+   full length. Cause: `Oscilloscope` scales x to the fixed `cap` (240), but the backend window
+   carries fewer samples at sub-240 fps → partial width. v3: scale to the drawn window so the
+   trace always spans the grid.
+5. **3D / parallax telemetry is BACK ON THE TABLE (direction amendment):** the "NO hologram / NO
+   parallax" line in the Monitor concept (direction spec 2026-07-09, Monitor row + Phase-3 plan)
+   is NOT a standing ban. Owner: the 3D/parallax layer is what's felt most appealing and on-par
+   with the direction — don't rule it out "unless reasonably so" (a stated, specific reason).
+   Fold this amendment into the direction spec with the v3 train.
+6. **Copy direction (app-wide, not just Monitor): consumer-market terms** — prefer "MAX FPS",
+   "Lowest latency", "HIGH RESOLUTION" over abstract wording like "visual fidelity / smooth /
+   clarity". These are the sought-after terms in this market. Honesty laws unchanged — the terms
+   label MEASURED values, never fabricate claims.
+7. **Process note (standing):** long owner responses have lost parts in translation before —
+   retain them verbatim here and decompose every part ([[decompose-owner-lists-atomic-todos]]).
+
 ### A. The JARVIS interaction / motion layer — his ranked effect plan, NEVER BUILT
 Source: `docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md:111-176`. The de-slop
 directive's redesign lane is marked "COMPLETE," but that only covered the **Instrument-HUD reskin**.
