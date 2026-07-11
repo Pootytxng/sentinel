@@ -182,6 +182,14 @@ Desktop. Verify: tsc 0 · vitest 1305 (165 files) · cargo 688. Flag `compy_moni
   Fritsch–Carlson curves + round joins on stack rows (every real sample kept, dips keep true
   depth — pin-on-minimum verified), round joins on the scope SVG traces; guard-pinned; vitest
   1306 · self-review PASS. RELEASE_STATE row `204d901`.
+- **Owner quick-fix ask on the eyeball ("lines need to just be sharpened and sleek no added
+  bloom or saturation/thickness") → SHIPPED `f2acb23`** (installer `05399D9D…EA7B7459`,
+  stamp-verified live): scope trace glow DELETED (the drop-shadow bloomed theme violet around
+  graded ink), all scope strokes `vector-effect: non-scaling-stroke` (the stretched viewBox no
+  longer fattens them), trace 1.25px, ink/hue untouched; bug→guard "line discipline" pin in
+  `oscilloscope.test.tsx`. tsc 0 · vitest 1307 · self-reviewer PASS 8/8. Same session,
+  `a4c95df`: RELEASE_STATE Snapshot table caught up to the live-installer chain (was two
+  installers stale; drift script 36/36).
 - **⏳ GATE: owner eyeball of v5** — Settings → Appearance → "Monitor console (preview)", both
   modes; the stack half shines with his real 5-session history on screen. Phase 4 (Blackbook
   console) still queues behind this verdict.

@@ -10,6 +10,19 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (v5 scope-line sharpening SHIPPED `f2acb23` — installer SHA-256
+> `05399D9DE7B2601EC2080CADA2036351DC52D3946C4C3372A99F5290EA7B7459`, live exe stamp-verified
+> `f2acb23`, installed by Claude, supersedes the `5AE1ED22…C7821236` installer; flag
+> `compy_monitor_console` still **DEFAULT OFF**):** owner quick-fix on the v5 eyeball ("lines
+> need to just be sharpened and sleek no added bloom or saturation/thickness") — the Oscilloscope
+> trace glow (drop-shadow of `--ix-accent-dim`, theme violet blooming around graded ink) is
+> DELETED; every scope stroke wears `vector-effect: non-scaling-stroke` (the stretched viewBox
+> no longer fattens strokes); trace 1.5→1.25px, ink/hue untouched. bug→guard "line discipline"
+> test in `oscilloscope.test.tsx` (no drop-shadow declaration in live CSS · non-scaling-stroke
+> present · trace ≤1.5px). Verify: tsc 0 · vitest **1307** (165 files) · self-reviewer **PASS
+> 8/8** (computed `filter: none` both motion states on a live mount, zoomed crops halo-free).
+> **⏳ OWNER eyeball of v5 still the open gate.**
+>
 > **UPDATE 2026-07-11 (v5 trace-line refinement SHIPPED `e900b6a` — installer SHA-256
 > `5AE1ED22BD308C4C877EF7D71155A65B77028736B7193C55E9197656C7821236`, live exe stamp-verified
 > `e900b6a`, installed by Claude, supersedes the `A4D3BF98…D147E0` installer; flag
@@ -258,9 +271,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `8f295d7` (branch `main`, 2026-07-11 — the live installer is built from exactly `e900b6a`; the commits above it, `204d901`/`8f295d7`, are docs-only) |
+| Git HEAD | `f2acb23` + this ship-docs commit (branch `main`, 2026-07-11 — the live installer is built from exactly `f2acb23`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `5AE1ED22BD308C4C877EF7D71155A65B77028736B7193C55E9197656C7821236` (built from `e900b6a`, 2026-07-11 — **Monitor v5 "Flight Deck + Session Stack"** + the same-day trace-line refinement (monotone Fritsch–Carlson curves, round joins); the v4 SessionWaterfall + `waterfall-profile` are DELETED; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: ONE face, no mode toggle — Flight Deck (consumer readouts · `DeckScope` frametime hero w/ hover scrub + drag-zoom · session-scoped delta row) + Session Stack (last ≤5 sessions on ONE shared 1%-low axis, recorded-span coverage stated, worst-dip pin w/ clock time, VS PREVIOUS chips), all over the SAME 1 Hz read-only polls, zero new IPC. Consumer-terms presets from `33661b8` and Home console DEFAULT ON from `bce72d6` unchanged. Hash re-verified against the one Desktop installer 2026-07-11. Superseded installer: `A4D3BF98…D147E0` from `960734c`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `05399D9DE7B2601EC2080CADA2036351DC52D3946C4C3372A99F5290EA7B7459` (built from `f2acb23`, 2026-07-11 — **Monitor v5 "Flight Deck + Session Stack"** + the same-day trace-line refinement (monotone Fritsch–Carlson curves, round joins) + the scope-line sharpening (trace glow deleted, non-scaling 1.25px strokes); the v4 SessionWaterfall + `waterfall-profile` are DELETED; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: ONE face, no mode toggle — Flight Deck (consumer readouts · `DeckScope` frametime hero w/ hover scrub + drag-zoom · session-scoped delta row) + Session Stack (last ≤5 sessions on ONE shared 1%-low axis, recorded-span coverage stated, worst-dip pin w/ clock time, VS PREVIOUS chips), all over the SAME 1 Hz read-only polls, zero new IPC. Consumer-terms presets from `33661b8` and Home console DEFAULT ON from `bce72d6` unchanged. Superseded installer: `5AE1ED22…C7821236` from `e900b6a`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
