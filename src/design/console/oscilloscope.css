@@ -12,7 +12,8 @@
 :root[data-v2="on"] .osc-stage { position: relative; border: 1px solid var(--ix-glass-border); min-height: 64px; }
 :root[data-v2="on"] .osc-grid { display: block; width: 100%; height: 64px; }
 :root[data-v2="on"] .osc-gridline { stroke: var(--ix-text-3); stroke-width: .5; opacity: .25; }
-:root[data-v2="on"] .osc-trace { stroke: var(--ix-accent); stroke-width: 1.5; }
+:root[data-v2="on"] .osc-trace { stroke: var(--ix-accent); stroke-width: 1.5;
+  stroke-linejoin: round; stroke-linecap: round; }
 :root[data-v2="on"] .osc-warn .osc-trace { stroke: var(--v2-warn); }
 :root[data-v2="on"] .osc-good .osc-trace { stroke: var(--ready); }
 :root[data-v2="on"] .osc-neutral .osc-trace { stroke: var(--ix-text-2); }

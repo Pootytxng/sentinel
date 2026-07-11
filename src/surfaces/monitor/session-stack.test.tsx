@@ -21,6 +21,7 @@ const ctx2d = {
   beginPath: vi.fn(),
   moveTo: vi.fn(),
   lineTo: vi.fn(),
+  bezierCurveTo: vi.fn(),
   stroke: vi.fn(),
   fill: vi.fn(),
   closePath: vi.fn(),
@@ -31,6 +32,8 @@ const ctx2d = {
   strokeStyle: "",
   fillStyle: "",
   lineWidth: 1,
+  lineJoin: "" as CanvasLineJoin,
+  lineCap: "" as CanvasLineCap,
 };
 
 beforeEach(() => {
@@ -299,5 +302,16 @@ describe("idle repaint guard (g) + header-slop law (h)", () => {
   it("no headings or lede strips inside the stack subtree", () => {
     const { container } = mount([sess(), sess()]);
     expect(container.querySelectorAll("h1, h2, h3").length).toBe(0);
+  });
+});
+
+describe("trace refinement (owner ask 2026-07-11: clean up the line)", () => {
+  it("rows draw a smoothed monotone curve with round joins — through the REAL samples", () => {
+    mount([sess()]);
+    // Monotone cubic segments (never a raw sawtooth polyline for the trace)…
+    expect(ctx2d.bezierCurveTo.mock.calls.length).toBeGreaterThan(0);
+    // …with round joins/caps so corners never render as spikes of their own.
+    expect(ctx2d.lineJoin).toBe("round");
+    expect(ctx2d.lineCap).toBe("round");
   });
 });
