@@ -320,7 +320,7 @@ describe("A's drag-to-segment on the front trace (f)", () => {
   });
 });
 
-describe("tilt is pointer-driven only; reduced ⇒ dead (g)", () => {
+describe("tilt is pointer-driven only; empty scenes never repaint (g)", () => {
   it("reduced: a bare pointer move over an empty scene causes no repaint", () => {
     const { container } = mount({ live: false, ftWin: [], sessions: [], reduced: true });
     fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
@@ -331,12 +331,78 @@ describe("tilt is pointer-driven only; reduced ⇒ dead (g)", () => {
     expect(ctx2d.calls.clearRect).toBe(before);
   });
 
-  it("full motion: the same move tilts (repaints) — motion only on pointer", () => {
+  it("FULL motion over an empty LIVE scene also stays paint-free (self-review round-1 catch)", () => {
     const { container } = mount({ live: false, ftWin: [], sessions: [], reduced: false });
-    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
+    const before = ctx2d.calls.clearRect;
+    const canvas = container.querySelector(".sw-canvas")!;
+    fireEvent.pointerMove(canvas, { clientX: 200, clientY: 100 });
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 100 });
+    expect(ctx2d.calls.clearRect).toBe(before);
+  });
+
+  it("full motion + depth layers: the same move tilts (repaints) — motion only on pointer", () => {
+    const { container } = mount({
+      live: false,
+      ftWin: [],
+      sessions: [sess(), sess({ process_name: "palworld.exe" })],
+      reduced: false,
+    });
     const before = ctx2d.calls.clearRect;
     const canvas = container.querySelector(".sw-canvas")!;
     fireEvent.pointerMove(canvas, { clientX: 200, clientY: 100 });
     expect(ctx2d.calls.clearRect).toBeGreaterThan(before);
+  });
+});
+
+describe("legend + delta annotation (self-review round-1 catches, bug→guard)", () => {
+  it("5 layers with long names all render as stacked legend rows (no per-layer positioning)", () => {
+    const games = [
+      "sand-a-superbly-long-title.exe",
+      "cyberpunk2077.exe",
+      "microsoftflightsimulator.exe",
+      "valorant.exe",
+      "escapefromtarkov.exe",
+    ];
+    const { container } = mount({
+      live: false,
+      ftWin: [],
+      sessions: games.map((g) => sess({ process_name: g, compy_changes_active: 12 })),
+    });
+    const legend = container.querySelector(".sw-legend")!;
+    expect(legend).not.toBeNull();
+    const rows = legend.querySelectorAll(".sw-layer-label");
+    expect(rows).toHaveLength(5);
+    // Rows are flow-stacked — none carries inline positioning that could collide.
+    for (const r of rows) expect(r.getAttribute("style")).toBeNull();
+  });
+
+  it("cross-game delta is LABELED, never a bare number that reads as a regression", () => {
+    const { container } = mount({
+      live: false,
+      ftWin: [],
+      sessions: [
+        sess({ process_name: "valorant.exe", avg_fps: 240 }),
+        sess({ process_name: "cyberpunk2077.exe", avg_fps: 90, low1_fps_est: 65 }),
+      ],
+    });
+    const delta = container.querySelector(".sw-delta")!;
+    expect(delta.textContent).toContain("DIFFERENT GAME");
+    expect(delta.textContent).toContain("cyberpunk2077".toUpperCase());
+  });
+
+  it("a same-game prior is preferred over a nearer different-game session", () => {
+    const { container } = mount({
+      live: false,
+      ftWin: [],
+      sessions: [
+        sess({ avg_fps: 247, low1_fps_est: 194 }),
+        sess({ process_name: "palworld.exe", avg_fps: 90 }),
+        sess(), // the front's own game, further back
+      ],
+    });
+    const delta = container.querySelector(".sw-delta")!;
+    expect(delta.textContent).toContain("VS PREV VALORANT");
+    expect(delta.textContent).not.toContain("DIFFERENT GAME");
+    expect(delta.textContent).toContain("+7");
   });
 });

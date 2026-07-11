@@ -188,6 +188,24 @@ export function fmtDelta(v: number | null): string {
   return r > 0 ? `+${r}` : r < 0 ? `${r}` : "±0";
 }
 
+export type ComparablePrev = { prev: SessionLayer | null; sameGame: boolean };
+
+/** The delta strip's other side: the most recent OLDER layer of the front's OWN game when one
+ *  exists (THE comparison a user wants); otherwise the plain previous layer, flagged so the
+ *  strip can say "different game" instead of letting a genre gap read as a regression
+ *  (self-review round-1 catch). */
+export function comparablePrev(layers: SessionLayer[]): ComparablePrev {
+  const front = layers[0];
+  if (!front || layers.length < 2) return { prev: null, sameGame: false };
+  const name = front.session.process_name;
+  if (name) {
+    for (let i = 1; i < layers.length; i++) {
+      if (layers[i].session.process_name === name) return { prev: layers[i], sameGame: true };
+    }
+  }
+  return { prev: layers[1], sameGame: false };
+}
+
 /** True when a same-game comparison exists: ≥2 layers share a process_name. */
 export function sameGameAvailable(layers: SessionLayer[]): boolean {
   const seen = new Set<string>();

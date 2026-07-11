@@ -14,6 +14,7 @@ import {
   sessionsScene,
   sessionDelta,
   fmtDelta,
+  comparablePrev,
   sameGameAvailable,
   filterSameGame,
   relativeDay,
@@ -301,8 +302,12 @@ export function SessionWaterfall({
   const onPointerMove = (e: React.PointerEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // Nothing drawn ⇒ a bare pointer move must not repaint (self-review round-1 catch:
+    // hovering an empty stage re-fired the draw effect, even under reduced motion).
+    if (orderedGeoms.length === 0) return;
     const r = canvas.getBoundingClientRect();
-    if (!reduced && r.width > 0) {
+    // Tilt is presentational depth offset — it only exists when depth layers exist.
+    if (!reduced && r.width > 0 && orderedGeoms.length > 1) {
       setTilt(((e.clientX - r.left) / r.width - 0.5) * 2);
     }
     if (mode === "live") {
@@ -370,10 +375,16 @@ export function SessionWaterfall({
     }
   }
 
-  // SESSIONS delta strip: front vs the previous comparable session (em-dash when absent).
+  // SESSIONS delta strip: front vs the previous COMPARABLE session — same game when one
+  // exists; a cross-game fallback is labeled so a genre gap never reads as a regression.
   const front = layers[0]?.session ?? null;
-  const prev = layers[1]?.session ?? null;
-  const delta = sessionDelta(front, prev);
+  const cmp = comparablePrev(layers);
+  const delta = sessionDelta(front, cmp.prev?.session ?? null);
+  const deltaVs = cmp.prev
+    ? cmp.sameGame
+      ? `VS PREV ${(prettyGameName(cmp.prev.session.process_name) || "unknown game").toUpperCase()}`
+      : `VS ${(prettyGameName(cmp.prev.session.process_name) || "unknown game").toUpperCase()} (DIFFERENT GAME)`
+    : null;
   const hovered = hoverLayer != null ? layers[hoverLayer] : null;
 
   const layerLabel = (s: SessionSummary) => {
@@ -441,17 +452,17 @@ export function SessionWaterfall({
           onDoubleClick={onDoubleClick}
         />
 
-        {/* SESSIONS layer labels — mono micro-label at each layer's left edge. */}
-        {mode === "sessions" &&
-          sScene &&
-          layers.map((l, i) => {
-            const t = transformFor(i, size.w, size.h, 0, depthCount);
-            return (
+        {/* SESSIONS layer legend — a stacked column (front layer first) that can NEVER
+            overlap, whatever the layer count or game-name length (self-review round-1 catch:
+            per-layer absolute offsets collided at the real 5-session history). Hovering a row
+            lifts its layer on the canvas — that hover IS the row↔layer association. */}
+        {mode === "sessions" && sScene && (
+          <div className="sw-legend">
+            {layers.map((l, i) => (
               <button
                 type="button"
                 key={`${l.session.started_at}-${i}`}
                 className={`sw-layer-label ${hoverLayer === i ? "sw-layer-label-on" : ""}`}
-                style={{ top: `${Math.max(2, t.baseY - 16)}px`, left: `${Math.max(2, px(t, size.w, 0))}px` }}
                 onMouseEnter={() => setHoverLayer(i)}
                 onMouseLeave={() => setHoverLayer(null)}
                 onFocus={() => setHoverLayer(i)}
@@ -465,8 +476,9 @@ export function SessionWaterfall({
                   </span>
                 )}
               </button>
-            );
-          })}
+            ))}
+          </div>
+        )}
 
         {/* Honest empties — nothing measured, nothing drawn. */}
         {mode === "live" && !lScene && (
@@ -495,9 +507,9 @@ export function SessionWaterfall({
             {hovered.events.length === 1 ? "dip" : "dips"}
             {hovered.events.length > 0 && ` — ${hovered.events[0].label}`}
           </span>
-        ) : sScene && layers.length >= 2 ? (
+        ) : sScene && layers.length >= 2 && deltaVs ? (
           <span className="sw-delta">
-            VS PREV · AVG FPS <b>{fmtDelta(delta.avgFps)}</b> · 1% LOW <b>{fmtDelta(delta.low1)}</b>
+            {deltaVs} · AVG FPS <b>{fmtDelta(delta.avgFps)}</b> · 1% LOW <b>{fmtDelta(delta.low1)}</b>
           </span>
         ) : sScene ? (
           <span className="sw-hint">one more session unlocks comparison</span>

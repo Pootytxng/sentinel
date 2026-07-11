@@ -179,8 +179,11 @@ export function MonitorConsole({
               ftWin.current = next;
             }
           } else if (!f.active) {
-            fpsH.current = [];
-            ftWin.current = [];
+            // Idempotent reset (v4 self-review round-1 catch): a fresh [] every idle tick is a
+            // NEW reference — it broke the content-stable contract below and repainted the
+            // waterfall canvas at 1 Hz while stopped. Reassign only on the actual transition.
+            if (fpsH.current.length !== 0) fpsH.current = [];
+            if (ftWin.current.length !== 0) ftWin.current = [];
           }
           setFps(f);
         })

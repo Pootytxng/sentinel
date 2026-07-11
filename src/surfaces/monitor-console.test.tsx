@@ -186,6 +186,18 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     expect(new Set(waterfallProps.filter((p) => p.ftWin.length > 0).map((p) => p.ftWin)).size).toBe(1);
   }, 8000);
 
+  it("idle STOPPED polls keep the cleared window reference stable too (v4 self-review round-1 catch)", async () => {
+    // The !active branch used to assign a fresh [] every 1 Hz tick — a new reference each
+    // second that repainted the waterfall canvas at rest. The reset must be idempotent.
+    mockPolls(() => ({ ...stoppedFps }));
+    mount();
+    await screen.findByTestId("session-waterfall");
+    await waitFor(() => expect(waterfallProps.length).toBeGreaterThanOrEqual(3), {
+      timeout: 4000,
+    });
+    expect(new Set(waterfallProps.map((p) => p.ftWin)).size).toBe(1);
+  }, 8000);
+
   it("capture ON mirrors up via onFpsActive (c)", async () => {
     mockPolls(() => liveFps);
     const { props } = mount();

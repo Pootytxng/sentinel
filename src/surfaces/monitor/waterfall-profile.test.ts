@@ -13,6 +13,7 @@ import {
   sessionsScene,
   sessionDelta,
   fmtDelta,
+  comparablePrev,
   sameGameAvailable,
   filterSameGame,
   relativeDay,
@@ -240,6 +241,35 @@ describe("sessionDelta / fmtDelta — em-dash, never a fabricated 0", () => {
   it("negative and zero deltas format honestly", () => {
     expect(fmtDelta(-3.4)).toBe("-3");
     expect(fmtDelta(0.2)).toBe("±0");
+  });
+});
+
+describe("comparablePrev — same game preferred, cross-game flagged (self-review round-1 catch)", () => {
+  const val1 = sess({ process_name: "valorant.exe", avg_fps: 240 });
+  const val2 = sess({ process_name: "valorant.exe", avg_fps: 230 });
+  const pal = sess({ process_name: "palworld.exe" });
+
+  it("skips a different-game neighbor to reach the front's own game", () => {
+    const cmp = comparablePrev(sessionLayers([val1, pal, val2]));
+    expect(cmp.sameGame).toBe(true);
+    expect(cmp.prev!.session.avg_fps).toBe(230);
+  });
+
+  it("no same-game prior → the plain previous layer, flagged cross-game", () => {
+    const cmp = comparablePrev(sessionLayers([val1, pal]));
+    expect(cmp.sameGame).toBe(false);
+    expect(cmp.prev!.session.process_name).toBe("palworld.exe");
+  });
+
+  it("fewer than 2 layers → no comparison at all", () => {
+    expect(comparablePrev(sessionLayers([val1]))).toEqual({ prev: null, sameGame: false });
+    expect(comparablePrev([])).toEqual({ prev: null, sameGame: false });
+  });
+
+  it("an anonymous front (no detected game) still gets the flagged fallback", () => {
+    const cmp = comparablePrev(sessionLayers([sess({ process_name: "" }), pal]));
+    expect(cmp.sameGame).toBe(false);
+    expect(cmp.prev!.session.process_name).toBe("palworld.exe");
   });
 });
 
