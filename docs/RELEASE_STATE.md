@@ -10,6 +10,31 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (Monitor v4 "SESSION WATERFALL" SHIPPED `85eb8c6` — installer SHA-256
+> `44610BF6F168E83741DD04A9EBD24D14A566EB2828238B1AFB67B0647D370A30`, live exe stamp-verified
+> `85eb8c6` (embedded-hash proof; owner queueing for a game, no CDP relaunch), installed by Claude
+> on the owner's go while between games, supersedes the `33661b8` installer; flag
+> `compy_monitor_console` still **DEFAULT OFF**):** the owner's concept-round-2 pick (B "Depth
+> Waterfall" + A's drag-segment, lean into previous-session comparison — verbatim in the plan) is
+> built as the console hero, replacing the REJECTED v3 ribbon (**FrametimeRibbon + ribbon-profile
+> DELETED**, r3f chunk gone from this face). `SessionWaterfall` (2D canvas, token inks): LIVE mode
+> (ms axis) = flat front scope + dashed budget + exact-moment spike pins + drag-zoom/double-click
+> reset + scrub readout, depth layers = receding snapshots of the SAME capture (cleared on stop,
+> never frozen-as-live); SESSIONS mode (1%-low fps axis) = the last ≤5 sessions' real
+> `stutter_timeline` layers, stacked legend labels, `stutter_events` dip pins with real labels,
+> delta strip vs the same-game prior ("VS PREV SAND"; cross-game fallback labeled "DIFFERENT
+> GAME"), same-game filter, "N COMPY CHANGES ON" context tag; honest empties throughout; units
+> never mix per scene. Zero new IPC, **zero src-tauri** (diff-verified empty; `SessionSummary` TS
+> type gained the timeline fields the backend already sent). Self-review round 1 **FAIL** (4 real
+> catches: idle stopped polls churned a fresh [] reference → 1 Hz canvas repaints at rest;
+> empty-scene hover repainted under reduced motion; legend overlap at the real 5-session history;
+> bare cross-game delta read as a −216 fps regression) → all fixed + bug→guard-pinned in `85eb8c6`
+> → round 2 **PASS 8/8** against real production data (idle 0 draws/12 s both modes). Verify:
+> tsc 0 · vitest **1315** (167 files) · flag-off byte-identity re-pinned BOTH `compy_editorial`
+> states (`monitor-console-flag.test.tsx`). **⏳ OWNER eyeball is the next gate** (Settings →
+> Appearance → "Monitor console (preview)", ideally mid-capture AND with ≥2 recorded sessions —
+> both modes; default-ON only on his verdict).
+>
 > **UPDATE 2026-07-10 (consumer-terms preset relabel SHIPPED `33661b8` — installer SHA-256
 > `7C1EC6891F37BC3515AC05DD27C7E72FD4D3E63C860EF086B7BA7806113BB888`, stamp-verified LIVE `33661b8`,
 > installed by Claude, supersedes the `6932fa7` installer):** UI_VISION §A0 item 6 closed — the
@@ -179,9 +204,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `33661b8` + this ship-docs commit (branch `main`, 2026-07-10 — the live installer is built from exactly `33661b8`) |
+| Git HEAD | `85eb8c6` + this ship-docs commit (branch `main`, 2026-07-11 — the live installer is built from exactly `85eb8c6`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `7C1EC6891F37BC3515AC05DD27C7E72FD4D3E63C860EF086B7BA7806113BB888` (built from `33661b8`, 2026-07-10 — **consumer-terms preset relabel** ("Max Quality" / "More FPS" / "Lower Latency", label-pinned) on top of Monitor v3 "Telemetry Ribbon"; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: 3D frametime ribbon hero + exact-moment spike markers + budget line + MAX FPS/AVG FPS/LOWEST LATENCY/SPIKES readouts + overlay control, all over the SAME 1 Hz read-only polls, zero new IPC. Home console stays DEFAULT ON from `bce72d6`. Superseded installer: `E9737D6E…32421E` from `6932fa7`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `44610BF6F168E83741DD04A9EBD24D14A566EB2828238B1AFB67B0647D370A30` (built from `85eb8c6`, 2026-07-11 — **Monitor v4 "Session Waterfall"** hero replaces the deleted v3 ribbon; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: SessionWaterfall LIVE (frametime scope + drag-zoom + receding same-capture snapshots) / SESSIONS (last ≤5 sessions' real timelines + delta strip + same-game filter + dip pins) + MAX FPS/AVG FPS/LOWEST LATENCY/SPIKES readouts + overlay control, all over the SAME 1 Hz read-only polls, zero new IPC. Consumer-terms presets from `33661b8` and Home console DEFAULT ON from `bce72d6` unchanged. Superseded installer: `7C1EC689…3BB888` from `33661b8`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 

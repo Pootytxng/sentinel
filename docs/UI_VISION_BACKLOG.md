@@ -75,6 +75,16 @@ full response ive written here seeing how things seem to get lost in translation
    scope + drag-zoom + receding same-capture snapshots · SESSIONS mode: the last ≤5 sessions' real
    `stutter_timeline` as depth layers, `stutter_events` dip pins, delta strip, same-game filter —
    zero new IPC). Builds in a FRESH session; ribbon deleted in its T4.
+   **→ v4 BUILT + SHIPPED 2026-07-11 (`85eb8c6`, installer `44610BF6…D370A30`, stamp-verified
+   live; flag `compy_monitor_console` still DEFAULT OFF):** all four decomposed asks present —
+   B depth waterfall (flat axis-anchored front, depth = presentational offset only), A drag-zoom
+   folded into the front trace, previous-session comparison leaned in (stacked legend labels ·
+   same-game-preferring delta strip with cross-game "DIFFERENT GAME" labeling · dip pins with
+   real labels · "N COMPY CHANGES ON" tag), 2D canvas replacing r3f. Ribbon DELETED. Self-review
+   round 1 FAIL (idle repaint churn · empty-scene repaint · legend overlap at the real 5-session
+   history · bare cross-game delta) → fixed + guard-pinned → round 2 PASS 8/8 on real production
+   data. **⏳ OWNER eyeball is the open gate** — Settings → Appearance → "Monitor console
+   (preview)", both modes, ideally mid-capture with ≥2 recorded sessions.
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
