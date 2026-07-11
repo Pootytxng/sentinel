@@ -161,6 +161,30 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-11b — ✅ DEAD-SURFACE HYGIENE TRAIN (`eb5e62a`+`4a9a6ed`+`257ab32`) — the 2026-07-10j logged candidate executed; Monitor v4 eyeball still the open gate
+
+**With every plain `[ ]` gated and Phase 4 entry-gated on the Monitor v4 round-2 eyeball, the next
+non-gated item was the logged dead-surface cleanup** (Cycle 2026-07-10j reviewer finding / UI_VISION
+§A.4 caveat). Verified then deleted: `CommandCenter`/`HomeV3`/`HardwareSection`/`OverviewTab`
+(unreachable under EVERY flag combo — `v2Shell` is unconditional once hw loads; CommandCenter was
+imported only by its own test) + their CSS/tests + the dead `.cc-*` blocks in shared CSS
+(`eb5e62a`). Cascade catch: the **ambient-backdrop subsystem was a lying control** — Settings'
+"Ambient backdrop" seg + "Step aside when I play" toggle had NO live consumer (only the deleted
+CommandCenter mounted `AmbientBackdrop`), i.e. two do-nothing Settings rows in the shipped app →
+both rows + `AmbientBackdrop` + the theme.ts ambiance/step-aside helpers removed (`4a9a6ed`;
+LivePreview keeps a fixed 3-streak theme preview; stale `compy_ambiance`/`compy_stepaside_game`
+localStorage keys simply go unread). Residue sweep `257ab32` (WindowChrome/dashboard-skin dead
+selectors, `cc-nav-ico`→`nav-ico`; live `cc-chip` namespace untouched). Kept deliberately:
+`CompyHero`+`readCommitted` (the parked `compy_committed` future-landing hero) · `HardwareGrid` /
+`command-center-data` (live in the Home consoles). Verify: tsc 0 · vitest **1306** (164 files; −14
+tests = the orphans' own suites + ambiance/step-aside pins) · zero src-tauri · self-reviewer
+**PASS 8/8** (Settings renders clean where both rows were, segs/theme cards functional, preview
+recolors Violet→Emerald, Home+Monitor zero-delta spot-check, no stale wording; its WindowChrome
+catch fixed in `257ab32`). Not rebuilt — rides the next installer (the owner's live build still
+shows the two dead rows until then; the open eyeball on `915cb96` is unaffected).
+- **⏳ Unchanged gate: owner eyeball round 2 on Monitor v4** (Settings → Appearance → "Monitor
+  console (preview)", Now + Compare). Phase 4 (Blackbook console) still queues behind it.
+
 ### Cycle 2026-07-11a — ✅ MONITOR v4 "SESSION WATERFALL" BUILT + SHIPPED, ❌ ROUND-1 REJECTED on real data, REWORKED → round-2 eyeball open (backfilled 2026-07-11, Cowork audit — this cycle was missing from the log; full detail already lived in RELEASE_STATE.md + UI_VISION_BACKLOG.md §A0 item 2)
 
 **Resuming Cycle 2026-07-10k's cleared gate:** Monitor v4 "Session Waterfall" (B Depth Waterfall + A's

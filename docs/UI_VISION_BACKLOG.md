@@ -142,12 +142,15 @@ tech stack, then bypassed — the shipped work used CSS/native React instead. **
 4. ~~Rig hologram: click-a-component-for-live-specs + boot/scan sweep~~ — **SHIPPED (verified
    2026-07-08).** Clicking a part pins its live spec card (`RigPart.tsx:82` `onClick`→`onSelect`,
    card renders while `active`); drag-orbit + scan sweep shipped. ~~Only residual: a copy gap~~ —
-   ✅ hint fixed 2026-07-10 ("Drag to orbit · hover or click a part for its live specs"). Caveat
-   found by the self-reviewer while verifying it: the CHROMED RigViewer (the only render with the
-   hint/controls bar) has **no reachable surface under any flag combination** — `OverviewTab`/
-   `HardwareSection` and `CommandCenter`/`HomeV3` are orphaned code (`App.tsx:1474` renders
-   HomeRoom for "Overview" unconditionally; live-probed with `compy_editorial="0"`). Every live
-   mount is `chromeless`. Dead-surface cleanup = its own hygiene item, not silently done.
+   ✅ hint fixed 2026-07-10 ("Drag to orbit · hover or click a part for its live specs"). ~~Caveat
+   found by the self-reviewer while verifying it: the CHROMED RigViewer's only surfaces
+   (`OverviewTab`/`HardwareSection` + `CommandCenter`/`HomeV3`) were orphaned code~~ — ✅
+   **dead-surface cleanup DONE 2026-07-11 (`eb5e62a`+`4a9a6ed`+`257ab32`, BACKLOG Cycle
+   2026-07-11b):** the four orphaned surfaces deleted (with the dead ambient-backdrop subsystem
+   they alone consumed — the do-nothing Ambiance + Step-aside Settings rows removed too).
+   RigViewer itself stays (LabConsole mounts it `chromeless`; the orbit-contract guards pin the
+   bare mount); note the chromed hint/controls bar now has no product mount at all — if a future
+   surface wants the chrome, it's still there.
 5. **Lenis smooth-scroll spine** tying the rooms together. **NEVER BUILT (VERIFIED 0 files).**
 6. **Room-transition "instrument retune" wipe** + Monitor meters as living oscilloscope traces
    (Home got one trace; Monitor rollout is partial). **NOT BUILT / partial.**
