@@ -82,9 +82,18 @@ full response ive written here seeing how things seem to get lost in translation
    same-game-preferring delta strip with cross-game "DIFFERENT GAME" labeling · dip pins with
    real labels · "N COMPY CHANGES ON" tag), 2D canvas replacing r3f. Ribbon DELETED. Self-review
    round 1 FAIL (idle repaint churn · empty-scene repaint · legend overlap at the real 5-session
-   history · bare cross-game delta) → fixed + guard-pinned → round 2 PASS 8/8 on real production
-   data. **⏳ OWNER eyeball is the open gate** — Settings → Appearance → "Monitor console
-   (preview)", both modes, ideally mid-capture with ≥2 recorded sessions.
+   history · bare cross-game delta) → fixed + guard-pinned → round 2 PASS 8/8. **⚠️ That round-2
+   "PASS on real production data" claim was WRONG on readability — the owner eyeball FAILED the
+   `85eb8c6` build 2026-07-11 ("this looks absolutely terrible … what a mess"): raw multi-hour
+   timelines drew as smears, dip pins as a barcode, legend printed over chart ink, Live|Sessions
+   duplicated the room's segment labels.** Readability rework `082414c`+`915cb96`:
+   `downsampleTimeline` (min-per-bucket, ≤160 drawn samples) · `MAX_LAYER_PINS=3` worst-dip caps ·
+   `layerAlpha` ramp · legend moved OUT of the stage · modes renamed **Now/Compare** · draw-density
+   guards automated (`waterfall-profile.test.ts` "draw-density discipline") · self-reviewer rubric
+   gained the real-density law (fixture-scale PASS ≠ PASS). Fresh full self-review round: PASS
+   (all items, real 5-session data). **⏳ OWNER eyeball (round 2) is the open gate** — Settings →
+   Appearance → "Monitor console (preview)", both modes, ideally mid-capture with ≥2 recorded
+   sessions.
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.

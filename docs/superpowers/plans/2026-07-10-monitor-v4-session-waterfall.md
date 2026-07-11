@@ -1,6 +1,14 @@
 # Monitor v4 — "Session Waterfall" (concept B refined into the working hero)
 
-> **RESUME NOTE 2026-07-11 (mid-train, working tree UNCOMMITTED):** v4 shipped `85eb8c6`
+> **✅ RESUME NOTE RESOLVED 2026-07-11:** the readability rework below is COMMITTED (`082414c` +
+> `915cb96` middot legend fix), full vitest 1320/167 green, own-eyes iterated on the live dev
+> instance (Compare + Now both read clean), fresh full self-review round **PASS**, rebuilt +
+> ship-reinstalled (installer `C2E0FF70…3E90238`, stamp-verified `915cb96`), RELEASE_STATE +
+> UI_VISION §A0 item 2 corrected (the round-2 "PASS 8/8" claim amended — owner eyeball FAILED
+> `85eb8c6`), bug→guard done (draw-density tests + self-reviewer real-density rubric law).
+> **Open gate: owner eyeball round 2.** Historical note kept below.
+
+> **RESUME NOTE 2026-07-11 (mid-train, working tree UNCOMMITTED — historical):** v4 shipped `85eb8c6`
 > (installer `44610BF6…D370A30`, live) but the **owner REJECTED the eyeball — "this looks
 > absolutely terrible … what a mess"**. Verified with my own eyes (real 5-session data): raw
 > multi-hour timelines drew as smears, dip pins as a barcode, legend printed over chart ink,

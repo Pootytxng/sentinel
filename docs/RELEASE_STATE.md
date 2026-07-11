@@ -10,6 +10,24 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (v4 waterfall READABILITY REWORK SHIPPED `915cb96` — installer SHA-256
+> `C2E0FF709DDF65256E757E2D3903CCA133207DEB614B2C59A6AE5666C3E90238`, live exe stamp-verified
+> `915cb96` (embedded-hash proof), installed by Claude, supersedes the `44610BF6…D370A30`
+> installer; flag `compy_monitor_console` still **DEFAULT OFF**):** the owner REJECTED the
+> `85eb8c6` waterfall on eyeball ("this looks absolutely terrible … what a mess") — the banner
+> below's round-2 "PASS 8/8 against real production data" was WRONG on readability: real
+> multi-hour timelines drew as smears, dip pins as a barcode, legend printed over chart ink,
+> Live|Sessions duplicated the room's segment labels. Rework (`082414c` + `915cb96`):
+> `downsampleTimeline` min-per-bucket ≤160 drawn samples · `MAX_LAYER_PINS=3` worst-dip caps ·
+> `layerAlpha` ramp · legend moved OUT of the stage (alpha swatches, middot grammar) · back
+> baselines dropped, LIFT 30/SCALE_STEP .08 · modes renamed **Now/Compare** · stage 300px.
+> Bug→guard ×2: draw-density discipline pinned in `waterfall-profile.test.ts`
+> (`MAX_DRAW_POINTS`/`MAX_LAYER_PINS`) + self-reviewer rubric gained the **real-density law**
+> (fixture-scale PASS ≠ PASS). Verify: tsc 0 · vitest **1320** (167 files) · fresh full
+> self-review round **PASS** (all items, real 5-session data, own-eyes iterated on the live dev
+> instance first). **⏳ OWNER eyeball (round 2) is the open gate** — Settings → Appearance →
+> "Monitor console (preview)", both modes.
+>
 > **UPDATE 2026-07-11 (Monitor v4 "SESSION WATERFALL" SHIPPED `85eb8c6` — installer SHA-256
 > `44610BF6F168E83741DD04A9EBD24D14A566EB2828238B1AFB67B0647D370A30`, live exe stamp-verified
 > `85eb8c6` (embedded-hash proof; owner queueing for a game, no CDP relaunch), installed by Claude

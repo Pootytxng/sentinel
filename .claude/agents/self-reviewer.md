@@ -30,9 +30,15 @@ The dev build runs two same-origin webviews + a small default window, so capture
 - Resize the REAL OS window (~1500×980 via MoveWindow) and capture NATIVELY with
   `docs/ui-sweep/cdp-shot.mjs`. Do NOT trust `setDeviceMetricsOverride` — it distorts when the
   real window is small (it has manufactured a false floating-panel defect AND can hide real ones).
-- Confirm the shot is the MAIN window (the nav rail present — currently 5 `.v2-nav-item`s; the
-  FPS overlay never has a rail), not the overlay.
+- Confirm the shot is the MAIN window (the nav rail present — currently 4 `.v2-nav-item`s
+  (Home/Monitor/Blackbook/Lab); the FPS overlay never has a rail), not the overlay.
 - For the EXACT element changed: scroll to it / zoom — look AT it, not just the page.
+- **Real-density law (bug→guard 2026-07-11, v4 waterfall rejection):** when the diff renders
+  data-driven density (charts, timelines, sparklines, long lists), judge on REAL data at real
+  density — live app state or a real multi-hour capture, never fixture-scale props alone. A PASS
+  earned only on fixture-scale data is NOT a PASS (precedent: the v4 waterfall round-2 review
+  passed on fixtures; the owner's real 5-session data drew as smears + a pin barcode). If real
+  density is unreachable in this session, say so and mark the capture item FAIL.
 
 ## The rubric — one line of EVIDENCE each. No evidence = not reviewed.
 
