@@ -10,6 +10,21 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-10 (consumer-terms preset relabel SHIPPED `33661b8` — installer SHA-256
+> `7C1EC6891F37BC3515AC05DD27C7E72FD4D3E63C860EF086B7BA7806113BB888`, stamp-verified LIVE `33661b8`,
+> installed by Claude, supersedes the `6932fa7` installer):** UI_VISION §A0 item 6 closed — the
+> Monitor tuning-preset trio the owner flagged ("Visual Fidelity / Smooth / Clarity") is now
+> **"Max Quality" / "More FPS" / "Lower Latency"** (ids stable; labels test-pinned in
+> `monitor-view.test.ts`). Chips are goal-register comparatives, deliberately NOT the console
+> readouts' verbatim stat terms — self-review round 1 caught literal "Max FPS"/"Low Latency" chips
+> rendering on the same screen as the measured "MAX FPS"/"LOWEST LATENCY" readouts; "High
+> Resolution" not used (preset bundles HDR+VRR, nothing touches resolution — honesty rail; owner may
+> overrule at eyeball). Also: RigViewer chromed hint → "hover or click a part" (§A.4 residual;
+> reviewer finding logged — the chromed RigViewer path is currently unreachable dead code, cleanup
+> is its own candidate). Verify: tsc 0 · vitest **1253** (166 files) · zero src-tauri ·
+> self-reviewer round-2 **PASS 8/8**. **⏳ OWNER eyeball unchanged: Monitor console (preview)** —
+> the same Monitor room now also shows the relabeled presets.
+>
 > **UPDATE 2026-07-10 (Monitor v3 "TELEMETRY RIBBON" SHIPPED `6932fa7` — installer SHA-256
 > `E9737D6EE5E05E2CE210DE4000578507F5ACBEC4CDC3A074C4086351D832421E`, stamp-verified LIVE `6932fa7`,
 > installed by Claude AFTER the owner's Palworld session ended (reinstall deliberately deferred
@@ -164,9 +179,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `6932fa7` + this ship-docs commit (branch `main`, 2026-07-10 — the live installer is built from exactly `6932fa7`) |
+| Git HEAD | `33661b8` + this ship-docs commit (branch `main`, 2026-07-10 — the live installer is built from exactly `33661b8`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `E9737D6EE5E05E2CE210DE4000578507F5ACBEC4CDC3A074C4086351D832421E` (built from `6932fa7`, 2026-07-10 — **Monitor v3 "Telemetry Ribbon"**, behind `compy_monitor_console` **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: 3D frametime ribbon hero + exact-moment spike markers + budget line + MAX FPS/AVG FPS/LOWEST LATENCY/SPIKES readouts + overlay control, all over the SAME 1 Hz read-only polls, zero new IPC. Home console stays DEFAULT ON from `bce72d6`. Superseded installer: `7E74216C…97295D` from `3fbd371`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `7C1EC6891F37BC3515AC05DD27C7E72FD4D3E63C860EF086B7BA7806113BB888` (built from `33661b8`, 2026-07-10 — **consumer-terms preset relabel** ("Max Quality" / "More FPS" / "Lower Latency", label-pinned) on top of Monitor v3 "Telemetry Ribbon"; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: 3D frametime ribbon hero + exact-moment spike markers + budget line + MAX FPS/AVG FPS/LOWEST LATENCY/SPIKES readouts + overlay control, all over the SAME 1 Hz read-only polls, zero new IPC. Home console stays DEFAULT ON from `bce72d6`. Superseded installer: `E9737D6E…32421E` from `6932fa7`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
