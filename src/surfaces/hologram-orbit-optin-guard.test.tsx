@@ -152,7 +152,19 @@ const shell = (child: React.ReactNode) => (
 );
 
 describe("hologram orbit default follows !readHologramV2() on every host (T4d contract)", () => {
+  // The console is the shipped Home default since the compy_home_console flip (owner-approved
+  // 2026-07-10) — its stage must obey the same T4d contract: fresh default = no unattended
+  // rotation, Orbit is an opt-in.
+  it("Home console stage, fresh default (v2 ON): Orbit renders un-pressed — no unattended rotation", async () => {
+    const c = render(shell(<HomeRoom {...props} />));
+    const orbit = await c.findByRole("button", { name: "Orbit" });
+    expect(orbit.getAttribute("aria-pressed")).toBe("false");
+    expect(orbit.className).not.toContain("hud-seg-on");
+  });
+
+  // The HomeHud bay pins keep exercising the hud layer through the console's "0" failsafe.
   it("HomeHud bay, fresh default (v2 ON): Orbit renders un-pressed — no unattended rotation", async () => {
+    localStorage.setItem("compy_home_console", "0");
     const c = render(shell(<HomeRoom {...props} />));
     const orbit = await c.findByRole("button", { name: "Orbit" });
     expect(orbit.getAttribute("aria-pressed")).toBe("false");
@@ -160,6 +172,7 @@ describe("hologram orbit default follows !readHologramV2() on every host (T4d co
   });
 
   it("HomeHud bay, classic (flag '0'): auto-orbit stays the default", async () => {
+    localStorage.setItem("compy_home_console", "0");
     localStorage.setItem("compy_hologram_v2", "0");
     const c = render(shell(<HomeRoom {...props} />));
     const orbit = await c.findByRole("button", { name: "Orbit" });

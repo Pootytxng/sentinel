@@ -8,10 +8,11 @@ import { railFor } from "../design/homeRail";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 
-// Guards for the Home console cold-open flag (plan 2026-07-10-console-hud-phase2-home, Task 1).
-// compy_home_console is DEFAULT OFF the whole phase: absent or "0", HomeRoom renders exactly
-// today's tree — byte-identical for BOTH compy_editorial states (the hud default and the "0"
-// classic failsafe). Flag "1" renders the console root and neither of today's Home trees.
+// Guards for the Home console cold-open flag (plan 2026-07-10-console-hud-phase2-home, Task 1;
+// DEFAULT-ON flip 2026-07-10 after the owner's eyeball approval, per ship-approved-work-as-
+// the-build). compy_home_console is DEFAULT ON: absent or "1", HomeRoom renders the console
+// root. Key "0" is the classic failsafe — byte-identical to the pre-console tree for BOTH
+// compy_editorial states (the hud default and the "0" classic failsafe).
 
 vi.mock("./rig/RigHologram", () => ({
   RigHologram: () => <div data-testid="rig-hologram" />,
@@ -157,34 +158,34 @@ const shell = (child: React.ReactNode) => (
   </ShellV2>
 );
 
-describe("Home console flag OFF — byte-identity with today's Home (the whole-phase contract)", () => {
-  it("hud default (editorial absent): key absent === key '0' === direct HomeHud", () => {
+describe("Home console flag '0' — the classic failsafe stays byte-identical (the failsafe contract)", () => {
+  it("hud default (editorial absent): key '0' === direct HomeHud", () => {
     const direct = render(shell(<HomeHud {...props} />)).container.innerHTML;
-    cleanup();
-    const absent = render(shell(<HomeRoom {...props} />)).container.innerHTML;
     cleanup();
     localStorage.setItem("compy_home_console", "0");
     const off = render(shell(<HomeRoom {...props} />)).container.innerHTML;
-    expect(absent).toBe(direct);
     expect(off).toBe(direct);
   });
 
-  it("classic failsafe (editorial '0'): key absent === key '0' === direct HomeV2", () => {
+  it("classic failsafe (editorial '0'): key '0' === direct HomeV2", () => {
     const direct = render(shell(<HomeV2 {...props} />)).container.innerHTML;
-    cleanup();
-    localStorage.setItem("compy_editorial", "0");
-    const absent = render(shell(<HomeRoom {...props} />)).container.innerHTML;
     cleanup();
     localStorage.setItem("compy_editorial", "0");
     localStorage.setItem("compy_home_console", "0");
     const off = render(shell(<HomeRoom {...props} />)).container.innerHTML;
-    expect(absent).toBe(direct);
     expect(off).toBe(direct);
   });
 });
 
-describe("Home console flag '1' — the console branch wins", () => {
-  it("renders the console root and neither of today's Home trees", () => {
+describe("Home console DEFAULT ON — the console branch wins (owner-approved flip 2026-07-10)", () => {
+  it("key ABSENT (the shipped default) renders the console root and neither of today's Home trees", () => {
+    const c = render(shell(<HomeRoom {...props} />)).container;
+    expect(c.querySelector(".home-console")).not.toBeNull();
+    expect(c.querySelector("[data-hud-home]")).toBeNull();
+    expect(c.querySelector(".hv2-grid")).toBeNull();
+  });
+
+  it("explicit '1' renders the console too (the pre-flip opt-in carries over)", () => {
     localStorage.setItem("compy_home_console", "1");
     const c = render(shell(<HomeRoom {...props} />)).container;
     expect(c.querySelector(".home-console")).not.toBeNull();
@@ -193,7 +194,6 @@ describe("Home console flag '1' — the console branch wins", () => {
   });
 
   it("wins over the editorial '0' failsafe too (highest-priority branch)", () => {
-    localStorage.setItem("compy_home_console", "1");
     localStorage.setItem("compy_editorial", "0");
     const c = render(shell(<HomeRoom {...props} />)).container;
     expect(c.querySelector(".home-console")).not.toBeNull();

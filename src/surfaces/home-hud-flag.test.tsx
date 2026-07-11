@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { HomeRoom } from "./HomeRoom";
 import { HomeV2 } from "./HomeV2";
@@ -53,6 +53,14 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+});
+
+// This file pins the compy_editorial (HomeHud/HomeV2) layer THROUGH HomeRoom. Since the
+// compy_home_console DEFAULT-ON flip (owner-approved 2026-07-10), HomeRoom's default branch
+// is the console — pin the console failsafe "0" here so these tests keep exercising the
+// layer they guard. The console's own default is pinned in home-console-flag.test.tsx.
+beforeEach(() => {
+  localStorage.setItem("compy_home_console", "0");
 });
 
 const hw = {

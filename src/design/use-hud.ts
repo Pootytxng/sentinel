@@ -30,9 +30,9 @@ export function useLabGroundFlag(): boolean {
 }
 
 // The Home console cold-open flag as live React state (plan 2026-07-10-console-hud-phase2-home,
-// same contract as useHudFlag: the Settings preview toggle fires compy:home-console-changed so
-// HomeRoom re-branches without a reload). DEFAULT OFF the whole phase — off, HomeRoom renders
-// today's tree byte-identical (pinned by home-console-flag.test.tsx).
+// same contract as useHudFlag: the Settings toggle fires compy:home-console-changed so HomeRoom
+// re-branches without a reload). DEFAULT ON (owner-approved 2026-07-10) — "0" is the classic-Home
+// failsafe, byte-identical to the pre-console tree (pinned by home-console-flag.test.tsx).
 export function useHomeConsoleFlag(): boolean {
   const [on, setOn] = useState(readHomeConsole);
   useEffect(() => {

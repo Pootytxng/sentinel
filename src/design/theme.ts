@@ -529,17 +529,18 @@ export function applyHud(on: boolean): void {
 
 // Home console cold-open (plan 2026-07-10-console-hud-phase2-home, Phase 2 of the Console HUD) —
 // Home as the console cold-open: the real rig hologram center-stage, honest corner arc gauges,
-// and a Dock into the rooms. DEFAULT OFF until the owner eyeball (Settings → Appearance preview
-// toggle): ON only when the key is literally "1" — the OPPOSITE polarity of readHud's default-ON.
+// and a Dock into the rooms. DEFAULT ON since the owner's eyeball approval (2026-07-10,
+// "everything looks good") per ship-approved-work-as-the-build: ON unless the key is literally
+// "0" — now readHud's polarity; the classic Home stays reachable as the Settings "0" failsafe.
 const HOME_CONSOLE_KEY = "compy_home_console";
 
 export function readHomeConsole(): boolean {
   try {
-    return localStorage.getItem(HOME_CONSOLE_KEY) === "1";
+    return localStorage.getItem(HOME_CONSOLE_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyHomeConsole(on: boolean): void {

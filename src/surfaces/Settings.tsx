@@ -217,9 +217,9 @@ export default function Settings({
     setHud(v);
     applyHud(v);
   };
-  // Home console preview (Phase 2 of the Console HUD, DEFAULT OFF until the owner eyeball) —
+  // Home console (Phase 2 of the Console HUD, DEFAULT ON — owner-approved 2026-07-10) —
   // Home as the console cold-open. Presentation only: same measured numbers, same probes;
-  // off renders today's Home byte-identical.
+  // "0" restores the classic Home byte-identical (the failsafe).
   const changeHomeConsole = (v: boolean) => {
     setHomeConsole(v);
     applyHomeConsole(v);
@@ -401,17 +401,17 @@ export default function Settings({
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Home console (preview)</div>
+                  <div className="set-row-title">Home console</div>
                   <div className="set-row-sub">
                     Home as the console cold-open: your rig hologram center-stage with corner
                     gauges and a dock into the rooms. Same numbers, same measurements — turn
-                    off for the current Home.
+                    off for the classic Home.
                   </div>
                 </div>
                 <Toggle
                   on={homeConsole}
                   onChange={changeHomeConsole}
-                  ariaLabel="Home console (preview)"
+                  ariaLabel="Home console"
                 />
               </div>
 
