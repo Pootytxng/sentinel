@@ -177,6 +177,11 @@ coverage, guard-pinned in the profile + stack suites → round 2 **PASS 8/8**. S
 `A4D3BF98…D147E0`, silent-reinstalled, **stamp-verified `960734c` live**, one installer on the
 Desktop. Verify: tsc 0 · vitest 1305 (165 files) · cargo 688. Flag `compy_monitor_console`
 **DEFAULT OFF** (flag-off byte-identity re-pinned both `compy_editorial` states).
+- **Owner refinement ask same day ("clean up and refine how the actual line on the graph
+  looks") → SHIPPED `e900b6a`** (installer `5AE1ED22…C7821236`, stamp-verified live): monotone
+  Fritsch–Carlson curves + round joins on stack rows (every real sample kept, dips keep true
+  depth — pin-on-minimum verified), round joins on the scope SVG traces; guard-pinned; vitest
+  1306 · self-review PASS. RELEASE_STATE row `204d901`.
 - **⏳ GATE: owner eyeball of v5** — Settings → Appearance → "Monitor console (preview)", both
   modes; the stack half shines with his real 5-session history on screen. Phase 4 (Blackbook
   console) still queues behind this verdict.
