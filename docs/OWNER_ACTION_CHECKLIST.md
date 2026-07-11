@@ -46,14 +46,18 @@ instantly. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-
 Approved and **shipped default-ON** (`bce72d6` live): Home now opens as the console for everyone;
 Settings → Appearance → "Home console" OFF restores the classic Home instantly (the failsafe).
 
-### A5. Monitor console v4 "Session Waterfall" — your eyeball (round 2)  ·  ⏳ OPEN (added 2026-07-11 audit — was missing from this list)
-Phase 3 shipped and has been through two owner rounds already: v2 → v3 "Telemetry Ribbon" (rated
-"satisfactory") → v4 "Session Waterfall" round 1 (`85eb8c6`) **REJECTED on eyeball** ("this looks
-absolutely terrible … what a mess" — real multi-hour data drew as smears, a dip-pin barcode, legend
-over chart ink) → reworked (`082414c`/`915cb96`: downsampled draws, capped pins, legend off-stage,
-renamed Now/Compare modes). **Your round-2 eyeball is the open gate:** Settings → Appearance →
-"Monitor console (preview)", both modes, ideally mid-capture with ≥2 recorded sessions.
-- **Result → tell Claude:** "Monitor v4 looks good" (or what's still wrong).
+### A5. Monitor console — pick the round-3 concept  ·  ⏳ OPEN (updated 2026-07-11: v4 round-2 verdict landed = not working out)
+The chain so far: v2 cluster ("satisfactory") → v3 ribbon (rejected) → v4 waterfall round 1
+(rejected) → v4 rework round 2 → **your 2026-07-11 verdict: "doesnt seem to be working out like i
+presumed … maybe just re work the whole thing to something else thats more likely to be
+comprehensive."** So it's re-concepted mockup-first (the pattern that worked for the Lab):
+**→ [Concept round 3 mockups](https://claude.ai/code/artifact/9ebf6305-e488-422d-b699-0c281b15676c)**
+— **A Flight Deck** (everything on one face, plain-number deltas) · **B Session Stack** (each
+session a flat mini-graph, one shared axis, stacked like a playlist) · **C Debrief Card** (grade +
+side-by-side scoreboard in words and bars). All keep your musts (real graphs, exact spike moments,
+MAX FPS-style terms, session comparison, overlay control, honest empties).
+- **Result → tell Claude:** "A" / "B" / "C" / a combine (e.g. "A's top + B's stack"), or what none
+  of them get right. Then it becomes ONE build behind the same preview flag.
 
 ---
 

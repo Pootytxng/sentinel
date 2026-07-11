@@ -161,6 +161,27 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-11c — ❌ MONITOR v4 ROUND-2 VERDICT: "not working out" → CONCEPT ROUND 3 OUT (mockup-first, owner pick pending)
+
+**Owner round-2 eyeball on the `915cb96` rework (verbatim, retained in UI_VISION §A0 item 2):**
+*"the monitor tab doesnt seem to be working out like i presumed, unless yo can really just change
+it to where it looks more intuitive then maybe just re work the whole thing to something else thats
+more likely to be comprehensive."* Read: after two build-rejections on this face (v3 ribbon, v4
+waterfall), the depth-stacked-sessions CONCEPT is the problem — stop polishing, re-concept. Per the
+mockup-first pattern (resolved the Lab; produced the v4 pick), **concept round 3 shipped as an
+interactive Artifact** <https://claude.ai/code/artifact/9ebf6305-e488-422d-b699-0c281b15676c>:
+**A "Flight Deck"** (ONE comprehensive face, no modes — live ms-axis scope w/ exact spike pins +
+hover scrub, MAX FPS/AVG/LOWEST LATENCY/SPIKES readouts, plain-number "vs last session" delta row,
+session shelf) · **B "Session Stack"** (small multiples — every session a flat mini-graph on ONE
+shared 1%-low axis, stacked newest-first, worst-dip pin w/ exact clock time per row, delta chip vs
+previous, DIFFERENT-GAME labeling) · **C "Debrief Card"** (measured grade + plain-English headline,
+two-session side-by-side bars, verdict sentences). All three carry the §A0 binding musts; natural
+combine flagged (A's top + B's stack). Same simulated feed across all three, labeled SIMULATED.
+OWNER_ACTION_CHECKLIST §A5 updated to the pick.
+- **⏳ GATE: owner picks A / B / C / combine** → then ONE build (fresh session, same
+  `compy_monitor_console` flag DEFAULT OFF, plan first). Phase 4 (Blackbook console) still queues
+  behind the Monitor verdict chain.
+
 ### Cycle 2026-07-11b — ✅ DEAD-SURFACE HYGIENE TRAIN (`eb5e62a`+`4a9a6ed`+`257ab32`) — the 2026-07-10j logged candidate executed; Monitor v4 eyeball still the open gate
 
 **With every plain `[ ]` gated and Phase 4 entry-gated on the Monitor v4 round-2 eyeball, the next

@@ -91,9 +91,25 @@ full response ive written here seeing how things seem to get lost in translation
    `layerAlpha` ramp · legend moved OUT of the stage · modes renamed **Now/Compare** · draw-density
    guards automated (`waterfall-profile.test.ts` "draw-density discipline") · self-reviewer rubric
    gained the real-density law (fixture-scale PASS ≠ PASS). Fresh full self-review round: PASS
-   (all items, real 5-session data). **⏳ OWNER eyeball (round 2) is the open gate** — Settings →
-   Appearance → "Monitor console (preview)", both modes, ideally mid-capture with ≥2 recorded
-   sessions.
+   (all items, real 5-session data). ~~⏳ OWNER eyeball (round 2) is the open gate~~ →
+   **❌ ROUND-2 VERDICT IN (owner, 2026-07-11, verbatim — retained per item 7):**
+   > the monitor tab doesnt seem to be working out like i presumed, unless yo can really just
+   > change it to where it looks more intuitive then maybe just re work the whole thing to
+   > something else thats more likely to be comprehensive
+   Read: the waterfall CONCEPT (depth-stacked session layers) is the problem, not the polish —
+   two build-rejections on this face (v3 ribbon, v4 waterfall) say stop tweaking and re-concept.
+   Per the mockup-first pattern (the one that resolved the Lab and produced the v4 pick),
+   **CONCEPT ROUND 3 is OUT (2026-07-11):** Artifact
+   <https://claude.ai/code/artifact/9ebf6305-e488-422d-b699-0c281b15676c> — **A "Flight Deck"**
+   (one comprehensive face, no modes: live scope w/ spike pins + consumer readouts + plain-number
+   "vs last session" deltas + session shelf) · **B "Session Stack"** (small multiples: each
+   session a flat mini-graph on ONE shared axis, stacked newest-first, worst-dip pin w/ exact
+   time per row, delta chip vs previous) · **C "Debrief Card"** (report card: measured grade +
+   plain-English headline, two-session side-by-side bars, verdict sentences). All three keep the
+   binding musts (real graphs · exact spike moments · consumer terms · session comparison ·
+   overlay control · honest empties · zero new IPC). Natural combine flagged on the page:
+   A's top half + B's stack. **⏳ GATE: owner picks A/B/C (or a combine)** — then ONE build,
+   same flag, fresh session.
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
