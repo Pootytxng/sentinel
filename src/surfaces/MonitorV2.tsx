@@ -6,7 +6,8 @@ import { TuningPresets } from "./Monitor";
 import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
-import { useHudFlag } from "../design/use-hud";
+import { useHudFlag, useMonitorConsoleFlag } from "../design/use-hud";
+import { MonitorConsole } from "./MonitorConsole";
 import { HudMasthead } from "./hud-masthead";
 import { readViewMode, applyViewMode, type ViewMode } from "../design/theme";
 import { monitorVerdict } from "./monitor-v2-data";
@@ -34,6 +35,11 @@ import "./monitor-v2.css";
 // V2-8 (P6 §2 placement): the forward door is ABSENT during a live capture session — it belongs
 // to the session-end state, not mid-game. The faces already poll get_fps_status for their own
 // tiles; they mirror that state up via the additive onFpsActive callback (no second IPC).
+//
+// Phase 3 (plan 2026-07-10-console-hud-phase3-monitor): behind compy_monitor_console (DEFAULT
+// OFF), the LIVE face swaps for the console instrument cluster (MonitorConsole) — Basic core
+// set, Advanced full cluster. The Sessions face, TuningPresets, and the onFpsActive door
+// mirror are UNCHANGED; flag off renders exactly this file's classic branches (test-pinned).
 
 type Segment = "sessions" | "live";
 
@@ -54,6 +60,7 @@ type Props = Omit<ComponentProps<typeof Play>, "view" | "onFpsActive" | "v2">;
 export function MonitorV2(props: Props) {
   const reduced = useReducedMotion();
   const hud = useHudFlag();
+  const monitorConsole = useMonitorConsoleFlag();
   const [segment, setSegment] = useState<Segment>("live");
   const [mode, setMode] = useState<ViewMode>(readViewMode);
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -154,15 +161,35 @@ export function MonitorV2(props: Props) {
       </div>
       <div className="mv2-body">
         {basic ? (
-          <MonitorBasic
+          monitorConsole ? (
+            <MonitorConsole
+              active={props.active}
+              vendor={props.vendor ?? "any"}
+              mode="basic"
+              onFpsActive={setCapturing}
+              onOpenSessions={() => {
+                chooseMode("advanced");
+                setSegment("sessions");
+              }}
+            />
+          ) : (
+            <MonitorBasic
+              active={props.active}
+              vendor={props.vendor}
+              sessions={props.sessions}
+              onFpsActive={setCapturing}
+              onOpenSessions={() => {
+                chooseMode("advanced");
+                setSegment("sessions");
+              }}
+            />
+          )
+        ) : segment === "live" && monitorConsole ? (
+          <MonitorConsole
             active={props.active}
-            vendor={props.vendor}
-            sessions={props.sessions}
+            vendor={props.vendor ?? "any"}
+            mode="advanced"
             onFpsActive={setCapturing}
-            onOpenSessions={() => {
-              chooseMode("advanced");
-              setSegment("sessions");
-            }}
           />
         ) : (
           <Play {...props} view={segment} onFpsActive={setCapturing} v2 />

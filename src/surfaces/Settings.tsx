@@ -19,6 +19,8 @@ import {
   applyHud,
   readHomeConsole,
   applyHomeConsole,
+  readMonitorConsole,
+  applyMonitorConsole,
   readSetupStepper,
   applySetupStepper,
   readFirstCheckTheater,
@@ -149,6 +151,7 @@ export default function Settings({
   const [labGround, setLabGround] = useState<boolean>(readLabGround);
   const [hud, setHud] = useState<boolean>(readHud);
   const [homeConsole, setHomeConsole] = useState<boolean>(readHomeConsole);
+  const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
   const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
   const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
   const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
@@ -223,6 +226,13 @@ export default function Settings({
   const changeHomeConsole = (v: boolean) => {
     setHomeConsole(v);
     applyHomeConsole(v);
+  };
+  // Monitor console preview (Phase 3 of the Console HUD, DEFAULT OFF the whole phase) — the
+  // Monitor Live face as the instrument cluster: fps/frametime traces + honest gauges.
+  // Presentation only: same sensors, same polls; off renders today's Monitor byte-identical.
+  const changeMonitorConsole = (v: boolean) => {
+    setMonitorConsole(v);
+    applyMonitorConsole(v);
   };
   // Setup stepper preview — the Setup & Tour's progress row as numbered step indicators.
   // Presentation only: same steps, same content, same navigation.
@@ -412,6 +422,22 @@ export default function Settings({
                   on={homeConsole}
                   onChange={changeHomeConsole}
                   ariaLabel="Home console"
+                />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Monitor console (preview)</div>
+                  <div className="set-row-sub">
+                    Monitor's live face as an instrument cluster: rolling fps and frametime
+                    traces with honest gauges. Same sensors, same measurements — turn off for
+                    the classic live tiles.
+                  </div>
+                </div>
+                <Toggle
+                  on={monitorConsole}
+                  onChange={changeMonitorConsole}
+                  ariaLabel="Monitor console (preview)"
                 />
               </div>
 

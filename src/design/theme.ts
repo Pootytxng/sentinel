@@ -556,6 +556,35 @@ export function applyHomeConsole(on: boolean): void {
   }
 }
 
+// Monitor console (plan 2026-07-10-console-hud-phase3-monitor, Phase 3 of the Console HUD) —
+// the Monitor room's LIVE face as the console instrument cluster: rolling fps/frametime
+// oscilloscope traces + honest arc gauges over the SAME polls the existing tiles run (zero new
+// IPC). DEFAULT OFF the whole phase (Settings → Appearance preview toggle): ON only when the
+// key is literally "1"; off, MonitorV2 renders exactly today's tree (test-pinned).
+const MONITOR_CONSOLE_KEY = "compy_monitor_console";
+
+export function readMonitorConsole(): boolean {
+  try {
+    return localStorage.getItem(MONITOR_CONSOLE_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyMonitorConsole(on: boolean): void {
+  try {
+    localStorage.setItem(MONITOR_CONSOLE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:monitor-console-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Dashboard v2 (owner "evolve toward the ui-spec" 2026-06-15) — the premium telemetry-dashboard
 // prototype (health hero + monospace metric cards + gradient area charts), Compy's identity + data.
 // DEFAULT OFF behind `compy_dash_v2`; toggled for review. Evolves the existing app — nothing scrapped.
