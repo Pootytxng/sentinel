@@ -21,7 +21,9 @@
 /* ── Flight Deck hero (v5) — the frametime scope full-width with scrub/zoom chrome; the delta
    row's plain numbers. Flat by chain law (v3→v4): the ms axis IS the depth. ── */
 :root[data-v2="on"] .deck-scope { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-:root[data-v2="on"] .deck-scope .osc-grid { height: 150px; }
+/* Hero height: scope + caption + bar stay ≤ ~180px, keeping the whole deck half ≤ ~300px so
+   the face fits the owner's 1500×980 window without a scroll-trap (plan T4). */
+:root[data-v2="on"] .deck-scope .osc-grid { height: 140px; }
 :root[data-v2="on"] .deck-scope .osc-stage { cursor: crosshair; touch-action: none; }
 :root[data-v2="on"] .deck-bar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
   min-height: 16px; font-family: var(--ix-mono); font-size: 11px; letter-spacing: .04em;
@@ -68,10 +70,10 @@
 :root[data-v2="on"] .ss-meta { font-family: var(--ix-mono); font-size: 10px; letter-spacing: .08em;
   text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   min-width: 0; }
-:root[data-v2="on"] .ss-canvas-wrap { position: relative; display: block; height: 44px;
-  padding-top: 13px; min-width: 0; }
+:root[data-v2="on"] .ss-canvas-wrap { position: relative; display: block; height: 38px;
+  padding-top: 12px; min-width: 0; }
 :root[data-v2="on"] .ss-canvas { display: block; width: 100%; height: 100%; }
-:root[data-v2="on"] .ss-notimeline { position: absolute; inset: 13px 0 0 0; display: grid;
+:root[data-v2="on"] .ss-notimeline { position: absolute; inset: 12px 0 0 0; display: grid;
   place-items: center; font-family: var(--ix-mono); font-size: 9px; letter-spacing: .12em;
   text-transform: uppercase; color: var(--ix-text-3); }
 /* The pin's clock time — the reserved strip above the plot, clamped off the edges. */
@@ -169,9 +171,11 @@
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-capture,
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage,
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest,
+:root[data-v2="on"] .monitor-console[data-motion="full"] .ss,
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last {
   animation: v2-mc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage { animation-delay: 0.1s; }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest { animation-delay: 0.22s; }
-:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last { animation-delay: 0.28s; }
+:root[data-v2="on"] .monitor-console[data-motion="full"] .ss { animation-delay: 0.28s; }
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last { animation-delay: 0.34s; }
