@@ -38,10 +38,8 @@ describe("Settings", () => {
     expect(screen.getByText("v0.1.0")).toBeInTheDocument();
   });
 
-  it("step-aside defaults ON; Motion is a Full/System/Reduced control (default Full, overrides OS)", () => {
+  it("Motion is a Full/System/Reduced control (default Full, overrides OS)", () => {
     render(<Settings {...baseProps} />);
-    const stepAside = screen.getByRole("switch", { name: "Step aside when I play" });
-    expect(stepAside.getAttribute("aria-checked")).toBe("true");
     const motion = screen.getByRole("group", { name: "Motion" });
     expect(motion).toBeInTheDocument();
     const full = within(motion).getByRole("button", { name: "Full" });

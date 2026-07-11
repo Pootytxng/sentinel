@@ -131,22 +131,6 @@
   font-weight: 700;
 }
 
-/* ── Move 5: Home gets extra love — the aurora reads more present (bolder) ─────── */
-:root[data-living="on"] .ix-aurora-a {
-  background: radial-gradient(
-    40% 40% at 34% 30%,
-    color-mix(in srgb, var(--ix-streak-1, #2ee6c0) 15%, transparent),
-    transparent 70%
-  );
-}
-:root[data-living="on"] .ix-aurora-b {
-  background: radial-gradient(
-    42% 42% at 70% 66%,
-    color-mix(in srgb, var(--ix-streak-2, #7c9cff) 15%, transparent),
-    transparent 70%
-  );
-}
-
 /* ── Simplified rail (owner direction: "fewer, plainer tabs") ─────────────────── */
 /* Everyday rooms stay; Lab moves to a compact, quieter "Advanced" cell (App.tsx
    filters it out of the primary set when living is on). Labels never truncate, and

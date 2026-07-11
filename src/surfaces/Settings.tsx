@@ -2,11 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   type InstrumentTheme,
-  type Ambiance,
-  AMBIANCE_OPTIONS,
   readInstrumentTheme,
   applyInstrumentTheme,
-  persistAmbiance,
   readLivingInstrument,
   applyLivingInstrument,
   readLabGuided,
@@ -31,9 +28,6 @@ import {
   applyHologramV2,
   readTwoFutures,
   applyTwoFutures,
-  readAmbianceChoice,
-  readStepAsideGame,
-  persistStepAsideGame,
   readCloseToTray,
   persistCloseToTray,
   type OverlayDensity,
@@ -93,9 +87,9 @@ function Toggle({
   );
 }
 
-// A small static preview reflecting the live theme (via --ix tokens) + the chosen ambiance density.
-function LivePreview({ ambiance }: { ambiance: Ambiance }) {
-  const streaks = ambiance === "full" ? 6 : ambiance === "calm" ? 3 : 0;
+// A small static preview reflecting the live theme (via --ix tokens).
+function LivePreview() {
+  const streaks = 3;
   return (
     <div className="set-preview" aria-hidden="true">
       <div className="set-preview-field">
@@ -141,10 +135,6 @@ export default function Settings({
   onClose: () => void;
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
-  // The picker reflects the EFFECTIVE default when the user never chose: the answer-first Home
-  // re-defaults ambiance to "calm" (owner §8b), so showing "Full" selected there would be a lie.
-  // An explicit choice always wins (and picking here persists one, unchanged).
-  const [ambiance, setAmbiance] = useState<Ambiance>(() => readAmbianceChoice() ?? "calm");
   const [living, setLiving] = useState<boolean>(readLivingInstrument);
   const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
   const [labBento, setLabBento] = useState<boolean>(readLabBento);
@@ -157,7 +147,6 @@ export default function Settings({
   const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
   const [holoV2, setHoloV2] = useState<boolean>(readHologramV2);
   const [twoFutures, setTwoFutures] = useState<boolean>(readTwoFutures);
-  const [stepAside, setStepAside] = useState<boolean>(readStepAsideGame);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
@@ -183,10 +172,6 @@ export default function Settings({
     setMotionPref(p); // persists, updates <html data-motion>, and notifies live listeners
   };
 
-  const changeAmbiance = (a: Ambiance) => {
-    setAmbiance(a);
-    persistAmbiance(a);
-  };
   // Living Instrument preview — toggles the depth/glow/motion skin live (applies the [data-living]
   // attribute app-wide). Cosmetic + reversible; default OFF until the look is locked.
   const changeLiving = (v: boolean) => {
@@ -266,12 +251,6 @@ export default function Settings({
     setTwoFutures(v);
     applyTwoFutures(v);
   };
-  const changeStepAside = (v: boolean) => {
-    setStepAside(v);
-    persistStepAsideGame(v);
-    // Let a mounted backdrop react immediately (it re-reads on this event).
-    window.dispatchEvent(new Event("compy:stepaside-changed"));
-  };
   // Close-to-tray: persist + sync the backend gate. Default OFF keeps the §1 clean exit until opt-in.
   const changeCloseToTray = (v: boolean) => {
     setCloseToTray(v);
@@ -328,20 +307,6 @@ export default function Settings({
                       ))}
                     </span>
                     <span className="set-theme-label">{t.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="set-field-label">Ambient backdrop</div>
-              <div className="set-seg" role="group" aria-label="Ambient backdrop">
-                {AMBIANCE_OPTIONS.map((a) => (
-                  <button
-                    key={a.id}
-                    className={`set-seg-btn ${ambiance === a.id ? "set-seg-on" : ""}`}
-                    aria-pressed={ambiance === a.id}
-                    onClick={() => changeAmbiance(a.id)}
-                  >
-                    {a.label}
                   </button>
                 ))}
               </div>
@@ -517,22 +482,13 @@ export default function Settings({
               </div>
 
             </div>
-            <LivePreview ambiance={ambiance} />
+            <LivePreview />
           </div>
         </section>
 
         {/* ── Behavior ── */}
         <section className="set-section">
           <h2 className="set-section-title">Behavior</h2>
-          <div className="set-row">
-            <div className="set-row-text">
-              <div className="set-row-title">Step aside when I play</div>
-              <div className="set-row-sub">
-                Freezes the backdrop while a game runs. Compy never steals your frames.
-              </div>
-            </div>
-            <Toggle on={stepAside} onChange={changeStepAside} ariaLabel="Step aside when I play" />
-          </div>
           <div className="set-row">
             <div className="set-row-text">
               <div className="set-row-title">When I close, keep Compy running in the tray</div>

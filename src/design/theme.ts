@@ -1,9 +1,8 @@
-// Instrument theme + ambient-backdrop preferences. Local-only (localStorage), no network — purely
-// cosmetic. The theme drives the app accent + the backdrop streak colors via `[data-itheme]` on
-// <html> (see instrument.css). Reversible: nothing here touches logic or the backend.
+// Instrument theme + appearance preferences. Local-only (localStorage), no network — purely
+// cosmetic. The theme drives the app accent colors via `[data-itheme]` on <html> (see
+// instrument.css). Reversible: nothing here touches logic or the backend.
 
 export type InstrumentTheme = "midnight" | "violet" | "crimson" | "emerald" | "hearth";
-export type Ambiance = "off" | "calm" | "full";
 
 export const INSTRUMENT_THEMES: { id: InstrumentTheme; label: string }[] = [
   { id: "midnight", label: "Midnight" },
@@ -13,18 +12,10 @@ export const INSTRUMENT_THEMES: { id: InstrumentTheme; label: string }[] = [
   { id: "hearth", label: "Hearth" },
 ];
 
-export const AMBIANCE_OPTIONS: { id: Ambiance; label: string }[] = [
-  { id: "off", label: "Off" },
-  { id: "calm", label: "Calm" },
-  { id: "full", label: "Full" },
-];
-
 const THEME_KEY = "compy_theme";
-const AMBIANCE_KEY = "compy_ambiance";
 
 const isTheme = (v: unknown): v is InstrumentTheme =>
   v === "midnight" || v === "violet" || v === "crimson" || v === "emerald" || v === "hearth";
-const isAmbiance = (v: unknown): v is Ambiance => v === "off" || v === "calm" || v === "full";
 
 export function readInstrumentTheme(): InstrumentTheme {
   try {
@@ -55,61 +46,6 @@ export function applyInstrumentTheme(t: InstrumentTheme): void {
     localStorage.setItem(THEME_KEY, t);
   } catch {
     /* ignore persistence failure — still applies this session */
-  }
-}
-
-export function readAmbiance(): Ambiance {
-  try {
-    const v = localStorage.getItem(AMBIANCE_KEY);
-    if (isAmbiance(v)) return v;
-  } catch {
-    /* ignore */
-  }
-  return "full"; // default Full so the backdrop is felt in dev
-}
-
-// The user's EXPLICIT ambiance choice, or null when they never picked one. Lets a flag-gated surface
-// re-default (P3 answer-first Home defaults to "calm" — owner §8b) WITHOUT overriding a real Settings
-// choice: an explicit Off/Full always wins. `readAmbiance()` above keeps the classic "full" default.
-export function readAmbianceChoice(): Ambiance | null {
-  try {
-    const v = localStorage.getItem(AMBIANCE_KEY);
-    if (isAmbiance(v)) return v;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-export function persistAmbiance(a: Ambiance): void {
-  try {
-    localStorage.setItem(AMBIANCE_KEY, a);
-  } catch {
-    /* ignore */
-  }
-}
-
-// "Step aside when I play" — freeze the ambient backdrop while a game is presenting. This is a USER
-// PREFERENCE (default ON), distinct from the UNCONDITIONAL reduced-motion + hidden-document freezes
-// (those are a11y/efficiency and are never user-overridable). Spec 2026-06-06-settings-and-icon §A0.
-const STEPASIDE_GAME_KEY = "compy_stepaside_game";
-
-export function readStepAsideGame(): boolean {
-  try {
-    const v = localStorage.getItem(STEPASIDE_GAME_KEY);
-    if (v === "0") return false;
-    if (v === "1") return true;
-  } catch {
-    /* ignore — default ON */
-  }
-  return true;
-}
-
-export function persistStepAsideGame(on: boolean): void {
-  try {
-    localStorage.setItem(STEPASIDE_GAME_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
   }
 }
 
@@ -213,7 +149,7 @@ export function applyLivingInstrument(on: boolean): void {
   } catch {
     /* ignore persistence failure — still applies this session */
   }
-  // Let the app shell (rail layout) react live to the toggle — same pattern as stepaside-changed.
+  // Let the app shell (rail layout) react live to the toggle.
   try {
     window.dispatchEvent(new Event("compy:living-changed"));
   } catch {

@@ -2,9 +2,6 @@ import { describe, it, expect, afterEach } from "vitest";
 import {
   readInstrumentTheme,
   applyInstrumentTheme,
-  readAmbiance,
-  persistAmbiance,
-  readAmbianceChoice,
   readViewMode,
   applyViewMode,
 } from "./theme";
@@ -43,29 +40,5 @@ describe("basic/advanced view mode", () => {
     expect(document.documentElement.dataset.viewMode).toBe("advanced");
     applyViewMode("basic");
     expect(document.documentElement.dataset.viewMode).toBe("basic");
-  });
-});
-
-describe("ambiance", () => {
-  it("defaults to full", () => {
-    expect(readAmbiance()).toBe("full");
-  });
-
-  it("persists + reads back a choice", () => {
-    persistAmbiance("calm");
-    expect(readAmbiance()).toBe("calm");
-  });
-
-  it("falls back to full on a junk stored value", () => {
-    localStorage.setItem("compy_ambiance", "ludicrous");
-    expect(readAmbiance()).toBe("full");
-  });
-
-  it("readAmbianceChoice distinguishes an explicit pick from the default", () => {
-    expect(readAmbianceChoice()).toBeNull(); // never chose → null (Home re-defaults to calm)
-    localStorage.setItem("compy_ambiance", "ludicrous"); // junk ≠ a choice
-    expect(readAmbianceChoice()).toBeNull();
-    persistAmbiance("off");
-    expect(readAmbianceChoice()).toBe("off"); // explicit choice always wins
   });
 });
