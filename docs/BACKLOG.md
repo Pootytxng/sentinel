@@ -161,6 +161,28 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10j — ✅ A0 item 6 CLOSED: consumer-terms preset relabel + rig-hint fix (next non-gated item; Monitor-v3 eyeball still the pending gate)
+
+**With all plain `[ ]` items gated and Phase 4 (Blackbook console) entry-gated on the Monitor-v3
+eyeball, the next non-gated item was the owner's A0 decomposition item 6** (consumer-market terms —
+the v3 train had covered only the readouts; the exact "Visual Fidelity / Smooth / Clarity" trio he
+flagged still labeled the tuning presets) **+ the §A.4 tracked hint-copy residual.** Shipped: preset
+trio → **"Max Quality" / "More FPS" / "Lower Latency"** (ids stable, labels test-pinned in
+`monitor-view.test.ts`). Self-review round 1 **FAIL** (2 real catches): literal "Max FPS"/"Low
+Latency" chips rendered on the SAME screen as the v3 measured "MAX FPS"/"LOWEST LATENCY" stat
+readouts (a chip must never read as a measured value → goal-register comparatives; readouts keep the
+owner's verbatim stat terms) + the Lower-Latency goal line orphaned its Storage Sense checklist item
+(now "free up drive headroom, prioritize the game, and cut background drag"). "High Resolution"
+deliberately not used — that preset bundles HDR+VRR, nothing touches resolution (honesty rail; owner
+may overrule at eyeball). Round 2 **PASS 8/8**. RigViewer hint → "hover or click a part" (§A.4
+residual closed at source) — reviewer finding logged: the CHROMED RigViewer has **no reachable
+surface under any flag combo** (`OverviewTab`/`HardwareSection` + `CommandCenter`/`HomeV3` are
+orphaned; `App.tsx:1474` renders HomeRoom for "Overview" unconditionally) — dead-surface cleanup is
+its own hygiene candidate, not silently done. Verify: tsc 0 · vitest **1253** (166 files, +1 label
+pin) · zero src-tauri.
+- **⏳ Unchanged gate: owner eyeball** on Settings → Appearance → "Monitor console (preview)"
+  (ideally mid-capture) — now also shows the relabeled presets. Phase 4 waits on it.
+
 ### Cycle 2026-07-10i — ✅ MONITOR v3 "TELEMETRY RIBBON" SHIPPED LIVE `6932fa7` (installer SHA-256 `E9737D6E…32421E`, stamp-verified; reinstall ran AFTER Palworld closed)
 
 **Owner picked the 3D-ribbon concept and said "continue" — built same session** (plan

@@ -69,7 +69,15 @@ full response ive written here seeing how things seem to get lost in translation
 6. **Copy direction (app-wide, not just Monitor): consumer-market terms** — prefer "MAX FPS",
    "Lowest latency", "HIGH RESOLUTION" over abstract wording like "visual fidelity / smooth /
    clarity". These are the sought-after terms in this market. Honesty laws unchanged — the terms
-   label MEASURED values, never fabricate claims.
+   label MEASURED values, never fabricate claims. ✅ **BUILT 2026-07-10 (post-v3 train):** the v3
+   readouts already carried the verbatim stat terms (MAX FPS · AVG FPS · LOWEST LATENCY · SPIKES);
+   the tuning-preset trio he named is now **"Max Quality" / "More FPS" / "Lower Latency"**
+   (label-pinned in `monitor-view.test.ts`; ids stable). Two disclosed deviations, both honesty/
+   self-review-driven: (a) "High Resolution" NOT used — that preset bundles HDR+VRR walkthroughs,
+   nothing touches resolution; "Max Quality" is the nearest honest term; (b) chips are goal-register
+   comparatives, not the readouts' exact stat terms — the self-reviewer caught literal "Max FPS"/
+   "Low Latency" chips rendering on the SAME screen as the measured "MAX FPS"/"LOWEST LATENCY"
+   readouts (a chip must never read as a measured value). Owner may overrule either at eyeball.
 7. **Process note (standing):** long owner responses have lost parts in translation before —
    retain them verbatim here and decompose every part ([[decompose-owner-lists-atomic-todos]]).
 
@@ -93,9 +101,13 @@ tech stack, then bypassed — the shipped work used CSS/native React instead. **
    plane shipped. Magnetic cursor: **NEVER BUILT (VERIFIED 0 files).**
 4. ~~Rig hologram: click-a-component-for-live-specs + boot/scan sweep~~ — **SHIPPED (verified
    2026-07-08).** Clicking a part pins its live spec card (`RigPart.tsx:82` `onClick`→`onSelect`,
-   card renders while `active`); drag-orbit + scan sweep shipped. **Only residual: a copy gap** —
-   `RigViewer.tsx:81` hint reads "hover a part for its live specs," never mentions click. Fold a
-   one-line fix ("hover or click") into the motion train.
+   card renders while `active`); drag-orbit + scan sweep shipped. ~~Only residual: a copy gap~~ —
+   ✅ hint fixed 2026-07-10 ("Drag to orbit · hover or click a part for its live specs"). Caveat
+   found by the self-reviewer while verifying it: the CHROMED RigViewer (the only render with the
+   hint/controls bar) has **no reachable surface under any flag combination** — `OverviewTab`/
+   `HardwareSection` and `CommandCenter`/`HomeV3` are orphaned code (`App.tsx:1474` renders
+   HomeRoom for "Overview" unconditionally; live-probed with `compy_editorial="0"`). Every live
+   mount is `chromeless`. Dead-surface cleanup = its own hygiene item, not silently done.
 5. **Lenis smooth-scroll spine** tying the rooms together. **NEVER BUILT (VERIFIED 0 files).**
 6. **Room-transition "instrument retune" wipe** + Monitor meters as living oscilloscope traces
    (Home got one trace; Monitor rollout is partial). **NOT BUILT / partial.**

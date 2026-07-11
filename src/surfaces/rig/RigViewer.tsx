@@ -92,7 +92,7 @@ export const RigViewer = memo(function RigViewer({
           >
             Orbit
           </button>
-          <span className="rig-hint">Drag to orbit · hover a part for its live specs</span>
+          <span className="rig-hint">Drag to orbit · hover or click a part for its live specs</span>
         </div>
       )}
 

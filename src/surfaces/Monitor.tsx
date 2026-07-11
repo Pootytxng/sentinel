@@ -15,7 +15,7 @@ import "./Monitor.css";
 // Sessions (the last-game debrief) is the second segment.
 // Reuses the shared SegmentedControl (the gliding-indicator pattern from Optimize). No new IPC.
 //
-// 3-mode preset GUIDED checklists (Visual Fidelity / Smooth / Clarity) — a quiet, ADVISORY panel above
+// 3-mode preset GUIDED checklists (Max Quality / More FPS / Lower Latency) — a quiet, ADVISORY panel above
 // the live/sessions content. Each preset bundles EXISTING guided walkthroughs (animated schematics of
 // out-of-Compy steps the user follows by hand). Read-only/advisory only: picking a preset just expands
 // the checklist; nothing here mutates Windows or touches IPC. The preset data is the knowledge layer

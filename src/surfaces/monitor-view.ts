@@ -1,6 +1,9 @@
 import { type Walkthrough, walkthroughForKey } from "./walkthroughs";
 
-// 3-mode preset GUIDED checklists for the Monitor surface (Visual Fidelity / Smooth / Clarity).
+// 3-mode preset GUIDED checklists for the Monitor surface (Max Quality / More FPS / Lower Latency —
+// consumer-market terms per the owner's 2026-07-10 direction; ids kept stable). Goal-register
+// comparatives, not the stat readouts' exact terms: the v3 console face shows measured "MAX FPS" /
+// "LOWEST LATENCY" stats on the SAME screen, and a chip must never read as one of those values.
 // Each preset is a curated, plain-English bundle of EXISTING guided walkthroughs — the same animated
 // schematics shown elsewhere for advisory recs. This is purely advisory/read-only knowledge layer:
 // it maps a goal the user has ("I want it to look best" / "I want steadier frames" / "I want a clean
@@ -28,20 +31,20 @@ export type PresetItem = { key: string; walkthrough: Walkthrough };
 export const TUNING_PRESETS: readonly TuningPreset[] = [
   {
     id: "visual-fidelity",
-    label: "Visual Fidelity",
+    label: "Max Quality",
     goal: "Make games look their best — richer color and a tear-free picture.",
     keys: ["hdr", "vrr"],
   },
   {
     id: "smooth",
-    label: "Smooth",
-    goal: "Chase steadier, higher frames — full RAM speed, Game Mode, a tear-free sync.",
+    label: "More FPS",
+    goal: "Chase higher, steadier frames — full RAM speed, Game Mode, a tear-free sync.",
     keys: ["game-mode", "xmp-expo", "vrr", "amd-gpu-undervolt"],
   },
   {
     id: "clarity",
-    label: "Clarity",
-    goal: "A clean, responsive desktop — free up the drive and cut background drag.",
+    label: "Lower Latency",
+    goal: "A more responsive PC — free up drive headroom, prioritize the game, and cut background drag.",
     keys: ["storage-sense", "game-mode"],
   },
 ];

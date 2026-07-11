@@ -3,13 +3,19 @@ import { TUNING_PRESETS, resolvePresetItems } from "./monitor-view";
 import { walkthroughForKey } from "./walkthroughs";
 
 // monitor-view — pure advisory data for the Monitor surface's 3-mode preset GUIDED checklists
-// (Visual Fidelity / Smooth / Clarity). Each preset is a curated list of EXISTING guided walkthroughs
+// (Max Quality / More FPS / Lower Latency). Each preset is a curated list of EXISTING guided walkthroughs
 // (out-of-Compy advisory steps). Read-only/advisory only: nothing here touches Windows, opens a URI,
 // or invokes IPC — it just maps a preset to the walkthroughs the user can follow by hand.
 
 describe("monitor-view tuning presets", () => {
   it("defines exactly the three named presets", () => {
     expect(TUNING_PRESETS.map((p) => p.id)).toEqual(["visual-fidelity", "smooth", "clarity"]);
+  });
+
+  it("labels use consumer-market terms (owner direction 2026-07-10) — never the abstract trio", () => {
+    // Goal-register comparatives, NOT the console readouts' stat terms ("MAX FPS"/"LOWEST LATENCY"
+    // render on the same screen; a preset chip must never read as a measured value).
+    expect(TUNING_PRESETS.map((p) => p.label)).toEqual(["Max Quality", "More FPS", "Lower Latency"]);
   });
 
   it("each preset has a label, a plain-English goal, and ≥1 walkthrough key", () => {
