@@ -13,6 +13,12 @@ import type { SessionSummary } from "../types";
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
+// jsdom has no WebGL — the lazy 3D hero is covered by ribbon-profile.test.ts (pure geometry)
+// + the live self-review; here we pin its mount/unmount contract.
+vi.mock("./monitor/FrametimeRibbon", () => ({
+  FrametimeRibbon: () => <div data-testid="frametime-ribbon" />,
+}));
+
 const cpuSnap = {
   usage_overall_pct: 34.2,
   frequency_mhz: 5100,
@@ -121,6 +127,31 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     expect(values[1]).toBe("142");
     expect(values[2]).toBe("6.9 ms");
     expect(values[3]).toBe("0");
+  });
+
+  it("the 3D ribbon hero mounts ONLY on a live window; stopped ⇒ gone (v3 T4)", async () => {
+    let live = true;
+    mockPolls(() => (live ? liveFps : stoppedFps));
+    mount();
+    expect(await screen.findByTestId("frametime-ribbon")).toBeTruthy();
+    live = false;
+    await waitFor(() => expect(screen.queryByTestId("frametime-ribbon")).toBeNull(), {
+      timeout: 3000,
+    });
+  }, 8000);
+
+  it("overlay control rides the same audited commands (v3 T4): show on toggle, corner picker persists", async () => {
+    mockPolls(() => liveFps);
+    mount();
+    const btn = await screen.findByRole("button", { name: "Overlay" });
+    btn.click();
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("show_overlay"));
+    const corner = await screen.findByRole("button", { name: "Overlay corner bottom right" });
+    corner.click();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("set_overlay_corner", { corner: "bottom-right" }),
+    );
+    expect(localStorage.getItem("compy_overlay_corner")).toBe("bottom-right");
   });
 
   it("capture ON mirrors up via onFpsActive (c)", async () => {

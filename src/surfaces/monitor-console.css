@@ -12,6 +12,17 @@
 :root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .mc-cap-status { font-family: var(--ix-mono); font-size: 11px;
   letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
+:root[data-v2="on"] .mc-ov { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+:root[data-v2="on"] .mc-ov-corner { font-size: 12px; line-height: 1; padding: 5px 8px; cursor: pointer;
+  background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
+:root[data-v2="on"] .mc-ov-corner:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
+:root[data-v2="on"] .mc-ov-corner-on { border-color: var(--ix-accent); color: var(--ix-accent); }
+
+:root[data-v2="on"] .mc-ribbon { height: 260px; border: 1px solid var(--ix-glass-border); min-width: 0; }
+:root[data-v2="on"] .mc-ribbon canvas { display: block; }
+:root[data-v2="on"] .mc-ribbon-loading { height: 100%; display: grid; place-items: center;
+  font-family: var(--ix-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ix-text-3); }
 
 :root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px;
   padding: 16px; border: 1px solid var(--ix-glass-border); }
@@ -49,6 +60,10 @@
   --glow-x: 50%;
   --glow-y: 50%;
   --glow-intensity: 0;
+  /* v3 depth chrome: the whole stage tilts uniformly toward the pointer — plot ink and grid
+     transform TOGETHER, so a spike's position never lies. Reduced motion never sets the vars. */
+  transform: perspective(1400px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 0.12s linear;
 }
 :root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage::after {
   content: "";

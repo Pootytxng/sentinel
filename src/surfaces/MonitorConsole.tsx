@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { readDisplayRefreshHz } from "../design/theme";
@@ -54,6 +54,20 @@ type FpsSample = {
 };
 type FpsLite = { active: boolean; status: string; sample: FpsSample | null };
 
+// v3 hero (plan 2026-07-10-monitor-v3-ribbon): the 3D frametime ribbon, lazy like RigHologram —
+// the three.js module loads only when a live window actually exists to draw.
+const FrametimeRibbon = lazy(() =>
+  import("./monitor/FrametimeRibbon").then((m) => ({ default: m.FrametimeRibbon })),
+);
+
+// Same corner set as Play's overlay config (ported, not forked).
+const CORNERS: [string, string][] = [
+  ["top-left", "↖"],
+  ["top-right", "↗"],
+  ["bottom-left", "↙"],
+  ["bottom-right", "↘"],
+];
+
 // Hottest GPU wins (same pick rule as MonitorBasic / Play's live card).
 function pickGpu(list: GpuSnap[]): GpuSnap | null {
   if (!list || list.length === 0) return null;
@@ -94,6 +108,13 @@ export function MonitorConsole({
   const [gpu, setGpu] = useState<GpuSnap | null>(null);
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
+  // In-game overlay — the SAME audited commands Play's live face runs, ported verbatim (owner
+  // §A0 item 1: the control must exist on the console face; density/backdrop stay classic-only
+  // for now — logged in UI_VISION_BACKLOG as an explicit residual).
+  const [overlayOn, setOverlayOn] = useState(false);
+  const [corner, setCorner] = useState<string>(
+    () => localStorage.getItem("compy_overlay_corner") ?? "top-left",
+  );
   // Caller-owned trace buffer (Oscilloscope is a pure render): real polled fps values only.
   const fpsH = useRef<number[]>([]);
   const visible = useDocumentVisible();
@@ -112,11 +133,22 @@ export function MonitorConsole({
     }
     const onMove = (e: PointerEvent) => {
       const r = stage.getBoundingClientRect();
-      stage.style.setProperty("--glow-x", `${((e.clientX - r.left) / r.width) * 100}%`);
-      stage.style.setProperty("--glow-y", `${((e.clientY - r.top) / r.height) * 100}%`);
+      const nx = (e.clientX - r.left) / r.width;
+      const ny = (e.clientY - r.top) / r.height;
+      stage.style.setProperty("--glow-x", `${nx * 100}%`);
+      stage.style.setProperty("--glow-y", `${ny * 100}%`);
       stage.style.setProperty("--glow-intensity", "1");
+      // v3 depth chrome (§A0 item 5 amendment): the WHOLE stage tilts a few degrees toward the
+      // pointer — a uniform transform, so plot ink and grid move together and a spike's position
+      // never lies (the "depth moves the panel, never warps the data ink" rail).
+      stage.style.setProperty("--tilt-x", `${(-(ny * 2 - 1) * 2).toFixed(2)}deg`);
+      stage.style.setProperty("--tilt-y", `${((nx * 2 - 1) * 2.5).toFixed(2)}deg`);
     };
-    const onLeave = () => stage.style.setProperty("--glow-intensity", "0");
+    const onLeave = () => {
+      stage.style.setProperty("--glow-intensity", "0");
+      stage.style.setProperty("--tilt-x", "0deg");
+      stage.style.setProperty("--tilt-y", "0deg");
+    };
     stage.addEventListener("pointermove", onMove);
     stage.addEventListener("pointerleave", onLeave);
     return () => {
@@ -160,6 +192,36 @@ export function MonitorConsole({
   useEffect(() => {
     onFpsActive?.(fpsActive);
   }, [onFpsActive, fpsActive]);
+
+  // Reflect the actual overlay window state (existing command, same read Play makes).
+  useEffect(() => {
+    invoke<boolean>("overlay_visible").then(setOverlayOn).catch(() => {});
+  }, [active]);
+
+  const toggleOverlay = async () => {
+    try {
+      if (overlayOn) {
+        await invoke("hide_overlay");
+        setOverlayOn(false);
+      } else {
+        await invoke("show_overlay");
+        setOverlayOn(true);
+        invoke("set_overlay_corner", { corner }).catch(() => {});
+      }
+    } catch {
+      /* leave as-is */
+    }
+  };
+
+  const chooseCorner = async (c: string) => {
+    setCorner(c);
+    localStorage.setItem("compy_overlay_corner", c);
+    try {
+      await invoke("set_overlay_corner", { corner: c });
+    } catch {
+      /* applies next time the overlay is shown */
+    }
+  };
 
   // The existing audited capture commands — identical semantics to MonitorBasic/Play's button.
   const toggleCapture = useCallback(async () => {
@@ -226,6 +288,28 @@ export function MonitorConsole({
             "start capture, then play"
           )}
         </span>
+        {/* The in-game overlay's control — the room's other real action (§A0 item 1). */}
+        <span className="mc-ov">
+          <button
+            type="button"
+            className={`mc-cap ${overlayOn ? "mc-cap-on" : ""}`}
+            onClick={toggleOverlay}
+          >
+            {overlayOn ? "Overlay on" : "Overlay"}
+          </button>
+          {overlayOn &&
+            CORNERS.map(([c, glyph]) => (
+              <button
+                key={c}
+                type="button"
+                className={`mc-ov-corner ${corner === c ? "mc-ov-corner-on" : ""}`}
+                aria-label={`Overlay corner ${c.replace("-", " ")}`}
+                onClick={() => chooseCorner(c)}
+              >
+                {glyph}
+              </button>
+            ))}
+        </span>
       </div>
 
       {/* THE INSTRUMENT STAGE — the signature instruments: the motion IS the data, real
@@ -266,6 +350,17 @@ export function MonitorConsole({
             <span className="mc-readout-k">SPIKES</span>
           </div>
         </div>
+
+        {/* THE HERO — the 3D frametime ribbon (owner-chosen v3 concept): real per-frame
+            geometry, spike peaks, the rig's budget plane; orbit is the user's. Renders ONLY
+            when a live window exists — stopped/empty falls to the strips' no-signal states. */}
+        {live && sample.recent_frametimes_ms.length >= 2 && (
+          <div className="mc-ribbon">
+            <Suspense fallback={<div className="mc-ribbon-loading">loading the 3D ribbon…</div>}>
+              <FrametimeRibbon samples={sample.recent_frametimes_ms} budget={ftBudget} />
+            </Suspense>
+          </div>
+        )}
         <div className="mc-scopes">
           <Oscilloscope
             samples={live ? fpsH.current : []}
