@@ -99,17 +99,63 @@ describe("stackRowsFrom — ONE shared 1%-low axis across every row", () => {
     expect(m.rows[1].fracs[1].y).toBeCloseTo(240 / 240);
   });
 
-  it("x normalizes to each session's true duration", () => {
+  it("x normalizes to the timeline's recorded span (== duration when fully covered)", () => {
     const a = sess({ duration_secs: 100, stutter_timeline: [[0, 100], [50, 40], [100, 90]] });
     const m = stackRowsFrom([a]);
     expect(m.rows[0].fracs[1].x).toBeCloseTo(0.5);
     expect(m.rows[0].fracs[2].x).toBe(1);
+    expect(m.rows[0].partial).toBe(false);
   });
 
-  it("duration 0 (defensive) falls back to the timeline's own span", () => {
+  it("duration 0 (defensive) still draws over the timeline's own span", () => {
     const a = sess({ duration_secs: 0, stutter_timeline: [[0, 100], [10, 100]] });
     const m = stackRowsFrom([a]);
     expect(m.rows[0].fracs[1].x).toBe(1);
+  });
+});
+
+describe("stackRowsFrom — partial timeline coverage (self-review round-1 catch, bug→guard)", () => {
+  // The real defect: a 10.5-hour session whose recorded timeline stops at ~2h (the backend's
+  // point cap) drew compressed into ~19% of its row — x was normalized to duration_secs, not to
+  // what was actually RECORDED. The fixture-scale tests all covered 100% of duration, so this
+  // passed on fixtures and broke on the owner's real Sand session (the real-density law's trap).
+  const capped = sess({
+    duration_secs: 37_696,
+    stutter_timeline: [
+      [0, 100],
+      [3600, 60],
+      [7229, 80],
+    ],
+    stutter_events: [
+      { at_secs: 3600, kind: "process-start", label: "in coverage" },
+      { at_secs: 30_000, kind: "process-start", label: "beyond coverage" },
+    ],
+  });
+
+  it("draws over the RECORDED span — the trace fills the row, flagged partial", () => {
+    const m = stackRowsFrom([capped]);
+    const row = m.rows[0];
+    expect(row.fracs[row.fracs.length - 1].x).toBe(1); // fills the row, never a sliver
+    expect(row.partial).toBe(true);
+    expect(row.coveredSecs).toBe(7229);
+  });
+
+  it("full coverage is NOT flagged partial", () => {
+    expect(stackRowsFrom([sess()]).rows[0].partial).toBe(false);
+    expect(stackRowsFrom([sess()]).rows[0].coveredSecs).toBe(600);
+  });
+
+  it("the worst-dip pin only anchors to events INSIDE coverage (no invented magnitudes); the true count stays", () => {
+    const m = stackRowsFrom([capped]);
+    expect(m.rows[0].pin!.label).toBe("in coverage");
+    expect(m.rows[0].pin!.x).toBeLessThanOrEqual(1);
+    expect(m.rows[0].dipCount).toBe(2);
+  });
+
+  it("undrawable rows carry no coverage claim", () => {
+    const m = stackRowsFrom([sess({ stutter_timeline: [] })]);
+    expect(m.rows[0].coveredSecs).toBeNull();
+    expect(m.rows[0].partial).toBe(false);
   });
 });
 

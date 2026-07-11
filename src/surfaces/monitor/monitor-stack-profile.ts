@@ -146,6 +146,12 @@ export type StackRow = {
   dipCount: number;
   /** vs the next-older row IN THE STACK ("VS PREVIOUS"); null on the oldest row. */
   delta: StackRowDelta | null;
+  /** The timeline's recorded span in seconds (its last elapsed second); null when undrawable. */
+  coveredSecs: number | null;
+  /** True when the recording covers materially less than the session (the backend caps timeline
+   *  points, so a multi-hour session's timeline can stop hours early) — the row must SAY so, or
+   *  a full-width trace claims the whole session (self-review round-1 catch, bug→guard). */
+  partial: boolean;
 };
 
 export type StackModel = {
@@ -180,20 +186,36 @@ export function stackRowsFrom(sessions: SessionSummary[], gameOnly?: string | nu
         }
       : null;
     if (!tl || axisMax == null) {
-      return { session: s, points: [], fracs: [], pin: null, dipCount: events.length, delta };
+      return {
+        session: s,
+        points: [],
+        fracs: [],
+        pin: null,
+        dipCount: events.length,
+        delta,
+        coveredSecs: null,
+        partial: false,
+      };
     }
     const points = downsampleTimeline(tl);
+    // Draw over the RECORDED span, not duration_secs: the backend caps timeline points, so a
+    // multi-hour session's timeline can stop hours early — normalizing to duration compressed
+    // the real trace into a sliver (self-review round-1 catch on the owner's 10.5 h session).
+    // `partial` tells the row to STATE the coverage, so a full-width trace never overclaims.
     const lastAt = tl[tl.length - 1][0];
-    const span = s.duration_secs > 0 ? s.duration_secs : Math.max(lastAt, 1);
+    const span = Math.max(lastAt, 1);
+    const partial = s.duration_secs > 0 && lastAt < s.duration_secs * 0.95;
     const toX = (at: number) => clamp01(at / span);
     const yAt = (at: number) => {
       let best = points[0];
       for (const p of points) if (Math.abs(p[0] - at) < Math.abs(best[0] - at)) best = p;
       return clamp01(Math.max(best[1], 0) / axisMax);
     };
-    // The ONE worst dip: the event whose nearest measured second is LOWEST (never invented).
+    // The ONE worst dip: the event whose nearest measured second is LOWEST — only events INSIDE
+    // the recorded coverage qualify (beyond it there is no measured magnitude to anchor to).
     let pin: StackPin | null = null;
     for (const e of events) {
+      if (e.at_secs > lastAt + 1) continue;
       const y = yAt(e.at_secs);
       if (!pin || y < pin.y) {
         pin = { x: toX(e.at_secs), y, clock: clockLabel(s.started_at, e.at_secs), label: e.label };
@@ -206,6 +228,8 @@ export function stackRowsFrom(sessions: SessionSummary[], gameOnly?: string | nu
       pin,
       dipCount: events.length,
       delta,
+      coveredSecs: lastAt,
+      partial,
     };
   });
 

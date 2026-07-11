@@ -122,10 +122,15 @@ function RowCanvas({ row, axisMax, newest }: { row: StackRow; axisMax: number | 
   }, [row, axisMax, newest, size]);
 
   return (
-    <span className="ss-canvas-wrap" ref={wrapRef}>
+    <span className={`ss-canvas-wrap ${row.partial ? "ss-canvas-partial" : ""}`} ref={wrapRef}>
       <canvas ref={canvasRef} className="ss-canvas" aria-hidden="true" />
       {(row.fracs.length < 2 || axisMax == null) && (
         <span className="ss-notimeline">timeline not kept</span>
+      )}
+      {/* A capped recording must SAY so — the trace spans what was RECORDED, and this states
+          it, so a full-width line never claims hours it doesn't show (bug→guard). */}
+      {row.partial && row.coveredSecs != null && (
+        <span className="ss-coverage">first {fmtDur(row.coveredSecs)} recorded</span>
       )}
       {row.pin && (
         <span
@@ -171,6 +176,9 @@ export function SessionStack({
       `${row.dipCount} ${row.dipCount === 1 ? "SPIKE" : "SPIKES"}`,
     ];
     if (row.pin) parts.push(`worst dip ${row.pin.clock} — ${row.pin.label}`.trim());
+    if (row.partial && row.coveredSecs != null) {
+      parts.push(`timeline covers the first ${fmtDur(row.coveredSecs)} only`);
+    }
     if (s.compy_changes_active > 0) {
       parts.push(
         `${s.compy_changes_active} ${s.compy_changes_active === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON`,

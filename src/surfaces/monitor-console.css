@@ -81,6 +81,12 @@
   left: clamp(36px, var(--pin-x, 50%), calc(100% - 36px)); transform: translateX(-50%);
   font-family: var(--ix-mono); font-size: 9px; letter-spacing: .06em; color: var(--v2-warn);
   white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
+/* Capped-recording note shares the strip, right-aligned; the pin clamps clear of it. */
+:root[data-v2="on"] .ss-coverage { position: absolute; top: 0; right: 0;
+  font-family: var(--ix-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ix-text-3); white-space: nowrap; pointer-events: none; }
+:root[data-v2="on"] .ss-canvas-partial .ss-pin-label {
+  left: clamp(36px, var(--pin-x, 50%), calc(100% - 170px)); }
 :root[data-v2="on"] .ss-chip { font-family: var(--ix-mono); font-size: 10px; letter-spacing: .08em;
   color: var(--ix-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 :root[data-v2="on"] .ss-row-newest .ss-chip { color: var(--ix-text-1); }

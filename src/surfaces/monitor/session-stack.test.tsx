@@ -180,6 +180,37 @@ describe("the ONE worst-dip pin with its exact clock time (d)", () => {
   });
 });
 
+describe("partial timeline coverage is STATED (self-review round-1 catch, bug→guard)", () => {
+  // A 10.5-hour real session whose timeline caps at ~2h drew as a sliver; now the trace spans
+  // the recorded window and the row says so — in the strip AND the detail line.
+  const capped = () =>
+    sess({
+      duration_secs: 37_696,
+      stutter_timeline: [
+        [0, 100],
+        [3600, 60],
+        [7200, 80],
+      ],
+      stutter_events: [],
+    });
+
+  it("a capped recording wears the coverage note; a full one doesn't", () => {
+    const { container } = mount([capped(), sess()]);
+    const notes = container.querySelectorAll(".ss-coverage");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toBe("first 2h 0m recorded");
+    expect(container.querySelectorAll(".ss-canvas-partial")).toHaveLength(1);
+  });
+
+  it("the expanded detail states the coverage too", () => {
+    const { container } = mount([capped()]);
+    fireEvent.click(container.querySelector(".ss-row")!);
+    expect(container.querySelector(".ss-detail")!.textContent).toContain(
+      "timeline covers the first 2h 0m only",
+    );
+  });
+});
+
 describe("expand/collapse detail line (e)", () => {
   it("click expands the inline detail: AVG · 1% LOW · SPIKES · worst dip · changes tag; click again collapses", () => {
     const start = new Date(2026, 6, 9, 21, 30, 0);
