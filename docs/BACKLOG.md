@@ -161,7 +161,7 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-10i — 🟡 MONITOR v3 "TELEMETRY RIBBON" CODE-COMPLETE `4c051e0`, SHIP IN FLIGHT (reinstall deferred: owner mid-game)
+### Cycle 2026-07-10i — ✅ MONITOR v3 "TELEMETRY RIBBON" SHIPPED LIVE `6932fa7` (installer SHA-256 `E9737D6E…32421E`, stamp-verified; reinstall ran AFTER Palworld closed)
 
 **Owner picked the 3D-ribbon concept and said "continue" — built same session** (plan
 `docs/superpowers/plans/2026-07-10-monitor-v3-ribbon.md`, entry gate cleared): `66966ea` Oscilloscope
@@ -177,14 +177,10 @@ Verify: tsc 0 · vitest **1252** (166 files) · `git diff -- src-tauri` EMPTY ·
 animates; full-width trace x=239/240; overlay toggle exercised live). Spec amendment landed: the
 direction spec's Monitor row now carries the owner's 2026-07-10 3D/parallax amendment; UI_VISION
 §A0 item 1 closed with the density/backdrop residual logged explicitly.
-- **⛳ SHIP REMAINING (next session picks this up):** release build from `4c051e0` was running in the
-  background (artifact: `src-tauri/target/release/bundle/nsis/Compy_0.1.0_x64-setup.exe` — verify it
-  exists/finished; docs-only files were dirty at build time, so the stamp may read `4c051e0`+dirty).
-  **Reinstall was DEFERRED — the owner was mid-Palworld** (step-aside: no kill/relaunch focus-steal
-  mid-game; note: round-2 review had to stop his live fps capture for the GL probe — his session
-  recording was cut, partial debrief in Sessions). When the game is closed: `scripts/ship-reinstall.ps1`
-  → stamp-verify `4c051e0` → RELEASE_STATE Snapshot UPDATE + Git HEAD/Current installer rows (SHA-256
-  from the reinstall output) → this cycle flips ✅.
+- **✅ SHIPPED:** the game-exit watcher fired, the stale-build gate correctly refused the `4c051e0`
+  artifact against the moved HEAD → rebuilt at `6932fa7` (docs-only delta), silent-reinstalled,
+  **stamp-verified `6932fa7` live**, ONE installer on the Desktop. (Note kept for the owner: round-2
+  review had to stop his live fps capture for the GL probe — partial debrief in Sessions.)
 - **⏳ Then: owner eyeball** on Settings → Appearance → "Monitor console (preview)" (ideally mid-capture
   — the ribbon + spike markers need live frames). Taste gate before default-ON.
 

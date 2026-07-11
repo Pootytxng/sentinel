@@ -10,6 +10,27 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-10 (Monitor v3 "TELEMETRY RIBBON" SHIPPED `6932fa7` — installer SHA-256
+> `E9737D6EE5E05E2CE210DE4000578507F5ACBEC4CDC3A074C4086351D832421E`, stamp-verified LIVE `6932fa7`,
+> installed by Claude AFTER the owner's Palworld session ended (reinstall deliberately deferred
+> mid-game); code-complete at `4c051e0`, `6932fa7` = docs-only on top; flag `compy_monitor_console`
+> still **DEFAULT OFF**):** the owner rated the v2 cluster "satisfactory", gave binding direction
+> (retained verbatim: `docs/UI_VISION_BACKLOG.md` §A0) and chose the **3D ribbon** concept. v3 =
+> `Oscilloscope` v2 (full-width window — his caught half-width bug — dashed budget line at
+> 1000/refreshHz, exact-moment spike markers via pure `spikeIndices`, worst-spike ms callout ONCE
+> in the strip caption) + consumer-term readouts (MAX FPS · AVG FPS · LOWEST LATENCY · SPIKES,
+> `monitor-console-data.ts`, em-dash never 0) + lazy r3f `FrametimeRibbon` hero (real per-frame
+> extrusion, spike cones, budget plane, orbit, `frameloop="demand"`, mounts ONLY on a live window)
+> + overlay toggle/corner ported verbatim + uniform stage tilt (depth never warps data ink — the
+> direction spec's Monitor row carries the owner's 3D/parallax amendment). Self-review round 1
+> **FAIL** (real catch: content-equal 1 Hz polls repainted the demand canvas — GL probe +8
+> draws/tick) → fixed `4c051e0` (content-stable `ftWin` ref + reference-identity bug→guard) →
+> round 2 **PASS 8/8** (idle flat 15s, repaints on real change, orbit animates). Verify: tsc 0 ·
+> vitest **1252** (166 files) · zero src-tauri across the whole v3 train. **⏳ OWNER eyeball is the
+> next gate** (Settings → Appearance → "Monitor console (preview)", ideally mid-capture — the
+> ribbon needs live frames). Residual (explicit): overlay density/backdrop config stays on the
+> classic face.
+>
 > **UPDATE 2026-07-10 (Phase-3 Monitor console BUILT + SHIPPED `3fbd371` — installer SHA-256
 > `7E74216CF47CAE3FA2D09A6E874A0F21A305D4D1925D363A869D61B15C97295D`, stamp-verified LIVE `3fbd371`,
 > installed by Claude, supersedes the `bce72d6` installer; flag `compy_monitor_console` **DEFAULT
@@ -143,9 +164,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `3fbd371` + this ship-docs commit (branch `main`, 2026-07-10 — the live installer is built from exactly `3fbd371`) |
+| Git HEAD | `6932fa7` + this ship-docs commit (branch `main`, 2026-07-10 — the live installer is built from exactly `6932fa7`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `7E74216CF47CAE3FA2D09A6E874A0F21A305D4D1925D363A869D61B15C97295D` (built from `3fbd371`, 2026-07-10 — the **Phase-3 Monitor console instrument cluster**, behind `compy_monitor_console` **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical to the previous build (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states), so this ship changes NO live look until the owner flips Settings → Appearance → "Monitor console (preview)". Flag ON: the Live face = the instrument cluster — `Oscilloscope` fps/frametime traces of real buffered samples (helper stopped ⇒ honest no-signal, never frozen-as-live) + ArcGauges (GPU temp vendor-gated per rule 5 / CPU ungraded / RAM; + GPU load in Advanced) over the SAME 1 Hz read-only polls the classic tiles run, zero new IPC. Home console stays DEFAULT ON from `bce72d6`; the T6c Resume banner and all prior gate states carry over unchanged. Superseded installer: `2DA1340D…E6F3E4` from `bce72d6`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `E9737D6EE5E05E2CE210DE4000578507F5ACBEC4CDC3A074C4086351D832421E` (built from `6932fa7`, 2026-07-10 — **Monitor v3 "Telemetry Ribbon"**, behind `compy_monitor_console` **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: 3D frametime ribbon hero + exact-moment spike markers + budget line + MAX FPS/AVG FPS/LOWEST LATENCY/SPIKES readouts + overlay control, all over the SAME 1 Hz read-only polls, zero new IPC. Home console stays DEFAULT ON from `bce72d6`. Superseded installer: `7E74216C…97295D` from `3fbd371`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
