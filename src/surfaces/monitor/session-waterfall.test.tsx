@@ -260,7 +260,7 @@ describe("SESSIONS lean-in: labels · dips · same-game · compy tag (e)", () =>
       ftWin: [],
       sessions: [sess({ compy_changes_active: 2 }), sess()],
     });
-    expect(screen.getByText("2 COMPY CHANGES ON")).toBeTruthy();
+    expect(screen.getByText("· 2 COMPY CHANGES ON")).toBeTruthy();
     expect(screen.queryByText(/faster|improved|gain/i)).toBeNull();
   });
 

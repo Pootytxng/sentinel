@@ -464,6 +464,7 @@ export function SessionWaterfall({
               {layerLabel(l.session)}
               {l.session.compy_changes_active > 0 && (
                 <span className="sw-compy-tag">
+                  {"· "}
                   {l.session.compy_changes_active}{" "}
                   {l.session.compy_changes_active === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON
                 </span>
