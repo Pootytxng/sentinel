@@ -145,3 +145,22 @@ describe("Oscilloscope — motion + ink discipline", () => {
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
+
+describe("Oscilloscope — line discipline (owner-caught 2026-07-11: bloom + fat strokes)", () => {
+  // bug→guard: the trace wore a drop-shadow (blooming theme violet around graded ink) and the
+  // stretched viewBox fattened strokes non-uniformly. Sharp, sleek lines are the pinned contract.
+  it("no bloom: the stylesheet never drop-shadows the trace; strokes are non-scaling", async () => {
+    const { readFileSync } = await import("fs");
+    // Comments may name the banned filter (history); only live declarations count.
+    const css = readFileSync("src/design/console/oscilloscope.css", "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).not.toMatch(/drop-shadow/);
+    expect(css).toMatch(/vector-effect:\s*non-scaling-stroke/);
+    // Sleek stroke: the trace never grows past 1.5px (screen px under non-scaling-stroke).
+    const trace = css.match(/\.osc-trace\s*\{[^}]*stroke-width:\s*([\d.]+)/);
+    expect(trace).not.toBeNull();
+    expect(parseFloat(trace![1])).toBeLessThanOrEqual(1.5);
+  });
+});
