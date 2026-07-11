@@ -1,5 +1,25 @@
 # Monitor v4 — "Session Waterfall" (concept B refined into the working hero)
 
+> **RESUME NOTE 2026-07-11 (mid-train, working tree UNCOMMITTED):** v4 shipped `85eb8c6`
+> (installer `44610BF6…D370A30`, live) but the **owner REJECTED the eyeball — "this looks
+> absolutely terrible … what a mess"**. Verified with my own eyes (real 5-session data): raw
+> multi-hour timelines drew as smears, dip pins as a barcode, legend printed over chart ink,
+> "Live|Sessions" duplicated the room's segment labels. The round-2 self-review PASS was WRONG
+> on readability — treat "PASS on fixture-scale data" as insufficient. **Fixes ARE CODED in the
+> working tree (uncommitted):** `waterfall-profile.ts` (+`downsampleTimeline` min-per-bucket
+> ≤160 real samples · `MAX_LAYER_PINS=3` worst-pin caps · `layerAlpha`), `SessionWaterfall.tsx`
+> (LIFT 30/SCALE_STEP .08, back baselines dropped, legend moved OUT of the stage with alpha
+> swatches, modes renamed **Now/Compare**), `monitor-console.css` (legend flow row, stage 300px),
+> tests updated+green (tsc 0; touched suites 131 pass; full vitest NOT yet re-run). **Next:**
+> (1) full `npx vitest run`, commit; (2) OWN-EYES check via dev instance (dev-relaunch was
+> launching with CDP 9333; capture Monitor→Compare with real data via `docs/ui-sweep/cdp-shot.mjs`,
+> ACTUALLY LOOK, iterate until it genuinely reads clean); (3) re-dispatch self-reviewer (full
+> fresh round); (4) rebuild + `pwsh scripts/ship-reinstall.ps1` + stamp verify; (5) docs:
+> RELEASE_STATE new banner + UI_VISION §A0 item 2 correction (the "PASS 8/8" claim must be
+> amended — owner eyeball FAILED it); (6) guard-forge note: fixture-blind visual QA is the
+> defect class — density guards now automated (`MAX_DRAW_POINTS`/`MAX_LAYER_PINS` pins in
+> `waterfall-profile.test.ts` "draw-density discipline" block).
+
 **Entry gate: CLEARED 2026-07-10.** Owner verdict on concept round 2 (Artifact `a8e6acf7…`),
 verbatim:
 

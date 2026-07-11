@@ -18,6 +18,7 @@ import {
   sameGameAvailable,
   filterSameGame,
   relativeDay,
+  layerAlpha,
   type LayerGeom,
 } from "./waterfall-profile";
 
@@ -39,8 +40,8 @@ import {
 // never frozen-as-live); SESSIONS layers are the backend's recorded per-second timelines,
 // stripped sessions simply don't appear. Absent aggregates ⇒ em-dash, never a fabricated 0.
 
-const SCALE_STEP = 0.06; // each depth step narrows the layer
-const LIFT = 20; // px each depth step rises
+const SCALE_STEP = 0.08; // each depth step narrows the layer
+const LIFT = 30; // px each depth step rises (owner catch 2026-07-11: 20px interleaved layers into a smear)
 const PAD_X = 16;
 const BOTTOM = 26;
 const TILT_MAX_PX = 12; // per depth step, at full tilt
@@ -91,7 +92,7 @@ export function SessionWaterfall({
   const [hoverLayer, setHoverLayer] = useState<number | null>(null); // SESSIONS layer index
   const [tilt, setTilt] = useState(0);
   const [snaps, setSnaps] = useState<number[][]>([]);
-  const [size, setSize] = useState({ w: 640, h: 280 });
+  const [size, setSize] = useState({ w: 640, h: 300 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const lastPush = useRef<number | null>(null);
@@ -193,16 +194,18 @@ export function SessionWaterfall({
           ? sScene.layers[hoverLayer] === (g as (typeof sScene.layers)[number])
           : false;
       const t = transformFor(d, w, h, isFront ? 0 : effTilt, depthCount);
-      const alpha = isFront ? 1 : hovered ? 1 : Math.max(0.16, 0.5 - d * 0.07);
+      const alpha = isFront || hovered ? 1 : layerAlpha(d);
 
-      // Baseline
-      ctx.globalAlpha = isFront ? 0.5 : alpha * 0.5;
-      ctx.strokeStyle = grid;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(px(t, w, 0), t.baseY);
-      ctx.lineTo(px(t, w, 1), t.baseY);
-      ctx.stroke();
+      // Baseline: front (and a hover-lifted layer) only — five stacked baselines read as grid noise.
+      if (isFront || hovered) {
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px(t, w, 0), t.baseY);
+        ctx.lineTo(px(t, w, 1), t.baseY);
+        ctx.stroke();
+      }
 
       // Area fill + trace
       ctx.globalAlpha = alpha;
@@ -405,13 +408,15 @@ export function SessionWaterfall({
     >
       <div className="sw-bar">
         <div className="sw-modes" role="group" aria-label="Waterfall mode">
+          {/* NOT "Live"/"Sessions" — those exact words are the ROOM's segment control right
+              above this face; duplicated labels meaning different things = owner-caught mess. */}
           <button
             type="button"
             className={`sw-mode-btn ${mode === "live" ? "sw-mode-on" : ""}`}
             aria-pressed={mode === "live"}
             onClick={() => choose("live")}
           >
-            Live
+            Now
           </button>
           <button
             type="button"
@@ -419,7 +424,7 @@ export function SessionWaterfall({
             aria-pressed={mode === "sessions"}
             onClick={() => choose("sessions")}
           >
-            Sessions
+            Compare
           </button>
         </div>
         {mode === "sessions" && sameGameAvailable(baseLayers) && (
@@ -440,6 +445,34 @@ export function SessionWaterfall({
         {axisLabel && <span className="sw-axis">{axisLabel}</span>}
       </div>
 
+      {/* SESSIONS layer legend — OUTSIDE the stage in normal flow (owner catch 2026-07-11:
+          overlaying it on the canvas printed text across the traces). Each row wears a swatch
+          at its layer's exact drawn alpha; hovering a row lifts its layer on the canvas. */}
+      {mode === "sessions" && sScene && (
+        <div className="sw-legend">
+          {layers.map((l, i) => (
+            <button
+              type="button"
+              key={`${l.session.started_at}-${i}`}
+              className={`sw-layer-label ${hoverLayer === i ? "sw-layer-label-on" : ""}`}
+              onMouseEnter={() => setHoverLayer(i)}
+              onMouseLeave={() => setHoverLayer(null)}
+              onFocus={() => setHoverLayer(i)}
+              onBlur={() => setHoverLayer(null)}
+            >
+              <span className="sw-swatch" style={{ opacity: layerAlpha(i) }} aria-hidden="true" />
+              {layerLabel(l.session)}
+              {l.session.compy_changes_active > 0 && (
+                <span className="sw-compy-tag">
+                  {l.session.compy_changes_active}{" "}
+                  {l.session.compy_changes_active === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="sw-stage" ref={wrapRef}>
         <canvas
           ref={canvasRef}
@@ -451,34 +484,6 @@ export function SessionWaterfall({
           onPointerLeave={onPointerLeave}
           onDoubleClick={onDoubleClick}
         />
-
-        {/* SESSIONS layer legend — a stacked column (front layer first) that can NEVER
-            overlap, whatever the layer count or game-name length (self-review round-1 catch:
-            per-layer absolute offsets collided at the real 5-session history). Hovering a row
-            lifts its layer on the canvas — that hover IS the row↔layer association. */}
-        {mode === "sessions" && sScene && (
-          <div className="sw-legend">
-            {layers.map((l, i) => (
-              <button
-                type="button"
-                key={`${l.session.started_at}-${i}`}
-                className={`sw-layer-label ${hoverLayer === i ? "sw-layer-label-on" : ""}`}
-                onMouseEnter={() => setHoverLayer(i)}
-                onMouseLeave={() => setHoverLayer(null)}
-                onFocus={() => setHoverLayer(i)}
-                onBlur={() => setHoverLayer(null)}
-              >
-                {layerLabel(l.session)}
-                {l.session.compy_changes_active > 0 && (
-                  <span className="sw-compy-tag">
-                    {l.session.compy_changes_active}{" "}
-                    {l.session.compy_changes_active === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Honest empties — nothing measured, nothing drawn. */}
         {mode === "live" && !lScene && (

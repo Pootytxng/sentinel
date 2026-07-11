@@ -19,6 +19,38 @@ export const MIN_ZOOM_SAMPLES = 8;
 export const AXIS_UNIT = { live: "ms", sessions: "fps" } as const;
 export type WaterfallMode = keyof typeof AXIS_UNIT;
 
+/** Max drawn points per session layer — a 10-hour session's ~37k per-second samples drawn raw
+ *  are a solid smear, not a line (owner catch, 2026-07-11). Downsampling keeps REAL samples. */
+export const MAX_DRAW_POINTS = 160;
+/** Max pins a single layer may wear — dozens of dip pins are a barcode, not forensics. The
+ *  hover readout still reports the TRUE total. */
+export const MAX_LAYER_PINS = 3;
+
+/** Depth alpha shared by the canvas renderer and the legend swatches (one source). */
+export function layerAlpha(depth: number): number {
+  return depth === 0 ? 1 : Math.max(0.14, 0.42 - depth * 0.08);
+}
+
+/** Honest min-per-bucket downsampling: every kept point IS a real measured sample (the bucket's
+ *  WORST 1%-low, at its own elapsed second) — dips survive, smears don't. ≤ maxPoints in ⇒
+ *  unchanged. */
+export function downsampleTimeline(
+  timeline: [number, number][],
+  maxPoints = MAX_DRAW_POINTS,
+): [number, number][] {
+  if (timeline.length <= maxPoints) return timeline;
+  const first = timeline[0][0];
+  const last = timeline[timeline.length - 1][0];
+  const span = Math.max(1, last - first);
+  const buckets: ([number, number] | null)[] = new Array(maxPoints).fill(null);
+  for (const p of timeline) {
+    const b = Math.min(maxPoints - 1, Math.floor(((p[0] - first) / span) * maxPoints));
+    const cur = buckets[b];
+    if (!cur || p[1] < cur[1]) buckets[b] = p;
+  }
+  return buckets.filter((p): p is [number, number] => p != null);
+}
+
 // ── A's drag-to-segment: zoom a region of the front trace ─────────────────────────────────
 
 /** Fractions (0..1) of the CURRENT window — order-free; the renderer commits on pointerup. */
@@ -95,8 +127,23 @@ export function liveScene(front: number[], snapshots: number[][], budget?: numbe
     scaleMax: max,
     budgetFrac: budget != null ? clamp01(budget / max) : null,
     front: seriesGeom(front, max, budget),
-    layers: snapshots.filter((s) => s.length >= 2).map((s) => seriesGeom(s, max, budget)),
+    // Receding layers wear only their WORST spikes — full pin sets on 6 layers read as noise.
+    layers: snapshots
+      .filter((s) => s.length >= 2)
+      .map((s) => {
+        const g = seriesGeom(s, max, budget);
+        return { ...g, pins: worstPins(g.pins, (p) => p.value) };
+      }),
   };
+}
+
+/** Keep the ≤ MAX_LAYER_PINS worst pins by `severity` (higher = worse), original order. */
+function worstPins<P extends { x: number }>(pins: P[], severity: (p: P) => number): P[] {
+  if (pins.length <= MAX_LAYER_PINS) return pins;
+  const keep = new Set(
+    [...pins].sort((a, b) => severity(b) - severity(a)).slice(0, MAX_LAYER_PINS),
+  );
+  return pins.filter((p) => keep.has(p));
 }
 
 // ── Mode SESSIONS: compare your last games ─────────────────────────────────────────────────
@@ -140,23 +187,28 @@ export function sessionsScene(layers: SessionLayer[]): SessionsScene | null {
     unit: "fps",
     scaleMax: max,
     layers: usable.map((l) => {
+      // A multi-hour session's raw per-second series is a smear, not a line — draw the honest
+      // min-per-bucket downsample (every point still a real sample; dips survive).
+      const series = downsampleTimeline(l.timeline);
       const lastAt = l.timeline[l.timeline.length - 1][0];
       const span = l.session.duration_secs > 0 ? l.session.duration_secs : Math.max(lastAt, 1);
       const toX = (at: number) => clamp01(at / span);
       const yAt = (at: number) => {
-        let best = l.timeline[0];
-        for (const p of l.timeline) if (Math.abs(p[0] - at) < Math.abs(best[0] - at)) best = p;
+        let best = series[0];
+        for (const p of series) if (Math.abs(p[0] - at) < Math.abs(best[0] - at)) best = p;
         return clamp01(Math.max(best[1], 0) / max);
       };
+      const pins = l.events.map((e) => ({
+        x: toX(e.at_secs),
+        y: yAt(e.at_secs),
+        value: e.at_secs,
+        label: e.label,
+      }));
       return {
         layer: l,
-        fracs: l.timeline.map(([at, v]) => ({ x: toX(at), y: clamp01(Math.max(v, 0) / max) })),
-        pins: l.events.map((e) => ({
-          x: toX(e.at_secs),
-          y: yAt(e.at_secs),
-          value: e.at_secs,
-          label: e.label,
-        })),
+        fracs: series.map(([at, v]) => ({ x: toX(at), y: clamp01(Math.max(v, 0) / max) })),
+        // Only the WORST dips wear pins (lowest 1%-low); the readout reports the true count.
+        pins: worstPins(pins, (p) => -p.y),
       };
     }),
   };

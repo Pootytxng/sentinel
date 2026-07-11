@@ -37,18 +37,20 @@
 :root[data-v2="on"] .sw-axis { margin-left: auto; font-family: var(--ix-mono); font-size: 9px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--ix-text-3);
   font-variant-numeric: tabular-nums; }
-:root[data-v2="on"] .sw-stage { position: relative; height: 280px; border: 1px solid var(--ix-glass-border);
+:root[data-v2="on"] .sw-stage { position: relative; height: 300px; border: 1px solid var(--ix-glass-border);
   min-width: 0; overflow: hidden; }
 :root[data-v2="on"] .sw-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 :root[data-v2="on"] .sw[data-mode="live"] .sw-canvas { cursor: crosshair; }
-/* Legend: a stacked column at the stage's top-left — rows can never overlap, whatever the
-   layer count or name length (v4 self-review round-1 catch). */
-:root[data-v2="on"] .sw-legend { position: absolute; top: 8px; left: 8px; z-index: 2;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; max-width: 62%; }
+/* Legend: normal-flow wrap row ABOVE the stage — never printed over chart ink (owner catch
+   2026-07-11); rows can never overlap, whatever the layer count or name length. */
+:root[data-v2="on"] .sw-legend { display: flex; flex-wrap: wrap; align-items: baseline;
+  column-gap: 16px; row-gap: 2px; }
 :root[data-v2="on"] .sw-layer-label { font-family: var(--ix-mono); font-size: 9px;
   letter-spacing: .08em; text-transform: uppercase; color: var(--ix-text-3); background: transparent;
-  border: 0; padding: 1px 4px; cursor: pointer; white-space: nowrap; text-align: left;
+  border: 0; padding: 1px 0; cursor: pointer; white-space: nowrap; text-align: left;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+:root[data-v2="on"] .sw-swatch { display: inline-block; width: 8px; height: 8px; margin-right: 6px;
+  background: var(--ix-accent); vertical-align: baseline; }
 :root[data-v2="on"] .sw-layer-label:hover, :root[data-v2="on"] .sw-layer-label-on { color: var(--ix-text-1); }
 :root[data-v2="on"] .sw-compy-tag { margin-left: 8px; color: var(--ix-accent); opacity: .85; }
 :root[data-v2="on"] .sw-empty { position: absolute; inset: 0; display: grid; place-items: center;

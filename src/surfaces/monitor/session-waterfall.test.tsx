@@ -121,7 +121,7 @@ describe("units never mix (b)", () => {
     expect(root.getAttribute("data-axis")).toBe("ms");
     expect(container.querySelector(".sw-axis")!.textContent).toMatch(/ms$/);
     expect(container.querySelector(".sw-axis")!.textContent).not.toMatch(/fps/);
-    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
     expect(root.getAttribute("data-axis")).toBe("fps");
   });
 
@@ -142,7 +142,7 @@ describe("honest empties (c)", () => {
 
   it("0 sessions → 'no sessions on record yet — play with capture on'", () => {
     mount({ live: false, ftWin: [], sessions: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
     expect(screen.getByText("no sessions on record yet — play with capture on")).toBeTruthy();
   });
 
@@ -152,7 +152,7 @@ describe("honest empties (c)", () => {
       ftWin: [],
       sessions: [sess({ stutter_timeline: [] }), sess({ stutter_timeline: undefined })],
     });
-    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
     expect(
       screen.getByText(
         "no session timelines on record — timelines are kept for your 5 most recent sessions",
@@ -267,7 +267,7 @@ describe("SESSIONS lean-in: labels · dips · same-game · compy tag (e)", () =>
   it("auto-parks on SESSIONS when nothing is live but sessions exist (until the user picks)", () => {
     const { container } = mount({ live: false, ftWin: [], sessions: [sess()] });
     expect(container.querySelector(".sw")!.getAttribute("data-mode")).toBe("sessions");
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
+    fireEvent.click(screen.getByRole("button", { name: "Now" }));
     expect(container.querySelector(".sw")!.getAttribute("data-mode")).toBe("live");
   });
 });
@@ -323,7 +323,7 @@ describe("A's drag-to-segment on the front trace (f)", () => {
 describe("tilt is pointer-driven only; empty scenes never repaint (g)", () => {
   it("reduced: a bare pointer move over an empty scene causes no repaint", () => {
     const { container } = mount({ live: false, ftWin: [], sessions: [], reduced: true });
-    fireEvent.click(screen.getByRole("button", { name: "Sessions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
     const before = ctx2d.calls.clearRect;
     const canvas = container.querySelector(".sw-canvas")!;
     fireEvent.pointerMove(canvas, { clientX: 200, clientY: 100 });

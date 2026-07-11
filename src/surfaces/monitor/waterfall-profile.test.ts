@@ -17,6 +17,10 @@ import {
   sameGameAvailable,
   filterSameGame,
   relativeDay,
+  downsampleTimeline,
+  layerAlpha,
+  MAX_DRAW_POINTS,
+  MAX_LAYER_PINS,
 } from "./waterfall-profile";
 
 // Truth-tables for the v4 waterfall's pure math (plan T1): honest empties (null scenes, null
@@ -216,6 +220,68 @@ describe("sessionsScene — one shared fps axis, dips on their own layer", () =>
     const a = sess({ duration_secs: 0, stutter_timeline: [[0, 100], [10, 100]] });
     const s = sessionsScene(sessionLayers([a]))!;
     expect(s.layers[0].fracs[1].x).toBe(1);
+  });
+});
+
+describe("draw-density discipline (owner catch 2026-07-11: raw multi-hour data was a smear)", () => {
+  it("downsampleTimeline caps a 10-hour series to MAX_DRAW_POINTS of REAL samples", () => {
+    const long: [number, number][] = Array.from({ length: 37_000 }, (_, i) => [
+      i,
+      100 + Math.sin(i / 30) * 40,
+    ]);
+    long[18_500] = [18_500, 3]; // the session's single worst dip
+    const ds = downsampleTimeline(long);
+    expect(ds.length).toBeLessThanOrEqual(MAX_DRAW_POINTS);
+    // Every kept point IS an input sample (no synthesis).
+    const set = new Set(long.map((p) => p.join(",")));
+    for (const p of ds) expect(set.has(p.join(","))).toBe(true);
+    // The global worst dip survives (min-per-bucket keeps worst cases).
+    expect(ds.some(([at, v]) => at === 18_500 && v === 3)).toBe(true);
+  });
+
+  it("short series pass through untouched", () => {
+    const short: [number, number][] = [
+      [0, 100],
+      [1, 90],
+    ];
+    expect(downsampleTimeline(short)).toBe(short);
+  });
+
+  it("a 50-event session wears only the MAX_LAYER_PINS worst dip pins; the readout count stays true", () => {
+    const timeline: [number, number][] = Array.from({ length: 600 }, (_, i) => [i, 100]);
+    timeline[100] = [100, 10]; // worst
+    timeline[200] = [200, 20];
+    timeline[300] = [300, 30];
+    timeline[400] = [400, 90];
+    const events = Array.from({ length: 50 }, (_, i) => ({
+      at_secs: (i % 6) * 100,
+      kind: "process-start",
+      label: `proc${i}`,
+    }));
+    const s = sessionsScene(
+      sessionLayers([sess({ duration_secs: 600, stutter_timeline: timeline, stutter_events: events })]),
+    )!;
+    expect(s.layers[0].pins.length).toBeLessThanOrEqual(MAX_LAYER_PINS);
+    // The kept pins are the WORST ones (they sit at the lowest measured dips).
+    for (const p of s.layers[0].pins) expect(p.y).toBeLessThanOrEqual(30 / 100 + 0.01);
+    // The layer still exposes the true event count for the hover readout.
+    expect(s.layers[0].layer.events).toHaveLength(50);
+  });
+
+  it("receding LIVE snapshots cap spike pins too; the FRONT trace keeps all its spikes", () => {
+    const spiky = [7, 7, 7, 41, 7, 42, 7, 43, 7, 44, 7, 45];
+    const s = liveScene(spiky, [spiky], 16.7)!;
+    expect(s.front.pins.length).toBe(5); // real-time forensics: front is uncapped
+    expect(s.layers[0].pins.length).toBeLessThanOrEqual(MAX_LAYER_PINS);
+    const kept = s.layers[0].pins.map((p) => p.value).sort((a, b) => a - b);
+    expect(kept).toEqual([43, 44, 45]); // the worst three
+  });
+
+  it("layerAlpha: front fully opaque, depth fades, never below the floor", () => {
+    expect(layerAlpha(0)).toBe(1);
+    expect(layerAlpha(1)).toBeLessThan(1);
+    expect(layerAlpha(2)).toBeLessThan(layerAlpha(1));
+    expect(layerAlpha(9)).toBeGreaterThanOrEqual(0.14);
   });
 });
 
