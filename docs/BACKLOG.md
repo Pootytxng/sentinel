@@ -161,6 +161,24 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10k — ❌ MONITOR v3 RIBBON REJECTED on eyeball → CONCEPT ROUND 2 OUT (interactive mockups, owner pick pending)
+
+**Owner eyeballed the ribbon (screenshot): "this looks sloppy and doesnt make sense … create
+something sensible thats achieves the same goal and still incorporates some sort of 3D or just
+simpyl interactive graph"** (full verbatim + failure diagnosis retained in UI_VISION §A0 item 2:
+the extruded mound had no y-axis/scale, perspective warped magnitude — zero readable values, so the
+3D broke his own exact-spike-moment requirement). Per the pattern that resolved the Lab
+(build-reject ×2 → interactive mockups → pick), **v4 goes mockup-first**: Artifact
+<https://claude.ai/code/artifact/a8e6acf7-54f6-47c4-a1db-d4e1880d8249> — **A Precision Scope**
+(interactive 2D: real ms axis, hover-scrub exact frames, drag-zoom, clickable spike chips) ·
+**B Depth Waterfall** (depth = TIME: front trace flat + readable, history recedes, spike pins
+persist) · **C Bar Skyline** (per-frame columns vs a labeled ms wall on a gridded floor,
+drag-orbit, spikes print exact ms). Same simulated feed, budget line, exact-moment markers,
+consumer readouts across all three.
+- **⏳ GATE: owner picks A/B/C (or combines) → v4 plan + build in a FRESH session.** Ribbon stays
+  live-but-preview-OFF (`compy_monitor_console` DEFAULT OFF — nothing rejected is default-visible).
+  Phase 4 (Blackbook console) stays queued behind the Monitor verdict chain.
+
 ### Cycle 2026-07-10j — ✅ A0 item 6 CLOSED: consumer-terms preset relabel + rig-hint fix (next non-gated item; Monitor-v3 eyeball still the pending gate)
 
 **With all plain `[ ]` items gated and Phase 4 (Blackbook console) entry-gated on the Monitor-v3

@@ -54,6 +54,22 @@ full response ive written here seeing how things seem to get lost in translation
    satisfactory; he wants a third option that beats both. Spitballed same day per the per-tab law;
    **owner CHOSE the "3D ribbon graph" concept (2026-07-10)** — plan written:
    `docs/superpowers/plans/2026-07-10-monitor-v3-ribbon.md` (entry gate cleared).
+   **→ BUILT + SHIPPED `6932fa7`, then ❌ REJECTED on eyeball (owner, 2026-07-10, verbatim):**
+   > ok this is not what i expected (view image) this looks sloppy and doesnt make sense. can you
+   > try to create something sensible thats achieves the same goal and still incorporates some
+   > sort of 3D or just simpyl interactive graph. this is just weird looking
+   Failure diagnosis (recorded so v4 can't repeat it): the ribbon extruded the trace into a solid
+   mound with **no y-axis, no per-frame reference, perspective warping magnitude** — zero readable
+   values, so the 3D destroyed the "exact spike moment" requirement (item 3). Lesson = the concept-
+   words→visual translation gap; v4 goes through **interactive mockups first** (the pattern that
+   resolved the Lab). **CONCEPT ROUND 2 OUT (2026-07-10):** Artifact
+   <https://claude.ai/code/artifact/a8e6acf7-54f6-47c4-a1db-d4e1880d8249> — A "Precision Scope"
+   (interactive 2D: ms axis, scrub, drag-zoom, spike chips) · B "Depth Waterfall" (3D where depth =
+   time; front trace flat/readable, history recedes, spike pins persist) · C "Bar Skyline"
+   (per-frame columns on a gridded floor vs a labeled ms wall, drag-orbit, spike columns print
+   their exact ms). All three: same feed, budget line, exact-moment markers, consumer readouts.
+   ⏳ **Owner picks (or combines) before any v4 build** — the ribbon stays live-but-preview-OFF
+   until then.
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
