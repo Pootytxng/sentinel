@@ -161,6 +161,40 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-10h — ✅ PHASE-3 MONITOR CONSOLE BUILT + SHIPPED LIVE `3fbd371` (installer SHA-256 `7E74216C…97295D`, stamp-verified; supersedes `bce72d6`; flag `compy_monitor_console` DEFAULT OFF)
+
+**The 2026-07-10g resume pointer executed end-to-end in one fresh session** (plan
+`docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md`, 5 tasks TDD; the per-tab
+concept-check entry gate cleared by the owner's go on the instrument cluster — live traces +
+gauges, NO hologram/parallax): `1527d61` flag plumbing + MonitorV2 Live-face branch (DEFAULT OFF,
+absent === "0" byte-identity pinned BOTH `compy_editorial` states; Settings → Appearance "Monitor
+console (preview)") · `7bb9508` the `Oscilloscope` kit component (pure render of caller-buffered
+REAL samples — no self-driven rAF/interval, cap-windowed, ArcGauge tone contract, token-only ink;
+empty buffer ⇒ honest "no signal", never a synthetic line; reduced ⇒ no glow/sweep) · `3f09742`
+MonitorConsole — the SAME three 1 Hz read-only polls MonitorBasic/Play live run ported verbatim
+(commands, cadence, cancellation, visibility gate — zero new IPC): fps trace = real polled capture
+samples, cleared the moment the helper stops (never frozen-as-live); frametime trace = the
+backend's real `recent_frametimes_ms` window (the Overlay's stream); ArcGauges GPU temp
+(vendor-gated, NVIDIA ungraded per rule 5) / CPU (ungraded by design) / RAM (+ GPU load in
+Advanced); capture control = the same audited toggle; V2-8 `onFpsActive` door mirror preserved;
+Basic keeps the last-session door; Sessions + TuningPresets untouched · `3fbd371` motion layer —
+Phase 2's spotlight (event-driven, no rAF) + `backwards` reveal + stage reticle, deliberately NO
+parallax over the traces; reduced ⇒ still page; border-hygiene guard caught + fixed an undefined
+`--ix-bg` fallback.
+Verify: tsc 0 · full vitest **1236** (164 files, +26 pins) · `git diff -- src-tauri` EMPTY ·
+self-reviewer **PASS** 8/8 (native 1500×980: stopped-state honesty, visual stillness at rest — two
+shots 12s apart differ only in real sensor numbers, computed accent-ink contrast on the capture
+button, flag-off classic round-trip, live Settings toggle no reload, Crimson spot-check — the
+violet capture button under Crimson traced to the PRE-EXISTING test-pinned per-room accent
+re-point `monitor-v2.css:31`, not this train).
+- **⏳ OWNER eyeball (the taste gate before default-ON and Phase 4 History/Black Box):** Settings →
+  Appearance → **"Monitor console (preview)"** ON, open Monitor's Live face (ideally during a
+  capture), react.
+- **📌 Known preview gap (owner reaction decides):** the Advanced console face shows the instrument
+  cluster only — overlay controls + deep monitoring stay on the classic face (flag off) for now.
+- **📌 Open candidates unchanged:** T6b (batched restore-side elevation) · the gated backlog `[ ]`
+  items.
+
 ### Cycle 2026-07-10g — ✅ OWNER VERDICT IN ("everything looks good and gaming mode worked") → HOME CONSOLE DEFAULT-ON SHIPPED LIVE `bce72d6` (installer SHA-256 `2DA1340D…E6F3E4`, stamp-verified; supersedes `80c69f1`) + PHASE-3 PLAN WRITTEN
 
 **Both pending gates cleared by one verdict (2026-07-10):** the T6c Resume worked live on his real
@@ -175,11 +209,8 @@ orphaned session, and the Home-console eyeball (A4) approved. Shipped per
   ✅ DONE**. Verify: tsc 0 · vitest **1210** (161 files) · zero src-tauri · self-reviewer **PASS**
   (settings round-trip live both ways no reload, "(preview)" grep-clean, console idle 0 GL
   draws/16s, orbit opt-in holds).
-- **⛳ RESUME (next train, FRESH session):** build **Phase 3 (Monitor)** from
-  `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` — NEW flag
-  `compy_monitor_console` DEFAULT OFF · NEW `Oscilloscope` kit component (pure real-sample trace,
-  no-signal honest state) · MonitorConsole over the existing live polls (verbatim port, zero new
-  IPC) · title-header/header-slop exit checks · self-review + ship + owner eyeball. Entry gate OPEN.
+- ~~⛳ RESUME: build Phase 3 (Monitor)~~ → **✅ EXECUTED — see Cycle 2026-07-10h above**
+  (`3fbd371` shipped live behind `compy_monitor_console` DEFAULT OFF).
 - **📌 Open candidates unchanged:** T6b (batched restore-side elevation) · the gated backlog `[ ]`
   items (owner-curated data / outbound walls).
 
