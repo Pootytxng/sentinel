@@ -10,6 +10,18 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (v5 trace-line refinement SHIPPED `e900b6a` — installer SHA-256
+> `5AE1ED22BD308C4C877EF7D71155A65B77028736B7193C55E9197656C7821236`, live exe stamp-verified
+> `e900b6a`, installed by Claude, supersedes the `A4D3BF98…D147E0` installer; flag
+> `compy_monitor_console` still **DEFAULT OFF**):** owner ask on the v5 eyeball ("clean up and
+> refine how the actual line on the graph looks") — stack row traces now stroke a **monotone
+> cubic (Fritsch–Carlson)** curve with round joins/caps (passes through EVERY real sample, never
+> overshoots — smooths the min-per-bucket sawtooth corners, never the data; pin dot verified on
+> the curve minimum) and the scope SVG traces gain round joins/caps, geometry unchanged. Guard:
+> bezierCurveTo + round-join pin in `session-stack.test.tsx`. Verify: tsc 0 · vitest **1306**
+> (165 files) · self-review **PASS** (zoomed real-data crops — no sawtooth, dips keep true
+> depth). **⏳ OWNER eyeball still the open gate.**
+>
 > **UPDATE 2026-07-11 (Monitor v5 "FLIGHT DECK + SESSION STACK" SHIPPED `960734c` — installer
 > SHA-256 `A4D3BF98DCE1CF57740C9163CF4393F5F7499168946630EA485D974706D147E0`, live exe
 > stamp-verified `960734c` (embedded-hash proof), installed by Claude, supersedes the
