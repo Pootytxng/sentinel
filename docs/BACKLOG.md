@@ -178,9 +178,13 @@ previous, DIFFERENT-GAME labeling) · **C "Debrief Card"** (measured grade + pla
 two-session side-by-side bars, verdict sentences). All three carry the §A0 binding musts; natural
 combine flagged (A's top + B's stack). Same simulated feed across all three, labeled SIMULATED.
 OWNER_ACTION_CHECKLIST §A5 updated to the pick.
-- **⏳ GATE: owner picks A / B / C / combine** → then ONE build (fresh session, same
-  `compy_monitor_console` flag DEFAULT OFF, plan first). Phase 4 (Blackbook console) still queues
-  behind the Monitor verdict chain.
+- ~~⏳ GATE: owner picks A / B / C / combine~~ → **✅ PICKED same day (owner, 2026-07-11):
+  "A's top + B's stack"** (mockups verdict: "ooooo ya i like the mockups you sent me").
+  **⛳ RESUME (next train, FRESH session): build Monitor v5 "Flight Deck + Session Stack" from
+  `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md`** — entry gate CLEARED; same flag
+  `compy_monitor_console` DEFAULT OFF; one face, two halves (live deck + flat same-axis session
+  stack), NO mode toggle, SessionWaterfall DELETED in T3; zero new IPC, zero src-tauri.
+  Phase 4 (Blackbook console) still queues behind the Monitor verdict chain.
 
 ### Cycle 2026-07-11b — ✅ DEAD-SURFACE HYGIENE TRAIN (`eb5e62a`+`4a9a6ed`+`257ab32`) — the 2026-07-10j logged candidate executed; Monitor v4 eyeball still the open gate
 

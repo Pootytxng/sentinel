@@ -56,8 +56,11 @@ comprehensive."** So it's re-concepted mockup-first (the pattern that worked for
 session a flat mini-graph, one shared axis, stacked like a playlist) · **C Debrief Card** (grade +
 side-by-side scoreboard in words and bars). All keep your musts (real graphs, exact spike moments,
 MAX FPS-style terms, session comparison, overlay control, honest empties).
-- **Result → tell Claude:** "A" / "B" / "C" / a combine (e.g. "A's top + B's stack"), or what none
-  of them get right. Then it becomes ONE build behind the same preview flag.
+- ~~Result → tell Claude: "A" / "B" / "C" / a combine~~ → ✅ **PICKED 2026-07-11: "A's top +
+  B's stack"** ("ooooo ya i like the mockups"). Build plan:
+  [`2026-07-11-monitor-v5-deck-stack.md`](superpowers/plans/2026-07-11-monitor-v5-deck-stack.md).
+  **Next thing on you here: the v5 eyeball once it ships** (same Settings → Appearance →
+  "Monitor console (preview)" toggle).
 
 ---
 

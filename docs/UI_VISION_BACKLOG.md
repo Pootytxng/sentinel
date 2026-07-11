@@ -108,8 +108,11 @@ full response ive written here seeing how things seem to get lost in translation
    plain-English headline, two-session side-by-side bars, verdict sentences). All three keep the
    binding musts (real graphs · exact spike moments · consumer terms · session comparison ·
    overlay control · honest empties · zero new IPC). Natural combine flagged on the page:
-   A's top half + B's stack. **⏳ GATE: owner picks A/B/C (or a combine)** — then ONE build,
-   same flag, fresh session.
+   A's top half + B's stack. ~~⏳ GATE: owner picks A/B/C (or a combine)~~ → ✅ **PICKED same day
+   (owner, 2026-07-11): "A's top + B's stack"** ("ooooo ya i like the mockups you sent me").
+   Build plan: `docs/superpowers/plans/2026-07-11-monitor-v5-deck-stack.md` (v5 "Flight Deck +
+   Session Stack" — one face, two halves, no mode toggle, waterfall deleted; builds in a FRESH
+   session).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
