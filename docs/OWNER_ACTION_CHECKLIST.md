@@ -8,7 +8,10 @@
 > — it keeps going and only raises one of these if it *truly* can't proceed.
 >
 > **Status legend:** ⬜ open · ✅ done · ⏳ waiting on you · 🔒 gated on money/legal.
-> Last reconciled: **2026-07-08** (full sweep of all task-list docs in the repo).
+> Last reconciled: **2026-07-08**, patched **2026-07-11** (Cowork full audit — added the missing
+> Monitor-v4 eyeball item, fixed a same-day self-contradiction on Lenis/HoloLens status, flagged a
+> dead repo link in the legal drafts). Not a full re-sweep of every doc — see
+> `docs/COWORK_AUDIT_2026-07-11.md` for what was and wasn't checked.
 
 ---
 
@@ -42,9 +45,15 @@ instantly. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-09f / 2026-07-
 ### A4. Home console preview — your eyeball  ·  ✅ DONE 2026-07-10 ("everything looks good")
 Approved and **shipped default-ON** (`bce72d6` live): Home now opens as the console for everyone;
 Settings → Appearance → "Home console" OFF restores the classic Home instantly (the failsafe).
-Phase 3 (Monitor — live gauges + oscilloscope traces) is planned
-(`superpowers/plans/2026-07-10-console-hud-phase3-monitor.md`) and builds in a fresh session;
-your next eyeball comes when its preview ships.
+
+### A5. Monitor console v4 "Session Waterfall" — your eyeball (round 2)  ·  ⏳ OPEN (added 2026-07-11 audit — was missing from this list)
+Phase 3 shipped and has been through two owner rounds already: v2 → v3 "Telemetry Ribbon" (rated
+"satisfactory") → v4 "Session Waterfall" round 1 (`85eb8c6`) **REJECTED on eyeball** ("this looks
+absolutely terrible … what a mess" — real multi-hour data drew as smears, a dip-pin barcode, legend
+over chart ink) → reworked (`082414c`/`915cb96`: downsampled draws, capped pins, legend off-stage,
+renamed Now/Compare modes). **Your round-2 eyeball is the open gate:** Settings → Appearance →
+"Monitor console (preview)", both modes, ideally mid-capture with ≥2 recorded sessions.
+- **Result → tell Claude:** "Monitor v4 looks good" (or what's still wrong).
 
 ---
 
@@ -83,10 +92,15 @@ direction was scattered across ~20 specs and the redesign lane was marked "COMPL
 about was never built.** Now consolidated into [`UI_VISION_BACKLOG.md`](UI_VISION_BACKLOG.md) — its
 🔴 OPEN section is the real remaining work. **Direction now DECIDED (2026-07-09):** the drag gallery was
 built then rejected + **deleted**; the JARVIS motion stack (magnetic cursor, GSAP data-reactivity, hologram
-inertia — Lenis dropped as unneeded) is being built via the APPROVED **Ops Console** rollout
+inertia) is being built via the APPROVED **Ops Console** rollout
 (`docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`; the Instrument-Bench bento was
-rejected on sight). Also open there:
-CommandPalette, the site-glow/"full overhaul" gate, and the HoloLens tour status.
+rejected on sight). **Correction (2026-07-11 audit — this line previously contradicted
+UI_VISION_BACKLOG.md and was wrong):** Lenis smooth-scroll is **NOT dropped — still unbuilt, still
+open** (UI_VISION_BACKLOG.md §A.5, verified 0 files). The HoloLens onboarding tour redesign is **NOT
+open — it SHIPPED** (verified 2026-07-08, UI_VISION_BACKLOG.md §H) and should not have been listed
+here as unresolved. Also still genuinely open there: CommandPalette, the site-glow/"full overhaul"
+gate, the magnetic-cursor slice (only a narrower "reticle Target Cursor" shipped so far), GSAP
+data-reactivity (not built as specified), and the room-transition wipe (partial).
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
@@ -99,8 +113,12 @@ These gate **public** release only (not the local app you use daily). Full list:
 [`ARCHITECTURE_LOCKS.md`](ARCHITECTURE_LOCKS.md) pre-launch section.
 - 🔒 **Code-signing route** — Azure Trusted Signing is the noted $0-first path; resolves the "unknown
   publisher" UAC banner for every elevation.
-- 🔒 **Legal** — EULA license model + governing law/jurisdiction; `docs/EULA.md` + `docs/PRIVACY.md`
-  are drafts to finalize.
+- 🔒 **Legal** — `docs/EULA.md` + `docs/PRIVACY.md` are drafts to finalize. **Narrower than it looks
+  (2026-07-11 audit):** license model (proprietary, all-rights-reserved) and governing law (United
+  States) are already decided in EULA v0.3 — only the `[STATE]` venue blank is genuinely open.
+  **Bug found:** both docs already link to `https://github.com/Pootytxng/compy`, which doesn't exist
+  yet (current repo is still `Pootytxng/sentinel`, private) — fix the links when the rename below
+  actually happens, don't ship as-is.
 - 🔒 **GitHub repo rename → `compy` + `compy.gg` domain** — bundled at first public exposure.
 - 🔒 **Receipts telemetry arming** — new outbound-network boundary; needs its security review + a
   consent UI + your sign-off before it can leave the machine (dark by design until then).

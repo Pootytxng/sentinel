@@ -199,7 +199,11 @@ direct-download / local-share distribution.** PUBLIC release stays gated on **co
 ## 8. Explicit non-goals
 
 - Do **not** enable remote fetch. Do **not** enable the updater.
-- Do **not** expand the frozen ~29-rec tweak catalog (LOCKED rule 6) — no new risky tweaks/recommendations. (Gaming Mode F1, service-suspend, and debloat are already SHIPPED/ARMED on `main` and are NOT new catalog entries — they ride the existing audited apply/rollback boundary.)
+- **(Correction, 2026-07-11 audit — this line was stale) LOCKED rule 6 is no longer a hard freeze:**
+  the owner opened the catalog 2026-07-09 under a measurable-benefit-under-rails policy — new tweaks
+  CAN be added if they clear the proving-ground bench, the permanent safety rails, and their own
+  mutation-gate QA. What's unchanged: no *unaudited* tweak ships, and Gaming Mode F1/service-suspend/
+  debloat rode the existing apply/rollback boundary, not a catalog shortcut. See CLAUDE.md rule 6.
 - Do **not** relax the privacy / no-telemetry stance.
 - Do **not** ship a public release without code signing + legal review.
 

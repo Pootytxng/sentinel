@@ -3,10 +3,13 @@
 > **Doctrine pointer (2026-06-12):** superseded by `docs/RECEIPTS_DOCTRINE.md` (Receipts Doctrine — monetization-first core, incl. a Compy Pro subscription); where this doc conflicts, the doctrine wins.
 
 **Status: DECISION NEEDED (2026-06-02).** This frames the model + processor choice so the build is a
-fast follow once you pick. **Nothing here is built yet** — picking the model is the checkpoint, because
-you can't build licensing infrastructure for a model that isn't chosen (and "free" means no licensing
-at all). Honest framing per Compy's identity: **local-only, no account, no telemetry.** That identity
-should *shape* the monetization, not get sacrificed for it.
+fast follow once you pick. **Correction (2026-07-11 audit):** "nothing here is built yet" is stale —
+§5 below documents the `license.rs` verify core, the dark licensing UI, and the owner-side minting tool
+as BUILT (2026-06-14). What's still undecided is the model/price/processor choice itself (§1) and
+whether/when to arm it (`licensing_armed()` stays DISARMED, all-zeros key, per `RELEASE_STATE.md`) —
+the infrastructure exists inert, waiting on that decision, not the reverse. Honest framing per Compy's
+identity: **local-only, no account, no telemetry.** That identity should *shape* the monetization, not
+get sacrificed for it.
 
 ---
 

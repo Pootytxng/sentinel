@@ -161,6 +161,22 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-11a — ✅ MONITOR v4 "SESSION WATERFALL" BUILT + SHIPPED, ❌ ROUND-1 REJECTED on real data, REWORKED → round-2 eyeball open (backfilled 2026-07-11, Cowork audit — this cycle was missing from the log; full detail already lived in RELEASE_STATE.md + UI_VISION_BACKLOG.md §A0 item 2)
+
+**Resuming Cycle 2026-07-10k's cleared gate:** Monitor v4 "Session Waterfall" (B Depth Waterfall + A's
+drag-segment) built and shipped `85eb8c6` — LIVE mode (frametime scope, drag-zoom, receding
+same-capture snapshots) + SESSIONS mode (last ≤5 sessions, delta strip, dip pins), replacing the
+deleted v3 ribbon. Self-review round 1 FAIL (4 real catches, fixed) → round 2 **PASS 8/8** — but that
+PASS ran on fixture-scale data. **Owner rejected on his real 5-session data: "this looks absolutely
+terrible … what a mess"** — real multi-hour timelines drew as smears, dip pins as a barcode, legend
+printed over chart ink, Live/Sessions duplicated the room's own segment labels. **Reworked**
+(`082414c` + `915cb96`): `downsampleTimeline` caps drawn samples, `MAX_LAYER_PINS=3`, legend moved off
+the stage, modes renamed Now/Compare. Two bug→guards landed from this: draw-density pinned in
+`waterfall-profile.test.ts`, and the self-reviewer rubric gained a **"real-density law"** (a PASS
+earned only on fixture-scale data is not a PASS — `.claude/agents/self-reviewer.md`).
+**⏳ Owner eyeball round 2 is the open gate** (now tracked in `OWNER_ACTION_CHECKLIST.md` §A5, which
+had also been missing this item until this same audit pass).
+
 ### Cycle 2026-07-10k — ❌ MONITOR v3 RIBBON REJECTED on eyeball → CONCEPT ROUND 2 OUT (interactive mockups, owner pick pending)
 
 **Owner eyeballed the ribbon (screenshot): "this looks sloppy and doesnt make sense … create

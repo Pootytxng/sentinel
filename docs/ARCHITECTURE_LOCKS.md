@@ -237,6 +237,17 @@ Strict serde rules apply: `deny_unknown_fields` on every struct, exhaustive enum
 
 ## 3. Baseline Exclusions
 
+> **Doctrine pointer (added 2026-07-11 audit — this section was NOT updated for the policy below and
+> read as a flat hard-freeze):** CLAUDE.md LOCKED rule 6 (owner decision 2026-07-09) OPENED the tweak
+> catalog under a measurable-benefit-under-rails policy. The list below now SPLITS: HPET/BCDEdit timer
+> hacks, global MMCSS abuse, core-parking writes, Defender/Update/mitigation disables, and fixed-pagefile
+> forcing **stay barred regardless of measured fps** (safety/stability/anti-cheat, not just unmeasured).
+> Everything else below — NIC offload disable packs, interrupt-moderation changes, global
+> fullscreen-optimizations disable, "TCP mega-pack" writes, universal MPO disable — is now a
+> **candidate** if it clears the proving-ground bench + the permanent safety rails + its own mutation-gate
+> QA. See CLAUDE.md rule 6 for the authoritative current split; treat this doc's flat list below as
+> historical framing, not current policy.
+
 These tweaks are **explicitly excluded from baseline safe recommendations** in v1. They may only appear later as **advanced, diagnostic, user-initiated, problem-specific advisories** — with strong warnings, no default apply, and full rollback where possible. They are not forever-banned from every possible diagnostic path; they are barred from the safe baseline.
 
 ### Excluded from baseline

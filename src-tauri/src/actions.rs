@@ -1606,11 +1606,13 @@ pub(crate) fn apply_service_suspend(service: KnownService) -> Result<ApplyResult
     })
 }
 
-// ─── OS-debloat: telemetry scheduled-task disable (BUILT DARK) ────────────
+// ─── OS-debloat: telemetry scheduled-task disable (ARMED 2026-06-26) ──────
 //
-// GATE — DARK (false) until this feature's own UAC QA + explicit owner sign-off (the owner greenlit
-// adding the gated mutation 2026-06-22, LOCKED-rule-6; the ARMING + the curated KnownBloatTask list
-// both ride that sign-off). Mirrors gaming_mode_gate / restore_gate / service_suspend.
+// Built dark, then ARMED 2026-06-26 after this feature's own UAC QA + explicit owner sign-off (the
+// owner greenlit adding the gated mutation 2026-06-22, LOCKED-rule-6; the ARMING + the curated
+// KnownBloatTask list both rode that sign-off). Mirrors gaming_mode_gate / service_suspend.
+// (Header comment corrected 2026-07-11 audit — it still read "DARK (false)" a full 15 days after the
+// function itself was armed to `true`; see the inline comment on the return below for the real history.)
 pub(crate) fn bloat_removal_gate() -> bool {
     // ARMED 2026-06-26: own apply/rollback QA passed (exact disable→enable restore + UAC-cancel=no-partial
     // + off-list/Defender rejected) + owner curated the task-list (all 3) + sign-off ("run all 3"). Was `false`.
