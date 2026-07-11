@@ -166,6 +166,7 @@ export function MonitorV2(props: Props) {
               active={props.active}
               vendor={props.vendor ?? "any"}
               mode="basic"
+              sessions={props.sessions}
               onFpsActive={setCapturing}
               onOpenSessions={() => {
                 chooseMode("advanced");

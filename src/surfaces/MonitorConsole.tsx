@@ -1,30 +1,273 @@
-import type { ComponentProps } from "react";
-import type Play from "./Play";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { SessionSummary } from "../types";
+import { readDisplayRefreshHz } from "../design/theme";
+import { useDocumentVisible } from "../data/use-document-visible";
+import { useReducedMotion } from "../design/use-motion";
+import {
+  gradeFps,
+  gradeLow1,
+  gradeFrametimeMs,
+  gradeRamPct,
+  gradeColor,
+  type Grade,
+} from "../data/metric-grade";
+import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
+import { Oscilloscope } from "../design/console/Oscilloscope";
+import { Term } from "../design/Term";
+import { prettyGameName } from "./game-name";
+import { shortVerdict, fmtDur } from "./Play";
+import type { GpuVendor } from "./walkthroughs";
+import "./monitor-console.css";
 
 // MonitorConsole — the Monitor room's Live face as the console instrument cluster (plan
 // 2026-07-10-console-hud-phase3-monitor; direction spec 2026-07-09-compy-console-hud-direction,
 // Monitor row: the arc gauges + oscilloscope traces are REAL live telemetry, not decoration —
-// deliberately NO hologram, NO parallax). Behind compy_monitor_console, DEFAULT OFF the whole
-// phase; flag off, MonitorV2 renders exactly today's faces (pinned by
-// monitor-console-flag.test.tsx). Presentation only over the SAME audited read-only polls the
-// existing tiles run — zero new IPC, zero src-tauri.
+// deliberately NO hologram, NO parallax). Behind compy_monitor_console, DEFAULT OFF; flag off,
+// MonitorV2 renders exactly today's faces (pinned by monitor-console-flag.test.tsx).
 //
-// Task 1 stub: the flag + branch contract lands first (byte-identity pinned); the real
-// instruments (Oscilloscope traces + ArcGauges over the ported polls) arrive in Task 3.
+// Honesty contract: presentation only over the SAME audited read-only polls MonitorBasic /
+// Play's live card run — the identical three 1 Hz commands, cadence, cancellation, and
+// visibility gate, ported verbatim (zero new IPC, zero src-tauri). Every instrument value
+// traces to a real sample: the fps trace buffers the real polled capture samples (cleared the
+// moment the helper stops — a frozen trace can never pose as live), the frametime trace draws
+// the backend's real per-frame window (recent_frametimes_ms, the same stream the Overlay
+// draws), and gauges render null as ArcGauge's honest NOT-YET — never a fabricated 0. GPU temp
+// tone is vendor-gated via gradeGpuTempForVendor (NVIDIA stays ungraded — LOCKED rule 5).
 
-type Props = {
+type CpuSnap = {
+  usage_overall_pct: number;
+  frequency_mhz: number;
+  ram_used_bytes: number;
+  ram_total_bytes: number;
+};
+type GpuSnap = { vendor?: string; temperature_c: number | null; utilization_gpu_pct: number | null };
+// Same wire shape monitor-panels/Overlay already type — real backend fields, nothing invented.
+type FpsSample = {
+  fps: number;
+  low1_fps: number;
+  avg_frametime_ms: number;
+  recent_frametimes_ms: number[];
+};
+type FpsLite = { active: boolean; status: string; sample: FpsSample | null };
+
+// Hottest GPU wins (same pick rule as MonitorBasic / Play's live card).
+function pickGpu(list: GpuSnap[]): GpuSnap | null {
+  if (!list || list.length === 0) return null;
+  return [...list].sort((a, b) => (b.temperature_c ?? -1) - (a.temperature_c ?? -1))[0];
+}
+
+// Grade → ArcGauge/Oscilloscope tone — HomeConsole's mapping: "ok" rides the accent (fine, not
+// celebrated), "bad" warns; neutral never borrows a judgment color.
+const arcTone = (g: Grade): ArcTone =>
+  g === "good" ? "good" : g === "ok" ? "accent" : g === "bad" ? "warn" : "neutral";
+
+// The fps trace window: 1 Hz polled samples, so ~2 minutes of capture history.
+const FPS_CAP = 120;
+// The frametime window is the backend's own cap (MAX_FRAMETIME_POINTS in fps.rs).
+const FT_CAP = 240;
+
+export function MonitorConsole({
+  active,
+  vendor = "any",
+  mode,
+  sessions = [],
+  onFpsActive,
+  onOpenSessions,
+}: {
   active: boolean;
-  vendor: NonNullable<ComponentProps<typeof Play>["vendor"]>;
+  vendor?: GpuVendor;
   /** Basic shows the core instrument set; Advanced the full cluster (the existing faces' split). */
   mode: "basic" | "advanced";
+  /** Basic's last-session door content (Advanced reaches sessions via its own tab). */
+  sessions?: SessionSummary[];
   /** Mirrors the room's live capture state up to MonitorV2 (the V2-8 forward-door rule). */
   onFpsActive?: (active: boolean) => void;
   /** Basic's route into Advanced → Sessions (never a dead end) — same door MonitorBasic has. */
   onOpenSessions?: () => void;
-};
+}) {
+  const reduced = useReducedMotion();
+  const [cpu, setCpu] = useState<CpuSnap | null>(null);
+  const [gpu, setGpu] = useState<GpuSnap | null>(null);
+  const [fps, setFps] = useState<FpsLite | null>(null);
+  const [fpsBusy, setFpsBusy] = useState(false);
+  // Caller-owned trace buffer (Oscilloscope is a pure render): real polled fps values only.
+  const fpsH = useRef<number[]>([]);
+  const visible = useDocumentVisible();
 
-export function MonitorConsole(_props: Props) {
-  return <section className="monitor-console" aria-label="Live instruments" />;
+  // Same 1 Hz read-only poll as MonitorBasic / Play live — verbatim commands, cadence,
+  // cancellation, and the tab+window visibility gate (sensors idle in the background).
+  useEffect(() => {
+    if (!active || !visible) return;
+    let cancelled = false;
+    const tick = () => {
+      invoke<CpuSnap>("get_cpu_sensors").then((c) => !cancelled && c && setCpu(c)).catch(() => {});
+      invoke<GpuSnap[]>("get_gpu_sensors").then((g) => !cancelled && setGpu(pickGpu(g))).catch(() => {});
+      invoke<FpsLite>("get_fps_status")
+        .then((f) => {
+          if (cancelled || !f) return;
+          // Honesty rail: buffer only live real samples; the moment the helper reports stopped
+          // the buffer clears, so the trace goes to its no-signal state (never frozen-as-live).
+          if (f.active && f.sample) {
+            fpsH.current = [...fpsH.current, f.sample.fps].slice(-FPS_CAP);
+          } else if (!f.active) {
+            fpsH.current = [];
+          }
+          setFps(f);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [active, visible]);
+
+  // V2-8: mirror the already-polled capture state up to the shell (no-op without the callback).
+  const fpsActive = fps?.active ?? false;
+  useEffect(() => {
+    onFpsActive?.(fpsActive);
+  }, [onFpsActive, fpsActive]);
+
+  // The existing audited capture commands — identical semantics to MonitorBasic/Play's button.
+  const toggleCapture = useCallback(async () => {
+    setFpsBusy(true);
+    try {
+      if (fps?.active) {
+        await invoke("stop_fps_capture");
+        fpsH.current = [];
+        setFps((p) => (p ? { ...p, active: false, sample: null } : p));
+      } else {
+        await invoke("start_fps_capture");
+      }
+    } catch {
+      /* surfaced via the next poll */
+    } finally {
+      setFpsBusy(false);
+    }
+  }, [fps?.active]);
+
+  const rig = { refreshHz: readDisplayRefreshHz() };
+  const sample = fps?.sample ?? null;
+  const live = fpsActive && sample != null;
+  const ramPct = cpu?.ram_total_bytes
+    ? Math.round((cpu.ram_used_bytes / cpu.ram_total_bytes) * 100)
+    : null;
+  const latest = sessions[0] ?? null;
+
+  const gpuGrade = gradeGpuTempForVendor(vendor, gpu?.temperature_c ?? null);
+  const low1Grade: Grade = sample ? gradeLow1(sample.low1_fps, sample.fps) : "neutral";
+
+  return (
+    <div className={`monitor-console mc-${mode}`}>
+      {/* The room's real capture control — same audited toggle the classic tiles carry. */}
+      <div className="mc-capture">
+        <button
+          type="button"
+          className={`mc-cap ${fpsActive ? "mc-cap-on" : ""}`}
+          disabled={fpsBusy}
+          onClick={toggleCapture}
+        >
+          {fpsBusy ? "…" : fpsActive ? "Stop capture" : "Start capture"}
+        </button>
+        <span className="mc-cap-status" style={live ? { color: gradeColor(low1Grade) || undefined } : undefined}>
+          {live ? (
+            <>
+              {Math.round(sample.low1_fps)} <Term id="one-percent-lows">1% low</Term> · est
+            </>
+          ) : fps?.status === "declined" ? (
+            "admin permission declined — tap Start capture to allow it"
+          ) : fpsActive ? (
+            "capturing — focus a DX11/DX12 game"
+          ) : (
+            "start capture, then play"
+          )}
+        </span>
+      </div>
+
+      {/* The signature instruments: the motion IS the data — real buffered samples only. */}
+      <div className="mc-scopes">
+        <Oscilloscope
+          samples={live ? fpsH.current : []}
+          cap={FPS_CAP}
+          label="fps"
+          unit="fps"
+          tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
+          reduced={reduced}
+        />
+        <Oscilloscope
+          samples={live ? sample.recent_frametimes_ms : []}
+          cap={FT_CAP}
+          label="frametime"
+          unit="ms"
+          tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
+          reduced={reduced}
+        />
+      </div>
+
+      {/* Honest gauges over the same sensor reads the tiles surface; null ⇒ NOT-YET, never 0.
+          CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
+      <div className="mc-gauges">
+        <ArcGauge
+          label="GPU temp"
+          value={gpu?.temperature_c ?? null}
+          max={100}
+          unit="°C"
+          tone={arcTone(gpuGrade)}
+          measured={gpu?.temperature_c != null}
+        />
+        {mode === "advanced" && (
+          <ArcGauge
+            label="GPU load"
+            value={gpu?.utilization_gpu_pct ?? null}
+            max={100}
+            unit="%"
+            tone="neutral"
+            measured={gpu?.utilization_gpu_pct != null}
+          />
+        )}
+        <ArcGauge
+          label="CPU"
+          value={cpu ? Math.round(cpu.usage_overall_pct) : null}
+          max={100}
+          unit="%"
+          tone="neutral"
+          measured={cpu != null}
+        />
+        <ArcGauge
+          label="RAM"
+          value={ramPct}
+          max={100}
+          unit="%"
+          tone={arcTone(gradeRamPct(ramPct))}
+          measured={ramPct != null}
+        />
+      </div>
+
+      {/* Same honesty micro-line the classic face carries — method stated. */}
+      <p className="mc-honest">
+        <Term id="etw">ETW</Term> · external · anti-cheat safe — no injection, no kernel driver.
+      </p>
+
+      {/* Basic collapses Sessions away, so it keeps MonitorBasic's door (never a dead end);
+          Advanced reaches sessions via its own tab. */}
+      {mode === "basic" && latest && (
+        <button type="button" className="mc-last cmp-door" onClick={onOpenSessions}>
+          <span className="mc-last-k">Last session</span>
+          <span className="mc-last-v">
+            {prettyGameName(latest.process_name) || "Unknown game"} · {shortVerdict(latest)} ·{" "}
+            {fmtDur(latest.duration_secs)} · {latest.avg_fps.toFixed(0)} avg
+          </span>
+          <span className="cmp-door-chevron cmp-door-chevron-end" aria-hidden="true">
+            ▸
+          </span>
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default MonitorConsole;

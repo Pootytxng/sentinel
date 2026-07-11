@@ -1,0 +1,31 @@
+/* MonitorConsole — the Monitor Live face as the console instrument cluster (Phase 3).
+   Token-only ink; scoped under [data-v2="on"] + registered in tokens-v2-guard's V2_CSS.
+   Deliberately flat: no hologram, no parallax — readability outranks depth on a data surface. */
+:root[data-v2="on"] .monitor-console { display: flex; flex-direction: column; gap: 16px; }
+
+:root[data-v2="on"] .mc-capture { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+:root[data-v2="on"] .mc-cap { font-family: var(--ix-mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; padding: 6px 14px; cursor: pointer;
+  background: transparent; color: var(--ix-accent); border: 1px solid var(--ix-accent); }
+:root[data-v2="on"] .mc-cap:hover:not(:disabled) { background: var(--ix-accent); color: var(--ix-accent-ink, var(--ix-bg)); }
+:root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: default; }
+:root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink, var(--ix-bg)); }
+:root[data-v2="on"] .mc-cap-status { font-family: var(--ix-mono); font-size: 11px;
+  letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
+
+:root[data-v2="on"] .mc-scopes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+
+:root[data-v2="on"] .mc-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px 18px; padding: 14px 16px; border: 1px solid var(--ix-glass-border); }
+
+:root[data-v2="on"] .mc-honest { margin: 0; font-family: var(--ix-mono); font-size: 10px;
+  letter-spacing: .08em; color: var(--ix-text-3); }
+
+:root[data-v2="on"] .mc-last { display: flex; align-items: baseline; gap: 10px; width: 100%;
+  padding: 10px 14px; background: transparent; border: 1px solid var(--ix-glass-border);
+  color: var(--ix-text-2); cursor: pointer; text-align: left; }
+:root[data-v2="on"] .mc-last:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
+:root[data-v2="on"] .mc-last-k { font-family: var(--ix-mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ix-text-3); white-space: nowrap; }
+:root[data-v2="on"] .mc-last-v { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
