@@ -187,9 +187,18 @@ shots 12s apart differ only in real sensor numbers, computed accent-ink contrast
 button, flag-off classic round-trip, live Settings toggle no reload, Crimson spot-check — the
 violet capture button under Crimson traced to the PRE-EXISTING test-pinned per-room accent
 re-point `monitor-v2.css:31`, not this train).
-- **⏳ OWNER eyeball (the taste gate before default-ON and Phase 4 History/Black Box):** Settings →
-  Appearance → **"Monitor console (preview)"** ON, open Monitor's Live face (ideally during a
-  capture), react.
+- **✅ OWNER verdict IN (same day):** v2 cluster rated "satisfactory" (classic tiles were "liked");
+  he asked for a third option to surpass both + gave binding direction (graphs a MUST with
+  exact-moment spike indicators · frametime-trace half-width bug · 3D/parallax un-banned ·
+  consumer-market terms · overlay control on the face) — FULL verbatim response retained in
+  `docs/UI_VISION_BACKLOG.md` §A0 (`e1abce9`). Concept spitballed per the per-tab law; **owner
+  chose "3D ribbon graph"**.
+- **⛳ RESUME (next train, FRESH session):** build **Monitor v3 "Telemetry Ribbon"** from
+  `docs/superpowers/plans/2026-07-10-monitor-v3-ribbon.md` — same flag `compy_monitor_console`
+  DEFAULT OFF · Oscilloscope full-stretch + spike markers · consumer-term readouts · lazy r3f
+  `FrametimeRibbon` (demand frameloop, orbit, budget plane) · overlay control ported · direction-
+  spec amendment folded in (T5). **Entry gate ALREADY CLEARED** (owner picked the concept
+  2026-07-10).
 - **📌 Known preview gap (owner reaction decides):** the Advanced console face shows the instrument
   cluster only — overlay controls + deep monitoring stay on the classic face (flag off) for now.
 - **📌 Open candidates unchanged:** T6b (batched restore-side elevation) · the gated backlog `[ ]`

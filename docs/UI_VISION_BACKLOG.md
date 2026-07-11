@@ -51,8 +51,9 @@ full response ive written here seeing how things seem to get lost in translation
    overlay itself IS in the build, unchanged. Fix: the console face gets the overlay control
    (same audited show/hide/corner commands, not forked). Rides the v3 train.
 2. **v3 rework — surpass "satisfactory":** classic tiles = liked; Phase-3 instrument cluster =
-   satisfactory; he wants a third option that beats both. Per the per-tab signature law the v3
-   concept is spitballed with him BEFORE building (concept check gates the phase).
+   satisfactory; he wants a third option that beats both. Spitballed same day per the per-tab law;
+   **owner CHOSE the "3D ribbon graph" concept (2026-07-10)** — plan written:
+   `docs/superpowers/plans/2026-07-10-monitor-v3-ribbon.md` (entry gate cleared).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
