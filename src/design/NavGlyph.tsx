@@ -17,7 +17,7 @@ const NAV_ICONS: Record<string, ReactNode> = {
 export function NavGlyph({ name }: { name: string }) {
   return (
     <svg
-      className="cc-nav-ico"
+      className="nav-ico"
       viewBox="0 0 24 24"
       width="20"
       height="20"
