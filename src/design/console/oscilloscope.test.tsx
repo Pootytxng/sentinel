@@ -64,6 +64,68 @@ describe("Oscilloscope — real samples only, one point per buffered sample", ()
   });
 });
 
+describe("Oscilloscope — full-width window (owner bug 2026-07-10: trace stopped ~halfway)", () => {
+  it("a window smaller than cap still spans the full grid width", () => {
+    const samples = Array.from({ length: 100 }, (_, i) => 7 + (i % 3));
+    const { container } = render(
+      <Oscilloscope samples={samples} cap={240} label="frametime" reduced />,
+    );
+    const pts = container
+      .querySelector(".osc-trace")!
+      .getAttribute("points")!
+      .trim()
+      .split(/\s+/);
+    expect(pts).toHaveLength(100);
+    const lastX = parseFloat(pts[pts.length - 1].split(",")[0]);
+    expect(lastX).toBeGreaterThan(230); // W=240 — the trace reaches the right edge
+  });
+});
+
+describe("Oscilloscope — budget line + exact-moment spike markers (v3 T1)", () => {
+  const flat = [7, 7.2, 6.9, 7.1, 7, 7.3, 7.1, 6.8];
+  const spiky = [7, 7.2, 6.9, 41, 7, 7.3, 22, 6.8];
+
+  it("spikeIndices (pure): >= 2× window median AND >= budget; flat data ⇒ none", async () => {
+    const { spikeIndices } = await import("./Oscilloscope");
+    expect(spikeIndices(flat, 6.06)).toEqual([]);
+    expect(spikeIndices(spiky, 6.06)).toEqual([3, 6]);
+    // Below budget never marks, even when 2× median trips (a fast rig's noise isn't a spike).
+    expect(spikeIndices([2, 2, 2, 5], 6.06)).toEqual([]);
+  });
+
+  it("draws the budget line when given, none otherwise", () => {
+    const { container: withB } = render(
+      <Oscilloscope samples={flat} label="frametime" budget={6.06} reduced />,
+    );
+    expect(withB.querySelector(".osc-budget")).not.toBeNull();
+    const { container: without } = render(
+      <Oscilloscope samples={flat} label="frametime" reduced />,
+    );
+    expect(without.querySelector(".osc-budget")).toBeNull();
+  });
+
+  it("spikes ⇒ per-sample markers at the exact moment; the worst spike gets a ms callout", () => {
+    const { container, getByText } = render(
+      <Oscilloscope samples={spiky} label="frametime" unit="ms" budget={6.06} spikes reduced />,
+    );
+    const markers = container.querySelectorAll(".osc-spike");
+    expect(markers.length).toBe(2);
+    // Marker x sits at the spike's own sample position (index 3 of 8 → x ≈ 3/7 of the width).
+    const worst = container.querySelector(".osc-spike-worst")!;
+    const wx = parseFloat(worst.getAttribute("x1")!);
+    expect(Math.abs(wx - (3 / 7) * 238 - 1)).toBeLessThan(2);
+    expect(getByText(/worst spike/i).textContent).toMatch(/41\s*ms/);
+  });
+
+  it("flat real data ⇒ zero markers, no callout (never a fabricated spike)", () => {
+    const { container, queryByText } = render(
+      <Oscilloscope samples={flat} label="frametime" unit="ms" budget={6.06} spikes reduced />,
+    );
+    expect(container.querySelectorAll(".osc-spike").length).toBe(0);
+    expect(queryByText(/worst spike/i)).toBeNull();
+  });
+});
+
 describe("Oscilloscope — motion + ink discipline", () => {
   it("reduced ⇒ the still marker (CSS gates sweep/glow off it)", () => {
     const { container: r } = render(<Oscilloscope samples={[1, 2]} label="fps" reduced />);

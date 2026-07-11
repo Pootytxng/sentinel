@@ -16,6 +16,11 @@
 :root[data-v2="on"] .osc-warn .osc-trace { stroke: var(--v2-warn); }
 :root[data-v2="on"] .osc-good .osc-trace { stroke: var(--ready); }
 :root[data-v2="on"] .osc-neutral .osc-trace { stroke: var(--ix-text-2); }
+:root[data-v2="on"] .osc-worst { font-size: 10px; letter-spacing: .06em; color: var(--v2-warn);
+  font-variant-numeric: tabular-nums; }
+:root[data-v2="on"] .osc-budget { stroke: var(--ix-text-3); stroke-width: .75; stroke-dasharray: 4 3; opacity: .6; }
+:root[data-v2="on"] .osc-spike { stroke: var(--v2-warn); stroke-width: 1; opacity: .8; }
+:root[data-v2="on"] .osc-spike-worst { stroke-width: 1.75; opacity: 1; }
 :root[data-v2="on"] .osc-nosignal { position: absolute; inset: 0; display: grid; place-items: center;
   font-family: var(--ix-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--ix-text-3); }
