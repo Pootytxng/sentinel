@@ -161,6 +161,34 @@ describe("MonitorConsole — vendor honesty (d)", () => {
   });
 });
 
+describe("MonitorConsole — motion contract (Task 4)", () => {
+  it("reduced motion → the console root carries data-motion='reduced' (still page), no reticle", async () => {
+    mockPolls(() => liveFps);
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelector(".monitor-console")).not.toBeNull());
+    expect(container.querySelector(".monitor-console")!.getAttribute("data-motion")).toBe(
+      "reduced",
+    );
+    // The reticle Target Cursor renders nothing under reduced motion (kit contract).
+    expect(container.querySelector(".lc-reticle")).toBeNull();
+  });
+
+  it("full motion → data-motion='full' (the reveal/spotlight CSS keys off it)", async () => {
+    localStorage.setItem("compy_motion", "full");
+    mockPolls(() => liveFps);
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelector(".monitor-console")).not.toBeNull());
+    expect(container.querySelector(".monitor-console")!.getAttribute("data-motion")).toBe("full");
+  });
+
+  it("never paints the vendor MagicBento purple — the console is token-only", async () => {
+    mockPolls(() => liveFps);
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll(".osc-trace").length).toBe(2));
+    expect(container.innerHTML).not.toMatch(/132\s*,\s*0\s*,\s*255/);
+  });
+});
+
 describe("MonitorConsole — laws (e) + the mode split", () => {
   it("header-slop pin: no headings or lede strips inside the console subtree", async () => {
     mockPolls(() => liveFps);

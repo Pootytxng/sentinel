@@ -7,11 +7,14 @@
 :root[data-v2="on"] .mc-cap { font-family: var(--ix-mono); font-size: 11px; letter-spacing: .1em;
   text-transform: uppercase; padding: 6px 14px; cursor: pointer;
   background: transparent; color: var(--ix-accent); border: 1px solid var(--ix-accent); }
-:root[data-v2="on"] .mc-cap:hover:not(:disabled) { background: var(--ix-accent); color: var(--ix-accent-ink, var(--ix-bg)); }
+:root[data-v2="on"] .mc-cap:hover:not(:disabled) { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: default; }
-:root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink, var(--ix-bg)); }
+:root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .mc-cap-status { font-family: var(--ix-mono); font-size: 11px;
   letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
+
+:root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px;
+  padding: 16px; border: 1px solid var(--ix-glass-border); }
 
 :root[data-v2="on"] .mc-scopes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 
@@ -29,3 +32,57 @@
   text-transform: uppercase; color: var(--ix-text-3); white-space: nowrap; }
 :root[data-v2="on"] .mc-last-v { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
+
+/* ── The alive layer (Task 4) — Phase 2's exact mechanisms; reduced ⇒ still page. ── */
+
+/* Cursor-follow spotlight — a border-masked accent glow whose opacity tracks pointer proximity
+   via --glow-intensity (set by MonitorConsole's pointer handler; HomeConsole's exact mechanism). */
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage {
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+}
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: radial-gradient(320px circle at var(--glow-x) var(--glow-y), var(--ix-accent) 0%, transparent 58%);
+  opacity: calc(var(--glow-intensity) * 0.55);
+  transition: opacity 0.25s ease;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Staggered mount reveal — capture control, then the instrument stage, then the footer rows
+   rise + fade in. `backwards` fill holds the hidden FROM state through the delay without
+   pinning the end state afterward (never `both`/`forwards` — the bench's old hover-blocking
+   bug). NO parallax anywhere: the traces never move under the cursor. */
+@keyframes v2-mc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-capture,
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage,
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest,
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last {
+  animation: v2-mc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-stage { animation-delay: 0.1s; }
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-honest { animation-delay: 0.22s; }
+:root[data-v2="on"] .monitor-console[data-motion="full"] .mc-last { animation-delay: 0.28s; }

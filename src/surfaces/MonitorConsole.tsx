@@ -15,6 +15,7 @@ import {
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Oscilloscope } from "../design/console/Oscilloscope";
+import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
@@ -95,6 +96,33 @@ export function MonitorConsole({
   // Caller-owned trace buffer (Oscilloscope is a pure render): real polled fps values only.
   const fpsH = useRef<number[]>([]);
   const visible = useDocumentVisible();
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  // Cursor-follow spotlight (Phase 2's exact mechanism, event-driven — no rAF loop): the
+  // pointer handler writes --glow-x/--glow-y/--glow-intensity on the instrument stage; a
+  // border-masked ::after consumes them. Reduced pins intensity to 0 (still page).
+  // Deliberately NO parallax over the traces — readability outranks depth on a data surface.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    if (reduced) {
+      stage.style.setProperty("--glow-intensity", "0");
+      return;
+    }
+    const onMove = (e: PointerEvent) => {
+      const r = stage.getBoundingClientRect();
+      stage.style.setProperty("--glow-x", `${((e.clientX - r.left) / r.width) * 100}%`);
+      stage.style.setProperty("--glow-y", `${((e.clientY - r.top) / r.height) * 100}%`);
+      stage.style.setProperty("--glow-intensity", "1");
+    };
+    const onLeave = () => stage.style.setProperty("--glow-intensity", "0");
+    stage.addEventListener("pointermove", onMove);
+    stage.addEventListener("pointerleave", onLeave);
+    return () => {
+      stage.removeEventListener("pointermove", onMove);
+      stage.removeEventListener("pointerleave", onLeave);
+    };
+  }, [reduced]);
 
   // Same 1 Hz read-only poll as MonitorBasic / Play live — verbatim commands, cadence,
   // cancellation, and the tab+window visibility gate (sensors idle in the background).
@@ -162,7 +190,7 @@ export function MonitorConsole({
   const low1Grade: Grade = sample ? gradeLow1(sample.low1_fps, sample.fps) : "neutral";
 
   return (
-    <div className={`monitor-console mc-${mode}`}>
+    <div className={`monitor-console mc-${mode}`} data-motion={reduced ? "reduced" : "full"}>
       {/* The room's real capture control — same audited toggle the classic tiles carry. */}
       <div className="mc-capture">
         <button
@@ -188,63 +216,70 @@ export function MonitorConsole({
         </span>
       </div>
 
-      {/* The signature instruments: the motion IS the data — real buffered samples only. */}
-      <div className="mc-scopes">
-        <Oscilloscope
-          samples={live ? fpsH.current : []}
-          cap={FPS_CAP}
-          label="fps"
-          unit="fps"
-          tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
-          reduced={reduced}
-        />
-        <Oscilloscope
-          samples={live ? sample.recent_frametimes_ms : []}
-          cap={FT_CAP}
-          label="frametime"
-          unit="ms"
-          tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
-          reduced={reduced}
-        />
-      </div>
+      {/* THE INSTRUMENT STAGE — the signature instruments: the motion IS the data, real
+          buffered samples only. Spotlight + reticle live here; NO hologram, NO parallax. */}
+      <div className="mc-stage" ref={stageRef}>
+        <div className="mc-scopes">
+          <Oscilloscope
+            samples={live ? fpsH.current : []}
+            cap={FPS_CAP}
+            label="fps"
+            unit="fps"
+            tone={live ? arcTone(gradeFps(sample.fps, rig)) : "accent"}
+            reduced={reduced}
+          />
+          <Oscilloscope
+            samples={live ? sample.recent_frametimes_ms : []}
+            cap={FT_CAP}
+            label="frametime"
+            unit="ms"
+            tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
+            reduced={reduced}
+          />
+        </div>
 
-      {/* Honest gauges over the same sensor reads the tiles surface; null ⇒ NOT-YET, never 0.
-          CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
-      <div className="mc-gauges">
-        <ArcGauge
-          label="GPU temp"
-          value={gpu?.temperature_c ?? null}
-          max={100}
-          unit="°C"
-          tone={arcTone(gpuGrade)}
-          measured={gpu?.temperature_c != null}
-        />
-        {mode === "advanced" && (
+        {/* Honest gauges over the same sensor reads the tiles surface; null ⇒ NOT-YET, never 0.
+            CPU utilisation stays deliberately ungraded (high while gaming is fine). */}
+        <div className="mc-gauges">
           <ArcGauge
-            label="GPU load"
-            value={gpu?.utilization_gpu_pct ?? null}
+            label="GPU temp"
+            value={gpu?.temperature_c ?? null}
+            max={100}
+            unit="°C"
+            tone={arcTone(gpuGrade)}
+            measured={gpu?.temperature_c != null}
+          />
+          {mode === "advanced" && (
+            <ArcGauge
+              label="GPU load"
+              value={gpu?.utilization_gpu_pct ?? null}
+              max={100}
+              unit="%"
+              tone="neutral"
+              measured={gpu?.utilization_gpu_pct != null}
+            />
+          )}
+          <ArcGauge
+            label="CPU"
+            value={cpu ? Math.round(cpu.usage_overall_pct) : null}
             max={100}
             unit="%"
             tone="neutral"
-            measured={gpu?.utilization_gpu_pct != null}
+            measured={cpu != null}
           />
-        )}
-        <ArcGauge
-          label="CPU"
-          value={cpu ? Math.round(cpu.usage_overall_pct) : null}
-          max={100}
-          unit="%"
-          tone="neutral"
-          measured={cpu != null}
-        />
-        <ArcGauge
-          label="RAM"
-          value={ramPct}
-          max={100}
-          unit="%"
-          tone={arcTone(gradeRamPct(ramPct))}
-          measured={ramPct != null}
-        />
+          <ArcGauge
+            label="RAM"
+            value={ramPct}
+            max={100}
+            unit="%"
+            tone={arcTone(gradeRamPct(ramPct))}
+            measured={ramPct != null}
+          />
+        </div>
+
+        {/* The game-HUD Target Cursor, stage-scoped (kit handles reduced/coarse-pointer null
+            + the rAF pointerleave stop — Phase-1's review fix). */}
+        <ReticleCursor scopeRef={stageRef} />
       </div>
 
       {/* Same honesty micro-line the classic face carries — method stated. */}
