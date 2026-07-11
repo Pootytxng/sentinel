@@ -16,6 +16,14 @@
 :root[data-v2="on"] .mc-stage { position: relative; display: flex; flex-direction: column; gap: 16px;
   padding: 16px; border: 1px solid var(--ix-glass-border); }
 
+:root[data-v2="on"] .mc-readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px 20px; }
+:root[data-v2="on"] .mc-readout { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+:root[data-v2="on"] .mc-readout-v { font-family: var(--ix-mono); font-size: 22px; font-weight: 600;
+  color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1; }
+:root[data-v2="on"] .mc-readout-k { font-family: var(--ix-mono); font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ix-text-3); }
+
 :root[data-v2="on"] .mc-scopes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 
 :root[data-v2="on"] .mc-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

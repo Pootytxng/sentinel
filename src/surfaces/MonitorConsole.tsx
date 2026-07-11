@@ -17,6 +17,7 @@ import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Oscilloscope } from "../design/console/Oscilloscope";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { Term } from "../design/Term";
+import { readoutStats, type ReadoutStats } from "./monitor-console-data";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
 import type { GpuVendor } from "./walkthroughs";
@@ -189,6 +190,17 @@ export function MonitorConsole({
   const gpuGrade = gradeGpuTempForVendor(vendor, gpu?.temperature_c ?? null);
   const low1Grade: Grade = sample ? gradeLow1(sample.low1_fps, sample.fps) : "neutral";
 
+  // v3 (UI_VISION_BACKLOG §A0): the frame budget for THIS rig's display — the spike detector's
+  // floor and the trace's budget line. Consumer-term readouts derive from the same real windows.
+  const ftBudget = rig.refreshHz ? 1000 / rig.refreshHz : undefined;
+  const stats: ReadoutStats = live
+    ? readoutStats(fpsH.current, sample.recent_frametimes_ms, ftBudget)
+    : { maxFps: null, avgFps: null, lowestLatencyMs: null, spikeCount: null };
+  const ink = (g: Grade) => {
+    const c = gradeColor(g);
+    return c ? { color: c } : undefined;
+  };
+
   return (
     <div className={`monitor-console mc-${mode}`} data-motion={reduced ? "reduced" : "full"}>
       {/* The room's real capture control — same audited toggle the classic tiles carry. */}
@@ -219,6 +231,41 @@ export function MonitorConsole({
       {/* THE INSTRUMENT STAGE — the signature instruments: the motion IS the data, real
           buffered samples only. Spotlight + reticle live here; NO hologram, NO parallax. */}
       <div className="mc-stage" ref={stageRef}>
+        {/* Consumer-term readouts (owner direction §A0 item 6) — measured values only, em-dash
+            when nothing is measured. Same windows the traces draw; spike count = the SAME
+            detector as the markers (one source, can't disagree). */}
+        <div className="mc-readouts">
+          <div className="mc-readout">
+            <span className="mc-readout-v" style={ink(gradeFps(stats.maxFps, rig))}>
+              {stats.maxFps == null ? "—" : Math.round(stats.maxFps)}
+            </span>
+            <span className="mc-readout-k">MAX FPS</span>
+          </div>
+          <div className="mc-readout">
+            <span className="mc-readout-v" style={ink(gradeFps(stats.avgFps, rig))}>
+              {stats.avgFps == null ? "—" : Math.round(stats.avgFps)}
+            </span>
+            <span className="mc-readout-k">AVG FPS</span>
+          </div>
+          <div className="mc-readout">
+            <span
+              className="mc-readout-v"
+              style={ink(gradeFrametimeMs(stats.lowestLatencyMs, rig))}
+            >
+              {stats.lowestLatencyMs == null ? "—" : `${stats.lowestLatencyMs.toFixed(1)} ms`}
+            </span>
+            <span className="mc-readout-k">LOWEST LATENCY</span>
+          </div>
+          <div className="mc-readout">
+            <span
+              className="mc-readout-v"
+              style={stats.spikeCount ? ink("bad") : undefined}
+            >
+              {stats.spikeCount == null ? "—" : stats.spikeCount}
+            </span>
+            <span className="mc-readout-k">SPIKES</span>
+          </div>
+        </div>
         <div className="mc-scopes">
           <Oscilloscope
             samples={live ? fpsH.current : []}
@@ -235,6 +282,8 @@ export function MonitorConsole({
             unit="ms"
             tone={live ? arcTone(gradeFrametimeMs(sample.avg_frametime_ms, rig)) : "accent"}
             reduced={reduced}
+            budget={ftBudget}
+            spikes
           />
         </div>
 

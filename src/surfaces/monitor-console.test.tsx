@@ -108,6 +108,21 @@ describe("MonitorConsole — live stream feeds real instruments (a)", () => {
     expect(screen.getByText("48")).toBeTruthy(); // RAM % (14.2/29.4)
   });
 
+  it("consumer-term readouts derive from the same real windows (v3 T2)", async () => {
+    mockPolls(() => liveFps);
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll(".osc-trace").length).toBe(2));
+    for (const label of ["MAX FPS", "AVG FPS", "LOWEST LATENCY", "SPIKES"]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    // One poll buffered fps 142.3 → MAX and AVG both read 142; lowest latency = min(6.9…) ms.
+    const values = [...container.querySelectorAll(".mc-readout-v")].map((n) => n.textContent);
+    expect(values[0]).toBe("142");
+    expect(values[1]).toBe("142");
+    expect(values[2]).toBe("6.9 ms");
+    expect(values[3]).toBe("0");
+  });
+
   it("capture ON mirrors up via onFpsActive (c)", async () => {
     mockPolls(() => liveFps);
     const { props } = mount();
@@ -126,6 +141,9 @@ describe("MonitorConsole — helper stopped ⇒ honest stillness (b)", () => {
     expect(container.querySelectorAll(".osc-read").length).toBe(0); // no readout invented
     expect(screen.getByRole("button", { name: "Start capture" })).toBeTruthy();
     expect(screen.getByText("start capture, then play")).toBeTruthy();
+    // v3 readouts show honest em-dashes, never fabricated zeros.
+    const values = [...container.querySelectorAll(".mc-readout-v")].map((n) => n.textContent);
+    expect(values).toEqual(["—", "—", "—", "—"]);
   });
 
   it("a live trace CLEARS when the helper stops — never frozen-as-live (and the door signal follows)", async () => {
