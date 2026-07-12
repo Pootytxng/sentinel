@@ -10,6 +10,28 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (EXPERT VIEW SHIPPED `5850ac0` — installer SHA-256
+> `63C3B5639673AF822F2C26C45DF0672D6AEFEC0FAD02720E54ACC4861D702233`, live exe stamp-verified
+> `5850ac0` via the embedded hash, installed by Claude, supersedes the `653FFEA0…9BADC2`
+> installer):** the Q3 expert-layer train (spec
+> `docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md`, owner GO 2026-07-12) built as
+> its own scoped train. One genuine Settings > Behavior preference — **"Expert view"
+> (`compy_expert_view`, DEFAULT OFF, a real preference like Motion, NOT a preview flag; the
+> default face is byte-identical, test-pinned).** ON = presentation-only un-hiding of existing
+> data: refused drawer renders open with reasoning inline (no barred-tier apply affordance —
+> LOCKED rule 6a untouched) · exact target (registry key/value · service · powercfg GUIDs ·
+> Settings-page path) inline on safe + needs-your-call rows via the display-only
+> `src/data/expert-targets.ts` map, transcribed from `actions.rs`/`services.rs` and
+> literal-pinned by `expert-targets.test.ts` · **the GO's ship condition MET + mechanized:** the
+> rollback-boundary disclaimer ("Edits made outside Compy aren't tracked and can't be rolled back
+> by Compy.") renders beside EVERY inline target (`expert-view.test.tsx` pins disclaimer count ==
+> target count) · true `local_percentiles` (1-decimal) replace the "Top N%" bucket on Benchmark
+> receipts, session tiles/deltas at 1 decimal · the long-tail sections (Fix collapsibles, Check
+> piles, Optimize-station ledger/cleanup disclosures) render open. **Zero `src-tauri` diff — no
+> gate moved, no mutation path added.** Verify: tsc 0 · vitest **1350** (171 files, +28 guards) ·
+> self-review **PASS** (live 1500×980; noted honestly: expert-ON Optimize is a ~10.6-screen
+> scroll — the accepted cost of the full panel).
+>
 > **UPDATE 2026-07-11 (CONSUMER-PANEL OVERHAUL SHIPPED `50b5c03` — installer SHA-256
 > `653FFEA0928E3372CA33ECB818EC6BF8A21B01CBB6A3B7250194DB5B3A9BADC2`, live exe stamp-verified
 > `50b5c03` via the embedded hash, installed by Claude, supersedes the `3B3A65C4…B19DAD` installer;
@@ -336,9 +358,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `915e85b` + this ship-docs commit (branch `main`, 2026-07-11 — the live installer is built from exactly `915e85b`) |
+| Git HEAD | `5850ac0` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `5850ac0`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `3B3A65C45C4BF63942373612CA19353EAFAB16CED10EE8A71F83143271B19DAD` (built from `915e85b`, 2026-07-11 — **Monitor v5 "Flight Deck + Session Stack"** + the trace-line refinement (monotone curves, round joins on stack rows) + the scope-line sharpening (trace glow deleted, non-scaling 1.25px strokes) + the RTSS-style ZERO-ANCHORED frametime scale (raw per-frame line on a stable 0→niceCap ms axis w/ labeled gridlines; the envelope mode that briefly shipped in `e02d1ad` is DELETED — owner-rejected); the v4 SessionWaterfall + `waterfall-profile` are DELETED; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: ONE face, no mode toggle — Flight Deck (consumer readouts · `DeckScope` frametime hero w/ hover scrub + drag-zoom · session-scoped delta row) + Session Stack (last ≤5 sessions on ONE shared 1%-low axis, recorded-span coverage stated, worst-dip pin w/ clock time, VS PREVIOUS chips), all over the SAME 1 Hz read-only polls, zero new IPC. Consumer-terms presets from `33661b8` and Home console DEFAULT ON from `bce72d6` unchanged. Superseded installer: `0AA8E222…F21A55` from `e02d1ad`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `63C3B5639673AF822F2C26C45DF0672D6AEFEC0FAD02720E54ACC4861D702233` (built from `5850ac0`, 2026-07-12 — **Expert view** (Q3 expert-layer train): one genuine Settings > Behavior preference `compy_expert_view`, **DEFAULT OFF** (`readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`) — pref off, the app face is byte-identical (pinned in `expert-view.test.tsx`); pref ON un-hides existing data only (refused-drawer reasoning inline · exact targets + the rollback-boundary disclaimer beside every one · true local percentiles + 1-decimal session stats · long-tail sections open), zero new mutation paths, zero `src-tauri` diff. Carries the full 2026-07-11 consumer-panel overhaul from `50b5c03` (its ship banner above; **note: this table's HEAD/installer rows had NOT been updated for that ship — drift fixed with this row**) and everything below it (Monitor v5 stack from `915e85b`, `compy_monitor_console` still **DEFAULT OFF**). Superseded installer: `653FFEA0…9BADC2` from `50b5c03`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
@@ -357,7 +379,7 @@
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:500` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **live reboot-while-active (headline case #4) + one-prompt advanced tier (#10) owner-PASSED 2026-07-07** — see GAMING_MODE_QA.md. Remaining checklist boxes are the non-headline live cases. |
 | **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1543` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. Since T6 (2026-07-07) session-start suspends ride the ONE batched elevation; since T6b (2026-07-08, `bdc9daa`) the restore side batches the same way. |
 | **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1614` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:188` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:163`, `lib.rs:679`, `Benchmark.tsx:193` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:1754` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs` | Built dark 2026-07-09 on the owner's nod (marathon §2a, spec `2026-07-08-lab-proving-ground.md`). Applies the whole safe stack in ONE UAC (reuses the audited `apply_recommendations_batch` — **no new mutation primitive**), measures the cumulative fps delta, then rolls back EXACTLY the changes it created via a multi-change Drop-guard (ledger id-diff; corrupt-ledger read ABORTS before any mutation — rust-tauri-reviewer fix). Commands `start_stack_trial` + `stack_trial_armed` refuse/return false while dark; no FE surface yet. Arming needs: live apply→rollback QA on a real rig + owner sign-off. |
 | **Leftovers restore** | **DARK** (`false`) | `restore_gate()` — `leftovers.rs:727` | Double-dark; detector is read-only, restore path refused + `#[cfg(test)]` bypass only. |

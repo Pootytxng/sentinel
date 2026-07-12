@@ -174,11 +174,18 @@ the stale 174 tree, green after staging**). The committed `site/` tree was alrea
 only the staging artifact had drifted. (2) Q3 expert-layer spec **GO** + added ship condition
 recorded (spec Status block + the row below).
 **Open out of this cycle:**
-- [ ] **BUILD: Expert-view scoped train** — `docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md`
-  (opt-in Settings preference, default OFF, presentation-only over existing data, non-LOCKED only).
-  **Must ship with the added condition:** wherever the exact registry key/service/setting renders
-  inline, a one-line disclaimer sits beside it — edits made outside Compy aren't tracked and can't
-  be rolled back by Compy. Standard self-review gate; no mutation-boundary diff expected.
+- [x] ✅ **BUILT 2026-07-12 `5850ac0`: Expert-view scoped train** — `docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md`.
+  One genuine Settings preference (`compy_expert_view`, Behavior row beside Motion, default OFF —
+  the skeptic face is byte-identical). ON = refused drawer open with reasoning inline · exact
+  target (registry/service/powercfg/Settings-path) inline on safe + needs-your-call rows via the
+  display-only `src/data/expert-targets.ts` map (transcribed from actions.rs, literal-pinned by
+  `expert-targets.test.ts`) · true `local_percentiles` + 1-decimal session/benchmark numbers ·
+  long-tail sections render open. **Ship condition MET + mechanized:** the rollback-boundary
+  disclaimer renders beside every inline target (`expert-view.test.tsx` pins disclaimer count ==
+  target count). Zero `src-tauri` diff (presentation-only, no mutation-gate). Verify: tsc clean ·
+  vitest 1350/1350 (171 files, +28 new guards) · self-review PASS (live 1500×980; honest note:
+  expert-ON Optimize is a ~10.6-screen scroll — the accepted cost of un-de-emphasizing, not a
+  defect; percentile/debrief precision verified by unit tests, no live session data on the rig).
 
 ### Cycle 2026-07-11e — ✅ CONSUMER-PANEL OVERHAUL BUILT + SHIPPED `50b5c03` — Q3 expert-layer proposal = the open owner gate
 
