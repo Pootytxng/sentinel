@@ -84,7 +84,7 @@ the app covers all three:
 The motion layer you ranked in the de-slop directive (the part the reskin skipped) is now live on
 your Desktop behind a preview flag. Flip **Settings → Appearance → "JARVIS motion (preview)"**, then:
 - **move between rooms** — a thin accent sweep "retunes" the pane on each switch;
-- **scroll a long room** (Blackbook/Learn) — the lane glides instead of stepping (Lenis);
+- **scroll a long room** (Blackbook) — the lane glides instead of stepping (Lenis);
 - **hover the rail tabs** — they pull a few px toward your cursor and ease back;
 - **watch Home's stage chrome** — brackets + corner gauges tilt slightly with your mouse (the
   3D rig itself never tilts, so drag-orbit stays exact);

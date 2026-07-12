@@ -161,6 +161,42 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12d — 🔧 IN PROGRESS: NAMING-DRIFT MAINTENANCE SWEEP (owner-triggered, "get on track") — resume here
+
+**Trigger:** while handing off the JARVIS build for eyeball, I told the owner to open the
+"**Learn**" room. "Learn" is a RETIRED label — I read the internal `HomeRailId` id `learn` and
+typed it as a tab name. Owner (rightly) flagged state-drift and ordered a **full maintenance sweep**.
+
+**GROUND TRUTH (verified this session — `src/design/homeRail.ts`):** the shipped rail (ground,
+default-ON) is **Home · Monitor · Blackbook · Lab**. Internal ids `learn`/`play`/`fix`/`check` are
+KEPT as persisted nav keys (renaming them orphans stored history) — NOT defects. Label renames the
+USER must see: **Play→Monitor · Fix→Tune (Optimize in the merge rail) · Learn→Blackbook · Check→folded
+into the Lab's Optimize station.** A DEFECT = a retired label in VISIBLE copy (header/button/tooltip/
+aria/prose/notification/empty-state). Existing partial guard: `src/stale-reference-guard.test.ts`
+(only the Blackbook DATA json — `<X> tab`), `src/data/jargon-guard.test.ts`.
+
+**Already fixed:** my fresh doc drift — `docs/OWNER_ACTION_CHECKLIST.md` §A7 "Blackbook/Learn" → "Blackbook".
+
+**IN FLIGHT — a background Workflow was launched then the session hit context-refresh:**
+- Run ID `wf_c688d119-49b` (task `wozx5vxyg`). Script (absolute):
+  `C:\Users\Kuya\AppData\Local\Temp\claude\c--Users-Kuya-code-sentinel\dc591a6b-79ab-4314-9583-34bd24917b12\scratchpad\naming-sweep.mjs`
+- Journal (read to recover results): `…\subagents\workflows\wf_c688d119-49b\journal.jsonl` under
+  `C:\Users\Kuya\.claude\projects\c--Users-Kuya-code-sentinel\dc591a6b-79ab-4314-9583-34bd24917b12\`
+- It fans 6 finders (surfaces · design · knowledge/data · onboarding · overlay+tray · settings) →
+  adversarial per-hit verify → a docs-drift lane. Returns `{confirmedUserFacingLeaks, rejectedCandidates, docsDrift, counts}`.
+
+**NEXT STEPS (resume):** (1) recover the sweep results (read the journal, or re-run the script — it's
+a fresh-session-safe absolute path; the scratchpad UUID `dc591a6b…` is THIS session's, so copy the
+script content if the path is gone). (2) FIX every confirmed user-facing leak (Learn→Blackbook,
+Play→Monitor, Fix→Tune, dead-tab prose). (3) **bug→guard**: extend `stale-reference-guard.test.ts`
+to scan `src/surfaces/**` + `src/design/**` visible copy, not just data JSON. (4) doc-sync stale rail
+naming in PRODUCT.md / DESIGN.md / CLAUDE.md (they still list "Home · Check · Play · Fix · Learn · Lab").
+(5) SAVE A MEMORY: the id-vs-label split (never speak internal ids to the owner; the rail is
+Home·Monitor·Blackbook·Lab). (6) tsc + vitest + new guard green, then report honest confirmed-vs-false count.
+
+**JARVIS eyeball still open** (Cycle 2026-07-12c): installed app is live `1d310e1`, JARVIS flag
+PRE-ENABLED for the owner (persisted in localStorage, survives restart), clean launch no debug port.
+
 ### Cycle 2026-07-12c — ✅ JARVIS MOTION LAYER BUILT + SHIPPED LIVE `1d310e1` (installer SHA-256 `8EB6185D…812D10`, embedded-hash-verified; NEW flag `compy_jarvis_motion` DEFAULT OFF) — owner eyeball = the open gate
 
 **The UI_VISION_BACKLOG §A.2/A.3/A.5/A.6 train** (rails: de-slop directive `:111-176`; the motion
