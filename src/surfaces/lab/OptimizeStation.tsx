@@ -100,7 +100,7 @@ export function OptimizeStation(props: LabFastPathProps) {
           <div
             className="lab-gauge"
             role="img"
-            aria-label={`${appliedSafe} of ${totalSafe} safe tweaks applied`}
+            aria-label={`${appliedSafe} of ${totalSafe} safe tweaks on`}
           >
             <svg className="lab-gauge-ring" viewBox="0 0 76 76" width="76" height="76" aria-hidden="true">
               <circle className="lab-gauge-track" cx="38" cy="38" r={GAUGE_R} />
@@ -128,8 +128,12 @@ export function OptimizeStation(props: LabFastPathProps) {
           </div>
           <p className="lab-gauge-caption">
             <span className="lab-gauge-caption-k">Your safe stack</span>
+            {/* State observation, never an action claim (consumer-panel Phase 0/1): currently_applied
+                is a live system probe — a setting can be on because Windows shipped that way or the
+                user set it themselves, not because Compy applied anything. "Fully applied" read as
+                unconsented action to first-contact readers. */}
             {appliedSafe >= totalSafe
-              ? "Fully applied — your rig is set."
+              ? `All ${totalSafe} already on for this rig — nothing to apply.`
               : driftedPending === 0
                 ? `${freshPending} left to enable below — one tap each, reversible.`
                 : freshPending === 0

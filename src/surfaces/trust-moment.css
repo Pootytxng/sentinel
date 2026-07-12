@@ -1,0 +1,65 @@
+/* TrustMoment — the one-time "watch it work" card on first Home view (consumer-panel Phase 2).
+   Calm panel tones, tokens only; the accent marks the live step, never alarm colors. */
+.trust-moment {
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--panel-2, transparent);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: var(--fg);
+}
+.tm-head {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.tm-body {
+  margin: 0 0 10px;
+  color: var(--muted, var(--fg));
+  max-width: 68ch;
+}
+.tm-body b {
+  color: var(--fg);
+}
+.tm-actions {
+  display: flex;
+  gap: 8px;
+}
+.tm-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, var(--border));
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.tm-btn-primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tm-btn:hover {
+  border-color: var(--accent);
+}
+.tm-live {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tm-step {
+  margin: 0;
+  color: var(--muted, var(--fg));
+}
+.tm-step-now {
+  color: var(--accent);
+}
+.tm-step-done {
+  color: var(--fg);
+}
+.tm-close {
+  margin-top: 8px;
+}
+.tm-error {
+  color: var(--attention, #f5c451);
+}

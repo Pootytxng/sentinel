@@ -34,8 +34,10 @@ export const FRIENDLY_LABELS: Record<string, FriendlyLabel> = {
   "usb-selective-suspend-off": { headline: "Keep your USB gear awake", tech: "USB Selective Suspend" },
   "pcie-aspm-off": { headline: "Stop your GPU link from power-napping", tech: "PCIe power management" },
   "eee-disable": { headline: "Steady your wired connection", tech: "Energy Efficient Ethernet" },
+  // Decision framing, not a nudge to weaken security (consumer-panel Phase 1: the old "may be
+  // costing you frames" headline read as a request to turn a protection off).
   "memory-integrity-vbs-advisory": {
-    headline: "A security feature may be costing you frames",
+    headline: "Your call: extra security or extra frames",
     tech: "Memory Integrity / VBS",
   },
   "defender-game-folder-exclusions-advisory": {

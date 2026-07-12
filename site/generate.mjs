@@ -236,19 +236,31 @@ const verdictKey = lib.glossary
   )
   .join("\n");
 
-const debunkCards = picks
-  .map((e) => {
-    const chip = chipFor(e, lib);
-    return [
-      `      <a class="card" href="${escapeHtml(e.id)}.html">`,
-      `        <span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span>`,
-      `        <h3>${escapeHtml(e.name)}</h3>`,
-      `        <p>${escapeHtml(e.type === "tweak" ? e.what : entrySummary(e))}</p>`,
-      `        <span class="read">Read the honest verdict →</span>`,
-      `      </a>`,
-    ].join("\n");
-  })
-  .join("\n");
+// One-line reasoning teaser beside the chip (consumer-panel overhaul: a chip + description alone
+// read as "a tier list, not an argument"). First sentence of the entry's own graded `why` — real
+// library text, never invented here.
+const whyTeaser = (why) => {
+  const first = /^[\s\S]*?[.!?](?=\s|$)/.exec(why.trim());
+  return (first ? first[0] : why).trim();
+};
+const debunkCard = (e) => {
+  const chip = chipFor(e, lib);
+  return [
+    `      <a class="card" href="${escapeHtml(e.id)}.html">`,
+    `        <span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span>`,
+    `        <h3>${escapeHtml(e.name)}</h3>`,
+    `        <p>${escapeHtml(e.type === "tweak" ? e.what : entrySummary(e))}</p>`,
+    ...(e.type === "tweak" && e.why
+      ? [`        <p class="card-why"><b>Why:</b> ${escapeHtml(whyTeaser(e.why))}</p>`]
+      : []),
+    `        <span class="read">Read the honest verdict →</span>`,
+    `      </a>`,
+  ].join("\n");
+};
+// Consumer-panel overhaul: the landing leads with a bite-sized "start here" trio (the first
+// three picks — curation order in debunks.config.json is the owner's swap point), then the rest.
+const startCards = picks.slice(0, 3).map(debunkCard).join("\n");
+const moreCards = picks.slice(3).map(debunkCard).join("\n");
 
 // Waitlist: the REAL same-origin form (spec 2026-06-12-waitlist-wiring) — native POST to our
 // own Pages Function; the slot HTML is the swap point in src/data/site.ts.
@@ -320,7 +332,8 @@ writeFileSync(
   join(here, "index.html"),
   fill(indexTemplate, {
     VERDICT_KEY: verdictKey,
-    DEBUNK_CARDS: debunkCards,
+    START_CARDS: startCards,
+    MORE_CARDS: moreCards,
     ENTRY_COUNT: String(entries.length),
     WAITLIST_SLOT: waitlistSlot,
     PAGE_SCRIPT: pageScript,

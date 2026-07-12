@@ -38,8 +38,10 @@
   <!-- ── Hero: the identity ── -->
   <div class="wrap hero">
     <div class="reveal">
-      <p class="kicker">Know which PC tweaks actually help your rig.</p>
-      <h1>Measured,<br />not promised.</h1>
+      <!-- Consumer-panel overhaul (plan 2026-07-11): the kicker was the stronger hook (Budget Teen
+           named it unprompted) — promoted to the h1; the doctrine line becomes the kicker. -->
+      <p class="kicker">Measured, not promised.</p>
+      <h1>Know which PC tweaks<br />actually help your rig.</h1>
       <p class="hero-sub">
         Every optimizer promises speed. Compy <strong>proves what's true on your rig</strong>:
         it reads your actual hardware, grades the internet's favorite tweaks — real, placebo,
@@ -50,24 +52,28 @@
         <a class="btn" href="#waitlist">Join the waitlist</a>
         <a class="link-quiet" href="#library">Read the debunks →</a>
       </div>
+      <!-- "It's free" belongs above the fold, not in the footer (three personas hunted for it). -->
+      <p class="hero-note"><b>Compy is free.</b> No account, no ads, nothing leaves your PC.</p>
     </div>
-    <!-- THE LIVING BLACKBOOK — the hero IS the product's own render (owner-approved, the
-         landing-blackbook mock wired in). Self-hosted <video> with a poster so it never blocks
-         first paint; the existing page script pauses it under prefers-reduced-motion. The verdict
-         ribbon + proof strip are decorative (aria-hidden); the value cards below carry the
-         accessible text. No raster image element, no external origin. -->
-    <div class="stage reveal reveal-late" aria-label="The Compy Blackbook — every tweak, graded honestly">
+    <!-- THE PROOF LOOP leads the stage (consumer-panel overhaul: three personas independently
+         named the applied → measured → rolled-back strip the most convincing element — it is now
+         the hero visual, real accessible text, not a decorative aside). The living-Blackbook
+         video stays as the ambient backdrop (aria-hidden; poster paints first, the page script
+         pauses it under prefers-reduced-motion). Numbers on the receipt are framed as an example
+         of what Compy shows — never a promise (content rules, site/README.md). -->
+    <div class="stage reveal reveal-late">
       <div class="book-glow" aria-hidden="true"></div>
-      <div class="book-frame">
-        <video autoplay muted loop playsinline poster="assets/og-card-poster.webp" aria-hidden="true">
+      <div class="book-frame" aria-hidden="true">
+        <video autoplay muted loop playsinline poster="assets/og-card-poster.webp">
           <source src="assets/og-card.mp4" type="video/mp4" />
         </video>
-        <div class="proof" aria-hidden="true">
-          <div class="proof-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
-          <div class="proof-row"><span>+8 fps · 1% low +11</span><span class="ok">measured ✓</span></div>
-          <div class="proof-row"><span class="k">rolled back</span><span>exact prior value ✓</span></div>
-          <div class="proof-cap">Judge → measure → receipt → undo. The whole loop, on your machine.</div>
-        </div>
+      </div>
+      <div class="proof">
+        <div class="proof-title">The proof loop · an example receipt</div>
+        <div class="proof-row"><span class="k">fast-startup-off</span><span>applied · 21:42</span></div>
+        <div class="proof-row"><span>+8 fps · 1% low +11</span><span class="ok">measured ✓</span></div>
+        <div class="proof-row"><span class="k">rolled back</span><span>exact prior value ✓</span></div>
+        <div class="proof-cap">Applied → measured → rolled back. Every change gets this receipt, on your machine.</div>
       </div>
       <div class="verdicts" aria-hidden="true">
         <i class="vd real" data-label="Real"></i>
@@ -127,97 +133,117 @@
   <!-- ── The Compy Blackbook — debunk-library showcase ── -->
   <section class="wrap" id="library">
     <h2>The Compy Blackbook</h2>
+    <!-- Panel finding: leading with raw counts reads as homework. Bite-sized "start here" picks
+         lead; the full count lives on the browse-all link below. -->
     <p class="section-sub">
-      174 tweaks, terms, and guides, graded honestly — what works, what's placebo, and the snake-oil we name and refuse.
-      A few of the internet's favorites:
+      The internet's favorite PC tweaks, graded honestly — what works, what's placebo, and the
+      snake-oil we name and refuse.
     </p>
+    <p class="start-label">Start here: three quick reads</p>
     <div class="debunks sr-kids">
       <a class="card" href="useplatformclock.html">
         <span class="chip chip-risky">Risky — refused</span>
         <h3>Force HPET / useplatformclock</h3>
         <p>Forces Windows to use the High Precision Event Timer via a boot flag.</p>
+        <p class="card-why"><b>Why:</b> Refused.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="timer-resolution.html">
-        <span class="chip chip-placebo">Placebo</span>
+        <span class="chip chip-risky">Risky — refused</span>
         <h3>Forcing 0.5 ms global timer resolution</h3>
         <p>Forces Windows' interrupt timer to its finest interval system-wide.</p>
+        <p class="card-why"><b>Why:</b> This one does change things you can measure — just not reliably for the better, which is why it isn't a free win.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="pagefile-disable.html">
         <span class="chip chip-risky">Risky — refused</span>
         <h3>Disable / fix the pagefile</h3>
         <p>Turns off or hard-caps Windows' virtual memory file.</p>
+        <p class="card-why"><b>Why:</b> Refused.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
+    </div>
+    <p class="start-label">More of the internet's favorites</p>
+    <div class="debunks sr-kids">
       <a class="card" href="disable-defender.html">
         <span class="chip chip-risky">Risky — refused</span>
         <h3>Disable Windows Defender</h3>
         <p>Turns off Windows' built-in antivirus for a supposed FPS gain.</p>
+        <p class="card-why"><b>Why:</b> Hard no.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="registry-fps-hacks.html">
         <span class="chip chip-placebo">Placebo</span>
         <h3>Random registry &quot;FPS boost&quot; hacks</h3>
         <p>Assorted forum / video registry edits promising free FPS.</p>
+        <p class="card-why"><b>Why:</b> Almost all are placebo or actively harmful — undocumented keys, no measurable effect, easy to break settings.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="debloat-scripts.html">
         <span class="chip chip-risky">Risky — refused</span>
         <h3>All-in-one debloat scripts / stripped ISOs</h3>
         <p>Scripts or custom Windows images that strip dozens of components at once.</p>
+        <p class="card-why"><b>Why:</b> The single biggest cause of mystery breakage: ten changes at once means no way to diagnose which one broke audio, anti-cheat, or updates.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="cpu-mitigations.html">
         <span class="chip chip-risky">Risky — refused</span>
         <h3>Disable CPU security mitigations (Spectre/Meltdown)</h3>
         <p>Turns off side-channel attack protections for a small CPU uplift.</p>
+        <p class="card-why"><b>Why:</b> For GAMING the gain is ~0–4% (the big numbers are servers); the cost is re-opening known, documented exploit classes.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="fullscreen-optimizations.html">
         <span class="chip chip-real">Real</span>
         <h3>Disable Fullscreen Optimizations</h3>
         <p>Turns off Windows' hybrid fullscreen compositor for a specific game's .exe.</p>
+        <p class="card-why"><b>Why:</b> Genuinely changes frame pacing / latency in SOME games and hurts others — it's per-game, so measure it.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="game-mode.html">
         <span class="chip chip-real">Real</span>
         <h3>Windows Game Mode</h3>
         <p>Prioritizes the foreground game for CPU/GPU scheduling and holds back background interruptions.</p>
+        <p class="card-why"><b>Why:</b> Modest, low-risk benefit on most rigs; larger on busy/background-heavy systems.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="disable-smt-gaming.html">
         <span class="chip chip-placebo">Placebo</span>
         <h3>Disabling SMT / Hyper-Threading for gaming</h3>
         <p>Turning off your CPU's second thread per core (Hyper-Threading on Intel, SMT on AMD) in BIOS, on the theory that fewer, 'cleaner' threads game better.</p>
+        <p class="card-why"><b>Why:</b> On almost any modern 6-plus-core CPU this is a step backwards or a wash — you hand the game fewer threads to spread across and leave background work fighting it for what's left.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="tcp-mega-packs.html">
         <span class="chip chip-placebo">Placebo</span>
         <h3>Network 'mega-pack' tweaks (Nagle, RSS/RSC, netsh stacks)</h3>
         <p>Bundles of TCP/NIC registry and netsh changes promising lower ping.</p>
+        <p class="card-why"><b>Why:</b> Your ping is your route and your ISP, not a registry key.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="game-boosters.html">
         <span class="chip chip-placebo">Placebo</span>
         <h3>Game booster apps (Razer Cortex etc.)</h3>
         <p>All-in-one 'booster' apps that promise FPS by closing background apps and 'optimizing' RAM or CPU when a game launches.</p>
+        <p class="card-why"><b>Why:</b> The one real thing they do — closing background apps — is free to do yourself, and Windows already deprioritizes background work while a game has focus.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="ram-cleaners.html">
         <span class="chip chip-placebo">Placebo</span>
         <h3>RAM cleaners / standby-list purgers (ISLC)</h3>
         <p>Utilities that 'free' RAM by purging Windows' standby list or trimming process memory on a timer.</p>
+        <p class="card-why"><b>Why:</b> Free RAM is wasted RAM: the standby list IS your file cache, and purging it throws away data Windows would have reused instantly — the next read comes from disk instead.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
       <a class="card" href="dns-for-gaming.html">
         <span class="chip chip-placebo">Placebo</span>
         <h3>Changing DNS for lower ping</h3>
         <p>Switching to a third-party 'gaming DNS' expecting lower in-game latency.</p>
+        <p class="card-why"><b>Why:</b> DNS answers one question — which IP a name points to — and it's asked when you connect, not while you play.</p>
         <span class="read">Read the honest verdict →</span>
       </a>
     </div>
-    <p class="browse-all"><a class="link-quiet" href="library/index.html">Open the full Blackbook — all 174 entries →</a></p>
+    <p class="browse-all"><a class="link-quiet" href="library/index.html">Open the full Blackbook — all 191 entries →</a></p>
   </section>
 
   <!-- ── Waitlist (placeholder slot — Zero-Budget) ── -->

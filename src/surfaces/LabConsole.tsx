@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
+import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
@@ -254,7 +255,19 @@ export function LabConsole({
         <span className="lc-brk lc-brk-bl" />
         <span className="lc-brk lc-brk-br" />
         <div className="lc-corner lc-tl">
-          <ArcGauge label="Readiness" value={readinessScore} max={100} unit="score" tone="accent" />
+          {/* Same "how we calculate this" line the Home console carries (consumer-panel Phase 2). */}
+          <ArcGauge
+            label="Readiness"
+            value={readinessScore}
+            max={100}
+            unit="score"
+            tone="accent"
+            note={
+              readinessKnown
+                ? `= ${Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count)} of ${readiness!.checks.length} checks passed`
+                : undefined
+            }
+          />
         </div>
         <div className="lc-corner lc-tr">
           <ArcGauge label="Avg FPS" value={avgFps} max={240} unit="fps" measured={avgFps != null} />
@@ -271,7 +284,11 @@ export function LabConsole({
         </div>
         <div className="lc-corner lc-br">
           <ArcGauge
-            label="1% low"
+            label={
+              /* align="end": this gauge sits at the stage's right edge — a left-anchored tooltip
+                 rendered 126px past the window (self-review catch 2026-07-11). */
+              <Term id="one-percent-lows" align="end">1% low</Term>
+            }
             value={lowFps}
             max={240}
             unit="frames"

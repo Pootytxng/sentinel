@@ -246,10 +246,12 @@ export function GamingMode() {
       {/* Interrupted-recovery prompt — highest priority */}
       {recovery && (
         <Card className="gaming-recovery">
-          <div className="gaming-card-head">Gaming Mode didn't close cleanly</div>
+          {/* Protection-first framing — same reframe as the App-level banner (consumer-panel Q4). */}
+          <div className="gaming-card-head">Finish the last Gaming Mode session</div>
           <p>
-            The last session ({statusLabel(recovery.status)}) didn't get a clean shutdown — usually
-            because Compy was closed or the PC restarted while it was on. Pick one:
+            Nothing&apos;s lost — the last session ({statusLabel(recovery.status)}) was interrupted,
+            usually because Compy was closed or the PC restarted while it was on. Compy kept the
+            full restore receipt. Pick one:
           </p>
           <ul className="gaming-recovery-choices">
             <li>

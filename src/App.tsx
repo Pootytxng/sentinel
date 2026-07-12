@@ -29,6 +29,7 @@ import { useReducedMotion } from "./design/use-motion";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { GamingMode } from "./surfaces/GamingMode";
 import { HomeRoom } from "./surfaces/HomeRoom";
+import { TrustMoment } from "./surfaces/TrustMoment";
 import { OptimizeV2 } from "./surfaces/OptimizeV2";
 import { MonitorV2 } from "./surfaces/MonitorV2";
 import { BlackbookV2 } from "./surfaces/BlackbookV2";
@@ -1328,9 +1329,13 @@ function App() {
           restore-then-re-enable-by-hand. */}
       {showGlobalRecoveryBanner(gamingRecovery !== null, gamingPaneMounted) && gamingRecovery && (
         <div className="gaming-recovery-banner" role="alert">
+          {/* Protection-first framing (consumer-panel Q4, owner-directed exploration 2026-07-11):
+              the honest state is "recoverable, nothing at risk" — the receipt is intact — so the
+              banner leads with that instead of alarm. Visibility/actions/never-hide unchanged. */}
           <span>
-            A Gaming Mode session didn't end cleanly — {statusLabel(gamingRecovery.status)}. Resume
-            it, or restore your settings?
+            <strong>Nothing&apos;s lost</strong> — a Gaming Mode session was interrupted (
+            {statusLabel(gamingRecovery.status)}) and Compy kept the full restore receipt. Resume
+            it, or restore your settings now?
           </span>
           <span className="gaming-recovery-actions">
             <button
@@ -1470,6 +1475,16 @@ function App() {
             </div>
           )}
           {activeTab === "Overview" && hw ? (
+            <>
+              {/* One-time "watch it work" trust loop (consumer-panel Phase 2): offered only while
+                  the Trust Ledger is empty; runs the SAME audited apply→rollback IPC, consented by
+                  a click, never automatic. Renders nothing on a rig with history. */}
+              <TrustMoment
+                recs={recs}
+                changes={changes}
+                isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                onChanged={refresh}
+              />
             <HomeRoom
               hw={hw}
               readiness={readiness}
@@ -1487,6 +1502,7 @@ function App() {
                 .filter((r) => r.id !== "home")
                 .map((r) => ({ key: r.id, name: r.label }))}
             />
+            </>
           ) : (
             <>
               {/* V2-5: the Monitor room on RoomShell (merged shape only — compy_monitor="0"

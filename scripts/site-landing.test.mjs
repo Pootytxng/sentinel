@@ -13,7 +13,9 @@ const html = readFileSync(join(root, "site", "index.html"), "utf8");
 
 describe("site landing (R4a publish-grade contract)", () => {
   it("carries the doctrine identity hero + the §B0 sections", () => {
-    expect(html).toContain("Measured,<br />not promised.");
+    // Consumer-panel overhaul 2026-07-11: the hook line is the h1, the doctrine line the kicker.
+    expect(html).toContain("Know which PC tweaks<br />actually help your rig.");
+    expect(html).toMatch(/class="kicker">Measured, not promised\./);
     expect(html).toContain('id="receipts"'); // 3 value cards
     expect((html.match(/class="value-card"/g) ?? []).length).toBe(3);
     expect(html).toContain('id="grades"'); // verdict key (glossary-generated)
@@ -22,6 +24,25 @@ describe("site landing (R4a publish-grade contract)", () => {
     expect(html).toContain('id="download"'); // future-download placeholder
     expect(html).toContain("Measured, not promised."); // creed footer line
     expect(html).toContain("No fabricated numbers");
+  });
+
+  it("consumer-panel overhaul contract: free above the fold, accessible proof loop, start-here curation", () => {
+    // "It's free" lives in the hero, before the library section (was footer-only knowledge).
+    const freeAt = html.indexOf("Compy is free.");
+    expect(freeAt).toBeGreaterThan(-1);
+    expect(freeAt).toBeLessThan(html.indexOf('id="library"'));
+    // The proof loop is real accessible text (the hero visual), not a decorative aside.
+    expect(html).toContain('class="proof-title"');
+    expect(html).not.toMatch(/class="proof" aria-hidden/);
+    // Example framing on the receipt numbers — never a promise.
+    expect(html).toContain("an example receipt");
+    // Every tweak card argues its grade — a one-line "why" beside the chip, not a bare tier chip.
+    expect((html.match(/class="card-why"/g) ?? []).length).toBeGreaterThanOrEqual(10);
+    // Blackbook leads with the start-here trio, not raw entry counts.
+    expect(html).toContain("Start here: three quick reads");
+    expect(html).not.toMatch(/class="section-sub">\s*\d+ tweaks/);
+    // The full count survives on the browse-all link (honest, just demoted).
+    expect(html).toMatch(/Open the full Blackbook — all \d+ entries/);
   });
 
   it("makes ZERO third-party requests: no external scripts/styles/fonts/trackers, no raster assets yet", () => {

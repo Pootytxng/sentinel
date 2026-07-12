@@ -1,4 +1,5 @@
 import type { TuningMeasurement } from "../data/tuning-measure";
+import { Term } from "../design/Term";
 import "./TuningVerdict.css";
 
 // The honest-measurement verdict card — ONE shared presentational block rendered identically in the
@@ -29,7 +30,7 @@ export function TuningVerdictCard({ m }: { m: TuningMeasurement }) {
         )}
         {m.low1DeltaPct != null && (
           <span className="tg-stat">
-            1% low <b>{sign(m.low1DeltaPct)}%</b> vs baseline
+            <Term id="one-percent-lows">1% low</Term> <b>{sign(m.low1DeltaPct)}%</b> vs baseline
           </span>
         )}
         <span className="tg-stat tg-stat-muted">

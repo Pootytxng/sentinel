@@ -6,7 +6,16 @@ import "./Term.css";
 // Inline glossary tooltip. <Term id="vrr">VRR</Term> renders a dotted-underline trigger; hover/tap/
 // focus reveals the term's one-line "what" with a link into the full library entry. Keyboard-
 // accessible. Fail-soft: an unknown id (or a non-term id) renders the children as plain text.
-export function Term({ id, children }: { id: string; children: ReactNode }) {
+export function Term({
+  id,
+  children,
+  align = "start",
+}: {
+  id: string;
+  children: ReactNode;
+  /** Tooltip anchor edge — "end" (right-anchored) for triggers near the window's right side. */
+  align?: "start" | "end";
+}) {
   const entry = KNOWLEDGE_BY_ID.get(id);
   const { openLibrary } = useLibrary();
   const [open, setOpen] = useState(false);
@@ -41,7 +50,7 @@ export function Term({ id, children }: { id: string; children: ReactNode }) {
         {children}
       </button>
       {open && (
-        <span className="kl-tip" role="tooltip" id={tipId}>
+        <span className={`kl-tip${align === "end" ? " kl-tip-end" : ""}`} role="tooltip" id={tipId}>
           <span className="kl-tip-what">{what}</span>
           <button
             type="button"

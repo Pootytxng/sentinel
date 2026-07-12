@@ -4,30 +4,8 @@ import {
   type InstrumentTheme,
   readInstrumentTheme,
   applyInstrumentTheme,
-  readLivingInstrument,
-  applyLivingInstrument,
-  readLabGuided,
-  readLabBento,
-  applyLabBento,
-  applyLabGuided,
-  readLabGround,
-  applyLabGround,
-  readHud,
-  applyHud,
-  readHomeConsole,
-  applyHomeConsole,
   readMonitorConsole,
   applyMonitorConsole,
-  readSetupStepper,
-  applySetupStepper,
-  readFirstCheckTheater,
-  applyFirstCheckTheater,
-  readMonitorCards,
-  applyMonitorCards,
-  readHologramV2,
-  applyHologramV2,
-  readTwoFutures,
-  applyTwoFutures,
   readCloseToTray,
   persistCloseToTray,
   type OverlayDensity,
@@ -135,18 +113,7 @@ export default function Settings({
   onClose: () => void;
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
-  const [living, setLiving] = useState<boolean>(readLivingInstrument);
-  const [labGuided, setLabGuided] = useState<boolean>(readLabGuided);
-  const [labBento, setLabBento] = useState<boolean>(readLabBento);
-  const [labGround, setLabGround] = useState<boolean>(readLabGround);
-  const [hud, setHud] = useState<boolean>(readHud);
-  const [homeConsole, setHomeConsole] = useState<boolean>(readHomeConsole);
   const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
-  const [setupStepper, setSetupStepper] = useState<boolean>(readSetupStepper);
-  const [fcTheater, setFcTheater] = useState<boolean>(readFirstCheckTheater);
-  const [monitorCards, setMonitorCards] = useState<boolean>(readMonitorCards);
-  const [holoV2, setHoloV2] = useState<boolean>(readHologramV2);
-  const [twoFutures, setTwoFutures] = useState<boolean>(readTwoFutures);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
@@ -172,84 +139,12 @@ export default function Settings({
     setMotionPref(p); // persists, updates <html data-motion>, and notifies live listeners
   };
 
-  // Living Instrument preview — toggles the depth/glow/motion skin live (applies the [data-living]
-  // attribute app-wide). Cosmetic + reversible; default OFF until the look is locked.
-  const changeLiving = (v: boolean) => {
-    setLiving(v);
-    applyLivingInstrument(v);
-  };
-  // Guided Lab bench preview — reorders + signposts the Lab's instruments (router, numbered
-  // stations, walk-through). Layout/copy only: the instruments and their reads are untouched.
-  const changeLabGuided = (v: boolean) => {
-    setLabGuided(v);
-    applyLabGuided(v);
-  };
-  // Lab checkup bento preview — the Lab's face as a station-card grid in bench order + a
-  // synthesized checkup report. Presentation + synthesis only: same instruments, same readings.
-  const changeLabBento = (v: boolean) => {
-    setLabBento(v);
-    applyLabBento(v);
-  };
-  // Lab proving ground preview (spec 2026-07-08-lab-proving-ground, phase 1) — merges the Optimize
-  // room INTO the Lab: the "enable all the good tweaks" fast path (no benchmark required) leads,
-  // the measure→prove instruments sit beside it as one linear spine. Same audited apply path, same
-  // instruments; off renders the classic separate Lab + Optimize rooms byte-identical.
-  const changeLabGround = (v: boolean) => {
-    setLabGround(v);
-    applyLabGround(v);
-  };
-  // Instrument-HUD preview — the de-slop redesign pilot (Home first; editorial retired,
-  // CORRECTED direction). Presentation only: the same measured numbers, the same probes;
-  // flag off renders today's rooms byte-identical.
-  const changeHud = (v: boolean) => {
-    setHud(v);
-    applyHud(v);
-  };
-  // Home console (Phase 2 of the Console HUD, DEFAULT ON — owner-approved 2026-07-10) —
-  // Home as the console cold-open. Presentation only: same measured numbers, same probes;
-  // "0" restores the classic Home byte-identical (the failsafe).
-  const changeHomeConsole = (v: boolean) => {
-    setHomeConsole(v);
-    applyHomeConsole(v);
-  };
   // Monitor console preview (Phase 3 of the Console HUD, DEFAULT OFF the whole phase) — the
   // Monitor Live face as the instrument cluster: fps/frametime traces + honest gauges.
   // Presentation only: same sensors, same polls; off renders today's Monitor byte-identical.
   const changeMonitorConsole = (v: boolean) => {
     setMonitorConsole(v);
     applyMonitorConsole(v);
-  };
-  // Setup stepper preview — the Setup & Tour's progress row as numbered step indicators.
-  // Presentation only: same steps, same content, same navigation.
-  const changeSetupStepper = (v: boolean) => {
-    setSetupStepper(v);
-    applySetupStepper(v);
-  };
-  // First-check boot theater — the run screen's HUD readout (active check prominent, finished
-  // checks stacking). Presentation only: same real checks, same honest elapsed; off renders the
-  // classic streaming row list.
-  const changeFcTheater = (v: boolean) => {
-    setFcTheater(v);
-    applyFirstCheckTheater(v);
-  };
-  // Monitor domain cards — the deep Monitoring panels summary-first (full detail one click
-  // away). Presentation only: same sensors, same cadence; off renders the classic panel stack.
-  const changeMonitorCards = (v: boolean) => {
-    setMonitorCards(v);
-    applyMonitorCards(v);
-  };
-  // Hologram bay v2 — the holo-shader shell + bloom on the Home rig. Presentation only:
-  // same real parts, same honest ghosts; off renders the classic bay.
-  const changeHoloV2 = (v: boolean) => {
-    setHoloV2(v);
-    applyHologramV2(v);
-  };
-  // Two Futures split preview — the Benchmark station's baseline-vs-now hologram pair.
-  // Presentation over the SAME measured benchmark structs; renders only from a real
-  // before/after pair (no pair → honest empty state). DEFAULT OFF.
-  const changeTwoFutures = (v: boolean) => {
-    setTwoFutures(v);
-    applyTwoFutures(v);
   };
   // Close-to-tray: persist + sync the backend gate. Default OFF keeps the §1 clean exit until opt-in.
   const changeCloseToTray = (v: boolean) => {
@@ -311,85 +206,15 @@ export default function Settings({
                 ))}
               </div>
 
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Living Instrument (preview)</div>
-                  <div className="set-row-sub">
-                    Depth, a soft glow on live readings, and a little motion. Purely cosmetic — nothing
-                    it touches changes what Compy measures.
-                  </div>
-                </div>
-                <Toggle on={living} onChange={changeLiving} ariaLabel="Living Instrument preview" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Guided Lab bench (preview)</div>
-                  <div className="set-row-sub">
-                    Lines the Lab's instruments up as numbered stations behind a "what are you
-                    here to do?" guide. Same instruments, same readings — just signposted.
-                  </div>
-                </div>
-                <Toggle on={labGuided} onChange={changeLabGuided} ariaLabel="Guided Lab bench preview" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Lab checkup bento</div>
-                  <div className="set-row-sub">
-                    Opens the Lab as a checkup room: station cards left to right in working
-                    order, plus a plain-English report of what your readings mean. Same
-                    instruments, same readings — turn off for the classic Lab face.
-                  </div>
-                </div>
-                <Toggle on={labBento} onChange={changeLabBento} ariaLabel="Lab checkup bento" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Lab proving ground</div>
-                  <div className="set-row-sub">
-                    The Lab as one Ops Console: enable all the safe tweaks at its Optimize station
-                    in one tap (no benchmarking needed), with the measure-and-prove instruments
-                    right beside them. Same tweaks, same undo — turn off for the classic separate
-                    Lab and Optimize rooms.
-                  </div>
-                </div>
-                <Toggle
-                  on={labGround}
-                  onChange={changeLabGround}
-                  ariaLabel="Lab proving ground"
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Instrument HUD</div>
-                  <div className="set-row-sub">
-                    The diagnostic-HUD look across Home and every room: console verdict,
-                    telemetry readouts, bracketed rig bay. Same numbers, same measurements —
-                    turn off for the classic look.
-                  </div>
-                </div>
-                <Toggle on={hud} onChange={changeHud} ariaLabel="Instrument HUD" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Home console</div>
-                  <div className="set-row-sub">
-                    Home as the console cold-open: your rig hologram center-stage with corner
-                    gauges and a dock into the rooms. Same numbers, same measurements — turn
-                    off for the classic Home.
-                  </div>
-                </div>
-                <Toggle
-                  on={homeConsole}
-                  onChange={changeHomeConsole}
-                  ariaLabel="Home console"
-                />
-              </div>
-
+              {/* Flag-debt sweep (consumer-panel Q2, owner answer A, 2026-07-11): the toggle rows
+                  for features already graduated to permanent default-ON (Living Instrument, Lab
+                  proving ground + the two classic-Lab-only toggles it stranded, Instrument HUD,
+                  Home console, Setup stepper, First-check theater, Monitor summary cards, Hologram
+                  bay v2, Two futures split) are REMOVED — three of five panel personas read the
+                  wall of "(preview)" switches as an internal QA panel. The features are unchanged
+                  and their flags still respect localStorage if set via devtools (same convention
+                  as the removed "New look" hub below). The ONE remaining preview row is Monitor
+                  console — genuinely default-OFF, awaiting the owner's v5 eyeball. */}
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
                   <div className="set-row-title">Monitor console (preview)</div>
@@ -403,81 +228,6 @@ export default function Settings({
                   on={monitorConsole}
                   onChange={changeMonitorConsole}
                   ariaLabel="Monitor console (preview)"
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Setup stepper</div>
-                  <div className="set-row-sub">
-                    Numbered step markers with check marks in the Setup &amp; Tour's progress
-                    bar, so you can see where you are and hop between steps. Same tour, same
-                    steps — turn off for the classic tick row.
-                  </div>
-                </div>
-                <Toggle
-                  on={setupStepper}
-                  onChange={changeSetupStepper}
-                  ariaLabel="Setup stepper"
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">First-check boot theater</div>
-                  <div className="set-row-sub">
-                    The first check's run screen as a HUD readout — the check being measured
-                    up front, finished ones stacking below. Same real checks — turn off for
-                    the classic row list.
-                  </div>
-                </div>
-                <Toggle
-                  on={fcTheater}
-                  onChange={changeFcTheater}
-                  ariaLabel="First-check boot theater"
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Monitor summary cards</div>
-                  <div className="set-row-sub">
-                    The deep Monitoring panels as compact instrument cards — one per domain,
-                    tap a card for the full readings. Same sensors — turn off for the classic
-                    full-width panels.
-                  </div>
-                </div>
-                <Toggle
-                  on={monitorCards}
-                  onChange={changeMonitorCards}
-                  ariaLabel="Monitor summary cards"
-                />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Hologram bay v2</div>
-                  <div className="set-row-sub">
-                    The Home rig hologram with a holo-glass shell and glow, in your theme's
-                    color. Same real parts — turn off for the classic bay.
-                  </div>
-                </div>
-                <Toggle on={holoV2} onChange={changeHoloV2} ariaLabel="Hologram bay v2" />
-              </div>
-
-              <div className="set-row set-row-inset">
-                <div className="set-row-text">
-                  <div className="set-row-title">Two futures split (preview)</div>
-                  <div className="set-row-sub">
-                    In the Lab's Benchmark station: your rig at its baseline next to how it
-                    measures now, side by side. Only renders from two real runs — no runs, no
-                    view.
-                  </div>
-                </div>
-                <Toggle
-                  on={twoFutures}
-                  onChange={changeTwoFutures}
-                  ariaLabel="Two futures split (preview)"
                 />
               </div>
 

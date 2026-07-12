@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useReducedMotion } from "../use-motion";
 import { useCountTo } from "../../surfaces/lab/use-count-to";
 import "./arc-gauge.css";
@@ -11,9 +12,12 @@ const TICKS = Array.from({ length: 24 }, (_, i) => {
 });
 
 export function ArcGauge({
-  label, value, max, unit, tone = "neutral", measured = true,
+  label, value, max, unit, tone = "neutral", measured = true, note,
 }: {
-  label: string; value: number | null; max: number; unit: string; tone?: ArcTone; measured?: boolean;
+  /** ReactNode so callers can gloss jargon labels inline (e.g. a <Term> tooltip on "1% low"). */
+  label: ReactNode; value: number | null; max: number; unit: string; tone?: ArcTone; measured?: boolean;
+  /** One quiet "how we calculate this" line under the label — shown only with a live value. */
+  note?: string;
 }) {
   const reduced = useReducedMotion();
   const shown = useCountTo(value, { reduced });     // null → null (honesty rail); reduced → snaps
@@ -38,6 +42,7 @@ export function ArcGauge({
         <span>{label}</span>
         {empty ? <span className="ag-tag ag-tag-ny">not yet</span>
                : measured ? <span className="ag-tag">measured</span> : null}
+        {note && !empty && <span className="ag-note">{note}</span>}
       </div>
     </div>
   );

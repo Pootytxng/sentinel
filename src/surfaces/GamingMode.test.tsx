@@ -87,12 +87,13 @@ describe("GamingMode restore-success confirmation", () => {
       return Promise.resolve(null);
     });
     render(<GamingMode />);
-    await screen.findByText("Gaming Mode didn't close cleanly");
+    // Protection-first head (consumer-panel Q4 reframe, 2026-07-11).
+    await screen.findByText("Finish the last Gaming Mode session");
 
     fireEvent(window, new Event(GAMING_SESSION_RESOLVED_EVENT));
 
     await waitFor(() =>
-      expect(screen.queryByText("Gaming Mode didn't close cleanly")).toBeNull(),
+      expect(screen.queryByText("Finish the last Gaming Mode session")).toBeNull(),
     );
   });
 

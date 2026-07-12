@@ -13,6 +13,7 @@ import { gradeFps, gradeLow1, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
+import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import "./home-console.css";
@@ -359,7 +360,20 @@ export function HomeConsole({
           <span className="hc-brk hc-brk-bl" aria-hidden="true" />
           <span className="hc-brk hc-brk-br" aria-hidden="true" />
           <div className="hc-corner hc-tl">
-            <ArcGauge label="Readiness" value={readinessScore} max={100} unit="score" tone="accent" />
+            {/* The score's whole formula, stated where the number is (consumer-panel Phase 2:
+                a bare 0–100 read as a made-up number). */}
+            <ArcGauge
+              label="Readiness"
+              value={readinessScore}
+              max={100}
+              unit="score"
+              tone="accent"
+              note={
+                readinessKnown
+                  ? `= ${Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count)} of ${readiness!.checks.length} checks passed`
+                  : undefined
+              }
+            />
           </div>
           <div className="hc-corner hc-tr">
             <ArcGauge
@@ -372,8 +386,10 @@ export function HomeConsole({
             />
           </div>
           <div className="hc-corner hc-bl">
+            {/* First exposure of "1% low" in the app (the cold-open) — glossed inline, plan
+                2026-07-11 Phase 1 (the no-jargon promise). */}
             <ArcGauge
-              label="1% low"
+              label={<Term id="one-percent-lows">1% low</Term>}
               value={lowFps}
               max={240}
               unit="fps"

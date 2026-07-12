@@ -26,3 +26,7 @@
 :root[data-v2="on"] .ag-tag { align-self: flex-start; font-size: 8px; letter-spacing: .1em;
   padding: 1px 5px; border: 1px solid var(--ready); color: var(--ready); }
 :root[data-v2="on"] .ag-tag-ny { border-color: var(--v2-warn, #f5c542); color: var(--v2-warn, #f5c542); }
+/* The "how we calculate this" line (consumer-panel Phase 2): plain sentence case, no tracking —
+   it's an explanation, not another instrument label. */
+:root[data-v2="on"] .ag-note { font-size: 9px; letter-spacing: 0; text-transform: none;
+  color: var(--ix-text-3); line-height: 1.35; }

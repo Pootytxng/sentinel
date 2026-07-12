@@ -397,7 +397,8 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
         />
         <p className="bench-muted">
           With a game running and FPS monitoring on, calibrate — Compy measures your rig's{" "}
-          <Term id="noise-floor">run-to-run noise</Term> from real frametimes (
+          <Term id="noise-floor">run-to-run noise</Term> from real{" "}
+          <Term id="frametime">frametimes</Term> (
           <Term id="one-percent-lows">1% lows</Term>). That's the floor: a change smaller than it
           can't be told apart from noise, so we won't claim it.
         </p>

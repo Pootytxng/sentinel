@@ -161,7 +161,7 @@ export function stationReading(key: LabStationKey, f: LabStationFacts): string {
       if (f.safeReady === 1) return "1 safe tweak ready to enable — one tap, reversible.";
       if (f.safeReady > 1)
         return `${f.safeReady} safe tweaks ready to enable — one tap, all reversible.`;
-      return "Safe stack applied — your rig is set. Prove it below, or you're done.";
+      return "Every safe tweak is already on — your rig is set. Prove it below, or you're done.";
     case "diagnostics":
       return f.diagnosticsCaptured
         ? "Report captured — the raw facts about this rig, ready to read."

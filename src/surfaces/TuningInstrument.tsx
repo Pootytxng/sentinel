@@ -1,6 +1,7 @@
 import type { SessionSummary } from "../types";
 import type { TuningGuide } from "../data/tuning-guides";
 import type { TuningMeasurement, TuningEvidence } from "../data/tuning-measure";
+import { Term } from "../design/Term";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { prettyGameName } from "./game-name";
@@ -93,8 +94,8 @@ export function TuningInstrument({
           </div>
         )}
         <p className="tg-readout-foot">
-          A gauge, not a control — Compy never touches your voltage. ETW + GPU sensors, external · no
-          injection.
+          A gauge, not a control — Compy never touches your voltage.{" "}
+          <Term id="etw">ETW</Term> + GPU sensors, external · no injection.
         </p>
       </div>
     </div>

@@ -10,6 +10,10 @@
   border: none;
   padding: 0;
   cursor: help;
+  /* The button UA stylesheet forces text-transform:none — inherit instead, so a Term inside an
+     uppercase context (e.g. an ArcGauge label) matches its siblings (self-review catch 2026-07-11). */
+  text-transform: inherit;
+  letter-spacing: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 2px;
   text-decoration-color: var(--accent, #6aa6ff);
@@ -41,6 +45,16 @@
   box-shadow: var(--shadow-pop, 0 12px 32px rgba(0, 0, 0, 0.45));
   text-align: left;
   white-space: normal;
+  /* The tooltip is a sentence — never inherit an ancestor's uppercase/tracking (it read as
+     shouting all-caps inside the gauge label; self-review catch 2026-07-11). */
+  text-transform: none;
+  letter-spacing: normal;
+}
+/* Right-edge anchoring for Terms that sit near the window's right side (e.g. the Lab console's
+   bottom-right gauge) — the default left:0 popover rendered past the viewport edge. */
+.kl-tip-end {
+  left: auto;
+  right: 0;
 }
 .kl-tip-what {
   display: block;
