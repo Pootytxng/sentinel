@@ -6,6 +6,8 @@ import {
   applyInstrumentTheme,
   readMonitorConsole,
   applyMonitorConsole,
+  readJarvisMotion,
+  applyJarvisMotion,
   readCloseToTray,
   persistCloseToTray,
   type OverlayDensity,
@@ -115,6 +117,7 @@ export default function Settings({
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
+  const [jarvisMotion, setJarvisMotion] = useState<boolean>(readJarvisMotion);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
@@ -156,6 +159,13 @@ export default function Settings({
   const changeMonitorConsole = (v: boolean) => {
     setMonitorConsole(v);
     applyMonitorConsole(v);
+  };
+  // JARVIS motion layer preview (UI_VISION_BACKLOG §A, DEFAULT OFF) — the interactive motion
+  // layer: glide scrolling, room-change sweep, magnetic rail, stage tilt, measured data-ticks.
+  // Presentation only; the Motion preference below still wins (reduced ⇒ the layer stands down).
+  const changeJarvisMotion = (v: boolean) => {
+    setJarvisMotion(v);
+    applyJarvisMotion(v);
   };
   // Close-to-tray: persist + sync the backend gate. Default OFF keeps the §1 clean exit until opt-in.
   const changeCloseToTray = (v: boolean) => {
@@ -224,8 +234,9 @@ export default function Settings({
                   bay v2, Two futures split) are REMOVED — three of five panel personas read the
                   wall of "(preview)" switches as an internal QA panel. The features are unchanged
                   and their flags still respect localStorage if set via devtools (same convention
-                  as the removed "New look" hub below). The ONE remaining preview row is Monitor
-                  console — genuinely default-OFF, awaiting the owner's v5 eyeball. */}
+                  as the removed "New look" hub below). The remaining preview rows — Monitor
+                  console (awaiting the owner's v5 eyeball) and the JARVIS motion layer — are
+                  genuinely default-OFF. */}
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
                   <div className="set-row-title">Monitor console (preview)</div>
@@ -239,6 +250,23 @@ export default function Settings({
                   on={monitorConsole}
                   onChange={changeMonitorConsole}
                   ariaLabel="Monitor console (preview)"
+                />
+              </div>
+
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">JARVIS motion (preview)</div>
+                  <div className="set-row-sub">
+                    The interactive motion layer: glide scrolling, a sweep when you change
+                    rooms, magnetic rail buttons, and gauges that tick when a measured value
+                    changes. Purely visual — it never touches what Compy measures, and the
+                    Motion setting below still wins.
+                  </div>
+                </div>
+                <Toggle
+                  on={jarvisMotion}
+                  onChange={changeJarvisMotion}
+                  ariaLabel="JARVIS motion (preview)"
                 />
               </div>
 

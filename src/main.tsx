@@ -84,6 +84,17 @@ try {
   document.documentElement.dataset.hud = "on"; // default ON even if localStorage is unavailable
 }
 
+// JARVIS motion layer (preview, UI_VISION_BACKLOG §A) — DEFAULT OFF: the attribute appears only
+// on an explicit "1" (Settings → Appearance). All jarvis CSS is scoped :root[data-jarvis="on"],
+// so flag-off is byte-identical; the JS effects additionally gate on the resolved motion pref.
+try {
+  if (localStorage.getItem("compy_jarvis_motion") === "1") {
+    document.documentElement.dataset.jarvis = "on";
+  }
+} catch {
+  /* default OFF */
+}
+
 // Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
 // components read one source of truth. Default BASIC (the answer face).
 try {

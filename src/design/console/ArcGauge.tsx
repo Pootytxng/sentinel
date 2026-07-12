@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { gsap } from "gsap";
 import { useReducedMotion } from "../use-motion";
+import { useJarvisActive } from "../jarvis/use-jarvis";
 import { useCountTo } from "../../surfaces/lab/use-count-to";
 import "./arc-gauge.css";
 
@@ -24,6 +26,36 @@ export function ArcGauge({
   const empty = shown === null;
   const frac = empty ? 0 : Math.min(1, Math.max(0, shown / max));
   const dashoffset = CIRC * (1 - frac);
+
+  // §A.2 data-tick (JARVIS layer, flag+motion gated) — the ring flashes ONLY when a REAL reading
+  // CHANGES to a different real reading. Honesty contract: arrival (null→value) is the count-up's
+  // moment, loss (value→null) is NOT-YET, and no data ⇒ no tick node ever renders — motion can
+  // never imply a measurement that didn't happen. Inactive, the DOM is byte-identical.
+  const jarvis = useJarvisActive();
+  const [tick, setTick] = useState(0);
+  const tickRef = useRef<SVGCircleElement>(null);
+  const prevValueRef = useRef<number | null>(value);
+  useEffect(() => {
+    const prev = prevValueRef.current;
+    prevValueRef.current = value;
+    if (!jarvis) return;
+    if (prev == null || value == null || value === prev) return;
+    setTick((t) => t + 1);
+  }, [value, jarvis]);
+  useLayoutEffect(() => {
+    if (tick === 0) return;
+    const el = tickRef.current;
+    if (!el) return;
+    const tween = gsap.fromTo(
+      el,
+      { attr: { r: R }, opacity: 0.9 },
+      { attr: { r: R + 5 }, opacity: 0, duration: 0.55, ease: "expo.out", overwrite: "auto" },
+    );
+    return () => {
+      tween.kill();
+    };
+  }, [tick]);
+
   return (
     <div className={`arc-gauge ag-${tone} ${empty ? "ag-empty" : ""}`}>
       <svg viewBox="0 0 56 56" aria-hidden="true">
@@ -32,6 +64,9 @@ export function ArcGauge({
         {!empty && (
           <circle className="ag-fill" cx="28" cy="28" r={R} transform="rotate(-90 28 28)"
             strokeDasharray={CIRC} strokeDashoffset={dashoffset} />
+        )}
+        {jarvis && tick > 0 && !empty && (
+          <circle ref={tickRef} className="jv-gauge-tick" cx="28" cy="28" r={R} opacity={0} />
         )}
       </svg>
       <div className="ag-ctr">

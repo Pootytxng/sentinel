@@ -7,12 +7,23 @@
 // Deliberately ABSENT: the mockup's "Search or jump anywhere · Ctrl K" box. CommandPalette is
 // PARKED (design-direction spec: a new feature, owner call post-P6) and a search box that does
 // nothing would be a fake affordance — banned. It lands with the palette, if the owner calls it.
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Wordmark } from "./Wordmark";
 import { NavGlyph } from "./NavGlyph";
 import { HOME_RAIL, type HomeRailId, type HomeRailItem } from "./homeRail";
+import { useJarvisActive } from "./jarvis/use-jarvis";
+import { LenisSpine } from "./jarvis/LenisSpine";
+import { MagneticLayer } from "./jarvis/MagneticLayer";
 import "./shell-v2.css";
+import "./jarvis/jarvis.css";
 
 // Plain-English crumb per room (topbar wayfinding). Says what the room is FOR — Sarah & Caleb bar.
 export const ROOM_CRUMB: Record<HomeRailId, string> = {
@@ -50,6 +61,23 @@ export function ShellV2({
   version: string;
   children: ReactNode;
 }) {
+  // JARVIS motion layer (§A.3/A.5/A.6, flag compy_jarvis_motion DEFAULT OFF + motion full) —
+  // inactive, none of the layer's nodes/attributes render and the shell is byte-identical.
+  const jarvis = useJarvisActive();
+  const shellRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // §A.6 retune wipe — replays once per ROOM change (keyed remount), never on first paint and
+  // never on a bare flag flip (the ref tracks rooms unconditionally so a flip alone can't
+  // fabricate a "navigation"). Removes itself on animationend.
+  const [wipe, setWipe] = useState(0);
+  const prevRoomRef = useRef(activeId);
+  useEffect(() => {
+    const changed = prevRoomRef.current !== activeId;
+    prevRoomRef.current = activeId;
+    if (changed && jarvis) setWipe((w) => w + 1);
+  }, [activeId, jarvis]);
+
   // Build stamp (compile-time provenance, same probe Settings→About uses). Fetch fails → no stamp
   // rendered — never a fabricated one.
   const [stamp, setStamp] = useState<string | null>(null);
@@ -92,7 +120,7 @@ export function ShellV2({
 
   return (
     <V2NavContext.Provider value={nav}>
-      <div className="v2-shell">
+      <div className="v2-shell" ref={shellRef}>
         <nav className="v2-rail" aria-label="Rooms">
           <div className="v2-wordmark">
             <Wordmark size={16} />
@@ -107,6 +135,7 @@ export function ShellV2({
                 className="v2-nav-item"
                 onClick={() => onNavigate(item.id)}
                 title={item.label}
+                {...(jarvis ? { "data-magnetic": "" } : {})}
               >
                 <NavGlyph name={item.icon} />
                 <span>{item.label}</span>
@@ -133,10 +162,29 @@ export function ShellV2({
             {active && <span className="v2-crumb">· {ROOM_CRUMB[active.id]}</span>}
             {stamp && <span className="v2-stamp">{stamp}</span>}
           </div>
-          <div className="v2-content">
-            <div className="v2-content-wrap">{children}</div>
+          <div className="v2-content" ref={contentRef}>
+            <div className="v2-content-wrap" ref={wrapRef}>
+              {children}
+            </div>
           </div>
+          {jarvis && wipe > 0 && (
+            <div
+              key={wipe}
+              className="jv-retune"
+              aria-hidden="true"
+              // Native listener (ref cleanup, React 19): the synthetic onAnimationEnd never
+              // fires in this webview/jsdom pairing — the native event is the reliable one.
+              ref={(el) => {
+                if (!el) return;
+                const done = () => setWipe(0);
+                el.addEventListener("animationend", done, { once: true });
+                return () => el.removeEventListener("animationend", done);
+              }}
+            />
+          )}
         </div>
+        {jarvis && <LenisSpine wrapperRef={contentRef} contentRef={wrapRef} />}
+        {jarvis && <MagneticLayer scopeRef={shellRef} />}
       </div>
     </V2NavContext.Provider>
   );

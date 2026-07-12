@@ -1,0 +1,76 @@
+/* JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.6) — every rule is scoped under
+   :root[data-jarvis="on"], so flag-off (the DEFAULT) leaves the cascade byte-identical.
+   Reduced motion is double-gated: the JS layer never mounts these nodes when reduced, and
+   the CSS below ALSO stands down under [data-motion="reduced"] (belt + suspenders, matching
+   the repo convention). Transform/opacity only — nothing here animates layout. */
+
+/* ── §A.6 room-transition "instrument retune" wipe ─────────────────────────────────────────
+   A thin accent hairline with a soft trailing gradient sweeps down the main pane once per
+   room change (ShellV2 mounts one .jv-retune keyed per wipe; it removes itself on
+   animationend). Navigation feedback only — it claims nothing about data. */
+:root[data-jarvis="on"] .v2-main {
+  position: relative;
+}
+:root[data-jarvis="on"] .jv-retune {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18vh;
+  pointer-events: none;
+  z-index: 6; /* over the lane, under nothing interactive (it can't be hit) */
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--ix-accent) 6%, transparent) 72%,
+    color-mix(in srgb, var(--ix-accent) 22%, transparent)
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--ix-accent) 45%, transparent);
+  transform: translateY(-110%);
+  animation: jv-retune 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform;
+}
+@keyframes jv-retune {
+  to {
+    transform: translateY(110vh);
+  }
+}
+:root[data-motion="reduced"] .jv-retune {
+  animation: none;
+  opacity: 0;
+}
+
+/* ── §A.3 chrome-plane tilt on the Home console stage ──────────────────────────────────────
+   Brackets + corner gauges rotate a hair off the SAME --hc-px/--hc-py pointer vars the
+   annotation parallax already writes (reduced-gated at the source: the handler no-ops and
+   the vars rest at 0). The rig canvas NEVER tilts — drag-orbit and part picking stay exact;
+   the HUD chrome floats over a stable subject. The short linear transition smooths the
+   event-driven var steps into a chase (the .hc-ann parallax's exact idiom). */
+:root[data-jarvis="on"][data-v2="on"] .home-console[data-motion="full"] .hc-stage {
+  perspective: 900px;
+}
+:root[data-jarvis="on"][data-v2="on"] .home-console[data-motion="full"] .hc-brk,
+:root[data-jarvis="on"][data-v2="on"] .home-console[data-motion="full"] .hc-corner {
+  transform: rotateY(calc(var(--hc-px, 0) * 2.4deg)) rotateX(calc(var(--hc-py, 0) * -2.4deg));
+  transition: transform 0.12s linear;
+}
+
+/* ── §A.2 measured data-tick ring (ArcGauge) ───────────────────────────────────────────────
+   The ring GSAP flashes when a REAL reading CHANGES (real→real only — arrival is the
+   count-up's moment, absence is NOT-YET). Tone mirrors .ag-fill exactly, fallback literals
+   included (arc-gauge.css's own pattern, pending the same tokens-v2-guard registration). */
+:root[data-jarvis="on"][data-v2="on"] .jv-gauge-tick {
+  fill: none;
+  stroke: var(--ix-accent);
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+:root[data-jarvis="on"][data-v2="on"] .ag-warn .jv-gauge-tick {
+  stroke: var(--v2-warn, #f5c542);
+}
+:root[data-jarvis="on"][data-v2="on"] .ag-good .jv-gauge-tick {
+  stroke: var(--ready, #46d98a);
+}
+:root[data-jarvis="on"][data-v2="on"] .ag-neutral .jv-gauge-tick {
+  stroke: var(--ix-text-2);
+}
