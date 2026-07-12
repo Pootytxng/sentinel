@@ -65,7 +65,7 @@ describe("blackbookVerdict — pure, measured, branch-proper copy", () => {
     const v = blackbookVerdict([]);
     expect(v.headline).toBe("Heard a tweak online? Look it up here before you try it.");
     expect(v.sub).toBe(
-      "We only answer what's been verified — search the library, or paste a whole guide and get every claim graded.",
+      "We only answer what's been verified — search the Blackbook, or paste a whole guide and get every claim graded.",
     );
   });
 

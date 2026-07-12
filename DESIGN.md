@@ -108,9 +108,14 @@ native confirm), `BackButton`, `Walkthrough`, `Term`/`WhatsThis` (inline Learn l
 
 ## Navigation / IA
 
-One rail, app-wide, from `src/design/homeRail.ts` (parity-guarded): **Home · Check · Play ·
-Fix · Learn · Lab** + Settings gear + Export action. Never teleports — the rail is the only
-location change; detail expands in place. Surfaces live in `src/surfaces/`.
+One rail, app-wide, from `src/design/homeRail.ts` (parity-guarded). The shipped rail (`railFor`,
+`compy_lab_ground` DEFAULT ON) is **Home · Monitor · Blackbook · Lab** + Settings gear + Export
+action — the old **Check** and **Fix/Optimize** rooms fold into the **Lab's Optimize station** and
+drop off the rail. The persisted nav **ids** stay `home/check/play/fix/learn/lab` (renaming an id
+would orphan stored history), so the **labels** the user reads (Monitor, Tune, Blackbook) deliberately
+differ from their ids — never speak an id as a room name. Non-default classic/merged rails stay
+reachable via the `compy_lab_ground="0"` failsafe. Never teleports — the rail is the only location
+change; detail expands in place. Surfaces live in `src/surfaces/`.
 
 ## Guards (keep these green)
 

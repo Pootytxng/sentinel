@@ -72,7 +72,7 @@ export function TuningInstrument({
           <TuningVerdictCard m={measurement} />
         ) : (
           <p className="tg-readout-empty">
-            No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Play debrief —
+            No tune measured yet. Undervolt in Adrenalin, then arm a baseline from a Monitor debrief —
             Compy measures whether temps dropped and frames held, judged over time.
           </p>
         )}

@@ -17,7 +17,7 @@ export function blackbookVerdict(ledger: AutopsyLedgerEntry[]): BlackbookVerdict
   if (stats.count === 0) {
     return {
       headline: "Heard a tweak online? Look it up here before you try it.",
-      sub: "We only answer what's been verified — search the library, or paste a whole guide and get every claim graded.",
+      sub: "We only answer what's been verified — search the Blackbook, or paste a whole guide and get every claim graded.",
     };
   }
   const one = stats.count === 1;

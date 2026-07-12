@@ -22,11 +22,11 @@ describe("Term glossary tooltip", () => {
     expect(screen.getByRole("button", { name: "VRR" })).toBeInTheDocument();
   });
 
-  it("reveals the definition on tap and links into the library", () => {
+  it("reveals the definition on tap and links into the Blackbook", () => {
     const open = renderTerm("vrr");
     fireEvent.click(screen.getByRole("button", { name: "VRR" }));
     expect(screen.getByRole("tooltip")).toHaveTextContent(/monitor/i); // vrr 'what' mentions the monitor
-    fireEvent.click(screen.getByRole("button", { name: /More in the library/i }));
+    fireEvent.click(screen.getByRole("button", { name: /More in the Blackbook/i }));
     expect(open).toHaveBeenCalledWith("vrr");
   });
 

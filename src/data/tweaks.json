@@ -465,7 +465,7 @@
     "aliases": ["clean install windows", "reinstall windows", "fresh install fps", "windows reinstall ritual"],
     "verdict": "placebo",
     "what": "Wiping and reinstalling Windows on a schedule, on the theory that an install 'wears out' and quietly eats FPS.",
-    "why": "A genuinely rotted install — years of leftover services, startup hooks, and half-removed 'optimizers' — can measurably improve from a wipe, which is why the ritual has believers. But the reinstall isn't what helped; removing the rot was, and on a maintained PC there's nothing to remove. As a schedule, it costs you a weekend of reinstalling everything for frames that don't move. Compy's Check looks for the actual rot — leftover tweak debris, startup load — so you can see whether there's anything a wipe would even fix before you burn the weekend.",
+    "why": "A genuinely rotted install — years of leftover services, startup hooks, and half-removed 'optimizers' — can measurably improve from a wipe, which is why the ritual has believers. But the reinstall isn't what helped; removing the rot was, and on a maintained PC there's nothing to remove. As a schedule, it costs you a weekend of reinstalling everything for frames that don't move. The Lab's Optimize station looks for the actual rot — leftover tweak debris, startup load — so you can see whether there's anything a wipe would even fix before you burn the weekend.",
     "related": ["leftovers", "debloating", "startup-cleanup"]
   },
   {

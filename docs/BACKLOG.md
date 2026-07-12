@@ -161,7 +161,7 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-12d — 🔧 IN PROGRESS: NAMING-DRIFT MAINTENANCE SWEEP (owner-triggered, "get on track") — resume here
+### Cycle 2026-07-12d — ✅ NAMING-DRIFT MAINTENANCE SWEEP DONE (owner-triggered, "get on track") — 4 user-facing leaks fixed + guard extended; JARVIS eyeball still the open gate
 
 **Trigger:** while handing off the JARVIS build for eyeball, I told the owner to open the
 "**Learn**" room. "Learn" is a RETIRED label — I read the internal `HomeRailId` id `learn` and
@@ -177,22 +177,33 @@ aria/prose/notification/empty-state). Existing partial guard: `src/stale-referen
 
 **Already fixed:** my fresh doc drift — `docs/OWNER_ACTION_CHECKLIST.md` §A7 "Blackbook/Learn" → "Blackbook".
 
-**IN FLIGHT — a background Workflow was launched then the session hit context-refresh:**
-- Run ID `wf_c688d119-49b` (task `wozx5vxyg`). Script (absolute):
-  `C:\Users\Kuya\AppData\Local\Temp\claude\c--Users-Kuya-code-sentinel\dc591a6b-79ab-4314-9583-34bd24917b12\scratchpad\naming-sweep.mjs`
-- Journal (read to recover results): `…\subagents\workflows\wf_c688d119-49b\journal.jsonl` under
-  `C:\Users\Kuya\.claude\projects\c--Users-Kuya-code-sentinel\dc591a6b-79ab-4314-9583-34bd24917b12\`
-- It fans 6 finders (surfaces · design · knowledge/data · onboarding · overlay+tray · settings) →
-  adversarial per-hit verify → a docs-drift lane. Returns `{confirmedUserFacingLeaks, rejectedCandidates, docsDrift, counts}`.
+**RESULT (workflow `wf_c688d119-49b` completed in background + completeness-critic grep + manual verify).**
+Honest count: **4 confirmed user-facing leaks fixed · 3 rejected false positives · 1 live-doc drift.**
+The multi-agent sweep alone would have UNDER-reported (harness dropped one confirmed verdict to a
+StructuredOutput format error; it missed one leak entirely) — the completeness grep + transcript
+recovery closed both gaps ([[audit-needs-completeness-critic-grep]]).
 
-**NEXT STEPS (resume):** (1) recover the sweep results (read the journal, or re-run the script — it's
-a fresh-session-safe absolute path; the scratchpad UUID `dc591a6b…` is THIS session's, so copy the
-script content if the path is gone). (2) FIX every confirmed user-facing leak (Learn→Blackbook,
-Play→Monitor, Fix→Tune, dead-tab prose). (3) **bug→guard**: extend `stale-reference-guard.test.ts`
-to scan `src/surfaces/**` + `src/design/**` visible copy, not just data JSON. (4) doc-sync stale rail
-naming in PRODUCT.md / DESIGN.md / CLAUDE.md (they still list "Home · Check · Play · Fix · Learn · Lab").
-(5) SAVE A MEMORY: the id-vs-label split (never speak internal ids to the owner; the rail is
-Home·Monitor·Blackbook·Lab). (6) tsc + vitest + new guard green, then report honest confirmed-vs-false count.
+- **Fixed (4):** `src/data/tweaks.json:468` "Compy's Check" → "The Lab's Optimize station" (Blackbook
+  prose; the possessive form slipped the old `<Name> tab`-only guard) · `src/design/Term.tsx:63` "More
+  in the library →" → "More in the Blackbook →" (glossary tooltip on 12 surfaces; + `Term.test.tsx`
+  pin updated) · `src/surfaces/TuningInstrument.tsx:75` "a Play debrief" → "a Monitor debrief" (Lab
+  empty state) · `src/surfaces/blackbook-v2-data.ts:20` "search the library" → "search the Blackbook"
+  (Blackbook empty state; my grep caught this — the finders missed it; + `blackbook-v2.test.tsx` pin).
+- **Rejected (3, correctly left alone):** TrustMoment.tsx:131/146 + SetupTour.tsx:261 "Trust Ledger"
+  — that's the CURRENT live brand, not retired (coexists with the narrower "Applied & history" Lab
+  disclosure label). Also confirmed NOT-a-leak: `setup-steps.ts:161` "The Check tab" (classic-rail raw
+  tie, remapped to "The Lab scans…" under the ground rail — contextually correct).
+- **bug→guard:** `src/stale-reference-guard.test.ts` extended — now also scans `src/surfaces/**` +
+  `src/design/**` rendered copy (comments stripped) for `(Play|Learn|Fix)`-as-room, the "library"
+  brand, and `Compy's <Retired>`. Red-green proven on all 4 leaks; per-file assertions + a floor on
+  files-scanned (no false-green on a broken glob).
+- **doc-sync:** `DESIGN.md:111` rail line → "Home · Monitor · Blackbook · Lab" + the id-vs-label note.
+  **PRODUCT.md and CLAUDE.md were VERIFIED CLEAN** — the resume note's "they still list …" was an
+  unverified assumption; only DESIGN.md actually had the stale rail. CHANGELOG/archive/spec hits are
+  dated point-in-time records, left as-is.
+- **Memory saved:** [[room-labels-vs-nav-ids]] (rail = Home·Monitor·Blackbook·Lab; never speak an id).
+- **Verify:** tsc 0 · vitest **1521** (172 files) green, incl. the extended guard. Self-reviewer
+  dispatched on the two `.tsx` copy changes (verdict pending at write time).
 
 **JARVIS eyeball still open** (Cycle 2026-07-12c): installed app is live `1d310e1`, JARVIS flag
 PRE-ENABLED for the owner (persisted in localStorage, survives restart), clean launch no debug port.

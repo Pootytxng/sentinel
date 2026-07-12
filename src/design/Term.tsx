@@ -60,7 +60,7 @@ export function Term({
               openLibrary(id);
             }}
           >
-            More in the library →
+            More in the Blackbook →
           </button>
         </span>
       )}
