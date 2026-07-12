@@ -61,8 +61,9 @@ export function ShellV2({
   version: string;
   children: ReactNode;
 }) {
-  // JARVIS motion layer (§A.3/A.5/A.6, flag compy_jarvis_motion DEFAULT OFF + motion full) —
-  // inactive, none of the layer's nodes/attributes render and the shell is byte-identical.
+  // JARVIS motion layer (§A.3/A.5/A.6, flag compy_jarvis_motion DEFAULT ON + motion full). When
+  // inactive (the "0" failsafe or reduced motion), none of the layer's nodes/attributes render and
+  // the shell is byte-identical.
   const jarvis = useJarvisActive();
   const shellRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);

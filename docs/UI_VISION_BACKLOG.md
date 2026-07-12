@@ -153,17 +153,18 @@ full response ive written here seeing how things seem to get lost in translation
 7. **Process note (standing):** long owner responses have lost parts in translation before —
    retain them verbatim here and decompose every part ([[decompose-owner-lists-atomic-todos]]).
 
-### A. The JARVIS interaction / motion layer — 🟢 CORE STACK BUILT behind flag (2026-07-12); eyeball open
+### A. The JARVIS interaction / motion layer — ✅ SHIPPED DEFAULT-ON (2026-07-12, owner-approved "everything looks good")
 Source: `docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md:111-176`. The de-slop
 directive's redesign lane is marked "COMPLETE," but that only covered the **Instrument-HUD reskin**.
 The **motion/interaction effect plan** the owner was most excited about was scoped, given a specific
 tech stack, then bypassed — the shipped work used CSS/native React instead. **VERIFIED 0 files in
 `src/`** for panoramic / magnetic-cursor / Lenis (2026-07-08).
 **→ TRAIN SHIPPED `1d310e1` (2026-07-12): A.2 + A.3 + A.5 + A.6 built as one layer behind NEW flag
-`compy_jarvis_motion` (Settings → Appearance → "JARVIS motion (preview)", DEFAULT OFF; flag-off
-byte-identity + honest-tick + reduced-wins all test-pinned in `src/design/jarvis/jarvis-motion.test.tsx`;
-self-reviewer PASS 8/8 incl. a 0-draws/16s GL idle probe). ⏳ Owner eyeball is the open gate.**
-His ranked plan, per-item status below:
+`compy_jarvis_motion` (flag-off byte-identity + honest-tick + reduced-wins all test-pinned in
+`src/design/jarvis/jarvis-motion.test.tsx`; self-reviewer PASS 8/8 incl. a 0-draws/16s GL idle
+probe). ✅ OWNER EYEBALLED + APPROVED 2026-07-12 ("everything looks good") → FLIPPED DEFAULT-ON
+(`readJarvisMotion` `!=="0"`, Settings row now "JARVIS motion"; the static shell stays reachable via
+the "0" failsafe, byte-identity re-pinned to explicit "0").** His ranked plan, per-item status below:
 
 1. **Panoramic inertia-drag telemetry gallery** — BUILT then REJECTED. The marathon shipped a literal
    clone of the sister-site effect (`330cd5c`, flag `compy_lab_ground` OFF); owner rejected it 2026-07-09
@@ -218,8 +219,8 @@ His ranked plan, per-item status below:
 > (`compy_jarvis_motion`), honest data (tick = real change only), reduced-motion-safe (Compy's own
 > Motion pref wins, mid-session flips live-verified), GPU-cheap (transform/opacity only; GL idle
 > probe 0 draws/16s; hologram uniforms deliberately untouched — the directive's HARD RAILS at
-> `:41-46,163-172`). ⏳ **Open: the owner's eyeball** — Settings → Appearance → "JARVIS motion
-> (preview)", then move between rooms / hover the rail / watch a gauge on a live reading.
+> `:41-46,163-172`). ✅ **Owner-approved 2026-07-12 ("everything looks good") → SHIPPED DEFAULT-ON**
+> (own commit, the Home-console pattern); the static shell stays reachable via the Settings "0" failsafe.
 
 ### B. Two Futures split — hologram must carry real per-part information
 Built v1 (`compy_two_futures`, flag OFF). Owner eyeball 2026-07-07: *"looks really good BUT the

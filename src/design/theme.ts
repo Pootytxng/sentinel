@@ -524,19 +524,20 @@ export function applyMonitorConsole(on: boolean): void {
 // JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6; rails: the de-slop directive
 // 2026-07-05 §"Interaction / motion layer" :111-176) — the interactive layer the reskin left
 // unbuilt: Lenis glide scrolling on the content lane, a room-change "retune" sweep, magnetic
-// rail items, stage-chrome tilt, and GSAP data-ticks on measured gauges. DEFAULT OFF
-// (Settings → Appearance preview): ON only when the key is literally "1". Presentation only —
+// rail items, stage-chrome tilt, and GSAP data-ticks on measured gauges. DEFAULT ON (owner
+// eyeball approved 2026-07-12, Cycle 2026-07-12c → default-ON flip): the static shell stays
+// reachable via the "0" failsafe (Settings → Appearance / localStorage). Presentation only —
 // zero IPC, no measurement path changes; every effect is ALSO reduced-motion-gated on top of
 // this flag (the resolved data-motion attribute wins, mid-session flips included).
 const JARVIS_MOTION_KEY = "compy_jarvis_motion";
 
 export function readJarvisMotion(): boolean {
   try {
-    return localStorage.getItem(JARVIS_MOTION_KEY) === "1";
+    return localStorage.getItem(JARVIS_MOTION_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyJarvisMotion(on: boolean): void {

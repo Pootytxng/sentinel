@@ -255,7 +255,7 @@ export default function Settings({
 
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">JARVIS motion (preview)</div>
+                  <div className="set-row-title">JARVIS motion</div>
                   <div className="set-row-sub">
                     The interactive motion layer: glide scrolling, a sweep when you change
                     rooms, magnetic rail buttons, and gauges that tick when a measured value
@@ -266,7 +266,7 @@ export default function Settings({
                 <Toggle
                   on={jarvisMotion}
                   onChange={changeJarvisMotion}
-                  ariaLabel="JARVIS motion (preview)"
+                  ariaLabel="JARVIS motion"
                 />
               </div>
 

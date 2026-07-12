@@ -161,6 +161,21 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12e — ✅ JARVIS MOTION LAYER FLIPPED DEFAULT-ON (owner eyeball "everything looks good", 2026-07-12)
+
+**Owner gave the looks-good verdict on the JARVIS motion layer** (Cycle 2026-07-12c's open gate — he'd
+been living with it pre-enabled on the live `1d310e1` build). Per [[ship-approved-work-as-the-build]]
+the approved preview flips to the build: `compy_jarvis_motion` **DEFAULT OFF → DEFAULT ON** via the
+`!=="0"` failsafe pattern (`readJarvisMotion` in `src/design/theme.ts` + the `main.tsx` pre-paint
+boot attr), Settings row dropped "(preview)" → "JARVIS motion" (now the OFF failsafe), stale
+DEFAULT-OFF comments in `use-jarvis.ts`/`ShellV2.tsx` corrected. **bug→guard:** the byte-identity
+anchor in `jarvis-motion.test.tsx` re-pinned from key-absent to explicit `"0"` (absence now = ON) +
+a new positive default-ON assertion (key-absent renders the live layer). Zero `src-tauri`. Verify:
+tsc 0 · vitest **1522** (172 files). Built + silent-reinstalled + stamp-verified live; installer
+SHA-256 + commit in the RELEASE_STATE Snapshot row. This build also carries the Cycle 2026-07-12d
+naming-drift fixes (they ride this installer).
+- ~~⏳ OPEN GATE (2026-07-12c): owner eyeball~~ → ✅ CLOSED — approved + flipped default-ON.
+
 ### Cycle 2026-07-12d — ✅ NAMING-DRIFT MAINTENANCE SWEEP DONE (owner-triggered, "get on track") — 4 user-facing leaks fixed + guard extended; JARVIS eyeball still the open gate
 
 **Trigger:** while handing off the JARVIS build for eyeball, I told the owner to open the

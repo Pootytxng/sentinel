@@ -80,19 +80,13 @@ the app covers all three:
   counted as the §A5 Monitor-v5 verdict — that one needs the Settings → "Monitor console
   (preview)" flip to even be visible.)
 
-### A7. JARVIS motion layer — eyeball the preview  ·  ⏳ OPEN (shipped `1d310e1`, 2026-07-12, flag OFF — your look is the gate)
-The motion layer you ranked in the de-slop directive (the part the reskin skipped) is now live on
-your Desktop behind a preview flag. Flip **Settings → Appearance → "JARVIS motion (preview)"**, then:
-- **move between rooms** — a thin accent sweep "retunes" the pane on each switch;
-- **scroll a long room** (Blackbook) — the lane glides instead of stepping (Lenis);
-- **hover the rail tabs** — they pull a few px toward your cursor and ease back;
-- **watch Home's stage chrome** — brackets + corner gauges tilt slightly with your mouse (the
-  3D rig itself never tilts, so drag-orbit stays exact);
-- **gauges tick** only when a real reading changes (e.g. GPU temp on Home) — honest by design.
-Two disclosed deviations you may overrule: hologram shader-pulses were EXCLUDED (they'd keep the
-GPU awake at idle — your "unless reasonably so" bar, reason stated in UI_VISION_BACKLOG §A.2), and
-the Dock isn't magnetic (it already has its magnify lift — one motion idea per element).
-Verdict → tell Claude looks-good / what's off; looks-good = it ships default-ON like Home console did.
+### A7. JARVIS motion layer — eyeball the preview  ·  ✅ DONE 2026-07-12 ("everything looks good") → flipped DEFAULT-ON
+You eyeballed the motion layer (it was pre-enabled on your live build) and approved it. It's now
+**default-ON** — the retune sweep between rooms, Lenis glide scrolling, magnetic rail tabs, Home
+stage-chrome tilt, and honest gauge ticks are on for everyone, no flip needed. Settings → Appearance
+still has a "JARVIS motion" toggle (now the OFF failsafe). Ships on its own commit + reinstall; your
+live app carries it after this cycle's build. Two disclosed deviations stand (you may still overrule):
+hologram shader-pulses excluded (idle-GPU bar), and the Dock isn't magnetic (it owns the magnify lift).
 
 ---
 

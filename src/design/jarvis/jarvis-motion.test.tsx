@@ -8,8 +8,9 @@ import { ArcGauge } from "../console/ArcGauge";
 
 // JARVIS motion layer guards (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6, train 2026-07-12).
 // The three contracts every effect in the layer must keep:
-//   1. FLAG-OFF BYTE-IDENTITY — compy_jarvis_motion absent/"0" (the DEFAULT) renders the shell
-//      and gauges exactly as before the train: no jv-* nodes, no data-magnetic attributes.
+//   1. FLAG-OFF BYTE-IDENTITY — compy_jarvis_motion "0" (the failsafe; DEFAULT is now ON after the
+//      2026-07-12 owner-approved flip) renders the shell and gauges exactly as before the train:
+//      no jv-* nodes, no data-magnetic attributes.
 //   2. REDUCED-MOTION WINS — flag "1" + resolved reduced motion ⇒ the layer stands down
 //      entirely (Compy's own Motion pref, mid-session flips included).
 //   3. HONEST DATA-TICK — the gauge tick fires ONLY on a real→real value CHANGE. Arrival
@@ -37,12 +38,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("compy_jarvis_motion flag", () => {
-  it("defaults OFF (key absent) and only an explicit '1' turns it on", () => {
-    expect(readJarvisMotion()).toBe(false);
+  it("defaults ON (key absent); only an explicit '0' is the failsafe off", () => {
+    expect(readJarvisMotion()).toBe(true);
     localStorage.setItem("compy_jarvis_motion", "0");
     expect(readJarvisMotion()).toBe(false);
     localStorage.setItem("compy_jarvis_motion", "1");
     expect(readJarvisMotion()).toBe(true);
+  });
+
+  it("renders the live layer by default (key absent) — data-magnetic on the rail", () => {
+    const { container } = render(shell("home"));
+    expect(container.querySelectorAll(".v2-nav-item[data-magnetic]").length).toBe(ITEMS.length);
   });
 
   it("applyJarvisMotion persists and mirrors onto <html data-jarvis>", () => {
@@ -55,7 +61,9 @@ describe("compy_jarvis_motion flag", () => {
   });
 });
 
-describe("flag-off byte-identity (the DEFAULT)", () => {
+describe("flag-off byte-identity (the '0' failsafe)", () => {
+  beforeEach(() => localStorage.setItem("compy_jarvis_motion", "0"));
+
   it("renders no jv-* nodes and no data-magnetic attributes", () => {
     const { container, rerender } = render(shell("home"));
     expect(container.querySelector("[data-magnetic]")).toBeNull();
@@ -96,7 +104,7 @@ describe("flag on + motion full", () => {
   });
 
   it("a bare flag flip is not a navigation — no wipe without a room change", () => {
-    localStorage.removeItem("compy_jarvis_motion");
+    localStorage.setItem("compy_jarvis_motion", "0");
     const { container, rerender } = render(shell("home"));
     rerender(shell("play")); // room change while OFF — tracked, but must not wipe
     expect(container.querySelector(".jv-retune")).toBeNull();
