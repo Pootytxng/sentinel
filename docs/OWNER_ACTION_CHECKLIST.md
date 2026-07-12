@@ -65,6 +65,19 @@ MAX FPS-style terms, session comparison, overlay control, honest empties).
   last 5 sessions as flat rows on one shared axis (your real Sand/Marvel/Palworld history is
   already in there — click a row for its detail). Verdict → tell Claude looks-good / what's off.
 
+### A6. One look at the latest live build — three trains' visible changes  ·  ⏳ OPEN (added 2026-07-12)
+Your live app (`cc1ffce`, installed 2026-07-12) carries three not-yet-eyeballed trains; one open of
+the app covers all three:
+- **Consumer-panel overhaul (`50b5c03`):** Home/Lab gauge formula notes + first-exposure term
+  glosses, Settings slimmed to ONE preview row, calmer protection-first recovery banner. (The site
+  rebalance is part of this too but stays dark until your separate publish GO.)
+- **Expert view (`5850ac0`):** Settings → Behavior → "Expert view" (default OFF) — flip it and skim
+  Optimize/Benchmark: refused-drawer reasoning inline, exact registry/service targets with the
+  rollback-boundary disclaimer, 1-decimal numbers, long sections open.
+- **Home masthead (`cc1ffce`, today):** the header now says just "Home"; the "ready to play /
+  N things need attention" verdict moved to its own line above the stage (your title-header law).
+- **Result → tell Claude:** looks-good / what's off, per item or in one breath.
+
 ---
 
 ## §B — Waiting on input only you can give
