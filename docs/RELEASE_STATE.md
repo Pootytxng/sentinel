@@ -10,6 +10,23 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (JARVIS MOTION LAYER FLIPPED DEFAULT-ON `fcc400b` — installer SHA-256
+> `DFE827D1CB0F85F23DA383EDD1C215C3CDF6B3BF6FA00AB941FED931AFD8FB59`, live exe stamp-verified
+> `fcc400b` via the embedded hash, installed by Claude, supersedes the `8EB6185D…812D10` installer;
+> flag `compy_jarvis_motion` **DEFAULT OFF → DEFAULT ON**, owner eyeball "everything looks good"):**
+> Owner approved the JARVIS motion layer (Cycle 2026-07-12c gate — he'd been living with it
+> pre-enabled) → flipped to the build per ship-approved-work-as-the-build. `readJarvisMotion`
+> (`src/design/theme.ts`) now `!=="0"` (default ON) + the `main.tsx` pre-paint boot attr; Settings
+> row "JARVIS motion" (dropped "(preview)", now the OFF failsafe); the byte-identity anchor in
+> `src/design/jarvis/jarvis-motion.test.tsx` re-pinned to explicit `"0"` (absence = ON) + a positive
+> default-ON assertion. **This installer also carries the Cycle 2026-07-12d naming-drift fixes** (4
+> user-facing retired-label leaks fixed — tweaks.json "Compy's Check", Term.tsx/blackbook-v2 "library"
+> → "Blackbook", TuningInstrument "Play"→"Monitor" debrief; `src/stale-reference-guard.test.ts`
+> extended to scan `src/surfaces` + `src/design` rendered copy). Zero `src-tauri`. Verify: tsc 0 ·
+> vitest **1522** (172 files) · self-reviewer **PASS 8/8** on the installed build (default-ON from
+> first paint with 0 flash `retuneAtRest:0`; retune fires once per room change t=21→314ms then
+> self-removes; Settings label bare "JARVIS motion", toggle ON; "0" failsafe fully reverts + restores).
+>
 > **UPDATE 2026-07-12 (JARVIS MOTION LAYER SHIPPED `1d310e1` — installer SHA-256
 > `8EB6185DEDBADE6FE1B6F9B5075F8E4ECF9945949748E102008205D9F9812D10`, live exe stamp-verified
 > `1d310e1` via the embedded hash, installed by Claude, supersedes the `4F4DB63A…45B931`
