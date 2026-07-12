@@ -153,12 +153,17 @@ full response ive written here seeing how things seem to get lost in translation
 7. **Process note (standing):** long owner responses have lost parts in translation before —
    retain them verbatim here and decompose every part ([[decompose-owner-lists-atomic-todos]]).
 
-### A. The JARVIS interaction / motion layer — his ranked effect plan, NEVER BUILT
+### A. The JARVIS interaction / motion layer — 🟢 CORE STACK BUILT behind flag (2026-07-12); eyeball open
 Source: `docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md:111-176`. The de-slop
 directive's redesign lane is marked "COMPLETE," but that only covered the **Instrument-HUD reskin**.
 The **motion/interaction effect plan** the owner was most excited about was scoped, given a specific
 tech stack, then bypassed — the shipped work used CSS/native React instead. **VERIFIED 0 files in
-`src/`** for panoramic / magnetic-cursor / Lenis (2026-07-08). His ranked plan:
+`src/`** for panoramic / magnetic-cursor / Lenis (2026-07-08).
+**→ TRAIN SHIPPED `1d310e1` (2026-07-12): A.2 + A.3 + A.5 + A.6 built as one layer behind NEW flag
+`compy_jarvis_motion` (Settings → Appearance → "JARVIS motion (preview)", DEFAULT OFF; flag-off
+byte-identity + honest-tick + reduced-wins all test-pinned in `src/design/jarvis/jarvis-motion.test.tsx`;
+self-reviewer PASS 8/8 incl. a 0-draws/16s GL idle probe). ⏳ Owner eyeball is the open gate.**
+His ranked plan, per-item status below:
 
 1. **Panoramic inertia-drag telemetry gallery** — BUILT then REJECTED. The marathon shipped a literal
    clone of the sister-site effect (`330cd5c`, flag `compy_lab_ground` OFF); owner rejected it 2026-07-09
@@ -168,9 +173,22 @@ tech stack, then bypassed — the shipped work used CSS/native React instead. **
    (`docs/superpowers/specs/2026-07-09-lab-redesign-direction-proposal.md`).
 2. **GSAP data-reactivity** — gauge sweeps / count-ups / shader uniforms animated FROM live metrics
    (honesty win: motion serves real data). Chosen stack `:135-137`. GSAP was "deferred"; a CSS ring
-   gauge + CountUp shipped instead. **NOT BUILT as specified.**
+   gauge + CountUp shipped instead. ~~NOT BUILT as specified~~ → **🟢 BUILT `1d310e1`:** the console
+   gauges were ALREADY GSAP (useCountTo drives ArcGauge's count-up + ring sweep — landed with the
+   console phases); the train adds the **data-tick** — a GSAP ring flash ONLY when a real measured
+   value CHANGES to a different real value (arrival = the count-up's moment, loss = NOT-YET, no
+   data = no tick node ever; all five cases test-pinned). **Disclosed deviation (a stated, specific
+   reason per the owner's own "unless reasonably so" bar):** "shader uniforms from live metrics" is
+   NOT pointed at the rig hologram — the bay rests on a demand frameloop (the idle-GPU ~0 law) and a
+   continuously-animated uniform would violate the directive's own performance rail `:163-166`. The
+   gauge tick is the honest A.2 vehicle; owner may overrule at eyeball.
 3. **Magnetic cursor + mouse-tilt parallax** — only a small event-parallax on Home's annotation
-   plane shipped. Magnetic cursor: **NEVER BUILT (VERIFIED 0 files).**
+   plane shipped. Magnetic cursor: ~~NEVER BUILT~~ → **🟢 BUILT `1d310e1`:** delegated MagneticLayer
+   (GSAP quickTo, ≤4px pull, expo-out release, coarse-pointer skip) on the rail room tabs; the Dock
+   is deliberately NOT magnetic (it owns the magnify lift — one motion idea per element). Plus the
+   **chrome-plane tilt** on Home's console stage: brackets + corner gauges rotate ≤2.4° off the same
+   pointer vars the annotation parallax already writes — the rig canvas never tilts, so drag-orbit
+   and part picking stay pixel-exact (the HUD chrome floats over a stable subject).
 4. ~~Rig hologram: click-a-component-for-live-specs + boot/scan sweep~~ — **SHIPPED (verified
    2026-07-08).** Clicking a part pins its live spec card (`RigPart.tsx:82` `onClick`→`onSelect`,
    card renders while `active`); drag-orbit + scan sweep shipped. ~~Only residual: a copy gap~~ —
@@ -183,14 +201,25 @@ tech stack, then bypassed — the shipped work used CSS/native React instead. **
    RigViewer itself stays (LabConsole mounts it `chromeless`; the orbit-contract guards pin the
    bare mount); note the chromed hint/controls bar now has no product mount at all — if a future
    surface wants the chrome, it's still there.
-5. **Lenis smooth-scroll spine** tying the rooms together. **NEVER BUILT (VERIFIED 0 files).**
+5. **Lenis smooth-scroll spine** tying the rooms together. ~~NEVER BUILT~~ → **🟢 BUILT `1d310e1`:**
+   `lenis@1.3.25` (new dep, loaded only when the flag is on) on the shell's one content lane;
+   nested scrollers (Learn list, drawers…) auto-yield to native scroll via an ancestor walk (no
+   per-surface bookkeeping); the rAF loop stops whenever the window is hidden (never competes with
+   the game being optimized); constructor failure ⇒ inert spine, native scroll.
 6. **Room-transition "instrument retune" wipe** + Monitor meters as living oscilloscope traces
-   (Home got one trace; Monitor rollout is partial). **NOT BUILT / partial.**
+   (Home got one trace; Monitor rollout is partial). **Wipe 🟢 BUILT `1d310e1`:** one accent
+   hairline band sweeps down the main pane once per room change — never on first paint, never on a
+   bare flag flip; 300ms, transform-only, self-removing. **The Monitor-oscilloscope half is NOT this
+   train's:** it lives in the Monitor console lane (§A0 — the v5 Flight Deck scope IS the live
+   trace; `compy_monitor_console`, its own eyeball gate).
 
-> This whole block reads as a **quiet substitution** — BACKLOG.md:53 says "use tooling only if a
-> room's language demands it," which silently swapped the entire ranked plan for the CSS reskin. If
-> the owner wants the motion layer, it needs its own spec'd train (flag-gated, DEFAULT OFF, honest
-> data, reduced-motion-safe, GPU-cheap — the directive's HARD RAILS at `:41-46,163-172`).
+> ~~This whole block reads as a **quiet substitution** … it needs its own spec'd train~~ → **that
+> train shipped 2026-07-12 (`1d310e1`)** exactly on the prescribed rails: flag-gated DEFAULT OFF
+> (`compy_jarvis_motion`), honest data (tick = real change only), reduced-motion-safe (Compy's own
+> Motion pref wins, mid-session flips live-verified), GPU-cheap (transform/opacity only; GL idle
+> probe 0 draws/16s; hologram uniforms deliberately untouched — the directive's HARD RAILS at
+> `:41-46,163-172`). ⏳ **Open: the owner's eyeball** — Settings → Appearance → "JARVIS motion
+> (preview)", then move between rooms / hover the rail / watch a gauge on a live reading.
 
 ### B. Two Futures split — hologram must carry real per-part information
 Built v1 (`compy_two_futures`, flag OFF). Owner eyeball 2026-07-07: *"looks really good BUT the
@@ -253,8 +282,9 @@ src-tauri` empty for §3/§5/§8 (the only src-tauri change is §2a's DARK-gated
 f16d158). **Still OPEN:** Phase 4 (catalog-expansion pipeline — a SEPARATE gated track, per-tweak mutation-gate); the
 slice-1 Optimize-rail TAB removal + full rail collapse (**deferred, owner call — the standalone Optimize tab still
 coexists with Lab station 1 during preview; this is the ONE open eyeball decision**). **Still NOT built from §A (this
-marathon only realized A.1's gallery):** the rest of the JARVIS motion stack — GSAP data-reactivity (A.2), magnetic
-cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — remain 🔴 OPEN.
+marathon only realized A.1's gallery):** ~~the rest of the JARVIS motion stack — GSAP data-reactivity (A.2), magnetic
+cursor (A.3), Lenis smooth-scroll spine (A.5), room-transition wipe (A.6) — remain 🔴 OPEN~~ → **built 2026-07-12
+(`1d310e1`, flag `compy_jarvis_motion` DEFAULT OFF — see §A above).**
 ⏳ Owner eyeball: flip Settings → Appearance → "Lab proving ground (preview)", open Lab — station 1 leads with the
 enable-all + Power features, the measure stations follow, the Gallery closes the room. React + confirm the deferred
 Optimize-tab call before it flips default-ON.
@@ -310,7 +340,9 @@ self-reviewer rubric item 6. Every Phase 2…N tab adoption must pass this as an
 **Still 🔴 OPEN after Ops Console Phase 1:** Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
 real `Oscilloscope` kit bound to live telemetry · History/Black Box flight-recorder log · Gaming Mode arm/engage console ·
 Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). Still folds in the remaining §A JARVIS stack
-(decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5). **Both owner-gated calls RESOLVED
+(decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5) — **the
+A.2/A.3/A.5/A.6 core shipped 2026-07-12 (`1d310e1`, `compy_jarvis_motion` DEFAULT OFF, §A above);
+per-tab Console rollout can now assume the layer exists behind its flag.** **Both owner-gated calls RESOLVED
 2026-07-10:** Optimize panel **open-on-click confirmed** ("cleaner") · the standalone **Optimize rail tab DROPS at
 default-ON** (owner call; the removal ships with the default-ON flip, after the eyeball). Phase-2 (Home cold-open) plan
 committed: `docs/superpowers/plans/2026-07-10-console-hud-phase2-home.md` (entry-gated on the round-2 eyeball).

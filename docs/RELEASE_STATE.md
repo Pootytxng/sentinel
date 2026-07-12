@@ -10,6 +10,26 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (JARVIS MOTION LAYER SHIPPED `1d310e1` — installer SHA-256
+> `8EB6185DEDBADE6FE1B6F9B5075F8E4ECF9945949748E102008205D9F9812D10`, live exe stamp-verified
+> `1d310e1` via the embedded hash, installed by Claude, supersedes the `4F4DB63A…45B931`
+> installer; NEW flag `compy_jarvis_motion` **DEFAULT OFF** — owner eyeball is the open gate):**
+> UI_VISION_BACKLOG §A.2/A.3/A.5/A.6 built as ONE layer (rails: de-slop directive `:111-176`) —
+> **A.5** Lenis smooth-scroll spine on the shell's content lane (`lenis@1.3.25` new dep, loaded
+> only when active; nested scrollers auto-yield; rAF stops on hidden) · **A.6** room-transition
+> "retune" wipe (accent hairline, 300ms transform-only, never on first paint/flag flip) · **A.3**
+> magnetic rail tabs (GSAP quickTo ≤4px; Dock deliberately excluded — it owns the magnify lift)
+> + Home stage chrome tilt ≤2.4° (existing pointer vars; the rig canvas never tilts — picking
+> exact) · **A.2** gauge data-tick (GSAP ring flash ONLY on a real→real measured change; hologram
+> shader uniforms deliberately excluded — the demand-frameloop idle-GPU law wins, deviation
+> disclosed in UI_VISION_BACKLOG §A.2). Reader `readJarvisMotion` (`src/design/theme.ts`, `==="1"`),
+> boot attr `main.tsx`, gate hook `useJarvisActive` (`src/design/jarvis/use-jarvis.ts` — flag AND
+> resolved motion; reduced wins, mid-session flips live-verified). Flag-off byte-identity +
+> honest-tick + reduced-wins pinned in `src/design/jarvis/jarvis-motion.test.tsx`. Zero
+> `src-tauri`. Verify: tsc 0 · vitest **1364** (172 files) · self-reviewer **PASS 8/8** (live
+> 1500×980; flag-on-at-rest chrome transform = identity; GL idle probe 0 draws/16s; rail-switch
+> circuit ≲50ms with the sole 58ms outlier on the flag-OFF baseline).
+>
 > **UPDATE 2026-07-12 (Home title-header fix SHIPPED `cc1ffce` — installer SHA-256
 > `4F4DB63A9955C97B8B54F5A590066E0DC88BBDC051230EF36BDE2068FB45B931`, live exe stamp-verified
 > `cc1ffce` via the embedded hash, installed by Claude, supersedes the `63C3B563…D702233`
@@ -375,9 +395,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `cc1ffce` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `cc1ffce`) |
+| Git HEAD | `1d310e1` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `1d310e1`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `4F4DB63A9955C97B8B54F5A590066E0DC88BBDC051230EF36BDE2068FB45B931` (built from `cc1ffce`, 2026-07-12 — **Home title-header fix**: the console h1 is the room TITLE "Home"; the posture verdict + dek live in the new `.hc-verdict` body strip (once, tone-inked; guards in `home-console.test.tsx`). Carries the Expert-view train from `5850ac0` — **Expert view** (Q3 expert-layer train): one genuine Settings > Behavior preference `compy_expert_view`, **DEFAULT OFF** (`readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`) — pref off, the app face is byte-identical (pinned in `expert-view.test.tsx`); pref ON un-hides existing data only (refused-drawer reasoning inline · exact targets + the rollback-boundary disclaimer beside every one · true local percentiles + 1-decimal session stats · long-tail sections open), zero new mutation paths, zero `src-tauri` diff. Carries the full 2026-07-11 consumer-panel overhaul from `50b5c03` (its ship banner above; **note: this table's HEAD/installer rows had NOT been updated for that ship — drift fixed with this row**) and everything below it (Monitor v5 stack from `915e85b`, `compy_monitor_console` still **DEFAULT OFF**). Superseded installer: `63C3B563…D702233` from `5850ac0`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `8EB6185DEDBADE6FE1B6F9B5075F8E4ECF9945949748E102008205D9F9812D10` (built from `1d310e1`, 2026-07-12 — **JARVIS motion layer**: UI_VISION_BACKLOG §A.2/A.3/A.5/A.6 behind NEW flag `compy_jarvis_motion` **DEFAULT OFF** (`readJarvisMotion` → `=== "1"`, `src/design/theme.ts`; Settings → Appearance "JARVIS motion (preview)") — Lenis spine + retune wipe + magnetic rail + stage-chrome tilt + gauge data-ticks; flag-off byte-identity test-pinned; details in the Snapshot banner above. Superseded installer: `4F4DB63A…45B931` from `cc1ffce`, whose payload it carries — **Home title-header fix**: the console h1 is the room TITLE "Home"; the posture verdict + dek live in the new `.hc-verdict` body strip (once, tone-inked; guards in `home-console.test.tsx`). Carries the Expert-view train from `5850ac0` — **Expert view** (Q3 expert-layer train): one genuine Settings > Behavior preference `compy_expert_view`, **DEFAULT OFF** (`readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`) — pref off, the app face is byte-identical (pinned in `expert-view.test.tsx`); pref ON un-hides existing data only (refused-drawer reasoning inline · exact targets + the rollback-boundary disclaimer beside every one · true local percentiles + 1-decimal session stats · long-tail sections open), zero new mutation paths, zero `src-tauri` diff. Carries the full 2026-07-11 consumer-panel overhaul from `50b5c03` (its ship banner above; **note: this table's HEAD/installer rows had NOT been updated for that ship — drift fixed with this row**) and everything below it (Monitor v5 stack from `915e85b`, `compy_monitor_console` still **DEFAULT OFF**). Superseded installer: `63C3B563…D702233` from `5850ac0`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 

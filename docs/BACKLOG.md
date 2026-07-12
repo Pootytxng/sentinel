@@ -161,6 +161,25 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12c — ✅ JARVIS MOTION LAYER BUILT + SHIPPED LIVE `1d310e1` (installer SHA-256 `8EB6185D…812D10`, embedded-hash-verified; NEW flag `compy_jarvis_motion` DEFAULT OFF) — owner eyeball = the open gate
+
+**The UI_VISION_BACKLOG §A.2/A.3/A.5/A.6 train** (rails: de-slop directive `:111-176`; the motion
+layer the reskin substituted away). Built as ONE flag-gated layer: **A.5** Lenis spine on `.v2-content`
+(`lenis@1.3.25`, active-only dynamic import, nested-scroller auto-yield, rAF stops on hidden) ·
+**A.6** room-retune wipe (300ms accent hairline, transform-only, never first-paint/flag-flip, native
+animationend self-removal — React 19's synthetic onAnimationEnd doesn't fire in this webview) ·
+**A.3** magnetic rail tabs (GSAP quickTo ≤4px; Dock excluded — owns the magnify lift) + Home stage
+chrome tilt ≤2.4° off the existing `--hc-px/--hc-py` vars (canvas never tilts) · **A.2** gauge
+data-tick (GSAP ring flash on real→real measured change ONLY; hologram shader uniforms deliberately
+excluded — demand-frameloop idle-GPU law, deviation disclosed in UI_VISION_BACKLOG §A.2). Guards:
+`src/design/jarvis/jarvis-motion.test.tsx` (flag-off byte-identity · reduced-wins incl. mid-session ·
+honest-tick ×5 · wipe lifecycle). Verify: tsc 0 · vitest **1364** (172 files) · `git diff -- src-tauri`
+EMPTY · self-reviewer **PASS 8/8** (flag-on-at-rest chrome = identity matrix; GL idle 0 draws/16s;
+rail circuit ≲50ms, sole 58ms outlier on the flag-OFF baseline). Docs: UI_VISION_BACKLOG §A flipped
+🟢-behind-flag, RELEASE_STATE banner+installer rows, OWNER_ACTION_CHECKLIST §A7 eyeball row.
+- ⏳ **OPEN GATE: owner eyeball** — Settings → Appearance → "JARVIS motion (preview)" (checklist §A7);
+  looks-good ⇒ default-ON flip rides its own commit (the Home-console pattern).
+
 ### Cycle 2026-07-12b — ✅ Home title-header fix SHIPPED LIVE `cc1ffce` (the last non-gated `[ ]`); Cowork audit correction committed
 
 **Resume found no open train; the one non-gated `[ ]` was the Cycle 2026-07-11e flagged
