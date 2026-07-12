@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "export:library": "node scripts/export-library.mjs"
+    "export:library": "node scripts/export-library.mjs",
+    "stage:site": "node scripts/stage-dist-site.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
