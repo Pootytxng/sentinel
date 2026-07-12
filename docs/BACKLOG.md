@@ -161,6 +161,31 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-11e — ✅ CONSUMER-PANEL OVERHAUL BUILT + SHIPPED `50b5c03` — Q3 expert-layer proposal = the open owner gate
+
+**The five-persona panel plan ran end to end** (`docs/superpowers/plans/2026-07-11-consumer-panel-overhaul.md`
+— owner's Q1–Q4 answers + per-item commit citations recorded in-file; supersedes the marathon
+roadmap doc). One commit `50b5c03` (47 files, zero src-tauri): Phase 0 verified (fully-applied IS
+reachable with zero user action — live probe), Phase 1 copy honesty + Term glosses (Monitor bucket
+DEFERRED until the v5 eyeball settles — inventory in the plan), Phase 2 readiness formula note +
+NEW TrustMoment watch-it-work loop (audited IPC only, ledger-empty gate, HKCU whitelist), Phase 3
+site rebalance (kicker↔h1, free above the fold, proof-loop hero, start-here trio, per-card "Why:"),
+Phase 4 Q2 flag-debt sweep (11 rows out; failsafes now devtools-only — RELEASE_STATE banners
+superseded) + Q4 protection-first recovery reframe. Self-review round 1 FAIL (4 real catches) →
+fixed + guard-pinned (`term-style-guard.test.ts`) → round 2 **PASS**. Ship: installer
+`653FFEA0…9BADC2`, silent-reinstalled, **stamp-verified `50b5c03` live**, one installer on the
+Desktop. Verify: tsc 0 · vitest **1322** (167 files) · site-landing 15/15.
+**Open gates out of this cycle:**
+- [ ] ⏳ OWNER: Q3 expert-layer middle ground — GO / adjust / park on
+  `docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md` (opt-in "Expert view"
+  preference; non-LOCKED only). Not built without the GO.
+- [ ] Monitor-surface jargon glosses (deferred bucket) — land as a small follow-up AFTER the
+  Monitor v5 owner eyeball settles (sequencing note in the plan).
+- [ ] ⏳ OWNER eyeball of this train's visible changes (Home/Lab gauge notes + glosses, Settings
+  slimmed to one preview row, calm recovery banner, site hero) on the live `50b5c03` build.
+- [ ] Flagged, pre-existing (NOT this train's diff): Home's h1 renders postureLine's status
+  sentence ("N thing(s) need your attention") — reads against the title-header law; separate pass.
+
 ### Cycle 2026-07-11d — ✅ MONITOR v5 "FLIGHT DECK + SESSION STACK" BUILT + SHIPPED `960734c` (flag OFF) — owner eyeball = the open gate
 
 **The 2026-07-11c resume ran to completion:** v5 built from

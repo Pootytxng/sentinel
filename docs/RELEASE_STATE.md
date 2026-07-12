@@ -10,6 +10,35 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (CONSUMER-PANEL OVERHAUL SHIPPED `50b5c03` — installer SHA-256
+> `653FFEA0928E3372CA33ECB818EC6BF8A21B01CBB6A3B7250194DB5B3A9BADC2`, live exe stamp-verified
+> `50b5c03` via the embedded hash, installed by Claude, supersedes the `3B3A65C4…B19DAD` installer;
+> flag `compy_monitor_console` still **DEFAULT OFF**, v5 owner eyeball still ITS open gate):** the
+> five-persona panel plan (`docs/superpowers/plans/2026-07-11-consumer-panel-overhaul.md` — Q1–Q4
+> owner answers + per-item commit citations recorded in-file) built end to end. App: safe-stack
+> caption is a state observation ("All N already on for this rig" — Phase 0 verified
+> `currently_applied` is a live probe, `recommendations.rs:315`), VBS advisory reframed as a
+> decision, Term glosses at first exposure (Home/Lab "1% low" gauges, ETW, frametimes; **Monitor
+> jargon bucket deferred until the v5 eyeball settles**), readiness gauges state their formula
+> ("= N of M checks passed"), NEW **TrustMoment** one-time watch-it-work loop (audited
+> apply→rollback IPC only, ledger-empty gate, HKCU whitelist, consent-first), gaming recovery
+> banner + pane card reframed protection-first ("Nothing's lost … kept the full restore receipt",
+> calm tone — never-hide mechanism untouched). **Settings flag-debt sweep (Q2=A): 11 graduated /
+> UI-inert toggle rows REMOVED** (Living Instrument, Guided Lab bench, Lab checkup bento, Lab
+> proving ground, Instrument HUD, Home console, Setup stepper, First-check theater, Monitor summary
+> cards, Hologram bay v2, Two futures split) — features unchanged, flags still honor localStorage
+> via devtools; **the "Settings → Appearance row is the classic failsafe" lines in the 2026-07-10
+> Home-console and Lab-ground banners below are SUPERSEDED — those failsafes are now
+> devtools/localStorage-only.** "Monitor console (preview)" is the one remaining preview row. Site
+> (dark, owner taste-gates before publish): hook kicker promoted to h1, "Compy is free." above the
+> fold, proof-loop receipt = accessible hero visual (example-framed), start-here trio over raw
+> counts, per-card one-line "Why:" (the tier now argues). Q3 = **proposal only, awaiting owner GO**
+> (`docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md`). Zero src-tauri. Self-review
+> round 1 **FAIL — 4 real catches** (Term mixed-case in uppercase labels · tooltip shouting caps ·
+> Lab tooltip 126px off-window · site h1 3-line wrap), all fixed + guard-pinned
+> (`term-style-guard.test.ts`) → round 2 **PASS** (computed-style + line-box proofs). Verify:
+> tsc 0 · vitest **1322** (167 files) · site-landing 15/15.
+>
 > **UPDATE 2026-07-11 (RTSS-style ZERO-ANCHORED frametime scale SHIPPED `915e85b` — installer
 > SHA-256 `3B3A65C45C4BF63942373612CA19353EAFAB16CED10EE8A71F83143271B19DAD`, live exe
 > stamp-verified `915e85b`, installed by Claude, supersedes the `0AA8E222…F21A55` installer;

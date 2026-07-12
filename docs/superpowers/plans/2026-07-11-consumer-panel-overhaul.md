@@ -161,9 +161,9 @@ Unanimous across all five personas as an anxiety-inducing first thing seen. The 
 
 ## Phase 1 — Language & framing fixes (app-side, live product — highest stakes, all 🟢, start immediately)
 
-- [ ] Plain-language pass on Monitor/Lab jargon (frametime, 1% low, VRR, VBS, ETW, "anti-cheat safe") —
+- [x] **`50b5c03`** (Lab/app-wide half) Plain-language pass on Monitor/Lab jargon (frametime, 1% low, VRR, VBS, ETW, "anti-cheat safe") —
   inline glosses at first exposure, or gate behind an already-existing Advanced surface. Closes a gap
-  against CLAUDE.md's own no-jargon promise, not new scope.
+  against CLAUDE.md's own no-jargon promise, not new scope. **Monitor bucket still open (deferred below).**
   > **Scope record (2026-07-11):** a full sonnet inventory of every user-visible jargon hit ran; the
   > existing `<Term>`/`<WhatsThis>` glossary mechanism was reused (no new component). Landed: Term
   > glosses at first exposure on the Home + Lab console "1% low" gauges (ArcGauge label is now
@@ -173,47 +173,63 @@ Unanimous across all five personas as an anxiety-inducing first thing seen. The 
   > **DEFERRED per this plan's own sequencing note: the MONITOR-surface bucket** (monitor-panels,
   > MonitorConsole delta row, DeckScope trace label, SessionStack, monitor-v2-data — enumerated in
   > the inventory) waits until the Monitor v5 eyeball settles, then lands as a small follow-up.
-- [ ] Rewrite "Safe Stack — Fully applied" and "a security feature may be costing you frames" copy so
+- [x] **`50b5c03`** Rewrite "Safe Stack — Fully applied" and "a security feature may be costing you frames" copy so
   neither reads as unconsented action or a request to weaken security. Confirm the fresh-install vs.
   dev-rig question (Phase 0 below) before finalizing exact wording.
-- [ ] Surface Blackbook grading reasoning next to the chip (even one line), not only behind "Autopsy a
-  guide" — closes the "tier list, not an argument" gap.
+- [x] **`50b5c03`** Surface Blackbook grading reasoning next to the chip (even one line), not only behind "Autopsy a
+  guide" — closes the "tier list, not an argument" gap. (Evidence pinned the gap to the LANDING cards —
+  a one-line "Why:" from each entry's graded `why` now renders on every tweak card; the in-app Learn
+  card already shows the full why beside the chip when opened, verified compliant.)
 
 ## Phase 0 — Verify before Phase 1 lands (❓, quick, do first)
 
-- [ ] Confirm whether a fresh consumer install can reach a "Safe Stack — X/X fully applied" state
+- [x] **`50b5c03`** Confirm whether a fresh consumer install can reach a "Safe Stack — X/X fully applied" state
   without an explicit user action, or whether that's specific to this heavily-used dev/test rig
   (ledger: 51 real entries). Changes how strongly Phase 1's copy fix needs to disclaim "you approved
   these."
+  > **VERIFIED:** `currently_applied` is a LIVE system-state probe (`check_state_kind`,
+  > `src-tauri/src/recommendations.rs:315`), not a ledger read — a fresh install CAN show
+  > "fully applied" with zero user action (pre-tweaked rigs; stock Windows won't — several safe recs
+  > default off). Copy therefore rewritten as a state observation, never an action claim.
 
 ## Phase 2 — First-run trust sequence (🟢)
 
-- [ ] Guided "watch it work" moment for brand-new users: apply one trivial, reversible setting, show
+- [x] **`50b5c03`** Guided "watch it work" moment for brand-new users: apply one trivial, reversible setting, show
   before/after, show the rollback complete — live, once, before asking for further trust. Named
   directly by the Burned Skeptic; it's the exact loop the marketing site already promises but never
-  demonstrates to a first-time user.
-- [ ] Add a one-line "how we calculate this" under "READINESS 100 · SCORED" — closes the Tinkerer's
-  "made-up number" read cheaply.
+  demonstrates to a first-time user. (TrustMoment on first Home view: ledger-empty gate, consent-first,
+  audited IPC only, HKCU whitelist = no UAC mid-demo, guard-tested pick logic.)
+- [x] **`50b5c03`** Add a one-line "how we calculate this" under "READINESS 100 · SCORED" — closes the Tinkerer's
+  "made-up number" read cheaply. (ArcGauge `note` prop, "= N of M checks passed", Home + Lab consoles.)
 
 ## Phase 3 — Marketing site (🟢, site is explicitly not live yet — sequence whenever, cheap now)
 
-- [ ] Promote the kicker ("Know which PC tweaks actually help your rig") over/above the current headline
+- [x] **`50b5c03`** Promote the kicker ("Know which PC tweaks actually help your rig") over/above the current headline
   ("Measured, not promised"), or A/B them — Budget Teen named the kicker as the stronger hook already
-  sitting unused.
-- [ ] Move "it's free" up near the top of the page — currently requires scrolling to footer/Settings.
-- [ ] Make the proof-loop strip (applied → measured → rolled back) the hero visual, not a decorative
-  aside — three personas cited it unprompted as the most convincing element on the page.
-- [ ] Re-balance the Blackbook section to lead with "START HERE" bite-sized entries over the raw
-  "174 tweaks / 85 terms" counts, which read as homework to two personas.
+  sitting unused. (Roles swapped: hook = h1, doctrine line = kicker; title/og/footer keep the brand line.)
+- [x] **`50b5c03`** Move "it's free" up near the top of the page — currently requires scrolling to footer/Settings.
+  ("Compy is free. No account, no ads, nothing leaves your PC." hero note under the CTA row.)
+- [x] **`50b5c03`** Make the proof-loop strip (applied → measured → rolled back) the hero visual, not a decorative
+  aside — three personas cited it unprompted as the most convincing element on the page. (Accessible
+  text now, example-framed per the content rules, accent-bordered focal card; video demoted to backdrop.)
+- [x] **`50b5c03`** Re-balance the Blackbook section to lead with "START HERE" bite-sized entries over the raw
+  "174 tweaks / 85 terms" counts, which read as homework to two personas. ("Start here: three quick
+  reads" trio + "More of the internet's favorites"; counts demoted to the browse-all link.)
 
 ## Phase 4 — Taste-gated items (do not start until all four Upfront questions are answered)
 
-- [ ] **If Q1 = B:** build a simplified first-run Home variant, hologram deferred past cold-open.
-- [ ] **If Q2 = A:** flag-debt sweep of `src/design/theme.ts` reads — remove toggles for already-
-  graduated features, keep the shipped behavior. **If Q2 = B:** build the Advanced/Developer sub-page
-  and relocate the toggles there instead of removing them.
-- [ ] **If Q3 = B or C:** scope and build the expert-layer surface at the agreed depth.
-- [ ] **Apply Q4's answer** to the recovery banner's first-encounter presentation.
+- [x] **Q1 = A → no work** (hologram/Instrument-HUD direction kept exactly as-is per owner answer).
+- [x] **`50b5c03`** **Q2 = A executed:** flag-debt sweep — 11 toggle rows removed from Settings
+  (8 graduated default-ON + 3 made UI-inert by the ground default: Guided Lab bench, Lab checkup
+  bento, Two futures split). Features unchanged; flags remain devtools/localStorage-reachable (same
+  convention as the removed "New look" hub). "Monitor console (preview)" kept — genuinely default-OFF,
+  awaiting the v5 eyeball. NOTE for RELEASE_STATE: the Home-console + Lab-ground "Settings row is the
+  failsafe" lines in older banners are superseded — failsafe is now devtools/localStorage-only.
+- [x] **Q3 = custom → PROPOSAL delivered** (`docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md`):
+  opt-in "Expert view" preference un-hiding existing data (refused-drawer open w/ reasoning, raw
+  technical targets inline, true percentiles), non-LOCKED only. **Awaiting owner GO — not built.**
+- [x] **`50b5c03`** **Q4 applied** per the exploration verdict above: permanent protection-first
+  reframe on both recovery surfaces, calm tone, mechanism untouched.
 
 ## Reopened for owner consideration (owner directive 2026-07-11 — don't auto-exclude a LOCKED critique from the conversation)
 
