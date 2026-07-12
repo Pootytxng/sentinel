@@ -313,12 +313,11 @@ export function HomeConsole({
             Rig diagnostic <span className="hc-eyebrow-sep">·</span>{" "}
             <span className="hc-mono">{dateline}</span>
           </span>
-          <span className="hc-headline" key={posture.headline}>
-            {posture.headline}
-          </span>
+          {/* Title only in the h1 (owner title-header law 2026-07-10 ×2) — the posture
+              verdict lives in its body context strip above the stage. */}
+          <span className="hc-headline">Home</span>
         </>
       }
-      sub={dekRedundant ? undefined : dek}
       measured={
         checking ? (
           <span className="hc-readout-seg">running checks…</span>
@@ -346,6 +345,15 @@ export function HomeConsole({
       }
     >
       <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
+        {/* THE COLD-OPEN VERDICT — relocated out of the h1 (title-header law): postureLine's
+            real headline + its trimmed sentence, tone-inked, rendered exactly ONCE on this
+            screen (one-mention law). */}
+        <div className={`hc-verdict hc-verdict-${posture.tone}`}>
+          <span className="hc-verdict-line" key={posture.headline}>
+            {posture.headline}
+          </span>
+          {!dekRedundant && <span className="hc-verdict-dek">{dek}</span>}
+        </div>
         {/* CONSOLE STAGE — bracketed frame, the real 3D hologram center, four honest corner
             gauges. No lede (owner header-slop law 2026-07-10): the console opens straight on
             the stage. */}

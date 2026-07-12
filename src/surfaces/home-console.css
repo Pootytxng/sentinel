@@ -65,6 +65,29 @@
 :root[data-v2="on"] .hc-mono {
   font-family: var(--v2-font-mono);
 }
+/* ── The cold-open verdict — relocated from the h1 (owner title-header law 2026-07-10):
+   the header is a TITLE; the posture answer speaks here, first thing in the body. Sentence
+   case, calm; attention state inks the line warn (the LED already carries the signal — the
+   ink agrees, never a second alarm). ── */
+:root[data-v2="on"] .hc-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+:root[data-v2="on"] .hc-verdict-line {
+  font: 650 clamp(17px, 1.9vw, 21px) / 1.2 var(--v2-font-sans);
+  letter-spacing: -0.005em;
+  color: var(--v2-text);
+  text-wrap: balance;
+}
+:root[data-v2="on"] .hc-verdict-attention .hc-verdict-line {
+  color: var(--v2-warn);
+}
+:root[data-v2="on"] .hc-verdict-dek {
+  font: 400 13px / 1.5 var(--v2-font-sans);
+  color: var(--v2-muted);
+  max-width: 62ch;
+}
 /* The readout strip — measured provenance as segmented instrument fields. */
 :root[data-v2="on"] .v2-measured:has(.hc-readout-seg) {
   display: flex;
@@ -445,12 +468,14 @@
     transform: translateY(0);
   }
 }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-verdict,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-stage,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-corner,
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter,
 :root[data-v2="on"] .home-console[data-motion="full"] .dock {
   animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-stage { animation-delay: 0.06s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-tl { animation-delay: 0.12s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-tr { animation-delay: 0.19s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-bl { animation-delay: 0.26s; }

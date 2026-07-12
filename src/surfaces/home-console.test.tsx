@@ -179,19 +179,49 @@ const mount = (p = props) =>
   );
 
 describe("HomeConsole — masthead (the proven HomeHud register)", () => {
-  it("renders the display verdict as postureLine's real headline, ok LED, real check counts", () => {
+  it("title-header law: the h1 is the room TITLE; the posture verdict renders ONCE, in body context", () => {
     const posture = postureLine(readiness, priorities, activeChangeCount(props.changes));
     const c = mount().container;
-    expect(c.querySelector(".v2-verdict h1")!.textContent).toContain(posture.headline);
+    const h1 = c.querySelector(".v2-verdict h1")!;
+    expect(h1.querySelector(".hc-headline")!.textContent).toBe("Home");
+    expect(h1.textContent).not.toContain(posture.headline);
+    // The relocated verdict: postureLine's real output, exactly once (one-mention law),
+    // inside the room body — never a second copy anywhere on the screen.
+    const lines = Array.from(c.querySelectorAll(".hc-verdict-line"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0].textContent).toBe(posture.headline);
+    expect(lines[0].closest(".home-console")).not.toBeNull();
     expect(c.querySelector(".hc-masthead-eyebrow .hc-led-ok")).not.toBeNull();
     expect(c.querySelector(".hc-led-scan")).toBeNull();
     expect(c.querySelector(".v2-measured")!.textContent).toContain("3/3");
   });
 
-  it("header-slop pin: no lede/explainer node anywhere in the console header", () => {
+  it("attention state: verdict strip carries the warn tone class + the real headline", () => {
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [
+        { id: "a", label: "Refresh rate", status: "attention", detail: "", value: null },
+        { id: "b", label: "B", status: "ready", detail: "", value: null },
+        { id: "c", label: "C", status: "ready", detail: "", value: null },
+      ],
+      ready_count: 2,
+      attention_count: 1,
+    };
+    const posture = postureLine(attn, priorities, activeChangeCount(props.changes));
+    const c = mount({ ...props, readiness: attn }).container;
+    expect(posture.tone).toBe("attention");
+    const strip = c.querySelector(".hc-verdict")!;
+    expect(strip.className).toContain("hc-verdict-attention");
+    expect(strip.querySelector(".hc-verdict-line")!.textContent).toBe(posture.headline);
+    expect(c.querySelector(".v2-verdict h1")!.textContent).not.toContain(posture.headline);
+  });
+
+  it("header-slop pin: no lede/explainer node anywhere in the console header, and no sub line", () => {
     const c = mount().container;
     expect(c.querySelector(".home-console-lede")).toBeNull();
     expect(c.querySelector(".hc-lede")).toBeNull();
+    // The dek moved to body context with the verdict — the header keeps no descriptive line.
+    expect(c.querySelector(".v2-verdict-sub")).toBeNull();
   });
 });
 
