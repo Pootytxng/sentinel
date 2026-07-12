@@ -203,6 +203,18 @@ Desktop. Verify: tsc 0 · vitest 1305 (165 files) · cargo 688. Flag `compy_moni
   coverage of line/polyline/path → round 2 **PASS** (computed vectorEffect + side-by-side
   stroke-weight proof, live real-density mount). tsc 0 · vitest **1311** · envelope guards
   (truth-table · dense⇒band+path+note · sparse⇒raw · no-prop⇒raw).
+- **❌ Envelope REJECTED on sight (owner: "this is atrocious just go do some reasearch on some
+  clean and comprehensive looking frametime graphs or just match riva tuners or something") →
+  RTSS-style ZERO-ANCHORED scale SHIPPED `915e85b`** (installer `3B3A65C4…B19DAD`,
+  stamp-verified live): envelope mode DELETED; research applied (RTSS "graph max" / CapFrameX
+  fixed y-range) — the frametime hero draws the RAW per-frame line on a stable 0→`niceCap` ms
+  axis (frame-budget landmarks 8.3/16.7/25/33.3/50/100/250) w/ labeled quarter-cap gridlines;
+  axis states "0–\<cap\> ms scale · budget X ms". **Root cause named:** window-min/max
+  normalization stretched ~3 ms of ordinary jitter to full chart height — THAT was the
+  "erratic"; the envelope had treated the symptom. fps/Home traces byte-same ("window"
+  default); `monotone.ts` stays (stack rows). Guards: niceCap truth-table · calm-amplitude
+  <10% of plot height while spikes tower · raw polyline pinned · labeled gridlines · window
+  default pinned. tsc 0 · vitest 1311 · self-reviewer PASS 8/8.
 - **⏳ GATE: owner eyeball of v5** — Settings → Appearance → "Monitor console (preview)", both
   modes; the stack half shines with his real 5-session history on screen. Phase 4 (Blackbook
   console) still queues behind this verdict.

@@ -10,6 +10,23 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-11 (RTSS-style ZERO-ANCHORED frametime scale SHIPPED `915e85b` — installer
+> SHA-256 `3B3A65C45C4BF63942373612CA19353EAFAB16CED10EE8A71F83143271B19DAD`, live exe
+> stamp-verified `915e85b`, installed by Claude, supersedes the `0AA8E222…F21A55` installer;
+> flag `compy_monitor_console` still **DEFAULT OFF**):** the owner REJECTED the envelope look
+> on sight ("this is atrocious … research clean and comprehensive frametime graphs or just
+> match riva tuners") — **envelope mode is DELETED** (band + median curve + note). Research
+> applied (RTSS "graph max" / CapFrameX fixed y-range): the DeckScope frametime hero now draws
+> the RAW per-frame line against a **stable zero-anchored ms scale** (`niceCap` frame-budget
+> landmarks 8.3/16.7/25/33.3/50/100/250) with labeled quarter-cap gridlines + right-edge ms
+> labels; axis states "0–\<cap\> ms scale · budget X ms". Root cause named: window-min/max
+> normalization stretched ~3 ms of jitter to full chart height — the envelope had treated the
+> symptom. fps + Home traces (default "window" scale) byte-same; `monotone.ts` stays
+> (SessionStack rows). Verify: tsc 0 · vitest **1311** (165 files) · self-reviewer **PASS 8/8**
+> (live real-density mount: calm line low on the chart, spikes tower, budget ≈14% up at
+> 6.9/50, scrub raw-exact, zoom rescales zero-anchored, fps/Home unchanged).
+> **⏳ OWNER eyeball of v5 still the open gate.**
+>
 > **UPDATE 2026-07-11 (v5 scope ENVELOPE mode SHIPPED `e02d1ad` — installer SHA-256
 > `0AA8E222755F082B7D75AF8EAEB3BA7A14DDFEFF97711C8483A456B319F21A55`, live exe stamp-verified
 > `e02d1ad`, installed by Claude, supersedes the `05399D9D…EA7B7459` installer; flag
@@ -290,9 +307,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `e02d1ad` + this ship-docs commit (branch `main`, 2026-07-11 — the live installer is built from exactly `e02d1ad`) |
+| Git HEAD | `915e85b` + this ship-docs commit (branch `main`, 2026-07-11 — the live installer is built from exactly `915e85b`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `0AA8E222755F082B7D75AF8EAEB3BA7A14DDFEFF97711C8483A456B319F21A55` (built from `e02d1ad`, 2026-07-11 — **Monitor v5 "Flight Deck + Session Stack"** + the same-day trace-line refinement (monotone Fritsch–Carlson curves, round joins) + the scope-line sharpening (trace glow deleted, non-scaling 1.25px strokes) + the scope ENVELOPE mode (dense frametime windows draw the true min–max band + median line; spikes/scrub stay raw-exact); the v4 SessionWaterfall + `waterfall-profile` are DELETED; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: ONE face, no mode toggle — Flight Deck (consumer readouts · `DeckScope` frametime hero w/ hover scrub + drag-zoom · session-scoped delta row) + Session Stack (last ≤5 sessions on ONE shared 1%-low axis, recorded-span coverage stated, worst-dip pin w/ clock time, VS PREVIOUS chips), all over the SAME 1 Hz read-only polls, zero new IPC. Consumer-terms presets from `33661b8` and Home console DEFAULT ON from `bce72d6` unchanged. Superseded installer: `05399D9D…EA7B7459` from `f2acb23`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `3B3A65C45C4BF63942373612CA19353EAFAB16CED10EE8A71F83143271B19DAD` (built from `915e85b`, 2026-07-11 — **Monitor v5 "Flight Deck + Session Stack"** + the trace-line refinement (monotone curves, round joins on stack rows) + the scope-line sharpening (trace glow deleted, non-scaling 1.25px strokes) + the RTSS-style ZERO-ANCHORED frametime scale (raw per-frame line on a stable 0→niceCap ms axis w/ labeled gridlines; the envelope mode that briefly shipped in `e02d1ad` is DELETED — owner-rejected); the v4 SessionWaterfall + `waterfall-profile` are DELETED; `compy_monitor_console` stays **DEFAULT OFF** (`readMonitorConsole` → `=== "1"`, `src/design/theme.ts:566`) — flag off, Monitor is byte-identical (pinned in `monitor-console-flag.test.tsx` for BOTH `compy_editorial` states); flag ON: ONE face, no mode toggle — Flight Deck (consumer readouts · `DeckScope` frametime hero w/ hover scrub + drag-zoom · session-scoped delta row) + Session Stack (last ≤5 sessions on ONE shared 1%-low axis, recorded-span coverage stated, worst-dip pin w/ clock time, VS PREVIOUS chips), all over the SAME 1 Hz read-only polls, zero new IPC. Consumer-terms presets from `33661b8` and Home console DEFAULT ON from `bce72d6` unchanged. Superseded installer: `0AA8E222…F21A55` from `e02d1ad`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
