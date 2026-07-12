@@ -65,7 +65,7 @@ MAX FPS-style terms, session comparison, overlay control, honest empties).
   last 5 sessions as flat rows on one shared axis (your real Sand/Marvel/Palworld history is
   already in there — click a row for its detail). Verdict → tell Claude looks-good / what's off.
 
-### A6. One look at the latest live build — three trains' visible changes  ·  ⏳ OPEN (added 2026-07-12)
+### A6. One look at the latest live build — three trains' visible changes  ·  ✅ DONE 2026-07-12 ("everything looks good so far on my end")
 Your live app (`cc1ffce`, installed 2026-07-12) carries three not-yet-eyeballed trains; one open of
 the app covers all three:
 - **Consumer-panel overhaul (`50b5c03`):** Home/Lab gauge formula notes + first-exposure term
@@ -76,7 +76,9 @@ the app covers all three:
   rollback-boundary disclaimer, 1-decimal numbers, long sections open.
 - **Home masthead (`cc1ffce`, today):** the header now says just "Home"; the "ready to play /
   N things need attention" verdict moved to its own line above the stage (your title-header law).
-- **Result → tell Claude:** looks-good / what's off, per item or in one breath.
+- ~~Result → tell Claude: looks-good / what's off~~ → ✅ verdict in, same day. (Deliberately NOT
+  counted as the §A5 Monitor-v5 verdict — that one needs the Settings → "Monitor console
+  (preview)" flip to even be visible.)
 
 ---
 
