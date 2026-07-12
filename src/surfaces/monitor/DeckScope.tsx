@@ -114,6 +114,7 @@ export function DeckScope({
         reduced={reduced}
         budget={budget}
         spikes
+        envelope
         scrub={!drag ? hover : null}
         sel={drag}
         stageProps={stageProps}

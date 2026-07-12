@@ -146,6 +146,64 @@ describe("Oscilloscope — motion + ink discipline", () => {
   });
 });
 
+describe("Oscilloscope — envelope mode (owner ask 2026-07-11: calm the sawtooth, keep accuracy)", () => {
+  // A dense real-density window: full-amplitude alternation (the chaotic sawtooth) + two
+  // exact spikes. 240 samples ≥ ENVELOPE_MIN so envelope engages.
+  const dense: number[] = Array.from({ length: 240 }, (_, i) => (i % 2 ? 8.4 : 5.6));
+  dense[120] = 41;
+  dense[200] = 22;
+
+  it("envelopeProfile (pure): per-bucket TRUE min/max/median of real samples, no invention", async () => {
+    const { envelopeProfile, ENVELOPE_BUCKETS } = await import("./Oscilloscope");
+    const prof = envelopeProfile(dense);
+    expect(prof).toHaveLength(ENVELOPE_BUCKETS);
+    // The spike bucket keeps the spike as its TRUE max — extremes are never smoothed away.
+    const spikeBucket = prof.find((p) => p.max === 41);
+    expect(spikeBucket).toBeTruthy();
+    // A plain alternating bucket: min/max are the real alternation, median between them.
+    const calm = prof[0];
+    expect(calm.min).toBe(5.6);
+    expect(calm.max).toBe(8.4);
+    expect(calm.med).toBeGreaterThanOrEqual(5.6);
+    expect(calm.med).toBeLessThanOrEqual(8.4);
+    expect(envelopeProfile([])).toEqual([]);
+  });
+
+  it("dense window + envelope ⇒ min–max band + median path + the honesty note; spikes stay raw-exact", () => {
+    const { container, getByText } = render(
+      <Oscilloscope samples={dense} cap={240} label="frametime" unit="ms" budget={6.9} spikes envelope reduced />,
+    );
+    expect(container.querySelector(".osc-band")).not.toBeNull();
+    const trace = container.querySelector(".osc-trace")!;
+    expect(trace.tagName.toLowerCase()).toBe("path"); // median curve, not the raw sawtooth
+    expect(getByText("line = typical · band = every frame")).toBeTruthy();
+    // Spike markers still anchor at the RAW sample's exact x (index 120 of 240).
+    const worst = container.querySelector(".osc-spike-worst")!;
+    const wx = parseFloat(worst.getAttribute("x1")!);
+    expect(Math.abs(wx - ((120 / 239) * 238 + 1))).toBeLessThan(0.2);
+    expect(getByText(/worst spike/i).textContent).toMatch(/41\s*ms/);
+  });
+
+  it("a sparse window (zoomed) falls back to the raw per-frame polyline — detail on demand", () => {
+    const { container, queryByText } = render(
+      <Oscilloscope samples={dense.slice(0, 80)} cap={240} label="frametime" envelope reduced />,
+    );
+    const trace = container.querySelector(".osc-trace")!;
+    expect(trace.tagName.toLowerCase()).toBe("polyline");
+    expect(trace.getAttribute("points")!.trim().split(/\s+/)).toHaveLength(80);
+    expect(container.querySelector(".osc-band")).toBeNull();
+    expect(queryByText(/band = every frame/)).toBeNull();
+  });
+
+  it("without the envelope prop a dense window still draws raw (opt-in, never silent)", () => {
+    const { container } = render(
+      <Oscilloscope samples={dense} cap={240} label="fps" reduced />,
+    );
+    expect(container.querySelector(".osc-trace")!.tagName.toLowerCase()).toBe("polyline");
+    expect(container.querySelector(".osc-band")).toBeNull();
+  });
+});
+
 describe("Oscilloscope — line discipline (owner-caught 2026-07-11: bloom + fat strokes)", () => {
   // bug→guard: the trace wore a drop-shadow (blooming theme violet around graded ink) and the
   // stretched viewBox fattened strokes non-uniformly. Sharp, sleek lines are the pinned contract.
@@ -157,7 +215,15 @@ describe("Oscilloscope — line discipline (owner-caught 2026-07-11: bloom + fat
       "",
     );
     expect(css).not.toMatch(/drop-shadow/);
-    expect(css).toMatch(/vector-effect:\s*non-scaling-stroke/);
+    // The non-scaling rule must cover EVERY stroke element type the scope draws — a new
+    // element type escaping the selector rendered fat (self-reviewer catch 2026-07-11: the
+    // envelope median <path> regressed the exact class f2acb23 fixed; a bare substring match
+    // let it through green).
+    const nsRule = css.match(/([^{}]+)\{[^}]*vector-effect:\s*non-scaling-stroke/);
+    expect(nsRule).not.toBeNull();
+    for (const el of ["line", "polyline", "path"]) {
+      expect(nsRule![1]).toMatch(new RegExp(`\\.osc-grid\\s+${el}`));
+    }
     // Sleek stroke: the trace never grows past 1.5px (screen px under non-scaling-stroke).
     const trace = css.match(/\.osc-trace\s*\{[^}]*stroke-width:\s*([\d.]+)/);
     expect(trace).not.toBeNull();

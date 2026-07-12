@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionSummary } from "../../types";
+import { monotoneSegments } from "../../design/console/monotone";
 import { prettyGameName } from "../game-name";
 import { fmtDur } from "../Play";
 import {
@@ -38,48 +39,16 @@ const PAD_Y = 3;
 // Monotone cubic (Fritsch–Carlson) trace — the refinement the owner asked for (2026-07-11):
 // the curve passes through EVERY real sample and, being monotone between points, never
 // overshoots into an invented dip or peak. It smooths the CORNERS of the min-per-bucket
-// sawtooth, never the data. < 3 points falls back to straight segments.
+// sawtooth, never the data. < 3 points falls back to straight segments. The math lives in
+// the shared console-kit module (the Oscilloscope's envelope median draws the same curve).
 function traceMonotone(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {
   ctx.moveTo(pts[0].x, pts[0].y);
   if (pts.length < 3) {
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     return;
   }
-  const n = pts.length;
-  const dx: number[] = [];
-  const m: number[] = [];
-  for (let i = 0; i < n - 1; i++) {
-    dx[i] = pts[i + 1].x - pts[i].x || 1e-6;
-    m[i] = (pts[i + 1].y - pts[i].y) / dx[i];
-  }
-  const t: number[] = [m[0]];
-  for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
-  t[n - 1] = m[n - 2];
-  for (let i = 0; i < n - 1; i++) {
-    if (m[i] === 0) {
-      t[i] = 0;
-      t[i + 1] = 0;
-      continue;
-    }
-    const a = t[i] / m[i];
-    const b = t[i + 1] / m[i];
-    const s = a * a + b * b;
-    if (s > 9) {
-      const k = 3 / Math.sqrt(s);
-      t[i] = k * a * m[i];
-      t[i + 1] = k * b * m[i];
-    }
-  }
-  for (let i = 0; i < n - 1; i++) {
-    const h = dx[i];
-    ctx.bezierCurveTo(
-      pts[i].x + h / 3,
-      pts[i].y + (t[i] * h) / 3,
-      pts[i + 1].x - h / 3,
-      pts[i + 1].y - (t[i + 1] * h) / 3,
-      pts[i + 1].x,
-      pts[i + 1].y,
-    );
+  for (const s of monotoneSegments(pts)) {
+    ctx.bezierCurveTo(s.c1x, s.c1y, s.c2x, s.c2y, s.x, s.y);
   }
 }
 
