@@ -161,6 +161,35 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12f — ✅ RELEASE_STATE table-drift fixed (`6824ab0`) + ✅ PHASE-4 BLACKBOOK CONSOLE CONCEPT OUT → owner PICKED "A · The Logbook"; build queued (fresh session)
+
+**Resume (`/clear`, live `fcc400b`).** Ground truth re-verified: clean `main`, live exe stamps
+`fcc400b` (JARVIS default-ON), one Desktop installer re-hashed to `DFE827D1…FB59` (matches the
+banner), no parallel Cowork lane. **Drift caught + fixed (`6824ab0`):** `f15e2c5` added the `fcc400b`
+default-ON RELEASE_STATE *banner* but left the *table's* Git-HEAD + Current-installer rows citing the
+superseded `1d310e1`/`8EB6185D` DEFAULT-OFF installer; `verify-release-state.mjs` passed 36/36 because
+it audits only code `path:line` citations, not installer-SHA prose. Both rows re-pointed.
+
+**Next train = Console-HUD Phase 4 (Blackbook).** Per the locked build order it's the next per-tab
+rollout (after Home default-ON, Monitor eyeball-pending); per the owner's per-tab signature process
+rule ("spitball … before we do it") the concept comes BEFORE code. An Explore map surfaced a real IA
+fork: **Blackbook today is the knowledge LIBRARY** (186 verified entries + "autopsy a guide"), NOT a
+records room — the spec's "flight-recorder of applied changes + sessions" data lives in three OTHER
+rooms (applied changes → Lab · sessions → Monitor) and there's already a shipped feature literally
+named **"Black Box"** (crash forensics) in the Lab (naming collision flagged). So the premise is an
+owner-territory decision, not a reskin. **Concept round OUT (mockup-first):** Artifact
+<https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91> — A "The Logbook" (library +
+a unified your-changes/sessions/autopsy tape) · B "Flight Recorder" (scrub-tape IS the room) · C
+"Field Records" (reskin the library only). **✅ OWNER PICKED same day: "A · The Logbook"** ("blackbook
+looks good" + A); naming default accepted (room stays "Blackbook", timeline = "the logbook", Lab
+"Black Box" left alone).
+- **Build plan written + entry gate cleared:** `docs/superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md`
+  (flag `compy_blackbook_console` DEFAULT OFF · pure `buildLogbook` tape builder over EXISTING data —
+  zero new IPC, zero `src-tauri` · rollback reuses the audited `rollback_change` path, mutation-gate
+  glance · title-header law · honest-empty · reduced-motion still · naming guard).
+- ⛳ **RESUME (next train, FRESH session): build Phase 4 "The Logbook" from that plan.** Then eyeball →
+  default-ON (Home/Monitor pattern).
+
 ### Cycle 2026-07-12e — ✅ JARVIS MOTION LAYER FLIPPED DEFAULT-ON (owner eyeball "everything looks good", 2026-07-12)
 
 **Owner gave the looks-good verdict on the JARVIS motion layer** (Cycle 2026-07-12c's open gate — he'd

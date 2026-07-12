@@ -88,6 +88,16 @@ still has a "JARVIS motion" toggle (now the OFF failsafe). Ships on its own comm
 live app carries it after this cycle's build. Two disclosed deviations stand (you may still overrule):
 hologram shader-pulses excluded (idle-GPU bar), and the Dock isn't magnetic (it owns the magnify lift).
 
+### A8. Blackbook console (Phase 4) — ✅ direction PICKED 2026-07-12 ("A · The Logbook"); build queued, eyeball later
+You picked **A · The Logbook** from the [concept](https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91)
+("blackbook looks good" + A). Background: Blackbook today is your knowledge library (186 verified entries +
+"autopsy a guide"), while the spec imagined a "flight-recorder" of your applied changes + sessions — so A keeps
+the field-guide **and** adds a unified record tape (your changes/sessions/guide-checks, each with its undo).
+Naming settled on the default: the room stays "Blackbook", the timeline is "the logbook", the existing Lab
+"Black Box" (crash forensics) is left alone. **Nothing on you right now** — it builds behind a default-OFF flag
+in a fresh session; then a one-flip eyeball comes back to you (Settings → Appearance → "Blackbook console
+(preview)"), same as Home/Monitor. Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
+
 ---
 
 ## §B — Waiting on input only you can give

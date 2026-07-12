@@ -360,6 +360,20 @@ parallax, reduced ⇒ still. ✅ **OWNER APPROVED 2026-07-10 ("everything looks 
 written:** `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` (flag `compy_monitor_console`
 DEFAULT OFF · NEW `Oscilloscope` kit component on the real live telemetry · builds in a fresh session).
 
+**🟢 PHASE 4 (Blackbook console) — CONCEPT OUT + owner PICKED "A · The Logbook" (2026-07-12); build queued.**
+Per the per-tab signature process rule (concept before code), the Blackbook rollout opened with a spitball.
+Explore-map finding: **Blackbook is the knowledge LIBRARY today** (186 verified entries + guide-autopsy), NOT a
+records room; the spec's "flight-recorder of applied changes + sessions" data lives in the Lab (applied-changes
+ledger) + Monitor (sessions), and a DIFFERENT shipped feature already owns the name **"Black Box"** (crash
+forensics, `BlackBox.tsx`, in the Lab). So this was a real IA fork, owner-gated. Three grounded directions in one
+Artifact <https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91>: **A "The Logbook"** (library +
+a unified your-record tape) · **B "Flight Recorder"** (scrub-tape hero, library → Reference tab) · **C "Field
+Records"** (reskin the library only). ✅ **Owner picked A** ("blackbook looks good" + A); naming default accepted
+(room stays "Blackbook", timeline = "the logbook", Lab "Black Box" left alone). Plan written:
+`docs/superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md` (flag `compy_blackbook_console` DEFAULT OFF ·
+pure `buildLogbook` tape over EXISTING data — zero new IPC/`src-tauri` · rollback reuses the audited path ·
+title-header law · honest-empty · reduced-motion still). **Builds in a FRESH session**, then eyeball → default-ON.
+
 ### D. CommandPalette / keyboard-first command flow — parked, then dropped
 From the product-UI-system brief (Linear/Raycast discipline). Explicitly parked as "new feature,
 backlog candidate post-P6, owner call" — and then never mentioned again anywhere.
