@@ -10,6 +10,23 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (Home title-header fix SHIPPED `cc1ffce` — installer SHA-256
+> `4F4DB63A9955C97B8B54F5A590066E0DC88BBDC051230EF36BDE2068FB45B931`, live exe stamp-verified
+> `cc1ffce` via the embedded hash, installed by Claude, supersedes the `63C3B563…D702233`
+> installer):** the BACKLOG-flagged pre-existing violation closed — HomeConsole's h1 rendered
+> postureLine's status sentence ("N thing(s) need your attention") against the owner's
+> title-header law (2026-07-10 ×2). The console h1 is now the room TITLE ("Home", eyebrow
+> unchanged); the posture verdict + trimmed dek relocate to a NEW `.hc-verdict` body strip above
+> the stage (postureLine's real output, rendered exactly once — one-mention law; attention state
+> inks warn, agreeing with the LED). The header keeps NO sub/descriptive line. Scoped like the
+> rooms' `626b83c` sweep: live face only (HomeHud/HomeV2 devtools-only classic failsafes
+> untouched). Guards re-anchored + extended in `home-console.test.tsx` (title pin · one-mention
+> pin · attention tone pin · no-sub pin). Zero `src-tauri`. Verify: tsc 0 · vitest **1351**
+> (171 files) · self-reviewer **PASS 8/8** (live 1500×980, real rig data incl. a real attention
+> state; line contrast 16.78:1, dek 6.51:1; reduced-motion still page; no stage collision).
+> Reviewer follow-up candidate logged in BACKLOG (ShellV2 topbar's static room tagline).
+> Same session: Cowork's 2026-07-11 audit self-correction committed as-is (`e1cec74`).
+>
 > **UPDATE 2026-07-12 (EXPERT VIEW SHIPPED `5850ac0` — installer SHA-256
 > `63C3B5639673AF822F2C26C45DF0672D6AEFEC0FAD02720E54ACC4861D702233`, live exe stamp-verified
 > `5850ac0` via the embedded hash, installed by Claude, supersedes the `653FFEA0…9BADC2`
@@ -358,9 +375,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `5850ac0` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `5850ac0`) |
+| Git HEAD | `cc1ffce` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `cc1ffce`) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `63C3B5639673AF822F2C26C45DF0672D6AEFEC0FAD02720E54ACC4861D702233` (built from `5850ac0`, 2026-07-12 — **Expert view** (Q3 expert-layer train): one genuine Settings > Behavior preference `compy_expert_view`, **DEFAULT OFF** (`readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`) — pref off, the app face is byte-identical (pinned in `expert-view.test.tsx`); pref ON un-hides existing data only (refused-drawer reasoning inline · exact targets + the rollback-boundary disclaimer beside every one · true local percentiles + 1-decimal session stats · long-tail sections open), zero new mutation paths, zero `src-tauri` diff. Carries the full 2026-07-11 consumer-panel overhaul from `50b5c03` (its ship banner above; **note: this table's HEAD/installer rows had NOT been updated for that ship — drift fixed with this row**) and everything below it (Monitor v5 stack from `915e85b`, `compy_monitor_console` still **DEFAULT OFF**). Superseded installer: `653FFEA0…9BADC2` from `50b5c03`.) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `4F4DB63A9955C97B8B54F5A590066E0DC88BBDC051230EF36BDE2068FB45B931` (built from `cc1ffce`, 2026-07-12 — **Home title-header fix**: the console h1 is the room TITLE "Home"; the posture verdict + dek live in the new `.hc-verdict` body strip (once, tone-inked; guards in `home-console.test.tsx`). Carries the Expert-view train from `5850ac0` — **Expert view** (Q3 expert-layer train): one genuine Settings > Behavior preference `compy_expert_view`, **DEFAULT OFF** (`readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`) — pref off, the app face is byte-identical (pinned in `expert-view.test.tsx`); pref ON un-hides existing data only (refused-drawer reasoning inline · exact targets + the rollback-boundary disclaimer beside every one · true local percentiles + 1-decimal session stats · long-tail sections open), zero new mutation paths, zero `src-tauri` diff. Carries the full 2026-07-11 consumer-panel overhaul from `50b5c03` (its ship banner above; **note: this table's HEAD/installer rows had NOT been updated for that ship — drift fixed with this row**) and everything below it (Monitor v5 stack from `915e85b`, `compy_monitor_console` still **DEFAULT OFF**). Superseded installer: `63C3B563…D702233` from `5850ac0`.) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 

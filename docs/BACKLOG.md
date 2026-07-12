@@ -161,6 +161,30 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12b — ✅ Home title-header fix SHIPPED LIVE `cc1ffce` (the last non-gated `[ ]`); Cowork audit correction committed
+
+**Resume found no open train; the one non-gated `[ ]` was the Cycle 2026-07-11e flagged
+title-header violation** — HomeConsole's h1 rendered postureLine's status sentence. Shipped
+`cc1ffce`: h1 = eyebrow + "Home" (title only, sub line gone from the header); the posture
+verdict + trimmed dek relocate to the new `.hc-verdict` body strip above the stage
+(postureLine's real output rendered exactly ONCE — one-mention law; attention state inks warn,
+agreeing with the LED; strip joins the mount stagger). Scoped like the rooms' `626b83c` sweep
+(live face only; HomeHud/HomeV2 devtools-only failsafes untouched). Guards re-anchored +
+extended in `home-console.test.tsx` (title pin · one-mention pin · attention tone pin · no-sub
+pin). Verify: tsc 0 · vitest **1351** (171 files) · zero src-tauri · self-reviewer **PASS 8/8**
+(live 1500×980, REAL rig data incl. a real attention state; contrast 16.78:1 / 6.51:1;
+reduced-motion still; no stage collision). Ship: installer `4F4DB63A…FB45B931`,
+silent-reinstalled, **stamp-verified `cc1ffce` live**, one installer on the Desktop.
+Also this session: **Cowork's 2026-07-11 audit self-correction committed as-is (`e1cec74`)** —
+its uncommitted rewrite disclosing the partly-fabricated round-1 sections + the real re-run;
+committed isolated so it can't be swept into an unrelated train.
+**Open out of this cycle:**
+- [ ] Flagged, pre-existing (self-reviewer finding, NOT this diff): the ShellV2 topbar's static
+  per-room tagline (`ROOM_CRUMB`, `src/design/ShellV2.tsx:19` — e.g. "Home · how your PC is
+  doing") sits directly above the room header and reads like the standing-descriptive-line
+  class the title-header law targets — needs an owner-taste read (topbar chrome vs header
+  space) before any sweep; don't silently delete.
+
 ### Cycle 2026-07-12a — ✅ dist-site staleness bug→guard + Q3 expert-layer GO filed
 
 **Cowork audit 2026-07-11 relayed two items; both landed.** (1) The gitignored deploy staging tree
@@ -209,8 +233,9 @@ Desktop. Verify: tsc 0 · vitest **1322** (167 files) · site-landing 15/15.
   Monitor v5 owner eyeball settles (sequencing note in the plan).
 - [ ] ⏳ OWNER eyeball of this train's visible changes (Home/Lab gauge notes + glosses, Settings
   slimmed to one preview row, calm recovery banner, site hero) on the live `50b5c03` build.
-- [ ] Flagged, pre-existing (NOT this train's diff): Home's h1 renders postureLine's status
-  sentence ("N thing(s) need your attention") — reads against the title-header law; separate pass.
+- [x] ~~Flagged, pre-existing (NOT this train's diff): Home's h1 renders postureLine's status
+  sentence ("N thing(s) need your attention") — reads against the title-header law; separate
+  pass.~~ → ✅ **SHIPPED `cc1ffce` 2026-07-12** (Cycle 2026-07-12b).
 
 ### Cycle 2026-07-11d — ✅ MONITOR v5 "FLIGHT DECK + SESSION STACK" BUILT + SHIPPED `960734c` (flag OFF) — owner eyeball = the open gate
 
