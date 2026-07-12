@@ -190,6 +190,19 @@ Desktop. Verify: tsc 0 · vitest 1305 (165 files) · cargo 688. Flag `compy_moni
   `oscilloscope.test.tsx`. tsc 0 · vitest 1307 · self-reviewer PASS 8/8. Same session,
   `a4c95df`: RELEASE_STATE Snapshot table caught up to the live-installer chain (was two
   installers stale; drift script 36/36).
+- **Owner round-2 ask on the eyeball ("make the lines not so tightly packed and erratic
+  without … taking away from the accuracy … transient spikes … overbearing and chaotic") →
+  scope ENVELOPE mode SHIPPED `e02d1ad`** (installer `0AA8E222…F21A55`, stamp-verified live):
+  dense ≥120-sample frametime windows draw a faint min–max band (per-bucket TRUE extremes,
+  nothing hidden) + a monotone MEDIAN line (shared Fritsch–Carlson extracted to
+  `src/design/console/monotone.ts`, SessionStack refactored onto it); spikes/scrub/worst-
+  callout stay raw-exact; zoom <120 samples returns the raw polyline; caption states "line =
+  typical · band = every frame"; fps scope deliberately raw. Self-review round 1 **FAIL**
+  (real catch: the median `<path>` escaped the non-scaling-stroke selector — rendered fat,
+  the exact f2acb23 class) → fixed + the line-discipline guard strengthened to selector
+  coverage of line/polyline/path → round 2 **PASS** (computed vectorEffect + side-by-side
+  stroke-weight proof, live real-density mount). tsc 0 · vitest **1311** · envelope guards
+  (truth-table · dense⇒band+path+note · sparse⇒raw · no-prop⇒raw).
 - **⏳ GATE: owner eyeball of v5** — Settings → Appearance → "Monitor console (preview)", both
   modes; the stack half shines with his real 5-session history on screen. Phase 4 (Blackbook
   console) still queues behind this verdict.
