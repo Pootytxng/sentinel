@@ -4,7 +4,7 @@
 > item; Zero-Budget Law §6 — nothing requiring an account or a dollar; placeholders + single-
 > constant swap points instead). Protocol = R1/R2 precedent (`AUTONOMOUS_SPRINT_2026-06-11*.md`):
 > per item build → verify → commit → push; /check + /security per lane; running log + owner
-> Review Queue in `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-12-R3.md` (CC creates).
+> Review Queue in `docs/archive/AUTONOMOUS_SPRINT_2026-06-12-R3.md` (CC creates).
 > Owner mandate: longest run yet, maximum doctrine progress, all reversible.
 
 ## §1 GLOBAL HARD LINES (any item that can't fit them → Review Queue, skip, continue)

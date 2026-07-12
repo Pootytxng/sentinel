@@ -223,7 +223,7 @@
 > - **🌙 Overnight sweep (2026-06-20):** +117 unit tests (5 TS pure-logic modules + hardware.rs parsers +
 >   dismissed), clippy `manual_range_contains` fix, a11y fixes (onboarding/gaming-modal/Settings/Fix),
 >   honesty audit **Grade A**, Check header clarity. Spec `docs/superpowers/specs/2026-06-20-retire-
->   classic-surfaces.md` (DRAFT, owner review — NOT executed). Log: `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-20.md`.
+>   classic-surfaces.md` (DRAFT, owner review — NOT executed). Log: `docs/archive/AUTONOMOUS_SPRINT_2026-06-20.md`.
 > - **Installer:** owner-clarity rebuild from `cb7b668` on the owner's Desktop —
 >   `Compy_0.1.0_x64-setup.exe` SHA-256 `C5B6ED77F2EDDF6015E6729D7DE4BC4FE254C67F3286A07D142F9534772DB4A1`
 >   (3,169,847 B); installed + running. SUPERSEDES earlier kits for owner-clarity (beta-kit/ untouched).
@@ -392,7 +392,7 @@
 
 > **🧪 AUTONOMOUS IMPROVEMENT SPRINT — 2026-06-10 (`main` @ `d51f6f0`+).** Owner-mandated broad
 > reversible sprint; full running log + ranked owner-deferred list in
-> `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-10.md`. Landed (all green, each pushed): design-law sweep
+> `docs/archive/AUTONOMOUS_SPRINT_2026-06-10.md`. Landed (all green, each pushed): design-law sweep
 > (zero violations); **hardening** — `gpuRunningHot` 14-day recency window + `measureTuning`
 > zero-session honesty (`4d01be9`), receipt-title cap at the webview boundary (`2ab405d`); **a11y** —
 > dialog semantics on the 3 content modals (`19c4fbb`); **perf** — `AmbientBackdrop` stops polling

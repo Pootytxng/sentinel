@@ -67,7 +67,7 @@ that is reversible and non-taste.
   `cargo clippy -- -D warnings` · `tsc` · `vite build` · then `/check` + `/security` on the phase.
   Suites must stay **≥ current green (cargo 329 · npm 298)** — never regress.
 - **Commit per logical unit** (small, reversible, additive); push to `main`; frozen refs untouched.
-- **Log** to `docs/superpowers/AUTONOMOUS_SPRINT_2026-06-12-R5.md` (use next free R-number if R5
+- **Log** to `docs/archive/AUTONOMOUS_SPRINT_2026-06-12-R5.md` (use next free R-number if R5
   collides): per lane → what/why · commit hashes · one verify line · what the owner must
   eyeball/decide.
 - **Close each lane with a 6-line COUNCIL STRIP** (Contrarian / First-Principles / Expansionist /
