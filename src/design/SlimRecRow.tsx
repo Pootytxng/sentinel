@@ -57,6 +57,7 @@ export function SlimDetailRow({ k, v }: { k: string; v: ReactNode }) {
 export function SlimRecRow({
   title,
   proof,
+  meta,
   badge,
   status,
   control,
@@ -66,6 +67,8 @@ export function SlimRecRow({
   title: ReactNode;
   /** The ONE measured proof line — always visible, never empty (slim-row-proof-guard). */
   proof: string;
+  /** Optional extra always-visible line under the proof (Expert view's exact-target line). */
+  meta?: ReactNode;
   badge: SlimRowBadge;
   status: SlimRowStatus;
   /** The row's single control (Fix passes the existing TrustSwitch — semantics unchanged). */
@@ -88,6 +91,7 @@ export function SlimRecRow({
           <span className="slimrow-main">
             <span className="slimrow-title">{title}</span>
             <span className="slimrow-proof">{proof}</span>
+            {meta}
           </span>
           <span className={`slimrow-badge slimrow-badge-${badge}`}>{BADGE_LABEL[badge]}</span>
           <Chevron />

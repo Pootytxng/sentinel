@@ -10,6 +10,8 @@ import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
+import { expertTarget, EXPERT_TARGET_DISCLAIMER } from "../data/expert-targets";
+import { useExpertView } from "../design/use-expert-view";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
 import { recMutation } from "../data/rec-mutations";
 import { slimProofLine } from "../data/slim-proof";
@@ -50,6 +52,22 @@ function RecTitle({ id, title }: { id: string; title: string }) {
 function RecReason({ id, text }: { id: string; text: string }) {
   if (livingOn() && friendlyLabel(id)) return null;
   return <p className="fix-row-reason">{text}</p>;
+}
+
+// Expert view (spec 2026-07-11-expert-layer-middle-ground §1): the exact registry key / service /
+// setting a tweak touches, inline on the row — display-only, transcribed from the apply source
+// (expert-targets.ts). SHIP CONDITION: the one-line rollback-boundary disclaimer renders beside
+// every inline target, always. Renders nothing when the preference is off or the id is unmapped.
+function ExpertTargetLine({ id }: { id: string }) {
+  const expert = useExpertView();
+  const t = expertTarget(id);
+  if (!expert || !t) return null;
+  return (
+    <span className="fix-expert-target">
+      <code className="fix-expert-path">{t.target}</code>
+      <span className="fix-expert-note">{EXPERT_TARGET_DISCLAIMER}</span>
+    </span>
+  );
 }
 
 // A5 measured-payoff linkage — the honest per-tweak payoff meter. Renders ONLY the backend-derived
@@ -321,6 +339,7 @@ export function SlimFixRow({
     <SlimRecRow
       title={<RecTitle id={rec.id} title={rec.title} />}
       proof={slimProofLine(rec)}
+      meta={<ExpertTargetLine id={rec.id} />}
       badge={rec.severity === "safe" ? "recommended" : "optional"}
       status={applied ? "ready" : rec.severity === "safe" ? "attention" : "neutral"}
       control={
@@ -399,7 +418,13 @@ function CollapsibleSection({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(!!defaultOpen);
+  // Expert view (spec §1/§3): the full panel renders OPEN — the refused drawer's reasoning and
+  // every long-tail section sit inline instead of behind a collapsed door. Flipping the preference
+  // re-baselines each section (open when expert, closed otherwise); the user can still toggle any
+  // section freely afterward. Presentation-only: contents and controls are identical either way.
+  const expert = useExpertView();
+  const [open, setOpen] = useState(!!defaultOpen || expert);
+  useEffect(() => setOpen(expert || !!defaultOpen), [expert, defaultOpen]);
   return (
     <section className={`fix-group ${tint ? `fix-group-${tint}` : ""}`}>
       <button className="fix-group-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -578,6 +603,7 @@ function GuidedRow({
           <span className="fix-guided-tag">Guided</span>
         </div>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
+        <ExpertTargetLine id={rec.id} />
         <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
           Not for me
         </button>

@@ -4,6 +4,7 @@ import Check from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import { useReducedMotion } from "../../design/use-motion";
+import { useExpertView } from "../../design/use-expert-view";
 import { useCountTo } from "./use-count-to";
 import type {
   Recommendation,
@@ -65,6 +66,12 @@ export function OptimizeStation(props: LabFastPathProps) {
   // Lab tab never spins up its session-state poll while the bay sits collapsed (the perf rails).
   const [powerOpen, setPowerOpen] = useState(false);
   const reduced = useReducedMotion();
+  // Expert view (spec §3 — stop de-emphasizing the long tail): the station's ledger + cleanup
+  // disclosures render OPEN so the full panel sits inline. `open={true}` only re-asserts on pref
+  // transitions (React diffs its own vdom), so the user can still fold either one afterward. The
+  // Power-features bay deliberately stays collapsed: it's a mode door with a lazy-mount polling
+  // cost, not de-emphasized long-tail data.
+  const expert = useExpertView();
 
   // Data-reactive hero gauge (Task 4) — bound to a REAL measured number: how much of THIS rig's
   // safe, one-click stack is already applied. The stack = safe-tier, eligible, appliable recs; the
@@ -171,7 +178,7 @@ export function OptimizeStation(props: LabFastPathProps) {
           ledger surface the classic room's "Applied" segment rendered (Fix view="ledger": active
           changes with per-row undo + the full history), one disclosure below the toggles it
           records. Zero new IPC; rollback resolves from history.json alone, same as everywhere. */}
-      <details className="lab-optimize-more lab-optimize-ledger">
+      <details className="lab-optimize-more lab-optimize-ledger" open={expert || undefined}>
         <summary className="lab-optimize-more-summary">Applied &amp; history — every change, undoable</summary>
         <div className="lab-optimize-more-body">
           <Fix
@@ -197,7 +204,7 @@ export function OptimizeStation(props: LabFastPathProps) {
           apps, past tweaks, driver freshness — lives one disclosure away so it never crowds the
           hero. Same audited apply path inside; read-only where it advises. (The ARMED telemetry-task
           disable — the "bloat" of §5 — already lives in the fixes surface above.) */}
-      <details className="lab-optimize-more">
+      <details className="lab-optimize-more" open={expert || undefined}>
         <summary className="lab-optimize-more-summary">More cleanup (optional)</summary>
         <div className="lab-optimize-more-body">
           <Check

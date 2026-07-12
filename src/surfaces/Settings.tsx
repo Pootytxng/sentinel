@@ -18,6 +18,7 @@ import {
 import { Wordmark } from "../design/Wordmark";
 import { BackButton, ForwardButton } from "../design/BackButton";
 import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-motion";
+import { readExpertView, setExpertView } from "../design/use-expert-view";
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
 import "./Settings.css";
@@ -118,6 +119,7 @@ export default function Settings({
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [motion, setMotion] = useState<MotionPref>(readMotionPref);
+  const [expertView, setExpertViewState] = useState<boolean>(readExpertView);
   // §C build stamp (spec 2026-06-12): compile-time provenance from the backend — review hygiene.
   const [buildStamp, setBuildStamp] = useState<string | null>(null);
   useEffect(() => {
@@ -137,6 +139,15 @@ export default function Settings({
   const changeMotion = (p: MotionPref) => {
     setMotion(p);
     setMotionPref(p); // persists, updates <html data-motion>, and notifies live listeners
+  };
+
+  // Expert view — a genuine preference like Motion, NOT a preview flag (spec
+  // 2026-07-11-expert-layer-middle-ground, owner GO 2026-07-12). Presentation-only: it un-hides
+  // data Compy already has (refused reasoning, exact targets, true percentiles); zero mutation
+  // paths change and the barred-refusal tier stays barred either way.
+  const changeExpertView = (v: boolean) => {
+    setExpertViewState(v);
+    setExpertView(v); // persists + notifies mounted surfaces live
   };
 
   // Monitor console preview (Phase 3 of the Console HUD, DEFAULT OFF the whole phase) — the
@@ -280,6 +291,18 @@ export default function Settings({
                 </button>
               ))}
             </div>
+          </div>
+          <div className="set-row">
+            <div className="set-row-text">
+              <div className="set-row-title">Expert view</div>
+              <div className="set-row-sub">
+                For tinkerers: shows every tweak's technical name and the exact registry key,
+                service, or setting it touches, opens the "deliberately refused" list with full
+                reasoning, and swaps rounded stats for raw measured values. Same tweaks, same
+                safety rails — nothing new becomes appliable.
+              </div>
+            </div>
+            <Toggle on={expertView} onChange={changeExpertView} ariaLabel="Expert view" />
           </div>
           <div className="set-row">
             <div className="set-row-text">

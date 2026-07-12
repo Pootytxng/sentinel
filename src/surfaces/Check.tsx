@@ -10,6 +10,7 @@ import { tuningGuideForVendor } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
+import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import "./Check.css";
@@ -143,13 +144,21 @@ export default function Check({
   const { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun } =
     useScan({ cache: true });
   const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [fineOpen, setFineOpen] = useState(false);
+  // Expert view (spec 2026-07-11-expert-layer-middle-ground §3): the "measured fine" and "not worth
+  // touching" piles render open — the long tail stops being de-emphasized. Flipping the preference
+  // re-baselines both; the user can still fold either afterward. Presentation-only.
+  const expert = useExpertView();
+  const [fineOpen, setFineOpen] = useState(expert);
   // Post-scan, the full per-check row list collapses behind a quiet toggle (the confidence chips carry
   // the summary; the actionable items render in the verdict below) — keeps the settled tab neat.
   const [showAllChecks, setShowAllChecks] = useState(false);
   // "Not worth touching" (the refusal pile) is secondary noise — collapse it by default like the
   // "measured fine" pile, so the settled tab leads with what's actionable.
-  const [notWorthOpen, setNotWorthOpen] = useState(false);
+  const [notWorthOpen, setNotWorthOpen] = useState(expert);
+  useEffect(() => {
+    setFineOpen(expert);
+    setNotWorthOpen(expert);
+  }, [expert]);
   const confirm = useConfirm();
 
   const linkedRec = (lim: PriorityItem) => {

@@ -15,6 +15,7 @@ import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
+import { useExpertView } from "../design/use-expert-view";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
 // (halfway-home §1, owner-greenlit). Locked copy unchanged. Styles are global (App.css / arc).
@@ -59,8 +60,11 @@ function ComparisonCard({
   const isMeasured =
     r.verdict === "no-change" || r.verdict === "improved" || r.verdict === "regressed";
   // Show the delta in both units — FPS (what you feel) and % (what the noise floor is in).
-  const dAvgFps = Math.round(r.after_avg_fps - r.baseline_avg_fps);
-  const dLowFps = Math.round(r.after_low1_fps - r.baseline_low1_fps);
+  // Expert view (spec §2): the raw measured delta at 1 decimal instead of the whole-FPS rounding.
+  const expert = useExpertView();
+  const dFps = (d: number) => (expert ? Number(d.toFixed(1)) : Math.round(d));
+  const dAvgFps = dFps(r.after_avg_fps - r.baseline_avg_fps);
+  const dLowFps = dFps(r.after_low1_fps - r.baseline_low1_fps);
   const deltaLine = `Δ avg ${sign(dAvgFps)} FPS (${sign(r.delta_avg_pct)}%) · 1% low ${sign(
     dLowFps,
   )} FPS (${sign(r.delta_low1_pct)}%) — ${
@@ -219,6 +223,10 @@ export function SessionDebrief({
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [reverting, setReverting] = useState(false);
   const confirm = useConfirm();
+  // Expert view (spec §2): the tiles show the raw measured value at 1 decimal instead of the
+  // whole-FPS rounding. Same SessionSummary fields, display precision only.
+  const expert = useExpertView();
+  const fmtFps = (n: number) => n.toFixed(expert ? 1 : 0);
   // Honesty gate (LOCKED rule #5): NVIDIA GPU temp comes from NVML — implemented, NOT hardware-verified
   // — so it's never graded authoritatively. Routed through the shared gpu-sensor helper (one source,
   // can't drift) — same gate Play + the Home/Monitoring surfaces use.
@@ -296,12 +304,12 @@ export function SessionDebrief({
       <div className="debrief-tiles">
         <DebriefTile
           label={<Term id="hz-vs-fps">Avg FPS</Term>}
-          value={s.avg_fps.toFixed(0)}
+          value={fmtFps(s.avg_fps)}
           grade={gradeFps(s.avg_fps, { refreshHz: readDisplayRefreshHz() })}
         />
         <DebriefTile
           label={<Term id="one-percent-lows">1% low</Term>}
-          value={s.low1_fps_est.toFixed(0)}
+          value={fmtFps(s.low1_fps_est)}
           note="estimate"
           grade={gradeLow1(s.low1_fps_est, s.avg_fps)}
         />

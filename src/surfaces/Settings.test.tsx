@@ -49,6 +49,20 @@ describe("Settings", () => {
     expect(screen.getByText(/living motion is on by default/i)).toBeInTheDocument();
   });
 
+  it("Expert view is a genuine preference — present, default OFF, persists on toggle", () => {
+    render(<Settings {...baseProps} />);
+    const toggle = screen.getByRole("switch", { name: "Expert view" });
+    // Default OFF: the default face stays the recovering-skeptic's simple one (spec 2026-07-11).
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    // Honest copy: says what it reveals AND that nothing new becomes appliable.
+    expect(screen.getByText(/nothing new becomes appliable/)).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(localStorage.getItem("compy_expert_view")).toBe("1");
+    fireEvent.click(toggle);
+    expect(localStorage.getItem("compy_expert_view")).toBe("0");
+  });
+
   it("Done calls onClose", () => {
     const onClose = vi.fn();
     render(<Settings {...baseProps} onClose={onClose} />);

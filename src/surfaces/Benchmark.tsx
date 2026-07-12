@@ -16,7 +16,9 @@ import {
   trialReasonText,
   benchRigTier,
   fmtLocalWinTopPct,
+  fmtLocalWinPercentile,
 } from "./benchmark-view";
+import { useExpertView } from "../design/use-expert-view";
 import { readTwoFutures } from "../design/theme";
 import { TwoFutures } from "./TwoFutures";
 import type { HardwareInfo } from "../App";
@@ -48,6 +50,9 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   );
   // Award drill-down: which award's full certified receipt is expanded (its list key, or null).
   const [openAward, setOpenAward] = useState<string | null>(null);
+  // Expert view (spec 2026-07-11-expert-layer-middle-ground §2): the receipt shows the TRUE local
+  // percentile instead of the rounded "Top N%" bucket. Same already-computed value, display only.
+  const expert = useExpertView();
   // A2 hardware-tier segmentation — the rough, transparent rig class (Entry/Mid/High) the
   // measurements are read against. Reuses the canonical rig-tier bands; LOCAL only, no cohort.
   const [rigTier, setRigTier] = useState<ReturnType<typeof benchRigTier>>(null);
@@ -522,7 +527,10 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
                 const open = openAward === key;
                 // A2 LOCAL percentile stub — this win's standing among the user's OWN wins (no
                 // peer cohort yet). Defensive read so a missing/stale field never throws.
-                const localTopPct = fmtLocalWinTopPct(score.local_percentiles?.[i]);
+                // Expert view swaps the rounded "Top N%" bucket for the true percentile (§2).
+                const localTopPct = expert
+                  ? fmtLocalWinPercentile(score.local_percentiles?.[i])
+                  : fmtLocalWinTopPct(score.local_percentiles?.[i]);
                 return (
                   <li key={key} className="bench-award">
                     <button

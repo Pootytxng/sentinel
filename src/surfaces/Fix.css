@@ -120,6 +120,30 @@
   color: var(--ix-text-2);
   line-height: 1.5;
 }
+/* Expert-view exact-target line (spec 2026-07-11 §1): the registry key / service / setting a tweak
+   touches, mono and quiet, with the one-line rollback-boundary disclaimer always beside it (ship
+   condition). Renders inside both slim rows (within the row-toggle button) and guided rows; long
+   registry paths wrap instead of forcing horizontal scroll. */
+.fix-expert-target {
+  display: block;
+  margin-top: 4px;
+  min-width: 0;
+  line-height: 1.45;
+  text-align: left;
+}
+.fix-expert-path {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ix-text-2);
+  overflow-wrap: anywhere;
+}
+.fix-expert-note {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ix-text-3);
+  font-style: italic;
+}
 /* A5 payoff meter — a quiet advisory chip naming the KIND of gain a change targets (never a
    fabricated number). Deliberately muted/outline, NOT an accent fill: it's advisory, not a CTA. */
 .fix-payoff {

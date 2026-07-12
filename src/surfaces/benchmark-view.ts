@@ -105,3 +105,13 @@ export function fmtLocalWinTopPct(percentile: number | null | undefined): string
   const top = Math.min(100, Math.max(1, Math.round(100 - percentile)));
   return `Top ${top}% of your verified wins`;
 }
+
+/**
+ * Expert-view variant (spec 2026-07-11-expert-layer-middle-ground §2): the TRUE percentile, not
+ * the rounded "top N%" bucket. Same input contract and null-guards as fmtLocalWinTopPct; no
+ * clamping — the raw number IS the point. Display-only over the already-computed value.
+ */
+export function fmtLocalWinPercentile(percentile: number | null | undefined): string | null {
+  if (percentile == null || !Number.isFinite(percentile)) return null;
+  return `Percentile ${percentile.toFixed(1)} of your verified wins (top ${(100 - percentile).toFixed(1)}%)`;
+}

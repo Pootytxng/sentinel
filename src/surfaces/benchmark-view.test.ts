@@ -9,6 +9,7 @@ import {
   trialReasonText,
   benchRigTier,
   fmtLocalWinTopPct,
+  fmtLocalWinPercentile,
 } from "./benchmark-view";
 import type { TrialVerdict } from "../types";
 
@@ -128,5 +129,24 @@ describe("fmtLocalWinTopPct (A2 LOCAL percentile stub)", () => {
   it("clamps the boundaries to 1..=100 (never 'top 0%')", () => {
     expect(fmtLocalWinTopPct(100)).toBe("Top 1% of your verified wins");
     expect(fmtLocalWinTopPct(0)).toBe("Top 100% of your verified wins");
+  });
+});
+
+describe("fmtLocalWinPercentile (Expert view §2 — the true percentile, unrounded)", () => {
+  it("shows nothing when there's no rankable percentile yet (same guards as the bucketed form)", () => {
+    expect(fmtLocalWinPercentile(null)).toBeNull();
+    expect(fmtLocalWinPercentile(undefined)).toBeNull();
+    expect(fmtLocalWinPercentile(NaN)).toBeNull();
+    expect(fmtLocalWinPercentile(Infinity)).toBeNull();
+  });
+
+  it("renders the raw percentile at 1 decimal — no clamping, no bucketing", () => {
+    expect(fmtLocalWinPercentile(87.5)).toBe(
+      "Percentile 87.5 of your verified wins (top 12.5%)",
+    );
+    expect(fmtLocalWinPercentile(50)).toBe("Percentile 50.0 of your verified wins (top 50.0%)");
+    // The boundaries stay honest raw values (fmtLocalWinTopPct clamps these to 1/100).
+    expect(fmtLocalWinPercentile(100)).toBe("Percentile 100.0 of your verified wins (top 0.0%)");
+    expect(fmtLocalWinPercentile(0)).toBe("Percentile 0.0 of your verified wins (top 100.0%)");
   });
 });
