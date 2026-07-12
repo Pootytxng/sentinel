@@ -161,6 +161,25 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12a — ✅ dist-site staleness bug→guard + Q3 expert-layer GO filed
+
+**Cowork audit 2026-07-11 relayed two items; both landed.** (1) The gitignored deploy staging tree
+`dist-site/` still claimed "174 entries" while the library holds **191** (84 tweaks · 85 terms ·
+14 tricks · 8 guides — `loadLibrary()` verified) — root cause: staging was a manual, undocumented
+copy. Fix = `scripts/stage-dist-site.mjs` (`npm run stage:site` — regenerates from live data, clean
+rm+mirror of site/ minus tooling + functions/; deploy stays owner-gated). bug→guard:
+`scripts/dist-site-staleness-guard.test.mjs` (Guard A: every committed site/ page's stated count ==
+data count · Guard B: dist-site, when present, is a byte-exact complete mirror — **red proven on
+the stale 174 tree, green after staging**). The committed `site/` tree was already correct at 191;
+only the staging artifact had drifted. (2) Q3 expert-layer spec **GO** + added ship condition
+recorded (spec Status block + the row below).
+**Open out of this cycle:**
+- [ ] **BUILD: Expert-view scoped train** — `docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md`
+  (opt-in Settings preference, default OFF, presentation-only over existing data, non-LOCKED only).
+  **Must ship with the added condition:** wherever the exact registry key/service/setting renders
+  inline, a one-line disclaimer sits beside it — edits made outside Compy aren't tracked and can't
+  be rolled back by Compy. Standard self-review gate; no mutation-boundary diff expected.
+
 ### Cycle 2026-07-11e — ✅ CONSUMER-PANEL OVERHAUL BUILT + SHIPPED `50b5c03` — Q3 expert-layer proposal = the open owner gate
 
 **The five-persona panel plan ran end to end** (`docs/superpowers/plans/2026-07-11-consumer-panel-overhaul.md`
@@ -176,9 +195,9 @@ fixed + guard-pinned (`term-style-guard.test.ts`) → round 2 **PASS**. Ship: in
 `653FFEA0…9BADC2`, silent-reinstalled, **stamp-verified `50b5c03` live**, one installer on the
 Desktop. Verify: tsc 0 · vitest **1322** (167 files) · site-landing 15/15.
 **Open gates out of this cycle:**
-- [ ] ⏳ OWNER: Q3 expert-layer middle ground — GO / adjust / park on
-  `docs/superpowers/specs/2026-07-11-expert-layer-middle-ground.md` (opt-in "Expert view"
-  preference; non-LOCKED only). Not built without the GO.
+- [x] ✅ Q3 expert-layer middle ground — **GO (2026-07-12**, source-verified by the Cowork audit;
+  verdict + one added ship condition recorded in the spec's Status block). Build row lives in
+  Cycle 2026-07-12a.
 - [ ] Monitor-surface jargon glosses (deferred bucket) — land as a small follow-up AFTER the
   Monitor v5 owner eyeball settles (sequencing note in the plan).
 - [ ] ⏳ OWNER eyeball of this train's visible changes (Home/Lab gauge notes + glosses, Settings

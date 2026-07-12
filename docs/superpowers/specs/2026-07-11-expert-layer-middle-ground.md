@@ -3,7 +3,18 @@
 > Owner's Q3 answer (2026-07-11): *"research into this to find the best middle ground to appease the
 > largest consumer interest range. definitely finding a way to allow for the tinkerer to have their
 > full panel of tweaks to fuel their junky cravings if they so choose."*
-> Status: **PROPOSAL — awaiting owner go/no-go.** Nothing here is built. Hard boundary throughout:
+> Status: **GO (2026-07-12) — verified against source, one added ship condition.** The verification
+> confirmed the central claim is real, not aspirational: `local_percentiles`, `friendly-labels.ts`,
+> `export_report`, and the catalog's reasoning fields all exist (the "why" name below is a loose
+> paraphrase of the catalog's description/impact/downside fields, not a literal field — the substance
+> holds), and the live "Deliberately refused" drawer already carries a one-line reason per item plus
+> an autopsy link, so §1's "default-open" framing is accurate.
+> **ADDED CONDITION (must ship with §1's inline targets):** wherever Expert view shows the exact
+> registry key / service / setting inline, a one-line disclaimer sits next to it — **edits made
+> outside Compy aren't tracked and can't be rolled back by Compy.** Showing the raw target is new
+> information exposure even with zero new mutation paths; the honest boundary must ship with it.
+> Builds as its own scoped train (not part of the closed consumer-panel marathon). Nothing built yet.
+> Hard boundary throughout:
 > the tinkerer's "full panel" spans **non-LOCKED items only** — no override on the barred-refusal
 > tier, no kernel driver / CPU temp (both stay in the plan's "Reopened" owner conversation).
 
