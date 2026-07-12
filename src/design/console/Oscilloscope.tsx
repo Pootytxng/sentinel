@@ -1,5 +1,4 @@
 import type { ArcTone } from "./ArcGauge";
-import { monotonePathD } from "./monotone";
 import "./oscilloscope.css";
 
 // Console kit — Oscilloscope (plan 2026-07-10-console-hud-phase3-monitor Task 2; v3 upgrade per
@@ -24,41 +23,21 @@ const PAD = 6;
 const GRID_X = Array.from({ length: 7 }, (_, i) => ((i + 1) / 8) * W);
 const GRID_Y = Array.from({ length: 3 }, (_, i) => ((i + 1) / 4) * H);
 
-// Envelope mode (owner ask 2026-07-11: the raw per-frame sawtooth reads "overbearing and
-// chaotic" — calm the ink WITHOUT losing measurement accuracy). Dense windows draw as a faint
-// min–max band (the TRUE per-bucket extremes of every frame — nothing clipped, nothing hidden)
-// under a monotone median line (the typical frame — a real statistic, never a synthetic
-// signal). Spike markers, the worst-spike callout, and the caller's scrub stay RAW per-sample —
-// exact moments, exact values. Below ENVELOPE_MIN samples (e.g. zoomed in) the raw polyline
-// returns: detail on demand, calm at a glance.
-export const ENVELOPE_BUCKETS = 60;
-export const ENVELOPE_MIN = ENVELOPE_BUCKETS * 2;
+// Zero-anchored scale (owner direction 2026-07-11, after rejecting an envelope/median attempt:
+// "go do some research on some clean and comprehensive looking frametime graphs or just match
+// riva tuners"). RTSS and CapFrameX draw frametimes against a STABLE ms scale anchored at 0
+// (RTSS "graph max"; CapFrameX fixed y-axis range) — a smooth game is a calm, near-flat line
+// low on the chart and a real spike towers against it. Window-min/max normalization (the old
+// default, still used for fps) was the "erratic" root cause: it stretched a few ms of ordinary
+// jitter to the full chart height. The line stays RAW per-frame — accuracy untouched; only the
+// y mapping changes. Nice caps step through frame-budget landmarks so the scale doesn't jitter
+// frame-to-frame.
+const NICE_CAPS = [8.3, 16.7, 25, 33.3, 50, 100, 250];
 
-/** Per-bucket profile of a dense window (pure, exported for tests): representative raw index
- *  (bucket center) + the bucket's TRUE min / max / median. */
-export function envelopeProfile(
-  win: number[],
-  buckets = ENVELOPE_BUCKETS,
-): { i: number; min: number; max: number; med: number }[] {
-  if (win.length === 0) return [];
-  const n = Math.min(buckets, win.length);
-  const groups: number[][] = Array.from({ length: n }, () => []);
-  const first: number[] = Array.from({ length: n }, () => -1);
-  const last: number[] = Array.from({ length: n }, () => -1);
-  win.forEach((v, i) => {
-    const b = Math.min(n - 1, Math.floor((i * n) / win.length));
-    groups[b].push(v);
-    if (first[b] < 0) first[b] = i;
-    last[b] = i;
-  });
-  return groups
-    .map((g, b) => {
-      if (g.length === 0) return null;
-      const s = [...g].sort((a, z) => a - z);
-      const med = s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
-      return { i: (first[b] + last[b]) / 2, min: s[0], max: s[s.length - 1], med };
-    })
-    .filter((p): p is { i: number; min: number; max: number; med: number } => p != null);
+/** Smallest stable "nice" ms cap that contains the window's max (and the budget line). */
+export function niceCap(needed: number): number {
+  for (const c of NICE_CAPS) if (needed <= c) return c;
+  return Math.ceil(needed / 100) * 100;
 }
 
 /** Exact-moment spike detection (pure, exported for tests): indices of samples that are both
@@ -84,7 +63,7 @@ export function Oscilloscope({
   reduced,
   budget,
   spikes = false,
-  envelope = false,
+  scale = "window",
   scrub = null,
   sel = null,
   stageProps,
@@ -101,9 +80,10 @@ export function Oscilloscope({
   budget?: number;
   /** Mark exact-moment spikes (>= 2× window median AND >= budget) + worst-spike ms callout. */
   spikes?: boolean;
-  /** Dense windows (>= ENVELOPE_MIN samples) draw the min–max band + median line instead of
-   *  the raw per-frame polyline; sparser windows (e.g. zoomed) fall back to raw. */
-  envelope?: boolean;
+  /** y mapping: "window" normalizes to the window's own min–max (fps-style relative trace);
+   *  "zero" anchors at 0 with a stable niceCap ms scale + labeled gridlines — the RTSS/
+   *  CapFrameX frametime convention (smooth = flat and low, spikes tower). */
+  scale?: "window" | "zero";
   /** Scrub crosshair at this x-fraction of the drawn window (snaps to the nearest REAL sample);
    *  the CALLER owns the readout — this stays a pure render. */
   scrub?: number | null;
@@ -116,37 +96,33 @@ export function Oscilloscope({
   const win = samples.length > cap ? samples.slice(-cap) : samples;
   const empty = win.length === 0;
 
-  // Normalize to the window's own span (including the budget line when given, so it always
-  // plots inside the grid); a constant window (range 0) draws mid-band — a real flat signal.
+  // y mapping. "window": normalize to the window's own span (including the budget line, so it
+  // always plots inside the grid); a constant window (range 0) draws mid-band — a real flat
+  // signal. "zero": anchor at 0 with a stable niceCap — the RTSS/CapFrameX frametime look.
   let pts = "";
   let latest: number | null = null;
   let toY: (v: number) => number = () => H / 2;
   let toX: (i: number) => number = () => 1;
   let spikeIdx: number[] = [];
   let worstIdx = -1;
-  const enveloped = envelope && win.length >= ENVELOPE_MIN;
-  let bandD = "";
-  let medD = "";
+  let msCap: number | null = null; // the zero-scale ms ceiling (stated by the caller's axis line)
+  let yTicks: number[] = [];
   if (!empty) {
-    const max = Math.max(...win, budget ?? -Infinity);
-    const min = Math.min(...win, budget ?? Infinity);
-    const range = max - min || 1;
+    const zero = scale === "zero";
+    const hi = Math.max(...win, budget ?? -Infinity);
+    const min = zero ? 0 : Math.min(...win, budget ?? Infinity);
+    if (zero) msCap = niceCap(hi);
+    const range = (zero ? (msCap as number) : hi - min) || 1;
     // Full-width law (v3): scale to the DRAWN window, never the cap — the trace always
     // reaches the right edge of the grid.
     const denom = Math.max(1, win.length - 1);
     toX = (i: number) => (i / denom) * (W - 2) + 1;
     toY = (v: number) => H - PAD - ((v - min) / range) * (H - PAD * 2);
+    pts = win.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
     latest = win[win.length - 1];
-    if (enveloped) {
-      const prof = envelopeProfile(win);
-      const f = (v: number) => v.toFixed(1);
-      bandD =
-        `M ${prof.map((p) => `${f(toX(p.i))} ${f(toY(p.max))}`).join(" L ")}` +
-        ` L ${[...prof].reverse().map((p) => `${f(toX(p.i))} ${f(toY(p.min))}`).join(" L ")} Z`;
-      medD = monotonePathD(prof.map((p) => ({ x: toX(p.i), y: toY(p.med) })));
-    } else {
-      pts = win.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-    }
+    // Value-anchored gridlines at quarter-cap steps, labeled in ms — the "comprehensive"
+    // half of the convention (a real axis, not decoration).
+    if (zero) yTicks = [1, 2, 3].map((q) => (q / 4) * (msCap as number));
     if (spikes) {
       spikeIdx = spikeIndices(win, budget);
       for (const i of spikeIdx) if (worstIdx < 0 || win[i] > win[worstIdx]) worstIdx = i;
@@ -160,7 +136,6 @@ export function Oscilloscope({
     >
       <figcaption className="osc-label">
         <span>{label}</span>
-        {enveloped && <span className="osc-envnote">line = typical · band = every frame</span>}
         {worstIdx >= 0 && (
           <span className="osc-worst">
             worst spike {Math.round(win[worstIdx])} {unit ?? ""}
@@ -183,8 +158,19 @@ export function Oscilloscope({
           {GRID_X.map((x) => (
             <line key={`x${x}`} className="osc-gridline" x1={x} y1="0" x2={x} y2={H} />
           ))}
-          {GRID_Y.map((y) => (
-            <line key={`y${y}`} className="osc-gridline" x1="0" y1={y} x2={W} y2={y} />
+          {msCap == null &&
+            GRID_Y.map((y) => (
+              <line key={`y${y}`} className="osc-gridline" x1="0" y1={y} x2={W} y2={y} />
+            ))}
+          {yTicks.map((v) => (
+            <line
+              key={`t${v}`}
+              className="osc-gridline"
+              x1="0"
+              y1={toY(v).toFixed(1)}
+              x2={W}
+              y2={toY(v).toFixed(1)}
+            />
           ))}
           {!empty && budget != null && (
             <line
@@ -195,13 +181,7 @@ export function Oscilloscope({
               y2={toY(budget).toFixed(1)}
             />
           )}
-          {!empty && enveloped && <path className="osc-band" d={bandD} />}
-          {!empty &&
-            (enveloped ? (
-              <path className="osc-trace" d={medD} fill="none" />
-            ) : (
-              <polyline className="osc-trace" points={pts} fill="none" />
-            ))}
+          {!empty && <polyline className="osc-trace" points={pts} fill="none" />}
           {!empty && sel != null && (
             <rect
               className="osc-sel"
@@ -233,6 +213,16 @@ export function Oscilloscope({
             />
           ))}
         </svg>
+        {yTicks.map((v) => (
+          <span
+            key={`yl${v}`}
+            className="osc-ylab"
+            style={{ top: `${((toY(v) / H) * 100).toFixed(1)}%` }}
+            aria-hidden="true"
+          >
+            {v.toFixed(v < 10 ? 1 : 0)}
+          </span>
+        ))}
         {empty && <span className="osc-nosignal">no signal</span>}
       </div>
     </figure>

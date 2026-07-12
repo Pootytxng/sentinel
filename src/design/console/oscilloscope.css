@@ -24,14 +24,11 @@
 :root[data-v2="on"] .osc-neutral .osc-trace { stroke: var(--ix-text-2); }
 :root[data-v2="on"] .osc-worst { font-size: 10px; letter-spacing: .06em; color: var(--v2-warn);
   font-variant-numeric: tabular-nums; }
-/* Envelope mode (dense windows): the min–max band = every real frame, faint; the trace above
-   it is the median line. Band fill follows the tone ink; no stroke, so nothing to fatten. */
-:root[data-v2="on"] .osc-band { fill: var(--ix-accent); opacity: .14; }
-:root[data-v2="on"] .osc-warn .osc-band { fill: var(--v2-warn); }
-:root[data-v2="on"] .osc-good .osc-band { fill: var(--ready); }
-:root[data-v2="on"] .osc-neutral .osc-band { fill: var(--ix-text-2); }
-:root[data-v2="on"] .osc-envnote { font-size: 9px; letter-spacing: .08em; color: var(--ix-text-3);
-  text-transform: lowercase; }
+/* Zero-scale ms tick labels (RTSS-style labeled axis): HTML spans so the stretched viewBox
+   can't distort the type; anchored to the right edge, quiet ink. */
+:root[data-v2="on"] .osc-ylab { position: absolute; right: 4px; transform: translateY(-50%);
+  font-family: var(--ix-mono); font-size: 8px; letter-spacing: .06em; color: var(--ix-text-3);
+  font-variant-numeric: tabular-nums; pointer-events: none; }
 :root[data-v2="on"] .osc-budget { stroke: var(--ix-text-3); stroke-width: .75; stroke-dasharray: 4 3; opacity: .6; }
 :root[data-v2="on"] .osc-spike { stroke: var(--v2-warn); stroke-width: 1; opacity: .8; }
 :root[data-v2="on"] .osc-spike-worst { stroke-width: 1.75; opacity: 1; }

@@ -135,10 +135,11 @@ describe("capture stop clears the zoom (c) + honest empty (d)", () => {
 });
 
 describe("the real ms axis + budget, stated plainly (e)", () => {
-  it("states the drawn window's true ms span and the rig's frame budget", () => {
+  it("states the zero-anchored ms scale and the rig's frame budget", () => {
     const { container } = mount();
     const axis = container.querySelector(".deck-axis")!;
-    expect(axis.textContent).toContain("7.0–41.0 ms window");
+    // niceCap(max(41, budget)) = 50 — the stable RTSS-style scale, stated plainly.
+    expect(axis.textContent).toContain("0–50 ms scale");
     expect(axis.textContent).toContain("budget 6.9 ms");
     // The dashed budget line itself rides the scope (same Oscilloscope contract).
     expect(container.querySelector(".osc-budget")).not.toBeNull();

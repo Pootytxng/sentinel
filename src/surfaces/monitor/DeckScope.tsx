@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Oscilloscope, spikeIndices } from "../../design/console/Oscilloscope";
+import { Oscilloscope, spikeIndices, niceCap } from "../../design/console/Oscilloscope";
 import type { ArcTone } from "../../design/console/ArcGauge";
 import { zoomWindow, type ZoomSel } from "./monitor-stack-profile";
 
@@ -114,7 +114,7 @@ export function DeckScope({
         reduced={reduced}
         budget={budget}
         spikes
-        envelope
+        scale="zero"
         scrub={!drag ? hover : null}
         sel={drag}
         stageProps={stageProps}
@@ -132,7 +132,7 @@ export function DeckScope({
         )}
         {span && (
           <span className="deck-axis">
-            {span.min.toFixed(1)}–{span.max.toFixed(1)} ms window
+            0–{niceCap(Math.max(span.max, budget ?? 0))} ms scale
             {budget != null && ` · budget ${budget.toFixed(1)} ms`}
           </span>
         )}

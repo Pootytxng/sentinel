@@ -146,61 +146,54 @@ describe("Oscilloscope — motion + ink discipline", () => {
   });
 });
 
-describe("Oscilloscope — envelope mode (owner ask 2026-07-11: calm the sawtooth, keep accuracy)", () => {
-  // A dense real-density window: full-amplitude alternation (the chaotic sawtooth) + two
-  // exact spikes. 240 samples ≥ ENVELOPE_MIN so envelope engages.
+describe('Oscilloscope — scale="zero" (owner direction 2026-07-11: match the RTSS/CapFrameX frametime convention)', () => {
+  // Real-density window: ordinary alternation + one spike. Under window-normalization the
+  // alternation stretched to full chart height (the rejected "erratic" look); zero-anchored
+  // it must hug the floor while the spike towers.
   const dense: number[] = Array.from({ length: 240 }, (_, i) => (i % 2 ? 8.4 : 5.6));
   dense[120] = 41;
-  dense[200] = 22;
 
-  it("envelopeProfile (pure): per-bucket TRUE min/max/median of real samples, no invention", async () => {
-    const { envelopeProfile, ENVELOPE_BUCKETS } = await import("./Oscilloscope");
-    const prof = envelopeProfile(dense);
-    expect(prof).toHaveLength(ENVELOPE_BUCKETS);
-    // The spike bucket keeps the spike as its TRUE max — extremes are never smoothed away.
-    const spikeBucket = prof.find((p) => p.max === 41);
-    expect(spikeBucket).toBeTruthy();
-    // A plain alternating bucket: min/max are the real alternation, median between them.
-    const calm = prof[0];
-    expect(calm.min).toBe(5.6);
-    expect(calm.max).toBe(8.4);
-    expect(calm.med).toBeGreaterThanOrEqual(5.6);
-    expect(calm.med).toBeLessThanOrEqual(8.4);
-    expect(envelopeProfile([])).toEqual([]);
+  it("niceCap (pure): smallest stable frame-budget landmark that contains the data", async () => {
+    const { niceCap } = await import("./Oscilloscope");
+    expect(niceCap(7.9)).toBe(8.3);
+    expect(niceCap(8.4)).toBe(16.7);
+    expect(niceCap(41)).toBe(50);
+    expect(niceCap(90)).toBe(100);
+    expect(niceCap(600)).toBe(600); // beyond the table: ceils to the next 100
   });
 
-  it("dense window + envelope ⇒ min–max band + median path + the honesty note; spikes stay raw-exact", () => {
-    const { container, getByText } = render(
-      <Oscilloscope samples={dense} cap={240} label="frametime" unit="ms" budget={6.9} spikes envelope reduced />,
-    );
-    expect(container.querySelector(".osc-band")).not.toBeNull();
-    const trace = container.querySelector(".osc-trace")!;
-    expect(trace.tagName.toLowerCase()).toBe("path"); // median curve, not the raw sawtooth
-    expect(getByText("line = typical · band = every frame")).toBeTruthy();
-    // Spike markers still anchor at the RAW sample's exact x (index 120 of 240).
-    const worst = container.querySelector(".osc-spike-worst")!;
-    const wx = parseFloat(worst.getAttribute("x1")!);
-    expect(Math.abs(wx - ((120 / 239) * 238 + 1))).toBeLessThan(0.2);
-    expect(getByText(/worst spike/i).textContent).toMatch(/41\s*ms/);
-  });
-
-  it("a sparse window (zoomed) falls back to the raw per-frame polyline — detail on demand", () => {
-    const { container, queryByText } = render(
-      <Oscilloscope samples={dense.slice(0, 80)} cap={240} label="frametime" envelope reduced />,
-    );
-    const trace = container.querySelector(".osc-trace")!;
-    expect(trace.tagName.toLowerCase()).toBe("polyline");
-    expect(trace.getAttribute("points")!.trim().split(/\s+/)).toHaveLength(80);
-    expect(container.querySelector(".osc-band")).toBeNull();
-    expect(queryByText(/band = every frame/)).toBeNull();
-  });
-
-  it("without the envelope prop a dense window still draws raw (opt-in, never silent)", () => {
+  it("zero scale: ordinary jitter stays low and calm, the spike towers — raw line, no smoothing", () => {
     const { container } = render(
-      <Oscilloscope samples={dense} cap={240} label="fps" reduced />,
+      <Oscilloscope samples={dense} cap={240} label="frametime" unit="ms" budget={6.9} spikes scale="zero" reduced />,
     );
+    const trace = container.querySelector(".osc-trace")!;
+    expect(trace.tagName.toLowerCase()).toBe("polyline"); // RAW per-frame — accuracy untouched
+    const pts = trace.getAttribute("points")!.trim().split(/\s+/);
+    expect(pts).toHaveLength(240);
+    // cap = niceCap(41) = 50: the 5.6–8.4 alternation spans <6% of the plot height
+    // (was 100% under window normalization) while the 41 ms spike reaches ~82% up.
+    const ys = pts.map((p) => parseFloat(p.split(",")[1]));
+    const plotH = 64 - 12; // H - 2*PAD
+    const calmAmp = Math.max(...ys.filter((_, i) => i !== 120)) - Math.min(...ys.filter((_, i) => i !== 120));
+    expect(calmAmp).toBeLessThan(plotH * 0.1);
+    expect(Math.min(...ys)).toBeLessThan(64 - 6 - plotH * 0.75); // the spike's y climbs high
+    // Spike marker still anchors at the RAW sample's exact x (index 120 of 240).
+    const worst = container.querySelector(".osc-spike-worst")!;
+    expect(Math.abs(parseFloat(worst.getAttribute("x1")!) - ((120 / 239) * 238 + 1))).toBeLessThan(0.2);
+  });
+
+  it("zero scale: labeled ms gridlines at quarter-cap steps (a real axis, not decoration)", () => {
+    const { container } = render(
+      <Oscilloscope samples={dense} cap={240} label="frametime" unit="ms" scale="zero" reduced />,
+    );
+    const labels = [...container.querySelectorAll(".osc-ylab")].map((el) => el.textContent);
+    expect(labels).toEqual(["13", "25", "38"]); // cap 50 → 12.5/25/37.5, rounded ints ≥10
+  });
+
+  it('default scale="window" is unchanged — fps traces keep the relative mapping, no ms labels', () => {
+    const { container } = render(<Oscilloscope samples={dense} cap={240} label="fps" reduced />);
     expect(container.querySelector(".osc-trace")!.tagName.toLowerCase()).toBe("polyline");
-    expect(container.querySelector(".osc-band")).toBeNull();
+    expect(container.querySelectorAll(".osc-ylab").length).toBe(0);
   });
 });
 
