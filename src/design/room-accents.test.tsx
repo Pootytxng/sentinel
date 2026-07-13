@@ -7,6 +7,7 @@ import {
   PICKABLE_ROOMS,
   defaultRoomAccent,
   isSwatchHex,
+  swatchInk,
   ROOM_IDENTITY,
   HOME_ACCENT,
   type PickableRoom,
@@ -56,18 +57,56 @@ const tokensCss = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
 const ACCENT_INK = tokensCss.match(/--v2-accent-ink:\s*(#[0-9a-fA-F]{6})/)![1];
 
 describe("room-accents: curated palette is legible + sound", () => {
-  it("every swatch clears WCAG 4.5:1 against the dark accent-ink (button-legibility law)", () => {
-    const ink = parseHex(ACCENT_INK);
+  // The button-legibility law, extended for the adaptive-ink palette (owner 2026-07-13 "bright/dark
+  // tone mixed"): every swatch must clear WCAG 4.5:1 against the ink it is actually read against —
+  // a BRIGHT swatch under the default dark ink #1a0a2e, a DARK swatch under ITS OWN paired light ink.
+  it("every swatch clears WCAG 4.5:1 against ITS effective ink (bright→dark ink, dark→paired light ink)", () => {
     for (const s of ROOM_ACCENT_SWATCHES) {
-      const ratio = contrast(ink, parseHex(s.hex));
-      expect(ratio, `${s.name} ${s.hex} on ink ${ACCENT_INK} = ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(
-        4.5,
-      );
+      const inkHex = s.ink ?? ACCENT_INK;
+      const ratio = contrast(parseHex(inkHex), parseHex(s.hex));
+      expect(
+        ratio,
+        `${s.name} ${s.hex} on ink ${inkHex} = ${ratio.toFixed(2)}`,
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
-  it("all swatches are valid 6-digit hexes and pairwise-distinct", () => {
-    for (const s of ROOM_ACCENT_SWATCHES) expect(s.hex).toMatch(/^#[0-9a-fA-F]{6}$/);
+  // The paired ink must be LOAD-BEARING, not decorative: a swatch only carries an `ink` because it is
+  // too dark for the default dark ink. This stops a bright swatch being mislabelled "dark" (which
+  // would silently give it a needless light ink) — and proves the "dark tone" ask is really present.
+  it("dark swatches (paired ink) genuinely FAIL the default dark ink — the adaptive ink is required", () => {
+    const darkInk = parseHex(ACCENT_INK);
+    const darks = ROOM_ACCENT_SWATCHES.filter((s) => s.ink);
+    expect(darks.length, "the palette must actually contain dark-tone swatches").toBeGreaterThan(0);
+    for (const s of darks) {
+      const ratio = contrast(darkInk, parseHex(s.hex));
+      expect(
+        ratio,
+        `${s.name} ${s.hex} vs #1a0a2e = ${ratio.toFixed(2)} — a paired-ink swatch must be too dark for the default ink`,
+      ).toBeLessThan(4.5);
+    }
+  });
+
+  it("bright swatches carry NO paired ink and pass the default dark ink on their own", () => {
+    const darkInk = parseHex(ACCENT_INK);
+    for (const s of ROOM_ACCENT_SWATCHES.filter((s) => !s.ink)) {
+      const ratio = contrast(darkInk, parseHex(s.hex));
+      expect(ratio, `${s.name} ${s.hex} vs #1a0a2e = ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("swatchInk() returns the paired ink for dark swatches, undefined for bright ones", () => {
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      expect(swatchInk(s.hex), s.name).toBe(s.ink ? s.ink.toLowerCase() : undefined);
+    }
+    expect(swatchInk("#000000"), "a non-swatch hex has no ink").toBeUndefined();
+  });
+
+  it("all swatches + inks are valid 6-digit hexes; swatches are pairwise-distinct", () => {
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      expect(s.hex).toMatch(/^#[0-9a-fA-F]{6}$/);
+      if (s.ink) expect(s.ink, `${s.name} ink`).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
     expect(new Set(ROOM_ACCENT_SWATCHES.map((s) => s.hex.toLowerCase())).size).toBe(
       ROOM_ACCENT_SWATCHES.length,
     );
@@ -115,6 +154,24 @@ describe("room-accents: persisted store round-trips + rejects junk", () => {
     expect(readRoomAccents().play).toBeUndefined();
   });
 
+  // watch-item → guard (self-review 2026-07-13): the reviewer once observed one room's stored pick
+  // appearing under another room during rapid probing (unreproduced). Pin the underlying invariant so
+  // it can never become real: writing/clearing ONE room's pick must leave every sibling room untouched.
+  it("setRoomAccent writes ONLY the target room — sibling picks are never mutated", () => {
+    setRoomAccent("home", "#9e1f46"); // Wine (dark)
+    setRoomAccent("learn", "#f45cc6"); // Magenta (bright)
+    setRoomAccent("play", "#4a37c4"); // Indigo — must not disturb home/learn
+    let got = readRoomAccents();
+    expect(got.home).toBe("#9e1f46");
+    expect(got.learn).toBe("#f45cc6");
+    expect(got.play).toBe("#4a37c4");
+    setRoomAccent("play", null); // clearing one leaves the others intact
+    got = readRoomAccents();
+    expect(got.play).toBeUndefined();
+    expect(got.home).toBe("#9e1f46");
+    expect(got.learn).toBe("#f45cc6");
+  });
+
   it("a non-swatch value (tampered store) is ignored — the legibility guarantee holds", () => {
     localStorage.setItem("compy_room_accents", JSON.stringify({ play: "#000000", learn: "#f0b878" }));
     const got = readRoomAccents();
@@ -143,6 +200,24 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
     expect(css).toContain("--v2-accent:#5aa9ff;");
     expect(css).toMatch(/--v2-accent-dim:color-mix\(in srgb, #5aa9ff 14%/);
     expect(css).toMatch(/--v2-accent-line:color-mix\(in srgb, #5aa9ff 25%/);
+  });
+
+  // Option B (adaptive ink, owner 2026-07-13): a DARK pick must emit its paired light ink as BOTH the
+  // token (--v2-accent-ink) and the instrument ink (--ix-accent-ink, so it reaches every accent-fill
+  // consumer even in a room that never re-pointed the ink, e.g. Home). A BRIGHT pick emits neither, so
+  // the room keeps the default dark ink #1a0a2e. This is the mechanism that keeps a dark fill legible.
+  it("a DARK pick emits the paired --v2-accent-ink AND --ix-accent-ink; a BRIGHT pick emits neither", () => {
+    setRoomAccent("play", "#4a37c4"); // Indigo (dark, ink #ece9ff)
+    let css = document.getElementById("compy-room-accents")!.textContent!;
+    expect(css).toContain("--v2-accent:#4a37c4;");
+    expect(css).toContain("--v2-accent-ink:#ece9ff;");
+    expect(css).toContain("--ix-accent-ink:#ece9ff;");
+
+    setRoomAccent("play", "#5aa9ff"); // Sky (bright) — replaces the pick, no ink override
+    css = document.getElementById("compy-room-accents")!.textContent!;
+    expect(css).toContain("--v2-accent:#5aa9ff;");
+    expect(css).not.toContain("--v2-accent-ink:");
+    expect(css).not.toContain("--ix-accent-ink:");
   });
 
   it("every generated rule header carries the [data-room-identity=\"on\"] scope", () => {

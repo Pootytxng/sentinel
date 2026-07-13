@@ -2,7 +2,7 @@
 // cosmetic. The theme drives the app accent colors via `[data-itheme]` on <html> (see
 // instrument.css). Reversible: nothing here touches logic or the backend.
 
-import { PICKABLE_ROOMS, isSwatchHex, type PickableRoom } from "./room-identity";
+import { PICKABLE_ROOMS, isSwatchHex, swatchInk, type PickableRoom } from "./room-identity";
 
 export type InstrumentTheme = "midnight" | "violet" | "crimson" | "emerald" | "hearth";
 
@@ -628,13 +628,22 @@ export function applyRoomAccents(): void {
     return;
   }
   const css = entries
-    .map(
-      ([room, hex]) =>
+    .map(([room, hex]) => {
+      // A DARK swatch carries its own light ink; emit it as BOTH the token (--v2-accent-ink, for any
+      // room whose -v2 re-point derives --ix-accent-ink from it) AND the instrument ink directly
+      // (--ix-accent-ink, so the light ink reaches every accent-fill consumer even in a room that
+      // never re-pointed the ink — e.g. Home). A BRIGHT swatch emits neither, so the room keeps the
+      // default dark ink #1a0a2e. This is what keeps a dark-tone accent legible as a filled button.
+      const ink = swatchInk(hex);
+      const inkDecls = ink ? `--v2-accent-ink:${ink};--ix-accent-ink:${ink};` : "";
+      return (
         `:root[data-room-identity="on"] .v2-room[data-room="${room}"]{` +
         `--v2-accent:${hex};` +
+        inkDecls +
         `--v2-accent-dim:color-mix(in srgb, ${hex} 14%, transparent);` +
-        `--v2-accent-line:color-mix(in srgb, ${hex} 25%, transparent);}`,
-    )
+        `--v2-accent-line:color-mix(in srgb, ${hex} 25%, transparent);}`
+      );
+    })
     .join("\n");
   if (!el) {
     el = document.createElement("style");
