@@ -366,7 +366,18 @@ parallax, reduced ⇒ still. ✅ **OWNER APPROVED 2026-07-10 ("everything looks 
 written:** `docs/superpowers/plans/2026-07-10-console-hud-phase3-monitor.md` (flag `compy_monitor_console`
 DEFAULT OFF · NEW `Oscilloscope` kit component on the real live telemetry · builds in a fresh session).
 
-**🟢 PHASE 4 (Blackbook console) — CONCEPT OUT + owner PICKED "A · The Logbook" (2026-07-12); build queued.**
+**🟢 PHASE 4 (Blackbook console) — BUILT + SHIPPED behind flag `617db5b` (2026-07-12, installer `43234A53…943D5`, stamp-verified); owner eyeball is the open gate.**
+Committed `617db5b` (`feat(blackbook): Console Phase 4 Logbook behind compy_blackbook_console DEFAULT OFF`),
+silent-reinstalled + stamp-verified live. The Logbook face renders behind `compy_blackbook_console` (DEFAULT
+OFF; Settings → Appearance → "Blackbook console (preview)"): a hairline flight-recorder tape of your
+changes/sessions/guide-checks synthesized by the pure `buildLogbook` over EXISTING data (zero new IPC/`src-tauri`),
+field guide reachable via a Logbook|Field-guide toggle, `"0"`/absent = today's Learn library byte-identical. Pure
+READ view — an active change routes to the Lab (the one undo home), zero mutations. tsc 0 · vitest 1560/175 ·
+self-reviewer round-2 PASS. **Open:** owner one-flip eyeball → default-ON or iterate (same pattern as Home/Monitor/JARVIS).
+One known follow-up folded into the shared accent-lock owner-taste call (room `.bc-*` chrome locks to `#a78bfa`
+under Crimson via the systemic `--ix-accent → --v2-accent` re-point; identical on Monitor/Lab, 0 vendor-purple).
+
+**Superseded (history):** ~~CONCEPT OUT + owner PICKED "A · The Logbook" (2026-07-12); build queued.~~
 Per the per-tab signature process rule (concept before code), the Blackbook rollout opened with a spitball.
 Explore-map finding: **Blackbook is the knowledge LIBRARY today** (186 verified entries + guide-autopsy), NOT a
 records room; the spec's "flight-recorder of applied changes + sessions" data lives in the Lab (applied-changes

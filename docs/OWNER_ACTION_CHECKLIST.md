@@ -89,15 +89,22 @@ still has a "JARVIS motion" toggle (now the OFF failsafe). Ships on its own comm
 live app carries it after this cycle's build. Two disclosed deviations stand (you may still overrule):
 hologram shader-pulses excluded (idle-GPU bar), and the Dock isn't magnetic (it owns the magnify lift).
 
-### A8. Blackbook console (Phase 4) — ✅ direction PICKED 2026-07-12 ("A · The Logbook"); build queued, eyeball later
+### A8. Blackbook console (Phase 4 "The Logbook") — ⏳ your eyeball · BUILT + SHIPPED default-OFF 2026-07-12 (`617db5b`, on your live build)
 You picked **A · The Logbook** from the [concept](https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91)
-("blackbook looks good" + A). Background: Blackbook today is your knowledge library (186 verified entries +
-"autopsy a guide"), while the spec imagined a "flight-recorder" of your applied changes + sessions — so A keeps
-the field-guide **and** adds a unified record tape (your changes/sessions/guide-checks, each with its undo).
-Naming settled on the default: the room stays "Blackbook", the timeline is "the logbook", the existing Lab
-"Black Box" (crash forensics) is left alone. **Nothing on you right now** — it builds behind a default-OFF flag
-in a fresh session; then a one-flip eyeball comes back to you (Settings → Appearance → "Blackbook console
-(preview)"), same as Home/Monitor. Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
+("blackbook looks good" + A); it's now **built and on your live app** (`617db5b`, installer `43234A53…943D5`,
+stamp-verified), behind a **default-OFF** flag so nothing changed until you flip it. The room keeps your knowledge
+library (186 entries + "autopsy a guide") **and** gains a flight-recorder **Logbook**: one tape of everything Compy
+has done on your PC — changes applied, gaming sessions, guides you fact-checked — over the SAME data (nothing new
+sent). The field guide stays one tap away via a Logbook | Field-guide toggle. It's a **read-only** view; to actually
+roll a change back it points you to the Lab (your one undo home). Naming settled on the default (room = "Blackbook",
+timeline = "the logbook", the Lab's "Black Box" crash forensics left alone).
+- **→ Your one job:** Settings → Appearance → flip **"Blackbook console (preview)"** ON, open Blackbook, eyeball it
+  (same one-flip pattern as Home/Monitor/JARVIS). **Result → tell Claude:** "looks good" (I flip it default-ON) or
+  what's off. Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
+- **Heads-up (folds into the §A5 follow-up, ONE taste call):** under a non-Violet theme (e.g. Crimson) the Blackbook
+  room's buttons/tags stay violet while other accents follow the theme — the same room-chrome-vs-theme mismatch noted
+  on Monitor. It's invisible on your default Violet and not a bug; I've teed it up as one decision — *room chrome
+  follows the live theme, or keeps the violet signature?* Answer whenever; no rush.
 
 ---
 

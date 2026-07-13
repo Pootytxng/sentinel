@@ -161,6 +161,60 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12h — ✅ CONSOLE HUD PHASE 4 "BLACKBOOK LOGBOOK" COMMITTED `617db5b` + SHIPPED LIVE (flag `compy_blackbook_console` DEFAULT OFF; installer `43234A53…943D5`, stamp-verified) — owner eyeball is the open gate
+
+**Built from `docs/superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md` (direction A "The
+Logbook").** Committed `617db5b`, shipped + silent-reinstalled (restoring the installed app the dev
+build had displaced), stamp-verified `617db5b` live. Owner eyeball = the one open gate (Settings →
+Appearance → "Blackbook console (preview)").
+
+- **New files** (`src/surfaces/blackbook/`): `logbook.ts` (pure `buildLogbook` tape builder +
+  `startHereEntries` — honesty spine, 18-test truth-table `logbook.test.ts`) · `BlackbookConsole.tsx`
+  + `blackbook-console.css` (the Logbook face: hairline tape of Change/Session/Guide-check records,
+  mono timestamps, type tags, body status line, library strip) · `blackbook-console.test.tsx` +
+  `blackbook-console-flag.test.tsx` (T4 guards).
+- **Modified:** `theme.ts` (`readBlackbookConsole`/`applyBlackbookConsole`, `=== "1"` DEFAULT OFF) ·
+  `use-hud.ts` (`useBlackbookConsoleFlag`) · `Settings.tsx` ("Blackbook console (preview)" row) ·
+  `BlackbookV2.tsx` (console face behind flag + Logbook|Field-guide SegmentedControl + `onOpenLab`) ·
+  `App.tsx` (passes `changes`/`sessions`/`onOpenLab={() => setActiveTab("Lab")}`) ·
+  `tokens-v2-guard.test.ts` (registered `blackbook-console.css` in V2_CSS).
+- **Verify:** tsc 0 · vitest **1560** (175 files) · **zero `src-tauri`** (`git diff -- src-tauri` empty).
+- **Self-review round 1 FAIL → both handled:** (1) **duplication** — the in-room Undo button was a
+  SECOND full undo surface, contradicting the owner's 2026-07-10 "Lab is the one undo home" decision.
+  FIXED → Logbook is now a pure READ view; an active change routes to the Lab via a single
+  `.bc-manage` "roll back in the Lab →" jump (the plan's sanctioned "manage in Optimize jump" v1); the
+  Logbook triggers ZERO mutations now. (2) **accent `#a78bfa` under Crimson** — VERIFIED as the
+  pre-existing, test-pinned, systemic per-room accent lock (`blackbook-v2.css` `--ix-accent →
+  --v2-accent` for `.v2-room[data-room="learn"]`, identical on Monitor/Lab); NOT a defect this train
+  introduced, no vendor purple, internally consistent. It IS the same open **Monitor accent-mismatch
+  owner-taste call** (Cycle 2026-07-12g) — fold them into ONE owner decision, don't fix in-train.
+- **Self-review round 2 = ✅ PASS** (agent `a851ea6bd10a9f2d2`, fresh full pass; both round-1
+  findings verified resolved/correctly-classified, no new defects): 0 `.bc-undo` nodes (duplication
+  resolved, Lab is the one interactive undo home, click-through to Lab live-confirmed); crimson facts
+  independently verified (0 vendor-purple hits · `.bc-*` + `.seg-indicator` all compute the same
+  `#a78bfa` = internally consistent · same lock present on Monitor/Lab = pre-existing/systemic);
+  title-header h1 == "Blackbook" with the count in `.bc-status` body; contrast `.bc-manage:hover` =
+  `#1a0a2e` accent-ink on the fill; reduced-motion still; flag-off round-trip clean. (Env note: this
+  session's external MoveWindow didn't resize the WebView2 bounds — reviewer worked around via the
+  app's own Maximize to 1920×1032 native, larger-than-target so no distortion risk.)
+- ✅ **SHIPPED 2026-07-12:** committed `617db5b` (`feat(blackbook): Console Phase 4 Logbook behind
+  compy_blackbook_console DEFAULT OFF`) → `npm run tauri build` (exit 0) → `scripts/ship-reinstall.ps1`
+  (stale-gate passed, graceful close, Desktop hygiene, silent `/S` install, launch — **this restored
+  the installed app the dev build had displaced**; the dev build + vite server on 1420/9222 were
+  stopped first per the single-instance race law) → installer `Compy_0.1.0_x64-setup.exe` SHA-256
+  `43234A53ED586A00AFBE163487BCDFBD8AE5D08147C15E1F910CE795C28943D5`, **stamp-verified `617db5b`**
+  (installed exe embeds the HEAD hash), one installer on the Desktop. Docs synced same cycle:
+  `RELEASE_STATE.md` (new UPDATE banner + Git HEAD + Current installer rows), this BACKLOG cycle → ✅,
+  `UI_VISION_BACKLOG.md` §E Phase 4 → SHIPPED-behind-flag, `OWNER_ACTION_CHECKLIST.md` A8 → eyeball gate.
+- ⛳ **OPEN GATE:** owner eyeball on the Blackbook Logbook (Settings → Appearance → "Blackbook console
+  (preview)"), same one-flip pattern as Home/Monitor/JARVIS → then approve/flip default-ON or iterate.
+- ⛳ **SURFACED TO OWNER (this cycle):** BOTH accent-lock taste calls folded into ONE decision — the
+  Monitor room-chrome-vs-sparkline mismatch (Cycle 2026-07-12g follow-up) AND the Blackbook `.bc-*`
+  chrome lock, both instances of the SAME systemic per-room `--ix-accent → --v2-accent` re-point that
+  pins room chrome to `#a78bfa` under non-Violet themes. Not a defect (0 vendor-purple, internally
+  consistent, invisible on the default Violet) — a taste fork: room chrome follows the live theme, or
+  stays the violet signature? Owner's call, awaiting his answer.
+
 ### Cycle 2026-07-12g — ✅ MONITOR v5 CONSOLE FLIPPED DEFAULT-ON + shipped `e195f70` (owner "flip it default on and silent reinstall")
 
 **Owner approved the Monitor v5 console** (the long-open §A5 eyeball — Flight Deck + Session Stack,

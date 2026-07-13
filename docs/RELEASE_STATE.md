@@ -10,6 +10,30 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (BLACKBOOK CONSOLE PHASE 4 "THE LOGBOOK" SHIPPED `617db5b` — installer SHA-256
+> `43234A53ED586A00AFBE163487BCDFBD8AE5D08147C15E1F910CE795C28943D5`, live exe stamp-verified
+> `617db5b` via the embedded hash, installed by Claude, supersedes the `3B855DD1…FB003` installer;
+> NEW flag `compy_blackbook_console` **DEFAULT OFF** — owner eyeball is the open gate):** Console HUD
+> Phase 4, direction A "The Logbook" (plan `docs/superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md`,
+> UI_VISION_BACKLOG §E Phase 4). Behind `compy_blackbook_console` (`readBlackbookConsole` `=== "1"`,
+> `src/design/theme.ts`; Settings → Appearance "Blackbook console (preview)"), the Blackbook room gains
+> a flight-recorder **Logbook** face — a single hairline tape of Change/Session/Guide-check records
+> (mono timestamps, type tags, body status line, library strip) synthesized by the pure `buildLogbook`
+> over EXISTING data (changes/sessions already held); the field guide stays reachable via a
+> Logbook|Field-guide SegmentedControl. The `"0"`/absent default renders today's Learn library
+> byte-identical (pinned `blackbook-console-flag.test.tsx`). **Logbook is a pure READ view** (self-review
+> r1 fix): no in-room undo surface — an active change routes to the Lab via a single `.bc-manage` "roll
+> back in the Lab" jump (Lab is the one undo home, owner 2026-07-10); ZERO mutations, **zero `src-tauri`**
+> (`git diff -- src-tauri` empty; no new IPC). New files under `src/surfaces/blackbook/`
+> (logbook.ts · BlackbookConsole.tsx · blackbook-console.css + 3 test files). Verify: tsc 0 · vitest
+> **1560** (175 files) · self-reviewer **round-2 PASS** (agent `a851ea6bd10a9f2d2`: 0 `.bc-undo` nodes,
+> click-through to Lab live-confirmed; h1 == "Blackbook" title-header with the count in `.bc-status`
+> body; `.bc-manage:hover` dark accent-ink on the fill; reduced-motion still; flag-off round-trip clean).
+> **Known follow-up (NOT this diff — pre-existing systemic accent lock, same class as the Monitor
+> follow-up below):** the room's `--ix-accent → --v2-accent` re-point locks `.bc-*` chrome to `#a78bfa`
+> under Crimson (identical lock present on Monitor/Lab; 0 vendor-purple, internally consistent) — folded
+> with the Monitor accent-mismatch into ONE owner-taste call, not fixed in-train.
+>
 > **UPDATE 2026-07-12 (MONITOR v5 CONSOLE FLIPPED DEFAULT-ON `e195f70` — installer SHA-256
 > `3B855DD1454FD7F615F301A6C4808AC0EC1FB8AB409E9DFCCA939927972FB003`, live exe stamp-verified
 > `e195f70` via the embedded hash, installed by Claude, supersedes the `DFE827D1…FB59` installer;
@@ -435,9 +459,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `e195f70` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `e195f70`, the Monitor v5 console DEFAULT-ON flip; live exe stamp-verified `e195f70` via the embedded hash) |
+| Git HEAD | `617db5b` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `617db5b`, the Blackbook console Phase 4 "Logbook" behind `compy_blackbook_console` DEFAULT OFF; live exe stamp-verified `617db5b` via the embedded hash) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `3B855DD1454FD7F615F301A6C4808AC0EC1FB8AB409E9DFCCA939927972FB003` (built from `e195f70`, 2026-07-12 — **Monitor v5 console FLIPPED DEFAULT-ON**: flag `compy_monitor_console` **DEFAULT OFF → DEFAULT ON** (`readMonitorConsole` → `!== "0"`, `src/design/theme.ts`; Settings → Appearance "Monitor console", now the OFF failsafe) — the Flight Deck + Session Stack is Monitor's default live face; the "0" failsafe restores the classic tiles; test-pins re-pointed to the DEFAULT-ON polarity (`monitor-console-flag.test.tsx` + sibling `monitor-v2.test.tsx`); owner "flip it default on"; self-reviewer PASS 8/8; details in the top Snapshot banner. Superseded installer: `DFE827D1…FB59` from `fcc400b` (JARVIS DEFAULT-ON), whose chain it carries — **JARVIS motion** (`compy_jarvis_motion` DEFAULT ON, `readJarvisMotion` → `!== "0"`), **Home title-header fix** (`cc1ffce`), the **Expert-view** train (`5850ac0`: `compy_expert_view` **DEFAULT OFF**, `readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`, zero `src-tauri`), the full 2026-07-11 consumer-panel overhaul (`50b5c03`) and the Monitor v5 stack build itself (`915e85b`, now default-ON).) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `43234A53ED586A00AFBE163487BCDFBD8AE5D08147C15E1F910CE795C28943D5` (built from `617db5b`, 2026-07-12 — **Blackbook console Phase 4 "The Logbook"** behind NEW flag `compy_blackbook_console` **DEFAULT OFF** (`readBlackbookConsole` → `=== "1"`, `src/design/theme.ts`; Settings → Appearance "Blackbook console (preview)") — the Blackbook room's flight-recorder Logbook face over EXISTING data, field guide reachable via the room's mode toggle; `"0"`/absent = today's Learn library byte-identical; pure READ view routing undo to the Lab; zero `src-tauri`; self-reviewer round-2 PASS; details in the top Snapshot banner. Superseded installer: `3B855DD1…FB003` from `e195f70` (Monitor v5 console DEFAULT-ON), whose chain it carries — **Monitor v5 console FLIPPED DEFAULT-ON**: flag `compy_monitor_console` **DEFAULT OFF → DEFAULT ON** (`readMonitorConsole` → `!== "0"`, `src/design/theme.ts`; Settings → Appearance "Monitor console", now the OFF failsafe) — the Flight Deck + Session Stack is Monitor's default live face; the "0" failsafe restores the classic tiles; test-pins re-pointed to the DEFAULT-ON polarity (`monitor-console-flag.test.tsx` + sibling `monitor-v2.test.tsx`); owner "flip it default on"; self-reviewer PASS 8/8; details in the top Snapshot banner. Superseded installer: `DFE827D1…FB59` from `fcc400b` (JARVIS DEFAULT-ON), whose chain it carries — **JARVIS motion** (`compy_jarvis_motion` DEFAULT ON, `readJarvisMotion` → `!== "0"`), **Home title-header fix** (`cc1ffce`), the **Expert-view** train (`5850ac0`: `compy_expert_view` **DEFAULT OFF**, `readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`, zero `src-tauri`), the full 2026-07-11 consumer-panel overhaul (`50b5c03`) and the Monitor v5 stack build itself (`915e85b`, now default-ON).) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
