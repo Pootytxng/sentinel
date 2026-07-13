@@ -134,8 +134,11 @@ full response ive written here seeing how things seem to get lost in translation
    an internal accent mismatch under non-Violet themes; owner-taste call, BACKLOG Cycle 2026-07-12g.**
    → ✅ **RESOLVED direction: owner picked "per-room identity" (2026-07-12)** — each room gets its OWN
    accent (Monitor = teal), so the SessionStack sparkline now matches the room chrome instead of clashing.
-   Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified);
-   owner one-flip eyeball pending (BACKLOG Cycle 2026-07-12i, OWNER_ACTION_CHECKLIST §A9).
+   Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified).
+   **Extended 2026-07-12 with a per-room color PICKER** (owner Cycle-12i follow-up "the freedom to shift
+   around the colors they want on each page"): an accent dot in each room's top-right corner opens a curated
+   10-swatch popover to recolor THAT room, persisted per-room (`20e2b50`, installer `457A2D00…F73EBDCE`,
+   stamp-verified). Owner one-flip eyeball pending (BACKLOG Cycles 2026-07-12i/j, OWNER_ACTION_CHECKLIST §A9).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.

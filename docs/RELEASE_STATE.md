@@ -10,6 +10,28 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (PER-ROOM ACCENT PICKER SHIPPED `20e2b50` — installer SHA-256
+> `457A2D00491672BD8F2C2DBF455EE1349975679FEB9206AD3EB7D419F73EBDCE`, live exe stamp-verified
+> `20e2b50` via the embedded hash, installed by Claude, supersedes the `D23DE073…9EBA9` installer;
+> SAME flag `compy_room_identity` **DEFAULT OFF** — owner eyeball is the open gate):** Extends the
+> per-room identity accents (Cycle 12i) with a **user-facing picker**. When `compy_room_identity` is ON,
+> each room shows a small accent dot in the topbar far-right corner (`.v2-top`, after `.v2-stamp`,
+> `src/design/ShellV2.tsx` under `useRoomIdentityFlag()`); click opens a 10-swatch curated popover
+> (`src/design/RoomAccentPicker.tsx` + `room-accent-picker.css`) to recolor THAT room, persisted
+> per-room, "Reset to default" restores the preset. Answers the owner's Cycle-12i follow-up — "the
+> freedom to shift around the colors they want on each page" (the Settings THEME selector only recolored
+> Home once room-identity was on). **Curated swatches, not a free hex field:** the palette
+> (`ROOM_ACCENT_SWATCHES`, `src/design/room-identity.ts`) is validated ≥4.5:1 vs dark ink `#1a0a2e`, so
+> the dark-ink legibility law stays unbreakable; the picker only renders under the flag, so the flag-off
+> topbar is byte-identical. `readRoomAccents`/`setRoomAccent`/`applyRoomAccents` (`src/design/theme.ts`)
+> drive a managed `<style id="compy-room-accents">` scoped `:root[data-room-identity="on"] .v2-room[data-room=X]`
+> with same-element `--v2-accent`+dim+line (whitelist-validated); re-skins that room's chrome + rig +
+> sparkline via the same scoped mechanism as the presets. **Zero `src-tauri`** (`git diff -- src-tauri`
+> empty). Verify: tsc 0 · vitest **1595** (177 files) · self-reviewer **round-3 PASS 7/7** (agent
+> `a1ea4efadff76d2f9`): popover-closes-on-room-nav, in-place sparkline repaint, and the reduced-motion
+> compound selector all fixed + bug→guard-pinned (`room-accents.test.tsx`, 21 guards); adjacent behaviors
+> intact (Blackbook→Rose `#ff8ac4` persisted across nav).
+>
 > **UPDATE 2026-07-12 (PER-ROOM IDENTITY ACCENTS SHIPPED `72fa005` — installer SHA-256
 > `D23DE0732BAB2E510891482F6E501C728E8DC52AD60E5782A31358E74D19EBA9`, live exe stamp-verified
 > `72fa005` via the embedded hash, installed by Claude, supersedes the `43234A53…943D5` installer;
