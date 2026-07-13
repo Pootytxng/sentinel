@@ -124,13 +124,11 @@ metric so no two read as near-twins. The dark tones (Rust, Olive, Pine, Slate, P
   click a room's **top-right accent dot**, and try the 15 — **especially a dark tone** to see the buttons stay legible.
   **Result → tell Claude:** "looks good" (toward the default-ON flip) or what to tweak — it's your palette, delegated
   to me but your final taste call.
-- **⚠️ Heads-up before you test the darks (my honest find, fix queued):** the dark tones are fully legible on
-  **buttons/pills** (that's the adaptive ink), but a few chrome spots use the accent as **plain text on a dark
-  background** — the **Lab station tabs** and the **Home dock room labels** — and there a *dark* pick shows up
-  low-contrast (dark text on dark). That's a pre-existing gap (it shipped with the first dark tones too), NOT the
-  prune, and it's **my next fix** (a focused "accent-as-text" legibility pass). So: bright picks are perfect
-  everywhere; dark picks look great on buttons but a couple of label spots need my follow-up. **I'd hold the
-  default-ON flip until that lands.** Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12l.
+- ~~⚠️ hold the default-ON flip until the accent-as-text fix lands~~ → ✅ **that fix SHIPPED 2026-07-13
+  (`cc9adb8`, on your live build):** dark picks are now legible EVERYWHERE — buttons/pills (adaptive ink) AND
+  the accent-as-text spots (Lab station tabs, Home dock labels, blackbook tags — each dark tone carries a
+  paired light text tint, ≥4.5:1 guard-pinned). **Nothing holds the eyeball anymore** — flip the preview on,
+  try a dark tone anywhere, and give the verdict. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12l.
 
 ---
 
