@@ -161,13 +161,32 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-12k — 🟢 OWNER LIKES THE PICKER (Cycle 12j eyeball cleared) → new follow-up: EXPAND PALETTE VARIETY (neon/bright + dark-tone mixed). NOT STARTED — queued for a fresh session.
+### Cycle 2026-07-12k — ✅ PALETTE EXPANDED 10→20 SHIPPED LIVE `8a9ab76` (neon brights + adaptive-ink dark tones, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `97C581BB…EEE7698`, stamp-verified) — owner one-flip eyeball on the NEW palette is the open gate
 
 **Owner verdict on the Cycle-12j picker (2026-07-12): "i like it" — the picker feature is APPROVED.**
 Follow-up ask, verbatim: *"maybe more variety of color diversity more neon or bright/dark tone mixed
-idk just more variety."* So the mechanism is good; he wants the **swatch palette itself** to have a lot
-more range. **Default-ON flip is DEFERRED** until the expanded palette lands and he re-eyeballs it (do
-NOT flip `compy_room_identity` default-ON yet).
+idk just more variety."* Owner answered the A/B/both fork: **"i agree with both."**
+
+**✅ SHIPPED (both A + B), `8a9ab76`:** `ROOM_ACCENT_SWATCHES` (`src/design/room-identity.ts`) grew from
+10 bright swatches to **20** — kept the original 10, added **5 new neon/saturated brights** (Magenta
+`#f45cc6` · Azure `#33b1ff` · Chartreuse `#d0f14e` · Tangerine `#ff9a2e` · Hot Pink `#ff5f9e`) and **5
+true DARK tones** (Indigo `#4a37c4` · Wine `#9e1f46` · Pine `#12694a` · Plum `#6b2b9e` · Slate `#33507f`),
+laid out as a clean 5×4 picker grid. **Option B (dark tones) landed via adaptive ink:** each dark swatch
+carries a paired light `ink`; `applyRoomAccents` (`theme.ts`) emits it as BOTH `--v2-accent-ink` AND
+`--ix-accent-ink` in the managed `<style>` per pick (so the light ink reaches every accent-fill consumer,
+incl. Home which never re-points ink), flipping a dark fill to legible light-on-dark; bright picks emit no
+ink override and keep the default dark ink `#1a0a2e`. **Legibility law mechanized BOTH ways**
+(`room-accents.test.tsx`, +5 guards incl. `swatchInk`, the DARK-emits/BRIGHT-doesn't managed-style
+contract, and per-room write isolation): every bright ≥4.5:1 vs `#1a0a2e`; every dark ≥4.5:1 vs ITS ink
+AND genuinely <4.5:1 vs `#1a0a2e` (adaptive ink is load-bearing). Zero `src-tauri`.
+
+- **Verify:** tsc 0 · vitest **1600** (177 files) · fresh-context adversarial diff review **SOUND**
+  (min contrast Pine 5.94:1; all 20 pairwise-distinct) · **self-reviewer PASS** (live CDP 1500×980:
+  Monitor/Indigo computed text `rgb(236,233,255)`=`#ece9ff` on the dark fill; Blackbook/Magenta computed
+  text `rgb(26,10,46)`=`#1a0a2e` on the bright fill — contrast holds both directions).
+- **Default-ON flip is STILL DEFERRED** — do NOT flip `compy_room_identity` default-ON. Owner re-eyeballs
+  the NEW palette first (one flip: Settings → Appearance → "Room accent colors (preview)" ON → click a
+  room's corner accent dot → pick a dark tone). This is the ONE remaining gate.
 
 - **Current palette (10, all bright by necessity):** Violet `#a78bfa` · Teal `#3fd9c2` · Amber `#f0b878`
   · Emerald `#27e08a` · Sky `#5aa9ff` · Rose `#ff8ac4` · Coral `#ff9163` · Gold `#ffd166` · Lime
@@ -192,10 +211,11 @@ NOT flip `compy_room_identity` default-ON yet).
   set is his eyeball. Present the expanded palette live (the picker shows it) and let him approve before
   the default-ON flip. Legibility law (`#1a0a2e` ink ≥4.5:1, or adaptive ink under option B) is
   NON-NEGOTIABLE — that's why it's curated swatches, not a free hex field.
-- ⛳ **RESUME (fresh session):** read this cycle + Cycle 12j. Pick fork (A/B/both — recommend both),
-  expand `ROOM_ACCENT_SWATCHES` (+ `SWATCH_WHITELIST`), keep/extend the legibility guard, add
-  bug→guards, `tsc`+`vitest`, self-review (live CDP), then **ship** (`.claude/skills/ship`) and
-  **doc-sync**. Do NOT flip default-ON — leave the owner one-flip eyeball on the NEW palette.
+- ✅ **DONE `8a9ab76` (2026-07-13):** owner chose "both" → shipped A (5 neon brights) + B (5 adaptive-ink
+  dark tones), 20 swatches total. The palette/fork context above (10-swatch state, "why they're all
+  bright", the A/B fork) is the point-in-time cycle record; the shipped result is the ✅ header + the
+  bullets under it. Whitelist auto-derives from `ROOM_ACCENT_SWATCHES` (no separate `SWATCH_WHITELIST`
+  symbol). **Only open item: the owner's one-flip eyeball on the NEW palette before any default-ON flip.**
 
 ### Cycle 2026-07-12j — ✅ PER-ROOM ACCENT PICKER SHIPPED LIVE `20e2b50` (curated swatches, behind existing `compy_room_identity` flag DEFAULT OFF; installer SHA-256 `457A2D00…F73EBDCE`, stamp-verified) — owner eyeball is the open gate
 

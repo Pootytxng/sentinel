@@ -10,6 +10,25 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-13 (ACCENT PALETTE EXPANDED 10→20 SHIPPED `8a9ab76` — installer SHA-256
+> `97C581BB4EF4EA47579939C2D9519F0603D72BF20FDA994BDDCAD7D9FEEE7698`, live exe stamp-verified
+> `8a9ab76` via the embedded hash, installed by Claude, supersedes the `457A2D00…F73EBDCE` installer;
+> SAME flag `compy_room_identity` **DEFAULT OFF** — owner one-flip eyeball on the NEW palette is the
+> open gate):** Owner Cycle-12k follow-up — *"more variety of color diversity, more neon or bright/dark
+> tone mixed."* `ROOM_ACCENT_SWATCHES` (`src/design/room-identity.ts`) grows from 10 bright swatches to
+> **20**: 15 bright/neon (adds Magenta/Azure/Chartreuse/Tangerine/Hot Pink) + **5 true DARK tones**
+> (Indigo/Wine/Pine/Plum/Slate). Dark tones ride an **adaptive ink** — each dark swatch carries a paired
+> light `ink`; `applyRoomAccents` (`src/design/theme.ts`) emits it as BOTH `--v2-accent-ink` AND
+> `--ix-accent-ink` in the managed `<style>` per pick, so a dark accent FILL flips to legible
+> light-on-dark; bright swatches emit no ink override (keep the default dark ink `#1a0a2e`). Legibility
+> law mechanized BOTH ways (`room-accents.test.tsx`): every bright swatch ≥4.5:1 vs `#1a0a2e`; every dark
+> swatch ≥4.5:1 vs ITS ink AND genuinely <4.5:1 vs `#1a0a2e` (adaptive ink is load-bearing, not
+> decorative). **Zero `src-tauri`** (`git diff -- src-tauri` empty). Verify: tsc 0 · vitest **1600**
+> (177 files) · adversarial fresh-context diff review **SOUND** (min contrast Pine 5.94:1) · self-reviewer
+> **PASS** (live CDP 1500×980: Monitor/Indigo text `#ece9ff` on dark fill, Blackbook/Magenta text
+> `#1a0a2e` on bright fill — contrast law holds both directions; 20-swatch grid clean 5×4). Supersedes
+> the 12j picker's 10-swatch palette; the picker mechanism/wiring is unchanged.
+>
 > **UPDATE 2026-07-12 (PER-ROOM ACCENT PICKER SHIPPED `20e2b50` — installer SHA-256
 > `457A2D00491672BD8F2C2DBF455EE1349975679FEB9206AD3EB7D419F73EBDCE`, live exe stamp-verified
 > `20e2b50` via the embedded hash, installed by Claude, supersedes the `D23DE073…9EBA9` installer;

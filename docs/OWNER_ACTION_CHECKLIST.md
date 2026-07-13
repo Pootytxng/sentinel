@@ -107,21 +107,24 @@ timeline = "the logbook", the Lab's "Black Box" crash forensics left alone).
   follows the live theme, or keeps the violet signature?* → ✅ **You answered 2026-07-12: "per-room identity"** — now
   BUILT, see **A9** below.
 
-### A9. Per-room identity accents **+ per-room color picker** — ⏳ your eyeball · BUILT + SHIPPED default-OFF 2026-07-12 (`20e2b50`, on your live build)
+### A9. Per-room identity accents **+ per-room color picker** (now a **20-color palette**) — ⏳ your eyeball · SHIPPED default-OFF, palette EXPANDED 2026-07-13 (`8a9ab76`, on your live build)
 You picked **"per-room identity"** as the answer to the accent-lock question (Cycles 12g/12h) — "i wanted … the
 components each had their own distinguishable color scheme so they were more visible." Each room gets its own preset
 accent so the rooms are more distinguishable at a glance: **Monitor teal · Blackbook amber · Lab/Optimize emerald ·
 Home violet** (unchanged). Then you asked for more (Cycle 12i follow-up): **"the freedom to shift around the colors
-they want on each page."** That's now built too — **a little accent dot in the top-right corner of each room; click
-it for a small swatch popover to recolor THAT room to your taste** (it remembers per-room; "Reset to default" puts the
-preset back). Curated swatches, not a raw hex field, so every color stays readable. Both are **on your live app**
-(`20e2b50`, installer `457A2D00…F73EBDCE`, stamp-verified), behind the same **default-OFF** flag so nothing changed
-until you flip it. This is the same idea as the color-coded parts in your 3D rig, extended to the rooms — and it
-**resolves the room-chrome-vs-theme mismatch** teed up as a taste call on A5/A8 (per-room identity IS that decision).
-- **→ Your one job:** Settings → Appearance → flip **"Room accent colors (preview)"** ON, click through Monitor /
-  Blackbook / Lab, eyeball the accents, then try the **accent dot in each room's top-right corner** to recolor a room
-  (same one-flip pattern as Home/Monitor/JARVIS/Blackbook). **Result → tell Claude:** "looks good" (I flip it
-  default-ON) or what's off. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycles 2026-07-12i (accents) / 2026-07-12j (picker).
+they want on each page."** That's built too — **a little accent dot in the top-right corner of each room; click it for
+a swatch popover to recolor THAT room** (it remembers per-room; "Reset to default" puts the preset back). You liked
+the picker ("i like it") and asked for **"more variety … more neon or bright/dark tone mixed"** — so the palette is
+now **20 colors** (up from 10): the original brights **+ 5 new neons** (Magenta, Azure, Chartreuse, Tangerine, Hot
+Pink) **+ 5 true dark tones** (Indigo, Wine, Pine, Plum, Slate). The dark ones stay readable because the ink flips to
+light automatically on a dark fill. All on your live app (`8a9ab76`, installer `97C581BB…EEE7698`, stamp-verified),
+still behind the same **default-OFF** flag so nothing changed until you flip it.
+- **→ Your one job (the ONE remaining gate before default-ON):** Settings → Appearance → flip **"Room accent colors
+  (preview)"** ON, click a room's **top-right accent dot**, and try the new swatches — **especially a dark tone**
+  (Indigo/Wine/Pine/Plum/Slate) to see the buttons stay legible. **Result → tell Claude:** "looks good" (I flip it
+  default-ON) or what to prune/add — it's your palette, delegated to me but your final taste call. One taste note from
+  me: the 20 lean a bit heavy on warm-orange (Amber/Coral/Tangerine/Gold) and pink (Rose/Magenta/Hot Pink) — say the
+  word and I'll swap some for cooler/other hues. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12k.
 
 ---
 
