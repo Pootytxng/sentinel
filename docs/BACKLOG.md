@@ -161,6 +161,48 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-13a — ✅ MONITOR v5 "frametime" JARGON GLOSS SHIPPED LIVE `530ef8b` (deferred Monitor-jargon bucket closed; installer SHA-256 `703F078B…B99EE40B8`, stamp-verified) — NO gate moved
+
+**Resume (`/clear`, live `72ded53`/`cc9adb8`).** The room-identity palette train was fully done +
+shipped; its ONE open item is the owner's one-flip eyeball on the pruned-15 legible palette (owner
+territory — did NOT flip `compy_room_identity` default-ON). Pulled the next non-gated `[ ]` item from
+this ledger: **Monitor-surface jargon glosses** (line ~589), whose sequencing gate ("AFTER the Monitor
+v5 owner eyeball settles") had CLEARED — the console flipped DEFAULT-ON at `e195f70` (Cycle 12g).
+
+- **The gap (source-verified, not assumed):** the Monitor v5 console (default face) DeckScope hero
+  passed a plain string `label="frametime"` to `Oscilloscope`, rendering the raw term with no gloss —
+  while its sibling **Play face already glosses it** (`Play.tsx:266` `<Term id="frametime">`) and the
+  Deep-Monitoring section-help does too (`App.tsx:1800`). A jargon gap on the default face against
+  CLAUDE.md's no-jargon promise.
+- **Fix (`530ef8b`, zero `src-tauri`):** `Oscilloscope.label` widened `string → ReactNode`
+  (backward-compatible; mirrors the ArcGauge ReactNode-label precedent — every other caller passes a
+  string, grep-confirmed unchanged) + `DeckScope` passes `label={<Term id="frametime">frametime</Term>}`.
+- **Scope discipline — only "frametime" glossed.** Inventoried the whole Monitor surface: `1% low`
+  (capture status) + `ETW` (honest line) already glossed on the console; FPS/latency/spikes/budget were
+  deliberately LEFT plain — they're consumer relabels, self-explanatory, or have no correct glossary
+  term. Glossing "LOWEST LATENCY" with the `input-latency` term would be FACTUALLY WRONG (the readout is
+  a frametime minimum, not click-to-photon input lag) — facts-first over a lazy gloss. monitor-panels'
+  "frametime"/"FPS" are second-exposures (the section-help above them already glosses frametime) → no
+  re-gloss (one-tooltip-per-label rule).
+- **bug→guard:** `deck-scope.test.tsx` +2 guards — the hero renders a real glossary Term
+  (`.osc-label .kl-term` == "frametime") and the tooltip reveals the definition (a dead id fails soft to
+  plain text, so the guard would find nothing → pins the id stays real).
+- **Verify:** tsc 0 · vitest **1607** (177 files, +2) · **self-reviewer PASS 8/8** (live 1500×980 CDP:
+  `.osc-label .kl-term` `rgb(139,147,167)` uppercase matching siblings, dotted accent underline ~6.37:1
+  on the dark panel; tooltip opens/closes on hover+click, not clipped, definition + Blackbook link
+  intact; FPS/latency/spikes/budget stay plain; backward-compat proven).
+- ✅ **SHIPPED 2026-07-13:** committed `530ef8b` (3 explicit paths, no `git add -A`) → `npm run tauri
+  build` (crate recompiled 28.65s) → `ship-reinstall.ps1` (stale-gate passed, one installer on Desktop,
+  silent `/S`, launch) → installer SHA-256 `703F078BCEA0BBA2BF740F93A7E559A421CB06D82CC5B981C8A6463B99EE40B8`,
+  **stamp-verified `530ef8b` live** (installed exe embeds HEAD). **doc-sync same cycle:** RELEASE_STATE
+  new UPDATE banner + **table Git-HEAD/Current-installer rows re-anchored** `72fa005`→`530ef8b` (they had
+  drifted behind the banners through the whole `8a9ab76`/`8e6920f`/`cc9adb8` palette chain — table-drift
+  class fixed); this cycle + the deferred item → ✅.
+- ⛳ **RESUME:** deferred Monitor-jargon bucket CLOSED. The room-identity palette's owner one-flip eyeball
+  (pruned-15 legible palette → `compy_room_identity` default-ON) remains the standing owner-territory gate
+  (Cycle 12l) — do NOT flip without owner sign-off. Next non-gated `[ ]`: see the ShellV2 topbar tagline
+  (owner-taste, line ~547) and the deeper data/outbound-gated items (owner-curated / outbound walls).
+
 ### Cycle 2026-07-12l — ✅ PALETTE PRUNED 20→15 SHIPPED LIVE `8e6920f` (differentiation prune, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `51B0A754…3862F39A`, stamp-verified) — owner one-flip eyeball on the pruned palette is the open gate
 
 **Owner verdict on the 20-swatch expansion (2026-07-13): "looks good but i agree to prune and widen
@@ -586,8 +628,14 @@ Desktop. Verify: tsc 0 · vitest **1322** (167 files) · site-landing 15/15.
 - [x] ✅ Q3 expert-layer middle ground — **GO (2026-07-12**, source-verified by the Cowork audit;
   verdict + one added ship condition recorded in the spec's Status block). Build row lives in
   Cycle 2026-07-12a.
-- [ ] Monitor-surface jargon glosses (deferred bucket) — land as a small follow-up AFTER the
-  Monitor v5 owner eyeball settles (sequencing note in the plan).
+- [x] ✅ **DONE 2026-07-13 `530ef8b`** (shipped live, installer `703F078B…B99EE40B8`, stamp-verified):
+  Monitor-surface jargon glosses (deferred bucket). Sequencing gate cleared — the Monitor v5 console
+  flipped DEFAULT-ON (`e195f70`). The one user-facing gap on the default face was the DeckScope hero's
+  raw "frametime" label (the sibling Play face + Deep-Monitoring section-help already glossed it);
+  fixed via `Oscilloscope.label` `string→ReactNode` + `<Term id="frametime">` on the DeckScope hero.
+  Only "frametime" glossed — FPS/latency/spikes/budget are consumer relabels/self-explanatory/have no
+  correct term. tsc 0 · vitest 1607 (+2 guards) · self-reviewer PASS 8/8 · zero `src-tauri`. See
+  Cycle 2026-07-13a below.
 - [ ] ⏳ OWNER eyeball of this train's visible changes (Home/Lab gauge notes + glosses, Settings
   slimmed to one preview row, calm recovery banner, site hero) on the live `50b5c03` build.
 - [x] ~~Flagged, pre-existing (NOT this train's diff): Home's h1 renders postureLine's status
