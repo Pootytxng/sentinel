@@ -148,8 +148,8 @@ describe("room-accents: persisted store round-trips + rejects junk", () => {
   });
 
   it("setRoomAccent persists a swatch and readRoomAccents returns it; null clears", () => {
-    setRoomAccent("play", "#5aa9ff");
-    expect(readRoomAccents().play).toBe("#5aa9ff");
+    setRoomAccent("play", "#46a8ff");
+    expect(readRoomAccents().play).toBe("#46a8ff");
     setRoomAccent("play", null);
     expect(readRoomAccents().play).toBeUndefined();
   });
@@ -160,11 +160,11 @@ describe("room-accents: persisted store round-trips + rejects junk", () => {
   it("setRoomAccent writes ONLY the target room — sibling picks are never mutated", () => {
     setRoomAccent("home", "#9e1f46"); // Wine (dark)
     setRoomAccent("learn", "#f45cc6"); // Magenta (bright)
-    setRoomAccent("play", "#4a37c4"); // Indigo — must not disturb home/learn
+    setRoomAccent("play", "#6b2b9e"); // Plum — must not disturb home/learn
     let got = readRoomAccents();
     expect(got.home).toBe("#9e1f46");
     expect(got.learn).toBe("#f45cc6");
-    expect(got.play).toBe("#4a37c4");
+    expect(got.play).toBe("#6b2b9e");
     setRoomAccent("play", null); // clearing one leaves the others intact
     got = readRoomAccents();
     expect(got.play).toBeUndefined();
@@ -192,14 +192,14 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   });
 
   it("applyRoomAccents emits a scoped rule with same-element --v2-accent + dim + line per pick", () => {
-    setRoomAccent("play", "#5aa9ff"); // setRoomAccent calls applyRoomAccents
+    setRoomAccent("play", "#46a8ff"); // setRoomAccent calls applyRoomAccents
     const css = document.getElementById("compy-room-accents")!.textContent!;
     // scoped under the flag → inert when off
     expect(css).toContain(':root[data-room-identity="on"] .v2-room[data-room="play"]{');
     // all three tokens re-declared SAME element (the var()-declaring-element gotcha)
-    expect(css).toContain("--v2-accent:#5aa9ff;");
-    expect(css).toMatch(/--v2-accent-dim:color-mix\(in srgb, #5aa9ff 14%/);
-    expect(css).toMatch(/--v2-accent-line:color-mix\(in srgb, #5aa9ff 25%/);
+    expect(css).toContain("--v2-accent:#46a8ff;");
+    expect(css).toMatch(/--v2-accent-dim:color-mix\(in srgb, #46a8ff 14%/);
+    expect(css).toMatch(/--v2-accent-line:color-mix\(in srgb, #46a8ff 25%/);
   });
 
   // Option B (adaptive ink, owner 2026-07-13): a DARK pick must emit its paired light ink as BOTH the
@@ -207,22 +207,22 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   // consumer even in a room that never re-pointed the ink, e.g. Home). A BRIGHT pick emits neither, so
   // the room keeps the default dark ink #1a0a2e. This is the mechanism that keeps a dark fill legible.
   it("a DARK pick emits the paired --v2-accent-ink AND --ix-accent-ink; a BRIGHT pick emits neither", () => {
-    setRoomAccent("play", "#4a37c4"); // Indigo (dark, ink #ece9ff)
+    setRoomAccent("play", "#6b2b9e"); // Plum (dark, ink #f4e9ff)
     let css = document.getElementById("compy-room-accents")!.textContent!;
-    expect(css).toContain("--v2-accent:#4a37c4;");
-    expect(css).toContain("--v2-accent-ink:#ece9ff;");
-    expect(css).toContain("--ix-accent-ink:#ece9ff;");
+    expect(css).toContain("--v2-accent:#6b2b9e;");
+    expect(css).toContain("--v2-accent-ink:#f4e9ff;");
+    expect(css).toContain("--ix-accent-ink:#f4e9ff;");
 
-    setRoomAccent("play", "#5aa9ff"); // Sky (bright) — replaces the pick, no ink override
+    setRoomAccent("play", "#46a8ff"); // Sky (bright) — replaces the pick, no ink override
     css = document.getElementById("compy-room-accents")!.textContent!;
-    expect(css).toContain("--v2-accent:#5aa9ff;");
+    expect(css).toContain("--v2-accent:#46a8ff;");
     expect(css).not.toContain("--v2-accent-ink:");
     expect(css).not.toContain("--ix-accent-ink:");
   });
 
   it("every generated rule header carries the [data-room-identity=\"on\"] scope", () => {
-    setRoomAccent("home", "#ff8ac4");
-    setRoomAccent("lab", "#ffd166");
+    setRoomAccent("home", "#ff6b6b");
+    setRoomAccent("lab", "#ffe14a");
     const css = document.getElementById("compy-room-accents")!.textContent!;
     const headers = [...css.matchAll(/([^{}]+)\{/g)].map((m) => m[1].trim());
     expect(headers.length).toBeGreaterThan(0);
@@ -230,7 +230,7 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   });
 
   it("removes the <style> entirely when no picks remain (unused feature = zero DOM)", () => {
-    setRoomAccent("play", "#5aa9ff");
+    setRoomAccent("play", "#46a8ff");
     expect(document.getElementById("compy-room-accents")).not.toBeNull();
     setRoomAccent("play", null);
     expect(document.getElementById("compy-room-accents")).toBeNull();
@@ -276,7 +276,7 @@ describe("room-accents: picker interaction (pick → persist → reset)", () => 
     fireEvent.click(screen.getByRole("button", { name: /Monitor accent color/ }));
     // pick Sky
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Sky" }));
-    expect(readRoomAccents().play).toBe("#5aa9ff");
+    expect(readRoomAccents().play).toBe("#46a8ff");
     // re-open → Sky is checked
     fireEvent.click(screen.getByRole("button", { name: /Monitor accent color/ }));
     expect(screen.getByRole("menuitemradio", { name: "Sky" }).getAttribute("aria-checked")).toBe(

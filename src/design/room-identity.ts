@@ -49,8 +49,13 @@ export function defaultRoomAccent(room: PickableRoom): string {
 
 // The curated swatch palette — SINGLE SOURCE OF TRUTH for both the picker UI and the persisted-value
 // whitelist (theme.ts only ever applies a hex found here, so a tampered localStorage can't inject an
-// illegible colour). Expanded 2026-07-13 (owner "more variety … more neon or bright/dark tone mixed")
-// from ten bright hues to twenty — a big neon/saturated bright range PLUS five true DARK tones.
+// illegible colour). Re-curated 2026-07-13 (owner "looks good but i agree to prune and widen variety
+// more differentiation") from the first 20-swatch expansion down to a tighter, MORE differentiated 15:
+// the redundant near-dupe clusters were pruned (four warm-oranges → Amber only; three pinks → one
+// Magenta; the teal/cyan overlap → Teal only) and the survivors re-spread so every
+// neighbour differs by HUE or by LIGHTNESS. Differentiation is VERIFIED by CIEDE2000: every non-preset
+// pair is >=18 dE2000 apart; the only closer pair is the LOCKED Teal/Emerald presets (14.3, both green,
+// unavoidable). 9 bright + 6 dark, with a dark Olive added in the empty dark-gold gap.
 //
 // THE LEGIBILITY LAW (non-negotiable — why this is a curated set, not a free hex field): the accent
 // doubles as a button/pill FILL with the accent-INK painted on top, so every swatch must clear WCAG
@@ -61,32 +66,26 @@ export function defaultRoomAccent(room: PickableRoom): string {
 //     light-on-dark and stays legible (adaptive ink — the "bright/dark mixed" ask).
 // Both invariants (every bright swatch ≥4.5:1 vs #1a0a2e; every dark swatch ≥4.5:1 vs ITS ink; the
 // dark ones genuinely need it) are mechanized in room-accents.test.tsx. The four room presets lead so
-// a room's own identity hue is always one tap away; all twenty hexes are pairwise-distinct.
+// a room's own identity hue is always one tap away; all fifteen hexes are pairwise-distinct.
 export const ROOM_ACCENT_SWATCHES: { name: string; hex: string; ink?: string }[] = [
-  // Row 1 — the four room presets lead + Sky (bright)
-  { name: "Violet", hex: "#a78bfa" }, // Home preset
-  { name: "Teal", hex: "#3fd9c2" }, // Monitor preset
-  { name: "Amber", hex: "#f0b878" }, // Blackbook preset
-  { name: "Emerald", hex: "#27e08a" }, // Lab preset
-  { name: "Sky", hex: "#5aa9ff" },
-  // Row 2 — the rest of the original bright set
-  { name: "Cyan", hex: "#5fd7f0" },
-  { name: "Lime", hex: "#a6e85f" },
-  { name: "Gold", hex: "#ffd166" },
-  { name: "Coral", hex: "#ff9163" },
-  { name: "Rose", hex: "#ff8ac4" },
-  // Row 3 — new neon / saturated brights (all still ≥4.5:1 vs the dark ink)
-  { name: "Magenta", hex: "#f45cc6" },
-  { name: "Azure", hex: "#33b1ff" },
-  { name: "Chartreuse", hex: "#d0f14e" },
-  { name: "Tangerine", hex: "#ff9a2e" },
-  { name: "Hot Pink", hex: "#ff5f9e" },
-  // Row 4 — DARK tones (adaptive light ink so the fill stays legible; the "bright/dark mixed" ask)
-  { name: "Indigo", hex: "#4a37c4", ink: "#ece9ff" },
-  { name: "Wine", hex: "#9e1f46", ink: "#ffe6ee" },
-  { name: "Pine", hex: "#12694a", ink: "#e3f6ee" },
-  { name: "Plum", hex: "#6b2b9e", ink: "#f4e9ff" },
-  { name: "Slate", hex: "#33507f", ink: "#e9f0fb" },
+  // Row 1 — the four room presets lead + Sky (bright). Hue walk begins.
+  { name: "Violet", hex: "#a78bfa" }, // Home preset (~255°)
+  { name: "Teal", hex: "#3fd9c2" }, // Monitor preset (~172°)
+  { name: "Amber", hex: "#f0b878" }, // Blackbook preset (~33°)
+  { name: "Emerald", hex: "#27e08a" }, // Lab preset (~154°)
+  { name: "Sky", hex: "#46a8ff" }, // azure blue (~210°)
+  // Row 2 — the rest of the bright wheel, spread for differentiation (all ≥4.5:1 vs the dark ink)
+  { name: "Red", hex: "#ff6b6b" }, // (~0°)
+  { name: "Yellow", hex: "#ffe14a" }, // (~53°)
+  { name: "Lime", hex: "#b6f24a" }, // yellow-green (~80°)
+  { name: "Magenta", hex: "#f45cc6" }, // hot fuchsia (~318°) — the one pink/magenta rep (Rose pruned as its near-dupe)
+  // Row 3 — DARK tones (adaptive light ink so the fill stays legible), spread across the wheel too
+  { name: "Rust", hex: "#9c4a1e", ink: "#fdeadb" }, // deep burnt orange (~22°)
+  { name: "Olive", hex: "#5f5620", ink: "#f7f3e0" }, // deep bronze/khaki (~48°) — fills the dark-gold gap
+  { name: "Pine", hex: "#12694a", ink: "#e3f6ee" }, // deep green (~158°)
+  { name: "Slate", hex: "#33507f", ink: "#e9f0fb" }, // deep steel-blue (~215°)
+  { name: "Plum", hex: "#6b2b9e", ink: "#f4e9ff" }, // deep purple (~280°)
+  { name: "Wine", hex: "#9e1f46", ink: "#ffe6ee" }, // deep crimson (~338°)
 ];
 
 const SWATCH_HEXES: ReadonlySet<string> = new Set(
