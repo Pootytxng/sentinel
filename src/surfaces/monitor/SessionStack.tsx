@@ -71,6 +71,10 @@ function RowCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 640, h: 40 });
+  // Repaint when a per-room accent PICK changes --ix-accent in place (owner 2026-07-12b). The draw
+  // effect reads the colour at paint time, but its deps don't observe a live accent change, so
+  // without this the newest trace would keep the old hue until the room remounts (self-review catch).
+  const [accentTick, setAccentTick] = useState(0);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -81,6 +85,12 @@ function RowCanvas({
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const bump = () => setAccentTick((t) => t + 1);
+    window.addEventListener("compy:room-identity-changed", bump);
+    return () => window.removeEventListener("compy:room-identity-changed", bump);
   }, []);
 
   useEffect(() => {
@@ -157,7 +167,7 @@ function RowCanvas({
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [row, axisMax, newest, size, roomIdentityOn]);
+  }, [row, axisMax, newest, size, roomIdentityOn, accentTick]);
 
   return (
     <span className={`ss-canvas-wrap ${row.partial ? "ss-canvas-partial" : ""}`} ref={wrapRef}>

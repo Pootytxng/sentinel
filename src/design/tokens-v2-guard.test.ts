@@ -43,6 +43,7 @@ const loadV2Css = (...path: string[]): string =>
 const tokensCss = loadV2Css("design", "tokens-v2.css");
 const hudTokensCss = loadV2Css("design", "tokens-hud.css");
 const shellCss = loadV2Css("design", "shell-v2.css");
+const roomAccentPickerCss = loadV2Css("design", "room-accent-picker.css");
 const homeCss = loadV2Css("surfaces", "home-v2.css");
 const homeHudCss = loadV2Css("surfaces", "home-hud.css");
 const homeConsoleCss = loadV2Css("surfaces", "home-console.css");
@@ -65,6 +66,7 @@ const V2_CSS: [string, string][] = [
   ["tokens-v2.css", tokensCss],
   ["tokens-hud.css", hudTokensCss],
   ["shell-v2.css", shellCss],
+  ["room-accent-picker.css", roomAccentPickerCss],
   ["home-v2.css", homeCss],
   ["home-hud.css", homeHudCss],
   ["home-console.css", homeConsoleCss],

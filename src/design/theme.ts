@@ -2,6 +2,8 @@
 // cosmetic. The theme drives the app accent colors via `[data-itheme]` on <html> (see
 // instrument.css). Reversible: nothing here touches logic or the backend.
 
+import { PICKABLE_ROOMS, isSwatchHex, type PickableRoom } from "./room-identity";
+
 export type InstrumentTheme = "midnight" | "violet" | "crimson" | "emerald" | "hearth";
 
 export const INSTRUMENT_THEMES: { id: InstrumentTheme; label: string }[] = [
@@ -583,6 +585,82 @@ export function applyRoomIdentity(on: boolean): void {
     window.dispatchEvent(new Event("compy:room-identity-changed"));
   } catch {
     /* ignore — not in a DOM context (tests) */
+  }
+}
+
+// ── Per-room accent PICKS (owner 2026-07-12b: per-page colour freedom). A user override for a
+// room's accent, chosen from the curated ROOM_ACCENT_SWATCHES (room-identity.ts). Persisted as a
+// { room: hex } JSON map; only rooms the user actually customised appear (a missing room falls back
+// to its preset). Applied by injecting a managed <style> whose rules use the SAME scoped selector +
+// SAME same-element dim/line washes as room-identity.css's presets (so the var()-declaring-element
+// gotcha stays handled and the rig/sparkline follow via --ix-accent: var(--v2-accent)). Every rule
+// is scoped under :root[data-room-identity="on"], so with the flag off the picks are inert —
+// byte-identity holds. Only ever applies a whitelisted swatch hex (isSwatchHex), so a tampered
+// store can't paint an illegible colour. Presentation only.
+const ROOM_ACCENTS_KEY = "compy_room_accents";
+const ROOM_ACCENTS_STYLE_ID = "compy-room-accents";
+
+export function readRoomAccents(): Partial<Record<PickableRoom, string>> {
+  const out: Partial<Record<PickableRoom, string>> = {};
+  try {
+    const raw = localStorage.getItem(ROOM_ACCENTS_KEY);
+    if (!raw) return out;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const room of PICKABLE_ROOMS) {
+      const v = parsed[room];
+      if (typeof v === "string" && isSwatchHex(v)) out[room] = v.trim().toLowerCase();
+    }
+  } catch {
+    /* malformed/absent — no picks */
+  }
+  return out;
+}
+
+// (Re)build the managed <style> from the persisted picks. No picks ⇒ the element is removed, so an
+// unused feature leaves zero DOM. Idempotent — safe to call on every change and at boot.
+export function applyRoomAccents(): void {
+  if (typeof document === "undefined") return;
+  const accents = readRoomAccents();
+  const entries = Object.entries(accents) as [PickableRoom, string][];
+  let el = document.getElementById(ROOM_ACCENTS_STYLE_ID) as HTMLStyleElement | null;
+  if (entries.length === 0) {
+    if (el) el.remove();
+    return;
+  }
+  const css = entries
+    .map(
+      ([room, hex]) =>
+        `:root[data-room-identity="on"] .v2-room[data-room="${room}"]{` +
+        `--v2-accent:${hex};` +
+        `--v2-accent-dim:color-mix(in srgb, ${hex} 14%, transparent);` +
+        `--v2-accent-line:color-mix(in srgb, ${hex} 25%, transparent);}`,
+    )
+    .join("\n");
+  if (!el) {
+    el = document.createElement("style");
+    el.id = ROOM_ACCENTS_STYLE_ID;
+    document.head.appendChild(el);
+  }
+  el.textContent = css;
+}
+
+// Set (or clear, with hex=null) a room's accent pick, persist, re-apply, and notify consumers
+// (rig/sparkline/picker) via the shared room-identity-changed event. A non-swatch hex is treated as
+// a clear (never applied — the legibility guarantee).
+export function setRoomAccent(room: PickableRoom, hex: string | null): void {
+  const accents = readRoomAccents();
+  if (hex && isSwatchHex(hex)) accents[room] = hex.trim().toLowerCase();
+  else delete accents[room];
+  try {
+    localStorage.setItem(ROOM_ACCENTS_KEY, JSON.stringify(accents));
+  } catch {
+    /* persistence failed — still applies this session */
+  }
+  applyRoomAccents();
+  try {
+    window.dispatchEvent(new Event("compy:room-identity-changed"));
+  } catch {
+    /* not in a DOM context (tests) */
   }
 }
 

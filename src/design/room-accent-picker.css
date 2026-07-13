@@ -1,0 +1,145 @@
+/* Per-room accent picker (owner 2026-07-12b) — the topbar-corner control for RoomAccentPicker.tsx.
+   Scoped under [data-v2="on"] (the always-on V2 shell) per the tokens-v2 scoping law; the component
+   itself only mounts when the room-identity flag is on, so the topbar is byte-identical with it off.
+   Swatch/dot colours come from INLINE styles (the chosen accent) — this sheet carries only structure
+   + token-driven chrome, so it stays literal-clean like the surface sheets. */
+
+[data-v2="on"] .v2-accent-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+[data-v2="on"] .v2-accent-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+[data-v2="on"] .v2-accent-pick-btn:hover,
+[data-v2="on"] .v2-accent-pick-btn[aria-expanded="true"] {
+  border-color: var(--v2-accent);
+  background: var(--v2-panel-2);
+}
+
+/* The current-accent dot. Its fill is inline (the room's effective accent). The inset ring keeps a
+   pale swatch legible against the panel and gives every hue a crisp edge. */
+[data-v2="on"] .v2-accent-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+[data-v2="on"] .v2-accent-caret {
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid var(--v2-muted);
+}
+
+/* Popover — anchored to the button's right edge so it never spills past the window. */
+[data-v2="on"] .v2-accent-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 188px;
+  padding: 11px;
+  border: 1px solid var(--v2-line);
+  border-radius: 11px;
+  background: var(--v2-panel);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  animation: v2-accent-pop-in 130ms ease;
+}
+
+[data-v2="on"] .v2-accent-pop-head {
+  font: 10.5px var(--v2-font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+  margin-bottom: 9px;
+}
+
+[data-v2="on"] .v2-accent-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+}
+
+[data-v2="on"] .v2-accent-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  transition: transform 110ms ease;
+}
+[data-v2="on"] .v2-accent-swatch:hover {
+  transform: scale(1.12);
+}
+/* Selected swatch: a ring in the room's accent (which the swatch itself is painting) reads as
+   "this is the one" without a checkmark occluding the colour. */
+[data-v2="on"] .v2-accent-swatch.is-selected {
+  box-shadow:
+    0 0 0 2px var(--v2-panel),
+    0 0 0 3.5px var(--v2-accent);
+}
+
+[data-v2="on"] .v2-accent-reset {
+  display: block;
+  width: 100%;
+  margin-top: 11px;
+  padding: 6px 0;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--v2-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+[data-v2="on"] .v2-accent-reset:hover:not(:disabled) {
+  color: var(--v2-text);
+  border-color: var(--v2-accent);
+}
+[data-v2="on"] .v2-accent-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@keyframes v2-accent-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Motion opt-out (owner law: motion ON by default, overrides OS; reduce is the Settings opt-in).
+   COMPOUND selector — data-v2 AND data-motion both live on <html>, so they must be joined with no
+   combinator (a descendant space would demand [data-v2] be a CHILD of :root, which never matches;
+   caught in self-review 2026-07-12b). Matches the codebase convention (ambient-hud/home-console). */
+:root[data-v2="on"][data-motion="reduced"] .v2-accent-pop {
+  animation: none;
+}
+:root[data-v2="on"][data-motion="reduced"] .v2-accent-swatch,
+:root[data-v2="on"][data-motion="reduced"] .v2-accent-pick-btn,
+:root[data-v2="on"][data-motion="reduced"] .v2-accent-reset {
+  transition: none;
+}
+:root[data-v2="on"][data-motion="reduced"] .v2-accent-swatch:hover {
+  transform: none;
+}

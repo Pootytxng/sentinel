@@ -20,6 +20,9 @@ import { Wordmark } from "./Wordmark";
 import { NavGlyph } from "./NavGlyph";
 import { HOME_RAIL, type HomeRailId, type HomeRailItem } from "./homeRail";
 import { useJarvisActive } from "./jarvis/use-jarvis";
+import { useRoomIdentityFlag } from "./use-hud";
+import { RoomAccentPicker } from "./RoomAccentPicker";
+import { PICKABLE_ROOMS, type PickableRoom } from "./room-identity";
 import { LenisSpine } from "./jarvis/LenisSpine";
 import { MagneticLayer } from "./jarvis/MagneticLayer";
 import "./shell-v2.css";
@@ -65,6 +68,9 @@ export function ShellV2({
   // inactive (the "0" failsafe or reduced motion), none of the layer's nodes/attributes render and
   // the shell is byte-identical.
   const jarvis = useJarvisActive();
+  // Per-room accent picker (owner 2026-07-12b) — the topbar-corner control appears only when the
+  // room-identity flag is on; with it off, the topbar is byte-identical to today.
+  const roomIdentity = useRoomIdentityFlag();
   const shellRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -162,6 +168,9 @@ export function ShellV2({
             <span className="v2-room-title">{active?.label ?? "Compy"}</span>
             {active && <span className="v2-crumb">· {ROOM_CRUMB[active.id]}</span>}
             {stamp && <span className="v2-stamp">{stamp}</span>}
+            {roomIdentity && active && PICKABLE_ROOMS.includes(active.id as PickableRoom) && (
+              <RoomAccentPicker room={active.id as PickableRoom} roomLabel={active.label} />
+            )}
           </div>
           <div className="v2-content" ref={contentRef}>
             <div className="v2-content-wrap" ref={wrapRef}>

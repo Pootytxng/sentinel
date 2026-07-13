@@ -323,7 +323,8 @@ export default function Settings({
                   <div className="set-row-sub">
                     Give each room its own color so they're instantly tellable apart — Monitor teal,
                     Blackbook amber, Lab emerald, Home violet — the same idea as the color-coded parts
-                    in your 3D rig. Only changes the look; turn off for one shared violet.
+                    in your 3D rig. Want a different color for a room? Use the little accent dot in its
+                    top-right corner to pick one. Only changes the look; turn off for one shared violet.
                   </div>
                 </div>
                 <Toggle

@@ -6,6 +6,7 @@ import Overlay from "./Overlay";
 import { ConfirmProvider } from "./design/ConfirmDialog";
 import { WindowChrome } from "./design/WindowChrome";
 import { applyMotionAttribute } from "./design/use-motion";
+import { applyRoomAccents } from "./design/theme";
 
 // The overlay runs in a separate window labeled "overlay". Detect by the
 // window label (robust — avoids URL hash/encoding issues across dev & prod).
@@ -107,6 +108,11 @@ try {
 } catch {
   /* default OFF — the classic uniform-violet look */
 }
+
+// Per-room accent PICKS (owner 2026-07-12b): inject the managed <style> for any rooms the user
+// recoloured, before first paint (no hue flash). Self-gating — the rules are scoped under
+// [data-room-identity="on"], so with the flag off they're inert; no picks ⇒ no <style> at all.
+applyRoomAccents();
 
 // Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
 // components read one source of truth. Default BASIC (the answer face).
