@@ -55,18 +55,3 @@ export function monotoneSegments(pts: Pt[]): CubicSeg[] {
   }
   return out;
 }
-
-/** SVG path `d` for the monotone curve through pts (straight lines below 3 points). */
-export function monotonePathD(pts: Pt[]): string {
-  if (pts.length === 0) return "";
-  const f = (v: number) => v.toFixed(1);
-  let d = `M ${f(pts[0].x)} ${f(pts[0].y)}`;
-  if (pts.length < 3) {
-    for (let i = 1; i < pts.length; i++) d += ` L ${f(pts[i].x)} ${f(pts[i].y)}`;
-    return d;
-  }
-  for (const s of monotoneSegments(pts)) {
-    d += ` C ${f(s.c1x)} ${f(s.c1y)}, ${f(s.c2x)} ${f(s.c2y)}, ${f(s.x)} ${f(s.y)}`;
-  }
-  return d;
-}

@@ -819,8 +819,10 @@ pub(crate) fn evaluate_readiness(
     }
 
     // 8. Applied Compy changes — count active + flag external reverts. The drifted settings are
-    // named (flags-name-it law: no vague "N setting(s)", no dead-end room references — "Tune"
-    // no longer exists; Optimize is the room the fix CTA routes to).
+    // named (flags-name-it law: no vague "N setting(s)", no dead-end room references). Post the
+    // 2026-07-10 ground-flip the undo home is the Lab (owner: "the Lab is the one undo home");
+    // the backend can't read the runtime rail flag, so it names "the Lab" — correct under the
+    // shipped default rail, never the retired standalone "Optimize"/"Tune" tabs that no longer exist.
     {
         let c = if hist.externally_reverted > 0 {
             let detail = if hist.externally_reverted == 1 {
@@ -832,7 +834,7 @@ pub(crate) fn evaluate_readiness(
                 format!(
                     "“{name}” — you turned it on with Compy and it's currently off, changed \
                      outside Compy (by Windows, another app, or you). Not an error: turn it \
-                     back on or roll it back in Optimize — either one clears this."
+                     back on or roll it back in the Lab — either one clears this."
                 )
             } else {
                 let mut names = hist.drifted_titles.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
@@ -842,7 +844,7 @@ pub(crate) fn evaluate_readiness(
                 format!(
                     "{} settings you turned on with Compy are currently off ({names}) — changed \
                      outside Compy (by Windows, another app, or you). Not an error: turn them \
-                     back on or roll them back in Optimize — either one clears this.",
+                     back on or roll them back in the Lab — either one clears this.",
                     hist.externally_reverted
                 )
             };
@@ -1277,11 +1279,14 @@ mod readiness_tests {
         let c = find(&r, "applied-changes");
         assert_eq!(c.status, ReadinessStatus::Attention);
         // flags-name-it law: the drifted setting is NAMED; no vague "setting(s)", no dead-end
-        // "Tune" room reference (that surface was merged into Optimize).
+        // room references. bug→guard (drift audit 2026-07-13): post the ground-flip the undo home
+        // is the Lab — the string must point THERE, never the retired standalone "Optimize"/"Tune"
+        // tabs (the room-labels-vs-nav-ids law: a retired label in user-facing copy is a defect).
         assert!(c.detail.contains("Enable Windows Game Mode"), "detail names the drifted setting: {}", c.detail);
         assert!(!c.detail.contains("setting(s)"), "no vague count: {}", c.detail);
         assert!(!c.detail.contains("Tune"), "no stale room name: {}", c.detail);
-        assert!(c.detail.contains("Optimize"), "points at the real room: {}", c.detail);
+        assert!(c.detail.contains("the Lab"), "points at the real undo home (the Lab): {}", c.detail);
+        assert!(!c.detail.contains("in Optimize"), "no retired standalone-Optimize-tab dead-end: {}", c.detail);
         // Structured drift titles are exposed so the priorities layer can dedup the drifted rec
         // out of "safe tweaks not applied" (owner-caught double-listing, 2026-07-08).
         assert_eq!(c.drifted_titles, vec!["Enable Windows Game Mode".to_string()]);

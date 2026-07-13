@@ -296,8 +296,11 @@ describe("vendor hygiene (MIT + Commons Clause notice)", () => {
     statSync(join(vendorDir, f)).isDirectory(),
   );
 
-  it("vendor kit is present (the V2-1 adopt list)", () => {
-    expect(components.length).toBeGreaterThanOrEqual(12);
+  it("vendor kit is present (the adopted list)", () => {
+    // Floor tracks the ADOPTED components only. Dead-code sweep 2026-07-13 removed 7 never-wired
+    // React Bits vendored dirs (DotField, GlareHover, GooeyNav, Grainient, Noise, PillNav, Radar —
+    // 0 importers, verified) from the original bulk-vendor add; the 7 that remain are all in use.
+    expect(components.length).toBeGreaterThanOrEqual(7);
   });
 
   const thirdParty = readFileSync(join(vendorDir, "THIRD_PARTY.md"), "utf8");

@@ -21,29 +21,20 @@ the `main` branch.
 |---|---|---|---|
 | DecryptedText | TextAnimations/DecryptedText | Verdict lines resolve on scan completion — measured values only | LF-normalized, header added; **decode-once registry** (module-level `decodedTexts` set) so `animateOn="view"` scrambles a given text once per session and shows it resolved instantly on later re-mounts — stops the per-char scramble re-churning on every V2 room re-mount (the tab-switch "stick") |
 | CountUp | TextAnimations/CountUp | Stat values land with weight — measured values only | LF-normalized, header added |
-| Radar | Backgrounds/Radar | Active-scan backdrop (one place) | LF-normalized, header added |
-| DotField | Backgrounds/DotField | Quiet technical shell backdrop, barely-there opacity | LF-normalized, header added |
-| Grainient | Backgrounds/Grainient | Texture pass — kills the flat-gradient look | LF-normalized, header added |
-| Noise | Animations/Noise | Static grain texture overlay | LF-normalized, header added |
 | ElectricBorder | Animations/ElectricBorder | ONE sanctioned use: hologram hero stage frame | LF-normalized, header added |
 | SpotlightCard | Components/SpotlightCard | Hover treatment, priority/finding cards | LF-normalized, header added |
-| GlareHover | Animations/GlareHover | Hover treatment (alternative — one of the two ships) | LF-normalized, header added |
 | MagicBento | Components/MagicBento | Home stats bento rhythm; **Lab checkup bento** (`LabBento.tsx`, spec 2026-07-05-lab-bento-checkup) | LF-normalized, header added; **`ParticleCard` exported** so LabBento composes real station cards from the interaction primitive (theme-accent glow, tilt/magnetism off, reduced-motion gated) instead of duplicating it |
-| GooeyNav | Components/GooeyNav | Rail active-state candidate (vs PillNav — dev-build eval, loser deleted) | LF-normalized, header added |
-| PillNav | Components/PillNav | Rail active-state candidate (vs GooeyNav — dev-build eval, loser deleted) | LF-normalized, header added; **react-router-dom removed** — plain anchors + `onItemSelect` callback (Compy is router-less) |
 | Stepper | Components/Stepper | Setup & Tour footer progress — numbered indicators + animated connectors + check marks (`compy_setup_stepper`, DEFAULT OFF; vendored 2026-07-05, round-2 pass) | LF-normalized, header added; **StepIndicator/StepConnector exported** (SetupTour composes the indicator row without the demo container); **status colors moved from the motion variants into token-driven CSS** (`data-status`; vendor purple can never paint, test-pinned); `reduced` prop zeroes every animation duration (reduced-motion gate) |
 
-Adopt-list picks settled at vendor time (rationale in the V2-1 commit):
-
-- **Radar over GridScan** — GridScan imports `face-api.js` (webcam face-detection ML) +
-  `postprocessing`; unacceptable dependency surface for a scan backdrop.
-- **DotField over DotGrid** — zero-dep vs gsap InertiaPlugin; same visual role.
-- **Noise + Grainient over Dither** — Dither needs `@react-three/postprocessing` +
-  `postprocessing` (two new deps for one texture).
-- **ElectricBorder over BorderGlow** — the spec's named-first pick; zero-dep.
+> **Dead-code sweep 2026-07-13:** 7 never-adopted React Bits dirs removed (0 importers, grep-verified) —
+> **Radar, DotField, Grainient, Noise, GlareHover, GooeyNav, PillNav**. Their table rows + the vendor-time
+> rationale below are dropped with them. **Follow-up (not done here):** `ogl` was pulled ONLY by Radar +
+> Grainient (both now gone) → it is likely an orphaned npm dependency; verify no other importer, then drop
+> it from `package.json` in a dedicated dep-prune pass. `gsap` (still used by MagicBento) and `motion`
+> (DecryptedText/CountUp) remain in use.
 
 Runtime deps these components pull (all free, MIT-family, added in V2-1): `gsap`
-(MagicBento, PillNav), `ogl` (Radar, Grainient), `motion` (DecryptedText, CountUp).
+(MagicBento), `motion` (DecryptedText, CountUp). (`ogl` — see the sweep note above.)
 
 ## threejs-holographic-material — github.com/ektogamat/threejs-holographic-material
 
