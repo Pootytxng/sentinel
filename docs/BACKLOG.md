@@ -161,6 +161,42 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12k — 🟢 OWNER LIKES THE PICKER (Cycle 12j eyeball cleared) → new follow-up: EXPAND PALETTE VARIETY (neon/bright + dark-tone mixed). NOT STARTED — queued for a fresh session.
+
+**Owner verdict on the Cycle-12j picker (2026-07-12): "i like it" — the picker feature is APPROVED.**
+Follow-up ask, verbatim: *"maybe more variety of color diversity more neon or bright/dark tone mixed
+idk just more variety."* So the mechanism is good; he wants the **swatch palette itself** to have a lot
+more range. **Default-ON flip is DEFERRED** until the expanded palette lands and he re-eyeballs it (do
+NOT flip `compy_room_identity` default-ON yet).
+
+- **Current palette (10, all bright by necessity):** Violet `#a78bfa` · Teal `#3fd9c2` · Amber `#f0b878`
+  · Emerald `#27e08a` · Sky `#5aa9ff` · Rose `#ff8ac4` · Coral `#ff9163` · Gold `#ffd166` · Lime
+  `#a6e85f` · Cyan `#5fd7f0` (`ROOM_ACCENT_SWATCHES`, `src/design/room-identity.ts:55`).
+- **The hard constraint (why they're all bright):** every swatch is guarded ≥ WCAG 4.5:1 vs the dark
+  accent-ink `--v2-accent-ink #1a0a2e`, because the accent doubles as a **button/pill FILL with dark ink
+  on top** (`room-accents.test.tsx:59`, "button-legibility law"). High-luminance neon/bright colours pass
+  easily; **true dark-tone swatches FAIL** (dark accent under dark ink < 4.5:1) and the guard blocks them.
+- **The ONE design fork the next session must resolve:**
+  - **(A) Bright-only expansion — fast, safe, single-ink architecture untouched:** grow to ~16–20 swatches
+    with far more neon/saturated range (electric blue, magenta, hot pink, chartreuse, orange, aqua,
+    violet-blue, etc.), all still ≥4.5:1 vs `#1a0a2e`. Covers "more neon/bright + more variety" fully;
+    does NOT deliver "dark tone."
+  - **(B) Also unlock dark tones — bigger, touches the ink architecture:** make `--v2-accent-ink`
+    luminance-adaptive (light ink on dark accents) so dark swatches stay legible as fills. Requires: the
+    managed `<style id="compy-room-accents">` (`theme.ts` `applyRoomAccents`) to also emit the paired ink
+    per swatch; the legibility guard extended to test each swatch against ITS ink (not a fixed dark ink);
+    a re-check of every accent-fill use site (buttons/pills/chips) + `button-legibility-guard.test.ts`;
+    self-review pass. **Recommended: do BOTH — (A) for the easy bright variety + (B) for a few dark
+    swatches — so "bright/dark tone mixed" is actually satisfied** (TURBO window has budget for the rigor).
+- **This is a TASTE deliverable** — the owner delegated the picks ("idk just more variety") but the final
+  set is his eyeball. Present the expanded palette live (the picker shows it) and let him approve before
+  the default-ON flip. Legibility law (`#1a0a2e` ink ≥4.5:1, or adaptive ink under option B) is
+  NON-NEGOTIABLE — that's why it's curated swatches, not a free hex field.
+- ⛳ **RESUME (fresh session):** read this cycle + Cycle 12j. Pick fork (A/B/both — recommend both),
+  expand `ROOM_ACCENT_SWATCHES` (+ `SWATCH_WHITELIST`), keep/extend the legibility guard, add
+  bug→guards, `tsc`+`vitest`, self-review (live CDP), then **ship** (`.claude/skills/ship`) and
+  **doc-sync**. Do NOT flip default-ON — leave the owner one-flip eyeball on the NEW palette.
+
 ### Cycle 2026-07-12j — ✅ PER-ROOM ACCENT PICKER SHIPPED LIVE `20e2b50` (curated swatches, behind existing `compy_room_identity` flag DEFAULT OFF; installer SHA-256 `457A2D00…F73EBDCE`, stamp-verified) — owner eyeball is the open gate
 
 **Owner follow-up 2026-07-12b** (after eyeballing Cycle 12i's presets, verdict "it looks good … otherwise
