@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RigPartKind } from "./rig-parts";
+import { readRoomIdentity } from "../../design/theme";
 
 // Resolve the active instrument theme's colours from CSS custom properties into plain hex strings
 // that three.js materials can consume (three can't read `var(--ix-*)`). The theme paints the BAY
@@ -24,7 +25,14 @@ const FALLBACK: RigColors = {
 
 function read(): RigColors {
   if (typeof document === "undefined") return FALLBACK;
-  const s = getComputedStyle(document.documentElement);
+  // When per-room identity is on, resolve the BAY accent from the active room element so the Lab's
+  // hologram cage/ring/grid adopt the room hue (emerald) instead of the base theme accent — the
+  // room chrome and the hologram then read as one. Off ⇒ documentElement (today's behaviour). Home
+  // takes no --ix-accent re-point, so reading its room element yields the same value as the root.
+  const scope =
+    (readRoomIdentity() ? document.querySelector<HTMLElement>(".v2-room") : null) ??
+    document.documentElement;
+  const s = getComputedStyle(scope);
   const v = (name: string, fb: string) => {
     const got = s.getPropertyValue(name).trim();
     return got || fb;
@@ -45,11 +53,19 @@ export function useRigColors(): RigColors {
   const [colors, setColors] = useState<RigColors>(read);
   useEffect(() => {
     const update = () => setColors(read());
-    update(); // resolve once mounted (CSS is now applied)
-    // Re-resolve when the instrument theme attribute flips (Settings → Appearance).
+    update(); // resolve once mounted (CSS is now applied, and the room element exists)
+    // Re-resolve when the instrument theme OR the per-room identity flag flips (Settings →
+    // Appearance). Room navigation is covered by remount — the rig unmounts/remounts per room.
     const obs = new MutationObserver(update);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-itheme"] });
-    return () => obs.disconnect();
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-itheme", "data-room-identity"],
+    });
+    window.addEventListener("compy:room-identity-changed", update);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener("compy:room-identity-changed", update);
+    };
   }, []);
   return colors;
 }

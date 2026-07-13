@@ -77,6 +77,7 @@ import "./design/living-instrument.css"; // "Living Instrument" feel-refresh ski
 import "./design/dashboard-skin.css"; // "dashboard-energy" premium skin — scoped under [data-dash-v2], default OFF
 import "./design/fonts-v2.css"; // Geist Sans/Mono @font-face (OFL, bundled) — inert until tokens-v2 uses them
 import "./design/tokens-v2.css"; // V2 shell tokens — every rule scoped under [data-v2="on"], default OFF
+import "./surfaces/room-identity.css"; // per-room identity accents — scoped [data-room-identity="on"], default OFF
 import "./design/tokens-hud.css"; // Instrument-HUD tokens — scoped under [data-hud="on"], DEFAULT OFF
 import "./surfaces/ambient-hud.css"; // T4c ambient skin (grain · glass · holo-foil) — scoped [data-v2][data-hud]
 

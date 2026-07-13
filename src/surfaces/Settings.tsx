@@ -8,6 +8,8 @@ import {
   applyMonitorConsole,
   readBlackbookConsole,
   applyBlackbookConsole,
+  readRoomIdentity,
+  applyRoomIdentity,
   readJarvisMotion,
   applyJarvisMotion,
   readCloseToTray,
@@ -120,6 +122,7 @@ export default function Settings({
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
   const [blackbookConsole, setBlackbookConsole] = useState<boolean>(readBlackbookConsole);
+  const [roomIdentity, setRoomIdentity] = useState<boolean>(readRoomIdentity);
   const [jarvisMotion, setJarvisMotion] = useState<boolean>(readJarvisMotion);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -170,6 +173,14 @@ export default function Settings({
   const changeBlackbookConsole = (v: boolean) => {
     setBlackbookConsole(v);
     applyBlackbookConsole(v);
+  };
+  // Per-room accent colors (owner 2026-07-12 "per-room identity", DEFAULT OFF — owner eyeball gate).
+  // Gives each room its own distinguishable accent (Monitor teal · Blackbook amber · Lab emerald ·
+  // Home violet) like the rig's per-part colors. Presentation only; the "0"/absent default renders
+  // every room in the classic uniform violet, byte-identical to today.
+  const changeRoomIdentity = (v: boolean) => {
+    setRoomIdentity(v);
+    applyRoomIdentity(v);
   };
   // JARVIS motion layer preview (UI_VISION_BACKLOG §A, DEFAULT OFF) — the interactive motion
   // layer: glide scrolling, room-change sweep, magnetic rail, stage tilt, measured data-ticks.
@@ -281,10 +292,11 @@ export default function Settings({
                 />
               </div>
 
-              {/* Blackbook console (Phase 4, DEFAULT OFF — the one current preview row): the
+              {/* Blackbook console (Phase 4, DEFAULT OFF — a current preview row): the
                   flight-recorder Logbook. Preview until the owner eyeballs it; "(preview)" is
                   honest here (unlike the graduated default-ON Monitor console / JARVIS rows above,
-                  whose "0" restores the classic look). */}
+                  whose "0" restores the classic look). The Room accent colors row below is the
+                  other open preview. */}
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
                   <div className="set-row-title">Blackbook console (preview)</div>
@@ -299,6 +311,25 @@ export default function Settings({
                   on={blackbookConsole}
                   onChange={changeBlackbookConsole}
                   ariaLabel="Blackbook console (preview)"
+                />
+              </div>
+
+              {/* Per-room accent colors (DEFAULT OFF — owner eyeball gate): each room gets its own
+                  identity hue like the rig's per-part colors. CSS is scoped [data-room-identity="on"],
+                  so the "0"/absent default is the classic uniform violet, byte-identical. */}
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Room accent colors (preview)</div>
+                  <div className="set-row-sub">
+                    Give each room its own color so they're instantly tellable apart — Monitor teal,
+                    Blackbook amber, Lab emerald, Home violet — the same idea as the color-coded parts
+                    in your 3D rig. Only changes the look; turn off for one shared violet.
+                  </div>
+                </div>
+                <Toggle
+                  on={roomIdentity}
+                  onChange={changeRoomIdentity}
+                  ariaLabel="Room accent colors (preview)"
                 />
               </div>
 

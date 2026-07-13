@@ -96,6 +96,18 @@ try {
   document.documentElement.dataset.jarvis = "on"; // default ON even if localStorage is unavailable
 }
 
+// Per-room identity accents (owner 2026-07-12) — DEFAULT OFF: the attribute appears ONLY when the
+// key is explicitly "1". room-identity.css is scoped :root[data-room-identity="on"] .v2-room[...],
+// so absent/"0" is byte-identical to today's uniform violet. Set before first paint so the room
+// hues never flash in after mount.
+try {
+  if (localStorage.getItem("compy_room_identity") === "1") {
+    document.documentElement.dataset.roomIdentity = "on";
+  }
+} catch {
+  /* default OFF — the classic uniform-violet look */
+}
+
 // Basic/Advanced view mode — mirrored onto <html data-view-mode> before first paint so CSS and
 // components read one source of truth. Default BASIC (the answer face).
 try {

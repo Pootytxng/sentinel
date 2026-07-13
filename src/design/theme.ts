@@ -554,6 +554,38 @@ export function applyBlackbookConsole(on: boolean): void {
   }
 }
 
+// Per-room identity accents (owner 2026-07-12 "per-room identity" — see src/design/room-identity.ts
+// for the palette + doctrine). DEFAULT OFF behind `compy_room_identity`: when on, <html
+// data-room-identity="on"> lets room-identity.css scope each room's own --v2-accent so its chrome
+// reads a distinguishable hue (theme-independent, like the rig's part-identity colours). Every rule
+// is scoped under the attribute, so the "0"/absent state is byte-identical to today's uniform violet.
+// Presentation only — no logic, data, measurement, or backend touched.
+const ROOM_IDENTITY_KEY = "compy_room_identity";
+
+export function readRoomIdentity(): boolean {
+  try {
+    return localStorage.getItem(ROOM_IDENTITY_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyRoomIdentity(on: boolean): void {
+  if (on) document.documentElement.dataset.roomIdentity = "on";
+  else delete document.documentElement.dataset.roomIdentity;
+  try {
+    localStorage.setItem(ROOM_IDENTITY_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore persistence failure — still applies this session */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:room-identity-changed"));
+  } catch {
+    /* ignore — not in a DOM context (tests) */
+  }
+}
+
 // JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6; rails: the de-slop directive
 // 2026-07-05 §"Interaction / motion layer" :111-176) — the interactive layer the reskin left
 // unbuilt: Lenis glide scrolling on the content lane, a room-change "retune" sweep, magnetic

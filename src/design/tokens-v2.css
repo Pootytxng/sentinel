@@ -23,7 +23,12 @@
   --v2-muted: #8b93a7;
   --v2-faint: #626a80;
 
-  /* Accent (violet family — the approved mockup accent) */
+  /* Accent (violet family — the approved mockup accent). These are the DEFAULT (flag-off) values.
+     A var()-chain inside a custom property bakes in at ITS declaring element, so a per-room
+     --v2-accent override at .v2-room can NOT retro-follow these :root declarations — the per-room
+     hue for the dim/line washes is therefore re-declared same-element in room-identity.css (each room
+     block), not derived here. --v2-accent-ink stays a fixed near-black — dark ink is legible on every
+     accent fill (teal/amber/emerald), so it must NOT follow. */
   --v2-accent: #a78bfa;
   --v2-accent-ink: #1a0a2e;
   --v2-accent-dim: rgba(167, 139, 250, 0.14);

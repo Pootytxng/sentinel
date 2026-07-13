@@ -5,6 +5,7 @@ import {
   readHomeConsole,
   readMonitorConsole,
   readBlackbookConsole,
+  readRoomIdentity,
 } from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
@@ -73,6 +74,20 @@ export function useBlackbookConsoleFlag(): boolean {
     const sync = () => setOn(readBlackbookConsole());
     window.addEventListener("compy:blackbook-console-changed", sync);
     return () => window.removeEventListener("compy:blackbook-console-changed", sync);
+  }, []);
+  return on;
+}
+
+// The per-room identity accent flag as live React state (owner 2026-07-12, see room-identity.ts;
+// same contract: the Settings toggle fires compy:room-identity-changed so consumers re-read without
+// a reload). DEFAULT OFF — SessionStack uses this to decide whether its sparkline reads the
+// room-scoped accent (on) or documentElement (off, byte-identical to today).
+export function useRoomIdentityFlag(): boolean {
+  const [on, setOn] = useState(readRoomIdentity);
+  useEffect(() => {
+    const sync = () => setOn(readRoomIdentity());
+    window.addEventListener("compy:room-identity-changed", sync);
+    return () => window.removeEventListener("compy:room-identity-changed", sync);
   }, []);
   return on;
 }

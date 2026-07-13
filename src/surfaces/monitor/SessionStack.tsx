@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionSummary } from "../../types";
+import { useRoomIdentityFlag } from "../../design/use-hud";
 import { monotoneSegments } from "../../design/console/monotone";
 import { prettyGameName } from "../game-name";
 import { fmtDur } from "../Play";
@@ -28,9 +29,13 @@ import {
 // objects come from one useMemo over [sessions, filter], so a same-reference re-render (the
 // parent's 1 Hz poll cycle) reaches no canvas.
 
-function readInk(name: string, fb: string): string {
+// Resolve a CSS custom property. `from` lets the caller read a ROOM-scoped value instead of the
+// document root: when the per-room identity flag is on, the newest-session trace reads --ix-accent
+// off the in-room element so it adopts the room hue (teal on Monitor), matching the room chrome
+// instead of the theme accent. `from` null/undefined ⇒ documentElement ⇒ today's behaviour.
+function readInk(name: string, fb: string, from?: Element | null): string {
   if (typeof document === "undefined") return fb;
-  const got = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const got = getComputedStyle(from ?? document.documentElement).getPropertyValue(name).trim();
   return got || fb;
 }
 
@@ -52,7 +57,17 @@ function traceMonotone(ctx: CanvasRenderingContext2D, pts: { x: number; y: numbe
   }
 }
 
-function RowCanvas({ row, axisMax, newest }: { row: StackRow; axisMax: number | null; newest: boolean }) {
+function RowCanvas({
+  row,
+  axisMax,
+  newest,
+  roomIdentityOn,
+}: {
+  row: StackRow;
+  axisMax: number | null;
+  newest: boolean;
+  roomIdentityOn: boolean;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 640, h: 40 });
@@ -82,9 +97,14 @@ function RowCanvas({ row, axisMax, newest }: { row: StackRow; axisMax: number | 
     ctx.clearRect(0, 0, w, h);
     if (row.fracs.length < 2 || axisMax == null) return;
 
-    const ink = newest ? readInk("--ix-accent", "#b366ff") : readInk("--ix-text-3", "#8a93a6");
-    const warn = readInk("--v2-warn", "#f5c542");
-    const grid = readInk("--ix-glass-border", "rgba(160,170,190,0.3)");
+    // When per-room identity is on, read the room-scoped accent (via this row's in-room element)
+    // so the newest trace matches the Monitor chrome hue; off ⇒ documentElement (today's value).
+    const inkFrom = roomIdentityOn ? wrapRef.current : null;
+    const ink = newest
+      ? readInk("--ix-accent", "#b366ff", inkFrom)
+      : readInk("--ix-text-3", "#8a93a6", inkFrom);
+    const warn = readInk("--v2-warn", "#f5c542", inkFrom);
+    const grid = readInk("--ix-glass-border", "rgba(160,170,190,0.3)", inkFrom);
     const baseY = h - 1;
     const plotH = h - PAD_Y * 2;
     const px = (xf: number) => 1 + xf * (w - 2);
@@ -137,7 +157,7 @@ function RowCanvas({ row, axisMax, newest }: { row: StackRow; axisMax: number | 
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [row, axisMax, newest, size]);
+  }, [row, axisMax, newest, size, roomIdentityOn]);
 
   return (
     <span className={`ss-canvas-wrap ${row.partial ? "ss-canvas-partial" : ""}`} ref={wrapRef}>
@@ -174,6 +194,7 @@ export function SessionStack({
 }) {
   const [gameOnly, setGameOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const roomIdentityOn = useRoomIdentityFlag();
   const now = useMemo(() => new Date(), []);
   const currentGame = sessions[0]?.process_name || null;
   const filterAvail = useMemo(() => gameFilterAvailable(sessions), [sessions]);
@@ -250,7 +271,12 @@ export function SessionStack({
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-                <RowCanvas row={row} axisMax={model.axisMax} newest={i === 0} />
+                <RowCanvas
+                  row={row}
+                  axisMax={model.axisMax}
+                  newest={i === 0}
+                  roomIdentityOn={roomIdentityOn}
+                />
                 {row.delta && (
                   <span className="ss-chip">
                     VS PREVIOUS {fmtDeltaGlyph(row.delta.avgFps)} AVG
