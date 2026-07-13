@@ -161,7 +161,7 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-13b — 🚧 DEAD-CODE CLEANUP + readiness leak fix COMMITTED+PUSHED `c80678f` — SHIP PENDING (build was in flight at context refresh)
+### Cycle 2026-07-13b — ✅ DEAD-CODE CLEANUP + readiness leak fix SHIPPED LIVE `2b64c51` (code `c80678f`; installer SHA-256 `21942094…0930FF4F`, stamp-verified) — NO gate moved
 
 **Turbo-window maintenance pass (owner-directed "full self review, maintenance, dead-code cleanup").** Three
 read-only audits (frontend dead code · Rust dead-code+clippy · doc/stale-ref drift) fanned out; findings
@@ -178,15 +178,16 @@ applied serially, all mechanically verified. **Committed + pushed `c80678f` (18 
   bug→guard (asserts "the Lab" present AND no "in Optimize" dead-end).
 - **Verify:** tsc 0 · **vitest 1593/1593** (177 files; −14 = per-component license tests for the removed
   vendor dirs) · cargo test readiness **35/0**. Zero mutation-boundary / gate changes.
-- ⛳ **RESUME (next session, FIRST):** ship `c80678f`. **The release build COMPLETED (exit 0) at refresh
-  time** — the NSIS at `src-tauri/target/release/bundle/nsis/Compy_0.1.0_x64-setup.exe` is built from
-  `c80678f`, so run `scripts/ship-reinstall.ps1` DIRECTLY (its stale-gate confirms the exe embeds `c80678f`;
-  rebuild only if the gate fails) → stamp-verify `c80678f` live → **doc-sync:** RELEASE_STATE new banner +
-  table Git-HEAD/Current-installer rows `530ef8b`→`c80678f` (live installer is still `703F078B…`/`530ef8b`
-  until this ships) + this cycle → ✅. **NOTE:** stop any running compy + free ports first per the
-  single-instance race law; ship-reinstall handles the graceful close.
-  (The dead-code removal is behaviorally inert; the readiness string is the only user-facing change — low
-  frequency, so an unshipped gap is harmless if the ship slips.)
+- ✅ **SHIPPED LIVE 2026-07-13 `2b64c51`.** The next session's ship found HEAD had advanced to `2b64c51`
+  (the docs persist-commit) AFTER the `c80678f` build, so the pre-built NSIS embedded `c80678f` while the
+  stale-gate now demanded `2b64c51` — it would have (correctly) thrown. **Rebuilt at HEAD** (`npm run tauri
+  build`, exit 0; sole `c80678f`→`2b64c51` delta is `docs/BACKLOG.md`, not compiled → binary functionally
+  identical to `c80678f`; `build.rs` re-stamped `COMPY_GIT_HASH=2b64c51` via its `.git/HEAD` rerun trigger) →
+  `scripts/ship-reinstall.ps1` (stale-gate PASSED, silent install exit 0, one installer on Desktop, launched)
+  → **stamp-verified `2b64c51` live** (installed `%LOCALAPPDATA%\Compy\compy.exe` embeds `2b64c51` only — not
+  `530ef8b`/`c80678f`). New installer SHA-256 `219420944926D99318CFB8FFA6D689952D154FF6005756926BF334640930FF4F`,
+  supersedes `703F078B…9EE40B8`/`530ef8b`. **doc-sync same commit:** RELEASE_STATE new UPDATE banner + table
+  Git-HEAD/Current-installer rows re-anchored `530ef8b`→`2b64c51`.
 - **DEFERRED follow-ups (verified-safe, NOT done — flagged for a focused pass):**
   1. **`theme.ts` 14 orphaned exports** (0-reference, safe delete; superseded by `main.tsx` inline boot):
      `INSTRUMENT_THEMES`, `readLivingInstrument`, `applyLivingInstrument`, `applyLabGuided`, `applyLabBento`,
