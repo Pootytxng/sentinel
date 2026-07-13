@@ -10,6 +10,29 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (MONITOR v5 CONSOLE FLIPPED DEFAULT-ON `e195f70` — installer SHA-256
+> `3B855DD1454FD7F615F301A6C4808AC0EC1FB8AB409E9DFCCA939927972FB003`, live exe stamp-verified
+> `e195f70` via the embedded hash, installed by Claude, supersedes the `DFE827D1…FB59` installer;
+> flag `compy_monitor_console` **DEFAULT OFF → DEFAULT ON**, owner "flip it default on and silent
+> reinstall"):** Owner approved the Monitor v5 console (Flight Deck + Session Stack, RTSS-style
+> zero-anchored frametime scale, live `915e85b`) after learning it lived behind the DEFAULT-OFF
+> "Monitor console (preview)" toggle → flipped to the build per ship-approved-work-as-the-build.
+> `readMonitorConsole` (`src/design/theme.ts`) now `!== "0"` (default ON, mirrors Home/JARVIS);
+> Settings row dropped "(preview)" → "Monitor console" (now the OFF failsafe); stale "DEFAULT OFF"
+> code comments corrected (`Settings.tsx` + `use-hud.ts`). **bug→guard:** `monitor-console-flag.test.tsx`
+> re-pinned to the DEFAULT-ON polarity (absent === console face byte-identical to "1"; "0" === the
+> classic Basic face, both `compy_editorial` states); sibling `monitor-v2.test.tsx` re-pointed the
+> same commit (sets the key "0" to keep pinning the classic tree). Zero `src-tauri`. Verify: tsc 0 ·
+> vitest **1522** (172 files) · self-reviewer **PASS 8/8** on the installed build (default-ON renders
+> the Flight Deck in Basic+Advanced; "0" failsafe restores classic with 0 reload; Settings label bare
+> "Monitor console"; h1 bare "Monitor"; scopes honest "NO SIGNAL" at rest over the owner's REAL
+> session history; dark accent-ink on every accent fill; 0 vendor-purple under Crimson; 0 idle
+> draws/10s). **Pre-existing follow-up exposed by the flip (NOT this diff, logged in BACKLOG):** the
+> Monitor room chrome (buttons/chips/mode-pill) is locked to static violet via `monitor-v2.css`'s
+> play-room accent re-point while `SessionStack`'s sparkline follows the live theme — an internal
+> accent mismatch under non-Violet themes only (invisible on the default Violet); not an
+> illegibility/vendor-purple defect.
+>
 > **UPDATE 2026-07-12 (JARVIS MOTION LAYER FLIPPED DEFAULT-ON `fcc400b` — installer SHA-256
 > `DFE827D1CB0F85F23DA383EDD1C215C3CDF6B3BF6FA00AB941FED931AFD8FB59`, live exe stamp-verified
 > `fcc400b` via the embedded hash, installed by Claude, supersedes the `8EB6185D…812D10` installer;
@@ -412,9 +435,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `fcc400b` + docs commits `f15e2c5`/this row (branch `main`, 2026-07-12 — the live installer is built from exactly `fcc400b`, the JARVIS-motion DEFAULT-ON flip; live exe stamp-verified `fcc400b`, Desktop installer SHA re-hashed to match, 2026-07-12) |
+| Git HEAD | `e195f70` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `e195f70`, the Monitor v5 console DEFAULT-ON flip; live exe stamp-verified `e195f70` via the embedded hash) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `DFE827D1CB0F85F23DA383EDD1C215C3CDF6B3BF6FA00AB941FED931AFD8FB59` (built from `fcc400b`, 2026-07-12 — **JARVIS motion layer FLIPPED DEFAULT-ON**: flag `compy_jarvis_motion` **DEFAULT OFF → DEFAULT ON** (`readJarvisMotion` → `!== "0"`, `src/design/theme.ts`; Settings → Appearance "JARVIS motion", now the OFF failsafe) — Lenis spine + retune wipe + magnetic rail + stage-chrome tilt + gauge data-ticks, default-ON from first paint; the "0" failsafe byte-identity re-pinned; owner eyeball "everything looks good"; details in the top Snapshot banner. Superseded installer: `8EB6185D…812D10` from `1d310e1` (same JARVIS payload, DEFAULT OFF), whose chain it carries — **Home title-header fix** (`cc1ffce`: console h1 = room TITLE "Home"; posture verdict + dek in the new `.hc-verdict` body strip; guards in `home-console.test.tsx`), the **Expert-view** train (`5850ac0`: one genuine Settings > Behavior preference `compy_expert_view`, **DEFAULT OFF**, `readExpertView` → `=== "1"`, `src/design/use-expert-view.ts` — pref off ⇒ byte-identical face, pinned in `expert-view.test.tsx`; ON un-hides existing data only, zero new mutation paths, zero `src-tauri` diff), the full 2026-07-11 consumer-panel overhaul (`50b5c03`) and everything below it (Monitor v5 stack from `915e85b`, `compy_monitor_console` still **DEFAULT OFF**).) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `3B855DD1454FD7F615F301A6C4808AC0EC1FB8AB409E9DFCCA939927972FB003` (built from `e195f70`, 2026-07-12 — **Monitor v5 console FLIPPED DEFAULT-ON**: flag `compy_monitor_console` **DEFAULT OFF → DEFAULT ON** (`readMonitorConsole` → `!== "0"`, `src/design/theme.ts`; Settings → Appearance "Monitor console", now the OFF failsafe) — the Flight Deck + Session Stack is Monitor's default live face; the "0" failsafe restores the classic tiles; test-pins re-pointed to the DEFAULT-ON polarity (`monitor-console-flag.test.tsx` + sibling `monitor-v2.test.tsx`); owner "flip it default on"; self-reviewer PASS 8/8; details in the top Snapshot banner. Superseded installer: `DFE827D1…FB59` from `fcc400b` (JARVIS DEFAULT-ON), whose chain it carries — **JARVIS motion** (`compy_jarvis_motion` DEFAULT ON, `readJarvisMotion` → `!== "0"`), **Home title-header fix** (`cc1ffce`), the **Expert-view** train (`5850ac0`: `compy_expert_view` **DEFAULT OFF**, `readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`, zero `src-tauri`), the full 2026-07-11 consumer-panel overhaul (`50b5c03`) and the Monitor v5 stack build itself (`915e85b`, now default-ON).) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 

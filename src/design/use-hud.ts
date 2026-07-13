@@ -45,8 +45,8 @@ export function useHomeConsoleFlag(): boolean {
 
 // The Monitor console flag as live React state (plan 2026-07-10-console-hud-phase3-monitor,
 // same contract: the Settings toggle fires compy:monitor-console-changed so MonitorV2
-// re-branches without a reload). DEFAULT OFF the whole phase — off, the Live face renders
-// exactly today's tree (pinned by monitor-console-flag.test.tsx).
+// re-branches without a reload). DEFAULT ON since 2026-07-12 — the "0" failsafe renders
+// exactly today's classic tree (pinned by monitor-console-flag.test.tsx).
 export function useMonitorConsoleFlag(): boolean {
   const [on, setOn] = useState(readMonitorConsole);
   useEffect(() => {

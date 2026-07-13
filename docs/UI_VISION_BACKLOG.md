@@ -124,8 +124,14 @@ full response ive written here seeing how things seem to get lost in translation
    ink). Self-review on the REAL 5-session history: round 1 FAIL — the real-density law caught
    the 10.5 h Sand session's backend-capped timeline (~2 h recorded) drawing as a sliver; fixed
    (rows draw the RECORDED span; partial coverage stated on-row: "first 2h 0m recorded") +
-   guard-pinned → round 2 PASS 8/8. **⏳ OWNER eyeball of v5 is the open gate** (Settings →
-   Appearance → "Monitor console (preview)").
+   guard-pinned → round 2 PASS 8/8. ~~⏳ OWNER eyeball of v5 is the open gate~~ → ✅ **OWNER
+   APPROVED 2026-07-12 ("flip it default on and silent reinstall") → FLIPPED DEFAULT-ON `e195f70`**
+   (installer `3B855DD1…FB003`, stamp-verified live; `readMonitorConsole` → `!== "0"`, Settings row
+   now "Monitor console", "0" = the classic failsafe; test-pins re-pointed to DEFAULT-ON polarity;
+   self-reviewer PASS 8/8). Monitor now opens on the Flight Deck for everyone. **Follow-up logged
+   (pre-existing, exposed by the flip): the Monitor room chrome is locked to static violet
+   (`monitor-v2.css` play-room re-point) while the SessionStack sparkline follows the live theme —
+   an internal accent mismatch under non-Violet themes; owner-taste call, BACKLOG Cycle 2026-07-12g.**
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.

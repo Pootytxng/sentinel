@@ -161,6 +161,34 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-12g — ✅ MONITOR v5 CONSOLE FLIPPED DEFAULT-ON + shipped `e195f70` (owner "flip it default on and silent reinstall")
+
+**Owner approved the Monitor v5 console** (the long-open §A5 eyeball — Flight Deck + Session Stack,
+RTSS-style zero-anchored frametime, live `915e85b`) after I clarified it lived behind the DEFAULT-OFF
+"Monitor console (preview)" toggle he hadn't flipped (his recent "everything looks good" was the
+default face + JARVIS, NOT the flag-gated console — the honest catch prevented shipping a face he
+hadn't actually seen). Verdict: "flip it default on and silent reinstall." Per
+[[ship-approved-work-as-the-build]]: `readMonitorConsole` `=== "1"` → `!== "0"` (default ON, mirrors
+Home/JARVIS); Settings row dropped "(preview)" → "Monitor console" (OFF failsafe); stale "DEFAULT OFF"
+code comments corrected (`Settings.tsx` + `use-hud.ts`; theme.ts was already right). **bug→guard:**
+`monitor-console-flag.test.tsx` re-pinned to DEFAULT-ON polarity (absent === console byte-identical to
+"1"; "0" === classic, both editorial states); sibling `monitor-v2.test.tsx` re-pointed the same commit
+(its own header note demanded it on any default flip). Zero `src-tauri`. Verify: tsc 0 · vitest
+**1522** (172 files) · self-reviewer **PASS 8/8** on the installed build (default-ON Flight Deck in
+Basic+Advanced · "0" restores classic 0-reload · Settings/h1 titles · honest "NO SIGNAL" scopes over
+the owner's REAL session history · dark accent-ink on fills · 0 vendor-purple Crimson · 0 idle
+draws/10s). Ship: installer `3B855DD1…FB003`, silent-reinstalled, **stamp-verified `e195f70` live**,
+one installer on the Desktop.
+- **Follow-up LOGGED (self-reviewer catch, NOT this diff — pre-existing, now exposed to 100% by the
+  default flip):** the Monitor room chrome (buttons/chips/mode-pill) is locked to static violet via
+  `monitor-v2.css`'s `[data-room="play"]` accent re-point (test-pinned), while `SessionStack`'s
+  `readInk()` reads `--ix-accent` directly so its sparkline DOES follow the live theme → an internal
+  accent mismatch under non-Violet themes (invisible on the default Violet; not an
+  illegibility/vendor-purple defect). Owner-taste call — room chrome follows theme, or sparkline
+  matches the violet lock? Surfaced to owner.
+- ✅ §A5 CLOSED. Next open Console-HUD work: **Phase 4 Blackbook "The Logbook"** (Cycle 2026-07-12f —
+  plan written, builds in a FRESH session). Phase 5 (Gaming/Settings chrome + app-wide HUD frame) after.
+
 ### Cycle 2026-07-12f — ✅ RELEASE_STATE table-drift fixed (`6824ab0`) + ✅ PHASE-4 BLACKBOOK CONSOLE CONCEPT OUT → owner PICKED "A · The Logbook"; build queued (fresh session)
 
 **Resume (`/clear`, live `fcc400b`).** Ground truth re-verified: clean `main`, live exe stamps

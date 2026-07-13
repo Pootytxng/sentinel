@@ -153,9 +153,9 @@ export default function Settings({
     setExpertView(v); // persists + notifies mounted surfaces live
   };
 
-  // Monitor console preview (Phase 3 of the Console HUD, DEFAULT OFF the whole phase) — the
-  // Monitor Live face as the instrument cluster: fps/frametime traces + honest gauges.
-  // Presentation only: same sensors, same polls; off renders today's Monitor byte-identical.
+  // Monitor console (Phase 3 of the Console HUD, DEFAULT ON since 2026-07-12) — the Monitor
+  // Live face as the instrument cluster: fps/frametime traces + honest gauges.
+  // Presentation only: same sensors, same polls; the "0" failsafe renders today's Monitor byte-identical.
   const changeMonitorConsole = (v: boolean) => {
     setMonitorConsole(v);
     applyMonitorConsole(v);
