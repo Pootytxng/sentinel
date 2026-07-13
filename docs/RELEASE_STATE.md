@@ -10,6 +10,29 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-13 (DARK-ACCENT-AS-TEXT LEGIBILITY SHIPPED `cc9adb8` — installer SHA-256
+> `B7931E4EE26F594A1AE746908EA2CB9F4B18B876831E9F4DD6472E695A3E92BC`, live exe stamp-verified
+> `cc9adb8` via the embedded hash, installed by Claude, supersedes the `51B0A754…3862F39A` installer;
+> SAME flag `compy_room_identity` **DEFAULT OFF** — owner one-flip eyeball still the open gate):**
+> **Closes the KNOWN FOLLOW-UP the prior banner logged.** A DARK per-room accent pick rendered ~2.5:1
+> wherever chrome used the accent as foreground TEXT on the dark panel (the adaptive INK covered
+> accent-as-FILL only — this adds the accent-as-TEXT half). Fix: each of the 6 dark swatches gains a
+> paired light, hue-carrying `text` tint (`src/design/room-identity.ts`, `swatchText()`);
+> `applyRoomAccents` (`src/design/theme.ts`) emits `--v2-accent-text`/`--ix-accent-text` (the light
+> tint) for dark picks only — bright picks emit neither. In-room accent-as-text sites swept
+> `var(--ix-accent)` → `var(--ix-accent-text)` (dock, blackbook-console, monitor-console, Lab,
+> lab-bento) and `var(--v2-accent)` → `var(--v2-accent-text, var(--v2-accent))` (HUD masthead sep,
+> forward-door arrow, optimize chip-count, home-hud); `home-console` gains `--ix-accent-text` via the
+> fallback (it is a descendant of the managed-style target). Scoped `.v2-room` overrides fix Check
+> ✓-marks / GamingMode marker / Learn superseded-link hover — each ALSO renders OUTSIDE any room
+> (escape-hatch / portal / overlay), kept byte-identical there. **Zero `src-tauri`.** Verify: tsc 0 ·
+> vitest **1605** (177 files; 5 new guards: legibility ≥4.5:1 vs panel · load-bearing · coverage ·
+> swatchText · emit-mechanism) · read-only scope audit (confirmed no other in-room accent-as-text
+> site) · fresh-context adversarial review (2 findings fixed: Learn hover, missing emit-test) ·
+> self-reviewer **PASS** (live 1500×980: Home dock `#ef8ea8` ~8.1:1, Monitor `#c79cef`, Blackbook
+> `#68d2a6`, Lab `#98b4e6` ~8.9:1; flag-off byte-identity confirmed). Flag stays **DEFAULT OFF** — do
+> NOT flip room-identity default-ON until the owner eyeballs.
+>
 > **UPDATE 2026-07-13 (ACCENT PALETTE PRUNED 20→15 SHIPPED `8e6920f` — installer SHA-256
 > `51B0A754C2CC2578302771168F45C13850A7ED24DABDEF23E98F7F1B3862F39A`, live exe stamp-verified
 > `8e6920f` via the embedded hash, installed by Claude, supersedes the `97C581BB…EEE7698` installer;

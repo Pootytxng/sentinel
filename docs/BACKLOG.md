@@ -180,19 +180,29 @@ the survivors spread wider. **Default-ON flip still DEFERRED** until he re-eyeba
 - **Verify:** tsc 0 · vitest **1600** (177 files) · CIEDE2000 audit · fresh-context adversarial review
   (Magenta/Rose fix confirmed) · **self-reviewer PASS** (live CDP 1500×980: Monitor/Plum computed text
   `#f4e9ff` on the dark fill; Blackbook/Magenta computed text `#1a0a2e` on the bright fill; grid 5×3).
-- 🔴 **NEW FOLLOW-UP TRAIN (self-review find, pre-existing) — dark-accent-as-TEXT legibility:** where
-  chrome uses the room accent as direct **foreground TEXT** on a near-black bg (`.dock-node-primary`
-  Home dock, Lab station tabs, blackbook `.bc-tag`/`.bc-state-on`, arc-instrument labels) a **DARK**
-  accent renders ~2.5:1 (fails 4.5:1). The adaptive ink only covers accent-as-**FILL** (button/pill
-  text), not accent-as-**TEXT**. This shipped already with the prior 5 dark swatches (`8a9ab76`) — it's
-  NOT introduced by the prune. **Fix approach:** emit a legibility-adaptive light `--ix-accent-text` for
-  dark picks in `applyRoomAccents`, AND sweep every `color: var(--ix-accent)` foreground site to
-  `--ix-accent-text` (grep: dozens across dock/blackbook-console/arc-instrument/Check/BlackBox/
-  ActionDrawer CSS). Needs its own guard (accent-as-text ≥4.5:1 vs panel for every dark swatch) +
-  self-review. **Queued as the next accent train — do NOT flip room-identity default-ON until this is
-  fixed** (a dark pick would show illegible chrome text). Owner is aware (reported 2026-07-13).
-- ⛳ **RESUME:** the palette itself is DONE + shipped; the open items are (1) owner's one-flip eyeball on
-  the pruned 15 and (2) the dark-accent-as-text legibility train above.
+- ✅ **FOLLOW-UP TRAIN DONE — dark-accent-as-TEXT legibility SHIPPED `cc9adb8`** (installer SHA-256
+  `B7931E4E…5A3E92BC`, live-stamp-verified, supersedes `51B0A754…3862F39A`; SAME flag `compy_room_identity`
+  **DEFAULT OFF**). Where chrome used the room accent as direct **foreground TEXT** on a near-black bg
+  (`.dock-node-primary` Home dock, Lab station tabs, blackbook `.bc-tag`/`.bc-state-on`/`.bc-manage`,
+  Monitor `.mc-cap`/session meta) a **DARK** accent rendered ~2.5:1 — the adaptive ink covered
+  accent-as-**FILL** only. **Fix:** each of the 6 dark swatches gained a paired light, hue-carrying
+  `text` tint (`room-identity.ts`, `swatchText()`); `applyRoomAccents` (`theme.ts`) emits
+  `--v2-accent-text`/`--ix-accent-text` (the light tint) for dark picks only — bright picks emit
+  neither. Swept the in-room accent-as-text sites `var(--ix-accent)`→`var(--ix-accent-text)` (dock,
+  blackbook-console, monitor-console, Lab, lab-bento) + `var(--v2-accent)`→`var(--v2-accent-text, var(
+  --v2-accent))` (masthead sep, forward-door arrow, chip-count, home-hud); `home-console` gained
+  `--ix-accent-text` via the fallback (descendant of the managed target). Scoped `.v2-room` overrides
+  for the 3 dual-context glyphs (Check ✓ / GamingMode marker / Learn superseded-link hover) that ALSO
+  render outside a room. A read-only scope audit **corrected the earlier "dozens across arc-instrument/
+  Check/BlackBox/ActionDrawer" estimate** — those render OUT of room (onboarding/FirstCheck/escape-hatch/
+  portal/overlay) so a pick never reaches them; BlackBox already read `--ix-accent-text`. Guards: 3
+  swatch invariants (legibility ≥4.5:1 vs panel · load-bearing · coverage) + swatchText + emit-mechanism.
+  Verify: tsc 0 · vitest **1605** · read-only scope audit · fresh-context adversarial review (2 fixes:
+  Learn hover, emit-test) · self-reviewer **PASS** (live 1500×980: dock `#ef8ea8` ~8.1:1, Monitor
+  `#c79cef`, Blackbook `#68d2a6`, Lab `#98b4e6` ~8.9:1; flag-off byte-identity). **Flag STAYS DEFAULT OFF.**
+- ⛳ **RESUME:** the palette AND the dark-accent-text legibility are both DONE + shipped. The ONE open
+  item is **owner's one-flip eyeball** on the pruned-15, now-fully-legible palette → then the
+  `compy_room_identity` default-ON flip (owner territory).
 
 ### Cycle 2026-07-12k — ✅ PALETTE EXPANDED 10→20 SHIPPED LIVE `8a9ab76` (neon brights + adaptive-ink dark tones, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `97C581BB…EEE7698`, stamp-verified) — SUPERSEDED by Cycle 12l (pruned to 15)
 
