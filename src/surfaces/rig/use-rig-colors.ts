@@ -25,13 +25,20 @@ const FALLBACK: RigColors = {
 
 function read(): RigColors {
   if (typeof document === "undefined") return FALLBACK;
-  // When per-room identity is on, resolve the BAY accent from the active room element so the Lab's
-  // hologram cage/ring/grid adopt the room hue (emerald) instead of the base theme accent — the
-  // room chrome and the hologram then read as one. Off ⇒ documentElement (today's behaviour). Home
-  // takes no --ix-accent re-point, so reading its room element yields the same value as the root.
+  // When per-room identity is on, resolve the BAY accent from the element that actually CARRIES the
+  // room's --ix-accent re-point, so the hologram cage/ring/grid adopt the room hue and the room
+  // chrome + hologram read as one. For Monitor/Blackbook/Lab the *-v2.css re-points live on the
+  // `.v2-room` wrapper itself — but Home's re-point lives on the NESTED `.home-console`
+  // (home-console.css), and custom properties never propagate UP to an ancestor, so reading
+  // `.v2-room` on Home silently yielded the base theme accent while the chrome repainted (self-review
+  // catch 2026-07-13: a Home accent pick recolored dock/buttons but never the rig). Prefer
+  // `.home-console` when present; fall back to `.v2-room` (the other rooms), then documentElement
+  // (flag off ⇒ today's behaviour).
   const scope =
-    (readRoomIdentity() ? document.querySelector<HTMLElement>(".v2-room") : null) ??
-    document.documentElement;
+    (readRoomIdentity()
+      ? (document.querySelector<HTMLElement>(".home-console") ??
+        document.querySelector<HTMLElement>(".v2-room"))
+      : null) ?? document.documentElement;
   const s = getComputedStyle(scope);
   const v = (name: string, fb: string) => {
     const got = s.getPropertyValue(name).trim();

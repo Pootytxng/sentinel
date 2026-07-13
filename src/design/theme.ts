@@ -2,7 +2,14 @@
 // cosmetic. The theme drives the app accent colors via `[data-itheme]` on <html> (see
 // instrument.css). Reversible: nothing here touches logic or the backend.
 
-import { PICKABLE_ROOMS, isSwatchHex, swatchInk, swatchText, type PickableRoom } from "./room-identity";
+import {
+  PICKABLE_ROOMS,
+  isSwatchHex,
+  splitSwatchKey,
+  swatchInk,
+  swatchText,
+  type PickableRoom,
+} from "./room-identity";
 
 export type InstrumentTheme = "midnight" | "violet" | "crimson" | "emerald" | "hearth";
 
@@ -528,19 +535,20 @@ export function applyMonitorConsole(on: boolean): void {
 // direction A "The Logbook") — the Blackbook room gains its own flight-recorder face: a single
 // reverse-chronological tape unifying the user's REAL changes, sessions and guide checks (a PURE
 // frontend view over data App already holds — zero new IPC). The field guide (today's library)
-// stays reachable via the room's mode toggle. DEFAULT OFF (owner eyeball is the gate before a
-// default-ON flip) — the room is byte-identical to today's Learn library unless the key is
-// literally "1" (test-pinned both compy_editorial states). Mirrors the Monitor console flag's
-// pre-flip polarity.
+// stays reachable via the room's mode toggle. DEFAULT ON since 2026-07-13 (owner eyeballed the
+// Logbook — "it looks much better" — and directed approved work default-ON): only an explicit "0"
+// (devtools/localStorage failsafe, no Settings row — the graduated-flag convention) restores the
+// classic Learn library, test-pinned both compy_editorial states. Mirrors the Monitor console
+// flag's post-flip polarity.
 const BLACKBOOK_CONSOLE_KEY = "compy_blackbook_console";
 
 export function readBlackbookConsole(): boolean {
   try {
-    return localStorage.getItem(BLACKBOOK_CONSOLE_KEY) === "1";
+    return localStorage.getItem(BLACKBOOK_CONSOLE_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyBlackbookConsole(on: boolean): void {
@@ -557,20 +565,22 @@ export function applyBlackbookConsole(on: boolean): void {
 }
 
 // Per-room identity accents (owner 2026-07-12 "per-room identity" — see src/design/room-identity.ts
-// for the palette + doctrine). DEFAULT OFF behind `compy_room_identity`: when on, <html
-// data-room-identity="on"> lets room-identity.css scope each room's own --v2-accent so its chrome
-// reads a distinguishable hue (theme-independent, like the rig's part-identity colours). Every rule
-// is scoped under the attribute, so the "0"/absent state is byte-identical to today's uniform violet.
-// Presentation only — no logic, data, measurement, or backend touched.
+// for the palette + doctrine). DEFAULT ON since 2026-07-13 (owner eyeballed the picker/palette and
+// directed approved work default-ON): <html data-room-identity="on"> lets room-identity.css scope
+// each room's own --v2-accent so its chrome reads a distinguishable hue (theme-independent, like the
+// rig's part-identity colours). Only an explicit "0" (devtools/localStorage failsafe, no Settings
+// row — the graduated-flag convention) restores the classic uniform violet; every rule is scoped
+// under the attribute, so the "0" state is byte-identical to it. Presentation only — no logic, data,
+// measurement, or backend touched.
 const ROOM_IDENTITY_KEY = "compy_room_identity";
 
 export function readRoomIdentity(): boolean {
   try {
-    return localStorage.getItem(ROOM_IDENTITY_KEY) === "1";
+    return localStorage.getItem(ROOM_IDENTITY_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyRoomIdentity(on: boolean): void {
@@ -645,13 +655,19 @@ export function applyRoomAccents(): void {
       // order). A BRIGHT swatch emits neither, so its accent-text stays the raw, already-legible accent.
       const text = swatchText(hex);
       const textDecls = text ? `--v2-accent-text:${text};--ix-accent-text:${text};` : "";
+      // A DUO pick (owner 2026-07-13b "double color options") stores `primary+secondary`: the PRIMARY
+      // is the accent proper (chrome/buttons/text — every legibility-bearing role), while the SECONDARY
+      // drives ONLY the dim/line washes (14%/25% alpha borders, hover washes, glows) so the room reads
+      // two-tone without any foreground contrast risk. A single pick's washes derive from itself.
+      const { hex: primary, hex2 } = splitSwatchKey(hex);
+      const washSource = hex2 ?? primary;
       return (
         `:root[data-room-identity="on"] .v2-room[data-room="${room}"]{` +
-        `--v2-accent:${hex};` +
+        `--v2-accent:${primary};` +
         inkDecls +
         textDecls +
-        `--v2-accent-dim:color-mix(in srgb, ${hex} 14%, transparent);` +
-        `--v2-accent-line:color-mix(in srgb, ${hex} 25%, transparent);}`
+        `--v2-accent-dim:color-mix(in srgb, ${washSource} 14%, transparent);` +
+        `--v2-accent-line:color-mix(in srgb, ${washSource} 25%, transparent);}`
       );
     })
     .join("\n");

@@ -9,6 +9,9 @@ import {
   isSwatchHex,
   swatchInk,
   swatchText,
+  swatchKey,
+  splitSwatchKey,
+  swatchDotCss,
   ROOM_IDENTITY,
   HOME_ACCENT,
   type PickableRoom,
@@ -159,14 +162,56 @@ describe("room-accents: curated palette is legible + sound", () => {
     expect(swatchText("#000000"), "a non-swatch hex has no accent-text").toBeUndefined();
   });
 
-  it("all swatches + inks are valid 6-digit hexes; swatches are pairwise-distinct", () => {
+  it("all swatch colours are valid 6-digit hexes; swatches are pairwise-distinct by KEY", () => {
     for (const s of ROOM_ACCENT_SWATCHES) {
       expect(s.hex).toMatch(/^#[0-9a-fA-F]{6}$/);
+      if (s.hex2) expect(s.hex2, `${s.name} hex2`).toMatch(/^#[0-9a-fA-F]{6}$/);
       if (s.ink) expect(s.ink, `${s.name} ink`).toMatch(/^#[0-9a-fA-F]{6}$/);
     }
-    expect(new Set(ROOM_ACCENT_SWATCHES.map((s) => s.hex.toLowerCase())).size).toBe(
-      ROOM_ACCENT_SWATCHES.length,
-    );
+    // Distinctness is keyed on swatchKey (a duo may deliberately share its PRIMARY with a single —
+    // e.g. Red / Blue reuses Red's vetted primary — but no two swatches may be the same swatch).
+    expect(new Set(ROOM_ACCENT_SWATCHES.map(swatchKey)).size).toBe(ROOM_ACCENT_SWATCHES.length);
+  });
+
+  // ── DUO swatches (owner 2026-07-13b "double color options"). The duo sidesteps both legibility
+  // floors BY CONSTRUCTION, and these guards enforce that construction stays true:
+  it("every DUO's PRIMARY is genuinely BRIGHT (≥4.5:1 vs the dark ink) and carries no ink/text pairing", () => {
+    const darkInk = parseHex(ACCENT_INK);
+    const duos = ROOM_ACCENT_SWATCHES.filter((s) => s.hex2);
+    expect(duos.length, "the palette must carry duo swatches").toBeGreaterThan(0);
+    for (const s of duos) {
+      expect(s.ink, `${s.name} — a duo must not need an adaptive ink (bright primary only)`).toBeUndefined();
+      expect(s.text, `${s.name} — a duo must not need an adaptive text (bright primary only)`).toBeUndefined();
+      const ratio = contrast(darkInk, parseHex(s.hex));
+      expect(
+        ratio,
+        `${s.name} primary ${s.hex} vs ${ACCENT_INK} = ${ratio.toFixed(2)} — duo primaries must be bright`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("no earth-tone darks remain (Rust/Olive/Pine pruned on the owner's 2026-07-13b directive)", () => {
+    const names = ROOM_ACCENT_SWATCHES.map((s) => s.name);
+    for (const gone of ["Rust", "Olive", "Pine"]) expect(names).not.toContain(gone);
+  });
+
+  it("swatchKey/splitSwatchKey round-trip singles (bare hex) and duos (primary+secondary)", () => {
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      const key = swatchKey(s);
+      const parts = splitSwatchKey(key);
+      expect(parts.hex).toBe(s.hex.toLowerCase());
+      expect(parts.hex2).toBe(s.hex2?.toLowerCase());
+      expect(isSwatchHex(key), `${s.name} key must whitelist`).toBe(true);
+    }
+  });
+
+  it("swatchDotCss renders a flat fill for singles and a diagonal split for duos", () => {
+    expect(swatchDotCss("#a78bfa")).toBe("#a78bfa");
+    const duo = ROOM_ACCENT_SWATCHES.find((s) => s.hex2)!;
+    const css = swatchDotCss(swatchKey(duo));
+    expect(css).toContain("linear-gradient(135deg");
+    expect(css).toContain(duo.hex.toLowerCase());
+    expect(css).toContain(duo.hex2!.toLowerCase());
   });
 
   it("the four room presets are all in the palette (a room's own hue is always pickable)", () => {
@@ -295,6 +340,34 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
     expect(css).not.toContain("--ix-accent-text:");
   });
 
+  // DUO emission (owner 2026-07-13b): the PRIMARY is the accent proper; the SECONDARY drives ONLY
+  // the dim/line washes. A duo pick must never emit ink/text (bright primary by construction).
+  it("a DUO pick emits --v2-accent from the PRIMARY and dim/line washes from the SECONDARY, no ink/text", () => {
+    const duo = ROOM_ACCENT_SWATCHES.find((s) => s.name === "Cyan / Midnight")!;
+    setRoomAccent("play", swatchKey(duo));
+    const css = document.getElementById("compy-room-accents")!.textContent!;
+    expect(css).toContain(`--v2-accent:${duo.hex.toLowerCase()};`);
+    expect(css).toMatch(new RegExp(`--v2-accent-dim:color-mix\\(in srgb, ${duo.hex2!.toLowerCase()} 14%`));
+    expect(css).toMatch(new RegExp(`--v2-accent-line:color-mix\\(in srgb, ${duo.hex2!.toLowerCase()} 25%`));
+    expect(css).not.toContain("--v2-accent-ink:");
+    expect(css).not.toContain("--v2-accent-text:");
+    // the raw composite key must never leak into the CSS output
+    expect(css).not.toContain("+");
+  });
+
+  it("a DUO key round-trips the persisted store; a tampered composite of non-swatch parts is rejected", () => {
+    const duo = ROOM_ACCENT_SWATCHES.find((s) => s.hex2)!;
+    setRoomAccent("lab", swatchKey(duo));
+    expect(readRoomAccents().lab).toBe(swatchKey(duo));
+    localStorage.setItem(
+      "compy_room_accents",
+      JSON.stringify({ play: "#000000+#111111", learn: swatchKey(duo) }),
+    );
+    const got = readRoomAccents();
+    expect(got.play).toBeUndefined(); // junk composite → dropped (whitelist is exact keys)
+    expect(got.learn).toBe(swatchKey(duo)); // a real duo key → kept
+  });
+
   it("every generated rule header carries the [data-room-identity=\"on\"] scope", () => {
     setRoomAccent("home", "#ff6b6b");
     setRoomAccent("lab", "#ffe14a");
@@ -312,7 +385,7 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
   });
 });
 
-describe("room-accents: picker is flag-gated (topbar byte-identity with the flag off)", () => {
+describe("room-accents: picker is flag-gated (DEFAULT ON 2026-07-13; '0' failsafe removes it)", () => {
   afterEach(cleanup);
   beforeEach(() => {
     localStorage.clear();
@@ -326,15 +399,15 @@ describe("room-accents: picker is flag-gated (topbar byte-identity with the flag
     </ShellV2>
   );
 
-  it("no accent picker in the topbar when room-identity is OFF", () => {
-    const { container } = render(shell());
-    expect(container.querySelector(".v2-accent-pick")).toBeNull();
-  });
-
-  it("the accent picker appears when room-identity is ON", () => {
-    localStorage.setItem("compy_room_identity", "1");
+  it("the accent picker renders by DEFAULT (key absent) — room identity is the build", () => {
     const { container } = render(shell());
     expect(container.querySelector(".v2-accent-pick")).not.toBeNull();
+  });
+
+  it("the explicit '0' devtools failsafe removes the picker (classic uniform topbar)", () => {
+    localStorage.setItem("compy_room_identity", "0");
+    const { container } = render(shell());
+    expect(container.querySelector(".v2-accent-pick")).toBeNull();
   });
 });
 

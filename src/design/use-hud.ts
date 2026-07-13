@@ -65,9 +65,9 @@ export function useMonitorConsoleFlag(): boolean {
 }
 
 // The Blackbook console flag as live React state (plan 2026-07-12-console-hud-phase4-blackbook,
-// same contract: the Settings toggle fires compy:blackbook-console-changed so BlackbookV2
-// re-branches without a reload). DEFAULT OFF — the room is byte-identical to today's Learn
-// library unless the key is literally "1" (pinned by blackbook-console-flag.test.tsx).
+// same contract: a flag change fires compy:blackbook-console-changed so BlackbookV2 re-branches
+// without a reload). DEFAULT ON since 2026-07-13 (owner-approved) — only an explicit "0"
+// (devtools failsafe) restores the classic Learn library (pinned by blackbook-console-flag.test.tsx).
 export function useBlackbookConsoleFlag(): boolean {
   const [on, setOn] = useState(readBlackbookConsole);
   useEffect(() => {
@@ -79,9 +79,9 @@ export function useBlackbookConsoleFlag(): boolean {
 }
 
 // The per-room identity accent flag as live React state (owner 2026-07-12, see room-identity.ts;
-// same contract: the Settings toggle fires compy:room-identity-changed so consumers re-read without
-// a reload). DEFAULT OFF — SessionStack uses this to decide whether its sparkline reads the
-// room-scoped accent (on) or documentElement (off, byte-identical to today).
+// same contract: a flag change fires compy:room-identity-changed so consumers re-read without
+// a reload). DEFAULT ON since 2026-07-13 (owner-approved) — SessionStack uses this to decide whether
+// its sparkline reads the room-scoped accent (on) or documentElement ("0" devtools failsafe).
 export function useRoomIdentityFlag(): boolean {
   const [on, setOn] = useState(readRoomIdentity);
   useEffect(() => {

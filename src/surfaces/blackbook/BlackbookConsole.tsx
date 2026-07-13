@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useReducedMotion } from "../../design/use-motion";
 import { Term } from "../../design/Term";
 import { prettyGameName } from "../game-name";
@@ -63,13 +63,19 @@ const fmtDuration = (secs: number): string => {
   return `${s}s`;
 };
 
+// Sentence grammar (owner pick 2026-07-13, concept B): every row reads as a plain sentence with an
+// ACTOR — "Compy applied…", "You played…", "You fact-checked…" — so any single row a first-timer
+// happens to read explains the whole page (a diary of what Compy and you did to this PC). Copy
+// only; the data underneath is unchanged.
 function ChangeBody({ r }: { r: LogbookChange }) {
   return (
     <>
-      <span className="bc-row-title">{r.title}</span>
+      <span className="bc-row-title">
+        Compy applied <b>{r.title}</b>
+      </span>
       <span className="bc-row-meta">
         {r.active ? (
-          <span className="bc-state bc-state-on">on</span>
+          <span className="bc-state bc-state-on">still on</span>
         ) : r.rolledBack ? (
           <span className="bc-state">rolled back</span>
         ) : (
@@ -88,7 +94,9 @@ function SessionBody({ r }: { r: LogbookSession }) {
   const delta = r.avgFpsDelta;
   return (
     <>
-      <span className="bc-row-title">{prettyGameName(r.game) || "Unknown game"}</span>
+      <span className="bc-row-title">
+        You played <b>{prettyGameName(r.game) || "an unknown game"}</b> for {fmtDuration(r.durationSecs)}
+      </span>
       <span className="bc-row-meta">
         <span className="bc-stat">
           avg <b className="bc-mono">{Math.round(r.avgFps)}</b> fps
@@ -96,7 +104,6 @@ function SessionBody({ r }: { r: LogbookSession }) {
         <span className="bc-stat">
           <Term id="one-percent-lows">1% low</Term> <b className="bc-mono">{Math.round(r.low1Fps)}</b>
         </span>
-        <span className="bc-stat bc-mono">{fmtDuration(r.durationSecs)}</span>
         {delta != null && delta !== 0 && (
           <span className={`bc-delta ${delta > 0 ? "bc-delta-up" : "bc-delta-down"}`}>
             {delta > 0 ? "▲" : "▼"} {delta > 0 ? "+" : "−"}
@@ -117,7 +124,7 @@ function AutopsyBody({ r }: { r: LogbookAutopsy }) {
   const graded = r.real + r.placebo + r.risky;
   return (
     <>
-      <span className="bc-row-title">Fact-checked a guide</span>
+      <span className="bc-row-title">You fact-checked a guide</span>
       <span className="bc-row-meta">
         {graded > 0 ? (
           <>
@@ -159,10 +166,27 @@ export function BlackbookConsole({
 }) {
   const reduced = useReducedMotion();
   const startHere = useMemo(() => startHereEntries(vendor, 4), [vendor]);
+  // The Receipts Strip's tape filter (owner pick 2026-07-13, concept A): null = the full tape.
+  // Session-local by design — a filter is a glance tool, not a preference.
+  const [filter, setFilter] = useState<LogbookRecord["kind"] | null>(null);
   // How many changes are still active — the read view states it and routes undo to the Lab.
   const activeChanges = useMemo(
     () => records.filter((r): r is typeof r & { kind: "change" } => r.kind === "change" && r.active).length,
     [records],
+  );
+  // Per-kind counts + scam flags — the strip's numbers are DERIVED from the same records the tape
+  // renders (they can never disagree with it).
+  const counts = useMemo(() => {
+    const c = { change: 0, session: 0, autopsy: 0, scamFlags: 0 };
+    for (const r of records) {
+      c[r.kind]++;
+      if (r.kind === "autopsy") c.scamFlags += r.scamFlags;
+    }
+    return c;
+  }, [records]);
+  const shown = useMemo(
+    () => (filter ? records.filter((r) => r.kind === filter) : records),
+    [records, filter],
   );
   const sinceDate = useMemo(
     () =>
@@ -176,15 +200,72 @@ export function BlackbookConsole({
     [records],
   );
 
+  // A tile toggles its kind filter; a zero-count tile is disabled (an honest empty beats an empty
+  // filtered tape). aria-pressed carries the state for AT.
+  const toggleFilter = (kind: LogbookRecord["kind"]) =>
+    setFilter((cur) => (cur === kind ? null : kind));
+
   return (
     <div className="blackbook-console" data-motion={reduced ? "reduced" : "full"}>
-      {/* Body status line — the "N records · since <date>" the title-header law keeps OUT of the
-          h1. Absent when there is no record (the empty state below carries the message instead). */}
+      {/* The Receipts Strip (owner pick 2026-07-13, concept A) — replaces the bare "N records ·
+          since <date>" status line with the same facts made self-explanatory: three tappable tiles
+          NAME the three things this room records, carry live counts, and filter the tape. The page
+          teaches its own vocabulary through a summary you can touch — no explainer paragraph.
+          Title-header law: this is BODY content; the h1 stays the bare room title. Absent when
+          there is no record (the empty state below carries the message instead). */}
       {records.length > 0 && (
-        <p className="bc-status">
-          <b className="bc-mono">{records.length}</b> {records.length === 1 ? "record" : "records"}
-          <span className="bc-status-sep"> · </span>since <span className="bc-mono">{sinceDate}</span>
-        </p>
+        <div className="bc-strip" role="group" aria-label="What Blackbook records">
+          <button
+            type="button"
+            className="bc-tile"
+            data-kind="change"
+            aria-pressed={filter === "change"}
+            disabled={counts.change === 0}
+            onClick={() => toggleFilter("change")}
+          >
+            <span className="bc-tile-k">Changes to this PC</span>
+            <span className="bc-tile-n bc-mono">{counts.change}</span>
+            <span className="bc-tile-d">
+              {counts.change === 0
+                ? "nothing changed yet"
+                : activeChanges > 0
+                  ? `${activeChanges} still on · every one undoable`
+                  : "none active now · every one undoable"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="bc-tile"
+            data-kind="session"
+            aria-pressed={filter === "session"}
+            disabled={counts.session === 0}
+            onClick={() => toggleFilter("session")}
+          >
+            <span className="bc-tile-k">Gaming sessions</span>
+            <span className="bc-tile-n bc-mono">{counts.session}</span>
+            <span className="bc-tile-d">
+              {counts.session === 0 ? "none watched yet" : "measured, not guessed"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="bc-tile"
+            data-kind="autopsy"
+            aria-pressed={filter === "autopsy"}
+            disabled={counts.autopsy === 0}
+            onClick={() => toggleFilter("autopsy")}
+          >
+            <span className="bc-tile-k">Guides fact-checked</span>
+            <span className="bc-tile-n bc-mono">{counts.autopsy}</span>
+            <span className="bc-tile-d">
+              {counts.autopsy === 0
+                ? "none checked yet"
+                : counts.scamFlags > 0
+                  ? `${counts.scamFlags} scam ${counts.scamFlags === 1 ? "pattern" : "patterns"} flagged`
+                  : "every claim graded"}
+            </span>
+          </button>
+        </div>
       )}
 
       {records.length === 0 ? (
@@ -195,8 +276,19 @@ export function BlackbookConsole({
           </span>
         </div>
       ) : (
-        <ol className="bc-tape">
-          {records.map((r, i) => (
+        <>
+          {/* The tape's section head (concept B) — the same eyebrow-plus-scent grammar the field-guide
+              strip below already speaks, so the room's two halves finally introduce themselves the
+              same way. One line, not a paragraph. */}
+          <div className="bc-sect">
+            <span className="bc-sect-t">The record{filter ? ` · ${KIND_TAG[filter].toLowerCase()}s only` : ""}</span>
+            <span className="bc-sect-rule" aria-hidden="true" />
+            <span className="bc-sect-s">
+              everything Compy has done on this PC · since <span className="bc-mono">{sinceDate}</span>
+            </span>
+          </div>
+          <ol className="bc-tape">
+            {shown.map((r, i) => (
             <li
               key={`${r.kind}-${r.at}-${i}`}
               className={`bc-row bc-row-${r.kind}${r.kind === "change" && r.rolledBack ? " bc-row-muted" : ""}`}
@@ -217,7 +309,8 @@ export function BlackbookConsole({
               </div>
             </li>
           ))}
-        </ol>
+          </ol>
+        </>
       )}
 
       {/* Undo lives in the Lab (the ONE audited undo home) — the Logbook is a read view, so an

@@ -134,9 +134,12 @@ const ROOMS: { name: string; label: string; title: string; mount: () => HTMLElem
 
 // Mount with a per-room clean first-run (composed surfaces persist their own state — e.g.
 // Learn's grade-key fold — so storage is reset before every mount, keeping the flag the
-// ONLY delta between comparisons).
+// ONLY delta between comparisons). The Blackbook console (default-ON since 2026-07-13) is
+// pinned "0" so BlackbookV2 stays on the classic Learn/HUD composition this suite exists to
+// test (the console face has its own contract: blackbook-console*.test.tsx).
 const mountWithFlag = (room: (typeof ROOMS)[number], flag: string | null) => {
   localStorage.clear();
+  localStorage.setItem("compy_blackbook_console", "0");
   if (flag != null) localStorage.setItem("compy_editorial", flag);
   return room.mount();
 };

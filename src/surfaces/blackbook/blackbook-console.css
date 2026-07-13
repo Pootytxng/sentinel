@@ -7,11 +7,40 @@
 /* The room's face toggle bar (Logbook | Field guide) — owned by BlackbookV2, styled here. */
 :root[data-v2="on"] .bbv2-bar { display: flex; align-items: center; margin-bottom: 8px; }
 
-/* Body status line — the "N records · since <date>" the title-header law keeps out of the h1. */
-:root[data-v2="on"] .bc-status { margin: 0; font-family: var(--ix-mono); font-size: 11px;
-  letter-spacing: .04em; color: var(--ix-text-2); font-variant-numeric: tabular-nums; }
-:root[data-v2="on"] .bc-status-sep { color: var(--ix-text-3); }
 :root[data-v2="on"] .bc-mono { font-family: var(--ix-mono); font-variant-numeric: tabular-nums; }
+
+/* ── the Receipts Strip (owner pick 2026-07-13, concept A) — three tappable tiles that NAME what
+   this room records (changes / sessions / guide checks), carry live counts, and filter the tape.
+   Replaces the bare "N records · since <date>" status line. Ink discipline: theme accent only —
+   the strip stays calm, the pressed tile rides the accent hairline like the change tag. */
+/* auto-fit (no @media — keeps every rule under the [data-v2] scope for the byte-identity guard):
+   three tiles side-by-side at desktop width, stacking gracefully in a narrow window. */
+:root[data-v2="on"] .bc-strip { display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+:root[data-v2="on"] .bc-tile { display: flex; flex-direction: column; align-items: flex-start;
+  gap: 2px; padding: 10px 14px; text-align: left; cursor: pointer; background: transparent;
+  border: 1px solid var(--ix-glass-border); min-width: 0; }
+:root[data-v2="on"] .bc-tile:hover:not(:disabled) { border-color: color-mix(in srgb, var(--ix-accent) 40%, var(--ix-glass-border)); }
+:root[data-v2="on"] .bc-tile[aria-pressed="true"] { border-color: var(--ix-accent-text);
+  background: var(--ix-accent-wash, transparent); }
+:root[data-v2="on"] .bc-tile:disabled { cursor: default; opacity: .55; }
+:root[data-v2="on"] .bc-tile-k { font-family: var(--ix-mono); font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ix-text-3); }
+:root[data-v2="on"] .bc-tile[aria-pressed="true"] .bc-tile-k { color: var(--ix-accent-text); }
+:root[data-v2="on"] .bc-tile-n { font-size: 19px; line-height: 1.2; color: var(--ix-text-1); }
+:root[data-v2="on"] .bc-tile-d { font-size: 11px; letter-spacing: .02em; color: var(--ix-text-2);
+  font-variant-numeric: tabular-nums; }
+
+/* ── the tape's section head (concept B) — the same eyebrow-plus-scent grammar as the field-guide
+   strip below, so the room's two halves introduce themselves the same way. */
+:root[data-v2="on"] .bc-sect { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+:root[data-v2="on"] .bc-sect-t { font-family: var(--ix-mono); font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ix-text-3); white-space: nowrap; }
+:root[data-v2="on"] .bc-sect-rule { flex: 1; height: 1px; align-self: center;
+  background: var(--ix-glass-border); }
+:root[data-v2="on"] .bc-sect-s { font-size: 11px; color: var(--ix-text-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
 
 /* Honest empty — never a fabricated row. */
 :root[data-v2="on"] .bc-empty { display: flex; flex-direction: column; gap: 6px; padding: 28px 20px;

@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   ROOM_ACCENT_SWATCHES,
   defaultRoomAccent,
+  swatchDotCss,
+  swatchKey,
   type PickableRoom,
 } from "./room-identity";
 import { readRoomAccents, setRoomAccent } from "./theme";
@@ -74,7 +76,8 @@ export function RoomAccentPicker({
         title={`${roomLabel} accent color`}
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="v2-accent-dot" style={{ background: effective }} aria-hidden="true" />
+        {/* swatchDotCss: flat fill for a single, diagonal split for a duo (both colours visible) */}
+        <span className="v2-accent-dot" style={{ background: swatchDotCss(effective) }} aria-hidden="true" />
         <span className="v2-accent-caret" aria-hidden="true" />
       </button>
       {open && (
@@ -82,18 +85,19 @@ export function RoomAccentPicker({
           <div className="v2-accent-pop-head">{roomLabel} accent</div>
           <div className="v2-accent-grid">
             {ROOM_ACCENT_SWATCHES.map((s) => {
-              const selected = effective.toLowerCase() === s.hex.toLowerCase();
+              const key = swatchKey(s);
+              const selected = effective.toLowerCase() === key;
               return (
                 <button
-                  key={s.hex}
+                  key={key}
                   type="button"
                   role="menuitemradio"
                   aria-checked={selected}
                   className={"v2-accent-swatch" + (selected ? " is-selected" : "")}
-                  style={{ background: s.hex }}
+                  style={{ background: swatchDotCss(key) }}
                   title={s.name}
                   aria-label={s.name}
-                  onClick={() => choose(s.hex)}
+                  onClick={() => choose(key)}
                 />
               );
             })}

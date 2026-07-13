@@ -97,8 +97,9 @@ describe("BlackbookConsole — honest empty (never a fabricated row)", () => {
     expect(container.querySelector(".bc-empty")).not.toBeNull();
     expect(container.querySelector(".bc-tape")).toBeNull();
     expect(screen.getByText("No record yet")).toBeTruthy();
-    // No count status line when there is nothing to count.
-    expect(container.querySelector(".bc-status")).toBeNull();
+    // No Receipts Strip (and no tape head) when there is nothing to count.
+    expect(container.querySelector(".bc-strip")).toBeNull();
+    expect(container.querySelector(".bc-sect")).toBeNull();
   });
 });
 
@@ -111,19 +112,35 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
     expect(container.querySelector(".bc-row-change")).not.toBeNull();
     expect(container.querySelector(".bc-row-session")).not.toBeNull();
     expect(container.querySelector(".bc-row-autopsy")).not.toBeNull();
-    // status line states the count in the BODY (title-header law) — plural-proper.
-    expect(container.querySelector(".bc-status")!.textContent).toContain("3 records");
+    // the Receipts Strip states the per-kind counts in the BODY (title-header law)
+    const tiles = container.querySelectorAll(".bc-strip .bc-tile");
+    expect(tiles.length).toBe(3);
+    for (const tile of tiles) expect(tile.querySelector(".bc-tile-n")!.textContent).toBe("1");
     // session prettifies the process name (drops .exe; casing left as-is — game exes carry their own)
     expect(screen.getByText("valorant")).toBeTruthy();
     // autopsy uses the plain "Guide check" tag, never "autopsy"/"Black Box"
     expect(container.textContent).toContain("Guide check");
   });
 
-  it("singular 'record' when there is one", () => {
+  // Sentence grammar (owner pick 2026-07-13, concept B): every row is a plain sentence with an
+  // actor, so any single row explains the page. Pin one per kind.
+  it("rows read as actor sentences: 'Compy applied…', 'You played…', 'You fact-checked…'", () => {
+    useReduced();
+    const { container } = mountConsole([change(), session(), autopsy()]);
+    const text = container.querySelector(".bc-tape")!.textContent!;
+    expect(text).toContain("Compy applied");
+    expect(text).toContain("You played");
+    expect(text).toContain("for 1h 0m"); // duration lives IN the session sentence now
+    expect(text).toContain("You fact-checked a guide");
+  });
+
+  it("the tape head speaks the field-guide grammar: 'The record' + the since date", () => {
     useReduced();
     const { container } = mountConsole([session()]);
-    expect(container.querySelector(".bc-status")!.textContent).toContain("1 record");
-    expect(container.querySelector(".bc-status")!.textContent).not.toContain("1 records");
+    const sect = container.querySelector(".bc-sect")!;
+    expect(sect.textContent).toContain("The record");
+    expect(sect.textContent).toContain("everything Compy has done on this PC");
+    expect(sect.textContent).toMatch(/since\s/);
   });
 
   it("same-game vs-previous delta renders only when present, never '(s)'", () => {
@@ -222,11 +239,50 @@ describe("BlackbookV2 console — title-header law + honest data flow", () => {
       <BlackbookV2 focusId={null} vendor="amd" onClose={() => {}} sessions={[s]} />,
     );
     expect((container.querySelector(".hud-headline") as HTMLElement).textContent).toBe("Blackbook");
-    // the count is a body element, never a heading
-    const status = container.querySelector(".bc-status") as HTMLElement;
-    expect(status).not.toBeNull();
-    expect(status.textContent).toContain("record");
-    expect(status.closest("h1")).toBeNull();
+    // the counts live in the body Receipts Strip, never a heading
+    const strip = container.querySelector(".bc-strip") as HTMLElement;
+    expect(strip).not.toBeNull();
+    expect(strip.textContent).toContain("Gaming sessions");
+    expect(strip.closest("h1")).toBeNull();
+  });
+});
+
+// ── the Receipts Strip's filter (owner pick 2026-07-13, concept A) ──
+describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => {
+  it("clicking a tile filters the tape to that kind; clicking again restores the full tape", () => {
+    useReduced();
+    const { container } = mountConsole([change(), session(), autopsy()]);
+    const sessionTile = screen.getByRole("button", { name: /Gaming sessions/ });
+    fireEvent.click(sessionTile);
+    expect(sessionTile.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(1);
+    expect(container.querySelector(".bc-row-session")).not.toBeNull();
+    expect(container.querySelector(".bc-row-change")).toBeNull();
+    // the tape head states the narrowed view — never a silently filtered list
+    expect(container.querySelector(".bc-sect")!.textContent).toContain("sessions only");
+    fireEvent.click(sessionTile);
+    expect(sessionTile.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(3);
+  });
+
+  it("a zero-count tile is disabled (an honest empty beats an empty filtered tape)", () => {
+    useReduced();
+    mountConsole([session()]);
+    const changeTile = screen.getByRole("button", { name: /Changes to this PC/ });
+    expect((changeTile as HTMLButtonElement).disabled).toBe(true);
+    expect(changeTile.textContent).toContain("nothing changed yet");
+  });
+
+  it("tile subs state real composition: active changes + scam flags, from the records themselves", () => {
+    useReduced();
+    const { container } = mountConsole([
+      change({ id: "c1", active: true }),
+      change({ id: "c2", active: false, rolledBack: true }),
+      autopsy({ scamFlags: 2 }),
+    ]);
+    const strip = container.querySelector(".bc-strip")!;
+    expect(strip.textContent).toContain("1 still on · every one undoable");
+    expect(strip.textContent).toContain("2 scam patterns flagged");
   });
 });
 

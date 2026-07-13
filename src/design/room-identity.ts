@@ -48,14 +48,13 @@ export function defaultRoomAccent(room: PickableRoom): string {
 }
 
 // The curated swatch palette — SINGLE SOURCE OF TRUTH for both the picker UI and the persisted-value
-// whitelist (theme.ts only ever applies a hex found here, so a tampered localStorage can't inject an
-// illegible colour). Re-curated 2026-07-13 (owner "looks good but i agree to prune and widen variety
-// more differentiation") from the first 20-swatch expansion down to a tighter, MORE differentiated 15:
-// the redundant near-dupe clusters were pruned (four warm-oranges → Amber only; three pinks → one
-// Magenta; the teal/cyan overlap → Teal only) and the survivors re-spread so every
-// neighbour differs by HUE or by LIGHTNESS. Differentiation is VERIFIED by CIEDE2000: every non-preset
-// pair is >=18 dE2000 apart; the only closer pair is the LOCKED Teal/Emerald presets (14.3, both green,
-// unavoidable). 9 bright + 6 dark, with a dark Olive added in the empty dark-gold gap.
+// whitelist (theme.ts only ever applies a value found here, so a tampered localStorage can't inject
+// an illegible colour). Re-curated 2026-07-13b on the owner's finish-it directive ("is there anyway
+// to just add some double color options rather than the ugly earth tones like olive … then leave that
+// finished"): the EARTH-TONE darks (Rust/Olive/Pine) are pruned; three DUO swatches join — each pairs
+// a bright PRIMARY (the accent proper: chrome, buttons, text) with a SECONDARY that drives the room's
+// dim/line washes (borders, hover washes, glows), giving a genuine two-colour room without touching
+// any foreground-legibility surface. 9 bright + 3 dark + 3 duo = 15, grid 5×3.
 //
 // THE LEGIBILITY LAW (non-negotiable — why this is a curated set, not a free hex field): the accent
 // is consumed in TWO foreground roles, each with its own contrast floor, so every swatch is vetted
@@ -72,63 +71,92 @@ export function defaultRoomAccent(room: PickableRoom): string {
 //       `--ix-accent-text`/`--v2-accent-text` for dark picks, and the accent-as-text sites read that
 //       token (adaptive text — the dark-tone legibility fix, 2026-07-13). A BRIGHT swatch needs no
 //       `text` (its accent-text stays the raw accent, already legible).
-// All invariants — every bright swatch ≥4.5:1 vs #1a0a2e; every dark swatch's `ink` ≥4.5:1 vs the
-// swatch AND the dark ones genuinely need it; every dark swatch's `text` ≥4.5:1 vs the lightest room
-// panel — are mechanized in room-accents.test.tsx. The four room presets lead so a room's own identity
-// hue is always one tap away; all fifteen hexes are pairwise-distinct.
-export const ROOM_ACCENT_SWATCHES: { name: string; hex: string; ink?: string; text?: string }[] = [
+//   DUO swatches sidestep both floors by construction: the PRIMARY must be BRIGHT (guard-enforced —
+//   no ink/text pairing ever needed), and the SECONDARY only ever renders at wash alpha (14%/25%
+//   decorative borders/washes — never text, never a fill under ink), so it carries no contrast floor.
+// All invariants — every bright swatch/primary ≥4.5:1 vs #1a0a2e; every dark swatch's `ink`/`text`
+// legible AND load-bearing; duo primaries genuinely bright — are mechanized in room-accents.test.tsx.
+// The four room presets lead so a room's own identity hue is always one tap away.
+export type AccentSwatch = {
+  name: string;
+  hex: string; // the PRIMARY accent (chrome, buttons, accent-text)
+  hex2?: string; // DUO only: the SECONDARY driving the dim/line washes
+  ink?: string; // DARK only: paired light on-fill ink
+  text?: string; // DARK only: paired light accent-as-text tint
+};
+
+export const ROOM_ACCENT_SWATCHES: AccentSwatch[] = [
   // Row 1 — the four room presets lead + Sky (bright). Hue walk begins.
   { name: "Violet", hex: "#a78bfa" }, // Home preset (~255°)
   { name: "Teal", hex: "#3fd9c2" }, // Monitor preset (~172°)
   { name: "Amber", hex: "#f0b878" }, // Blackbook preset (~33°)
   { name: "Emerald", hex: "#27e08a" }, // Lab preset (~154°)
   { name: "Sky", hex: "#46a8ff" }, // azure blue (~210°)
-  // Row 2 — the rest of the bright wheel, spread for differentiation (all ≥4.5:1 vs the dark ink)
+  // Row 2 — the rest of the bright wheel + the first dark (all brights ≥4.5:1 vs the dark ink)
   { name: "Red", hex: "#ff6b6b" }, // (~0°)
   { name: "Yellow", hex: "#ffe14a" }, // (~53°)
   { name: "Lime", hex: "#b6f24a" }, // yellow-green (~80°)
-  { name: "Magenta", hex: "#f45cc6" }, // hot fuchsia (~318°) — the one pink/magenta rep (Rose pruned as its near-dupe)
-  // Row 3 — DARK tones. Each carries a paired light `ink` (legible as the ON-fill label) AND a paired
-  // light `text` (legible as accent TEXT on the panel — a lighter, hue-carrying tint of the same hue).
-  { name: "Rust", hex: "#9c4a1e", ink: "#fdeadb", text: "#e1a06e" }, // deep burnt orange (~22°)
-  { name: "Olive", hex: "#5f5620", ink: "#f7f3e0", text: "#d8c886" }, // deep bronze/khaki (~48°) — fills the dark-gold gap
-  { name: "Pine", hex: "#12694a", ink: "#e3f6ee", text: "#68d2a6" }, // deep green (~158°)
+  { name: "Magenta", hex: "#f45cc6" }, // hot fuchsia (~318°)
   { name: "Slate", hex: "#33507f", ink: "#e9f0fb", text: "#98b4e6" }, // deep steel-blue (~215°)
+  // Row 3 — the remaining darks + the DUOS (owner-named pairs, 2026-07-13b). Earth tones
+  // (Rust/Olive/Pine) pruned on the same directive.
   { name: "Plum", hex: "#6b2b9e", ink: "#f4e9ff", text: "#c79cef" }, // deep purple (~280°)
   { name: "Wine", hex: "#9e1f46", ink: "#ffe6ee", text: "#ef8ea8" }, // deep crimson (~338°)
+  { name: "Cyan / Midnight", hex: "#35e0e8", hex2: "#3b2a7a" }, // cyan chrome over midnight-purple washes
+  { name: "Red / Blue", hex: "#ff6b6b", hex2: "#2f6bff" }, // red chrome over vivid-blue washes
+  { name: "Lime / Cyan", hex: "#b6f24a", hex2: "#35e0e8" }, // lime chrome over cyan washes
 ];
 
-const SWATCH_HEXES: ReadonlySet<string> = new Set(
-  ROOM_ACCENT_SWATCHES.map((s) => s.hex.toLowerCase()),
-);
+// A swatch's persisted KEY: the bare primary hex for singles (backward-compatible with every pick
+// stored before duos existed), `primary+secondary` for duos. Lowercased — the whitelist, the store,
+// and the picker's selected-compare all speak this one form.
+export function swatchKey(s: AccentSwatch): string {
+  return (s.hex2 ? `${s.hex}+${s.hex2}` : s.hex).toLowerCase();
+}
 
-// A dark swatch's paired light ink, keyed by (lowercased) hex. Only DARK swatches appear here — a
-// bright swatch has no entry and falls back to the default `--v2-accent-ink`.
+// Parse a persisted key back into its primary (+ optional secondary) hexes. Junk-tolerant — callers
+// whitelist with isSwatchHex first.
+export function splitSwatchKey(key: string): { hex: string; hex2?: string } {
+  const [hex, hex2] = key.trim().toLowerCase().split("+");
+  return hex2 ? { hex, hex2 } : { hex };
+}
+
+const SWATCH_KEYS: ReadonlySet<string> = new Set(ROOM_ACCENT_SWATCHES.map(swatchKey));
+
+// A dark swatch's paired light ink, keyed by swatch KEY. Only DARK swatches appear here — a bright
+// or duo swatch has no entry and falls back to the default `--v2-accent-ink`.
 const SWATCH_INK: ReadonlyMap<string, string> = new Map(
-  ROOM_ACCENT_SWATCHES.filter((s) => s.ink).map((s) => [s.hex.toLowerCase(), s.ink!.toLowerCase()]),
+  ROOM_ACCENT_SWATCHES.filter((s) => s.ink).map((s) => [swatchKey(s), s.ink!.toLowerCase()]),
 );
 
-// A dark swatch's paired light accent-TEXT tint, keyed by (lowercased) hex. Only DARK swatches appear
-// here — a bright swatch has no entry, so its accent-text stays the raw (already-legible) accent.
+// A dark swatch's paired light accent-TEXT tint, keyed by swatch KEY. Only DARK swatches appear
+// here — a bright or duo swatch has no entry, so its accent-text stays the raw (legible) accent.
 const SWATCH_TEXT: ReadonlyMap<string, string> = new Map(
-  ROOM_ACCENT_SWATCHES.filter((s) => s.text).map((s) => [s.hex.toLowerCase(), s.text!.toLowerCase()]),
+  ROOM_ACCENT_SWATCHES.filter((s) => s.text).map((s) => [swatchKey(s), s.text!.toLowerCase()]),
 );
 
-// Is `hex` one of the curated swatches? (The legibility guarantee — only a vetted swatch is ever
-// applied.) Case-insensitive.
-export function isSwatchHex(hex: string): boolean {
-  return SWATCH_HEXES.has(hex.trim().toLowerCase());
+// Is `key` one of the curated swatch keys? (The legibility guarantee — only a vetted swatch is ever
+// applied.) Case-insensitive; accepts bare hexes (singles) and `a+b` duo keys.
+export function isSwatchHex(key: string): boolean {
+  return SWATCH_KEYS.has(key.trim().toLowerCase());
 }
 
-// The paired light ink for a swatch, or `undefined` for a bright swatch (use the default dark ink).
+// The paired light ink for a swatch key, or `undefined` for a bright/duo swatch (default dark ink).
 // theme.ts emits this alongside the accent so a dark fill flips to legible light-on-dark.
-export function swatchInk(hex: string): string | undefined {
-  return SWATCH_INK.get(hex.trim().toLowerCase());
+export function swatchInk(key: string): string | undefined {
+  return SWATCH_INK.get(key.trim().toLowerCase());
 }
 
-// The paired light accent-TEXT tint for a DARK swatch, or `undefined` for a bright swatch (whose
-// accent-text stays the raw accent). theme.ts emits this as --ix-accent-text/--v2-accent-text for a
-// dark pick so accent-as-text on the room panel flips to a legible, hue-carrying light tint.
-export function swatchText(hex: string): string | undefined {
-  return SWATCH_TEXT.get(hex.trim().toLowerCase());
+// The paired light accent-TEXT tint for a DARK swatch key, or `undefined` for a bright/duo swatch
+// (whose accent-text stays the raw accent). theme.ts emits this as --ix-accent-text/--v2-accent-text
+// for a dark pick so accent-as-text on the room panel flips to a legible, hue-carrying light tint.
+export function swatchText(key: string): string | undefined {
+  return SWATCH_TEXT.get(key.trim().toLowerCase());
+}
+
+// The CSS background that REPRESENTS a swatch in the picker UI (dot + grid): a flat fill for singles,
+// a hard diagonal split for duos so both colours are visible at a glance.
+export function swatchDotCss(key: string): string {
+  const { hex, hex2 } = splitSwatchKey(key);
+  return hex2 ? `linear-gradient(135deg, ${hex} 0 50%, ${hex2} 50% 100%)` : hex;
 }

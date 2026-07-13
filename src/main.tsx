@@ -97,16 +97,16 @@ try {
   document.documentElement.dataset.jarvis = "on"; // default ON even if localStorage is unavailable
 }
 
-// Per-room identity accents (owner 2026-07-12) — DEFAULT OFF: the attribute appears ONLY when the
-// key is explicitly "1". room-identity.css is scoped :root[data-room-identity="on"] .v2-room[...],
-// so absent/"0" is byte-identical to today's uniform violet. Set before first paint so the room
-// hues never flash in after mount.
+// Per-room identity accents (owner 2026-07-12; DEFAULT ON since 2026-07-13, owner-approved): the
+// attribute appears unless the key is explicitly "0" (devtools/localStorage failsafe). room-identity.css
+// is scoped :root[data-room-identity="on"] .v2-room[...], so the "0" state is byte-identical to the
+// classic uniform violet. Set before first paint so the room hues never flash in after mount.
 try {
-  if (localStorage.getItem("compy_room_identity") === "1") {
+  if (localStorage.getItem("compy_room_identity") !== "0") {
     document.documentElement.dataset.roomIdentity = "on";
   }
 } catch {
-  /* default OFF — the classic uniform-violet look */
+  document.documentElement.dataset.roomIdentity = "on"; // default ON even if localStorage is unavailable
 }
 
 // Per-room accent PICKS (owner 2026-07-12b): inject the managed <style> for any rooms the user

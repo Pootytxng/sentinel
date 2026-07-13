@@ -87,28 +87,26 @@ describe("room-identity: rooms are distinguishable (the whole point)", () => {
   });
 });
 
-describe("room-identity: DEFAULT OFF wiring", () => {
+describe("room-identity: DEFAULT ON wiring (owner-approved flip 2026-07-13)", () => {
   beforeEach(() => {
     localStorage.clear();
     delete document.documentElement.dataset.roomIdentity;
   });
 
-  it("readRoomIdentity is false unless the key is literally \"1\"", () => {
-    expect(readRoomIdentity()).toBe(false); // absent
-    localStorage.setItem("compy_room_identity", "0");
-    expect(readRoomIdentity()).toBe(false);
-    localStorage.setItem("compy_room_identity", "on");
-    expect(readRoomIdentity()).toBe(false); // only "1" counts
+  it("readRoomIdentity is true unless the key is literally \"0\" (the devtools failsafe)", () => {
+    expect(readRoomIdentity()).toBe(true); // absent = ON (the default build)
     localStorage.setItem("compy_room_identity", "1");
     expect(readRoomIdentity()).toBe(true);
+    localStorage.setItem("compy_room_identity", "0");
+    expect(readRoomIdentity()).toBe(false); // only "0" restores the classic uniform violet
   });
 
-  it("theme.ts reader is === \"1\" (opt-in), not !== \"0\" (opt-out)", () => {
-    expect(themeTs).toMatch(/ROOM_IDENTITY_KEY\)\s*===\s*"1"/);
+  it("theme.ts reader is !== \"0\" (default ON, opt-out), not === \"1\" (opt-in)", () => {
+    expect(themeTs).toMatch(/ROOM_IDENTITY_KEY\)\s*!==\s*"0"/);
   });
 
-  it("main.tsx sets the boot attribute ONLY when the key is \"1\"", () => {
-    expect(mainTsx).toMatch(/getItem\("compy_room_identity"\)\s*===\s*"1"/);
+  it("main.tsx sets the boot attribute unless the key is \"0\"", () => {
+    expect(mainTsx).toMatch(/getItem\("compy_room_identity"\)\s*!==\s*"0"/);
   });
 
   it("applyRoomIdentity round-trips the attribute + localStorage", () => {
@@ -158,6 +156,22 @@ describe("room-identity: rig hologram bay follows the room accent when flagged",
   it("use-rig-colors resolves from the active .v2-room when readRoomIdentity() is on", () => {
     expect(rigColorsTs).toMatch(/readRoomIdentity\(\)/);
     expect(rigColorsTs).toMatch(/querySelector<HTMLElement>\(["']\.v2-room["']\)/);
+  });
+
+  // bug→guard (self-review catch 2026-07-13, the default-ON ship review): Home's --ix-accent
+  // re-point lives on the NESTED .home-console (home-console.css), not the .v2-room wrapper —
+  // custom properties never propagate UP, so reading .v2-room on Home silently yielded the base
+  // theme accent: a Home accent pick recolored chrome/dock but NEVER the rig hologram. Pin that
+  // the reader prefers .home-console (Home) before falling back to .v2-room (the other rooms).
+  it("use-rig-colors prefers .home-console (Home's re-point element) over the .v2-room fallback", () => {
+    // anchor on the querySelector CALLS (comments legitimately mention both selectors)
+    const homeIdx = rigColorsTs.indexOf('querySelector<HTMLElement>(".home-console")');
+    const roomIdx = rigColorsTs.indexOf('querySelector<HTMLElement>(".v2-room")');
+    expect(homeIdx, "the .home-console querySelector call must exist").toBeGreaterThan(-1);
+    expect(roomIdx, "the .v2-room querySelector call must exist").toBeGreaterThan(-1);
+    expect(homeIdx, ".home-console must be tried BEFORE the .v2-room fallback").toBeLessThan(roomIdx);
+    // and the stale "Home takes no re-point" comment (the defect's cover story) must be gone
+    expect(rigColorsTs).not.toMatch(/Home\s+takes no --ix-accent re-point/);
   });
   it("use-rig-colors re-resolves on the room-identity flag change (attr + event)", () => {
     expect(rigColorsTs).toMatch(/attributeFilter:\s*\[[^\]]*"data-room-identity"/);
