@@ -107,24 +107,30 @@ timeline = "the logbook", the Lab's "Black Box" crash forensics left alone).
   follows the live theme, or keeps the violet signature?* → ✅ **You answered 2026-07-12: "per-room identity"** — now
   BUILT, see **A9** below.
 
-### A9. Per-room identity accents **+ per-room color picker** (now a **20-color palette**) — ⏳ your eyeball · SHIPPED default-OFF, palette EXPANDED 2026-07-13 (`8a9ab76`, on your live build)
+### A9. Per-room identity accents **+ per-room color picker** (now a **15-color palette**) — ⏳ your eyeball · SHIPPED default-OFF, palette PRUNED 2026-07-13 (`8e6920f`, on your live build)
 You picked **"per-room identity"** as the answer to the accent-lock question (Cycles 12g/12h) — "i wanted … the
 components each had their own distinguishable color scheme so they were more visible." Each room gets its own preset
 accent so the rooms are more distinguishable at a glance: **Monitor teal · Blackbook amber · Lab/Optimize emerald ·
 Home violet** (unchanged). Then you asked for more (Cycle 12i follow-up): **"the freedom to shift around the colors
 they want on each page."** That's built too — **a little accent dot in the top-right corner of each room; click it for
 a swatch popover to recolor THAT room** (it remembers per-room; "Reset to default" puts the preset back). You liked
-the picker ("i like it") and asked for **"more variety … more neon or bright/dark tone mixed"** — so the palette is
-now **20 colors** (up from 10): the original brights **+ 5 new neons** (Magenta, Azure, Chartreuse, Tangerine, Hot
-Pink) **+ 5 true dark tones** (Indigo, Wine, Pine, Plum, Slate). The dark ones stay readable because the ink flips to
-light automatically on a dark fill. All on your live app (`8a9ab76`, installer `97C581BB…EEE7698`, stamp-verified),
-still behind the same **default-OFF** flag so nothing changed until you flip it.
-- **→ Your one job (the ONE remaining gate before default-ON):** Settings → Appearance → flip **"Room accent colors
-  (preview)"** ON, click a room's **top-right accent dot**, and try the new swatches — **especially a dark tone**
-  (Indigo/Wine/Pine/Plum/Slate) to see the buttons stay legible. **Result → tell Claude:** "looks good" (I flip it
-  default-ON) or what to prune/add — it's your palette, delegated to me but your final taste call. One taste note from
-  me: the 20 lean a bit heavy on warm-orange (Amber/Coral/Tangerine/Gold) and pink (Rose/Magenta/Hot Pink) — say the
-  word and I'll swap some for cooler/other hues. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12k.
+the picker, saw the first 20-color expansion, and said **"looks good but i agree to prune and widen variety more
+differentiation"** — so the palette is now a tighter, more-differentiated **15** (9 bright + 6 dark): I cut the
+look-alikes (four oranges → one, three pinks → one) and spread the rest wider, checked with a real color-distance
+metric so no two read as near-twins. The dark tones (Rust, Olive, Pine, Slate, Plum, Wine) stay readable on
+**buttons/pills** because the ink flips to light automatically. All on your live app (`8e6920f`, installer
+`51B0A754…3862F39A`, stamp-verified), still behind the same **default-OFF** flag so nothing changed until you flip it.
+- **→ Your one job (a gate before default-ON):** Settings → Appearance → flip **"Room accent colors (preview)"** ON,
+  click a room's **top-right accent dot**, and try the 15 — **especially a dark tone** to see the buttons stay legible.
+  **Result → tell Claude:** "looks good" (toward the default-ON flip) or what to tweak — it's your palette, delegated
+  to me but your final taste call.
+- **⚠️ Heads-up before you test the darks (my honest find, fix queued):** the dark tones are fully legible on
+  **buttons/pills** (that's the adaptive ink), but a few chrome spots use the accent as **plain text on a dark
+  background** — the **Lab station tabs** and the **Home dock room labels** — and there a *dark* pick shows up
+  low-contrast (dark text on dark). That's a pre-existing gap (it shipped with the first dark tones too), NOT the
+  prune, and it's **my next fix** (a focused "accent-as-text" legibility pass). So: bright picks are perfect
+  everywhere; dark picks look great on buttons but a couple of label spots need my follow-up. **I'd hold the
+  default-ON flip until that lands.** Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12l.
 
 ---
 

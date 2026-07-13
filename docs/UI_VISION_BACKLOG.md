@@ -137,10 +137,13 @@ full response ive written here seeing how things seem to get lost in translation
    Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified).
    **Extended 2026-07-12 with a per-room color PICKER** (owner Cycle-12i follow-up "the freedom to shift
    around the colors they want on each page"): an accent dot in each room's top-right corner opens a curated
-   swatch popover to recolor THAT room, persisted per-room (`20e2b50`). **Palette EXPANDED 2026-07-13 to 20
-   swatches** (owner "more neon or bright/dark tone mixed"): 15 bright/neon + 5 dark tones with adaptive
-   light ink so dark fills stay legible (`8a9ab76`, installer `97C581BB…EEE7698`, stamp-verified). Owner
-   one-flip eyeball on the NEW palette pending (BACKLOG Cycle 2026-07-12k, OWNER_ACTION_CHECKLIST §A9).
+   swatch popover to recolor THAT room, persisted per-room (`20e2b50`). **Palette expanded to 20 then PRUNED
+   to a differentiated 15 2026-07-13** (owner "more neon or bright/dark tone mixed" → "prune and widen
+   variety more differentiation"): 9 bright + 6 dark tones with adaptive light ink so dark FILLS stay
+   legible; CIEDE2000-verified differentiation (`8e6920f`, installer `51B0A754…3862F39A`, stamp-verified).
+   Owner one-flip eyeball on the pruned palette pending. 🔴 **Follow-up:** accent-as-TEXT (Lab station
+   tabs, Home dock) renders dark picks ~2.5:1 — the adaptive ink covers FILLS only; legibility train
+   queued (BACKLOG Cycle 2026-07-12l, OWNER_ACTION_CHECKLIST §A9).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.

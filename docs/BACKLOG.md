@@ -161,7 +161,40 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
-### Cycle 2026-07-12k — ✅ PALETTE EXPANDED 10→20 SHIPPED LIVE `8a9ab76` (neon brights + adaptive-ink dark tones, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `97C581BB…EEE7698`, stamp-verified) — owner one-flip eyeball on the NEW palette is the open gate
+### Cycle 2026-07-12l — ✅ PALETTE PRUNED 20→15 SHIPPED LIVE `8e6920f` (differentiation prune, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `51B0A754…3862F39A`, stamp-verified) — owner one-flip eyeball on the pruned palette is the open gate
+
+**Owner verdict on the 20-swatch expansion (2026-07-13): "looks good but i agree to prune and widen
+variety more differentiation."** So the direction is approved; he wants the near-dupe clusters cut and
+the survivors spread wider. **Default-ON flip still DEFERRED** until he re-eyeballs the pruned set.
+
+- **✅ SHIPPED `8e6920f`:** `ROOM_ACCENT_SWATCHES` re-curated 20 → **15** (9 bright + 6 dark). Pruned the
+  clusters — four warm-oranges → Amber only; three pinks → one Magenta; teal/cyan overlap → Teal only —
+  re-spread the survivors, added a dark **Olive** `#5f5620` (ink `#f7f3e0`) in the empty dark-gold gap.
+  Removed: Cyan, Gold, Coral, Rose, Hot Pink, Azure, Chartreuse, Tangerine, Indigo; Sky/Lime hexes
+  retuned. Final 15: Violet · Teal · Amber · Emerald · Sky `#46a8ff` · Red `#ff6b6b` · Yellow `#ffe14a`
+  · Lime `#b6f24a` · Magenta `#f45cc6` (bright) + Rust · Olive · Pine · Slate · Plum · Wine (dark).
+- **Differentiation VERIFIED, not eyeballed:** CIEDE2000 across all 15 → minimum non-preset pairwise
+  distance **18.0** (was 13.4 for the Magenta/Rose pair the adversarial review flagged); the only closer
+  pair is the LOCKED Teal/Emerald presets (14.3, both green, unavoidable). Legibility law + adaptive-ink
+  mechanism (`theme.ts`) unchanged. Zero `src-tauri`.
+- **Verify:** tsc 0 · vitest **1600** (177 files) · CIEDE2000 audit · fresh-context adversarial review
+  (Magenta/Rose fix confirmed) · **self-reviewer PASS** (live CDP 1500×980: Monitor/Plum computed text
+  `#f4e9ff` on the dark fill; Blackbook/Magenta computed text `#1a0a2e` on the bright fill; grid 5×3).
+- 🔴 **NEW FOLLOW-UP TRAIN (self-review find, pre-existing) — dark-accent-as-TEXT legibility:** where
+  chrome uses the room accent as direct **foreground TEXT** on a near-black bg (`.dock-node-primary`
+  Home dock, Lab station tabs, blackbook `.bc-tag`/`.bc-state-on`, arc-instrument labels) a **DARK**
+  accent renders ~2.5:1 (fails 4.5:1). The adaptive ink only covers accent-as-**FILL** (button/pill
+  text), not accent-as-**TEXT**. This shipped already with the prior 5 dark swatches (`8a9ab76`) — it's
+  NOT introduced by the prune. **Fix approach:** emit a legibility-adaptive light `--ix-accent-text` for
+  dark picks in `applyRoomAccents`, AND sweep every `color: var(--ix-accent)` foreground site to
+  `--ix-accent-text` (grep: dozens across dock/blackbook-console/arc-instrument/Check/BlackBox/
+  ActionDrawer CSS). Needs its own guard (accent-as-text ≥4.5:1 vs panel for every dark swatch) +
+  self-review. **Queued as the next accent train — do NOT flip room-identity default-ON until this is
+  fixed** (a dark pick would show illegible chrome text). Owner is aware (reported 2026-07-13).
+- ⛳ **RESUME:** the palette itself is DONE + shipped; the open items are (1) owner's one-flip eyeball on
+  the pruned 15 and (2) the dark-accent-as-text legibility train above.
+
+### Cycle 2026-07-12k — ✅ PALETTE EXPANDED 10→20 SHIPPED LIVE `8a9ab76` (neon brights + adaptive-ink dark tones, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `97C581BB…EEE7698`, stamp-verified) — SUPERSEDED by Cycle 12l (pruned to 15)
 
 **Owner verdict on the Cycle-12j picker (2026-07-12): "i like it" — the picker feature is APPROVED.**
 Follow-up ask, verbatim: *"maybe more variety of color diversity more neon or bright/dark tone mixed

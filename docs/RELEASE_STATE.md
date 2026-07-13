@@ -10,6 +10,26 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-13 (ACCENT PALETTE PRUNED 20→15 SHIPPED `8e6920f` — installer SHA-256
+> `51B0A754C2CC2578302771168F45C13850A7ED24DABDEF23E98F7F1B3862F39A`, live exe stamp-verified
+> `8e6920f` via the embedded hash, installed by Claude, supersedes the `97C581BB…EEE7698` installer;
+> SAME flag `compy_room_identity` **DEFAULT OFF** — owner one-flip eyeball on the pruned palette is the
+> open gate):** Owner follow-up — *"looks good but i agree to prune and widen variety more
+> differentiation."* Re-curates `ROOM_ACCENT_SWATCHES` (`src/design/room-identity.ts`) from 20 → **15**
+> (9 bright + 6 dark): pruned the near-dupe clusters (four warm-oranges → Amber; three pinks → one
+> Magenta; teal/cyan overlap → Teal), re-spread the survivors, and added a dark **Olive** `#5f5620`
+> (paired ink `#f7f3e0`) in the empty dark-gold gap. Differentiation is VERIFIED by CIEDE2000: minimum
+> non-preset pairwise distance **18.0** (was 13.4 for the flagged Magenta/Rose); the only closer pair is
+> the LOCKED Teal/Emerald presets (14.3, both green). Legibility law + adaptive-ink mechanism unchanged.
+> **Zero `src-tauri`.** Verify: tsc 0 · vitest **1600** (177 files) · CIEDE2000 differentiation audit ·
+> fresh-context adversarial review (Magenta/Rose fix confirmed) · self-reviewer **PASS** (live CDP:
+> Monitor/Plum text `#f4e9ff` on dark fill, Home/Olive room vars confirmed, Blackbook/Magenta text
+> `#1a0a2e` on bright fill; 15-swatch grid clean 5×3).
+> **KNOWN FOLLOW-UP (pre-existing, tracked — NOT this diff):** where chrome uses the room accent as
+> direct TEXT on a dark background (Lab station tabs, Home dock, blackbook tags) a DARK accent renders
+> ~2.5:1 — the adaptive ink covers accent-as-FILL only, not accent-as-TEXT. Shipped already with the
+> prior 5 dark swatches (`8a9ab76`); a focused accent-as-text legibility train is queued (BACKLOG).
+>
 > **UPDATE 2026-07-13 (ACCENT PALETTE EXPANDED 10→20 SHIPPED `8a9ab76` — installer SHA-256
 > `97C581BB4EF4EA47579939C2D9519F0603D72BF20FDA994BDDCAD7D9FEEE7698`, live exe stamp-verified
 > `8a9ab76` via the embedded hash, installed by Claude, supersedes the `457A2D00…F73EBDCE` installer;
