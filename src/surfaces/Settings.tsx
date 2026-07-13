@@ -234,12 +234,12 @@ export default function Settings({
                   bay v2, Two futures split) are REMOVED — three of five panel personas read the
                   wall of "(preview)" switches as an internal QA panel. The features are unchanged
                   and their flags still respect localStorage if set via devtools (same convention
-                  as the removed "New look" hub below). The remaining preview rows — Monitor
-                  console (awaiting the owner's v5 eyeball) and the JARVIS motion layer — are
-                  genuinely default-OFF. */}
+                  as the removed "New look" hub below). The remaining toggle rows — Monitor
+                  console and the JARVIS motion layer — are owner-approved DEFAULT-ON failsafes
+                  (the "0" setting restores the classic look). */}
               <div className="set-row set-row-inset">
                 <div className="set-row-text">
-                  <div className="set-row-title">Monitor console (preview)</div>
+                  <div className="set-row-title">Monitor console</div>
                   <div className="set-row-sub">
                     Monitor's live face as an instrument cluster: rolling fps and frametime
                     traces with honest gauges. Same sensors, same measurements — turn off for
@@ -249,7 +249,7 @@ export default function Settings({
                 <Toggle
                   on={monitorConsole}
                   onChange={changeMonitorConsole}
-                  ariaLabel="Monitor console (preview)"
+                  ariaLabel="Monitor console"
                 />
               </div>
 

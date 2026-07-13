@@ -495,17 +495,18 @@ export function applyHomeConsole(on: boolean): void {
 // Monitor console (plan 2026-07-10-console-hud-phase3-monitor, Phase 3 of the Console HUD) —
 // the Monitor room's LIVE face as the console instrument cluster: rolling fps/frametime
 // oscilloscope traces + honest arc gauges over the SAME polls the existing tiles run (zero new
-// IPC). DEFAULT OFF the whole phase (Settings → Appearance preview toggle): ON only when the
-// key is literally "1"; off, MonitorV2 renders exactly today's tree (test-pinned).
+// IPC). DEFAULT ON since 2026-07-12 (owner "flip it default on" after the v5 flight-deck +
+// session-stack eyeball) per ship-approved-work-as-the-build: ON unless the key is literally
+// "0" — the classic live tiles stay reachable as the Settings "0" failsafe (test-pinned).
 const MONITOR_CONSOLE_KEY = "compy_monitor_console";
 
 export function readMonitorConsole(): boolean {
   try {
-    return localStorage.getItem(MONITOR_CONSOLE_KEY) === "1";
+    return localStorage.getItem(MONITOR_CONSOLE_KEY) !== "0";
   } catch {
-    /* ignore — default OFF */
+    /* ignore — default ON */
   }
-  return false;
+  return true;
 }
 
 export function applyMonitorConsole(on: boolean): void {
