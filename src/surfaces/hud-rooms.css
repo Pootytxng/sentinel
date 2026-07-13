@@ -98,7 +98,7 @@
 :root[data-v2="on"][data-hud="on"]
   .v2-room:not([data-room="home"]):not([data-room="check"])
   .hud-eyebrow-sep {
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
   letter-spacing: 0;
 }
 

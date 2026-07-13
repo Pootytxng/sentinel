@@ -8,6 +8,7 @@ import {
   defaultRoomAccent,
   isSwatchHex,
   swatchInk,
+  swatchText,
   ROOM_IDENTITY,
   HOME_ACCENT,
   type PickableRoom,
@@ -55,6 +56,9 @@ const contrast = (fg: RGB, bg: RGB): number => {
 // The real dark ink used on accent fills — read from the token so a token change re-validates here.
 const tokensCss = readFileSync(join("src", "design", "tokens-v2.css"), "utf8");
 const ACCENT_INK = tokensCss.match(/--v2-accent-ink:\s*(#[0-9a-fA-F]{6})/)![1];
+// The LIGHTEST room panel surface accent-TEXT can render on (worst case for a light foreground) —
+// read from the token so a palette change re-validates the accent-text legibility here.
+const PANEL_LIGHTEST = tokensCss.match(/--v2-panel-2:\s*(#[0-9a-fA-F]{6})/)![1];
 
 describe("room-accents: curated palette is legible + sound", () => {
   // The button-legibility law, extended for the adaptive-ink palette (owner 2026-07-13 "bright/dark
@@ -100,6 +104,59 @@ describe("room-accents: curated palette is legible + sound", () => {
       expect(swatchInk(s.hex), s.name).toBe(s.ink ? s.ink.toLowerCase() : undefined);
     }
     expect(swatchInk("#000000"), "a non-swatch hex has no ink").toBeUndefined();
+  });
+
+  // ── The accent-as-TEXT legibility law (dark-pick fix, owner 2026-07-13). The accent also renders as
+  // foreground text/glyphs on the dark room panel (Lab station labels, the Home dock, Blackbook's change
+  // tag, session meta). A bright swatch is legible as-is; a DARK swatch's deep hue renders ~2.5:1, so it
+  // carries a paired light `text` tint that theme.ts emits as --ix-accent-text/--v2-accent-text. Three
+  // invariants, mirroring the ink guards: legibility · load-bearing · coverage.
+  it("every DARK swatch's accent-TEXT clears WCAG 4.5:1 against the lightest room panel", () => {
+    const panel = parseHex(PANEL_LIGHTEST);
+    const darks = ROOM_ACCENT_SWATCHES.filter((s) => s.text);
+    expect(darks.length, "the palette must carry paired accent-text tints").toBeGreaterThan(0);
+    for (const s of darks) {
+      const ratio = contrast(parseHex(s.text!), panel);
+      expect(
+        ratio,
+        `${s.name} text ${s.text} on panel ${PANEL_LIGHTEST} = ${ratio.toFixed(2)}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // Load-bearing: a swatch only carries `text` because its RAW accent is too dark to read as text on
+  // the panel. This stops a bright swatch being needlessly given a light text (and proves the fix is
+  // required, not decorative) — the mirror of the ink load-bearing check.
+  it("dark swatches' RAW accent genuinely FAILS 4.5:1 as text on the panel — the light accent-text is required", () => {
+    const panel = parseHex(PANEL_LIGHTEST);
+    for (const s of ROOM_ACCENT_SWATCHES.filter((s) => s.text)) {
+      const ratio = contrast(parseHex(s.hex), panel);
+      expect(
+        ratio,
+        `${s.name} raw ${s.hex} vs panel = ${ratio.toFixed(2)} — a text-paired swatch must be too dark for raw text`,
+      ).toBeLessThan(4.5);
+    }
+  });
+
+  // Coverage: NO swatch may be left text-broken. Any swatch whose raw accent fails as text on the panel
+  // MUST carry a paired `text` — so adding a new dark swatch without one fails CI here.
+  it("every swatch too dark for raw text on the panel carries a paired accent-text (no dark swatch left broken)", () => {
+    const panel = parseHex(PANEL_LIGHTEST);
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      if (contrast(parseHex(s.hex), panel) < 4.5) {
+        expect(
+          s.text,
+          `${s.name} ${s.hex} is too dark to read as text on the panel but has no paired accent-text`,
+        ).toBeDefined();
+      }
+    }
+  });
+
+  it("swatchText() returns the paired accent-text for dark swatches, undefined for bright ones", () => {
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      expect(swatchText(s.hex), s.name).toBe(s.text ? s.text.toLowerCase() : undefined);
+    }
+    expect(swatchText("#000000"), "a non-swatch hex has no accent-text").toBeUndefined();
   });
 
   it("all swatches + inks are valid 6-digit hexes; swatches are pairwise-distinct", () => {
@@ -218,6 +275,24 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
     expect(css).toContain("--v2-accent:#46a8ff;");
     expect(css).not.toContain("--v2-accent-ink:");
     expect(css).not.toContain("--ix-accent-ink:");
+  });
+
+  // The adaptive accent-TEXT emission (dark-pick legibility, 2026-07-13) — the MECHANISM half of the fix
+  // (the swatch-data half is guarded above). A DARK pick must write its paired light text as BOTH
+  // --v2-accent-text (for --v2-accent-as-text sites reading it via fallback) AND --ix-accent-text (the
+  // instrument text token the room -v2 re-points map to var(--v2-accent); this same-element override wins
+  // on source order). A BRIGHT pick writes neither, so its accent-text stays the raw, already-legible
+  // accent. This pins theme.ts's emission — a dropped/typo'd `text` decl would slip every swatch-data test.
+  it("a DARK pick emits the paired --v2-accent-text AND --ix-accent-text; a BRIGHT pick emits neither", () => {
+    setRoomAccent("play", "#6b2b9e"); // Plum (dark, text #c79cef)
+    let css = document.getElementById("compy-room-accents")!.textContent!;
+    expect(css).toContain("--v2-accent-text:#c79cef;");
+    expect(css).toContain("--ix-accent-text:#c79cef;");
+
+    setRoomAccent("play", "#46a8ff"); // Sky (bright) — replaces the pick, no text override
+    css = document.getElementById("compy-room-accents")!.textContent!;
+    expect(css).not.toContain("--v2-accent-text:");
+    expect(css).not.toContain("--ix-accent-text:");
   });
 
   it("every generated rule header carries the [data-room-identity=\"on\"] scope", () => {

@@ -35,6 +35,12 @@
 .gaming-recovery-choices li::marker {
   color: var(--ix-accent, var(--accent, #2ee6c0));
 }
+/* Dark-pick legibility (room-identity, 2026-07-13): inside a room (fix/lab) the marker follows the
+   adaptive accent-text (== accent for bright/preset/flag-off → byte-identical); the .v2-room scope
+   leaves the classic escape-hatch render (GamingMode outside any room) on its raw accent. */
+:root[data-v2="on"] .v2-room .gaming-recovery-choices li::marker {
+  color: var(--ix-accent-text);
+}
 
 /* Featured framing when Gaming Mode rides at the top of the Tune tab (its own tab retired) — a faint
    accent-topped panel so it reads as a glorified section, not just another row. */

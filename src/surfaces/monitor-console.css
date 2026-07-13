@@ -6,7 +6,7 @@
 :root[data-v2="on"] .mc-capture { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 :root[data-v2="on"] .mc-cap { font-family: var(--ix-mono); font-size: 11px; letter-spacing: .1em;
   text-transform: uppercase; padding: 6px 14px; cursor: pointer;
-  background: transparent; color: var(--ix-accent); border: 1px solid var(--ix-accent); }
+  background: transparent; color: var(--ix-accent-text); border: 1px solid var(--ix-accent-text); }
 :root[data-v2="on"] .mc-cap:hover:not(:disabled) { background: var(--ix-accent); color: var(--ix-accent-ink); }
 :root[data-v2="on"] .mc-cap:disabled { opacity: .6; cursor: default; }
 :root[data-v2="on"] .mc-cap-on { background: var(--ix-accent); color: var(--ix-accent-ink); }
@@ -16,7 +16,7 @@
 :root[data-v2="on"] .mc-ov-corner { font-size: 12px; line-height: 1; padding: 5px 8px; cursor: pointer;
   background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
 :root[data-v2="on"] .mc-ov-corner:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
-:root[data-v2="on"] .mc-ov-corner-on { border-color: var(--ix-accent); color: var(--ix-accent); }
+:root[data-v2="on"] .mc-ov-corner-on { border-color: var(--ix-accent-text); color: var(--ix-accent-text); }
 
 /* ── Flight Deck hero (v5) — the frametime scope full-width with scrub/zoom chrome; the delta
    row's plain numbers. Flat by chain law (v3→v4): the ms axis IS the depth. ── */
@@ -44,7 +44,7 @@
 :root[data-v2="on"] .mc-delta-k { font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--ix-text-3); }
 :root[data-v2="on"] .mc-delta-v { color: var(--ix-text-1); }
-:root[data-v2="on"] .mc-delta-tag { color: var(--ix-accent); opacity: .85; font-size: 10px;
+:root[data-v2="on"] .mc-delta-tag { color: var(--ix-accent-text); opacity: .85; font-size: 10px;
   letter-spacing: .08em; }
 
 /* ── Session Stack (v5 sessions half) — flat small multiples on ONE shared 1%-low axis.
@@ -66,7 +66,7 @@
   border: 1px solid var(--ix-glass-border); color: var(--ix-text-2); cursor: pointer; text-align: left; }
 :root[data-v2="on"] .ss-row:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
 :root[data-v2="on"] .ss-row-newest { color: var(--ix-text-1); }
-:root[data-v2="on"] .ss-row-newest .ss-meta { color: var(--ix-accent); }
+:root[data-v2="on"] .ss-row-newest .ss-meta { color: var(--ix-accent-text); }
 :root[data-v2="on"] .ss-meta { font-family: var(--ix-mono); font-size: 10px; letter-spacing: .08em;
   text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   min-width: 0; }

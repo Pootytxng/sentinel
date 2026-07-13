@@ -247,5 +247,5 @@
 }
 :root[data-v2="on"] .v2-door-arrow {
   margin-left: auto;
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
 }

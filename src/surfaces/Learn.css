@@ -878,6 +878,15 @@
   color: var(--ix-accent);
   text-decoration-thickness: 2px;
 }
+/* Dark-pick legibility (room-identity 2026-07-13): the resting link already reads --ix-accent-text, but
+   hover/focus dropped to the raw accent — which a DARK Blackbook pick renders ~2.5:1 (Blackbook embeds
+   <Learn asPanel> inside .v2-room[data-room="learn"]). Scoped to .v2-room so the standalone Library
+   overlay (rendered outside any room) keeps its untouched raw-accent hover; in-room --ix-accent-text is
+   the adaptive light token (== accent for bright/preset/flag-off, so byte-identical there). */
+:root[data-v2="on"] .v2-room .lx-superseded-link:hover,
+:root[data-v2="on"] .v2-room .lx-superseded-link:focus-visible {
+  color: var(--ix-accent-text);
+}
 /* A5 supersession chain — the quiet audit trail under a multi-hop note ("A → B → C"). */
 .lx-superseded-chain {
   display: block;

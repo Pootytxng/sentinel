@@ -58,16 +58,25 @@ export function defaultRoomAccent(room: PickableRoom): string {
 // unavoidable). 9 bright + 6 dark, with a dark Olive added in the empty dark-gold gap.
 //
 // THE LEGIBILITY LAW (non-negotiable — why this is a curated set, not a free hex field): the accent
-// doubles as a button/pill FILL with the accent-INK painted on top, so every swatch must clear WCAG
-// 4.5:1 against the ink it will be read against. Two kinds of swatch:
-//   • BRIGHT (no `ink`) — high-luminance; legible under the DEFAULT dark ink `--v2-accent-ink #1a0a2e`.
-//   • DARK (`ink` set) — a deep tone that would FAIL under the dark ink, so it carries its OWN light
-//     ink; theme.ts (applyRoomAccents) emits that paired ink alongside the accent so the fill flips to
-//     light-on-dark and stays legible (adaptive ink — the "bright/dark mixed" ask).
-// Both invariants (every bright swatch ≥4.5:1 vs #1a0a2e; every dark swatch ≥4.5:1 vs ITS ink; the
-// dark ones genuinely need it) are mechanized in room-accents.test.tsx. The four room presets lead so
-// a room's own identity hue is always one tap away; all fifteen hexes are pairwise-distinct.
-export const ROOM_ACCENT_SWATCHES: { name: string; hex: string; ink?: string }[] = [
+// is consumed in TWO foreground roles, each with its own contrast floor, so every swatch is vetted
+// against BOTH:
+//   (1) accent-as-FILL — the accent paints a button/pill and the accent-INK is read ON it. Two kinds:
+//       • BRIGHT (no `ink`) — high-luminance; legible under the DEFAULT dark ink `--v2-accent-ink #1a0a2e`.
+//       • DARK (`ink` set) — a deep tone that would FAIL under the dark ink, so it carries its OWN light
+//         ink; theme.ts (applyRoomAccents) emits that paired ink alongside the accent so the fill flips
+//         to light-on-dark and stays legible (adaptive ink — the "bright/dark mixed" ask).
+//   (2) accent-as-TEXT — the accent is read AS text/glyphs ON the dark room panel (Lab station labels,
+//       the Home dock's primary node, Blackbook's change tag, session meta, …). A BRIGHT swatch is
+//       already legible as text on the panel, but a DARK swatch renders ~2.5:1 — illegible. So each
+//       DARK swatch also carries a paired light, hue-CARRYING `text` tint; theme.ts emits it as
+//       `--ix-accent-text`/`--v2-accent-text` for dark picks, and the accent-as-text sites read that
+//       token (adaptive text — the dark-tone legibility fix, 2026-07-13). A BRIGHT swatch needs no
+//       `text` (its accent-text stays the raw accent, already legible).
+// All invariants — every bright swatch ≥4.5:1 vs #1a0a2e; every dark swatch's `ink` ≥4.5:1 vs the
+// swatch AND the dark ones genuinely need it; every dark swatch's `text` ≥4.5:1 vs the lightest room
+// panel — are mechanized in room-accents.test.tsx. The four room presets lead so a room's own identity
+// hue is always one tap away; all fifteen hexes are pairwise-distinct.
+export const ROOM_ACCENT_SWATCHES: { name: string; hex: string; ink?: string; text?: string }[] = [
   // Row 1 — the four room presets lead + Sky (bright). Hue walk begins.
   { name: "Violet", hex: "#a78bfa" }, // Home preset (~255°)
   { name: "Teal", hex: "#3fd9c2" }, // Monitor preset (~172°)
@@ -79,13 +88,14 @@ export const ROOM_ACCENT_SWATCHES: { name: string; hex: string; ink?: string }[]
   { name: "Yellow", hex: "#ffe14a" }, // (~53°)
   { name: "Lime", hex: "#b6f24a" }, // yellow-green (~80°)
   { name: "Magenta", hex: "#f45cc6" }, // hot fuchsia (~318°) — the one pink/magenta rep (Rose pruned as its near-dupe)
-  // Row 3 — DARK tones (adaptive light ink so the fill stays legible), spread across the wheel too
-  { name: "Rust", hex: "#9c4a1e", ink: "#fdeadb" }, // deep burnt orange (~22°)
-  { name: "Olive", hex: "#5f5620", ink: "#f7f3e0" }, // deep bronze/khaki (~48°) — fills the dark-gold gap
-  { name: "Pine", hex: "#12694a", ink: "#e3f6ee" }, // deep green (~158°)
-  { name: "Slate", hex: "#33507f", ink: "#e9f0fb" }, // deep steel-blue (~215°)
-  { name: "Plum", hex: "#6b2b9e", ink: "#f4e9ff" }, // deep purple (~280°)
-  { name: "Wine", hex: "#9e1f46", ink: "#ffe6ee" }, // deep crimson (~338°)
+  // Row 3 — DARK tones. Each carries a paired light `ink` (legible as the ON-fill label) AND a paired
+  // light `text` (legible as accent TEXT on the panel — a lighter, hue-carrying tint of the same hue).
+  { name: "Rust", hex: "#9c4a1e", ink: "#fdeadb", text: "#e1a06e" }, // deep burnt orange (~22°)
+  { name: "Olive", hex: "#5f5620", ink: "#f7f3e0", text: "#d8c886" }, // deep bronze/khaki (~48°) — fills the dark-gold gap
+  { name: "Pine", hex: "#12694a", ink: "#e3f6ee", text: "#68d2a6" }, // deep green (~158°)
+  { name: "Slate", hex: "#33507f", ink: "#e9f0fb", text: "#98b4e6" }, // deep steel-blue (~215°)
+  { name: "Plum", hex: "#6b2b9e", ink: "#f4e9ff", text: "#c79cef" }, // deep purple (~280°)
+  { name: "Wine", hex: "#9e1f46", ink: "#ffe6ee", text: "#ef8ea8" }, // deep crimson (~338°)
 ];
 
 const SWATCH_HEXES: ReadonlySet<string> = new Set(
@@ -98,6 +108,12 @@ const SWATCH_INK: ReadonlyMap<string, string> = new Map(
   ROOM_ACCENT_SWATCHES.filter((s) => s.ink).map((s) => [s.hex.toLowerCase(), s.ink!.toLowerCase()]),
 );
 
+// A dark swatch's paired light accent-TEXT tint, keyed by (lowercased) hex. Only DARK swatches appear
+// here — a bright swatch has no entry, so its accent-text stays the raw (already-legible) accent.
+const SWATCH_TEXT: ReadonlyMap<string, string> = new Map(
+  ROOM_ACCENT_SWATCHES.filter((s) => s.text).map((s) => [s.hex.toLowerCase(), s.text!.toLowerCase()]),
+);
+
 // Is `hex` one of the curated swatches? (The legibility guarantee — only a vetted swatch is ever
 // applied.) Case-insensitive.
 export function isSwatchHex(hex: string): boolean {
@@ -108,4 +124,11 @@ export function isSwatchHex(hex: string): boolean {
 // theme.ts emits this alongside the accent so a dark fill flips to legible light-on-dark.
 export function swatchInk(hex: string): string | undefined {
   return SWATCH_INK.get(hex.trim().toLowerCase());
+}
+
+// The paired light accent-TEXT tint for a DARK swatch, or `undefined` for a bright swatch (whose
+// accent-text stays the raw accent). theme.ts emits this as --ix-accent-text/--v2-accent-text for a
+// dark pick so accent-as-text on the room panel flips to a legible, hue-carrying light tint.
+export function swatchText(hex: string): string | undefined {
+  return SWATCH_TEXT.get(hex.trim().toLowerCase());
 }

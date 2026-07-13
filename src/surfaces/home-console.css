@@ -20,6 +20,12 @@
   --ix-text-2: var(--v2-muted);
   --ix-text-3: var(--v2-faint);
   --ix-accent: var(--v2-accent);
+  /* Accent-as-TEXT token (dark-pick legibility, 2026-07-13). Home carries no room -v2 re-point, so the
+     dock's accent-text is set here. It must FOLLOW the emitted --v2-accent-text (the light tint theme.ts
+     writes on the .v2-room[data-room="home"] ANCESTOR for a dark pick) — NOT re-resolve var(--v2-accent),
+     which would re-bake the dark hue at this element and clobber the adaptive value for the dock. The
+     fallback keeps it byte-identical to --ix-accent (raw accent) for bright picks / presets / flag-off. */
+  --ix-accent-text: var(--v2-accent-text, var(--v2-accent));
   --ix-mono: var(--v2-font-mono);
 }
 
@@ -45,7 +51,7 @@
   letter-spacing: 0.08em;
 }
 :root[data-v2="on"] .hc-eyebrow-sep {
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
   letter-spacing: 0;
 }
 /* The verdict speaks in sentence case — calm confidence, not a shouted banner (the round-1

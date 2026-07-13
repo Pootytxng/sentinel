@@ -2,7 +2,7 @@
 // cosmetic. The theme drives the app accent colors via `[data-itheme]` on <html> (see
 // instrument.css). Reversible: nothing here touches logic or the backend.
 
-import { PICKABLE_ROOMS, isSwatchHex, swatchInk, type PickableRoom } from "./room-identity";
+import { PICKABLE_ROOMS, isSwatchHex, swatchInk, swatchText, type PickableRoom } from "./room-identity";
 
 export type InstrumentTheme = "midnight" | "violet" | "crimson" | "emerald" | "hearth";
 
@@ -636,10 +636,20 @@ export function applyRoomAccents(): void {
       // default dark ink #1a0a2e. This is what keeps a dark-tone accent legible as a filled button.
       const ink = swatchInk(hex);
       const inkDecls = ink ? `--v2-accent-ink:${ink};--ix-accent-ink:${ink};` : "";
+      // A DARK swatch ALSO carries a paired light accent-TEXT tint — the accent doubles as foreground
+      // text/glyphs on the dark room panel (Lab station labels, the Home dock, Blackbook's change tag,
+      // …) where the raw deep hue renders ~2.5:1. Emit it as BOTH --v2-accent-text (for --v2-accent-as-
+      // text sites, e.g. the HUD masthead sep + door arrow, which read it with a var() fallback) AND
+      // --ix-accent-text (the instrument text token every accent-as-text site resolves — the room -v2
+      // re-points map it to var(--v2-accent), so this override lands SAME-element and wins on source
+      // order). A BRIGHT swatch emits neither, so its accent-text stays the raw, already-legible accent.
+      const text = swatchText(hex);
+      const textDecls = text ? `--v2-accent-text:${text};--ix-accent-text:${text};` : "";
       return (
         `:root[data-room-identity="on"] .v2-room[data-room="${room}"]{` +
         `--v2-accent:${hex};` +
         inkDecls +
+        textDecls +
         `--v2-accent-dim:color-mix(in srgb, ${hex} 14%, transparent);` +
         `--v2-accent-line:color-mix(in srgb, ${hex} 25%, transparent);}`
       );

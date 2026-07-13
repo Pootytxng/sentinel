@@ -164,8 +164,9 @@ describe("dock primary vs active distinction (owner-caught: Optimize looked pre-
 
   it("a RESTING primary never wears the full accent border the active state uses", () => {
     const primary = block(css, ".dock-node-primary");
-    // Identity stays accent…
-    expect(primary).toMatch(/color:\s*var\(--ix-accent\)/);
+    // Identity stays the accent hue — now via the legibility-adaptive accent-text token (== accent for
+    // bright/preset/flag-off, a legible light tint for a DARK per-room pick; room-identity 2026-07-13).
+    expect(primary).toMatch(/color:\s*var\(--ix-accent-text\)/);
     // …but the border must be a mixed/faint accent, never the bare accent the active node wears.
     expect(primary).toMatch(/border-color:\s*color-mix\(/);
     expect(primary).not.toMatch(/border-color:\s*var\(--ix-accent\)\s*;/);

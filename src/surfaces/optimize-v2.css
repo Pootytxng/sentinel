@@ -100,7 +100,7 @@
 /* The count is a machine value — the sanctioned mono use. */
 :root[data-v2="on"] .ov2-chip-count {
   font: 12px var(--v2-font-mono);
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
 }
 
 /* ── quiet slot internals (the head button itself is .v2-quiet from shell-v2.css) ── */

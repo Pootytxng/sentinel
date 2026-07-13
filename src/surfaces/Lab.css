@@ -110,7 +110,7 @@
   cursor: pointer;
 }
 .lab-card-icon {
-  color: var(--ix-accent);
+  color: var(--ix-accent-text);
   flex-shrink: 0;
 }
 .lab-card-text {
@@ -169,7 +169,7 @@
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--ix-accent);
+  color: var(--ix-accent-text);
   border: 1px solid var(--ix-glass-border);
   border-radius: 50%;
 }
@@ -251,7 +251,7 @@
   flex-shrink: 0;
   min-width: 84px;
   font-weight: 600;
-  color: var(--ix-accent);
+  color: var(--ix-accent-text);
 }
 .lab-router-because {
   flex: 1 1 auto;

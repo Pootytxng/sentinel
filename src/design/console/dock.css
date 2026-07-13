@@ -58,10 +58,10 @@
    panel is actually open earns the full accent border + tinted fill. */
 :root[data-v2="on"] .dock-node-primary {
   border-color: color-mix(in srgb, var(--ix-accent) 35%, transparent);
-  color: var(--ix-accent);
+  color: var(--ix-accent-text);
 }
 :root[data-v2="on"] .dock-node-primary .dock-nm {
-  color: var(--ix-accent);
+  color: var(--ix-accent-text);
 }
 :root[data-v2="on"] .dock-node-active {
   border-color: var(--ix-accent);

@@ -62,7 +62,7 @@
   letter-spacing: 0.08em;
 }
 :root[data-v2="on"][data-hud="on"] .hud-eyebrow-sep {
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
   letter-spacing: 0;
 }
 :root[data-v2="on"][data-hud="on"] .v2-room[data-room="home"] .v2-verdict-sub {
@@ -528,7 +528,7 @@
   width: 2em;
 }
 :root[data-v2="on"][data-hud="on"] .hud-docket-top .hud-rank {
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
 }
 :root[data-v2="on"][data-hud="on"] .hud-docket-text {
   display: flex;
@@ -566,7 +566,7 @@
 }
 /* #1 row — a quiet accent, the only signal it needs to read as "the top one". */
 :root[data-v2="on"][data-hud="on"] .hud-pill-warn {
-  color: var(--v2-accent);
+  color: var(--v2-accent-text, var(--v2-accent));
 }
 :root[data-v2="on"][data-hud="on"] .hud-pill-ok,
 :root[data-v2="on"][data-hud="on"] .hud-pill-info {

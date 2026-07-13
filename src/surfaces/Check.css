@@ -397,6 +397,14 @@
 .check-all-unknown .check-all-mark {
   color: var(--ix-text-3);
 }
+/* Dark-pick legibility (room-identity, 2026-07-13): these ✓ status marks read the raw accent, which
+   a DARK per-room pick renders ~2.5:1. Inside a room (fix/lab) --ix-accent-text is the adaptive light
+   token (== --ix-accent for bright/preset/flag-off, so byte-identical there); the .v2-room scope keeps
+   the classic escape-hatch render (Check outside any room) on its untouched raw accent. */
+:root[data-v2="on"] .v2-room .check-fine-mark,
+:root[data-v2="on"] .v2-room .check-all-ok .check-all-mark {
+  color: var(--ix-accent-text);
+}
 .check-all-name {
   flex: 0 0 auto;
   max-width: 45%;
