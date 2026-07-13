@@ -1533,6 +1533,9 @@ function App() {
                   focusId={libraryFocusId}
                   vendor={detectedVendor}
                   onClose={() => setActiveTab("Overview")}
+                  changes={changes}
+                  sessions={sessions}
+                  onOpenLab={() => setActiveTab("Lab")}
                 />
               )}
               {/* V2-7: the Lab room on RoomShell — Lab composes verbatim (its v2 prop trims the

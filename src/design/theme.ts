@@ -522,6 +522,38 @@ export function applyMonitorConsole(on: boolean): void {
   }
 }
 
+// Blackbook console (plan 2026-07-12-console-hud-phase4-blackbook, Phase 4 of the Console HUD,
+// direction A "The Logbook") — the Blackbook room gains its own flight-recorder face: a single
+// reverse-chronological tape unifying the user's REAL changes, sessions and guide checks (a PURE
+// frontend view over data App already holds — zero new IPC). The field guide (today's library)
+// stays reachable via the room's mode toggle. DEFAULT OFF (owner eyeball is the gate before a
+// default-ON flip) — the room is byte-identical to today's Learn library unless the key is
+// literally "1" (test-pinned both compy_editorial states). Mirrors the Monitor console flag's
+// pre-flip polarity.
+const BLACKBOOK_CONSOLE_KEY = "compy_blackbook_console";
+
+export function readBlackbookConsole(): boolean {
+  try {
+    return localStorage.getItem(BLACKBOOK_CONSOLE_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyBlackbookConsole(on: boolean): void {
+  try {
+    localStorage.setItem(BLACKBOOK_CONSOLE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:blackbook-console-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6; rails: the de-slop directive
 // 2026-07-05 §"Interaction / motion layer" :111-176) — the interactive layer the reskin left
 // unbuilt: Lenis glide scrolling on the content lane, a room-change "retune" sweep, magnetic

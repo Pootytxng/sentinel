@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { readHud, readLabGround, readHomeConsole, readMonitorConsole } from "./theme";
+import {
+  readHud,
+  readLabGround,
+  readHomeConsole,
+  readMonitorConsole,
+  readBlackbookConsole,
+} from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
 // directive, CORRECTED direction). The Home pilot uses this to swap presentation the moment
@@ -53,6 +59,20 @@ export function useMonitorConsoleFlag(): boolean {
     const sync = () => setOn(readMonitorConsole());
     window.addEventListener("compy:monitor-console-changed", sync);
     return () => window.removeEventListener("compy:monitor-console-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Blackbook console flag as live React state (plan 2026-07-12-console-hud-phase4-blackbook,
+// same contract: the Settings toggle fires compy:blackbook-console-changed so BlackbookV2
+// re-branches without a reload). DEFAULT OFF — the room is byte-identical to today's Learn
+// library unless the key is literally "1" (pinned by blackbook-console-flag.test.tsx).
+export function useBlackbookConsoleFlag(): boolean {
+  const [on, setOn] = useState(readBlackbookConsole);
+  useEffect(() => {
+    const sync = () => setOn(readBlackbookConsole());
+    window.addEventListener("compy:blackbook-console-changed", sync);
+    return () => window.removeEventListener("compy:blackbook-console-changed", sync);
   }, []);
   return on;
 }

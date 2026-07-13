@@ -6,6 +6,8 @@ import {
   applyInstrumentTheme,
   readMonitorConsole,
   applyMonitorConsole,
+  readBlackbookConsole,
+  applyBlackbookConsole,
   readJarvisMotion,
   applyJarvisMotion,
   readCloseToTray,
@@ -117,6 +119,7 @@ export default function Settings({
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
   const [monitorConsole, setMonitorConsole] = useState<boolean>(readMonitorConsole);
+  const [blackbookConsole, setBlackbookConsole] = useState<boolean>(readBlackbookConsole);
   const [jarvisMotion, setJarvisMotion] = useState<boolean>(readJarvisMotion);
   const [closeToTray, setCloseToTray] = useState<boolean>(readCloseToTray);
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
@@ -159,6 +162,14 @@ export default function Settings({
   const changeMonitorConsole = (v: boolean) => {
     setMonitorConsole(v);
     applyMonitorConsole(v);
+  };
+  // Blackbook console (Phase 4 of the Console HUD, DEFAULT OFF — owner eyeball gate) — the
+  // Blackbook room's flight-recorder Logbook: one tape unifying your changes, sessions and guide
+  // checks. Presentation only over data already held; the "0"/absent default renders today's
+  // Learn library byte-identical, and the field guide stays reachable via the room's mode toggle.
+  const changeBlackbookConsole = (v: boolean) => {
+    setBlackbookConsole(v);
+    applyBlackbookConsole(v);
   };
   // JARVIS motion layer preview (UI_VISION_BACKLOG §A, DEFAULT OFF) — the interactive motion
   // layer: glide scrolling, room-change sweep, magnetic rail, stage tilt, measured data-ticks.
@@ -267,6 +278,27 @@ export default function Settings({
                   on={jarvisMotion}
                   onChange={changeJarvisMotion}
                   ariaLabel="JARVIS motion"
+                />
+              </div>
+
+              {/* Blackbook console (Phase 4, DEFAULT OFF — the one current preview row): the
+                  flight-recorder Logbook. Preview until the owner eyeballs it; "(preview)" is
+                  honest here (unlike the graduated default-ON Monitor console / JARVIS rows above,
+                  whose "0" restores the classic look). */}
+              <div className="set-row set-row-inset">
+                <div className="set-row-text">
+                  <div className="set-row-title">Blackbook console (preview)</div>
+                  <div className="set-row-sub">
+                    Blackbook's flight recorder: one timeline of everything Compy has done on your
+                    PC — changes applied, gaming sessions, and guides you've fact-checked. The full
+                    field guide stays one tap away. Same data, nothing new sent — turn off for the
+                    classic library.
+                  </div>
+                </div>
+                <Toggle
+                  on={blackbookConsole}
+                  onChange={changeBlackbookConsole}
+                  ariaLabel="Blackbook console (preview)"
                 />
               </div>
 

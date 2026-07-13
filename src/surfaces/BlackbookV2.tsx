@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
+import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
-import { useHudFlag } from "../design/use-hud";
+import { useHudFlag, useBlackbookConsoleFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
+import { BlackbookConsole } from "./blackbook/BlackbookConsole";
+import { buildLogbook } from "./blackbook/logbook";
+import type { AppliedChange, SessionSummary } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./blackbook-v2.css";
@@ -26,22 +30,54 @@ import "./blackbook-v2.css";
 // Deliberately NO primaryAction — the P6 spec names Blackbook the room that may have none: its
 // work (search, filters, grading a pasted guide) lives in the body, and hoisting one mode
 // would demote the other.
+//
+// Phase 4 (plan 2026-07-12-console-hud-phase4-blackbook, direction A "The Logbook"): behind
+// compy_blackbook_console (DEFAULT OFF), the room gains a flight-recorder LOGBOOK face — one
+// reverse-chronological tape unifying the user's real changes, sessions and guide checks
+// (buildLogbook, a PURE view over data App already holds — zero new IPC, zero src-tauri). The
+// field guide (this file's Learn tree) stays reachable via the mode toggle. Flag off renders
+// EXACTLY today's Learn tree, byte-identical for both compy_editorial states (test-pinned).
+
+type Face = "logbook" | "guide";
+const FACES: { id: Face; label: string }[] = [
+  { id: "logbook", label: "Logbook" },
+  { id: "guide", label: "Field guide" },
+];
 
 export function BlackbookV2({
   focusId,
   vendor,
   onClose,
+  changes = [],
+  sessions = [],
+  onOpenLab,
 }: {
   focusId: string | null;
   vendor: GpuVendor;
   onClose: () => void;
+  /** The Trust Ledger's applied changes — the tape's Change records (mirrored, never moved). */
+  changes?: AppliedChange[];
+  /** Recorded gaming sessions — the tape's Session records. */
+  sessions?: SessionSummary[];
+  /** Route to the Lab's Optimize station — the Logbook's read view sends undo there, not in-room. */
+  onOpenLab?: () => void;
 }) {
   const reduced = useReducedMotion();
   const hud = useHudFlag();
-  // Seeded from the persisted ledger; Learn reports each new grading up so the room verdict
-  // updates the moment a guide is fact-checked (same data, no second read of the panel).
+  const consoleOn = useBlackbookConsoleFlag();
+  // Seeded from the persisted ledger; Learn reports each new grading up so the room verdict AND
+  // the Logbook tape update the moment a guide is fact-checked (same data, no second read).
   const [ledger, setLedger] = useState(readAutopsyLedger);
   const verdict = blackbookVerdict(ledger);
+
+  // The Logbook face + which field-guide entry a library-strip pick deep-links to. Flag off, none
+  // of this is reachable (the classic Learn tree renders directly).
+  const [face, setFace] = useState<Face>("logbook");
+  const [guideFocus, setGuideFocus] = useState<string | null>(null);
+  const records = useMemo(
+    () => buildLogbook({ changes, sessions, autopsy: ledger }),
+    [changes, sessions, ledger],
+  );
 
   return (
     <RoomShell
@@ -65,8 +101,8 @@ export function BlackbookV2({
         }
         // HUD header = title only (owner title-header law 2026-07-10 round 2). The autopsy
         // record moves back into its context — the Autopsy panel's own record rollup (Learn's
-        // keepRecord below un-trims it). No LED: a record count is not a health state, and this
-        // room computes no live status to honestly light one from.
+        // keepRecord below un-trims it) and, under the console, the Logbook's own status line.
+        // No LED: a record count is not a health state, and this room computes no live status.
         return (
           <>
             <HudMasthead label="Field records" />
@@ -76,15 +112,50 @@ export function BlackbookV2({
       })()}
       sub={hud ? undefined : verdict.sub}
     >
-      <Learn
-        asPanel
-        v2
-        keepRecord={hud}
-        focusId={focusId}
-        vendor={vendor}
-        onClose={onClose}
-        onAutopsyRecorded={setLedger}
-      />
+      {consoleOn ? (
+        <>
+          {/* The room's face toggle — the Logbook tape or the full field guide. */}
+          <div className="bbv2-bar">
+            <SegmentedControl
+              segments={FACES}
+              value={face}
+              onChange={(id) => setFace(id as Face)}
+              aria-label="Blackbook view"
+            />
+          </div>
+          {face === "logbook" ? (
+            <BlackbookConsole
+              records={records}
+              vendor={vendor}
+              onOpenLab={() => onOpenLab?.()}
+              onOpenGuide={(fid) => {
+                setGuideFocus(fid ?? null);
+                setFace("guide");
+              }}
+            />
+          ) : (
+            <Learn
+              asPanel
+              v2
+              keepRecord
+              focusId={guideFocus ?? focusId}
+              vendor={vendor}
+              onClose={onClose}
+              onAutopsyRecorded={setLedger}
+            />
+          )}
+        </>
+      ) : (
+        <Learn
+          asPanel
+          v2
+          keepRecord={hud}
+          focusId={focusId}
+          vendor={vendor}
+          onClose={onClose}
+          onAutopsyRecorded={setLedger}
+        />
+      )}
     </RoomShell>
   );
 }
