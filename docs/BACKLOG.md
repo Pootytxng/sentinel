@@ -161,6 +161,47 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-13c — ✅ DEFAULT-ON GRADUATION + duo palette + A+B Blackbook SHIPPED LIVE `18272be` (installer SHA-256 `A8C341DE…61EC1C10`, stamp-verified) — NO gate moved, zero src-tauri
+
+**Owner directives (this cycle, all owner-verbatim):** (1) "everything was supposed to be default on
+to avoid the QA toggle section as per the consumer interest rec" → `compy_room_identity` +
+`compy_blackbook_console` flipped **DEFAULT ON** (readers `!== "0"`, theme.ts; boot attr main.tsx;
+both "(preview)" Settings rows REMOVED — devtools `"0"` failsafe stays, graduated-flag convention);
+(2) "double color options rather than the ugly earth tones like olive … then leave that finished" →
+`ROOM_ACCENT_SWATCHES` (src/design/room-identity.ts) re-curated to **15**: Rust/Olive/Pine pruned, 3
+DUO swatches added (Cyan/Midnight `#35e0e8+#3b2a7a` · Red/Blue `#ff6b6b+#2f6bff` · Lime/Cyan
+`#b6f24a+#35e0e8`; duo = bright PRIMARY for chrome/text, SECONDARY drives only the dim/line washes;
+new helpers swatchKey/splitSwatchKey/swatchDotCss; duo persists as `a+b` key; picker dots render a
+135° split — RoomAccentPicker.tsx, theme.ts applyRoomAccents); (3) Blackbook intuitiveness — owner
+PICKED **"A + B together"** from the concept artifact
+(https://claude.ai/code/artifact/88345144-e138-4b44-a71a-de487aa42929): BUILT in
+src/surfaces/blackbook/BlackbookConsole.tsx + blackbook-console.css — (A) Receipts Strip (3 tappable
+count tiles replace the `bc-status` line, filter the tape, aria-pressed, zero-count disabled) + (B)
+sentence rows ("Compy applied…", "You played… for …", "You fact-checked a guide") + tape section head
+("THE RECORD ─ everything Compy has done on this PC · since <date>", filtered ⇒ "· sessions only").
+- **Round-1 self-review: FAIL with 1 real finding, FIXED:** a Home accent pick recolored chrome but
+  never the rig hologram — use-rig-colors.ts read `.v2-room` while Home's `--ix-accent` re-point
+  lives on the NESTED `.home-console` (custom props don't propagate up). Fix: prefer
+  `.home-console` ?? `.v2-room` (src/surfaces/rig/use-rig-colors.ts) + bug→guard in
+  room-identity.test.ts (call-order pin + stale-comment ban). Everything else round-1 verified PASS
+  with direct evidence (contrast numbers, persistence, failsafes, Settings cleanup).
+- **Verify state:** tsc 0 · vitest **1604/1604** (177 files; guards re-pinned to the new default-ON
+  polarity in room-identity.test.ts / room-accents.test.tsx / blackbook-console-flag.test.tsx /
+  blackbook-v2.test.tsx / hud-rooms-flag.test.tsx (classic suites pin `"0"`); new duo + strip +
+  sentence + filter guards in room-accents.test.tsx + blackbook-console.test.tsx).
+- ✅ **SHIPPED LIVE 2026-07-13 `18272be`.** The round-2 self-reviewer returned before the context
+  refresh fired: **PASS all 8 items** on the owner's REAL 70-record logbook (native 1500×980 — rig
+  recolor pixel-proven for Plum AND Cyan/Midnight with `--ix-accent` read back off `.home-console`;
+  Lab emerald no-regression; strip counts 51/19/0 sum exactly to the tape; changes-tile "13 still
+  on" == the bc-manage jump's number; filter/aria-pressed/disabled-zero live-verified; reduced-motion
+  still; h1 "Blackbook"; field-guide strip unchanged; GL idle 0 draws/18s). One soft note logged: the
+  changes-tile sub and the bc-manage CTA say near-identical things in different roles — wording
+  tighten is a future-polish candidate, judged not-duplication. Committed `18272be` (15 files,
+  explicit paths) → rebuilt (exit 0, exe embeds `18272be`) → ship-reinstall OK (stale-gate PASSED,
+  installer SHA-256 `A8C341DEB55F32630E59144D6CA33CAF205A16B48A34F8923C27D65861EC1C10`, one on
+  Desktop, launched) → **stamp-verified `18272be` live**. doc-sync same commit: RELEASE_STATE banner
+  + Git-HEAD/installer rows; OWNER_ACTION_CHECKLIST **A8 + A9 → ✅ resolved-by-directive**.
+
 ### Cycle 2026-07-13b — ✅ DEAD-CODE CLEANUP + readiness leak fix SHIPPED LIVE `2b64c51` (code `c80678f`; installer SHA-256 `21942094…0930FF4F`, stamp-verified) — NO gate moved
 
 **Turbo-window maintenance pass (owner-directed "full self review, maintenance, dead-code cleanup").** Three

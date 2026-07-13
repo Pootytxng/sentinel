@@ -89,25 +89,29 @@ still has a "JARVIS motion" toggle (now the OFF failsafe). Ships on its own comm
 live app carries it after this cycle's build. Two disclosed deviations stand (you may still overrule):
 hologram shader-pulses excluded (idle-GPU bar), and the Dock isn't magnetic (it owns the magnify lift).
 
-### A8. Blackbook console (Phase 4 "The Logbook") — ⏳ your eyeball · BUILT + SHIPPED default-OFF 2026-07-12 (`617db5b`, on your live build)
-You picked **A · The Logbook** from the [concept](https://claude.ai/code/artifact/b00295a5-97d0-4f33-9703-0ae975951e91)
-("blackbook looks good" + A); it's now **built and on your live app** (`617db5b`, installer `43234A53…943D5`,
-stamp-verified), behind a **default-OFF** flag so nothing changed until you flip it. The room keeps your knowledge
-library (186 entries + "autopsy a guide") **and** gains a flight-recorder **Logbook**: one tape of everything Compy
-has done on your PC — changes applied, gaming sessions, guides you fact-checked — over the SAME data (nothing new
-sent). The field guide stays one tap away via a Logbook | Field-guide toggle. It's a **read-only** view; to actually
-roll a change back it points you to the Lab (your one undo home). Naming settled on the default (room = "Blackbook",
-timeline = "the logbook", the Lab's "Black Box" crash forensics left alone).
-- **→ Your one job:** Settings → Appearance → flip **"Blackbook console (preview)"** ON, open Blackbook, eyeball it
-  (same one-flip pattern as Home/Monitor/JARVIS). **Result → tell Claude:** "looks good" (I flip it default-ON) or
-  what's off. Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
-- **Heads-up (folds into the §A5 follow-up, ONE taste call):** under a non-Violet theme (e.g. Crimson) the Blackbook
-  room's buttons/tags stay violet while other accents follow the theme — the same room-chrome-vs-theme mismatch noted
-  on Monitor. It's invisible on your default Violet and not a bug; I've teed it up as one decision — *room chrome
-  follows the live theme, or keeps the violet signature?* → ✅ **You answered 2026-07-12: "per-room identity"** — now
-  BUILT, see **A9** below.
+### A8. Blackbook console (Phase 4 "The Logbook") — ✅ RESOLVED 2026-07-13 ("it looks much better" + the default-ON directive) → shipped DEFAULT-ON, preview row removed
+Your verdict came in 2026-07-13 with two follow-ups, both done the same day: it's **default-ON for
+everyone** (the Settings preview row is gone per your "avoid the QA toggle section" directive;
+devtools `"0"` remains the failsafe), and your intuitiveness ask ("skippers should inherently
+comprehend it") shipped as your **A+B pick** — the Receipts Strip (three tappable count tiles that
+name what the room records and filter the tape) + sentence-grammar rows ("Compy applied… / You
+played…"). Nothing on you here anymore.
 
-### A9. Per-room identity accents **+ per-room color picker** (now a **15-color palette**) — ⏳ your eyeball · SHIPPED default-OFF, palette PRUNED 2026-07-13 (`8e6920f`, on your live build)
+History: you picked **A · The Logbook** from the 2026-07-12 concept round ("blackbook looks good" + A),
+it shipped default-OFF `617db5b`, your 2026-07-13 eyeball approved it, and the A+B intuitiveness pick came
+from [the 2026-07-13 concepts](https://claude.ai/code/artifact/88345144-e138-4b44-a71a-de487aa42929).
+Room = "Blackbook", timeline = "the logbook"; still a read-only view that routes undo to the Lab.
+Plan: [`2026-07-12-console-hud-phase4-blackbook.md`](superpowers/plans/2026-07-12-console-hud-phase4-blackbook.md).
+
+### A9. Per-room identity accents **+ per-room color picker** — ✅ RESOLVED 2026-07-13 (your palette directive) → shipped DEFAULT-ON, preview row removed
+Closed by your 2026-07-13 directive: the earth tones (Rust/Olive/Pine) are **gone**, three **two-color
+combos** are in (Cyan/Midnight · Red/Blue · Lime/Cyan — the first color paints buttons/text, the second
+tints the room's borders and glows), singles untouched, and the whole feature is **default-ON for
+everyone** with the preview row removed ("avoid the QA toggle section"). The palette is 15 (9 bright ·
+3 dark · 3 duo) and you called it finished — it stays as-is unless you reopen it. Nothing on you here.
+
+<!-- Pre-resolution history below, kept for the record: -->
+Original thread — ⏳ your eyeball · SHIPPED default-OFF, palette PRUNED 2026-07-13 (`8e6920f`):
 You picked **"per-room identity"** as the answer to the accent-lock question (Cycles 12g/12h) — "i wanted … the
 components each had their own distinguishable color scheme so they were more visible." Each room gets its own preset
 accent so the rooms are more distinguishable at a glance: **Monitor teal · Blackbook amber · Lab/Optimize emerald ·
