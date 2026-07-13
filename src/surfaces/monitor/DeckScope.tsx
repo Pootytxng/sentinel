@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Oscilloscope, spikeIndices, niceCap } from "../../design/console/Oscilloscope";
 import type { ArcTone } from "../../design/console/ArcGauge";
+import { Term } from "../../design/Term";
 import { zoomWindow, type ZoomSel } from "./monitor-stack-profile";
 
 // DeckScope — the Flight Deck's hero (plan 2026-07-11-monitor-v5-deck-stack, T3). The SAME
@@ -108,7 +109,7 @@ export function DeckScope({
       <Oscilloscope
         samples={win}
         cap={cap}
-        label="frametime"
+        label={<Term id="frametime">frametime</Term>}
         unit="ms"
         tone={tone}
         reduced={reduced}

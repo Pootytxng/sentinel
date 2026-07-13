@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ArcTone } from "./ArcGauge";
 import "./oscilloscope.css";
 
@@ -72,7 +73,9 @@ export function Oscilloscope({
   samples: number[];
   /** Rolling window length; the trace draws at most the last `cap` samples. */
   cap?: number;
-  label: string;
+  /** Trace label — a string, or a ReactNode so a caller can wrap jargon in an inline <Term>
+   *  gloss (the DeckScope hero glosses "frametime", matching the Play/Deep-Monitoring faces). */
+  label: ReactNode;
   unit?: string;
   tone?: ArcTone;
   reduced: boolean;

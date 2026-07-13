@@ -134,6 +134,30 @@ describe("capture stop clears the zoom (c) + honest empty (d)", () => {
   });
 });
 
+describe("hero label glosses the jargon (f)", () => {
+  // bug→guard: the Monitor console's DeckScope hero exposed the raw term "frametime" with no
+  // gloss, while its sibling Play face (Play.tsx) and the Deep-Monitoring section-help already
+  // wrap it in an inline <Term>. This pins the console back to parity — the non-technical gamer
+  // gets the one-line explanation at first exposure (deferred Monitor-jargon bucket, consumer-panel
+  // overhaul; landed after the v5 eyeball settled). Term fails soft, so this also proves the id is
+  // a real glossary term (a dead id renders plain text and this querySelector would find nothing).
+  it("renders 'frametime' as an inline glossary trigger, not raw jargon", () => {
+    const { container } = mount();
+    const term = container.querySelector(".osc-label .kl-term");
+    expect(term).not.toBeNull();
+    expect(term!.textContent).toBe("frametime");
+  });
+
+  it("opening the gloss reveals the frametime definition (wired to a real term)", () => {
+    const { container } = mount();
+    const term = container.querySelector<HTMLButtonElement>(".osc-label .kl-term")!;
+    fireEvent.click(term);
+    const tip = container.querySelector(".kl-tip-what");
+    expect(tip).not.toBeNull();
+    expect(tip!.textContent).toMatch(/frame/i);
+  });
+});
+
 describe("the real ms axis + budget, stated plainly (e)", () => {
   it("states the zero-anchored ms scale and the rig's frame budget", () => {
     const { container } = mount();
