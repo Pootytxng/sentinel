@@ -132,6 +132,10 @@ full response ive written here seeing how things seem to get lost in translation
    (pre-existing, exposed by the flip): the Monitor room chrome is locked to static violet
    (`monitor-v2.css` play-room re-point) while the SessionStack sparkline follows the live theme —
    an internal accent mismatch under non-Violet themes; owner-taste call, BACKLOG Cycle 2026-07-12g.**
+   → ✅ **RESOLVED direction: owner picked "per-room identity" (2026-07-12)** — each room gets its OWN
+   accent (Monitor = teal), so the SessionStack sparkline now matches the room chrome instead of clashing.
+   Built behind `compy_room_identity` **DEFAULT OFF** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified);
+   owner one-flip eyeball pending (BACKLOG Cycle 2026-07-12i, OWNER_ACTION_CHECKLIST §A9).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
@@ -376,6 +380,9 @@ READ view — an active change routes to the Lab (the one undo home), zero mutat
 self-reviewer round-2 PASS. **Open:** owner one-flip eyeball → default-ON or iterate (same pattern as Home/Monitor/JARVIS).
 One known follow-up folded into the shared accent-lock owner-taste call (room `.bc-*` chrome locks to `#a78bfa`
 under Crimson via the systemic `--ix-accent → --v2-accent` re-point; identical on Monitor/Lab, 0 vendor-purple).
+→ ✅ **RESOLVED direction (owner 2026-07-12): "per-room identity"** — Blackbook = amber, built behind
+`compy_room_identity` **DEFAULT OFF** (`72fa005`); owner one-flip eyeball pending (BACKLOG Cycle 2026-07-12i,
+OWNER_ACTION_CHECKLIST §A9).
 
 **Superseded (history):** ~~CONCEPT OUT + owner PICKED "A · The Logbook" (2026-07-12); build queued.~~
 Per the per-tab signature process rule (concept before code), the Blackbook rollout opened with a spitball.

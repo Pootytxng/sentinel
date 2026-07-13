@@ -104,7 +104,20 @@ timeline = "the logbook", the Lab's "Black Box" crash forensics left alone).
 - **Heads-up (folds into the §A5 follow-up, ONE taste call):** under a non-Violet theme (e.g. Crimson) the Blackbook
   room's buttons/tags stay violet while other accents follow the theme — the same room-chrome-vs-theme mismatch noted
   on Monitor. It's invisible on your default Violet and not a bug; I've teed it up as one decision — *room chrome
-  follows the live theme, or keeps the violet signature?* Answer whenever; no rush.
+  follows the live theme, or keeps the violet signature?* → ✅ **You answered 2026-07-12: "per-room identity"** — now
+  BUILT, see **A9** below.
+
+### A9. Per-room identity accents — ⏳ your eyeball · BUILT + SHIPPED default-OFF 2026-07-12 (`72fa005`, on your live build)
+You picked **"per-room identity"** as the answer to the accent-lock question (Cycles 12g/12h) — "i wanted … the
+components each had their own distinguishable color scheme so they were more visible." It's now **built and on your
+live app** (`72fa005`, installer `D23DE073…9EBA9`, stamp-verified), behind a **default-OFF** flag so nothing changed
+until you flip it. Each room gets its own accent so the rooms are more distinguishable at a glance: **Monitor teal ·
+Blackbook amber · Lab/Optimize emerald · Home violet** (unchanged). This is the same idea as the color-coded parts in
+your 3D rig, extended to the rooms — and it **resolves the room-chrome-vs-theme mismatch** teed up as a taste call on
+A5/A8 (per-room identity IS that decision).
+- **→ Your one job:** Settings → Appearance → flip **"Room accent colors (preview)"** ON, click through Monitor /
+  Blackbook / Lab, eyeball it (same one-flip pattern as Home/Monitor/JARVIS/Blackbook). **Result → tell Claude:**
+  "looks good" (I flip it default-ON) or what's off. Full thread: [`BACKLOG.md`](BACKLOG.md) Cycle 2026-07-12i.
 
 ---
 

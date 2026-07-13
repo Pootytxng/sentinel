@@ -10,6 +10,30 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-12 (PER-ROOM IDENTITY ACCENTS SHIPPED `72fa005` — installer SHA-256
+> `D23DE0732BAB2E510891482F6E501C728E8DC52AD60E5782A31358E74D19EBA9`, live exe stamp-verified
+> `72fa005` via the embedded hash, installed by Claude, supersedes the `43234A53…943D5` installer;
+> NEW flag `compy_room_identity` **DEFAULT OFF** — owner eyeball is the open gate):** Each room gains
+> its own identity accent — the per-part 3D-rig color philosophy (owner's 2026-07-07 directive) extended
+> to room chrome, resolving the Monitor/Blackbook accent-lock owner-taste call (Cycles 2026-07-12g/h;
+> owner picked "per-room identity" 2026-07-12). **Palette** (single source `src/design/room-identity.ts`):
+> Monitor(play) teal `#3fd9c2` · Blackbook(learn) amber `#f0b878` · Lab/Optimize(fix) emerald `#27e08a` ·
+> Home violet `#a78bfa` (unchanged, no override). Behind `compy_room_identity` (`readRoomIdentity` `=== "1"`,
+> `src/design/theme.ts`; Settings → Appearance "Room accent colors (preview)"), `src/surfaces/room-identity.css`
+> scopes per-room `--v2-accent` + same-element re-declared `--v2-accent-dim/-line` washes to
+> `:root[data-room-identity="on"] .v2-room[data-room=X]`; `SessionStack`'s sparkline ink + the rig bay accent
+> resolve from the active `.v2-room` scope when on (Lab hologram cage/ring go emerald). Flag-off is
+> **byte-identical on every room** (test-pinned). **CSS gotcha fixed (cost 2 self-review rounds):** a
+> `var()`-chain inside a custom property substitutes at its DECLARING element, not the using element — so
+> `:root`-declared dim/line washes can't retro-follow a per-room `--v2-accent` override; they must be
+> re-declared same-element inside each room block. **Zero `src-tauri`** (`git diff -- src-tauri` empty).
+> Verify: tsc 0 · vitest **1575** (176 files) · self-reviewer **round-3 PASS** (agent `a9b0cfd1f3c27234f`,
+> all 8 rubric items: `.play-armed` border = teal under the flag; per-room `--v2-accent-line` teal/amber/emerald;
+> flag-OFF restores `rgba(167,139,250,0.25)` violet byte-identical on every room; dark ink `rgb(26,10,46)`
+> legible on all accent fills; rig idle GL probe clean, Home `--ix-accent` correctly unaffected).
+> One NON-BLOCKING note: rig orbit-off settle burst measured 8,640 draws vs ~6k historical ref — reviewer
+> classified benign (one-time settle → flat 0-growth, not a perpetual-invalidation loop).
+>
 > **UPDATE 2026-07-12 (BLACKBOOK CONSOLE PHASE 4 "THE LOGBOOK" SHIPPED `617db5b` — installer SHA-256
 > `43234A53ED586A00AFBE163487BCDFBD8AE5D08147C15E1F910CE795C28943D5`, live exe stamp-verified
 > `617db5b` via the embedded hash, installed by Claude, supersedes the `3B855DD1…FB003` installer;
@@ -459,9 +483,9 @@
 
 | Field | Value |
 |---|---|
-| Git HEAD | `617db5b` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `617db5b`, the Blackbook console Phase 4 "Logbook" behind `compy_blackbook_console` DEFAULT OFF; live exe stamp-verified `617db5b` via the embedded hash) |
+| Git HEAD | `72fa005` + this ship-docs commit (branch `main`, 2026-07-12 — the live installer is built from exactly `72fa005`, the per-room identity accents behind `compy_room_identity` DEFAULT OFF; live exe stamp-verified `72fa005` via the embedded hash) |
 | App version | `0.1.0` (`gg.compy.app`, `compy.exe`) |
-| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `43234A53ED586A00AFBE163487BCDFBD8AE5D08147C15E1F910CE795C28943D5` (built from `617db5b`, 2026-07-12 — **Blackbook console Phase 4 "The Logbook"** behind NEW flag `compy_blackbook_console` **DEFAULT OFF** (`readBlackbookConsole` → `=== "1"`, `src/design/theme.ts`; Settings → Appearance "Blackbook console (preview)") — the Blackbook room's flight-recorder Logbook face over EXISTING data, field guide reachable via the room's mode toggle; `"0"`/absent = today's Learn library byte-identical; pure READ view routing undo to the Lab; zero `src-tauri`; self-reviewer round-2 PASS; details in the top Snapshot banner. Superseded installer: `3B855DD1…FB003` from `e195f70` (Monitor v5 console DEFAULT-ON), whose chain it carries — **Monitor v5 console FLIPPED DEFAULT-ON**: flag `compy_monitor_console` **DEFAULT OFF → DEFAULT ON** (`readMonitorConsole` → `!== "0"`, `src/design/theme.ts`; Settings → Appearance "Monitor console", now the OFF failsafe) — the Flight Deck + Session Stack is Monitor's default live face; the "0" failsafe restores the classic tiles; test-pins re-pointed to the DEFAULT-ON polarity (`monitor-console-flag.test.tsx` + sibling `monitor-v2.test.tsx`); owner "flip it default on"; self-reviewer PASS 8/8; details in the top Snapshot banner. Superseded installer: `DFE827D1…FB59` from `fcc400b` (JARVIS DEFAULT-ON), whose chain it carries — **JARVIS motion** (`compy_jarvis_motion` DEFAULT ON, `readJarvisMotion` → `!== "0"`), **Home title-header fix** (`cc1ffce`), the **Expert-view** train (`5850ac0`: `compy_expert_view` **DEFAULT OFF**, `readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`, zero `src-tauri`), the full 2026-07-11 consumer-panel overhaul (`50b5c03`) and the Monitor v5 stack build itself (`915e85b`, now default-ON).) |
+| Current installer | `Compy_0.1.0_x64-setup.exe` SHA-256 `D23DE0732BAB2E510891482F6E501C728E8DC52AD60E5782A31358E74D19EBA9` (built from `72fa005`, 2026-07-12 — **Per-room identity accents** behind NEW flag `compy_room_identity` **DEFAULT OFF** (`readRoomIdentity` → `=== "1"`, `src/design/theme.ts`; Settings → Appearance "Room accent colors (preview)") — each room gets its own accent (Monitor teal · Blackbook amber · Lab/Optimize emerald · Home violet unchanged), resolving the accent-lock owner-taste call; flag-off byte-identical every room; zero `src-tauri`; self-reviewer round-3 PASS; details in the top Snapshot banner. Superseded installer: `43234A53…943D5` from `617db5b` (2026-07-12), whose chain it carries — **Blackbook console Phase 4 "The Logbook"** behind NEW flag `compy_blackbook_console` **DEFAULT OFF** (`readBlackbookConsole` → `=== "1"`, `src/design/theme.ts`; Settings → Appearance "Blackbook console (preview)") — the Blackbook room's flight-recorder Logbook face over EXISTING data, field guide reachable via the room's mode toggle; `"0"`/absent = today's Learn library byte-identical; pure READ view routing undo to the Lab; zero `src-tauri`; self-reviewer round-2 PASS; details in the top Snapshot banner. Superseded installer: `3B855DD1…FB003` from `e195f70` (Monitor v5 console DEFAULT-ON), whose chain it carries — **Monitor v5 console FLIPPED DEFAULT-ON**: flag `compy_monitor_console` **DEFAULT OFF → DEFAULT ON** (`readMonitorConsole` → `!== "0"`, `src/design/theme.ts`; Settings → Appearance "Monitor console", now the OFF failsafe) — the Flight Deck + Session Stack is Monitor's default live face; the "0" failsafe restores the classic tiles; test-pins re-pointed to the DEFAULT-ON polarity (`monitor-console-flag.test.tsx` + sibling `monitor-v2.test.tsx`); owner "flip it default on"; self-reviewer PASS 8/8; details in the top Snapshot banner. Superseded installer: `DFE827D1…FB59` from `fcc400b` (JARVIS DEFAULT-ON), whose chain it carries — **JARVIS motion** (`compy_jarvis_motion` DEFAULT ON, `readJarvisMotion` → `!== "0"`), **Home title-header fix** (`cc1ffce`), the **Expert-view** train (`5850ac0`: `compy_expert_view` **DEFAULT OFF**, `readExpertView` → `=== "1"`, `src/design/use-expert-view.ts`, zero `src-tauri`), the full 2026-07-11 consumer-panel overhaul (`50b5c03`) and the Monitor v5 stack build itself (`915e85b`, now default-ON).) |
 | Frozen private-beta artifact | ref `16069fa` / `beta/private-beta-001` (the OLD verified unsigned private beta — a DIFFERENT risk profile from current `main`) |
 | Last full installed-build QA | **§6/§7: 2026-07-07 on the `5f765e4` installer (T5)** — §7 swept all items live (3 honesty gaps found → fixed `ff186e6` → focused re-verify PASS on the shipped build); §6 corrupt + missing ledger proven live (fail-loud quarantine / empty load, no crash; real ledger restored hash-identical), cancelled-apply covered by §1's live QA. **§6 helper-crash leg CLOSED 2026-07-08** (owner-run probe on the `48ca9ec` installer: kill elevated helper → `fps.json` froze + `fps.alive` cleaned + no ghost → re-enable spawned a new helper; owner confirmed the Monitor UI showed the sensor STOPPED, not frozen/false-live) — **§6 is now fully passed**; §1/§2a/§5 stand on their own dated passes. Last FULL all-section pass remains 2026-05-31 (frozen private-beta build). |
 
