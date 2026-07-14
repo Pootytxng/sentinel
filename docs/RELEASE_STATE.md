@@ -10,6 +10,23 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-14 (FULL-PROJECT REVIEW CLEANUP SHIPPED `4dbfca4`+`3ba79dc` — installer SHA-256
+> `26D42379A1A3EED60E95CFC4315B48303362064AA8784C0D6482900D483979A3`, live exe stamp-verified `3ba79dc`
+> via the embedded hash, installed by Claude + LIVE, supersedes the `1C1F13DC…FE657E0` installer; NO
+> gate moved):** part (b) of the Fable-5 exhaustive review — every finding fixed. FE/site batches
+> (App.tsx dead-tab removal, retired-brand sweep + stale-reference guard, LicensePanel `armed` from
+> `status.armed`, waitlist atomic rate-limit + CSP + D1 migration, ErrorBoundary/safe-storage) +
+> backend non-mutation (license `armed` stamp, PDH `Drop`, fps helper liveness) + mutation boundary
+> under the full mutation-gate (10/10): `with_error_action_stop` single-command false-ledger guard ·
+> `nic_interface_safe` GUID charset guard · Nagle apply/rollback per-call `-ErrorAction
+> SilentlyContinue` (mid-loop interface failure can't orphan earlier live writes) ·
+> `gaming_orchestrator::start()` fail-closed when an unreadable session file can't be quarantined ·
+> bug→guard `every_nagle_set_itemproperty_write_isolates_its_own_error`. rust-tauri-reviewer:
+> "mutation boundary sound, merge-ready". Verify: cargo 712/0 (up from 711) · clippy clean · tsc 0 ·
+> vitest green · verify-release-state 38/38 (6 citations re-anchored). `3ba79dc` also logs the
+> `--run-elevated` boundary-side guard as a Phase B defense-in-depth backlog item (owner-approved,
+> not launch-blocking). Cowork adversarial audit flagged for the mutation diff.
+>
 > **UPDATE 2026-07-13 (390px LANDING PAGE-EDGE OVERFLOW FIXED — site-only commit, NO gate moved, no
 > installer change, zero `src-tauri`, zero `src/`):** the pre-existing mobile defect the hero-receipt
 > pass logged is closed. Root cause: `.topbar`/`.hero`/`.article` share their element with `.wrap`
