@@ -18,6 +18,7 @@
 | `ship` | after every `npm run tauri build` | any | Silent reinstall is Claude's job; stamp-proof, ONE installer, RELEASE_STATE row, owner report format. |
 | `guard-forge` | a defect was caught, BEFORE its fix is claimed done | any | bug→guard law; red→green proof required; tiers: test > rubric > memory. |
 | `doc-sync` | any state change; any two docs disagreeing | any | Precedence (RELEASE_STATE=state, CLAUDE.md=law, code>both) + same-commit ordering. |
+| `usage-audit` | owner asks about usage/tokens/budget; a 🔴 in `docs/usage-audit/LATEST.md` | layer 1: `node scripts/usage-audit.mjs` (no LLM) · layer 2: any (terse) | Session/token discipline meter. Weekly report auto-written by the `CompyUsageAudit` scheduled task (Mondays, zero tokens). |
 
 **Subagent routing (condensed):** haiku = mechanical search/read/format · sonnet = research/verify/
 audit/review (the default worker — CC pins it via `settings.json` `CLAUDE_CODE_SUBAGENT_MODEL`) ·

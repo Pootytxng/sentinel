@@ -53,3 +53,6 @@ business/
 secrets/
 *.key
 compy-license.key
+
+# Weekly usage-audit reports (machine-local, auto-written by the CompyUsageAudit scheduled task)
+docs/usage-audit/

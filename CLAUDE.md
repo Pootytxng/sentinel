@@ -210,10 +210,12 @@ to move each law OUT of memory INTO the toolchain (the chosen enforcement, 2026-
 
 **`.claude/skills/INDEX.md`** maps every project skill (self-review · impeccable · compy-coverage-sweep
 · **mutation-gate · gate-drift-audit · ship · guard-forge · doc-sync** — the last five added 2026-07-06
-to persist judgment past the Fable window) to its trigger + cheapest executor model, plus tier-2
-spec'd-not-built skills. Consult it before mutation-boundary diffs, ships, state assertions, or bug
-fixes; `scripts/verify-release-state.mjs` mechanizes the RELEASE_STATE citation audit. A `ship-reminder`
-PostToolUse hook now nudges the reinstall law after any `tauri build`.
+to persist judgment past the Fable window — · **usage-audit**, added 2026-07-13) to its trigger +
+cheapest executor model, plus tier-2 spec'd-not-built skills. Consult it before mutation-boundary
+diffs, ships, state assertions, or bug fixes; `scripts/verify-release-state.mjs` mechanizes the
+RELEASE_STATE citation audit and `scripts/usage-audit.mjs` mechanizes the session/token audit (weekly
+report auto-written Mondays by the `CompyUsageAudit` scheduled task — zero tokens). A `ship-reminder`
+PostToolUse hook nudges the reinstall law after any `tauri build`.
 
 ### SILENT REINSTALL IS MINE, NOT THE OWNER'S — automatic after every rebuild (standing LAW, 2026-06-26)
 
