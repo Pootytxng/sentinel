@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { Term, GlossText, glossSegments, type GlossRule } from "./Term";
 import { LibraryContext } from "../surfaces/library-context";
 
@@ -40,6 +40,45 @@ describe("Term glossary tooltip", () => {
     render(<Term id="xmp-expo">XMP</Term>); // xmp-expo is a tweak, not a term
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByText("XMP")).toBeInTheDocument();
+  });
+
+  // bug→guard (owner catch 2026-07-13): the tooltip sits 6px below the trigger, and mouse-leave
+  // closed it INSTANTLY — the pointer could never cross the gap to click "More in the Blackbook →".
+  // The close now rides a short grace timer that re-entering the wrapper (tooltip included) cancels.
+  describe("hover grace — the tooltip link is mouse-reachable", () => {
+    it("survives a leave→re-enter within the grace (crossing the gap into the tooltip)", () => {
+      vi.useFakeTimers();
+      try {
+        const open = renderTerm("vrr");
+        const wrap = screen.getByRole("button", { name: "VRR" }).closest(".kl-term-wrap")!;
+        fireEvent.mouseEnter(wrap);
+        expect(screen.getByRole("tooltip")).toBeInTheDocument();
+        fireEvent.mouseLeave(wrap); // pointer in the 6px gap
+        act(() => vi.advanceTimersByTime(80)); // less than the grace
+        expect(screen.getByRole("tooltip")).toBeInTheDocument(); // still open mid-crossing
+        fireEvent.mouseEnter(wrap); // pointer arrives on the tooltip (a wrapper child)
+        act(() => vi.advanceTimersByTime(1000));
+        expect(screen.getByRole("tooltip")).toBeInTheDocument(); // pending close was cancelled
+        fireEvent.click(screen.getByRole("button", { name: /More in the Blackbook/i }));
+        expect(open).toHaveBeenCalledWith("vrr"); // the link is genuinely reachable + navigates
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("still closes once the pointer really leaves (grace elapsed)", () => {
+      vi.useFakeTimers();
+      try {
+        renderTerm("vrr");
+        const wrap = screen.getByRole("button", { name: "VRR" }).closest(".kl-term-wrap")!;
+        fireEvent.mouseEnter(wrap);
+        fireEvent.mouseLeave(wrap);
+        act(() => vi.advanceTimersByTime(500));
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

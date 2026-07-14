@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import Learn from "./Learn";
 import { AUTOPSY_MAX_CHARS } from "../data/knowledge-autopsy";
@@ -20,6 +20,26 @@ describe("Learn surface (reskin)", () => {
     expect(screen.getByText("Blackbook")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terms" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tricks" })).toBeInTheDocument();
+  });
+
+  // bug→guard (self-review catch on the 2026-07-13 tooltip train): a deep-link (focusId — e.g. a
+  // Term's "More in the Blackbook →") expanded the entry's category but never SCROLLED to the card:
+  // the scroll effect's first run missed (category still collapsed ⇒ no cardRef), and without
+  // `openCats` in its dependency array it never re-ran once the card actually rendered. Pin that a
+  // focusId mount scrolls-into-view + flashes the focused card.
+  it("a focusId deep-link scrolls the focused card into view and flashes it", () => {
+    // Spy on HTMLElement.prototype — that's where src/test/setup.ts stubs it (an Element.prototype
+    // spy would be shadowed and silently never see the call).
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    try {
+      render(<Learn onClose={() => {}} focusId="one-percent-lows" />);
+      expect(spy).toHaveBeenCalled(); // the effect re-ran after the category expanded
+      const flashed = document.querySelector(".lx-flash");
+      expect(flashed).not.toBeNull(); // and it flashed the actual focused card
+      expect(flashed!.textContent).toMatch(/1% low/i);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("search narrows to matching entries (matcher unchanged)", async () => {

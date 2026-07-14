@@ -766,7 +766,11 @@ export default function Learn({
   // §5 "Start here" — the guides are the actionable entry points (capped). Shown only in pure browse.
   const startHere = useMemo(() => KNOWLEDGE.filter((e) => e.type === "guide").slice(0, 5), []);
 
-  // Scroll the focused entry into view and flash it once it's in the rendered list.
+  // Scroll the focused entry into view and flash it once it's in the rendered list. `openCats`
+  // must be a dependency (owner-catch chain 2026-07-13): on a deep-link the sibling effect expands
+  // the entry's category AFTER this first runs — the card isn't rendered yet (`cardRefs` miss), the
+  // early-return fires, and without `openCats` here it never re-ran, so "More in the Blackbook →"
+  // landed on an unscrolled list with the focused card off-screen.
   useEffect(() => {
     if (mode !== "browse" || !focused) return;
     const el = cardRefs.current.get(focused);
@@ -775,7 +779,7 @@ export default function Learn({
     el.classList.add("lx-flash");
     const t = setTimeout(() => el.classList.remove("lx-flash"), 1200);
     return () => clearTimeout(t);
-  }, [focused, results, mode]);
+  }, [focused, results, mode, openCats]);
 
   const navigateTo = (id: string) => {
     if (!KNOWLEDGE_BY_ID.has(id)) return;

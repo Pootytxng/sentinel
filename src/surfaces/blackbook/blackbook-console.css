@@ -124,11 +124,16 @@
 :root[data-v2="on"] .bc-chevron { font-size: 12px; line-height: 1; }
 
 /* Reveal — the tape rows stagger in ONLY under full motion. Reduced ⇒ no animation-name, so the
-   inline animation-delay is inert and the tape is still (motion-on-by-default law, resolved). */
+   inline animation-delay is inert and the tape is still (motion-on-by-default law, resolved).
+   fill-mode must be `backwards`, NEVER `both` (owner catch 2026-07-13): `both` keeps the fill
+   applied forever, and a filled transform/opacity animation makes EVERY row a permanent stacking
+   context — sibling contexts paint in DOM order, so the rows BELOW an open Term tooltip painted
+   over it (the "1% low" gloss was buried under later row text). `backwards` still hides rows
+   through their stagger delay, then drops the fill so the tooltip's z-index works again. */
 @keyframes v2-bc-reveal {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 :root[data-v2="on"] .blackbook-console[data-motion="full"] .bc-row {
-  animation: v2-bc-reveal 340ms cubic-bezier(.2, .7, .2, 1) both;
+  animation: v2-bc-reveal 340ms cubic-bezier(.2, .7, .2, 1) backwards;
 }

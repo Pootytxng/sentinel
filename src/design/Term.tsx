@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { KNOWLEDGE_BY_ID } from "../data/knowledge";
 import { useLibrary } from "../surfaces/library-context";
 import "./Term.css";
@@ -20,6 +20,22 @@ export function Term({
   const { openLibrary } = useLibrary();
   const [open, setOpen] = useState(false);
   const tipId = useId();
+  // Mouse-leave closes on a short GRACE (not instantly): the tooltip sits 6px below the trigger,
+  // and the pointer must cross that gap to reach the "More in the Blackbook →" link — an instant
+  // close made the link unreachable by mouse (owner catch 2026-07-13). Re-entering the wrapper
+  // (the tooltip is a wrapper child) cancels the pending close.
+  const closeTimer = useRef<number | null>(null);
+  const cancelClose = () => {
+    if (closeTimer.current != null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
+  };
+  useEffect(() => cancelClose, []); // never fire a close after unmount
 
   const what = entry && entry.type === "term" ? entry.what : null;
   if (!what) return <>{children}</>;
@@ -32,12 +48,21 @@ export function Term({
   return (
     <span
       className="kl-term-wrap"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
+      onMouseEnter={() => {
+        cancelClose();
+        setOpen(true);
+      }}
+      onMouseLeave={scheduleClose}
+      onFocus={() => {
+        cancelClose();
+        setOpen(true);
+      }}
       onBlur={onBlur}
       onKeyDown={(e) => {
-        if (e.key === "Escape") setOpen(false);
+        if (e.key === "Escape") {
+          cancelClose();
+          setOpen(false);
+        }
       }}
     >
       <button

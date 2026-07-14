@@ -300,6 +300,25 @@ describe("BlackbookConsole — theme accent only, no vendor purple", () => {
   });
 });
 
+// bug→guard (owner catch 2026-07-13): the reveal animation's fill-mode `both` stayed applied after
+// the animation finished, making EVERY tape row a permanent stacking context (a filled transform/
+// opacity animation does that) — sibling contexts paint in DOM order, so the rows BELOW an open
+// Term tooltip painted their text OVER it ("1% low" gloss buried under later rows). The fill must
+// be `backwards`: rows stay hidden through their stagger delay, then the fill drops and the
+// tooltip's z-index works. Any filled (`both`/`forwards`) animation on .bc-row re-opens the class.
+describe("BlackbookConsole — tape rows must not be permanent stacking contexts (tooltip overpaint)", () => {
+  it("the .bc-row reveal uses fill-mode `backwards`, never `both`/`forwards`", () => {
+    const live = consoleCss.replace(/\/\*[\s\S]*?\*\//g, ""); // scan live CSS, not the comments
+    const rowAnim = live.match(/\.bc-row\s*\{[^}]*animation:[^;}]*/g) ?? [];
+    expect(rowAnim.length, "the staggered reveal must still exist").toBeGreaterThan(0);
+    for (const decl of rowAnim) {
+      expect(decl).toContain("backwards");
+      expect(decl).not.toMatch(/\bboth\b/);
+      expect(decl).not.toMatch(/\bforwards\b/);
+    }
+  });
+});
+
 // Strip block + line comments so the guard scans CODE/COPY, not the comments that document the
 // rail itself (which legitimately name "Black Box" to explain why the copy must avoid it). The
 // //-strip requires the preceding char not be ':' so it never eats "https://".
