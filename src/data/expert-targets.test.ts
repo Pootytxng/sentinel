@@ -36,10 +36,21 @@ describe("EXPERT_TARGET_DISCLAIMER (the GO's ship condition)", () => {
   });
 });
 
+// The refuse-pile trio (mirrors REFUSE_PILE in Fix.tsx). Settings' Expert View copy promises
+// "every tweak's technical name and the exact registry key" — the consumer panel (2026-07-14)
+// caught that the deliberately-refused tier had no targets, so the promise now covers it too.
+const REFUSED = ["useplatformclock", "pagefile-disable", "disable-defender"];
+
 describe("EXPERT_TARGETS coverage", () => {
   it("every Compy-appliable rec has a mapped exact target", () => {
     for (const id of APPLIABLE) {
       expect(expertTarget(id), `missing expert target for appliable rec "${id}"`).not.toBeNull();
+    }
+  });
+
+  it("every deliberately-refused tweak has a mapped target (the 'every tweak' promise)", () => {
+    for (const id of REFUSED) {
+      expect(expertTarget(id), `missing expert target for refused tweak "${id}"`).not.toBeNull();
     }
   });
 
@@ -86,5 +97,11 @@ describe("EXPERT_TARGETS ground-truth literals (transcribed from actions.rs/serv
     pin("usb-selective-suspend-off", "2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226");
     pin("pcie-aspm-off", "501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5");
     pin("power-ultimate", "powercfg", "e9a42b02-d5df-448d-aa00-03f14749eb61");
+  });
+
+  it("refused-tier targets name where the tweak lives (display-only — Compy never touches these)", () => {
+    pin("useplatformclock", "bcdedit", "useplatformclock");
+    pin("pagefile-disable", "Virtual memory", "Memory Management", "PagingFiles");
+    pin("disable-defender", "Policies\\Microsoft\\Windows Defender", "DisableAntiSpyware", "Tamper Protection");
   });
 });

@@ -134,6 +134,24 @@ export const EXPERT_TARGETS: Record<string, ExpertTarget> = {
     kind: "location",
     target: "Settings → System → Display → Graphics → per-game GPU preference → High performance",
   },
+
+  // ── Deliberately refused (targets = where the tweak lives, so Expert View keeps its "every
+  // tweak" promise on the refuse-pile too; Compy NEVER touches these — display-only education,
+  // ids match REFUSE_PILE in Fix.tsx / the Library autopsies) ──
+  "useplatformclock": {
+    kind: "system",
+    target: "bcdedit (boot configuration) → useplatformclock = true — Compy never writes boot config",
+  },
+  "pagefile-disable": {
+    kind: "system",
+    target:
+      "System Properties → Performance → Virtual memory → “No paging file” (registry: HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management → PagingFiles)",
+  },
+  "disable-defender": {
+    kind: "registry",
+    target:
+      "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender → DisableAntiSpyware = 1 — ignored on modern Windows while Tamper Protection is on",
+  },
 };
 
 /** The exact target for a rec, or null (rec has no mapped target — the row shows none). */

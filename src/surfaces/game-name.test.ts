@@ -14,6 +14,13 @@ describe("prettyGameName", () => {
     expect(prettyGameName("serioussam.exe.exe")).toBe("serioussam.exe"); // only ONE trailing .exe
   });
 
+  it("strips the Unreal shipping-binary suffix (packaging boilerplate, not the game's name)", () => {
+    expect(prettyGameName("PALWORLD-WIN64-SHIPPING.exe")).toBe("PALWORLD");
+    expect(prettyGameName("FortniteClient-Win64-Shipping.exe")).toBe("FortniteClient");
+    expect(prettyGameName("Stalker2_WinGDK_Shipping.exe")).toBe("Stalker2");
+    expect(prettyGameName("shippingco.exe")).toBe("shippingco"); // substring ≠ suffix
+  });
+
   it("handles empty / missing input", () => {
     expect(prettyGameName("")).toBe("");
     expect(prettyGameName(null)).toBe("");

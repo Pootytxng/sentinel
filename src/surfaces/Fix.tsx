@@ -1413,6 +1413,7 @@ export default function Fix({
                 <span className="fix-row-title">{r.name}</span>
               </div>
               <p className="fix-row-reason">{r.why}</p>
+              <ExpertTargetLine id={r.id} />
               <button className="fix-autopsy" onClick={() => onOpenLibrary(r.id)}>
                 Read the autopsy →
               </button>

@@ -394,8 +394,19 @@ export function MonitorConsole({
             <span className="mc-delta-v">1% LOW {fmtDeltaGlyph(deck.low1)}</span>
             <span className="mc-delta-v">SPIKES {fmtDeltaGlyph(deck.spikes)}</span>
             {deck.changesOn > 0 && (
-              <span className="mc-delta-tag">
+              // Honesty caveat (consumer panel 2026-07-14): with >1 change on, these deltas are
+              // the COMBINED effect — never imply per-change attribution. The one-change-at-a-time
+              // answer is the Lab's A/B benchmark, and the tooltip says so.
+              <span
+                className="mc-delta-tag"
+                title={
+                  deck.changesOn > 1
+                    ? "These deltas reflect all active changes (and anything else that differed) together — for a one-change-at-a-time measurement, run the Lab's before/after benchmark."
+                    : undefined
+                }
+              >
                 {deck.changesOn} {deck.changesOn === 1 ? "COMPY CHANGE" : "COMPY CHANGES"} ON
+                {deck.changesOn > 1 && " · COMBINED EFFECT"}
               </span>
             )}
           </div>

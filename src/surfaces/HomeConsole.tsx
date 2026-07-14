@@ -68,6 +68,16 @@ const arcTone = (g: Grade): ArcTone =>
 const shortModel = (n: string | undefined): string | undefined =>
   n?.replace(/^\s*(AMD|NVIDIA|Intel)?\s*(Radeon|GeForce|Arc)?\s*(\(TM\))?\s*/i, "").trim() || n;
 
+// RAM speed for the rig annotation (consumer panel 2026-07-14: capacity alone hid the speed/EXPO
+// story the cards view already tells). Measured module speed only — no reading, no claim; the
+// below-rated case mirrors HardwareGrid's actionable EXPO/XMP flag in compact form.
+const ramSpeedNote = (mods: HardwareInfo["memory_modules"]): string | undefined => {
+  const below = mods.find((m) => m.xmp_expo_status === "running_below_rated" && m.rated_speed_mhz > 0);
+  if (below) return `${below.speed_mhz} of ${below.rated_speed_mhz} MT/s — EXPO/XMP off in BIOS`;
+  const m = mods.find((x) => x.speed_mhz > 0);
+  return m ? `${m.speed_mhz} MT/s` : undefined;
+};
+
 // One instrument annotation: LED (only when a measured value earned a tone) · part · detected
 // model · measured value on a hairline leader. HomeHud's Callout in the console's namespace.
 function Callout({
@@ -446,6 +456,7 @@ export function HomeConsole({
                 <Callout
                   tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
                   name="RAM"
+                  detail={ramSpeedNote(hw.memory_modules)}
                   value={
                     mem
                       ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`

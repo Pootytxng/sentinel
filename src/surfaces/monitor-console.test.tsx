@@ -264,6 +264,35 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     expect(row.textContent).toContain("2 COMPY CHANGES ON");
   });
 
+  it("multiple changes on → the tag says COMBINED EFFECT (no per-change attribution implied); a single change doesn't", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({
+      sessions: [
+        sess({ avg_fps: 247, compy_changes_active: 11 }),
+        sess({ avg_fps: 240 }),
+      ],
+    });
+    await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
+    const tag = container.querySelector(".mc-delta-tag")!;
+    expect(tag.textContent).toContain("11 COMPY CHANGES ON · COMBINED EFFECT");
+    expect(tag.getAttribute("title")).toContain("one-change-at-a-time");
+  });
+
+  it("exactly one change on → plain tag, no combined-effect caveat", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({
+      sessions: [
+        sess({ avg_fps: 247, compy_changes_active: 1 }),
+        sess({ avg_fps: 240 }),
+      ],
+    });
+    await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
+    const tag = container.querySelector(".mc-delta-tag")!;
+    expect(tag.textContent).toContain("1 COMPY CHANGE ON");
+    expect(tag.textContent).not.toContain("COMBINED");
+    expect(tag.getAttribute("title")).toBeNull();
+  });
+
   it("cross-game prior is LABELED; unrecorded spikes read em-dash, never 0", async () => {
     mockPolls(() => stoppedFps);
     const { container } = mount({
