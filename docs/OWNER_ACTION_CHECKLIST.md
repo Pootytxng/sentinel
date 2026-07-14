@@ -207,6 +207,12 @@ These gate **public** release only (not the local app you use daily). Full list:
 ## §D — Taste / visual sign-offs (as they come up)
 Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
 exact hexes, anything where your eye is the authority.
+- ⏳ **Site hero copy — your taste pass before publish (2026-07-14, PART B `2eda4eb`).** The compy.gg
+  landing hero is now the positives-first two-strip stack: TOP = your real Diablo IV session showcase
+  (237 avg fps, measurement only, no gain claim), BOTTOM = the game-mode null receipt as the honesty
+  anchor. All provenance-pinned and test-guarded; open `site/index.html` locally (or ask for a
+  screenshot) and give the verdict. This gate rides the same GO as B3's deploy — nothing publishes
+  until you say so.
 - ✅ **Sibling slop sweep — DONE + SHIPPED `f13d10a` (2026-07-08).** The `#1 BIGGEST LIMITER` uppercase
   tags in **FirstCheck** and the **Setup Tour** spotlight are now quiet lowercase "#1 biggest limiter"
   mono tags matching Home's fix (SetupTour de-ambered too); self-reviewer PASS 8/8, guard-pinned, live.
