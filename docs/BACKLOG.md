@@ -161,6 +161,25 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-13d — ✅ GLOSSARY-TOOLTIP TRIO FIXED + SHIPPED LIVE `86ecad1` (installer SHA-256 `1C1F13DC…FE657E0`, stamp-verified) — NO gate moved, zero src-tauri
+
+**Owner-reported (screenshot, Blackbook tape "1% low" gloss):** (1) tooltip overpainted by later tape
+rows — root cause `animation-fill-mode: both` on the `.bc-row` reveal left every row a PERMANENT
+stacking context (filled transform/opacity animation) so later siblings painted over the open tooltip;
+fix `both → backwards` (`blackbook-console.css`) + css-scan guard banning `both`/`forwards`
+(`blackbook-console.test.tsx`). (2) "More in the Blackbook →" unreachable — mouse-leave closed the
+tooltip instantly across its 6px gap; fix 160ms close-grace in `Term.tsx` (wrapper re-entry cancels;
+focus/Escape unchanged) + fake-timer guards (`Term.test.tsx`); benefits every Term site app-wide.
+**(3) found by the fix's self-review (pre-existing):** the deep-link opened the library + expanded the
+category but never SCROLLED — `Learn.tsx`'s scroll-into-view effect missed on first run (category
+still collapsed → no cardRef) and lacked `openCats` in its deps; fixed + guarded (`Learn.test.tsx`,
+spy at `HTMLElement.prototype` where `src/test/setup.ts` stubs it). Verify: tsc 0 · vitest
+**1608/1608** (178 files) · self-reviewer **PASS** (live real data: tooltip opaque `rgb(20,24,36)`
+over sibling rows; real CDP pointer crossed the gap; link navigated, card `rect.top=108` vs 1023+
+off-screen before; stagger + reduced-motion intact; Monitor "frametime" gloss regression-checked).
+Reviewer field-note: on 800×600 dev-CDP mouse tests, scroll `.v2-content.lenis` up first — a row
+below the 600px fold makes `elementFromPoint` return null (environmental, not app behavior).
+
 ### Cycle 2026-07-13c — ✅ DEFAULT-ON GRADUATION + duo palette + A+B Blackbook SHIPPED LIVE `18272be` (installer SHA-256 `A8C341DE…61EC1C10`, stamp-verified) — NO gate moved, zero src-tauri
 
 **Owner directives (this cycle, all owner-verbatim):** (1) "everything was supposed to be default on
