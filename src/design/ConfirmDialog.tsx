@@ -44,6 +44,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const confirmBtn = useRef<HTMLButtonElement | null>(null);
 
   const confirm = useCallback<ConfirmFn>((o) => {
+    // Re-entrancy guard: if a dialog is already open (two triggers firing close together — an Enter
+    // auto-repeat, or two async effects each opening a confirm), auto-cancel the FIRST (resolve false)
+    // before installing the new resolver. Without this the prior promise never settled, so any await'd
+    // cleanup gated on it (clearing a spinner, re-enabling a button) hung for the rest of the session.
+    resolver.current?.(false);
     trigger.current = (document.activeElement as HTMLElement) ?? null;
     setOpts(o);
     return new Promise<boolean>((resolve) => {
@@ -63,17 +68,24 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     if (opts) confirmBtn.current?.focus();
   }, [opts]);
 
-  // Keyboard: Enter=confirm, Esc=cancel, Tab traps within the dialog.
+  // Keyboard: Enter=confirm, Esc=cancel, Tab traps within the dialog. Registered in the CAPTURE phase
+  // with stopImmediatePropagation on every key we own — a modal must TRAP its keys so they never leak to
+  // background window handlers. Without this, a host that also listens on window for Escape (e.g. the
+  // SetupTour, whose Escape calls finish()) fired alongside us: dismissing this confirm also tore down
+  // the whole tour. Capture + stopImmediatePropagation makes this dialog the sole responder while open.
   useEffect(() => {
     if (!opts) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         close(false);
       } else if (e.key === "Enter") {
         e.preventDefault();
+        e.stopImmediatePropagation();
         close(true);
       } else if (e.key === "Tab") {
+        e.stopImmediatePropagation();
         const m = modalRef.current;
         if (!m) return;
         const f = Array.from(m.querySelectorAll<HTMLElement>("button"));
@@ -89,8 +101,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [opts, close]);
 
   return (

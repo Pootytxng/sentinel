@@ -26,9 +26,10 @@ export function LicensePanel() {
   }, []);
 
   const isPro = !!status && status.valid && status.tier === "pro";
-  // "Armed" = the backend is actually validating licenses (a real key is embedded). Until then there's
-  // nothing a key could unlock, so we don't show the entry form — just the honest free state.
-  const armed = !!status && status.reason !== "licensing not active";
+  // "Armed" = the backend is actually validating licenses (a real key is embedded). Read the backend's
+  // explicit `armed` flag directly — NOT a string-match on `reason` (reworded copy must never arm the
+  // gate). Until armed there's nothing a key could unlock, so we don't show the entry form.
+  const armed = !!status && status.armed === true;
 
   const submit = () => {
     setSaving(true);

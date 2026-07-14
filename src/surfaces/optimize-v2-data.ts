@@ -51,14 +51,29 @@ export function optimizeVerdict(
   const ready = safeFixesReady(recs, isAppliable, revertedIds);
   // The undo promise is the rollback-first law stated plainly — and it names where undo lives.
   const undoSub = "Every apply captures its undo first — roll anything back from Applied.";
+  // When ready fixes AND drifted changes coexist, the ready headline wins (it's the primary
+  // action), but the body ALSO shows the "turned off outside Compy" rows — so the sub must name
+  // that drift too (V2-9 (g) law: the verdict describes the state the body actually shows). Without
+  // this the drifted section rendered with no mention in the verdict at all.
+  const driftClause =
+    reverted.length === 1
+      ? " Plus 1 change you applied was turned off outside Compy — flip it back on below."
+      : reverted.length > 1
+        ? ` Plus ${reverted.length} changes you applied were turned off outside Compy — flip them back on below.`
+        : "";
   if (ready === 1)
-    return { settled: true, allClear: false, headline: "1 safe fix is ready to apply.", sub: undoSub };
+    return {
+      settled: true,
+      allClear: false,
+      headline: "1 safe fix is ready to apply.",
+      sub: undoSub + driftClause,
+    };
   if (ready > 1)
     return {
       settled: true,
       allClear: false,
       headline: `${ready} safe fixes are ready to apply.`,
-      sub: undoSub,
+      sub: undoSub + driftClause,
     };
   // Drifted-only: nothing new to apply, but a change Compy made was switched off outside it.
   // Named honestly — maybe the user did it on purpose, so the verdict offers, never pushes.

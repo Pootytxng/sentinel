@@ -17,8 +17,9 @@ use crate::actions::{
     Snapshot,
 };
 use crate::gaming_session::{
-    clear_session, load_session, needs_recovery, next_on_stop, resolve_restore_order, save_session,
-    SessionChange, SessionFile, SessionStatus, SESSION_SCHEMA_VERSION,
+    clear_session, load_session, needs_recovery, next_on_stop, quarantine_session,
+    read_session_slot, resolve_restore_order, save_session, SessionChange, SessionFile, SessionSlot,
+    SessionStatus, SESSION_SCHEMA_VERSION,
 };
 
 /// In-memory marker of the session id THIS process started. Lets us tell an
@@ -320,8 +321,27 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 /// undo what landed, and return the error.
 pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     let _op = session_op_guard()?; // held across the whole start (incl. its abort-restore)
-    if load_session().is_some() {
-        return Err("a Gaming Mode session already exists — recover it first".into());
+    // Slot-aware guard (rollback-first): a LOADED contract blocks start (recover it first). A file we
+    // can't PARSE (corrupt / version-skewed schema) may still hold a real, unrestored rollback
+    // contract — quarantine it aside so a schema-compatible build can recover it, never let the
+    // save_session below overwrite (orphan) it. Only a genuinely empty slot starts fresh silently.
+    match read_session_slot() {
+        SessionSlot::Loaded => {
+            return Err("a Gaming Mode session already exists — recover it first".into());
+        }
+        SessionSlot::Unreadable => {
+            // Preserve the untrusted contract; proceed ONLY once the slot is actually free. The file
+            // exists here (that's what Unreadable means), so a None return = the rename failed (a
+            // Windows AV/indexer file lock, or the 999 orphan-slots exhausted) and the unreadable
+            // contract is STILL on disk — the save_session below would overwrite (orphan) it, silently
+            // destroying a possibly-live rollback contract. Refuse rather than clobber (rollback-first).
+            if quarantine_session().is_none() {
+                return Err("a Gaming Mode session file exists but is unreadable and couldn't be \
+                            safely moved aside — refusing to start so it isn't overwritten. Try again, \
+                            or recover it from %APPDATA%\\Compy.".into());
+            }
+        }
+        SessionSlot::Empty => {}
     }
     let now = chrono::Utc::now();
     let mut file = SessionFile {
@@ -336,31 +356,45 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     save_session(&file)?; // lock exists before any mutation
     set_live_session(&file.session_id); // mark this run as the live owner
 
-    // Apply one item; on error, undo whatever landed and bail. Defined as a
-    // closure-like macro so each step shares the same partial-undo path.
+    // Shared honest partial-undo path: transition to RestorePending, best-effort persist that
+    // status, then undo whatever the in-memory contract holds. If the undo ITSELF fails, the
+    // session is left RestoreFailed + orphan-recoverable — say so rather than implying a clean
+    // failure (honesty doctrine: never mislead about whether the system was left changed). (A core
+    // step refusing mid-bundle is reachable via the unreadable-prior fail-safe, not just UAC-cancel.)
+    macro_rules! undo_and_report {
+        ($msg:expr) => {{
+            let mut msg = $msg;
+            file.status = SessionStatus::RestorePending;
+            let _ = save_session(&file);
+            if let Err(undo_err) = restore(&mut file) {
+                msg.push_str(&format!(
+                    " — and undoing the partial session also failed ({undo_err}); \
+                     your system may still be changed. Recover it from the prompt next launch."
+                ));
+            }
+            return Err(msg);
+        }};
+    }
+
+    // Apply one item; on error — OR on a receipt-persist failure AFTER the mutation landed — undo
+    // whatever landed and bail through the shared honest path. Persisting the receipt is NOT a bare
+    // `?`: a mutation that succeeded but whose receipt couldn't be saved must be rolled back now,
+    // while the in-memory contract still holds it — never returned as a bare error that leaves the
+    // change applied and unrecorded (an unrecorded change has no rollback record → it would orphan).
     macro_rules! apply_step {
         ($label:expr, $result:expr) => {{
             match $result {
                 Ok(r) => {
                     push(&mut file.changes, $label, r);
-                    save_session(&file)?;
-                }
-                Err(e) => {
-                    file.status = SessionStatus::RestorePending;
-                    let _ = save_session(&file);
-                    // Best-effort undo of partial state. If the undo ITSELF fails, the session is
-                    // left RestoreFailed + orphan-recoverable — say so rather than implying a clean
-                    // failure. Honesty doctrine: never mislead about whether the system was left
-                    // changed. (A core step refusing mid-bundle is now reachable via the unreadable-
-                    // prior fail-safe, not just UAC-cancel.)
-                    let mut msg = format!("{}: {}", $label, e);
-                    if let Err(undo_err) = restore(&mut file) {
-                        msg.push_str(&format!(
-                            " — and undoing the partial session also failed ({undo_err}); \
-                             your system may still be changed. Recover it from the prompt next launch."
+                    if let Err(save_err) = save_session(&file) {
+                        undo_and_report!(format!(
+                            "{}: the change was applied but recording it failed ({save_err})",
+                            $label
                         ));
                     }
-                    return Err(msg);
+                }
+                Err(e) => {
+                    undo_and_report!(format!("{}: {}", $label, e));
                 }
             }
         }};
@@ -370,14 +404,15 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     match apply_power_plan_switch_core() {
         Ok(Some(r)) => {
             push(&mut file.changes, "Power plan → max performance", r);
-            save_session(&file)?;
+            if let Err(save_err) = save_session(&file) {
+                undo_and_report!(format!(
+                    "Power plan → max performance: the change was applied but recording it failed ({save_err})"
+                ));
+            }
         }
         Ok(None) => {}
         Err(e) => {
-            file.status = SessionStatus::RestorePending;
-            let _ = save_session(&file);
-            let _ = restore(&mut file);
-            return Err(format!("Power plan: {}", e));
+            undo_and_report!(format!("Power plan: {}", e));
         }
     }
     apply_step!("Windows Game Mode on", apply_game_mode());
@@ -414,19 +449,9 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         });
     }
     if let Err(e) = apply_elevated_tier(&mut file, tier) {
-        // Same honest partial-undo path as apply_step! (identical wording): restore whatever the
-        // contract holds; if the undo ITSELF fails, say so plainly rather than implying a clean
-        // failure.
-        file.status = SessionStatus::RestorePending;
-        let _ = save_session(&file);
-        let mut msg = e;
-        if let Err(undo_err) = restore(&mut file) {
-            msg.push_str(&format!(
-                " — and undoing the partial session also failed ({undo_err}); \
-                 your system may still be changed. Recover it from the prompt next launch."
-            ));
-        }
-        return Err(msg);
+        // Same honest partial-undo path as apply_step! — restore whatever the contract holds and
+        // report undo failure plainly.
+        undo_and_report!(e);
     }
 
     Ok(file)

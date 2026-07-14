@@ -154,6 +154,29 @@ describe("Fix", () => {
     expect(onToggleRec).toHaveBeenCalledWith("game-mode");
   });
 
+  // bug→guard (rollback-correctness, Fix.tsx:973): `busyId` is a single global scalar — the apply/rollback
+  // model is SERIAL (one in-flight op). While ANY op is pending, EVERY row's switch must be disabled, not
+  // just the matching one; else a user could start a second apply/rollback on a different rec before the
+  // first invoke resolves (the UI is interactive again the instant UAC closes) and the second snapshot
+  // could capture a prior already mutated by the first — corrupting the rollback chain.
+  it("busyId set → EVERY ready-row apply switch is disabled (serial apply/rollback, no concurrent 2nd op)", () => {
+    render(
+      <Fix
+        recs={[rec("game-mode", false), rec("sysmain-disable", false)]}
+        {...baseProps}
+        busyId="sysmain-disable"
+      />,
+    );
+    // The IN-FLIGHT rec's switch AND every other ready row's switch are disabled.
+    expect(screen.getByRole("switch", { name: /Apply Title sysmain-disable/ })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: /Apply Title game-mode/ })).toBeDisabled();
+  });
+
+  it("busyId null → ready-row switches are enabled (no op in flight)", () => {
+    render(<Fix recs={[rec("game-mode", false)]} {...baseProps} busyId={null} />);
+    expect(screen.getByRole("switch", { name: /Apply Title game-mode/ })).not.toBeDisabled();
+  });
+
   // ── view prop (Optimize merge phase 1a, spec 2026-06-21): render fixes-only or ledger-only ──
   // An active change drives the ledger sections; a worth-fixing rec drives the fixes sections.
   const activeChange = {

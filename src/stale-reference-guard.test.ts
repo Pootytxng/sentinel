@@ -44,6 +44,12 @@ const RETIRED_ROOM = [
   // "the library" as the Learn/Blackbook room's retired brand (a nav/search affordance, not the
   // common noun — the leading verb pins it to "go to / search the room").
   /\b(?:More in the|search the|open the|visit the|back to the|into the) library\b/g,
+  // The retired room brand "Library" as a NAV DESTINATION — a capital "Library" reached via a
+  // preposition/article (the old "Open full entry in Library" button, "back to the Library"). The
+  // required leading in/to/into/from/the is what separates the brand from the legit capitalized
+  // common noun ("Dynamic-Link Library", "Steam Library") and code identifiers (openLibrary,
+  // LibraryContext) — a bare "Library" is NOT scanned because the common-noun sense is capitalized too.
+  /\b(?:in|to|into|from|the) Library\b/g,
   // "Compy's <Retired>" — names a retired room as a Compy feature the user can use (the exact
   // form that slipped the old json-only guard, e.g. "Compy's Check looks for the rot").
   /\bCompy's (Check|Play|Learn|Fix)\b/g,

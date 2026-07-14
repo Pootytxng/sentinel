@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { KNOWLEDGE_BY_ID, type KnowledgeEntry } from "../data/knowledge";
 import "./WhatsThis.css";
 
@@ -26,6 +26,22 @@ export function WhatsThis({ id, onOpen }: { id: string; onOpen: (id: string) => 
   const entry = KNOWLEDGE_BY_ID.get(id);
   const [open, setOpen] = useState(false);
   const tipId = useId();
+  // Mouse-leave closes on a short GRACE (not instantly), mirroring Term.tsx: the tip sits below the
+  // trigger and the pointer must cross that gap to reach the "More in the Blackbook →" link — an
+  // instant close made the link unreachable by mouse (same class as the owner's 2026-07-13 Term
+  // catch; this sibling was missed by that sweep). Re-entering the wrapper cancels the pending close.
+  const closeTimer = useRef<number | null>(null);
+  const cancelClose = () => {
+    if (closeTimer.current != null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
+  };
+  useEffect(() => cancelClose, []); // never fire a close after unmount
   if (!entry) return null;
 
   // Focus/blur handled at the wrapper so tabbing from the trigger into "More" keeps the tip open.
@@ -36,12 +52,21 @@ export function WhatsThis({ id, onOpen }: { id: string; onOpen: (id: string) => 
   return (
     <span
       className="whats-this-wrap"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
+      onMouseEnter={() => {
+        cancelClose();
+        setOpen(true);
+      }}
+      onMouseLeave={scheduleClose}
+      onFocus={() => {
+        cancelClose();
+        setOpen(true);
+      }}
       onBlur={onBlur}
       onKeyDown={(e) => {
-        if (e.key === "Escape") setOpen(false);
+        if (e.key === "Escape") {
+          cancelClose();
+          setOpen(false);
+        }
       }}
     >
       <button

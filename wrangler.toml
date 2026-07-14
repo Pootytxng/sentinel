@@ -11,3 +11,6 @@ compatibility_date = "2026-06-12"
 binding = "DB"
 database_name = "compy_waitlist"
 database_id = "74810997-9c7e-4fba-8d11-2eacbd6ba685"
+# Schema lives in migrations/ (0001_waitlist.sql), reproducible via
+# `wrangler d1 migrations apply compy_waitlist`. Explicit so the dir isn't a magic default.
+migrations_dir = "migrations"

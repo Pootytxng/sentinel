@@ -495,7 +495,10 @@ export default function Check({
               </div>
             </div>
           )}
-          {/* Drift watch — a check that was good and has since regressed outside Compy. The
+          {/* Drift watch — a check that was good and has since regressed. We state WHAT + WHEN
+              only, never WHO: drift can't tell a Windows Update revert from the user's own in-app
+              rollback (e.g. rolling back the Ultimate power plan regresses "power-profile"), so
+              "outside Compy" would be a false claim in the self-rollback case. The
               "applied-changes" drift is EXCLUDED here: it's served (named + inline "turn it back on")
               by the limiter card below, so this vague banner would just duplicate it. */}
           {drifts
@@ -504,7 +507,7 @@ export default function Check({
             <div key={d.id} className="check-drift">
               <div className="check-drift-head">
                 <span className="check-drift-label">{d.label}</span>
-                <span className="check-drift-when">changed outside Compy · noticed {ago(d.noticed_at)}</span>
+                <span className="check-drift-when">changed since it was last good · noticed {ago(d.noticed_at)}</span>
               </div>
               <p className="check-drift-detail">{d.detail}</p>
             </div>

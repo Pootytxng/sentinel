@@ -61,7 +61,7 @@ export function trialReasonText(reason: string): string {
     case "conditions-unstable":
       return "conditions were too noisy to measure reliably — try again";
     case "invalid-trial":
-      return "the run was invalid (throttling or background load) and was discarded";
+      return "the run was invalid — the GPU throttled or its clock/temperature drifted mid-run — and was discarded";
     default:
       return reason;
   }

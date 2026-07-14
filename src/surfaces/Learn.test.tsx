@@ -162,10 +162,10 @@ describe("Learn surface (reskin)", () => {
     expect(screen.getByText(/claims? graded/i)).toBeInTheDocument();
     // Clicking a graded row expands IN PLACE — the autopsy stays (paste box remains), no redirect.
     fireEvent.click(screen.getByRole("button", { name: /Windows Game Mode/i }));
-    expect(screen.getByText(/Open full entry in Library/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open full entry/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Paste a tweak guide to autopsy")).toBeInTheDocument();
     // The quiet full-entry link is the only deliberate travel into the library.
-    fireEvent.click(screen.getByText(/Open full entry in Library/i));
+    fireEvent.click(screen.getByText(/Open full entry/i));
     expect(screen.getByLabelText("Search the knowledge library")).toBeInTheDocument();
   });
 

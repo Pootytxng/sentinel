@@ -4,6 +4,7 @@
 //! rules from outside the binary. Remote fetch stays disabled until a
 //! production key + URL are wired; see ARCHITECTURE_LOCKS §1.4 / §5.
 
+use std::cmp::Ordering;
 use std::fs;
 use std::path::PathBuf;
 
@@ -297,9 +298,36 @@ fn verify_chain_with_key(
 }
 
 fn version_in_range(current: &str, min: &str, max: &str) -> bool {
-    // Permissive lexicographic check is fine for "0.1.0"-style strings; for
-    // SemVer-correct compares we'd swap in the `semver` crate later.
-    current >= min && current <= max
+    // Compare dotted versions NUMERICALLY, component by component — a raw string compare is
+    // lexicographic and wrong at the boundary this actually gates (e.g. "0.10.0" < "0.9.0" as
+    // strings, so a genuinely-newer build would be rejected as below min). No `semver` dep needed
+    // for the "MAJOR.MINOR.PATCH" shape the manifest uses.
+    cmp_version(current, min) != Ordering::Less && cmp_version(current, max) != Ordering::Greater
+}
+
+/// Numeric dotted-version compare. Each '.'-separated segment is parsed as a number (leading digits
+/// only, so a "1.2.3-rc1" pre-release tail is ignored — a non-numeric segment reads as 0); the
+/// shorter version is zero-padded so "1.2" == "1.2.0". Never panics on malformed input.
+fn cmp_version(a: &str, b: &str) -> Ordering {
+    let parse = |s: &str| -> Vec<u64> {
+        s.split('.')
+            .map(|seg| {
+                let digits: String = seg.chars().take_while(|c| c.is_ascii_digit()).collect();
+                digits.parse::<u64>().unwrap_or(0)
+            })
+            .collect()
+    };
+    let (va, vb) = (parse(a), parse(b));
+    let n = va.len().max(vb.len());
+    for i in 0..n {
+        let x = va.get(i).copied().unwrap_or(0);
+        let y = vb.get(i).copied().unwrap_or(0);
+        match x.cmp(&y) {
+            Ordering::Equal => continue,
+            other => return other,
+        }
+    }
+    Ordering::Equal
 }
 
 // ─── Rules source tracking + last-known-good cache ───────────────────────
@@ -574,6 +602,19 @@ mod manifest_tests {
             verify_chain_with_key(&m, VALID_RULES, 0, &pk),
             Err(ManifestError::Expired)
         ));
+    }
+
+    #[test]
+    fn version_compare_is_numeric_not_lexicographic() {
+        // The bug this guards: a raw string compare orders "0.10.0" BELOW "0.9.0" (because '1' < '9'
+        // char-wise), so a genuinely-newer build would be rejected as under min_app_version.
+        assert_eq!(cmp_version("0.10.0", "0.9.0"), Ordering::Greater);
+        assert_eq!(cmp_version("1.2.0", "1.2"), Ordering::Equal); // zero-padded tail
+        assert_eq!(cmp_version("1.2.3-rc1", "1.2.3"), Ordering::Equal); // pre-release tail ignored
+        assert_eq!(cmp_version("2.0.0", "10.0.0"), Ordering::Less);
+        // In-range check uses it end to end: 0.10.0 IS within [0.9.0, 1.0.0].
+        assert!(version_in_range("0.10.0", "0.9.0", "1.0.0"));
+        assert!(!version_in_range("0.8.0", "0.9.0", "1.0.0"));
     }
 
     #[test]

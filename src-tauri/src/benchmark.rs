@@ -812,7 +812,12 @@ pub(crate) fn compute_efficacy(before: &RunReport, after: &RunReport, base_floor
             continue;
         }
         let delta_pct = if b.score == 0 {
-            0.0
+            // Percent change from a measured-zero baseline is mathematically undefined. Report it
+            // honestly by sign rather than flattening every 0→X to a false "no measurable change":
+            // 0 → positive is a real (unquantifiable-as-%) gain, surfaced as +100% ("all of the new
+            // score is new"); 0 → 0 is genuine no-change. The raw before/after points travel
+            // alongside delta_pct (ComponentEfficacy.before/after), so the true magnitude is visible.
+            if a.score > 0 { 100.0 } else { 0.0 }
         } else {
             (a.score as f64 - b.score as f64) / b.score as f64 * 100.0
         };

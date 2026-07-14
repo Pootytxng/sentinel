@@ -79,6 +79,30 @@ export function MonitorV2(props: Props) {
     invoke("get_gpu_sensors").catch(() => {});
   }, []);
 
+  // Self-correcting capture poll — ONLY while we believe a capture is live AND the normal poller
+  // (the Live face) is unmounted (segment !== "live"). Without this, leaving the Live segment
+  // mid-capture strands `capturing` at true: no mounted face polls get_fps_status, so when the
+  // session actually ends the forward door never reopens until the user returns to Live. This
+  // re-reads REAL backend state only — it never opens the door speculatively (honours the
+  // conservative "door never opens mid-capture just because the user changed segment" contract):
+  // once s.active reads false, capturing flips false, this effect re-runs and its guard stops it.
+  useEffect(() => {
+    if (!capturing || segment === "live") return;
+    let live = true;
+    const tick = () =>
+      invoke<{ active: boolean }>("get_fps_status")
+        .then((s) => {
+          if (live) setCapturing(s.active);
+        })
+        .catch(() => {});
+    const id = window.setInterval(tick, 2000);
+    tick();
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [capturing, segment]);
+
   const basic = mode === "basic";
   const verdict = monitorVerdict(props.sessions);
 

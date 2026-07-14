@@ -1,7 +1,10 @@
 //! Drift Watch (Wave-2): notices readiness checks that WERE good and have since regressed — e.g. a
 //! power plan reverted by Windows Update — and surfaces them as a quiet, honest heads-up. Honest-copy
-//! rule: name WHAT drifted and WHEN we noticed; never speculate WHO beyond "outside Compy." Read-only;
-//! the fix routes through the existing apply / deep-link flow, nothing new here.
+//! rule: name WHAT drifted and WHEN we noticed; NEVER speculate WHO — not even "outside Compy." A
+//! regression can be self-inflicted (rolling back the Ultimate power plan in the Trust Ledger drops
+//! the "power-profile" check back to Attention), and drift has no vantage point to tell that from a
+//! Windows Update revert, so any WHO-claim is sometimes false. Read-only; the fix routes through the
+//! existing apply / deep-link flow, nothing new here.
 
 use std::collections::HashMap;
 

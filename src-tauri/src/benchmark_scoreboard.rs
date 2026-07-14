@@ -141,17 +141,38 @@ fn store_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("scoreboard.json")
 }
 
+/// Serializes the whole load-modify-save cycle so two concurrent `record_result` / `clear`
+/// calls can't read the same store, each push their own entry onto that stale copy, and have the
+/// slower writer clobber the faster one's award (lost update). Read-only `scoreboard()` doesn't
+/// take it — a slightly stale read is harmless, a lost award is not.
+static SCOREBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn load_store() -> ScoreStore {
-    std::fs::read_to_string(store_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    let path = store_path();
+    match std::fs::read_to_string(&path) {
+        Ok(s) => match serde_json::from_str(&s) {
+            Ok(store) => store,
+            Err(_) => {
+                // Don't silently reset a corrupt scoreboard (which the next save would then
+                // overwrite for good) — set the damaged bytes aside for recovery, then start
+                // fresh. This is arcade state, not a rollback contract, so it doesn't hard-fail.
+                let corrupt = path.with_extension("json.corrupt");
+                let _ = std::fs::rename(&path, &corrupt);
+                ScoreStore::default()
+            }
+        },
+        Err(_) => ScoreStore::default(),
+    }
 }
 
 fn save_store(store: &ScoreStore) -> Result<(), String> {
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
     let json = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
-    std::fs::write(store_path(), json).map_err(|e| e.to_string())
+    // Atomic swap (mirrors history.rs / sessions.rs): write beside the live file, then rename it in.
+    let path = store_path();
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
 /// Record a trial's result. Only a certified `Keep` earns a ledger entry (the firewall); anything
@@ -168,6 +189,7 @@ pub(crate) fn record_result(rec_id: &str, rec_title: &str, verdict: &Verdict) ->
         ci_hi_pct: a.ci_hi_pct,
         at: chrono::Utc::now().to_rfc3339(),
     };
+    let _guard = SCOREBOARD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let mut store = load_store();
     store.awards.push(entry.clone());
     let _ = save_store(&store);
@@ -184,6 +206,7 @@ pub(crate) fn scoreboard() -> ScoreboardView {
 }
 
 pub(crate) fn clear_scoreboard() -> Result<(), String> {
+    let _guard = SCOREBOARD_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     save_store(&ScoreStore::default())
 }
 

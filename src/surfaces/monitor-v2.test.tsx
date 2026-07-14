@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { MonitorV2 } from "./MonitorV2";
 import Monitor from "./Monitor";
 import { monitorVerdict } from "./monitor-v2-data";
@@ -44,8 +44,14 @@ vi.mock("./MonitorBasic", () => ({
     </div>
   ),
 }));
-// MonitorV2's one-shot sensor pre-warm (read-only) — jsdom has no Tauri IPC.
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
+// MonitorV2's one-shot sensor pre-warm (read-only) — jsdom has no Tauri IPC. `get_fps_status` is
+// driven by `ipc.fpsActive` so the self-correcting off-Live capture poll (below) is testable.
+const ipc = vi.hoisted(() => ({ fpsActive: true }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((cmd: string) =>
+    Promise.resolve(cmd === "get_fps_status" ? { active: ipc.fpsActive } : null),
+  ),
+}));
 
 beforeAll(() => {
   // jsdom lacks the observers the vendored DecryptedText uses; inert stubs, animation never starts.
@@ -198,6 +204,25 @@ describe("MonitorV2 — RoomShell composition", () => {
     expect(container.querySelectorAll(".v2-door").length).toBe(1);
     fireEvent.click(screen.getByText("stub-play-capture-on"));
     expect(container.querySelectorAll(".v2-door").length).toBe(0);
+  });
+
+  // bug→guard (MonitorV2.tsx capture poll): only the Live face polls get_fps_status and mirrors it
+  // up via onFpsActive. Leaving Live mid-capture unmounts that poller, so if nothing else re-read the
+  // backend the door would stay closed FOREVER once the session actually ended off-screen. The
+  // self-correcting off-Live poll re-reads real state; when the backend reports active:false the door
+  // must reopen without the user returning to Live.
+  it("reopens the door when a capture ends while the user is off the Live segment", async () => {
+    useReduced();
+    useAdvanced();
+    ipc.fpsActive = true;
+    const { container } = mount();
+    fireEvent.click(screen.getByText("stub-play-capture-on")); // capture live → door closed
+    expect(container.querySelectorAll(".v2-door").length).toBe(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" })); // leave Live → poller unmounts
+    ipc.fpsActive = false; // the session ends off-screen (picked up by the 2s poll)
+    await waitFor(() => expect(container.querySelectorAll(".v2-door").length).toBe(1), {
+      timeout: 3000,
+    });
   });
 });
 

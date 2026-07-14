@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import Overlay from "./Overlay";
 import { ConfirmProvider } from "./design/ConfirmDialog";
+import { ErrorBoundary } from "./design/ErrorBoundary";
 import { WindowChrome } from "./design/WindowChrome";
 import { applyMotionAttribute } from "./design/use-motion";
 import { applyRoomAccents } from "./design/theme";
@@ -133,10 +134,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     {isOverlay ? (
       <Overlay />
     ) : (
-      <ConfirmProvider>
-        <WindowChrome />
-        <App />
-      </ConfirmProvider>
+      <ErrorBoundary>
+        <ConfirmProvider>
+          <WindowChrome />
+          <App />
+        </ConfirmProvider>
+      </ErrorBoundary>
     )}
   </React.StrictMode>,
 );

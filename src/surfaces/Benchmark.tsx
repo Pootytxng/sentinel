@@ -345,7 +345,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
           overall pill + the same 4 delta/verdict rows would render twice adjacently) — it
           carries the full readout plus before/after values, the split rigs, and the change
           attribution. Flag off renders today's card unchanged. */}
-      {showEfficacy && state?.efficacy && !twoFutures && (
+      {showEfficacy && state?.efficacy && !twoFutures && !provingGround && (
         <EfficacyCard efficacy={state.efficacy} changes={changesSince} />
       )}
 

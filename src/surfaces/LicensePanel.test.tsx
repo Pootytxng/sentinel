@@ -5,8 +5,8 @@ import type { LicenseStatus } from "../types";
 
 // Settable per-test backend responses (hoisted for the vi.mock factory).
 const mock = vi.hoisted(() => ({
-  status: { tier: "free", valid: false, reason: "licensing not active", expires_at: null } as LicenseStatus,
-  setResult: { tier: "free", valid: false, reason: "license signature invalid", expires_at: null } as LicenseStatus,
+  status: { tier: "free", valid: false, armed: false, reason: "licensing not active", expires_at: null } as LicenseStatus,
+  setResult: { tier: "free", valid: false, armed: true, reason: "license signature invalid", expires_at: null } as LicenseStatus,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -19,13 +19,13 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 afterEach(() => {
   cleanup();
-  mock.status = { tier: "free", valid: false, reason: "licensing not active", expires_at: null };
-  mock.setResult = { tier: "free", valid: false, reason: "license signature invalid", expires_at: null };
+  mock.status = { tier: "free", valid: false, armed: false, reason: "licensing not active", expires_at: null };
+  mock.setResult = { tier: "free", valid: false, armed: true, reason: "license signature invalid", expires_at: null };
 });
 
 describe("LicensePanel (Compy Pro — dark license surface)", () => {
   it("the DARK default shows the honest free state and NO entry form (no dead-end)", async () => {
-    mock.status = { tier: "free", valid: false, reason: "licensing not active", expires_at: null };
+    mock.status = { tier: "free", valid: false, armed: false, reason: "licensing not active", expires_at: null };
     render(<LicensePanel />);
     expect(await screen.findByText(/you're on the free version/i)).toBeInTheDocument();
     // never paywalls safety — the copy says core/safety is free
@@ -35,7 +35,7 @@ describe("LicensePanel (Compy Pro — dark license surface)", () => {
   });
 
   it("when licensing is ARMED, the entry form appears and a bad key shows a friendly note", async () => {
-    mock.status = { tier: "free", valid: false, reason: "no license", expires_at: null };
+    mock.status = { tier: "free", valid: false, armed: true, reason: "no license", expires_at: null };
     render(<LicensePanel />);
     fireEvent.click(await screen.findByText(/have a license key/i));
     const input = screen.getByLabelText("License key");
@@ -45,8 +45,8 @@ describe("LicensePanel (Compy Pro — dark license surface)", () => {
   });
 
   it("a valid Pro key flips the panel to 'Pro active'", async () => {
-    mock.status = { tier: "free", valid: false, reason: "no license", expires_at: null };
-    mock.setResult = { tier: "pro", valid: true, reason: "active", expires_at: null };
+    mock.status = { tier: "free", valid: false, armed: true, reason: "no license", expires_at: null };
+    mock.setResult = { tier: "pro", valid: true, armed: true, reason: "active", expires_at: null };
     render(<LicensePanel />);
     fireEvent.click(await screen.findByText(/have a license key/i));
     fireEvent.change(screen.getByLabelText("License key"), { target: { value: "good.key" } });

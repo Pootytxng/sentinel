@@ -66,8 +66,10 @@ describe("Play", () => {
     expect(row.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("true");
-    // The full debrief verdict heading now renders inline.
-    expect(screen.getByText(/Smooth session|smooth|Rough/i)).toBeInTheDocument();
+    // The full debrief verdict heading now renders inline. Match the heading forms specifically
+    // (not a bare "smooth") so this doesn't also collide with the one-word short-verdict chip, which
+    // the gradeLow1 alignment now lets read "Smooth" for this same fixture.
+    expect(screen.getByText(/Smooth session|Mostly smooth|Rough —/i)).toBeInTheDocument();
   });
 
   // ── view prop (Monitor restructure, spec 2026-06-21): the Monitor shell renders Play twice ──

@@ -67,6 +67,11 @@ struct LicensePayload {
 pub(crate) struct LicenseStatus {
     pub(crate) tier: String, // "free" | "pro"
     pub(crate) valid: bool,
+    /// Licensing is ARMED (a real signing key is embedded, replacing the placeholder). The frontend
+    /// gates Pro on this flag DIRECTLY — do not make the UI infer it by string-matching `reason`
+    /// (that couples the dark-vs-live gate to free-text copy: a reworded reason would silently arm
+    /// Pro for everyone). `reason` stays human-facing only.
+    pub(crate) armed: bool,
     pub(crate) reason: String, // plain-English: "no license", "active", "license expired …", …
     pub(crate) expires_at: Option<String>,
 }
@@ -76,6 +81,7 @@ impl LicenseStatus {
         LicenseStatus {
             tier: "free".into(),
             valid: false,
+            armed: false, // stamped true by the armed entry points (get_license_status/set_license_key)
             reason: reason.into(),
             expires_at: None,
         }
@@ -132,6 +138,7 @@ pub(crate) fn verify_license(key: &str, pubkey_bytes: &[u8; 32], now: DateTime<U
     LicenseStatus {
         tier: payload.tier,
         valid: true,
+        armed: false, // stamped by get_license_status/set_license_key (this pure verify is armed-agnostic)
         reason: "active".into(),
         expires_at: payload.expires_at,
     }
@@ -192,10 +199,12 @@ pub(crate) fn get_license_status() -> LicenseStatus {
     if !licensing_armed() {
         return LicenseStatus::free("licensing not active");
     }
-    match read_stored_key() {
+    let mut status = match read_stored_key() {
         Some(key) => verify_license(&key, &LICENSE_SIGNING_PUBKEY_BYTES, Utc::now()),
         None => LicenseStatus::free("no license"),
-    }
+    };
+    status.armed = true; // reached only past the licensing_armed() gate above
+    status
 }
 
 /// IPC: store a license key locally (app-data file) and return its verified status. Writing the file is
@@ -206,7 +215,9 @@ pub(crate) fn set_license_key(key: String) -> Result<LicenseStatus, String> {
     let path = license_key_path();
     if trimmed.is_empty() {
         let _ = std::fs::remove_file(&path); // clearing is fine whether or not it existed
-        return Ok(LicenseStatus::free("no license"));
+        let mut cleared = LicenseStatus::free("no license");
+        cleared.armed = licensing_armed();
+        return Ok(cleared);
     }
     if trimmed.len() > LICENSE_KEY_MAX_CHARS {
         return Err("That doesn't look like a Compy license key.".into());
@@ -215,7 +226,9 @@ pub(crate) fn set_license_key(key: String) -> Result<LicenseStatus, String> {
         std::fs::create_dir_all(dir).map_err(|_| "Couldn't save the license locally.".to_string())?;
     }
     std::fs::write(&path, trimmed).map_err(|_| "Couldn't save the license locally.".to_string())?;
-    Ok(verify_license(trimmed, &LICENSE_SIGNING_PUBKEY_BYTES, Utc::now()))
+    let mut status = verify_license(trimmed, &LICENSE_SIGNING_PUBKEY_BYTES, Utc::now());
+    status.armed = licensing_armed();
+    Ok(status)
 }
 
 // ─── Pure-core tests (the crypto is proven against a test keypair; production key stays placeholder) ──
@@ -323,11 +336,23 @@ mod license_tests {
     #[test]
     fn status_serializes_to_the_expected_ts_shape() {
         let v = serde_json::to_value(LicenseStatus::free("no license")).unwrap();
-        for k in ["tier", "valid", "reason", "expires_at"] {
+        for k in ["tier", "valid", "armed", "reason", "expires_at"] {
             assert!(v.get(k).is_some(), "missing key {k}");
         }
         assert_eq!(v["tier"], "free");
         assert_eq!(v["valid"], false);
+        assert_eq!(v["armed"], false);
+    }
+
+    #[test]
+    fn get_license_status_reports_disarmed_while_placeholder_key_ships() {
+        // The gate the frontend now reads DIRECTLY (proStateFrom → status.armed), instead of
+        // string-matching `reason`. While the shipped key is the all-zeros placeholder, armed=false
+        // so every Pro feature renders free — the dark default. This guards that copy tweaks to
+        // `reason` can never silently flip the gate.
+        let s = get_license_status();
+        assert!(!s.armed, "must be disarmed while the placeholder key ships: {s:?}");
+        assert_eq!(s.reason, "licensing not active");
     }
 
     #[test]

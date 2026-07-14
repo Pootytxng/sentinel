@@ -249,11 +249,45 @@ feel/look right). This is the operational meaning of "keep the installer on his 
 
 ### Rust module map (post-refactor — `lib.rs` carved into safety-boundary modules)
 
-- `lib.rs` (~1270 lines) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:499`), `safety_tests`.
-- `actions.rs` — the ONLY Windows-mutation + rollback boundary: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
-- `history.rs` — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history alone.
-- `recommendations.rs`, `hardware.rs`, `monitoring.rs`, `diagnostics.rs`, `fps.rs`, `remote_rules.rs`.
-- `main.rs` — if argv has `--fps-capture`, run the headless ETW helper (`run_fps_capture`) and return BEFORE any window; else `run()`.
+Complete as of 2026-07-14 (35 `.rs` files; line counts drift, treat as rough). **Mutation/rollback + gate-relevant modules are starred ★ — scope any mutation-gate change against these first.**
+
+**Core wiring & entry**
+- `main.rs` — argv router: `--fps-capture` → headless ETW helper (`run_fps_capture`); `--run-elevated <hex>` → elevated-PowerShell child (elevation boundary, owner territory); else `run()`. Runs BEFORE any window.
+- `lib.rs` (~1320) — `run()` wiring + command registration, state probes, `compy_data_dir`, startup-apps, `gaming_mode_gate` (`lib.rs:499`), `safety_tests`.
+
+**★ Mutation, rollback & gates (the safety boundary)**
+- ★ `actions.rs` (~4700) — the ONLY Windows-mutation + rollback boundary: typed `AppliedAction`/`RollbackAction`/`Snapshot`, all `apply_*`/`rollback_*_typed`, `dispatch_rollback`, `resolve_rollback`, `synthesize_legacy_rollback`, `run_elevated_powershell`.
+- ★ `history.rs` (~2080) — Trust Ledger: `AppliedChange`, persistence (`load/save_history`), `apply_recommendation`/`rollback_change`/`get_applied_changes`. Rollback resolves from local history ALONE.
+- ★ `gaming_orchestrator.rs` (~1660) — Gaming Mode session lifecycle: start/stop/keeper, orphan detection + recovery, staged-change commit. Mutation-boundary.
+- ★ `gaming_session.rs` (~360) — Gaming Mode session model + atomic persistence (`gaming-session.json`, `SESSION_SCHEMA_VERSION`).
+- ★ `game_mode_persist.rs` (~190) — Game Mode registry snapshot/persist helpers.
+- ★ `services.rs` (~1040) — service-suspend/debloat mutation surface (ARMED).
+- ★ `gpu_profile.rs` (~590) — GPU profile handling (apply structurally impossible → advisory; AMD state not user-mode readable).
+- ★ `remote_rules.rs` (~590) — signed remote-rules (Ed25519 verify wired, fetch triple-gated OFF).
+- ★ `receipts.rs` (~415) — Receipts telemetry gate (built dark, opt-in, default-OFF; new outbound boundary).
+- ★ `license.rs` (~355) — Compy Pro license gate (built dark).
+- ★ `drift.rs` (~255) — applied-change drift detection vs live machine state.
+
+**Hardware, sensors & detection (read-only probes)**
+- `hardware.rs` (~3350) — `HardwareInfo` probe (CPU/GPU/RAM/storage/network); Rust↔TS serde contract.
+- `cpu_temp.rs` (~520) — HWiNFO shared-memory CPU-temp/fan read (SEH-crash risk noted in audit). GPU temp via vendor SDK elsewhere.
+- `amd_freesync.rs` (~250), `overlay_tools.rs` (~230), `hwchange.rs` (~190) — FreeSync detection, overlay-tool detection, hardware-change tracking.
+
+**Monitoring, FPS & sessions**
+- `monitoring.rs` (~1300) — monitor-tool orchestration + sensor coverage.
+- `fps.rs` (~625) — FPS/frametime IPC (`fps.json`/`fps.alive`) from the ETW helper.
+- `sessions.rs` (~330) — session-summary persistence (`sessions.json`).
+- `stutter.rs` (~135) — stutter/1%-low derivation.
+
+**Benchmark & Lab**
+- `benchmark.rs` (~1330), `benchmark_trial.rs` (~615), `benchmark_verdict.rs` (~580), `benchmark_scoreboard.rs` (~460), `comparison.rs` (~475) — the Lab proving-ground bench: trials, verdicts, scoreboard, A/B comparison.
+- `latency.rs` (~2255) — input/network latency probes.
+- `blackbox.rs` (~2150) — diagnostic black-box capture.
+
+**Advisory, ranking & export**
+- `recommendations.rs` (~970), `readiness.rs` (~1615), `priorities.rs` (~707), `diagnostics.rs` (~637), `leftovers.rs` (~1200) — recs catalog, gaming-readiness, priority ranking, diagnostics, leftover-cleanup advisory.
+- `export.rs` (~814) — evidence-pack / share-card export.
+- `tray.rs` (~177) — system-tray integration.
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision
 

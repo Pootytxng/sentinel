@@ -489,7 +489,7 @@ fn cap_feedback(feedback: Option<String>) -> Option<String> {
 pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, String> {
     let feedback = cap_feedback(feedback);
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let hardware = serde_json::to_value(crate::hardware::get_hardware_info()).unwrap_or(Value::Null);
+    let mut hardware = serde_json::to_value(crate::hardware::get_hardware_info()).unwrap_or(Value::Null);
     let recommendations =
         serde_json::to_value(crate::recommendations::get_recommendations()).unwrap_or(Value::Null);
     let trust_ledger =
@@ -518,10 +518,21 @@ pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, St
 
     let dir = compy_data_dir().join("exports");
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create export folder: {e}"))?;
-    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    // Millisecond granularity (%3f, no leading dot) so two exports within the same second don't
+    // collide on the filename and silently overwrite the earlier report.
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S%3f");
     let md_path = dir.join(format!("compy-report-{stamp}.md"));
     std::fs::write(&md_path, markdown_with_bom(&markdown))
         .map_err(|e| format!("could not write report: {e}"))?;
+
+    // Redact the machine hostname from the shareable JSON. It's identity-adjacent (a hostname is
+    // very often the owner's real name), the markdown/Discord reports never surfaced it, and an
+    // export exists to be pasted in public ("receipts"). Everything else in `hardware` is
+    // model/spec, not identity. Safe to mutate here: the markdown + discord builders above already
+    // ran against the full value.
+    if let Some(obj) = hardware.as_object_mut() {
+        obj.remove("hostname");
+    }
 
     // JSON export comes for free — the assembled source Values + metadata.
     let json_path = dir.join(format!("compy-report-{stamp}.json"));
@@ -537,10 +548,9 @@ pub(crate) fn export_report(feedback: Option<String>) -> Result<ExportResult, St
         "diagnostics": diagnostics,
         "privacy": "Local export only. Compy collects no telemetry and has no account.",
     });
-    let _ = std::fs::write(
-        &json_path,
-        serde_json::to_string_pretty(&bundle).unwrap_or_default(),
-    );
+    let json_body = serde_json::to_string_pretty(&bundle).map_err(|e| format!("could not build JSON report: {e}"))?;
+    std::fs::write(&json_path, json_body)
+        .map_err(|e| format!("could not write JSON report: {e}"))?;
 
     Ok(ExportResult {
         path: md_path.to_string_lossy().to_string(),

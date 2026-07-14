@@ -27,6 +27,7 @@ import {
   verdictDefinition,
 } from "../data/verdict-glossary";
 import { Icon } from "../design";
+import { useReducedMotion } from "../design/use-motion";
 import { Walkthrough } from "../design/Walkthrough";
 import { walkthroughForKey, type GpuVendor } from "./walkthroughs";
 import { TUNING_GUIDE_BY_ID } from "../data/tuning-guides";
@@ -494,7 +495,7 @@ function AutopsyResultView({
                     <EntryBody entry={entry} onNavigate={onNavigate} />
                     {/* Deliberate travel only — the quiet full-entry link, per the continuity law. */}
                     <button className="lx-howto" onClick={() => onNavigate(h.id)}>
-                      Open full entry in Library →
+                      Open full entry →
                     </button>
                   </div>
                 )}
@@ -717,6 +718,10 @@ export default function Learn({
   const [openCats, setOpenCats] = useState<Set<KnowledgeType>>(new Set()); // §5 collapsed categories
   const [focused, setFocused] = useState<string | null>(focusId);
   const [phIdx, setPhIdx] = useState(0);
+  // Motion law: gate on the project's resolved pref (Compy motion is ON by default and OVERRIDES OS
+  // reduce-motion), NEVER raw matchMedia — the owner's WebView2 reports reduce=true, which had silently
+  // frozen the placeholder cycling even though motion should run. Reactive so a Settings toggle re-arms it.
+  const reducedMotion = useReducedMotion();
   const deferredQ = useDeferredValue(q); // keeps the input snappy; dataset is tiny so results are instant
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -745,12 +750,12 @@ export default function Learn({
     }
   }, [mode, asPanel]);
 
-  // Cycle the placeholder examples; frozen (static first) under prefers-reduced-motion.
+  // Cycle the placeholder examples; frozen (static first) when motion is reduced.
   useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (reducedMotion) return;
     const id = window.setInterval(() => setPhIdx((i) => (i + 1) % PLACEHOLDERS.length), 2800);
     return () => window.clearInterval(id);
-  }, []);
+  }, [reducedMotion]);
 
   const results = useMemo(() => {
     let hits = searchKnowledge(deferredQ);

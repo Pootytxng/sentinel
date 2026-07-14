@@ -164,7 +164,8 @@ fn read_fans_hwinfo() -> Vec<FanSensor> {
             let fans = if view.Value.is_null() {
                 Vec::new()
             } else {
-                let f = parse_hwinfo_fans(view.Value as *const u8);
+                let len = mapped_region_size(view.Value as *const u8);
+                let f = parse_hwinfo_fans(view.Value as *const u8, len);
                 let _ = UnmapViewOfFile(view);
                 f
             };
@@ -177,13 +178,41 @@ fn read_fans_hwinfo() -> Vec<FanSensor> {
     Vec::new()
 }
 
-/// Parse fan readings (reading_type == Fan) from the mapped HWiNFO block. Same validated, fail-soft
-/// layout handling as parse_hwinfo.
-unsafe fn parse_hwinfo_fans(base: *const u8) -> Vec<FanSensor> {
+/// Actual byte size of a mapped view, via `VirtualQuery`. `MapViewOfFile(..,0)` maps to the end of
+/// the section but never tells us how big that is; a hostile process can publish a tiny
+/// `HWiNFO_SENS_SM2` section with a header claiming a huge `num_reading`, so the mapped size — NOT
+/// the header's self-reported counts — is the authority for every bounds check. Returns 0 on failure
+/// (⇒ callers fail soft). The OS page-rounds a mapped view and zero-fills the tail, so reads within
+/// this size can never fault or leak another process's memory.
+unsafe fn mapped_region_size(base: *const u8) -> usize {
+    use windows::Win32::System::Memory::{VirtualQuery, MEMORY_BASIC_INFORMATION};
+    let mut mbi = MEMORY_BASIC_INFORMATION::default();
+    let n = VirtualQuery(
+        Some(base as *const core::ffi::c_void),
+        &mut mbi,
+        std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+    );
+    if n == 0 {
+        0
+    } else {
+        mbi.RegionSize
+    }
+}
+
+/// Validate the HWiNFO header against the ACTUAL mapped `len` and return the reading layout
+/// `(offset, size_elem, num)` only when EVERY element read is provably in-bounds. `None` (fail-soft)
+/// on any mismatch. Shared by the temp + fan parsers so the untrusted-input bounds contract lives in
+/// exactly one place. `off + num*size_elem <= len` is checked with overflow-safe arithmetic so a
+/// crafted header can't wrap a huge span into a small in-range value; because `size_elem >=
+/// size_of::<HwiReading>()`, that single check bounds the last element's full read.
+unsafe fn hwinfo_reading_layout(base: *const u8, len: usize) -> Option<(usize, usize, usize)> {
+    if len < std::mem::size_of::<HwiHeader>() {
+        return None;
+    }
     let sig4 = std::slice::from_raw_parts(base, 4);
     let sig_u32 = u32::from_le_bytes([sig4[0], sig4[1], sig4[2], sig4[3]]);
     if sig4 != b"SiWH" && sig4 != b"HWiS" && sig_u32 != 0x5369_5748 {
-        return Vec::new();
+        return None;
     }
     let h: HwiHeader = std::ptr::read_unaligned(base as *const HwiHeader);
     let off = h.offset_reading as usize;
@@ -194,8 +223,21 @@ unsafe fn parse_hwinfo_fans(base: *const u8) -> Vec<FanSensor> {
         || num == 0
         || num > 100_000
     {
-        return Vec::new();
+        return None;
     }
+    let end = num.checked_mul(size_elem).and_then(|span| off.checked_add(span))?;
+    if end > len {
+        return None;
+    }
+    Some((off, size_elem, num))
+}
+
+/// Parse fan readings (reading_type == Fan) from the mapped HWiNFO block. `len` = mapped size (the
+/// bounds authority — see hwinfo_reading_layout). Validated, fail-soft.
+unsafe fn parse_hwinfo_fans(base: *const u8, len: usize) -> Vec<FanSensor> {
+    let Some((off, size_elem, num)) = hwinfo_reading_layout(base, len) else {
+        return Vec::new();
+    };
     let mut fans = Vec::new();
     for i in 0..num {
         let e: HwiReading =
@@ -273,7 +315,8 @@ fn read_hwinfo() -> Option<CpuTemp> {
             let result = if view.Value.is_null() {
                 None
             } else {
-                let r = parse_hwinfo(view.Value as *const u8);
+                let len = mapped_region_size(view.Value as *const u8);
+                let r = parse_hwinfo(view.Value as *const u8, len);
                 let _ = UnmapViewOfFile(view);
                 r
             };
@@ -286,29 +329,12 @@ fn read_hwinfo() -> Option<CpuTemp> {
     None
 }
 
-/// Parse the mapped HWiNFO block for the best CPU temperature reading. Validated + fail-soft.
-unsafe fn parse_hwinfo(base: *const u8) -> Option<CpuTemp> {
-    // Signature is the DWORD 'SiWH' (0x53695748); in memory its little-endian bytes read as
-    // "HWiS". Accept either byte order AND the raw DWORD so an endianness quirk can't make us
-    // silently miss it.
-    let sig4 = std::slice::from_raw_parts(base, 4);
-    let sig_u32 = u32::from_le_bytes([sig4[0], sig4[1], sig4[2], sig4[3]]);
-    if sig4 != b"SiWH" && sig4 != b"HWiS" && sig_u32 != 0x5369_5748 {
-        return None;
-    }
-    let h: HwiHeader = std::ptr::read_unaligned(base as *const HwiHeader);
-    let off = h.offset_reading as usize;
-    let size_elem = h.size_reading_elem as usize;
-    let num = h.num_reading as usize;
-    // Layout sanity: the element must be at least our known layout (a newer HWiNFO may append
-    // trailing fields, which don't move the ones we read); offset + count must be plausible.
-    if size_elem < std::mem::size_of::<HwiReading>()
-        || off < std::mem::size_of::<HwiHeader>()
-        || num == 0
-        || num > 100_000
-    {
-        return None;
-    }
+/// Parse the mapped HWiNFO block for the best CPU temperature reading. `len` = mapped size (the
+/// bounds authority — see hwinfo_reading_layout). Validated + fail-soft. The signature is the DWORD
+/// 'SiWH' (0x53695748); in memory its little-endian bytes read as "HWiS" — hwinfo_reading_layout
+/// accepts either byte order AND the raw DWORD so an endianness quirk can't make us silently miss it.
+unsafe fn parse_hwinfo(base: *const u8, len: usize) -> Option<CpuTemp> {
+    let (off, size_elem, num) = hwinfo_reading_layout(base, len)?;
     let mut best: Option<(f64, String)> = None;
     let mut best_is_pkg = false;
     for i in 0..num {
@@ -394,6 +420,22 @@ mod hwinfo_tests {
         buf
     }
 
+    /// Overwrite the header's num_reading field (last u32 of the header) in a built block.
+    fn set_num_reading(buf: &mut [u8], num: u32) {
+        let at = std::mem::size_of::<HwiHeader>() - 4;
+        buf[at..at + 4].copy_from_slice(&num.to_le_bytes());
+    }
+    /// Overwrite the header's offset_reading field.
+    fn set_offset_reading(buf: &mut [u8], off: u32) {
+        let at = std::mem::size_of::<HwiHeader>() - 12; // offset_reading, size_reading_elem, num_reading
+        buf[at..at + 4].copy_from_slice(&off.to_le_bytes());
+    }
+    /// Overwrite the header's size_reading_elem field.
+    fn set_size_reading_elem(buf: &mut [u8], size: u32) {
+        let at = std::mem::size_of::<HwiHeader>() - 8;
+        buf[at..at + 4].copy_from_slice(&size.to_le_bytes());
+    }
+
     #[test]
     fn parses_cpu_temp_prefers_tctl_excludes_gpu() {
         let buf = block(&[
@@ -402,7 +444,7 @@ mod hwinfo_tests {
             (1, "CPU (Tctl/Tdie)", 55.0),    // preferred (tctl)
             (3, "CPU Fan", 1200.0),          // not a temp (type 3)
         ]);
-        let t = unsafe { parse_hwinfo(buf.as_ptr()) }.expect("CPU temp parsed");
+        let t = unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.expect("CPU temp parsed");
         assert_eq!(t.temp_c, 55.0);
         assert_eq!(t.source, "HWiNFO");
         assert!(t.label.contains("Tctl"));
@@ -412,13 +454,13 @@ mod hwinfo_tests {
     fn rejects_wrong_signature() {
         let mut buf = block(&[(1, "CPU (Tctl/Tdie)", 55.0)]);
         buf[0] = b'X'; // corrupt the signature
-        assert!(unsafe { parse_hwinfo(buf.as_ptr()) }.is_none());
+        assert!(unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.is_none());
     }
 
     #[test]
     fn none_when_no_cpu_temp_present() {
         let buf = block(&[(1, "GPU Temperature", 70.0), (1, "Motherboard", 35.0)]);
-        assert!(unsafe { parse_hwinfo(buf.as_ptr()) }.is_none());
+        assert!(unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.is_none());
     }
 
     #[test]
@@ -429,11 +471,50 @@ mod hwinfo_tests {
             (3, "Fan #2", 900.0),
             (3, "Fan #3", 0.0), // a stopped fan is still reported honestly (0 RPM)
         ]);
-        let fans = unsafe { parse_hwinfo_fans(buf.as_ptr()) };
+        let fans = unsafe { parse_hwinfo_fans(buf.as_ptr(), buf.len()) };
         assert_eq!(fans.len(), 3);
         assert_eq!(fans[0].label, "CPU Fan");
         assert_eq!(fans[0].rpm, 1200);
         assert_eq!(fans[0].source, "HWiNFO");
         assert!(fans.iter().all(|f| !f.label.contains("Tctl")));
+    }
+
+    // ── Untrusted-input bounds guards (the OOB-read DoS a hostile HWiNFO_SENS_SM2 could trigger) ──
+
+    #[test]
+    fn rejects_num_reading_larger_than_mapped_view() {
+        // Header claims 100 readings but the mapped block only holds 1 → the old code read 99
+        // elements past the end of the section (access violation / info leak). Must fail soft.
+        let mut buf = block(&[(1, "CPU (Tctl/Tdie)", 55.0)]);
+        set_num_reading(&mut buf, 100);
+        assert!(unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.is_none());
+        assert!(unsafe { parse_hwinfo_fans(buf.as_ptr(), buf.len()) }.is_empty());
+    }
+
+    #[test]
+    fn rejects_offset_reading_past_mapped_view() {
+        // A crafted offset that points beyond the mapping → no element is in-bounds.
+        let mut buf = block(&[(1, "CPU (Tctl/Tdie)", 55.0)]);
+        let past_end = buf.len() as u32 + 4096;
+        set_offset_reading(&mut buf, past_end);
+        assert!(unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.is_none());
+    }
+
+    #[test]
+    fn rejects_len_smaller_than_header() {
+        // A truncated section (e.g. a hostile 8-byte mapping) can't even hold the header.
+        let buf = block(&[(1, "CPU (Tctl/Tdie)", 55.0)]);
+        assert!(unsafe { parse_hwinfo(buf.as_ptr(), 8) }.is_none());
+    }
+
+    #[test]
+    fn rejects_oversized_stride_past_mapped_view() {
+        // A huge size_reading_elem passes the "at least our layout" floor but makes even one element
+        // read past the mapping. off + num*size_elem > len must reject it (overflow-safe).
+        let mut buf = block(&[(1, "CPU (Tctl/Tdie)", 55.0)]);
+        set_num_reading(&mut buf, 10);
+        set_size_reading_elem(&mut buf, 1_000_000); // 10 * 1_000_000 ≫ buf.len()
+        assert!(unsafe { parse_hwinfo(buf.as_ptr(), buf.len()) }.is_none());
+        assert!(unsafe { parse_hwinfo_fans(buf.as_ptr(), buf.len()) }.is_empty());
     }
 }

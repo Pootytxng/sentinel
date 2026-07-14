@@ -724,7 +724,7 @@ pub(crate) fn parse_cpu_arch(brand: &str) -> Option<CpuArchInfo> {
                     '1' => "Zen",
                     '2' => "Zen+",
                     '3' => "Zen 2",
-                    '4' => "Zen 3 (mobile)",
+                    '4' => "Zen 2 (mobile)", // 4000-series mobile (Renoir) is Zen 2, not Zen 3
                     '5' => "Zen 3",
                     '6' => "Zen 3+ (mobile)",
                     '7' => "Zen 4",
@@ -1712,10 +1712,42 @@ pub(crate) fn collect_hardware() -> HardwareInfo {
     // single scan and then all clone the result. (A hot-plugged drive/monitor won't appear until
     // the app restarts — an acceptable trade for the startup-time win; live RAM/temps come from
     // the monitoring poller, not this snapshot.)
+    //
+    // BUT a few fields legitimately change within a session AND are shown on the hardware panel
+    // as if current — RAM-in-use and free disk space (HardwareGrid.tsx). Serving those frozen at
+    // startup misreports them all session (e.g. the user frees 50 GB and the panel still shows the
+    // old figure). So overwrite ONLY those cheap, purely-local reads on each call; everything else
+    // (the WMI identity sweep, network state) stays the startup snapshot.
     static CACHE: std::sync::OnceLock<HardwareInfo> = std::sync::OnceLock::new();
-    CACHE
+    let mut hw = CACHE
         .get_or_init(|| on_wmi_thread(collect_hardware_inner))
-        .clone()
+        .clone();
+    refresh_live_fields(&mut hw);
+    hw
+}
+
+/// Re-read the handful of HardwareInfo fields that change during a session and are presented as
+/// current on the hardware panel: RAM-in-use and per-disk free space. Both come from LOCAL syscalls
+/// (`System::refresh_memory` / `Disks` — no WMI, no PowerShell, no thread spawn), so refreshing per
+/// call costs microseconds and never re-triggers the startup WMI contention `collect_hardware`'s
+/// cache exists to eliminate. Network connection state deliberately stays cached — refreshing it
+/// means re-running the WMI+netsh adapter sweep (the exact cost the cache avoids); a mid-session
+/// cable pull is a restart-to-refresh edge, consistent with the static-inventory contract. Only
+/// known (already-enumerated) mount points are refreshed — a newly-mounted disk still awaits restart.
+fn refresh_live_fields(hw: &mut HardwareInfo) {
+    let mut sys = System::new();
+    sys.refresh_memory();
+    hw.ram_used_bytes = sys.used_memory();
+
+    let fresh = Disks::new_with_refreshed_list();
+    for disk in hw.disks.iter_mut() {
+        if let Some(d) = fresh
+            .iter()
+            .find(|d| d.mount_point().to_string_lossy() == disk.mount_point)
+        {
+            disk.available_bytes = d.available_space();
+        }
+    }
 }
 
 fn collect_hardware_inner() -> HardwareInfo {
@@ -1802,6 +1834,52 @@ fn collect_hardware_inner() -> HardwareInfo {
         network_pills,
         game_storage: detect_game_storage(),
         monitors: detect_monitors(),
+    }
+}
+
+#[cfg(test)]
+mod live_refresh_tests {
+    use super::{refresh_live_fields, DiskInfo, Disks, HardwareInfo};
+
+    // bug→guard (hardware.rs:1715): the process-lifetime cache froze RAM-in-use / free-disk at
+    // startup, yet HardwareGrid.tsx renders them as current. refresh_live_fields must re-read them
+    // on every collect_hardware() call — proven here by seeding an impossible sentinel and asserting
+    // it is overwritten by a fresh local read.
+    #[test]
+    fn refresh_live_fields_re_reads_ram_not_a_frozen_snapshot() {
+        let mut hw = HardwareInfo {
+            ram_used_bytes: 999, // impossible: a live system never uses under 1 KB
+            ..HardwareInfo::default()
+        };
+        refresh_live_fields(&mut hw);
+        assert_ne!(
+            hw.ram_used_bytes, 999,
+            "RAM-in-use must be re-read on each collect_hardware, not served frozen"
+        );
+        assert!(hw.ram_used_bytes > 0, "live memory read should be non-zero");
+    }
+
+    #[test]
+    fn refresh_live_fields_re_reads_free_disk_space() {
+        // Seed a KNOWN mount point (a real one, so refresh actually touches it) with a sentinel.
+        let fresh = Disks::new_with_refreshed_list();
+        let Some(real) = fresh.iter().next() else {
+            return; // no disks visible in this env — nothing to prove
+        };
+        let mut hw = HardwareInfo {
+            disks: vec![DiskInfo {
+                mount_point: real.mount_point().to_string_lossy().to_string(),
+                total_bytes: 0,
+                available_bytes: 999, // impossible free space for a mounted volume
+                file_system: String::new(),
+            }],
+            ..HardwareInfo::default()
+        };
+        refresh_live_fields(&mut hw);
+        assert_ne!(
+            hw.disks[0].available_bytes, 999,
+            "free disk space must be re-read live, not served frozen"
+        );
     }
 }
 
@@ -2751,11 +2829,11 @@ mod parser_tests {
 
     #[test]
     fn amd_ryzen_mobile_arch_labels() {
-        // FINDING: the parser keys arch off the FIRST model digit alone, so mobile
-        // labels like "Zen 3 (mobile)" come from a leading '4' / '6' / '8' — it does
-        // NOT inspect a U/H suffix. e.g. a "4800H" reports "Zen 3 (mobile)".
+        // The parser keys arch off the FIRST model digit alone (it does NOT inspect a U/H
+        // suffix), so mobile labels come from a leading '4' / '6' / '8'. 4000-series mobile
+        // (Renoir, e.g. 4800H) is Zen 2 — NOT Zen 3; keying '4' to Zen 3 was a bug.
         let m = parse_cpu_arch("AMD Ryzen 7 4800H with Radeon Graphics").unwrap();
-        assert_eq!(m.architecture, "Zen 3 (mobile)"); // '4'
+        assert_eq!(m.architecture, "Zen 2 (mobile)"); // '4'
         let m8 = parse_cpu_arch("AMD Ryzen 7 8840U with Radeon Graphics").unwrap();
         assert_eq!(m8.architecture, "Zen 4 (mobile)"); // '8'
     }

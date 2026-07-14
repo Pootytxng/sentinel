@@ -450,7 +450,17 @@ const DEBLOAT_TASKS: { id: string; label: string; what: string }[] = [
 
 // Self-contained: invokes the gated `disable_known_bloat_task` command directly; the applied change
 // shows in the Trust Ledger (History) where it can be rolled back (re-enables the task).
-function DebloatTasks({ onWhatsThis }: { onWhatsThis: (id: string) => void }) {
+function DebloatTasks({
+  onWhatsThis,
+  activeChangeFor,
+}: {
+  onWhatsThis: (id: string) => void;
+  // Derive the "Disabled" state from the Trust Ledger, not just this render's local state: an applied
+  // disable lands under rec_id `bloat-task:<id>`, so a persisted (still-active, not rolled-back) change
+  // means the task stays off across remount/nav. Local `state` only carries THIS session's fresh click
+  // + any error text; the ledger is the durable truth (mirrors the toggle-row rows' activeChangeFor use).
+  activeChangeFor: (recId: string) => AppliedChange | undefined;
+}) {
   const [busy, setBusy] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, "done" | string>>({});
   const disable = async (id: string) => {
@@ -478,7 +488,9 @@ function DebloatTasks({ onWhatsThis }: { onWhatsThis: (id: string) => void }) {
       <ul className="fix-list">
         {DEBLOAT_TASKS.map((t) => {
           const st = state[t.id];
-          const done = st === "done";
+          // Persisted (ledger) OR just-clicked this session. The ledger read survives remount/nav —
+          // the row no longer reverts to "Disable" after leaving and returning while the task stays off.
+          const done = !!activeChangeFor(`bloat-task:${t.id}`) || st === "done";
           const err = st && st !== "done" ? st : null;
           return (
             <li className="fix-row fix-row-advisory" key={t.id}>
@@ -970,8 +982,14 @@ export default function Fix({
       ? history.filter((c) => c.on_this_rig !== false)
       : history;
 
-  const rowBusy = (rec: Rec) =>
-    busyId !== null && (busyId === rec.id || busyId === activeChangeFor(rec.id)?.id);
+  // ROLLBACK-CORRECTNESS: `busyId` is a single global scalar — the apply/rollback execution model is
+  // serial (one in-flight op at a time). So while ANY op is in flight, disable EVERY row's switch, not
+  // just the one whose id matches. Disabling only the matching row let a user start a SECOND apply/
+  // rollback on a different rec while the first invoke was still pending (the app is interactive again
+  // the moment UAC closes) — a second apply could snapshot a prior that already reflects the first
+  // apply's mutation, corrupting the rollback chain. This matches the Action Drawer's own guard
+  // (`busy={busyId !== null}`) and the row `busy` prop only disables (no misleading per-row spinner).
+  const rowBusy = (_rec: Rec) => busyId !== null;
   const living = livingOn();
   const dashV2 = dashOn();
   // Action Drawer state: the rec/change to present + how its primary action resolves (apply vs roll back).
@@ -1220,7 +1238,7 @@ export default function Fix({
               <ActiveChangeCard
                 key={c.id}
                 change={c}
-                busy={busyId !== null && busyId === c.id}
+                busy={busyId !== null}
                 onRollback={() => onRollback(c)}
                 onWhatsThis={onOpenLibrary}
                 onOpenDrawer={
@@ -1459,7 +1477,7 @@ export default function Fix({
       )}
 
       {/* Telemetry-task disable (Phase B, ARMED) — curated CEIP tasks; reversible via the Trust Ledger. */}
-      <DebloatTasks onWhatsThis={onOpenLibrary} />
+      <DebloatTasks onWhatsThis={onOpenLibrary} activeChangeFor={activeChangeFor} />
       <PreloadApps />
       </>
       )}

@@ -7,7 +7,7 @@
 // only read hardware + write ONE local fingerprint JSON. No Windows mutation, no elevation, nothing gated.
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { cachedProbe, peekProbe } from "../data/probe-cache";
+import { cachedProbe, peekProbe, putProbe } from "../data/probe-cache";
 
 /** Mirrors the Rust `HardwareChangeReport` shape (hwchange.rs). */
 export type HardwareChangeReport = {
@@ -87,7 +87,12 @@ export function useHardwareChange(): UseHardwareChangeBinding {
     try {
       await invoke("acknowledge_hardware_changes");
       // Optimistically clear locally — the backend re-baselined, so the next detect agrees.
-      setReport((p) => (p ? { ...p, changed: false, changes: [] } : p));
+      const cleared: HardwareChangeReport = { changed: false, changes: [], baseline_recorded: true };
+      setReport((p) => (p ? { ...p, ...cleared } : p));
+      // ...AND update the SHARED probe cache so a remount within the 60s TTL doesn't re-seed the just-
+      // dismissed advisory from a stale `changed:true` entry (Check unmounts on every tab switch, and
+      // peekProbe/cachedProbe would otherwise serve the pre-acknowledge value until the TTL lapses).
+      putProbe<HardwareChangeReport>(PROBE_KEY, cleared);
     } catch {
       /* leave the card up; the user can retry or just re-check */
     } finally {

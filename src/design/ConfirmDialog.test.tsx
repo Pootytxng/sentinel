@@ -65,6 +65,26 @@ describe("ConfirmDialog", () => {
     await waitFor(() => expect(screen.getByTestId("result").textContent).toBe("false"));
   });
 
+  // bug→guard (SetupTour.tsx:92): the modal must TRAP Escape/Enter so they never leak to a background
+  // window keydown listener. Before this, a host that also listened on window for Escape (the SetupTour,
+  // whose Escape calls finish()) fired alongside the dialog — dismissing the confirm also tore down the
+  // whole tour. Capture-phase + stopImmediatePropagation makes the dialog the sole responder while open.
+  it("traps Escape from background window handlers while open (no leak to a host's window listener)", async () => {
+    let bgHits = 0;
+    const bg = (e: KeyboardEvent) => {
+      if (e.key === "Escape") bgHits++;
+    };
+    window.addEventListener("keydown", bg); // a host handler, exactly like SetupTour's finish()-on-Escape
+    try {
+      open();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.getByTestId("result").textContent).toBe("false"));
+      expect(bgHits).toBe(0); // the confirm consumed Escape; the host never saw it
+    } finally {
+      window.removeEventListener("keydown", bg);
+    }
+  });
+
   it("acknowledge mode shows a single dismiss button (no cancel) for error notices", () => {
     function NoticeHarness() {
       const confirm = useConfirm();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { signalRing, postureLine, liveStrip } from "./command-center-data";
+import { postureLine, liveStrip } from "./command-center-data";
 import type { GameReadiness, Priorities, ReadinessCheck, SessionSummary } from "../types";
 
 const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
@@ -32,42 +32,6 @@ const priorities = (limiters: number): Priorities => ({
   not_worth_touching: [],
   session_hint: null,
   upgrade_path: null,
-});
-
-describe("signalRing (honest readiness ratio — never a score)", () => {
-  it("shimmers (unknown) before readiness loads — no faked value", () => {
-    const r = signalRing(null);
-    expect(r.known).toBe(false);
-    expect(r.ratio).toBe(0);
-  });
-
-  it("is 'Dialed' at full ratio when every check is ideal", () => {
-    const r = signalRing(readiness([check("ready", "SSD"), check("ready", "Refresh")]));
-    expect(r.dialed).toBe(true);
-    expect(r.ratio).toBe(1);
-    expect(r.label).toBe("Dialed");
-    expect(r.toFix).toBe(0);
-  });
-
-  it("reports the real ideal/total and 'N to fix' when some need attention", () => {
-    const r = signalRing(
-      readiness([check("ready", "SSD"), check("attention", "Refresh"), check("unknown", "VRR")]),
-    );
-    expect(r.total).toBe(3);
-    expect(r.ideal).toBe(1); // 3 - 1 attention - 1 unknown
-    expect(r.toFix).toBe(2);
-    expect(r.ratio).toBeCloseTo(1 / 3);
-    expect(r.label).toBe("Ready");
-    expect(r.sub).toBe("2 to fix");
-  });
-
-  it("counts advisory + dismissed as resolved (mirrors the backend / CommandHero)", () => {
-    const r = signalRing(
-      readiness([check("ready", "SSD"), check("advisory", "VRR"), check("attention", "HDR")], ["HDR"]),
-    );
-    expect(r.dialed).toBe(true); // advisory not counted, HDR dismissed
-    expect(r.toFix).toBe(0);
-  });
 });
 
 describe("postureLine (real headline + priorities-driven sentence)", () => {

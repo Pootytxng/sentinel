@@ -14,11 +14,13 @@ export type ProState = {
   isPro: boolean; // a valid Pro license is present
 };
 
-/** Pure: derive Pro state from a license status. `armed` is false while the backend reports
- *  "licensing not active" (the dark default), so gating stays INERT — everything is free. */
+/** Pure: derive Pro state from a license status. Reads the backend's explicit `armed` flag directly
+ *  — NOT a string-match on `reason` (which would couple the dark-vs-live gate to human-facing copy,
+ *  so a reworded reason could silently arm Pro for everyone). `armed` is false in the dark default,
+ *  so gating stays INERT — everything is free. */
 export function proStateFrom(status: LicenseStatus | null): ProState {
   if (!status) return { ready: false, armed: false, isPro: false };
-  const armed = status.reason !== "licensing not active";
+  const armed = status.armed === true;
   const isPro = status.valid && status.tier === "pro";
   return { ready: true, armed, isPro };
 }

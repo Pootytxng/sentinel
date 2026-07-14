@@ -131,6 +131,23 @@ describe("autopsyScan", () => {
     expect(r.hits.map((h) => h.id)).toContain("startup-cleanup-guide");
   });
 
+  // bug→guard (knowledge-autopsy.ts): a guide with BOTH an alias that overlaps a verdict tweak AND
+  // a separate standalone alias must keep its standalone occurrence — the old row-drop discarded the
+  // whole guide the moment it attached anywhere, silently undercounting a real mention.
+  it("keeps a guide's standalone occurrence even when another of its aliases attaches to a verdict", () => {
+    const fx2: KnowledgeEntry[] = [
+      tweak("xmp-expo", "XMP", ["xmp"], "real"),
+      guide("xmp-guide", "Turn on XMP", ["enable xmp", "memory profile"]),
+    ];
+    const r = autopsyScan("please enable xmp now, then set the memory profile too", fx2);
+    // The "enable xmp" mention overlaps the verdict tweak → attaches as a how-to chip…
+    expect(r.hits.find((h) => h.id === "xmp-expo")?.howTos).toContain("xmp-guide");
+    // …and the separate "memory profile" mention still stands as its own guide row (1 occurrence).
+    const guideHit = r.hits.find((h) => h.id === "xmp-guide");
+    expect(guideHit).toBeTruthy();
+    expect(guideHit?.occurrences).toBe(1);
+  });
+
   // Legit aim advice must NOT grade as placebo. The "Registry aim tweaks" placebo entry uses
   // scam-specific aliases only — the generic "better aim"/"improve aim" were dropped for exactly
   // this reason. Runs against the REAL dataset (default KNOWLEDGE), not a fixture.

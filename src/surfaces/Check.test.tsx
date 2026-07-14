@@ -11,6 +11,11 @@ const leftoversMock = vi.hoisted(() => ({
   nics: [] as { name: string; driver_date: string; driver_age_days: number | null; vendor: string }[],
 }));
 
+// Settable Drift Watch payload — a check that was good and has since regressed. Default: none.
+const readinessMock = vi.hoisted(() => ({
+  drifts: [] as { id: string; label: string; detail: string; noticed_at: string }[],
+}));
+
 // Settable priorities payload (R3 Lane B: upgrade_path arrives on this existing command).
 const prioritiesMock = vi.hoisted(() => ({
   payload: {
@@ -36,7 +41,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         advisory_count: 0,
         advisory: "",
         dismissed_ids: [],
-        drifts: [],
+        drifts: readinessMock.drifts,
       });
     if (cmd === "get_priorities") return Promise.resolve(prioritiesMock.payload);
     // useScan/refresh now rank via priorities_from (pure) instead of re-running get_priorities.
@@ -54,6 +59,7 @@ import type { SessionSummary } from "../types";
 
 afterEach(() => {
   cleanup();
+  readinessMock.drifts = [];
   prioritiesMock.payload = {
     limiters: [],
     already_fine: [],
@@ -111,6 +117,32 @@ describe("Check", () => {
     // Expanding reveals the full checklist — progressive disclosure, nothing deleted.
     fireEvent.click(toggle);
     expect(screen.getByText("SSD check")).toBeInTheDocument();
+  });
+
+  it("drift banner names WHAT + WHEN but never a WHO — no 'outside Compy' (honesty guard, drift.rs:61)", async () => {
+    // A power-profile regression can be self-inflicted (rolling back the Ultimate power plan in the
+    // Trust Ledger drops this same check to Attention). Drift has no vantage point to tell that from a
+    // Windows Update revert — so claiming a WHO ("changed outside Compy") is sometimes a flat lie.
+    readinessMock.drifts = [
+      {
+        id: "power-profile",
+        label: "Power profile",
+        detail: "Active plan 'Balanced'.",
+        noticed_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    // WHAT drifted (the label) + its detail render...
+    expect(await screen.findByText("Power profile")).toBeInTheDocument();
+    expect(screen.getByText("Active plan 'Balanced'.")).toBeInTheDocument();
+    // ...WHEN we noticed it (relative, honest)...
+    expect(screen.getByText(/changed since it was last good · noticed/)).toBeInTheDocument();
+    // ...but the banner NEVER attributes a cause. "outside Compy" is the retired false claim.
+    expect(screen.queryByText(/outside Compy/i)).not.toBeInTheDocument();
   });
 
   it("shows the tuning nudge ONLY when an AMD rig has run sustained-warm, linking to the guide", async () => {

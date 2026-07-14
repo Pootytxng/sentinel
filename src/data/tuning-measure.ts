@@ -149,8 +149,11 @@ function round1(x: number): number {
 }
 
 function fmtPlaytime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.round((secs % 3600) / 60);
+  // Round to whole minutes FIRST, then split — rounding the minute remainder on its own can carry to
+  // 60 and print "3h 60m" (e.g. 3h 59m 45s → round(59.75)=60). Rounding the total avoids the carry.
+  const totalMin = Math.round(secs / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
   if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
   return `${m}m`;
 }
@@ -209,6 +212,10 @@ export function measureTuning(
   const tempDropC =
     baselinePeakTempC != null && afterPeakTempC != null ? baselinePeakTempC - afterPeakTempC : null;
   const tempReal = tempDropC != null && tempDropC >= TUNING_REAL_TEMP_DROP_C;
+  // The mirror of tempReal: the peak came in HOTTER by at least the real threshold. A tune whose whole
+  // point was to run cooler landing here is a measured miss — the verdict must say so, never bury it
+  // under "no measurable change" while the stat row shows the jump (honest-measurement law).
+  const tempRose = tempDropC != null && tempDropC <= -TUNING_REAL_TEMP_DROP_C;
 
   const windowMet =
     sessionsSince >= TUNING_MIN_SESSIONS && secsSince >= TUNING_MIN_SECS && !crashReported;
@@ -217,11 +224,13 @@ export function measureTuning(
     secsSince,
   )}`;
   const tempLine =
-    tempDropC != null
-      ? tempReal
+    tempDropC == null
+      ? "Temps will show once a monitored session reports a peak."
+      : tempReal
         ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (−${tempDropC}°C) — a real drop.`
-        : `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C — within sensor noise so far.`
-      : "Temps will show once a monitored session reports a peak.";
+        : tempRose
+          ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (+${-tempDropC}°C) — hotter, not cooler.`
+          : `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C — within sensor noise so far.`;
 
   // Precedence (honest): a reported crash is real regardless of anything else; then a confound voids
   // attribution; then a measured regression; then an improvement (gated on the window); else a null.
@@ -271,6 +280,14 @@ export function measureTuning(
       headline = "Too early to call — keep playing";
       detail = `${tempLine} Looking good, but stability shows over time: ${progress} so far (needs ≥${TUNING_MIN_SESSIONS} sessions and ~3h with no crash).`;
     }
+  } else if (tempRose) {
+    // Frames held (no regression above), but the peak measured HOTTER — the opposite of what a cooling
+    // tune is for. Lead with that truth; keep the neutral no-change verdict because the *stability*
+    // axis (frames/crashes) didn't move, and peak-to-peak across sessions carries load/ambient swing
+    // so this is a flag to watch, not proof the tune caused it (never over-claim causation either).
+    verdict = "no-change";
+    headline = "Frames held — but it's running warmer";
+    detail = `${tempLine} Your 1% lows stayed inside the ±${TUNING_NOISE_FLOOR_PCT}% floor, but the hottest peak came in higher this window. Peak-to-peak swings with load and ambient, so watch it across another session or two rather than reading it as the tune backfiring — ${progress} so far.`;
   } else {
     verdict = "no-change";
     headline = "No measurable change";

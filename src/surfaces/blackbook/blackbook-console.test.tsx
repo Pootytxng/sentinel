@@ -143,6 +143,17 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
     expect(sect.textContent).toMatch(/since\s/);
   });
 
+  // bug→guard (autopsy LOW, 2026-07-14): a 59m50s session (3590s) used to render the impossible
+  // "60m" — the minute-part rounded to 60 while the hour-part stayed 0. Rounding to whole minutes
+  // FIRST carries the overflow into the hour, so it reads "1h 0m" and no "60m" can ever appear.
+  it("a sub-hour session that rounds to 60 minutes reads '1h 0m', never '60m'", () => {
+    useReduced();
+    const { container } = mountConsole([session({ durationSecs: 3590 })]);
+    const text = container.querySelector(".bc-tape")!.textContent!;
+    expect(text).toContain("for 1h 0m");
+    expect(text).not.toContain("60m");
+  });
+
   it("same-game vs-previous delta renders only when present, never '(s)'", () => {
     useReduced();
     const { container } = mountConsole([session({ avgFpsDelta: 30 }), session({ avgFpsDelta: null })]);

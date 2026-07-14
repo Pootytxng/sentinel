@@ -205,6 +205,29 @@ describe("optimizeVerdict — pure, measured, branch-proper copy", () => {
     expect(v.headline).toBe("1 safe fix is ready to apply.");
     expect(safeFixesReady(mixed, isAppliable, new Set(["hags-enable"]))).toBe(1);
   });
+
+  // bug→guard (optimize-v2-data.ts): when ready fixes AND drifted changes coexist, the body shows
+  // BOTH — the ready rows and the "turned off outside Compy" section — so the verdict must name the
+  // drift too (V2-9 (g): the verdict describes the state the body actually shows). Before this the
+  // drifted rows rendered with zero mention in the verdict when a ready fix led.
+  it("ready fix leading + drifted rows present → sub names the drift too, branch-proper", () => {
+    const mixed = [
+      ...recsFixture, // 1 ready (game-mode)
+      rec({ id: "hags-enable", currently_applied: false }),
+      rec({ id: "sysmain-disable", currently_applied: false }),
+    ];
+    // one drift
+    const v1 = optimizeVerdict(mixed, isAppliable, 0, [{ rec_id: "hags-enable" }]);
+    expect(v1.headline).toBe("1 safe fix is ready to apply.");
+    expect(v1.sub).toContain("1 change you applied was turned off outside Compy");
+    // two drifts → plural, still branch-proper (never "(s)")
+    const v2 = optimizeVerdict(mixed, isAppliable, 0, [
+      { rec_id: "hags-enable" },
+      { rec_id: "sysmain-disable" },
+    ]);
+    expect(v2.sub).toContain("2 changes you applied were turned off outside Compy");
+    for (const x of [v1, v2]) expect(`${x.headline} ${x.sub ?? ""}`).not.toContain("(s)");
+  });
 });
 
 describe("OptimizeV2 — RoomShell composition", () => {

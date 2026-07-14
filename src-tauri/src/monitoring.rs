@@ -102,6 +102,18 @@ impl CpuPerfCounter {
     }
 }
 
+impl Drop for CpuPerfCounter {
+    // Closing the query frees its counter too. Today the sole owner lives on a poller thread that
+    // loops for the process's lifetime, so this rarely fires — but making ownership explicit means a
+    // future short-lived reader (or a poller that learns to exit) can't leak the PDH handle.
+    fn drop(&mut self) {
+        use windows::Win32::System::Performance::PdhCloseQuery;
+        unsafe {
+            let _ = PdhCloseQuery(self.query);
+        }
+    }
+}
+
 // ─── Demand-gated pollers ────────────────────────────────────────────────
 //
 // The sensor pollers do their (relatively costly) refresh only while a consumer
@@ -651,6 +663,80 @@ pub(crate) fn get_gpu_sensors() -> Vec<GpuSensorSnapshot> {
     out
 }
 
+/// Reduce GPU sensor snapshots to the `(max graphics clock MHz, max temperature °C)` pair the
+/// benchmark trial feeds into its throttle/thermal validity gates. Hotspot (junction) temp is
+/// preferred over edge temp when present (AMD exposes it; it's the throttle-relevant sensor).
+/// Returns `(0.0, 0.0)` when nothing is readable — the verdict engine treats a zero as "no
+/// signal" and skips that gate rather than inventing a confound (see `benchmark_verdict::Trial`).
+fn reduce_gpu_validity(snaps: &[GpuSensorSnapshot]) -> (f64, f64) {
+    let clock = snaps.iter().filter_map(|s| s.graphics_clock_mhz).max().unwrap_or(0) as f64;
+    let temp = snaps
+        .iter()
+        .filter_map(|s| s.hotspot_temperature_c.or(s.temperature_c))
+        .max()
+        .unwrap_or(0) as f64;
+    (clock, temp)
+}
+
+/// Live GPU throttle/thermal validity sample for the benchmark trial: `(graphics clock MHz,
+/// temperature °C)`, `(0.0, 0.0)` when unreadable. Cheap — reads the cached sensor snapshots.
+pub(crate) fn sample_gpu_validity() -> (f64, f64) {
+    reduce_gpu_validity(&get_gpu_sensors())
+}
+
+#[cfg(test)]
+mod gpu_validity_tests {
+    use super::*;
+
+    fn snap(clock: Option<u32>, temp: Option<u32>, hotspot: Option<u32>) -> GpuSensorSnapshot {
+        GpuSensorSnapshot {
+            vendor: "AMD".into(),
+            index: 0,
+            name: "test".into(),
+            temperature_c: temp,
+            hotspot_temperature_c: hotspot,
+            utilization_gpu_pct: None,
+            utilization_memory_pct: None,
+            vram_used_bytes: None,
+            vram_total_bytes: None,
+            graphics_clock_mhz: clock,
+            memory_clock_mhz: None,
+            power_draw_w: None,
+            fan_speed_pct: None,
+            fan_speed_rpm: None,
+        }
+    }
+
+    #[test]
+    fn no_snapshots_is_no_signal() {
+        // Empty / unreadable → (0,0), which the verdict engine reads as "skip the gate", never a
+        // fabricated confound. This is the exact production state the finding was about.
+        assert_eq!(reduce_gpu_validity(&[]), (0.0, 0.0));
+    }
+
+    #[test]
+    fn takes_max_clock_and_prefers_hotspot_over_edge() {
+        let snaps = vec![
+            snap(Some(2400), Some(60), Some(75)), // hotspot present → 75 wins over edge 60
+            snap(Some(2800), Some(58), None),     // no hotspot → falls back to edge 58
+        ];
+        // Max clock across adapters, max temp preferring hotspot where present.
+        assert_eq!(reduce_gpu_validity(&snaps), (2800.0, 75.0));
+    }
+
+    #[test]
+    fn edge_temp_used_when_no_hotspot() {
+        // NVIDIA path: hotspot is always None, so edge temp is the signal.
+        assert_eq!(reduce_gpu_validity(&[snap(Some(1900), Some(70), None)]), (1900.0, 70.0));
+    }
+
+    #[test]
+    fn missing_clock_or_temp_stays_zero() {
+        // A snapshot with neither clock nor any temp contributes no signal on that axis.
+        assert_eq!(reduce_gpu_validity(&[snap(None, None, None)]), (0.0, 0.0));
+    }
+}
+
 // ─── FPS / frametime control (elevated helper orchestration) ─────────────
 //
 // The main app runs unelevated; the ETW capture helper must be elevated.
@@ -677,6 +763,15 @@ pub(crate) fn fps_alive_path() -> PathBuf {
 pub(crate) fn fps_active() -> &'static std::sync::atomic::AtomicBool {
     static A: OnceLock<std::sync::atomic::AtomicBool> = OnceLock::new();
     A.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
+}
+/// True while a spawned `--fps-capture` helper PROCESS is still alive. Distinct from `fps_active`
+/// (the "we want capture" intent flag): `stop_fps_capture` clears `fps_active` immediately, but the
+/// elevated helper only self-exits on its next poll once the heartbeat goes stale. Tracking real
+/// process liveness lets a quick stop→start wait for the old helper to die before spawning a new one,
+/// so two elevated helpers never write `fps.json` at once (a non-elevated parent can't kill either).
+fn helper_running() -> &'static std::sync::atomic::AtomicBool {
+    static R: OnceLock<std::sync::atomic::AtomicBool> = OnceLock::new();
+    R.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
 }
 pub(crate) fn fps_status_slot() -> &'static Mutex<String> {
     static S: OnceLock<Mutex<String>> = OnceLock::new();
@@ -727,6 +822,22 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     if fps_active().load(Ordering::Acquire) {
         return Ok(()); // already running
     }
+    // A quick stop→start can outrace the previous elevated helper's self-exit: `stop_fps_capture`
+    // clears the intent flag and drops the heartbeat, but the helper only notices on its next poll.
+    // If we re-touched `fps.alive` now, that stale helper would see a fresh heartbeat and keep
+    // running alongside the one we're about to spawn — two elevated helpers we can't kill, both
+    // writing fps.json. So first give the old helper a bounded window to observe the dropped
+    // heartbeat and exit. It clears `helper_running` from its wait thread; best-effort — if it's
+    // wedged we proceed after the cap rather than hang the command (no worse than the old behaviour).
+    if helper_running().load(Ordering::Acquire) {
+        let _ = std::fs::remove_file(fps_alive_path()); // ensure the heartbeat stays dropped while we wait
+        for _ in 0..50 {
+            if !helper_running().load(Ordering::Acquire) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
     let dir = fps_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create data dir: {e}"))?;
     // Drop any stale sample so the UI doesn't briefly show last session's data.
@@ -772,10 +883,12 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             .spawn()
         {
             Ok(mut child) => {
+                helper_running().store(true, Ordering::Release);
                 *lock_status() = "running".into();
                 // Reflect helper exit (self-exit on heartbeat stale, or crash).
                 std::thread::spawn(move || {
                     let _ = child.wait();
+                    helper_running().store(false, Ordering::Release);
                     fps_active().store(false, Ordering::Release);
                     *lock_status() = "stopped".into();
                 });
@@ -795,11 +908,16 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
         // console-subsystem app, so the default SW_NORMAL would pop a visible
         // console running the capture loop. The direct-spawn path above gets the
         // same effect via CREATE_NO_WINDOW; this is the runas equivalent.
+        // Optimistically mark a helper live: runas `.status()` blocks for the helper's whole
+        // lifetime, so we can't wait for a separate "spawned" signal. A declined UAC returns
+        // quickly and clears it again — a brief, harmless true window.
+        helper_running().store(true, Ordering::Release);
         std::thread::spawn(move || {
             let res = runas::Command::new(exe)
                 .args(&["--fps-capture", "--fps-out", &out, "--fps-alive", &alive])
                 .show(false)
                 .status();
+            helper_running().store(false, Ordering::Release);
             fps_active().store(false, Ordering::Release);
             // Distinguish a cancelled/failed elevation from a clean stop. The
             // runas crate ALWAYS returns Ok on Windows (even on UAC cancel it

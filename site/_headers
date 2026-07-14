@@ -22,3 +22,18 @@
 /eula
   Cache-Control: no-store
   Cloudflare-CDN-Cache-Control: no-store
+
+# Security headers, applied site-wide (a `/*` rule stacks with the per-path cache rules above —
+# different header names, no conflict). The waitlist form is the one place a visitor types data,
+# so clickjacking/UI-redress is the real threat: frame-ancestors 'none' + X-Frame-Options: DENY
+# forbid embedding the page in any iframe. nosniff stops MIME-confusion; the referrer policy trims
+# the leaked URL cross-origin. The CSP is scoped to what the site ACTUALLY loads — everything is
+# same-origin (library.css, assets/*, the *.html reads) EXCEPT that the page carries one inline
+# <script> and inline style= attributes, so script-src/style-src must allow 'unsafe-inline' or the
+# page breaks. script-src stays 'self' otherwise, so no third-party/injected external script can
+# load — preserving the zero-third-party invariant as a browser-enforced wall, not just a promise.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

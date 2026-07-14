@@ -51,10 +51,18 @@ function pickGpu(list: GpuLite[]): GpuLite | null {
 // Exported for MonitorBasic (P2 Basic tiles' last-session line) — same verdict/duration wording
 // everywhere, one source. Rendering here is unchanged.
 export function shortVerdict(s: SessionSummary): string {
-  const ratio = s.avg_fps > 0 ? s.low1_fps_est / s.avg_fps : 1;
-  if (ratio >= 0.75) return "Smooth";
-  if (ratio >= 0.55) return "Some dips";
-  return "Rough";
+  // Derive the headline from the SAME grade thresholds gradeLow1 uses so the colored 1%-low number and
+  // this word can never contradict (previously shortVerdict had its own 0.75/0.55 cuts vs gradeLow1's
+  // 0.7/0.5 — at ratio 0.72 the number rendered green "good" next to a "Some dips" headline). neutral
+  // (missing data → no color on the number) maps to the non-committal middle, so no contradiction exists.
+  switch (gradeLow1(s.low1_fps_est, s.avg_fps)) {
+    case "good":
+      return "Smooth";
+    case "bad":
+      return "Rough";
+    default:
+      return "Some dips"; // "ok" and "neutral"
+  }
 }
 
 export function fmtDur(sec: number): string {

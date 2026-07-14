@@ -152,6 +152,12 @@ impl Drop for RollbackGuard {
                 }),
             }
         }
+        // Clear `running` only now — AFTER the rollback has resolved. The armed-guard exit paths
+        // deliberately leave `running` true so the backend's `if s.running { return; }` start guard
+        // rejects a new trial (which would replace this shared TrialState mid-rollback and let this
+        // drop clobber the new trial's fields) until the machine is fully unwound. It also keeps the
+        // frontend polling long enough to observe a rollback FAILURE it must surface.
+        set(|s| s.running = false);
     }
 }
 
@@ -229,7 +235,7 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
             let treatment = collect_windows(PER_SIDE, "Treatment");
             if treatment.len() < PER_SIDE {
                 set(|s| {
-                    s.running = false;
+                    // `running` stays true until _guard's drop finishes the rollback (see RollbackGuard).
                     s.status = "No frames.".into();
                     s.error = Some("Couldn't collect frames with the change on.".into());
                 });
@@ -241,7 +247,7 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
             // Record a verified win to the scoreboard — only a Keep earns one (the firewall).
             let _ = crate::benchmark_scoreboard::record_result(&rec_id, &rec_title, &verdict);
             set(|s| {
-                s.running = false;
+                // `running` stays true until _guard's drop finishes the rollback (see RollbackGuard).
                 s.verdict = Some(verdict);
                 s.status = "Rolling the change back…".into();
             });
@@ -306,6 +312,9 @@ impl Drop for StackRollbackGuard {
                 s.status = "Rollback failed — see the Ledger.".into();
             });
         }
+        // Clear `running` only after the whole stack has unwound — see RollbackGuard::drop for why
+        // the armed-guard exit paths leave it true until here.
+        set(|s| s.running = false);
     }
 }
 
@@ -463,7 +472,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
             let treatment = collect_windows(PER_SIDE, "Treatment");
             if treatment.len() < PER_SIDE {
                 set(|s| {
-                    s.running = false;
+                    // `running` stays true until _guard's drop finishes the rollback (see StackRollbackGuard).
                     s.status = "No frames.".into();
                     s.error = Some("Couldn't collect frames with the stack on.".into());
                 });
@@ -475,7 +484,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
             //    Keep verdicts only — an aggregate isn't attributable to one rec).
             let verdict = Trial { baseline, treatment }.verdict();
             set(|s| {
-                s.running = false;
+                // `running` stays true until _guard's drop finishes the rollback (see StackRollbackGuard).
                 s.verdict = Some(verdict);
                 s.status = format!("Rolling back the {applied_n}-tweak stack…");
             });
@@ -494,7 +503,13 @@ fn collect_windows(n: usize, label: &str) -> Vec<MetricWindow> {
         }
         std::thread::sleep(WINDOW_INTERVAL);
         if let Some((_proc, ft)) = crate::monitoring::latest_frametimes() {
-            if let Some(w) = MetricWindow::from_frametimes(&ft, WindowCtx::default()) {
+            // Sample the GPU's live clock + temperature alongside the frametimes so the verdict
+            // engine's throttle/thermal validity gates actually engage (they no-op on a zero
+            // reading). `bg_load_flag`/`input_to_photon_ms` stay unset — no honest signal is wired
+            // for those yet, so they contribute nothing rather than a fabricated confound.
+            let (avg_clock_mhz, max_temp_c) = crate::monitoring::sample_gpu_validity();
+            let ctx = WindowCtx { avg_clock_mhz, max_temp_c, ..WindowCtx::default() };
+            if let Some(w) = MetricWindow::from_frametimes(&ft, ctx) {
                 out.push(w);
                 let got = out.len();
                 set(|s| {

@@ -154,6 +154,10 @@ export const ParticleCard: React.FC<{
     magnetismAnimationRef.current?.kill();
 
     particlesRef.current.forEach(particle => {
+      // Each clone carries two repeat:-1 (infinite) tweens (float + opacity pulse). Without killing
+      // them here the shrink below never wins and, worse, the detached node stays referenced by GSAP's
+      // global timeline forever — a per-hover leak. Kill them first, THEN run the shrink-and-remove.
+      gsap.killTweensOf(particle);
       gsap.to(particle, {
         scale: 0,
         opacity: 0,

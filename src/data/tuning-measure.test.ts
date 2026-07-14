@@ -139,6 +139,32 @@ describe("measureTuning", () => {
     expect(m.headline).toBe("No measurable change");
   });
 
+  it("RUNNING WARMER: frames held but the peak rose ≥3 °C — never buried under 'no measurable change'", () => {
+    // A cooling tune (undervolt) whose measured peak came in HOTTER. The old code fell to the
+    // no-change branch and told the user "temps are where they were" while the stat row showed the
+    // jump — the exact honest-measurement lie this module exists to prevent.
+    const sessions = [
+      sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 90 }), // 84 → 90 = +6 °C
+      sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 89 }),
+      sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 90 }),
+    ];
+    const m = measureTuning(baseline(), sessions)!;
+    expect(m.tempReal).toBe(false);
+    expect(m.tempDropC).toBe(-6); // 84 → worst post peak 90
+    expect(m.headline).toBe("Frames held — but it's running warmer");
+    expect(m.headline).not.toMatch(/no measurable change/i);
+    expect(m.detail).toMatch(/hotter, not cooler/i);
+    expect(m.detail).not.toMatch(/where they were|within sensor noise/i);
+  });
+
+  it("fmtPlaytime never carries the minute remainder to '60m' (rounds total minutes first)", () => {
+    // 3585 s = 59 m 45 s → the old `round((secs % 3600) / 60)` printed "60m"; rounding the total
+    // first carries it to "1h". Progress copy is where the user sees this.
+    const m = measureTuning(baseline(), [sess({ started_at: "2026-06-08T14:00:00Z", duration_secs: 3585 })])!;
+    expect(m.detail).toMatch(/\b1h\b/);
+    expect(m.detail).not.toMatch(/60m/);
+  });
+
   it("CONFOUNDED: a Compy fix landed mid-window → no attribution (but not when a crash is real)", () => {
     const confound = { verdict: "confounded", kind: "tuning", game: "game.exe" } as ComparisonResult;
     const m = measureTuning(baseline(), threeGoodSessions(), confound)!;

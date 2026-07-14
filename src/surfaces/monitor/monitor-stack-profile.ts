@@ -14,8 +14,11 @@ export const MAX_STACK_ROWS = 5;
 /** Max drawn points per row — a 10-hour session's ~37k per-second samples drawn raw are a
  *  solid smear, not a line (owner catch, 2026-07-11). Downsampling keeps REAL samples. */
 export const MAX_DRAW_POINTS = 160;
-/** Pin cap per stack row — v5 collapses it to ONE worst-dip pin (the plan's constant-kept,
- *  value-1 rule); the detail line still reports the TRUE dip count. */
+/** Pin cap per stack row — v5 deliberately shows ONE worst-dip pin (the detail line still reports
+ *  the TRUE dip count). This is a DOCUMENTED INVARIANT, not a tunable knob: the pin-selection loop
+ *  in `stackRowsFrom` keeps a single lowest-y pin by construction, so raising this number changes
+ *  nothing — supporting N pins would need real top-N logic (rejected: the plan collapsed to 1). A
+ *  test pins it at 1; if that ever needs to change, change the loop, not just the constant. */
 export const MAX_ROW_PINS = 1;
 /** Minimum samples a drag-zoom may narrow to — below this a selection is ignored. */
 export const MIN_ZOOM_SAMPLES = 8;

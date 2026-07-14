@@ -328,6 +328,28 @@ fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
     std::fs::rename(&tmp, path).map_err(|e| format!("swap: {e}"))
 }
 
+/// Prove the ledger is WRITABLE before mutating the machine (H1, write side).
+///
+/// The existing H1 guard loads the ledger before dispatch, so an unreadable/corrupt ledger blocks
+/// the change. But a *readable* ledger can still fail to *write* at receipt time (data dir went
+/// read-only, volume full, ACL change) — and if the mutation already ran, that orphans it: a real
+/// system change we could never record and therefore never roll back, exactly the "never mutate
+/// what can't be recorded" invariant inverted. `save_history` is atomic (temp-write + same-volume
+/// rename), so re-saving the CURRENT, unchanged ledger is a content-identical no-op that exercises
+/// the very write+rename path the post-mutation receipt will use. If it fails we refuse BEFORE any
+/// elevation, so nothing is changed. (Not a TOCTOU guarantee — the volume could still fill in the
+/// millisecond between canary and receipt — but it converts the common, deterministic un-writable
+/// cases from "silent orphaned mutation" into "clean pre-mutation refusal.")
+fn ensure_ledger_writable(history: &[AppliedChange]) -> Result<(), String> {
+    save_history(history).map_err(|e| {
+        format!(
+            "refusing to apply: the change ledger isn't writable right now, so this change \
+             couldn't be recorded — and an unrecorded change can't be rolled back. Nothing on \
+             your system was changed. ({e})"
+        )
+    })
+}
+
 /// The ONE dispatch from rec id to its audited apply_* — `apply_recommendation` and the §4 batch
 /// orchestrator both go through here, so there is no second copy of the match to drift.
 fn dispatch_apply(rec_id: &str) -> Result<ApplyResult, String> {
@@ -410,6 +432,7 @@ pub(crate) fn restore_leftover(
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
     let mut history = load_history()?;
+    ensure_ledger_writable(&history)?;
     let result = match detector_id {
         "memory-compression-off" => crate::actions::restore_memory_compression(),
         "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
@@ -437,6 +460,9 @@ pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<
     // happen at all — never mutate what can't be written down. Same audited dispatch + receipt
     // as before; only the refusal moved ahead of the mutation.
     let mut history = load_history()?;
+    // ...and prove the ledger is WRITABLE too (H1 write side): a readable-but-unwritable ledger
+    // would let the mutation succeed and then orphan its receipt. Refuse before elevation.
+    ensure_ledger_writable(&history)?;
     let result = dispatch_apply(&rec_id)?;
     let change = build_applied_change(&rec_id, &rec_title, result)?;
     history.push(change.clone());
@@ -459,6 +485,7 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
         .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let mut history = load_history()?;
+    ensure_ledger_writable(&history)?;
     let result = crate::actions::apply_service_suspend(service)?;
     let change = build_applied_change(
         &format!("service-suspend:{}", service_name),
@@ -484,6 +511,7 @@ pub(crate) fn disable_known_bloat_task(task_id: String) -> Result<AppliedChangeV
         .ok_or_else(|| format!("'{}' isn't a Compy-removable telemetry task.", task_id))?;
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let mut history = load_history()?;
+    ensure_ledger_writable(&history)?;
     let result = crate::actions::apply_disable_scheduled_task(task)?;
     let change = build_applied_change(
         &format!("bloat-task:{}", task_id),
@@ -510,6 +538,7 @@ pub(crate) fn remove_known_preload_app(app_id: String) -> Result<AppliedChangeVi
         .ok_or_else(|| format!("'{}' isn't a Compy-removable preinstalled app.", app_id))?;
     let _lock = HISTORY_LOCK.lock().map_err(|_| "history lock poisoned".to_string())?;
     let mut history = load_history()?;
+    ensure_ledger_writable(&history)?;
     let result = crate::actions::apply_remove_preload_app(app)?;
     let change = build_applied_change(
         &format!("preload-app:{}", app_id),
@@ -610,8 +639,11 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     let _lock = HISTORY_LOCK
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
-    // H1: refuse the whole batch before phase 1 if the ledger can't record receipts.
+    // H1: refuse the whole batch before phase 1 if the ledger can't record receipts — readable
+    // (load) AND writable (canary), so a readable-but-unwritable ledger can't let phase-1 mutations
+    // (HKCU, immediate) succeed and then orphan their receipts.
     let mut history = load_history()?;
+    ensure_ledger_writable(&history)?;
     let mut outcomes: Vec<BatchItemOutcome> = Vec::new();
     let mut applied = 0usize;
 

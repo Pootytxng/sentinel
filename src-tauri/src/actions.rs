@@ -854,6 +854,21 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
         || err.starts_with("elevated command is too long to dispatch")
 }
 
+/// Promote non-terminating cmdlet errors to terminating ones for a SINGLE elevated command, so a
+/// cmdlet that "fails" without throwing (e.g. `Set-WindowsReservedStorageState` mid state-transition,
+/// or a policy/pending-reboot block) cannot exit 0 and record a mutation that never happened as a
+/// successful, rollback-eligible apply — a false ledger entry. Idempotent: a command that already
+/// sets `$ErrorActionPreference` (some apply builders embed it in a multi-statement script) is
+/// returned unchanged, so we never prepend a second, conflicting directive. Mirrors the §4 batch
+/// path's guard in `compose_batch_script`.
+fn with_error_action_stop(command: &str) -> std::borrow::Cow<'_, str> {
+    if command.trim_start().starts_with("$ErrorActionPreference") {
+        std::borrow::Cow::Borrowed(command)
+    } else {
+        std::borrow::Cow::Owned(format!("$ErrorActionPreference='Stop'; {command}"))
+    }
+}
+
 pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     // §4 batching: an armed sink on THIS thread captures instead of elevating (see above).
     let deferred = ELEVATION_SINK.with(|s| {
@@ -867,6 +882,15 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     if deferred {
         return Ok(());
     }
+    // A single (non-batched) elevated command must promote non-terminating cmdlet errors to
+    // terminating ones. Otherwise a cmdlet that "fails" without throwing (e.g.
+    // Set-WindowsReservedStorageState mid state-transition, or a policy/pending-reboot block) still
+    // exits 0, run_elevated_powershell returns Ok, and we'd record a mutation that never happened as
+    // a successful, rollback-eligible apply — a false ledger entry. The §4 batch path already does
+    // this in compose_batch_script; this is the same guard for the single-command path. Skip if the
+    // caller already set it (some apply builders embed it in a multi-statement script).
+    let owned = with_error_action_stop(command);
+    let command: &str = &owned;
     // Test-only: count every invocation that gets PAST the sink — i.e. every call that would show
     // a UAC prompt in production (the decline/direct seams below still count: they stand in for a
     // real dispatch; the two pre-launch refusals further down count too — over-counting only makes
@@ -996,9 +1020,34 @@ pub(crate) fn ps_safe_squoted(token: &str) -> Result<(), String> {
     }
 }
 
+/// Validates a network-interface registry subkey name — the GUID-shaped adapter key under
+/// `...\Tcpip\Parameters\Interfaces\` — BEFORE it is interpolated into a single-quoted PowerShell
+/// `-Path '...'` literal. Real interface keys are braced GUIDs (e.g. `{2a737441-1930-...}`), so the
+/// admitted set is `[A-Za-z0-9-{}]`: it accepts every legitimate key and rejects the single quote
+/// (no literal breakout) plus every other metacharacter. The Nagle snapshot's `interface` is read
+/// back from the persisted, user-writable history.json, so this is the guard that stops a tampered
+/// ledger entry from injecting elevated PowerShell at rollback time. (`ps_safe_squoted` can't be
+/// reused here — it forbids the braces a GUID key legitimately contains.)
+pub(crate) fn nic_interface_safe(name: &str) -> Result<(), String> {
+    if !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '{' | '}'))
+    {
+        Ok(())
+    } else {
+        Err(format!(
+            "refusing to build an elevated command with an unsafe interface key: {name:?}"
+        ))
+    }
+}
+
 #[cfg(test)]
 mod ps_injection_tests {
-    use super::ps_safe;
+    use super::{
+        nic_interface_safe, ps_safe, rollback_nagle_disable_typed, rollback_power_plan_setting_typed,
+        NagleInterfaceSnapshot,
+    };
 
     #[test]
     fn accepts_every_real_catalog_token() {
@@ -1034,6 +1083,57 @@ mod ps_injection_tests {
         ] {
             assert!(ps_safe(t).is_err(), "should reject unsafe token {t:?}");
         }
+    }
+
+    #[test]
+    fn nic_interface_safe_accepts_braced_guid() {
+        // Real Tcpip\Parameters\Interfaces subkeys are braced GUIDs — the exact shape we must admit
+        // (ps_safe_squoted can't be reused for these because it forbids the braces).
+        for t in [
+            "{2a737441-1930-4402-8d77-b2bebba308a3}",
+            "{48E6B7A6-50F5-4782-A5D4-53BB8F07E226}",
+            "2a737441-1930-4402-8d77-b2bebba308a3", // also accept the unbraced form
+        ] {
+            assert!(nic_interface_safe(t).is_ok(), "should accept NIC key {t:?}");
+        }
+    }
+
+    #[test]
+    fn nic_interface_safe_rejects_injection() {
+        for t in [
+            "",
+            "'; Stop-Computer; '",
+            "{guid}' -Force; calc; '",
+            "a`whoami`",
+            "$(Remove-Item C:\\)",
+            "has space",
+            "a\nStart-Process calc",
+        ] {
+            assert!(nic_interface_safe(t).is_err(), "should reject NIC key {t:?}");
+        }
+    }
+
+    #[test]
+    fn rollback_power_plan_setting_rejects_injected_guid() {
+        // A tampered ledger snapshot must fail loud BEFORE the GUID reaches the elevated powercfg
+        // command line — the guard runs ahead of any system probe or elevation.
+        let injected = "12345678-90ab-cdef-1234-567890abcdef; Stop-Computer";
+        let good = "12345678-90ab-cdef-1234-567890abcdef";
+        assert!(rollback_power_plan_setting_typed(injected, good, good, 0, 0).is_err());
+        assert!(rollback_power_plan_setting_typed(good, injected, good, 0, 0).is_err());
+        assert!(rollback_power_plan_setting_typed(good, good, injected, 0, 0).is_err());
+    }
+
+    #[test]
+    fn rollback_nagle_disable_rejects_injected_interface() {
+        // interface is read back from the user-writable history.json; an injected value must fail
+        // before it can be interpolated into an elevated -Path literal.
+        let snap = [NagleInterfaceSnapshot {
+            interface: "{guid}' -Name X -Value 1; Stop-Computer; '".to_string(),
+            prior_ack: Some(0),
+            prior_nodelay: None,
+        }];
+        assert!(rollback_nagle_disable_typed(&snap).is_err());
     }
 }
 
@@ -1237,6 +1337,76 @@ mod elevation_attribution_tests {
         // Unrecognized error text: fail-safe direction is "assume it may have run".
         assert!(!elevation_error_nothing_ran("some future error nobody classified"));
         assert!(!elevation_error_nothing_ran(""));
+    }
+}
+
+// ── `with_error_action_stop` — single-command path can't record a mutation that never ran ──
+#[cfg(test)]
+mod error_action_stop_tests {
+    use super::with_error_action_stop;
+
+    #[test]
+    fn a_bare_command_is_prefixed_so_failures_terminate() {
+        // A cmdlet that "fails" without throwing must not exit 0 → false ledger entry.
+        let out = with_error_action_stop("Enable-MMAgent -MemoryCompression");
+        assert!(
+            out.starts_with("$ErrorActionPreference='Stop'; "),
+            "must promote non-terminating errors, got: {out}"
+        );
+        assert!(out.contains("Enable-MMAgent -MemoryCompression"), "must keep the command, got: {out}");
+    }
+
+    #[test]
+    fn a_command_already_setting_erroraction_is_not_double_prefixed() {
+        // Idempotent: some apply builders embed the directive in a multi-statement script.
+        let already = "$ErrorActionPreference='Stop'; Do-Thing";
+        let out = with_error_action_stop(already);
+        assert_eq!(out, already, "must pass through unchanged");
+        assert_eq!(out.matches("$ErrorActionPreference").count(), 1, "no second directive");
+    }
+
+    #[test]
+    fn leading_whitespace_before_the_directive_is_still_recognized() {
+        // trim_start guard: a leading-space script that sets its own preference isn't re-prefixed.
+        let out = with_error_action_stop("  $ErrorActionPreference='SilentlyContinue'; X");
+        assert_eq!(out.matches("$ErrorActionPreference").count(), 1, "must not prepend a conflicting Stop");
+    }
+
+    // bug→guard (rust-tauri-reviewer 2026-07-14): run_elevated_powershell now unconditionally prefixes
+    // `$ErrorActionPreference='Stop'`. In a MULTI-interface Nagle script, a registry write that fails on
+    // interface N would then abort the ENTIRE script — leaving interfaces 0..N already mutated on the
+    // machine with NO ledger entry (apply returns Err → nothing persisted → un-rollback-able live
+    // mutation = rollback-first violation). Each Set-ItemProperty MUST isolate its own error. This scans
+    // the source so a future edit can't silently drop the flag and reopen the regression.
+    #[test]
+    fn every_nagle_set_itemproperty_write_isolates_its_own_error() {
+        // Tokens built by concat! so this test's own source lines don't self-match the scan.
+        let set = concat!("Set-", "ItemProperty");
+        let ack = concat!("TcpAck", "Frequency");
+        let nodelay = concat!("TCP", "NoDelay");
+        let flag = concat!("-ErrorAction ", "SilentlyContinue");
+        let mut checked = 0;
+        for line in include_str!("actions.rs").lines() {
+            // A real write is the PowerShell string literal: `Set-ItemProperty ... -Name '<col>' ...`.
+            // `-Name '` excludes prose comments that merely mention the cmdlet. (Apply builds it on one
+            // push_str line; rollback's Some(v) arms put the literal on its own continuation line.)
+            let is_nagle_write = line.contains(set)
+                && line.contains("-Name '")
+                && (line.contains(ack) || line.contains(nodelay));
+            if is_nagle_write {
+                assert!(
+                    line.contains(flag),
+                    "a Nagle Set-ItemProperty write lost its per-call error isolation (reopens the \
+                     mid-loop-abort orphan bug): {}",
+                    line.trim()
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 4,
+            "expected >=4 guarded Nagle writes (2 apply + 2 rollback restore), scanned {checked}"
+        );
     }
 }
 
@@ -1695,7 +1865,16 @@ pub(crate) fn apply_disable_scheduled_task(task: KnownBloatTask) -> Result<Apply
     // BEFORE any elevation — instead of popping a UAC prompt only to silently no-op on a missing task.
     let (path, name) = resolved_task_target(&task)
         .ok_or_else(|| "that telemetry task was not found on this system.".to_string())?;
+    // Rollback-first: refuse if the prior state can't be confirmed rather than recording an "Unknown"
+    // prior and mutating anyway. If the task was ALREADY Disabled and the read transiently failed,
+    // rollback (which treats Unknown as "was enabled") would later re-enable a task the user or an
+    // environment policy intentionally left disabled. Mirrors require_service_prior for service applies.
     let prior_state = scheduled_task_state(&task);
+    if prior_state == "Unknown" {
+        return Err("couldn't read that telemetry task's current state, so this change wasn't applied — \
+                    an unconfirmed prior state can't be reliably rolled back. Nothing was changed; try again."
+            .to_string());
+    }
     run_elevated_powershell(&format!(
         "Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' | Out-Null",
         path, name
@@ -2739,6 +2918,16 @@ pub(crate) fn rollback_power_plan_setting_typed(
     prior_ac_value: u32,
     prior_dc_value: u32,
 ) -> Result<(), String> {
+    // These three GUIDs are read straight back out of the persisted (user-writable) history.json
+    // snapshot at rollback time and then interpolated UNQUOTED into an elevated powercfg command
+    // (build_power_setting_restore_cmd). Validate them the same way the apply path validates its
+    // subgroup/setting (apply_power_setting_off_on_ac) and rollback_power_ultimate_typed validates
+    // its prior GUID — a tampered/garbled ledger entry must fail loud BEFORE it can reach the
+    // elevated command line, never inject shell metacharacters. Every legitimate value is a bare
+    // `[0-9a-f-]` GUID, which ps_safe admits.
+    ps_safe(plan_guid)?;
+    ps_safe(subgroup_guid)?;
+    ps_safe(setting_guid)?;
     // Restore AC/DC to the EXACT plan this was applied to. If that plan no
     // longer exists (deleted, or never captured), fail safe with a clear
     // message — we will NOT silently restore the value onto whatever plan
@@ -3716,14 +3905,25 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
         .collect();
 
     // Write to exactly those interfaces, by explicit path (mirrors the rollback script).
+    // Per-call `-ErrorAction SilentlyContinue` is DELIBERATE and MUST stay: run_elevated_powershell
+    // now prefixes `$ErrorActionPreference='Stop'` (single-command false-ledger guard), which would
+    // otherwise make a mid-loop Set-ItemProperty failure on interface N abort the whole script,
+    // leaving interfaces 0..N already mutated on the machine with NO ledger entry (apply returns Err
+    // → nothing persisted → un-rollback-able live mutation, a rollback-first violation). Isolating
+    // each write keeps apply all-recorded: we snapshot EXACTLY what we target and rollback is an
+    // idempotent restore, so over-recording an interface that failed to write is a harmless no-op —
+    // strictly safer than orphaning. Mirrors the EEE script's per-item isolation.
     let mut ps = String::new();
     for s in &nic_snapshots {
+        // The name came from enum_keys() here, but validate anyway so the invariant is enforced at
+        // the interpolation site (the snapshot we persist must never contain an unsafe key).
+        nic_interface_safe(&s.interface)?;
         let path = format!(
             "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
             s.interface
         );
-        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1 -Type DWord; "));
-        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1 -Type DWord; "));
+        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "));
+        ps.push_str(&format!("Set-ItemProperty -Path '{path}' -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue; "));
     }
     if !ps.is_empty() {
         run_elevated_powershell(&ps)?;
@@ -3749,13 +3949,22 @@ pub(crate) fn rollback_nagle_disable_typed(
         if entry.interface.is_empty() {
             continue;
         }
+        // entry.interface is read back from the user-writable history.json — validate it before it
+        // is interpolated into an elevated PowerShell -Path literal, or a tampered ledger entry
+        // could inject arbitrary admin commands at rollback time.
+        nic_interface_safe(&entry.interface)?;
         let path = format!(
             "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{}",
             entry.interface
         );
+        // Per-call `-ErrorAction SilentlyContinue` on every branch (mirrors apply): under the blanket
+        // `$ErrorActionPreference='Stop'`, one interface's Set/Remove failure would otherwise abort
+        // the whole rollback pass, leaving later interfaces un-restored. Isolated + idempotent, so a
+        // single bad interface can't block restoring the rest; history.rs only marks the entry
+        // rolled_back after dispatch_rollback returns Ok, so a partial pass stays retryable.
         match entry.prior_ack {
             Some(v) => ps.push_str(&format!(
-                "Set-ItemProperty -Path '{}' -Name 'TcpAckFrequency' -Value {} -Type DWord; ",
+                "Set-ItemProperty -Path '{}' -Name 'TcpAckFrequency' -Value {} -Type DWord -ErrorAction SilentlyContinue; ",
                 path, v
             )),
             None => ps.push_str(&format!(
@@ -3765,7 +3974,7 @@ pub(crate) fn rollback_nagle_disable_typed(
         }
         match entry.prior_nodelay {
             Some(v) => ps.push_str(&format!(
-                "Set-ItemProperty -Path '{}' -Name 'TCPNoDelay' -Value {} -Type DWord; ",
+                "Set-ItemProperty -Path '{}' -Name 'TCPNoDelay' -Value {} -Type DWord -ErrorAction SilentlyContinue; ",
                 path, v
             )),
             None => ps.push_str(&format!(

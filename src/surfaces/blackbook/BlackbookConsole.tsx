@@ -56,11 +56,14 @@ const fmtWhen = (at: number): string => {
 
 const fmtDuration = (secs: number): string => {
   const s = Math.max(0, Math.round(secs));
-  const h = Math.floor(s / 3600);
-  const m = Math.round((s % 3600) / 60);
-  if (h) return `${h}h ${m}m`;
-  if (m) return `${m}m`;
-  return `${s}s`;
+  // Round to whole minutes FIRST, then split into h/m — otherwise a 59m50s session
+  // (3590s) rounds its minute-part to 60 while h stays 0, rendering the impossible "60m"
+  // (bug→guard, blackbook-console duration test). Sub-minute sessions still read in seconds.
+  if (s < 60) return `${s}s`;
+  const totalMin = Math.round(s / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
 };
 
 // Sentence grammar (owner pick 2026-07-13, concept B): every row reads as a plain sentence with an

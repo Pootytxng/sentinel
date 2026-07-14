@@ -84,12 +84,20 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   }, [steps.length, finish]);
   const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
 
+  // Initial focus lands ONCE on mount on a real control (the primary Next button), not the
+  // non-interactive backdrop — so screen-reader/keyboard users start on something operable. Kept
+  // in its OWN mount-only effect: folding it into the keydown effect below re-stole focus back to
+  // Next on every re-render where finish/next/back changed identity (finish chains off the onDone
+  // prop), yanking the caret out from under a user who had tabbed elsewhere. Falls back to root.
   useEffect(() => {
-    const root = rootRef.current;
-    // Initial focus lands on a real control (the primary Next button), not the non-interactive
-    // backdrop — so screen-reader/keyboard users start on something operable. Falls back to root.
-    (nextRef.current ?? root)?.focus();
+    (nextRef.current ?? rootRef.current)?.focus();
+  }, []);
+
+  // Keydown wiring re-subscribes when the callbacks change identity (harmless — always uses the
+  // latest finish/next/back), but it must NEVER move focus; that's the mount effect's sole job.
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const root = rootRef.current;
       if (e.key === "Escape") {
         e.preventDefault();
         finish();
@@ -321,8 +329,16 @@ function StepCheck() {
     try {
       await invoke("apply_recommendation", { recId: rec.id, recTitle: rec.title });
       await rerun();
-    } catch {
-      /* leave state as-is */
+    } catch (e) {
+      setApplyingId(null);
+      // Tell the user it didn't apply (e.g. a declined UAC prompt) instead of silently swallowing it
+      // — mirrors FirstCheck's acknowledge-only NOTICE so the tour never lies about a no-op.
+      await confirm({
+        title: "Couldn't apply that fix",
+        body: String(e),
+        confirmLabel: "OK",
+        acknowledge: true,
+      });
     } finally {
       setApplyingId(null);
     }
@@ -341,8 +357,15 @@ function StepCheck() {
     try {
       await invoke("apply_recommendation", { recId: rev.rec_id, recTitle: rev.title });
       await rerun();
-    } catch {
-      /* leave state as-is */
+    } catch (e) {
+      setApplyingId(null);
+      // Surface the failure (e.g. declined UAC) rather than silently swallowing it — same NOTICE as above.
+      await confirm({
+        title: "Couldn't turn that back on",
+        body: String(e),
+        confirmLabel: "OK",
+        acknowledge: true,
+      });
     } finally {
       setApplyingId(null);
     }

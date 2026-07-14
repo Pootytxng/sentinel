@@ -87,19 +87,20 @@ export const onRequestPost = async (ctx: PagesContext): Promise<Response> => {
   const ipHash = await sha256Hex((env.IP_PEPPER ?? IP_PEPPER_FALLBACK) + ip);
 
   try {
-    const recent = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM waitlist WHERE ip_hash = ?1 AND created_at > datetime('now', '-1 hour')",
-    )
-      .bind(ipHash)
-      .first<{ n: number }>();
-    // Over the limit → report success, store nothing (same don't-teach-the-bot posture).
-    if ((recent?.n ?? 0) >= MAX_PER_HOUR) return ok();
-
-    // Idempotent: a duplicate email is a no-op, and the user still sees the thanks state.
+    // Rate limit enforced ATOMICALLY inside the insert, not as a separate SELECT-then-INSERT:
+    // the COUNT subquery is a correlated guard on the INSERT ... SELECT, so it runs under the same
+    // SQLite write lock as the write itself. A prior check-then-act let N concurrent POSTs each read
+    // count<5 before any sibling's INSERT committed, so all N slipped past the cap; here the Nth
+    // concurrent write re-evaluates the (now-committed) count and the SELECT yields zero rows once
+    // saturated. All three outcomes — inserted, over-limit (SELECT empty), duplicate email
+    // (ON CONFLICT) — are no-op-or-store and report the same success (don't-teach-the-bot posture).
     await env.DB.prepare(
-      "INSERT INTO waitlist (email, created_at, ip_hash) VALUES (?1, datetime('now'), ?2) ON CONFLICT(email) DO NOTHING",
+      "INSERT INTO waitlist (email, created_at, ip_hash) " +
+        "SELECT ?1, datetime('now'), ?2 " +
+        "WHERE (SELECT COUNT(*) FROM waitlist WHERE ip_hash = ?2 AND created_at > datetime('now', '-1 hour')) < ?3 " +
+        "ON CONFLICT(email) DO NOTHING",
     )
-      .bind(email, ipHash)
+      .bind(email, ipHash, MAX_PER_HOUR)
       .run();
   } catch {
     // No internals to the client; nothing PII-bearing is thrown or logged.

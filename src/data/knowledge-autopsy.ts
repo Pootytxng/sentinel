@@ -86,13 +86,14 @@ export function autopsyScan(text: string, entries: KnowledgeEntry[] = KNOWLEDGE)
     }
   }
 
-  const attachedGuides = new Set<string>();
-  for (const set of howTos.values()) for (const g of set) attachedGuides.add(g);
-
   const byId = new Map(entries.map((e) => [e.id, e]));
   const hits: AutopsyHit[] = [...occ.entries()]
-    // A guide that attached as a how-to is shown as a chip, not a duplicate standalone row.
-    .filter(([id]) => !(byId.get(id)!.type === "guide" && attachedGuides.has(id)))
+    // `occ` only counts STANDALONE (non-overlapping owner) mentions — an attachment increments
+    // `howTos` and `continue`s before the occ bump, never `occ`. So every guide in `occ.entries()`
+    // has ≥1 genuine standalone mention distinct from any attachment span; those must NOT be dropped
+    // just because the SAME guide attached elsewhere via a different alias (that undercounted a real
+    // standalone occurrence). A guide with ONLY overlapping mentions has occ=0, so it never reaches
+    // here anyway — it shows only as a how-to chip, no filter needed.
     .map(([id, occurrences]) => {
       const e = byId.get(id)!;
       return {

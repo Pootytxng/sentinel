@@ -23,7 +23,7 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
   check: "Scan game-readiness, then apply the safe fixes it finds for your rig.",
   play: "Watch live FPS, 1% lows and temps — with a debrief after each session.",
   fix: "Apply and undo reversible tweaks — every change logged in the ledger.",
-  learn: "The measured library of what actually works — and the myths that don't.",
+  learn: "The measured record of what actually works — and the myths that don't.",
   lab: "Go deeper: benchmarks, latency and system diagnostics.",
 };
 

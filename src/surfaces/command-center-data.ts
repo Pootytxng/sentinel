@@ -8,49 +8,10 @@ import { deriveSystemPosture } from "./system-posture";
 import { latestSession } from "./dashboard-data";
 import { prettyGameName } from "./game-name";
 
-// The signal ring encodes a REAL readiness ratio: of the checks evaluated, how many are already
-// ideal. Never a 0–100 "score". `ideal` mirrors the CommandHero accounting exactly — advisory and
-// user-dismissed checks count as resolved (the backend already excludes dismissals from
-// attention_count), so only live attention + unknown hold the ring down.
-export type SignalRing = {
-  ideal: number;
-  total: number;
-  ratio: number; // 0..1 — the fraction of the ring to fill
-  dialed: boolean; // all checks ideal
-  toFix: number; // total - ideal (the honest "N to fix")
-  label: string; // big center text — an honest state word, never a number
-  sub: string; // small real detail under it
-  known: boolean; // false while scanning / nothing to judge yet → shimmer, don't fake a value
-};
-
-export function signalRing(readiness: GameReadiness | null): SignalRing {
-  if (!readiness || readiness.checks.length === 0) {
-    return {
-      ideal: 0,
-      total: 0,
-      ratio: 0,
-      dialed: false,
-      toFix: 0,
-      label: "Scanning",
-      sub: "running checks…",
-      known: false,
-    };
-  }
-  const total = readiness.checks.length;
-  const ideal = Math.max(0, total - readiness.attention_count - readiness.unknown_count);
-  const dialed = ideal >= total;
-  const toFix = total - ideal;
-  return {
-    ideal,
-    total,
-    ratio: total > 0 ? ideal / total : 0,
-    dialed,
-    toFix,
-    label: dialed ? "Dialed" : "Ready",
-    sub: dialed ? `all ${total} checks ideal` : `${toFix} to fix`,
-    known: true,
-  };
-}
+// (The former `signalRing`/`SignalRing` ratio widget was retired 2026-07-14 — orphaned after Home
+// stopped rendering the ring. It read raw attention_count/unknown_count instead of the dismissed-aware
+// deriveSystemPosture, so leaving it live risked re-introducing the dismissed-counts-as-attention
+// regression the moment it was wired back in. Any future ring must route through deriveSystemPosture.)
 
 // The posture sentence beside the ring. Headline + tone come from the shared posture derivation
 // (readiness-driven); the "worth fixing" count comes from priorities (advisory limiters), per spec

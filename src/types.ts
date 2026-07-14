@@ -337,6 +337,7 @@ export type BlackBoxReport = {
 export type LicenseStatus = {
   tier: string; // "free" | "pro"
   valid: boolean;
+  armed: boolean; // licensing is active (real signing key embedded) — the gate the UI reads directly
   reason: string; // "no license" | "active" | "license expired …" | "licensing not active" | …
   expires_at: string | null;
 };

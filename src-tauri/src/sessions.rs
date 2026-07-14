@@ -176,10 +176,21 @@ fn load_sessions_from(path: &Path) -> Vec<SessionSummary> {
     if !path.exists() {
         return Vec::new();
     }
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    match std::fs::read_to_string(path) {
+        Ok(s) => match serde_json::from_str(&s) {
+            Ok(v) => v,
+            Err(_) => {
+                // A corrupt sessions.json must not be silently overwritten by the next save — set
+                // the damaged bytes aside for recovery, then start fresh. (Unlike the Trust Ledger
+                // this is not a rollback contract, so we don't hard-fail: losing session history is
+                // non-destructive, and blocking every future save on it would be worse.)
+                let corrupt = path.with_extension("json.corrupt");
+                let _ = std::fs::rename(path, &corrupt);
+                Vec::new()
+            }
+        },
+        Err(_) => Vec::new(),
+    }
 }
 
 fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
@@ -196,7 +207,12 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
         s.stutter_timeline = Vec::new();
     }
     let json = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    // Atomic swap (mirrors history.rs save_history_to): write beside the live file then rename it
+    // in (MoveFileEx + REPLACE_EXISTING on Windows), so a crash mid-write leaves the prior valid
+    // sessions.json intact plus an ignorable .tmp — never a torn half-written file.
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
 /// Returns `Ok(true)` if a real session was saved, `Ok(false)` if it was dropped as too short — the

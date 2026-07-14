@@ -64,10 +64,15 @@ pub(crate) fn analyze(timeline: &[(u32, f64)], events: &[StutterEvent]) -> Optio
             *counts.entry(l).or_insert(0) += 1;
         }
     }
-    counts
+    // Deterministic pick: highest count wins, ties broken by label (ascending). HashMap iteration
+    // order is randomized per-run, so a bare `max_by_key` would name a DIFFERENT culprit across
+    // restarts on the same input when two signals tie — the sort makes the same input always name
+    // the same signal.
+    let mut ranked: Vec<(String, usize)> = counts.into_iter().filter(|(_, c)| *c >= MIN_LINEUP).collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    ranked
         .into_iter()
-        .filter(|(_, c)| *c >= MIN_LINEUP)
-        .max_by_key(|(_, c)| *c)
+        .next()
         .map(|(label, count)| format!("{count} of your worst stutters lined up with {label}."))
 }
 

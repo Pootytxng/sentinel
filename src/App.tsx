@@ -47,6 +47,7 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
+import { lsGet, lsSet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
 import Play from "./surfaces/Play";
 import Monitor from "./surfaces/Monitor";
@@ -189,6 +190,23 @@ export type HardwareInfo = {
   bios_info: BiosInfo | null;
   virtualization: VirtualizationInfo | null;
   usb: UsbSummary | null;
+  // Serialized by the Rust `HardwareInfo` (hardware.rs) but not previously mirrored here — optional
+  // so historical/partial payloads still typecheck. Kept in sync with the struct; the frontend reads
+  // `network_pills` (Latency's readiness chips) directly instead of re-casting the invoke result.
+  has_active_wired_ethernet?: boolean;
+  eee_switch_exposed?: boolean;
+  wifi_link?: {
+    band: string | null;
+    signal_pct: number | null;
+    rx_mbps: number | null;
+    radio_type: string | null;
+    channel: number | null;
+  } | null;
+  qos_policies?: string[];
+  network_pills?: { label: string; tone: string }[];
+  // Game-library storage summary; `libraries` detail (GameLibrary) lives backend-side and no surface
+  // consumes it, so the scalar SSD/HDD signals are typed and the list is left opaque.
+  game_storage?: { libraries: unknown[]; any_fast: boolean; any_slow: boolean };
 };
 
 // "Verified"        — Compy directly observes the fact this rec claims.
@@ -261,7 +279,7 @@ const APPLIABLE_REC_IDS = new Set<string>([
 // Top-level sections shown in the left command rail. The six rec categories +
 // Startup are consolidated into one "Optimize" section (filtered inside) so the
 // rail stays short and never needs a horizontal scroll.
-type Tab = "Overview" | "Check" | "Optimize" | "Play" | "Learn" | "Lab" | "Diagnostics" | "History";
+type Tab = "Overview" | "Check" | "Optimize" | "Play" | "Learn" | "Lab";
 
 type DiagnosticEntry = {
   label: string;
@@ -299,7 +317,8 @@ type GameReadiness = {
   drifts: Drift[];
 };
 
-// Drift Watch — a check that was good and has since regressed (outside Compy).
+// Drift Watch — a check that was good and has since regressed (cause unknown: could be a Windows
+// Update revert or the user's own in-app rollback — we never claim which).
 type Drift = { id: string; label: string; detail: string; noticed_at: string };
 
 // Session summaries (F3): read-only post-session metrics. Mirrors the Rust
@@ -530,7 +549,7 @@ function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Sessions "new debrief" indicator: the started_at of the latest session the user has seen.
   const [sessionsSeenAt, setSessionsSeenAt] = useState<string>(
-    () => localStorage.getItem("compy_sessions_seen_v1") ?? "",
+    () => lsGet("compy_sessions_seen_v1") ?? "",
   );
   const [showEncyclopedia, setShowEncyclopedia] = useState(false);
   const [libraryFocusId, setLibraryFocusId] = useState<string | null>(null);
@@ -562,7 +581,7 @@ function App() {
   // re-nag a returning user; they reach it from the Home launcher card or Settings.
   const [showSetupTour, setShowSetupTour] = useState(
     () =>
-      localStorage.getItem(SETUP_TOUR_KEY) !== "1" && localStorage.getItem(ONBOARDED_KEY) !== "1",
+      lsGet(SETUP_TOUR_KEY) !== "1" && lsGet(ONBOARDED_KEY) !== "1",
   );
   // Open the tour on demand from the Home launcher card (mirrors the open-settings event pattern).
   useEffect(() => {
@@ -572,6 +591,18 @@ function App() {
     };
     window.addEventListener("compy:start-tour", on);
     return () => window.removeEventListener("compy:start-tour", on);
+  }, []);
+  // Stable identity so SetupTour's finish→onDone→keydown-effect chain doesn't churn every App render
+  // (an inline arrow here re-ran the tour's mount effect and re-stole focus back to Next).
+  const handleSetupTourDone = useCallback(() => {
+    // Mark the legacy flags satisfied too, so the old auto-modals can never fire later.
+    try {
+      localStorage.setItem(ONBOARDED_KEY, "1");
+      localStorage.setItem(FIRST_CHECK_KEY, "1");
+    } catch {
+      /* non-fatal */
+    }
+    setShowSetupTour(false);
   }, []);
   // Gaming Mode (F1) is gated — the backend returns false until its mutation QA
   // + owner sign-off, so the tab never appears by default (the surface is dark).
@@ -741,14 +772,27 @@ function App() {
     const readinessP = run<GameReadiness>("get_game_readiness", setReadiness);
     const sessionsP = run<SessionSummary[]>("get_session_summaries", setSessions);
     const prioritiesP = Promise.all([readinessP, recsP, startupP, sessionsP])
-      .then(([readiness, recommendations, startup, sessions]) =>
-        invoke<Priorities>("priorities_from", {
+      .then(([readiness, recommendations, startup, sessions]) => {
+        // If ANY of the four probes failed, its own run() catch already surfaced the REAL error.
+        // Invoking priorities_from with a missing/undefined arg would reject on the Rust side's
+        // deserialization and fire a SECOND, misleading "couldn't rank priorities" toast on top of
+        // the true cause — so skip it. Priorities stay as-is; the next clean refresh recomputes them.
+        if (
+          readiness === undefined ||
+          recommendations === undefined ||
+          startup === undefined ||
+          sessions === undefined
+        ) {
+          return;
+        }
+        return invoke<Priorities>("priorities_from", {
           readiness,
           recommendations,
           startup,
           sessions,
-        }).then(setPriorities),
-      )
+        }).then(setPriorities);
+      })
+      // Only a genuine priorities_from failure (all four present, ranking itself failed) reaches here.
       .catch((e) => fail("Couldn't rank your priorities just now — try again in a moment.", e));
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
@@ -926,10 +970,10 @@ function App() {
     // Play consolidates Monitoring + Sessions IN PLACE; Lab consolidates Benchmark + Latency IN PLACE.
     if (hw || sessions.length > 0) list.push("Play");
     if (hw) list.push("Lab");
-    if (diagnostics.length > 0) list.push("Diagnostics");
-    if (changes.length > 0) list.push("History");
+    // Diagnostics + History are no longer standalone rooms — Diagnostics embeds inside the Lab and
+    // the Trust Ledger (History) lives inside the Optimize/Fix room, so neither is a visible tab.
     return list;
-  }, [recs, startup.length, hw, diagnostics.length, changes.length, readiness, sessions.length, priorities, gamingEnabled, optimizeMerged, labGround]);
+  }, [recs, startup.length, hw, readiness, sessions.length, priorities, gamingEnabled, optimizeMerged, labGround]);
 
   // If the active section disappears, fall back to Dashboard (Overview).
   useEffect(() => {
@@ -983,10 +1027,8 @@ function App() {
     Check: labGround ? "lab" : optimizeMerged ? "fix" : "check",
     Play: "play",
     Optimize: labGround ? "lab" : "fix",
-    History: labGround ? "lab" : "fix",
     Learn: "learn",
     Lab: "lab",
-    Diagnostics: "lab",
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
@@ -1251,12 +1293,6 @@ function App() {
           vendor={detectedVendor}
         />
       )}
-      {activeTab === "Diagnostics" && (
-        <DiagnosticsTab sections={diagnostics} />
-      )}
-      {activeTab === "History" && (
-        <HistoryTab changes={changes} busyId={busyId} onRollback={rollback} />
-      )}
     </>
   );
 
@@ -1268,16 +1304,7 @@ function App() {
         <SetupTour
           hw={hw}
           rig={rigLines}
-          onDone={() => {
-            // Mark the legacy flags satisfied too, so the old auto-modals can never fire later.
-            try {
-              localStorage.setItem(ONBOARDED_KEY, "1");
-              localStorage.setItem(FIRST_CHECK_KEY, "1");
-            } catch {
-              /* non-fatal */
-            }
-            setShowSetupTour(false);
-          }}
+          onDone={handleSetupTourDone}
         />
       )}
       {showFirstCheck && (
@@ -1645,7 +1672,7 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
   const [cpuTemp, setCpuTemp] = useState<CpuTemp | null>(null);
   const [mem, setMem] = useState<MemoryPressure | null>(null);
   const [overlayCorner, setOverlayCorner] = useState<string>(
-    () => localStorage.getItem("compy_overlay_corner") ?? "top-left",
+    () => lsGet("compy_overlay_corner") ?? "top-left",
   );
 
   // Sync the overlay toggle with the actual window state on mount (e.g. the
@@ -1672,7 +1699,7 @@ function MonitoringTab({ active, embedded = false }: { active: boolean; embedded
 
   const chooseCorner = async (corner: string) => {
     setOverlayCorner(corner);
-    localStorage.setItem("compy_overlay_corner", corner);
+    lsSet("compy_overlay_corner", corner);
     try {
       await invoke("set_overlay_corner", { corner });
     } catch {
@@ -1916,204 +1943,6 @@ function DiagnosticsTab({ sections }: { sections: DiagnosticSection[] }) {
         ))}
       </div>
     </section>
-  );
-}
-
-function HistoryTab({
-  changes,
-  busyId,
-  onRollback,
-}: {
-  changes: AppliedChange[];
-  busyId: string | null;
-  onRollback: (change: AppliedChange) => void;
-}) {
-  // Trust Ledger preface: explain to the user what this view is and why
-  // they should rely on it. Per the cross-LLM "anti-scam differentiator"
-  // framing -- this is where Compy proves it's not a tweak pack.
-  return (
-    <section className="tab-pane">
-      <div className="section-header">
-        <h2 className="section-title">
-          Trust Ledger
-          <span className="count-badge">{changes.length}</span>
-        </h2>
-        <div className="read-only-pill">Audit trail · click any row to expand</div>
-      </div>
-      <p className="section-help">
-        Every change Compy has applied to your machine, with the data needed to
-        roll it back independently of the live recommendation catalog. This is
-        the receipt — Compy can prove what it changed, when, with which
-        version, and whether your machine still reflects the change.
-      </p>
-      <div className="change-list">
-        {changes.length === 0 ? (
-          <div className="empty">
-            No applied changes yet. Anything Compy applies will appear here
-            with a full rollback record.
-          </div>
-        ) : (
-          changes
-            .slice()
-            .reverse()
-            .map((c) => (
-              <ChangeRow
-                key={c.id}
-                change={c}
-                busy={busyId === c.id}
-                onRollback={() => onRollback(c)}
-              />
-            ))
-        )}
-      </div>
-    </section>
-  );
-}
-
-// ─── Reusable bits ───────────────────────────────────────────────────────
-
-function ChangeRow({
-  change,
-  busy,
-  onRollback,
-}: {
-  change: AppliedChange;
-  busy: boolean;
-  onRollback: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const when = new Date(change.applied_at).toLocaleString();
-  const stale = change.status === "applied" && !change.is_still_active;
-  const stateClass = stale ? "change-stale" : `change-${change.status}`;
-
-  const actionKind = (change.applied_action as { kind?: string } | null | undefined)
-    ?.kind;
-  const rollbackKind = (change.rollback_action as { kind?: string } | null | undefined)
-    ?.kind;
-  const snapshot = change.snapshot as
-    | { kind?: string; [k: string]: unknown }
-    | null
-    | undefined;
-
-  return (
-    <div
-      className={`change ${stateClass} ${expanded ? "change-expanded" : ""}`}
-      data-rec-id={change.rec_id}
-    >
-      <div
-        className="change-header cmp-door"
-        onClick={() => setExpanded((v) => !v)}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setExpanded((v) => !v);
-          }
-        }}
-      >
-        <div className="change-main">
-          <div className="change-title">
-            <span className="change-chevron" aria-hidden="true">
-              {expanded ? "▾" : "▸"}
-            </span>
-            {change.rec_title}
-          </div>
-          <div className="change-when">
-            {when}
-            {stale && <span className="change-note"> · reverted outside Compy</span>}
-          </div>
-        </div>
-        <div className="change-action-area" onClick={(e) => e.stopPropagation()}>
-          {change.status === "rolled_back" ? (
-            <span className="change-status">✓ Rolled back</span>
-          ) : stale ? (
-            <span className="change-status change-status-stale">No longer active</span>
-          ) : (
-            <button className="btn btn-rollback" onClick={onRollback} disabled={busy}>
-              {busy ? "Rolling back…" : "Roll back"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="change-details">
-          <div className="ledger-grid">
-            <div className="ledger-row">
-              <span className="ledger-label">Rule id</span>
-              <span className="ledger-value mono">{change.rec_id}</span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Change id</span>
-              <span className="ledger-value mono">{change.id}</span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Applied at</span>
-              <span className="ledger-value">{when}</span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Status</span>
-              <span className="ledger-value">
-                {change.status === "rolled_back"
-                  ? "Rolled back by Compy"
-                  : stale
-                  ? "Applied, but no longer matches current Windows state"
-                  : "Applied — Compy-owned"}
-              </span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Compy app version</span>
-              <span className="ledger-value mono">
-                {change.app_version_at_apply ?? "(pre-versioning entry)"}
-              </span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Ruleset version</span>
-              <span className="ledger-value mono">
-                {change.ruleset_version_at_apply ?? "(pre-versioning entry)"}
-              </span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">UAC elevation</span>
-              <span className="ledger-value">
-                {change.elevation_used == null
-                  ? "Unknown (pre-versioning entry)"
-                  : change.elevation_used
-                  ? "Yes — required admin"
-                  : "No — ran as standard user"}
-              </span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Action performed</span>
-              <span className="ledger-value mono">
-                {actionKind ?? "(legacy: untyped, dispatched by rec_id)"}
-              </span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Rollback action</span>
-              <span className="ledger-value mono">
-                {rollbackKind ?? "(legacy: synthesized from rec_id at rollback time)"}
-              </span>
-            </div>
-            <div className="ledger-row">
-              <span className="ledger-label">Prior state snapshot</span>
-              <span className="ledger-value mono ledger-snapshot">
-                {snapshot
-                  ? JSON.stringify(snapshot, null, 2)
-                  : "(none recorded)"}
-              </span>
-            </div>
-          </div>
-          <div className="ledger-footer">
-            This row is the rollback contract. Compy can restore the prior
-            state from the snapshot above, independently of whether this rule
-            still exists in the active recommendation catalog.
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 

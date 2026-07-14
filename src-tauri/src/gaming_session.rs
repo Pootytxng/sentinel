@@ -143,6 +143,60 @@ pub(crate) fn load_session() -> Option<SessionFile> {
     parse_session_json(&s)
 }
 
+/// What physically occupies the session slot on disk. `load_session()` collapses
+/// "no file" and "file we can't parse" into the same `None`, which is fine for the
+/// recovery path (we can't auto-restore a contract we can't read) but DANGEROUS at a
+/// write boundary: a present-but-unparseable file may still hold a real, unrestored
+/// rollback contract from a version-skewed run (a newer Compy bumped the schema, made
+/// real Game Mode mutations, then the user ran this older build). Overwriting it would
+/// orphan those mutations forever. Start MUST tell these apart and quarantine, never clobber.
+pub(crate) enum SessionSlot {
+    /// No session file on disk — the slot is free to start fresh.
+    Empty,
+    /// A valid, current-schema contract occupies the slot (start must refuse; recover it
+    /// first). Callers that need the parsed contract itself use `load_session()`.
+    Loaded,
+    /// A file exists but did not parse (corrupt or schema mismatch). Its bytes are left
+    /// on disk untouched — the caller must quarantine before writing, never destroy it.
+    Unreadable,
+}
+
+/// Read the session slot, distinguishing an absent file from a present-but-unparseable
+/// one. A read error that is NOT "file absent" is treated as `Unreadable` (something is
+/// there we couldn't fully read) so we never clobber it on a transient error.
+pub(crate) fn read_session_slot() -> SessionSlot {
+    match std::fs::read_to_string(session_path()) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => SessionSlot::Empty,
+        Err(_) => SessionSlot::Unreadable,
+        Ok(s) => match parse_session_json(&s) {
+            Some(_) => SessionSlot::Loaded,
+            None => SessionSlot::Unreadable,
+        },
+    }
+}
+
+/// Move an unparseable session file aside so its (possibly still-live) rollback contract
+/// survives for a schema-compatible build to recover, instead of being overwritten by a
+/// fresh start. Best-effort; returns the quarantine path on success. Prior quarantines are
+/// never clobbered either — they get a bounded numeric suffix. No timestamp in the name
+/// (kept deterministic + testable).
+pub(crate) fn quarantine_session() -> Option<PathBuf> {
+    let src = session_path();
+    if !src.exists() {
+        return None;
+    }
+    let dir = session_data_dir();
+    let primary = dir.join("gaming-session.orphaned.json");
+    let dest = if primary.exists() {
+        (1..1000)
+            .map(|n| dir.join(format!("gaming-session.orphaned-{n}.json")))
+            .find(|c| !c.exists())?
+    } else {
+        primary
+    };
+    std::fs::rename(&src, &dest).ok().map(|_| dest)
+}
+
 /// Persist atomically: write a temp file then rename, so a crash mid-write
 /// never leaves a half-written contract on disk.
 pub(crate) fn save_session(f: &SessionFile) -> Result<(), String> {
@@ -242,5 +296,66 @@ mod tests {
     fn status_serializes_kebab_case() {
         let json = serde_json::to_string(&SessionStatus::RestorePending).unwrap();
         assert_eq!(json, "\"restore-pending\"");
+    }
+
+    // A private per-test session dir so the REAL save/quarantine path runs without touching a live
+    // session on the rig. Each test runs on its own thread → the thread-local override is isolated.
+    fn temp_dir(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("compy-gs-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).expect("temp dir");
+        d
+    }
+
+    #[test]
+    fn read_slot_distinguishes_empty_loaded_and_unreadable() {
+        let dir = temp_dir("slot");
+        let _redirect = SessionDirOverride::begin(&dir);
+        // Empty: nothing on disk → safe to start fresh.
+        assert!(matches!(read_session_slot(), SessionSlot::Empty));
+        // Loaded: a valid current-schema contract.
+        save_session(&sample_file()).unwrap();
+        assert!(matches!(read_session_slot(), SessionSlot::Loaded));
+        // Unreadable: a version-skewed (future-schema) contract this build can't parse. load_session()
+        // would collapse this to None (same as Empty) — the slot read must NOT.
+        std::fs::write(session_path(), r#"{"schema_version":999,"session_id":"orphan"}"#).unwrap();
+        assert!(matches!(read_session_slot(), SessionSlot::Unreadable));
+        assert!(load_session().is_none(), "load_session still collapses wrong-schema to None (fail-safe)");
+    }
+
+    #[test]
+    fn quarantine_preserves_an_unparseable_contract_instead_of_destroying_it() {
+        // THE FINDING (drift of gaming_session schema): a start() that overwrote a present-but-
+        // unparseable file would orphan a real, unrestored rollback contract from a version-skewed
+        // run. Quarantine must move the bytes aside VERBATIM and free the slot — never destroy them.
+        let dir = temp_dir("quarantine");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let orphan = r#"{"schema_version":2,"session_id":"skewed","changes":[{"real":"contract"}]}"#;
+        std::fs::write(session_path(), orphan).unwrap();
+        let moved = quarantine_session().expect("an unparseable file must be moved aside");
+        // The live slot is now free — a fresh start won't overwrite anything...
+        assert!(matches!(read_session_slot(), SessionSlot::Empty));
+        // ...and the original contract survives byte-for-byte at the quarantine path.
+        assert_eq!(std::fs::read_to_string(&moved).unwrap(), orphan);
+    }
+
+    #[test]
+    fn quarantine_never_clobbers_a_prior_quarantine() {
+        let dir = temp_dir("quarantine-prior");
+        let _redirect = SessionDirOverride::begin(&dir);
+        std::fs::write(session_path(), "first-orphan").unwrap();
+        let a = quarantine_session().expect("first moved");
+        std::fs::write(session_path(), "second-orphan").unwrap();
+        let b = quarantine_session().expect("second moved");
+        assert_ne!(a, b, "the second quarantine must land on its own path, not overwrite the first");
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "first-orphan");
+        assert_eq!(std::fs::read_to_string(&b).unwrap(), "second-orphan");
+    }
+
+    #[test]
+    fn quarantine_on_an_empty_slot_is_a_noop() {
+        let dir = temp_dir("quarantine-empty");
+        let _redirect = SessionDirOverride::begin(&dir);
+        assert!(quarantine_session().is_none(), "nothing on disk → nothing to preserve");
     }
 }
