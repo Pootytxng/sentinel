@@ -10,6 +10,16 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-13 (SITE HERO RECEIPT NOW REAL — site-only commit, NO gate moved, no installer
+> change, zero `src-tauri`, zero `src/`):** the landing hero's proof-strip numbers were a decorative
+> mock (`fast-startup-off` "+8 fps · 1% low +11") that a consumer-panel persona flagged as fabricated
+> under the "measured, not promised" headline. Replaced with a REAL receipt measured through the
+> app's own Lab → Benchmark tweak A/B flow on the dev rig 2026-07-13: `game-mode` → live Palworld
+> frames → **within ±0.7% noise** (same-session calibrated floor) → auto-rolled-back (ledger
+> `game-mode-1783992509604`). Provenance: `site/src/proof-receipt.json`; guard:
+> `scripts/site-landing.test.mjs` pins strip↔provenance + bans the mock trio (site-landing 16/16).
+> Site remains pre-publish (hosting owner-gated); the live installer stays `86ecad1`/`1C1F13DC…`.
+>
 > **UPDATE 2026-07-13 (GLOSSARY-TOOLTIP TRIO FIXED `86ecad1` — installer SHA-256
 > `1C1F13DC259A99042918B5F1714B518F3825EFB1B080FC3443316F1CBFE657E0`, live exe stamp-verified
 > `86ecad1` via the embedded hash, installed by Claude, supersedes the `A8C341DE…61EC1C10` installer;

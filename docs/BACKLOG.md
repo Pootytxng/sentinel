@@ -161,6 +161,28 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-13e — ✅ SITE HERO RECEIPT IS NOW REAL (mock replaced with a measured trial) — site-only, NO gate moved, zero src-tauri, zero src/
+
+**Cowork consumer-panel follow-up flagged the hero proof strip's numbers as fabricated** (marked
+decorative in source: `fast-startup-off` "+8 fps · 1% low +11" — doubly fake, a boot-time tweak
+can't move fps) — the "measured, not promised" brand illustrating its core claim with an invented
+example. **Replaced with a REAL receipt produced through the app's own Lab → Benchmark
+"Measure this tweak" flow on this rig:** `game-mode` applied 18:28 → measured on live Palworld
+frames (5+5 windows, ~120 fps menu) → verdict **within noise** (no gain beyond the rig's
+same-session calibrated ±0.7% run-to-run floor) → auto-rolled-back (Trust Ledger
+`game-mode-1783992509604`). `game-mode` was the ONLY measurable candidate (every other appliable
+rec is already applied on this rig); per the task's own rule the honest within-noise outcome ships
+un-padded — and it literally demonstrates value card 02's "No measurable change gets called exactly
+that." Provenance record: `site/src/proof-receipt.json`. bug→guard: `site-landing.test.mjs` now
+pins the rendered strip to the provenance record (re-measuring must update both together) + bans
+the fabricated trio from rendered copy. Site regenerated (`node site/generate.mjs`, index only —
+deploy stays owner-gated; site is pre-publish). Verify: site-landing **16/16** · visual pass
+1440px+390px (marginal 390px title overflow caught + fixed by shortening; page-edge mobile
+overflow at 390px is PRE-EXISTING, identical render on the committed page — logged here, untouched).
+**Note for a future better receipt:** a Keep-verdict receipt (real measured WIN) can replace this
+one when one occurs naturally — e.g. a tester rig or a fresh Windows state where a START-HERE tweak
+isn't already applied; the provenance+guard structure makes the swap a two-file edit.
+
 ### Cycle 2026-07-13d — ✅ GLOSSARY-TOOLTIP TRIO FIXED + SHIPPED LIVE `86ecad1` (installer SHA-256 `1C1F13DC…FE657E0`, stamp-verified) — NO gate moved, zero src-tauri
 
 **Owner-reported (screenshot, Blackbook tape "1% low" gloss):** (1) tooltip overpainted by later tape

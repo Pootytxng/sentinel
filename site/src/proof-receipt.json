@@ -1,0 +1,26 @@
+{
+  "note": "Provenance for the hero proof-strip receipt in index.template.html. This is a REAL measurement, not illustrative copy: captured 2026-07-13 through Compy's own Lab → Benchmark 'Measure this tweak' flow (apply → measure on live game frames → auto-rollback via RollbackGuard). It replaced a decorative mock (fast-startup-off / '+8 fps · 1% low +11') that a consumer-panel persona correctly flagged as fabricated. If the strip is ever re-measured, update BOTH this record and the template; scripts/site-landing.test.mjs pins them together.",
+  "capturedAt": "2026-07-13T18:28 local (America/Chicago rig time)",
+  "recId": "game-mode",
+  "recTitle": "Enable Windows Game Mode",
+  "ledgerEntryId": "game-mode-1783992509604",
+  "game": "Palworld (Palworld-Win64-Shipping.exe, ~120 fps menu scene)",
+  "rig": "AMD Radeon RX 9070 XT · Ryzen X3D-class 16-thread · Windows 11",
+  "trial": {
+    "kind": "tweak A/B (benchmark_trial.rs start_tweak_trial)",
+    "baselineWindows": 5,
+    "treatmentWindows": 5,
+    "verdict": "inconclusive",
+    "reason": "within-noise",
+    "rolledBack": true,
+    "finalStatus": "Done — change measured and rolled back."
+  },
+  "noiseFloorPct": 0.7394891476994147,
+  "noiseFloorSource": "same-session calibration run (start_calibration, 10 windows, unchanged conditions)",
+  "stripLines": {
+    "title": "The proof loop · a real receipt",
+    "row1": ["game-mode", "applied · 18:28"],
+    "row2": ["no gain beyond ±0.7% noise", "measured ✓"],
+    "row3": ["rolled back", "exact prior value ✓"]
+  }
+}

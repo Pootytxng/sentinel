@@ -34,8 +34,6 @@ describe("site landing (R4a publish-grade contract)", () => {
     // The proof loop is real accessible text (the hero visual), not a decorative aside.
     expect(html).toContain('class="proof-title"');
     expect(html).not.toMatch(/class="proof" aria-hidden/);
-    // Example framing on the receipt numbers — never a promise.
-    expect(html).toContain("an example receipt");
     // Every tweak card argues its grade — a one-line "why" beside the chip, not a bare tier chip.
     expect((html.match(/class="card-why"/g) ?? []).length).toBeGreaterThanOrEqual(10);
     // Blackbook leads with the start-here trio, not raw entry counts.
@@ -43,6 +41,29 @@ describe("site landing (R4a publish-grade contract)", () => {
     expect(html).not.toMatch(/class="section-sub">\s*\d+ tweaks/);
     // The full count survives on the browse-all link (honest, just demoted).
     expect(html).toMatch(/Open the full Blackbook — all \d+ entries/);
+  });
+
+  it("hero receipt is the REAL measured one, pinned to its provenance record (bug→guard, 2026-07-13)", () => {
+    // A consumer-panel persona caught the old strip using fabricated numbers (fast-startup-off
+    // "+8 fps" — a boot-time tweak that cannot move fps). The receipt is now a real Lab →
+    // Benchmark A/B trial; site/src/proof-receipt.json is its provenance. This guard pins the
+    // rendered strip to that record so decorative numbers can't silently return: re-measuring
+    // means updating BOTH files together.
+    const receipt = JSON.parse(readFileSync(join(root, "site", "src", "proof-receipt.json"), "utf8"));
+    expect(html).toContain(receipt.stripLines.title);
+    for (const row of [receipt.stripLines.row1, receipt.stripLines.row2, receipt.stripLines.row3]) {
+      for (const cell of row) expect(html).toContain(cell);
+    }
+    // Provenance must be complete enough to audit: a ledger entry, a real trial, a clean rollback.
+    expect(receipt.ledgerEntryId).toMatch(/^[a-z-]+-\d+$/);
+    expect(receipt.trial.rolledBack).toBe(true);
+    expect(receipt.recId).toBe(receipt.ledgerEntryId.replace(/-\d+$/, ""));
+    // The known-fabricated mock trio must never reappear in RENDERED copy (the template's
+    // provenance comment may name it — comments don't render, so strip them before matching).
+    const rendered = html.replace(/<!--[\s\S]*?-->/g, "");
+    expect(rendered).not.toContain("+8 fps");
+    expect(rendered).not.toContain("an example receipt");
+    expect(rendered).not.toMatch(/proof-row"><span class="k">fast-startup-off/);
   });
 
   it("makes ZERO third-party requests: no external scripts/styles/fonts/trackers, no raster assets yet", () => {
