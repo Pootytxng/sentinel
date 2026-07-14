@@ -10,6 +10,19 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-14 (CONSUMER-PANEL PART A HONESTY FIXES SHIPPED `9a29cfe` — installer SHA-256
+> `CA408DF49BC747C2E0360135CD3F055F2040F29C64CDA96DE77BC9D0AA00F795`, live exe stamp-verified `9a29cfe`
+> via the embedded hash, installed by Claude + LIVE, supersedes the `26D42379…D483979A` installer; NO
+> gate moved, display-only — zero mutation-boundary code):** the 2026-07-14 consumer-panel PART A
+> items: Expert View's "every tweak" promise now covers the deliberately-refused tier
+> (`expert-targets.ts` + `REFUSE_PILE` rows render the gated `ExpertTargetLine`; default-OFF face
+> pinned unchanged) · Monitor vs-last-session tag appends "· COMBINED EFFECT" when >1 change is on,
+> tooltip routes attribution to the Lab A/B bench · Home rig RAM callout gains measured speed /
+> EXPO-XMP note · `prettyGameName` strips UE `-Win64-Shipping` suffixes. Verify: tsc 0 · vitest
+> 1623/1623 (up from 1610) · self-reviewer PASS (Expert ON/OFF, live 11-changes session). PART B
+> (theater-vs-data merge, hero proof framing) answered directionally by owner — proposals pending,
+> nothing built.
+>
 > **UPDATE 2026-07-14 (FULL-PROJECT REVIEW CLEANUP SHIPPED `4dbfca4`+`3ba79dc` — installer SHA-256
 > `26D42379A1A3EED60E95CFC4315B48303362064AA8784C0D6482900D483979A3`, live exe stamp-verified `3ba79dc`
 > via the embedded hash, installed by Claude + LIVE, supersedes the `1C1F13DC…FE657E0` installer; NO
