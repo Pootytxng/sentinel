@@ -10,6 +10,23 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-14 (CONSUMER-PANEL PART B SHIPPED `2eda4eb` — installer SHA-256
+> `4B916615DF25A8D4EBEE29E4BAEDAA3C178634209F38D90195A9D5C1643DCC18`, live exe stamp-verified `2eda4eb`
+> via the embedded hash, installed by Claude + LIVE, supersedes the `CA408DF4…AA00F795` installer; NO
+> gate moved, display-only — zero mutation-boundary code):** the owner-approved PART B pair. **B7 site
+> hero "positives first, credibility as the shield":** the stage stacks two provenance-pinned strips —
+> TOP `.proof-win` is a real Diablo IV measured-session showcase (237 avg fps / 214 1% low, 3h,
+> `site/src/session-receipt.json`) with NO gain claim (the Monitor "▲37 avg" delta was REJECTED for the
+> slot: 94% vs 41% GPU load between its two sessions = indefensible attribution; documented in the
+> receipt JSON), BOTTOM keeps the game-mode null receipt retitled "The honesty test · we publish the
+> misses"; `scripts/site-landing.test.mjs` pins both strips to their JSONs and rejects gain-claim
+> phrasing in the win strip. Site stays PRE-PUBLISH — hero copy is owner taste-gated before publish.
+> **B6a hologram-as-index:** Home rig callouts (GPU/CPU/RAM/Storage) expand on demand (hover peek /
+> click pin, `HomeConsole.tsx` dense builders) into detected-only dense readouts; missing field = no
+> row; drag-orbit preserved; 4 new guards in `home-console.test.tsx`. **B6b:** Settings "JARVIS motion"
+> sub-description now descriptive (`Settings.tsx:259`). Verify: tsc 0 · vitest 1628/1628 (up from
+> 1623) · site 17/17 · self-reviewer PASS (8/8 incl. GL-idle 0 draws with all callouts pinned).
+>
 > **UPDATE 2026-07-14 (CONSUMER-PANEL PART A HONESTY FIXES SHIPPED `9a29cfe` — installer SHA-256
 > `CA408DF49BC747C2E0360135CD3F055F2040F29C64CDA96DE77BC9D0AA00F795`, live exe stamp-verified `9a29cfe`
 > via the embedded hash, installed by Claude + LIVE, supersedes the `26D42379…D483979A` installer; NO
