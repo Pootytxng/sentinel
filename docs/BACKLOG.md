@@ -930,6 +930,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   validates `APPLIABLE_REC_IDS`, single-consent + ONE UAC) wired at `App.tsx:772` on the QA-closed apply path.
   A dedicated "re-apply everything that drifted off in one click" button would be a small UI add on top if wanted.
 - Gaming Mode (F1) — built, **gate still false**; needs physical-reboot QA + owner sign-off.
+- [ ] `--run-elevated` boundary-side guard (defense-in-depth, owner-approved 2026-07-14) — the elevated
+  helper entry (`main.rs:10` → `lib.rs:61` `run_elevated_helper`) runs whatever hex-decoded PowerShell it's
+  handed; all validation lives caller-side (`ps_safe`/typed dispatch in `actions.rs`). NOT a live hole (the
+  entry grants no privilege by itself — an external caller runs at their own IL and needs their own UAC
+  prompt, at which point Compy is irrelevant), but a future confused-deputy bug could hand it
+  attacker-influenced hex. Fix = a second lock AT the boundary that can never false-reject a legitimate
+  apply (e.g. helper accepts only scripts carrying the exact shapes `compose_batch_script`/apply builders
+  emit, or an HMAC-with-session-key envelope minted at dispatch in `run_elevated_powershell`). Fully
+  backend, zero UX change. Rides the mutation-gate (elevation boundary = owner territory): own commit,
+  guard tests both directions (rejects foreign script · every real apply builder's output still passes),
+  reviewer verdict. Sized ~1 session; not launch-blocking.
 
 ## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
 - [BUILT-DARK] Receipts opt-in consent UI + payload preview — `receipts.rs`, `ReceiptsConsent.tsx` (gate off)
