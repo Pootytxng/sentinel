@@ -55,18 +55,22 @@
       <!-- "It's free" belongs above the fold, not in the footer (three personas hunted for it). -->
       <p class="hero-note"><b>Compy is free.</b> No account, no ads, nothing leaves your PC.</p>
     </div>
-    <!-- THE PROOF LOOP leads the stage (consumer-panel overhaul: three personas independently
-         named the applied → measured → rolled-back strip the most convincing element — it is now
-         the hero visual, real accessible text, not a decorative aside). The living-Blackbook
-         video stays as the ambient backdrop (aria-hidden; poster paints first, the page script
-         pauses it under prefers-reduced-motion). The receipt is REAL — a game-mode A/B trial run
+    <!-- THE STAGE (consumer-panel round 2, owner direction 2026-07-14: "positives first,
+         credibility as the shield"): TWO real strips now share it. TOP = the appealing positive —
+         a real measured session (Diablo IV, 3h, 237 avg fps) transcribed from the dev rig's own
+         Monitor data; it is a MEASUREMENT showcase, deliberately claiming no gain and attributing
+         nothing to Compy changes (the Monitor "▲37 avg" delta was REJECTED for this slot: its two
+         sessions ran at 94% vs 41% GPU load — a skeptic would shred it; provenance + the rejection
+         note live in site/src/session-receipt.json). BOTTOM = the proof-loop receipt, reframed as
+         the credibility anchor ("we publish the misses"): the REAL game-mode A/B trial run
          2026-07-13 through the app's own Lab → Benchmark flow on live Palworld frames (applied →
-         measured → auto-rolled-back; Trust Ledger game-mode-1783992509604). The honest verdict
-         was "within noise" — which IS the brand claim: no measurable change gets called exactly
-         that. Full provenance: site/src/proof-receipt.json (a follow-up consumer-panel persona
-         flagged the previous decorative mock — fast-startup-off "+8 fps" — as fabricated; a
-         boot-time tweak can't move fps at all). site-landing.test.mjs pins these lines to the
-         provenance record. -->
+         measured → auto-rolled-back; Trust Ledger game-mode-1783992509604; verdict "within
+         noise"). Full provenance: site/src/proof-receipt.json (its predecessor — a decorative
+         fast-startup-off "+8 fps" mock — was flagged fabricated by a panel persona; a boot-time
+         tweak can't move fps at all). The living-Blackbook video stays as the ambient backdrop
+         (aria-hidden; poster paints first, the page script pauses it under prefers-reduced-motion).
+         site-landing.test.mjs pins BOTH strips to their provenance records and rejects gain-claim
+         phrasing in the session strip. -->
     <div class="stage reveal reveal-late">
       <div class="book-glow" aria-hidden="true"></div>
       <div class="book-frame" aria-hidden="true">
@@ -74,12 +78,18 @@
           <source src="assets/og-card.mp4" type="video/mp4" />
         </video>
       </div>
+      <div class="proof proof-win">
+        <div class="proof-title">Measured live · a real session</div>
+        <div class="proof-row"><span class="k">Diablo IV</span><span>3h 00m session</span></div>
+        <div class="proof-row"><span>237 avg fps · 214 1% low</span><span class="ok">measured ✓</span></div>
+        <div class="proof-cap">Radeon RX 9070 XT · every number read on-device and graphed in Monitor.</div>
+      </div>
       <div class="proof">
-        <div class="proof-title">The proof loop · a real receipt</div>
+        <div class="proof-title">The honesty test · we publish the misses</div>
         <div class="proof-row"><span class="k">game-mode</span><span>applied · 18:28</span></div>
         <div class="proof-row"><span>no gain beyond ±0.7% noise</span><span class="ok">measured ✓</span></div>
         <div class="proof-row"><span class="k">rolled back</span><span>exact prior value ✓</span></div>
-        <div class="proof-cap">Applied → measured → rolled back. Every change gets this receipt, on your machine.</div>
+        <div class="proof-cap">This tweak did nothing, so that's what Compy called it. That's why a "real win" verdict from Compy means something.</div>
       </div>
       <div class="verdicts" aria-hidden="true">
         <i class="vd real" data-label="Real"></i>

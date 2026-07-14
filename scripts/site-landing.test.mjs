@@ -66,6 +66,28 @@ describe("site landing (R4a publish-grade contract)", () => {
     expect(rendered).not.toMatch(/proof-row"><span class="k">fast-startup-off/);
   });
 
+  it("hero session showcase is a REAL session, pinned to provenance, and claims NO gain (owner direction 2026-07-14: positives first, credibility as the shield)", () => {
+    // The win strip is a measurement showcase transcribed from the rig's own Monitor data
+    // (site/src/session-receipt.json). It must never grow a gain/causal claim: the Monitor
+    // "▲37 avg" delta was REJECTED for this slot (its two sessions ran at 94% vs 41% GPU
+    // load — not comparable), so the guard rejects gain-claim phrasing outright.
+    const session = JSON.parse(readFileSync(join(root, "site", "src", "session-receipt.json"), "utf8"));
+    expect(html).toContain(session.stripLines.title);
+    for (const row of [session.stripLines.row1, session.stripLines.row2]) {
+      for (const cell of row) expect(html).toContain(cell);
+    }
+    expect(html).toContain(session.cap);
+    // Provenance must be auditable: a real session record with duration + sample counts.
+    expect(session.durationSecs).toBeGreaterThan(0);
+    expect(session.samples).toBeGreaterThan(0);
+    expect(session.claim).toContain("no gain claim");
+    // No gain-claim phrasing anywhere in the win strip (▲/+N fps, "faster", "boost", "gained").
+    const winStrip = /<div class="proof proof-win">([\s\S]*?)<\/div>\s*<div class="proof">/.exec(html)?.[1] ?? "";
+    expect(winStrip.length).toBeGreaterThan(0); // the strip is really there, above the honesty receipt
+    expect(winStrip).not.toMatch(/[▲+]\s*\d/);
+    expect(winStrip).not.toMatch(/faster|boost|gain/i);
+  });
+
   it("makes ZERO third-party requests: no external scripts/styles/fonts/trackers, no raster assets yet", () => {
     // Every external http(s) reference would be a third-party request — there must be none.
     // (The waitlist POST is SAME-ORIGIN /api/waitlist — gate-crossing per the 2026-06-12

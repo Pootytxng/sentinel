@@ -291,6 +291,9 @@ h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration
   font-family: var(--mono); font-size: 13px;
   box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.7), 0 0 44px rgba(46, 230, 192, 0.12);
 }
+/* Two strips share the stage (positives-first direction, 2026-07-14): the measured-session
+   showcase anchors the TOP edge; the honesty receipt keeps the bottom. Same glass, one stage. */
+.proof-win { top: 22px; bottom: auto; }
 .proof-title {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--accent); margin: 0 0 8px;
@@ -529,6 +532,6 @@ html.rv .sr-kids.in > :nth-child(n + 6) { transition-delay: 360ms; }
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; gap: 40px; padding-top: 56px; }
   .hero::before { width: 110%; }
-  .stage { min-height: 380px; order: 2; }
+  .stage { min-height: 470px; order: 2; } /* two absolute strips (win + honesty) need the room */
   .verdict-key, .debunks { grid-template-columns: 1fr; }
 }

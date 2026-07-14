@@ -78,8 +78,58 @@ const ramSpeedNote = (mods: HardwareInfo["memory_modules"]): string | undefined 
   return m ? `${m.speed_mhz} MT/s` : undefined;
 };
 
+// ── Dense readouts behind each callout (owner direction 2026-07-14: "the hologram is the
+// index into the dense data"). Expanding a callout shows the full DETECTED record — the same
+// HardwareInfo fields the Cards view renders; zero new probes, zero new claims. A missing
+// field omits its row entirely (never a placeholder, never a guess).
+const fmtGB0 = (b: number) => `${Math.round(b / 1024 ** 3)}`;
+const fmtDiskSize = (b: number) =>
+  b >= 1000 * 1024 ** 3 ? `${(b / 1024 ** 4).toFixed(1)} TB` : `${fmtGB0(b)} GB`;
+
+export const denseGpu = (g: HardwareInfo["gpus"][number] | undefined): [string, string][] => {
+  if (!g) return [];
+  const rows: [string, string][] = [["model", g.name]];
+  if (g.vram_bytes > 0) rows.push(["VRAM", `${fmtGB0(g.vram_bytes)} GB`]);
+  if (g.driver_version) rows.push(["driver", g.driver_version]);
+  if (g.driver_date) rows.push(["driver date", g.driver_date]);
+  return rows;
+};
+
+export const denseCpu = (hw: HardwareInfo): [string, string][] => {
+  const rows: [string, string][] = [];
+  if (hw.cpu_brand) rows.push(["model", hw.cpu_brand]);
+  if (hw.cpu_cores_physical > 0)
+    rows.push(["cores", `${hw.cpu_cores_physical}c / ${hw.cpu_cores_logical}t`]);
+  if (hw.cpu_frequency_mhz > 0)
+    rows.push(["clock", `${(hw.cpu_frequency_mhz / 1000).toFixed(1)} GHz`]);
+  return rows;
+};
+
+export const denseRam = (mods: HardwareInfo["memory_modules"]): [string, string][] =>
+  mods.map((m, i) => [
+    `slot ${i + 1}`,
+    [
+      m.capacity_bytes > 0 ? `${fmtGB0(m.capacity_bytes)} GB` : null,
+      m.type_name || null,
+      m.speed_mhz > 0 ? `${m.speed_mhz} MT/s` : null,
+      m.manufacturer || null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  ]);
+
+export const denseStorage = (disks: HardwareInfo["physical_disks"]): [string, string][] =>
+  disks.map((d) => [
+    d.friendly_name,
+    [d.media_type || null, d.bus_type || null, fmtDiskSize(d.size_bytes)]
+      .filter(Boolean)
+      .join(" · "),
+  ]);
+
 // One instrument annotation: LED (only when a measured value earned a tone) · part · detected
 // model · measured value on a hairline leader. HomeHud's Callout in the console's namespace.
+// With `dense` rows it becomes the index into the full detected record: hover peeks, click
+// pins (aria-expanded button). The default face is unchanged — density is per-interaction.
 function Callout({
   tone,
   name,
@@ -87,6 +137,7 @@ function Callout({
   value,
   valueTone,
   mono = true,
+  dense,
 }: {
   tone: "ok" | "warn" | null;
   name: string;
@@ -94,19 +145,58 @@ function Callout({
   value?: string;
   valueTone?: "ok" | "warn" | null;
   mono?: boolean;
+  dense?: [string, string][];
 }) {
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const expandable = !!dense && dense.length > 0;
+  const open = expandable && (pinned || hovered);
+  const head = (
+    <span className="hc-callout-head">
+      {tone && <span className={`hc-led hc-led-${tone}`} aria-hidden="true" />}
+      <b>{name}</b>
+      {detail && <span className="hc-callout-detail">{detail}</span>}
+      {expandable && (
+        <span className="hc-callout-more" aria-hidden="true">
+          {open ? "−" : "+"}
+        </span>
+      )}
+    </span>
+  );
   return (
-    <div className="hc-callout">
-      <span className="hc-callout-head">
-        {tone && <span className={`hc-led hc-led-${tone}`} aria-hidden="true" />}
-        <b>{name}</b>
-        {detail && <span className="hc-callout-detail">{detail}</span>}
-      </span>
+    <div
+      className={`hc-callout${expandable ? " hc-callout-x" : ""}${open ? " hc-callout-open" : ""}`}
+      onPointerEnter={expandable ? () => setHovered(true) : undefined}
+      onPointerLeave={expandable ? () => setHovered(false) : undefined}
+    >
+      {expandable ? (
+        <button
+          type="button"
+          className="hc-callout-btn"
+          aria-expanded={open}
+          aria-label={`${name} details`}
+          onClick={() => setPinned((v) => !v)}
+        >
+          {head}
+        </button>
+      ) : (
+        head
+      )}
       {value && (
         <span
           className={`hc-callout-v ${mono ? "hc-mono" : ""}${valueTone ? ` hc-callout-v-${valueTone}` : ""}`}
         >
           {value}
+        </span>
+      )}
+      {open && (
+        <span className="hc-callout-dense">
+          {dense!.map(([k, v], i) => (
+            <span key={`${k}-${i}`} className="hc-dense-row">
+              <span className="hc-dense-k">{k}</span>
+              <span className="hc-dense-v hc-mono">{v}</span>
+            </span>
+          ))}
         </span>
       )}
     </div>
@@ -449,9 +539,11 @@ export function HomeConsole({
           </div>
           {rig3d && (
             <>
-              {/* Instrument annotations — the parallax plane (Task 4); pointer-events none so
-                  drag-orbit under them never fights. GPU temp lives in the BR gauge (one owner
-                  per number), so the GPU callout carries the detected model only. */}
+              {/* Instrument annotations — the parallax plane (Task 4); the plane stays
+                  pointer-events none so drag-orbit under it never fights — only a callout
+                  with a dense readout takes the pointer back (hc-callout-x). GPU temp lives
+                  in the BR gauge (one owner per number), so the GPU callout carries the
+                  detected model only; expanding it is the index into the full record (B6a). */}
               <div className="hc-ann hc-ann-left">
                 <Callout
                   tone={mem ? gradeTone(mem.level === "ok" ? "good" : "bad") : null}
@@ -463,6 +555,7 @@ export function HomeConsole({
                       : `${fmtGB1(hw.ram_total_bytes)} GB`
                   }
                   valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
+                  dense={denseRam(hw.memory_modules)}
                 />
                 {diskPct != null && (
                   <Callout
@@ -470,17 +563,24 @@ export function HomeConsole({
                     name="Storage"
                     value={`C: ${diskPct}% full`}
                     valueTone={diskPct >= 90 ? "warn" : "ok"}
+                    dense={denseStorage(hw.physical_disks)}
                   />
                 )}
               </div>
               <div className="hc-ann hc-ann-right">
-                <Callout tone={null} name="GPU" detail={shortModel(hw.gpus[0]?.name)} />
+                <Callout
+                  tone={null}
+                  name="GPU"
+                  detail={shortModel(hw.gpus[0]?.name)}
+                  dense={denseGpu(hw.gpus[0])}
+                />
                 <Callout
                   tone={null}
                   name="CPU"
                   detail={hw.cpu_arch?.family_label || undefined}
                   value="no temp — Compy won't ship a kernel driver"
                   mono={false}
+                  dense={denseCpu(hw)}
                 />
               </div>
             </>

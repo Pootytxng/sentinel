@@ -257,10 +257,10 @@ export default function Settings({
                 <div className="set-row-text">
                   <div className="set-row-title">JARVIS motion</div>
                   <div className="set-row-sub">
-                    The interactive motion layer: glide scrolling, a sweep when you change
-                    rooms, magnetic rail buttons, and gauges that tick when a measured value
-                    changes. Purely visual — it never touches what Compy measures, and the
-                    Motion setting below still wins.
+                    Turns interface animation on or off: smooth scrolling, a short transition
+                    when you change rooms, buttons that shift toward the cursor, and a tick on
+                    gauges when a reading updates. It changes how things move, never what Compy
+                    measures. The Motion setting below still wins.
                   </div>
                 </div>
                 <Toggle

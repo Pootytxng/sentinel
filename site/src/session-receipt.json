@@ -1,0 +1,20 @@
+{
+  "note": "Provenance for the hero 'measured live' session strip in index.template.html. This is a REAL session summary transcribed from the dev rig's own Monitor data (%APPDATA%/Compy/sessions.json), not illustrative copy. It is a MEASUREMENT SHOWCASE ONLY — the strip deliberately makes NO gain/causal claim (8 Compy changes were active during this session, but attributing fps to them would be exactly the combined-effect dishonesty the 2026-07-14 consumer panel flagged in Monitor; the Monitor '▲37 avg' delta was rejected for this slot for the same reason — its two sessions ran at 94% vs 41% GPU load, different scenes). If the strip is ever re-pointed at a different session, update BOTH this record and the template; scripts/site-landing.test.mjs pins them together and rejects gain-claim phrasing in the strip.",
+  "transcribedAt": "2026-07-14",
+  "source": "%APPDATA%/Compy/sessions.json — Monitor session summary (sessions.rs)",
+  "startedAt": "2026-06-11T03:44:08Z",
+  "game": "Diablo IV (Diablo IV.exe)",
+  "durationSecs": 10805,
+  "samples": 10776,
+  "avgFps": 237.3,
+  "low1FpsEst": 214.4,
+  "peakGpuUsagePct": 98,
+  "rig": "AMD Radeon RX 9070 XT · Ryzen X3D-class 16-thread · Windows 11",
+  "claim": "measurement showcase only — no gain claim, no attribution to Compy changes",
+  "stripLines": {
+    "title": "Measured live · a real session",
+    "row1": ["Diablo IV", "3h 00m session"],
+    "row2": ["237 avg fps · 214 1% low", "measured ✓"]
+  },
+  "cap": "Radeon RX 9070 XT · every number read on-device and graphed in Monitor."
+}

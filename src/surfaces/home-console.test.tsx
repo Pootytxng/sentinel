@@ -353,6 +353,89 @@ describe("HomeConsole — motion contract (Task 4)", () => {
   });
 });
 
+// B6a (owner direction 2026-07-14): the hologram is the INDEX into the dense data — callouts
+// with a dense record expand on demand into the full detected readout. Same HardwareInfo the
+// Cards view renders; a missing field omits its row (never a placeholder).
+const denseHw = {
+  ...hw,
+  gpus: [
+    {
+      name: "AMD Radeon RX 9070 XT",
+      vram_bytes: 16 * 1024 ** 3,
+      driver_version: "25.5.1",
+      driver_date: "2026-05-02",
+    },
+  ],
+  memory_modules: [
+    {
+      capacity_bytes: 16 * 1024 ** 3,
+      speed_mhz: 6000,
+      rated_speed_mhz: 6000,
+      type_name: "DDR5",
+      manufacturer: "Corsair",
+      xmp_expo_status: "running_at_rated",
+    },
+    {
+      capacity_bytes: 16 * 1024 ** 3,
+      speed_mhz: 6000,
+      rated_speed_mhz: 6000,
+      type_name: "DDR5",
+      manufacturer: "Corsair",
+      xmp_expo_status: "running_at_rated",
+    },
+  ],
+} as unknown as HardwareInfo;
+
+describe("HomeConsole — callout dense readouts (B6a: the hologram indexes the dense data)", () => {
+  const gpuButton = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find((b) =>
+      b.textContent?.includes("GPU"),
+    )!;
+
+  it("default face is unchanged: no dense readout in the DOM, expandable callouts closed", () => {
+    const c = mount({ ...props, hw: denseHw }).container;
+    expect(c.querySelector(".hc-callout-dense")).toBeNull();
+    expect(gpuButton(c).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("click expands into the DETECTED record (driver, VRAM) and click again collapses", () => {
+    const c = mount({ ...props, hw: denseHw }).container;
+    fireEvent.click(gpuButton(c));
+    expect(gpuButton(c).getAttribute("aria-expanded")).toBe("true");
+    const dense = gpuButton(c).closest(".hc-callout")!.querySelector(".hc-callout-dense")!;
+    expect(dense.textContent).toContain("AMD Radeon RX 9070 XT");
+    expect(dense.textContent).toContain("16 GB");
+    expect(dense.textContent).toContain("25.5.1");
+    fireEvent.click(gpuButton(c));
+    expect(c.querySelector(".hc-callout-dense")).toBeNull();
+  });
+
+  it("RAM expands to per-module detected rows (capacity · type · speed · manufacturer)", () => {
+    const c = mount({ ...props, hw: denseHw }).container;
+    const ramBtn = Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find(
+      (b) => b.textContent?.includes("RAM"),
+    )!;
+    fireEvent.click(ramBtn);
+    const dense = ramBtn.closest(".hc-callout")!.querySelector(".hc-callout-dense")!;
+    expect(dense.textContent).toContain("slot 1");
+    expect(dense.textContent).toContain("16 GB · DDR5 · 6000 MT/s · Corsair");
+    expect(dense.querySelectorAll(".hc-dense-row")).toHaveLength(2);
+  });
+
+  it("honesty: a missing field omits its ROW; an empty record renders NO button at all", () => {
+    // Default fixture: gpus[0] has no driver fields → no driver row, no fabricated value.
+    const c = mount().container;
+    fireEvent.click(gpuButton(c));
+    const dense = gpuButton(c).closest(".hc-callout")!.querySelector(".hc-callout-dense")!;
+    expect(dense.textContent).not.toContain("driver");
+    // memory_modules is empty in the default fixture → the RAM callout is not expandable.
+    const ramBtn = Array.from(c.querySelectorAll<HTMLButtonElement>(".hc-callout-btn")).find(
+      (b) => b.textContent?.includes("RAM"),
+    );
+    expect(ramBtn).toBeUndefined();
+  });
+});
+
 describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)", () => {
   it("renders the top limiter's real title, quiet confidence tag, and the jump control", () => {
     const jump = vi.fn();

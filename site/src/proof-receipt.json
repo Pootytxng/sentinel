@@ -18,7 +18,7 @@
   "noiseFloorPct": 0.7394891476994147,
   "noiseFloorSource": "same-session calibration run (start_calibration, 10 windows, unchanged conditions)",
   "stripLines": {
-    "title": "The proof loop · a real receipt",
+    "title": "The honesty test · we publish the misses",
     "row1": ["game-mode", "applied · 18:28"],
     "row2": ["no gain beyond ±0.7% noise", "measured ✓"],
     "row3": ["rolled back", "exact prior value ✓"]
