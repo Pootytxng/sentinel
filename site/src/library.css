@@ -121,7 +121,10 @@ body::after {
 /* ── Topbar ── */
 .topbar {
   display: flex; align-items: baseline; justify-content: space-between;
-  padding: 22px 0 18px; border-bottom: 1px solid var(--hairline);
+  /* Longhand on purpose: this class shares its element with .wrap (<header class="wrap topbar">),
+     and a padding SHORTHAND here clobbers .wrap's 24px side padding (same specificity, later in
+     file) — the 2026-07-13 mobile page-edge defect. Top/bottom only; sides stay .wrap's. */
+  padding-top: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--hairline);
   gap: 10px; flex-wrap: wrap; /* 380px floor: the beta chip wraps under the wordmark cleanly */
 }
 .wordmark {
@@ -139,7 +142,10 @@ body::after {
 .hero {
   display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
   gap: clamp(36px, 6vw, 56px); align-items: center;
-  padding: clamp(52px, 11vw, 96px) 0 clamp(48px, 9vw, 80px);
+  /* Longhand on purpose (shares its element with .wrap — see .topbar): the old shorthand zeroed
+     the wrap's side padding, so below ~1128px the hero ran edge-to-edge and the verdict ribbon's
+     -10px overhang + 7px glow ring scrolled the page sideways (390px: scrollWidth 407). */
+  padding-top: clamp(52px, 11vw, 96px); padding-bottom: clamp(48px, 9vw, 80px);
   position: relative;
 }
 /* Soft radial bloom behind the hero copy — the first light source the eye meets. */
@@ -185,10 +191,11 @@ h1 {
 }
 h1 .strike { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: var(--risky); }
 /* The promoted hook headline is longer than the old two-word doctrine line — sized down so it
-   holds exactly two lines in the 7fr column (~597px at a 1400px viewport; measured via line boxes,
-   self-review 2026-07-11 — 4.6vw/52px wrapped to three). The base h1 clamp still serves the
+   holds exactly two lines in the 7fr column (569px once .wrap's 24px side padding applies;
+   measured via line boxes, self-review 2026-07-11 + 2026-07-13 — a 44px cap wrapped
+   "actually help your rig." to a third line at ≥1294px). The base h1 clamp still serves the
    article pages. */
-.hero h1 { font-size: clamp(28px, 3.4vw, 44px); line-height: 1.12; }
+.hero h1 { font-size: clamp(28px, 3.4vw, 42px); line-height: 1.12; }
 .hero-sub { color: var(--ink-2); max-width: var(--measure); margin: 0 0 30px; font-size: 18.5px; }
 .hero-sub strong { color: var(--ink); font-weight: 600; }
 /* "It's free" above the fold (consumer-panel overhaul). */
@@ -423,7 +430,10 @@ h2 {
 }
 
 /* ── Article (debunk page) ── */
-.article { max-width: 720px; margin: 0 auto; padding: 64px 0 80px; }
+/* Longhand on purpose (shares its element with .wrap — <main class="wrap article">, see .topbar):
+   the old shorthand zeroed the wrap's 24px side padding, so article body text ran flush to the
+   viewport edge on mobile across every library/debunk page. */
+.article { max-width: 720px; margin: 0 auto; padding-top: 64px; padding-bottom: 80px; }
 .article .chip { margin-bottom: 18px; }
 .article h1 { font-size: clamp(28px, 4.2vw, 42px); }
 .aliases { font-family: var(--mono); font-size: 13px; color: var(--ink-3); margin: 0 0 36px; }

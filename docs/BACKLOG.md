@@ -161,6 +161,28 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 
 ## 🛰️ HQ STEERING LOG — live lane board (newest on top)
 
+### Cycle 2026-07-13f — ✅ 390px LANDING PAGE-EDGE OVERFLOW FIXED (the pre-existing defect 13e logged) — site-only, NO gate moved, zero src-tauri, zero src/
+
+**Root cause (probed, not guessed):** `.topbar`, `.hero`, and `.article` each share their element
+with `.wrap` (`<header class="wrap topbar">` …) and their `padding:` SHORTHANDS (`22px 0 18px` etc.)
+clobbered `.wrap`'s `0 24px` side padding (same specificity, later in file). Below ~1128px the hero
+ran edge-to-edge and the verdict ribbon (`.verdicts` `right:-10px` + `.vd::after` `inset:-7px`)
+scrolled the page to 407px at a 390px viewport; article body text sat flush at x=0 on every
+library/debunk page. **Fix (`site/src/library.css`, regenerated + restaged):** longhand
+`padding-top/-bottom` on all three rules + `.hero h1` clamp cap 44→42px (the self-reviewer's
+round-1 catch: the correctly-narrowed 569px column wrapped the hard-`<br>` headline to a 3rd line
+at ≥1294px). Desktop effect: topbar/hero now ALIGN with every `.wrap` section (they were the odd
+ones out by 24px). **bug→guard (`scripts/site-landing.test.mjs`): red-PROVEN on the pre-fix CSS**
+— parses every rule, flags a `padding:` shorthand in any block whose subject is a wrap-combined
+class (classes derived from the landing + both article templates), and pins generated==source css.
+Verify: self-reviewer round-1 PASS on 390 visuals/768/1000 band/full-page eyeball + round-2 h1 ==
+exactly 2 line boxes at 1280/1440/1920 (worker hit its session limit mid-round-2; the remaining
+NUMERIC checks closed inline, disclosed: index sw==cw at 1280/1440/1920/390 w/ 0 offenders ·
+article 390 padL/R 24px, h1/p x=24, sw 390 · article 1440 unchanged 720px centered) · site-landing
+**17/17** + staleness guard · full vitest **1610/1610** (177 files). Impeccable-hook notes
+(gradient hero h1, two article `border-left` pulls) = pre-existing taste-gated design, untouched.
+Site stays pre-publish (deploy owner-gated).
+
 ### Cycle 2026-07-13e — ✅ SITE HERO RECEIPT IS NOW REAL (mock replaced with a measured trial) — site-only, NO gate moved, zero src-tauri, zero src/
 
 **Cowork consumer-panel follow-up flagged the hero proof strip's numbers as fabricated** (marked
@@ -178,7 +200,7 @@ pins the rendered strip to the provenance record (re-measuring must update both 
 the fabricated trio from rendered copy. Site regenerated (`node site/generate.mjs`, index only —
 deploy stays owner-gated; site is pre-publish). Verify: site-landing **16/16** · visual pass
 1440px+390px (marginal 390px title overflow caught + fixed by shortening; page-edge mobile
-overflow at 390px is PRE-EXISTING, identical render on the committed page — logged here, untouched).
+overflow at 390px was PRE-EXISTING, identical render on the committed page — ✅ fixed in Cycle 13f).
 **Note for a future better receipt:** a Keep-verdict receipt (real measured WIN) can replace this
 one when one occurs naturally — e.g. a tester rig or a fresh Windows state where a START-HERE tweak
 isn't already applied; the provenance+guard structure makes the swap a two-file edit.

@@ -10,6 +10,20 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-13 (390px LANDING PAGE-EDGE OVERFLOW FIXED — site-only commit, NO gate moved, no
+> installer change, zero `src-tauri`, zero `src/`):** the pre-existing mobile defect the hero-receipt
+> pass logged is closed. Root cause: `.topbar`/`.hero`/`.article` share their element with `.wrap`
+> and their `padding:` shorthands zeroed `.wrap`'s 24px side padding — below ~1128px the hero ran
+> edge-to-edge and the verdict ribbon's `-10px` overhang + 7px glow scrolled the page to 407px at a
+> 390px viewport; article text sat flush at x=0 on every library/debunk page. Fix: longhand
+> `padding-top/-bottom` on all three (`site/src/library.css`, regenerated) + `.hero h1` clamp cap
+> 44→42px (self-review catch — the narrowed 569px column wrapped the headline to 3 lines ≥1294px).
+> bug→guard in `scripts/site-landing.test.mjs` (red-proven on the pre-fix CSS; scans wrap-combined
+> classes from landing + article templates for the shorthand; pins generated==source). Verify:
+> self-reviewer PASS (390 visuals + h1 2-line boxes at 1280/1440/1920) · index sw==cw at
+> 390/1280/1440/1920 · article 24px inset at 390, desktop unchanged · site-landing 17/17 · vitest
+> 1610/1610. Site stays pre-publish; the live installer stays `86ecad1`/`1C1F13DC…`.
+>
 > **UPDATE 2026-07-13 (SITE HERO RECEIPT NOW REAL — site-only commit, NO gate moved, no installer
 > change, zero `src-tauri`, zero `src/`):** the landing hero's proof-strip numbers were a decorative
 > mock (`fast-startup-off` "+8 fps · 1% low +11") that a consumer-panel persona flagged as fabricated

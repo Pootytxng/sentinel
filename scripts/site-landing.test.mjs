@@ -90,6 +90,46 @@ describe("site landing (R4a publish-grade contract)", () => {
     expect(download).not.toMatch(/<button|class="btn"/);
   });
 
+  it("wrap-combined classes never clobber .wrap's side padding with a shorthand (bug→guard, 2026-07-13)", () => {
+    // The 390px page-edge overflow (Cycle 2026-07-13e log): .topbar/.hero share their element
+    // with .wrap (<header class="wrap topbar">), and a `padding:` SHORTHAND in those blocks
+    // resets .wrap's 24px side padding (same specificity, later in the file) — hero copy ran
+    // edge-to-edge on mobile and the verdict ribbon scrolled the page to 407px. Longhand
+    // padding-top/-bottom is the law for any class that rides a .wrap element.
+    const css = readFileSync(join(root, "site", "library.css"), "utf8");
+    // Scan the landing AND both article templates — every markup source that pairs a class
+    // with .wrap ("wrap article" caught the same bug on all 200+ library pages).
+    const markup =
+      html +
+      readFileSync(join(root, "site", "src", "page.template.html"), "utf8") +
+      readFileSync(join(root, "site", "src", "debunk.template.html"), "utf8");
+    const combined = new Set(
+      [...markup.matchAll(/class="wrap\s+([\w- ]+)"/g)].flatMap((m) => m[1].trim().split(/\s+/)),
+    );
+    expect(combined.size).toBeGreaterThanOrEqual(3); // topbar + hero + article at minimum
+    // Walk every rule (comments stripped so they can't blur block boundaries) and flag any
+    // block that styles a wrap-combined class ITSELF (class in the rightmost compound —
+    // descendant rules like `.article ul.toc` style a different element and may pad freely).
+    const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    expect(rules.length).toBeGreaterThan(50); // the parse actually saw the stylesheet
+    let checked = 0;
+    for (const [, selectorList, body] of rules) {
+      for (const cls of combined) {
+        const targetsSelf = selectorList.split(",").some((sel) => {
+          const subject = sel.trim().split(/[\s>+~]+/).pop() ?? "";
+          return new RegExp(String.raw`\.${cls}(?![\w-])`).test(subject) && !subject.includes(":");
+        });
+        if (!targetsSelf) continue;
+        checked++;
+        expect(body, `.${cls} block uses a padding shorthand — it zeroes .wrap's side padding`)
+          .not.toMatch(/(^|;|\s)padding\s*:/);
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(3); // .topbar/.hero/.article blocks were really examined
+    // And the generated stylesheet must stay in sync with its source.
+    expect(css).toBe(readFileSync(join(root, "site", "src", "library.css"), "utf8"));
+  });
+
   it("mobile viewport + og metas present; og:image is LIVE (the §D art exists) and absolute", () => {
     expect(html).toContain('name="viewport"');
     expect(html).toContain('property="og:title"');
