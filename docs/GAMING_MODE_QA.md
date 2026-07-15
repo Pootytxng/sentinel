@@ -69,16 +69,41 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       ✅ **PASSED 2026-07-14 (same run):** Stop → probe byte-identical to baseline, session cleared,
       and the T6b **visible restore confirmation** live-eyeballed: green "✓ Your settings are back —
       Restored 2 changes" card naming each change (`docs/ui-sweep/shots/gm-qa-restore-confirmation.png`).
-- [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles,
+- [x] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles,
       start, and **cancel the single UAC prompt** (since T6, 2026-07-07, the whole advanced tier —
       USB + PCIe + any service suspends — rides ONE prompt). → no partial state left; whatever core
       items applied are rolled back **with no further prompts**; clear error; no session file
       lingering as `active` without a contract.
-- [ ] **7. UAC cancel during RESTORE.** Trigger a restore that needs UAC (advanced tier applied) and
+      ✅ **PASSED 2026-07-14 (CC-driven on the `db5349e` build, owner clicking the real prompts).**
+      Start with USB+PCIe → owner clicked **No** → honest decline error ("Advanced options: You didn't
+      approve the elevation prompt — nothing was changed."), NO second prompt, ground-truth probe
+      byte-identical to baseline, no session file. **This case's FIRST attempts exposed and were blocked
+      by a real bug** (see the runas note below) — an earlier "pass" of #6 recorded mid-run on the
+      pre-fix `2eda4eb` build was INVALID (the decline was misattributed as an approved-then-failed
+      elevation and a spurious SECOND prompt fired) and was never checked off.
+- [x] **7. UAC cancel during RESTORE.** Trigger a restore that needs UAC (advanced tier applied) and
       **cancel the single UAC prompt** (since T6b, 2026-07-08, the whole elevated restore tier rides
       ONE prompt, mirroring #6's start side) → status `RestoreFailed`, the contract is **retained**,
       a clear retry path is shown, it **never reports success**, and the decline is **never followed
       by more prompts**. Retry → completes (ONE prompt again).
+      ✅ **PASSED 2026-07-14 (same `db5349e` run, click order No·Yes·No·Yes):** start → **Yes** →
+      4-change active session (both advanced items `elevated_restore: true`, truthful prior snapshots) →
+      stop → **No** → honest decline error, session file retained with status `restore-failed` and all
+      4 changes intact, NO false success, no extra prompts → retry stop → **Yes** → full restore,
+      session cleared, probe byte-identical to baseline.
+
+> **⚠ The runas bug (found BY this checklist, fixed 2026-07-14, commit `db5349e`):** the `runas` crate
+> (1.2.0) never returns `Err` on Windows — a UAC **decline** (ShellExecuteExW → ERROR_CANCELLED 1223)
+> was collapsed to `Ok(exit -1)`, so the app told the user *"You approved the elevation, but the
+> operation itself failed"* after they clicked No, and the abort path fired a **spurious second
+> prompt**. Replaced with our own `actions::elevate_and_wait` (ShellExecuteExW with the launch error
+> preserved; a missing/unreadable exit maps conservatively, never to fabricated success) at all 3 call
+> sites; 3 guard tests pin the 1223→decline mapping. Cases #6/#7 above ran on the fixed build. A
+> mid-diagnosis run with NO visible prompts was traced to a driver-side arg-casing slip (camelCase
+> serde contract → all-false opts → core-only session, honestly promptless), not an app defect; UAC
+> policy (`EnableLUA=1`/`CPBA=5`/secure desktop) and the app's non-elevated token were verified
+> read-only before the passing run.
+
 - [x] **8. Missing power plan at restore.** Apply Gaming Mode, then delete the prior power plan
       (`powercfg /delete <guid>`) before stopping. Stop → **fails safe with a clear message** (never a
       silent fallback / wrong plan).
@@ -114,7 +139,8 @@ feature via the gate if the bug is user-facing) and you re-test the affected cas
 
 **Case #4 is the one milestone between F1 Gaming Mode and "1.0-confident."**
 
-**Status 2026-07-14: 8 of 10 cases PASSED.** #4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9 CC-driven
+**Status 2026-07-14: ALL 10 cases PASSED.** #4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9 CC-driven
 live-app automation (CDP over the installed `2eda4eb` build, ground-truth registry/powercfg probe,
-owner present) 2026-07-14. **Remaining: #6 and #7 — the real-UAC cancel arms** — need the owner's
-hands on the prompts (4 clicks total: Cancel · Yes · Cancel · Yes); everything else is scripted.
+owner present) 2026-07-14; #6/#7 — the real-UAC cancel arms — owner-clicked (No·Yes·No·Yes) on the
+`db5349e` build 2026-07-14, after that checklist run exposed and forced the runas-decline fix above.
+**Remaining: nothing but the owner's words — "Gaming Mode QA signed off".**

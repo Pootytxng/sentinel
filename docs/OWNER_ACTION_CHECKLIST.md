@@ -18,13 +18,17 @@
 ## §A — Needs your hands or eyes (owner-run, reversible)
 
 ### A1. Gaming Mode QA — sign it off  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
-The feature is live. **8 of 10 cases are PASSED** (#4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9
+The feature is live. **ALL 10 cases are PASSED** (#4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9
 CC-automated on the installed build with ground-truth probes, 2026-07-14 — evidence per-case in the
-QA doc). **Only 2 remain — the real-UAC cancel arms, ~2 minutes at the keyboard:**
-- ⬜ #6 UAC-cancel at START — CC drives everything, you click **Cancel** on the one prompt.
-- ⬜ #7 UAC-cancel at RESTORE + retry — CC drives, you click **Yes · Cancel · Yes** (3 prompts).
-- **Result → tell Claude:** "Gaming Mode QA signed off". *This is the one milestone between F1 and
-  "1.0-confident."*
+QA doc):
+
+- ✅ #6 UAC-cancel at START — owner-clicked 2026-07-14 on the `db5349e` build (this case caught a
+  real bug first: the `runas` crate misread a decline as approved-then-failed + fired a spurious
+  second prompt; fixed in `db5349e`, then #6/#7 re-run clean — see the QA doc's runas note).
+- ✅ #7 UAC-cancel at RESTORE + retry — owner-clicked same run (Yes · No · Yes): decline retained the
+  contract (`restore-failed`, no false success), retry restored everything.
+- ⬜ **The ONLY remaining step is yours: say "Gaming Mode QA signed off"** → recorded here + QA doc,
+  F1 is field-proven for 1.0.
 
 ### A2. Beta smoke pass — before any invites go out  ·  full list: [`BETA_SMOKE_CHECKLIST.md`](BETA_SMOKE_CHECKLIST.md)
 **24 checks, currently 0 run.** The critical one is **migration** (`%APPDATA%\Sentinel` → `\Compy`
