@@ -136,4 +136,10 @@ the base; elements can be borrowed later.
    framing) + FAQ JSON-LD + llms.txt/schema.
 3. **P3 (owner-flagged LATER)** — walkthrough videos + 60–90s app-tour video, simulated-scan demo.
 
-**Decision record (owner answers):** _pending — filled in after the decide-together._
+**Decision record (owner, 2026-07-14):** all three recommendations picked —
+**Direction A "Mission Control"** · **Monitor replay demo** (real Diablo IV session through the
+real Monitor components, `[REPLAY · real recorded session]` chip) · **Astro + React islands
+rebuild** (React Bits free tier + GSAP/ScrollTrigger + Lenis + Motion, Fontsource self-hosted,
+zero third-party runtime requests, Cloudflare Pages $0). Build proceeds per the phasing above:
+P1 home+hero → P2 pricing+compare → P3 videos (owner-flagged LATER). Site stays PRE-PUBLISH;
+every page passes the owner taste gate + the §1 anti-pattern checklist before deploy GO.
