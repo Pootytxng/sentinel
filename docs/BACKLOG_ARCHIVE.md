@@ -5,6 +5,54 @@
 > full history at boot). Same format, newest on top. Grep here for any cycle older than the live board.
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
+### Cycle 2026-07-12j — ✅ PER-ROOM ACCENT PICKER SHIPPED LIVE `20e2b50` (curated swatches, behind existing `compy_room_identity` flag DEFAULT OFF; installer SHA-256 `457A2D00…F73EBDCE`, stamp-verified) — owner eyeball is the open gate
+
+**Owner follow-up 2026-07-12b** (after eyeballing Cycle 12i's presets, verdict "it looks good … otherwise
+everything looks good"): the Settings THEME selector now visibly changes only Home when room-identity is
+on (other rooms are locked to presets) — "doesn't make much sense." His fix: **"offer within the tabs
+themselves a very neatly placed little dropdown … on the corner of each tab to individually change the
+color … for each window … the freedom to shift around the colors they want on each page."** Via
+`AskUserQuestion` he picked **"Curated swatches"** (not a free hex field — keeps the dark-ink legibility
+law unbreakable). **NOT committed, NOT shipped.**
+
+- **What it is:** when `compy_room_identity` is ON (SAME flag, no new one — the picker only renders when
+  the flag is on, so flag-off topbar is byte-identical), each room shows a small accent dot in the
+  TOPBAR far-right corner (`.v2-top`, after `.v2-stamp`) reflecting the ACTIVE room's accent; click →
+  10-swatch popover to recolor THAT room; persists per-room; "Reset to default" restores the preset.
+  Re-skins that room's chrome + rig + sparkline via the same scoped `--v2-accent` mechanism as presets.
+- **NEW files:** `src/design/RoomAccentPicker.tsx` (the control) · `src/design/room-accent-picker.css`
+  (scoped `[data-v2="on"]`; swatch colors are INLINE so it stays literal-clean) · `src/design/room-accents.test.tsx`
+  (21 guards: palette legibility ≥4.5:1 vs ink #1a0a2e, whitelist, store round-trip, managed-style
+  scoping+same-element, flag-gating, interaction, + 3 bug→guards).
+- **Modified:** `room-identity.ts` (`ROOM_ACCENT_SWATCHES` 10-swatch palette + `PICKABLE_ROOMS` +
+  `defaultRoomAccent` + `isSwatchHex`) · `theme.ts` (`readRoomAccents`/`setRoomAccent`/`applyRoomAccents`
+  → managed `<style id="compy-room-accents">`, rules scoped `:root[data-room-identity="on"] .v2-room[data-room=X]`
+  with same-element `--v2-accent`+dim+line, whitelist-validated) · `main.tsx` (boot `applyRoomAccents`) ·
+  `ShellV2.tsx` (renders `<RoomAccentPicker>` in topbar when `useRoomIdentityFlag()`) · `Settings.tsx`
+  (row copy points at the corner control) · `surfaces/monitor/SessionStack.tsx` (repaint on
+  `compy:room-identity-changed` — self-review fix b) · `design/tokens-v2-guard.test.ts` (registered
+  `room-accent-picker.css` in V2_CSS).
+- **Verify:** tsc 0 · vitest **1595** (177 files) · **zero `src-tauri`** (`git diff -- src-tauri` empty).
+- **Self-review (self-reviewer subagent, live dev build CDP 9222):** round 1 FAIL (2) → fixed: (a)
+  reduced-motion selector used a spaced `[data-motion] [data-v2]` combinator (both attrs on `<html>` →
+  never matched) → COMPOUND `:root[data-v2="on"][data-motion="reduced"]`; (b) Monitor sparkline didn't
+  repaint on an in-place pick → added `compy:room-identity-changed` listener + `accentTick` dep in
+  `SessionStack` RowCanvas. Round 2 FAIL (1) → fixed: (c) popover floated over the new room on nav →
+  `setOpen(false)` on room change in RoomAccentPicker's room-sync effect. All 3 are bug→guard-pinned.
+  Round 2 confirmed items 1,2,4,5,6,7 PASS. **Round 3 = ✅ PASS 7/7** (agent `a1ea4efadff76d2f9`): item-3
+  fix confirmed (open popover on Lab → click Home tab → `.v2-accent-pop` absent within 50ms, no floating
+  panel/stale label), adjacent behaviors intact (opens on click; pick-after-switch persists + re-skins;
+  Blackbook→Rose `#ff8ac4` persisted across nav). **Self-review is DONE — do NOT re-run it.**
+- **Dev build was left reset to baseline (flag off) on CDP 9222** (displaces installed `72fa005`). Ship
+  restores the installed app.
+- ✅ **DONE 2026-07-12:** committed `20e2b50` (10 explicit paths, no `git add -A`), built (compy crate
+  recompiled → new stamp embedded), silent-reinstalled via `ship-reinstall.ps1` (installer SHA-256
+  `457A2D00…F73EBDCE`, one on the Desktop), **stamp-verified `20e2b50` live** (embedded-hash match).
+  Doc-sync landed: RELEASE_STATE new Snapshot block + installer row; this cycle → ✅;
+  `OWNER_ACTION_CHECKLIST` A9 updated (the picker is the built answer to his "freedom on each page" ask);
+  UI_VISION accent-lock note. **OPEN GATE = owner one-flip eyeball:** Settings → Appearance → "Room accent
+  colors (preview)" ON → the accent dot in each room's top-right corner → click to recolor that room.
+
 ### Cycle 2026-07-12i — ✅ PER-ROOM IDENTITY ACCENTS SHIPPED LIVE `72fa005` (flag `compy_room_identity` DEFAULT OFF; installer `D23DE073…9EBA9`, stamp-verified) — owner eyeball is the open gate
 
 **Owner directive 2026-07-12** (answering the accent-lock taste call from Cycle 12h): picked **"per-room

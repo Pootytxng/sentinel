@@ -176,10 +176,15 @@ const modules = [
   </section>
 
   <!-- ============ the record: the replay deck, a second REAL session ============ -->
-  <section class="record">
-    <div class="wrap">
-      <!-- the instrument deck: a REAL recorded Monitor session, replayable -->
-      <div class="deck brackets reveal">
+  <section class="record" data-record>
+    <!-- scrub runway (Director #5): ReplayHUD arms .record--scrub with JS + motion
+         allowed — the runway gains height, the deck pins, and scroll scrubs the real
+         session. Static / reduced-motion users get no runway (auto height, no pin). -->
+    <div class="record-runway" data-runway>
+      <div class="record-pin">
+        <div class="wrap">
+          <!-- the instrument deck: a REAL recorded Monitor session, scroll-scrubbed -->
+          <div class="deck brackets reveal">
         <span class="bkt" aria-hidden="true"></span>
         <div class="deck-rail mono" aria-hidden="true">
           <span class="deck-tag">MONITOR <i>//</i> SESSION REPLAY</span>
@@ -201,7 +206,11 @@ const modules = [
           </aside>
         </div>
       </div>
+        </div>
+      </div>
+    </div>
 
+    <div class="wrap">
       <!-- the five vows: the deck's bottom rail -->
       <ul class="vows mono reveal" role="list" aria-label="What Compy will never do">
         <li>rollback-first</li>
@@ -898,6 +907,23 @@ const modules = [
   /* ---- the record section (replay deck + vows) ---- */
   .record {
     padding: 110px 0 0;
+  }
+  /* scrub runway (Director #5) — .record--scrub is added by ReplayHUD only with
+     JS + motion allowed, so static/reduced users never see dead scroll height. */
+  .record--scrub .record-runway {
+    height: 240vh;
+  }
+  .record--scrub .record-pin {
+    position: sticky;
+    top: max(20px, calc(50vh - 300px));
+  }
+  @media (max-width: 720px) {
+    .record--scrub .record-runway {
+      height: 200vh;
+    }
+    .record--scrub .record-pin {
+      top: max(12px, calc(50vh - 330px));
+    }
   }
 
   /* ---- the instrument deck ---- */

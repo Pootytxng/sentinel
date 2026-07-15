@@ -165,6 +165,39 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-15b — ✅ DIRECTOR #5 BUILT: SCROLL-SCRUBBED TELEMETRY THROUGHLINE — site-only, PRE-PUBLISH, NO gate moved, zero src-tauri, zero src/
+
+**The queued Director change #5 got its own train** (owner green light: "proceed with the
+conclusions made by the council and design director"). The `.record` replay deck's ▶ button replay
+is RETIRED — the page scroll is now the Monitor's transport: with JS + motion allowed the section
+becomes a 240vh runway (200vh ≤720px), the deck sticky-pins, and scroll scrubs the REAL 3:00:05
+Diablo IV session bidirectionally — new event-timeline canvas (51 real events at true timestamps,
+hour graticule, playhead), session clock, ~1Hz sample counter, events-passed n/51, live event feed —
+landing on the measured-results grid ("T+3:00:05 · end of record") as the deck unpins.
+
+- **Honesty boundary held:** that record has NO per-second fps series (guard-enforced), so nothing
+  per-frame is animated or invented; fps numbers appear only as end results. Reduced-motion/no-JS
+  get the finished static summary with ZERO dead runway (doorknob law) — new guard pins in
+  `scripts/site-landing.test.mjs` ban `record--scrub`/timeline/hint from static markup.
+- **Director seat-6 sat on the BUILT result: SHIP-WITH-CHANGES** ("the first mechanic on this site
+  I'd actually remember"; clears both slop altitudes). Both named fixes applied same train:
+  (1) **density-weighted transport** — all 51 events live in the session's first ~38%, so the linear
+  scroll→time map idled for ~60% of the runway; `timeOf()` (ACTIVE_SHARE 0.85) now spends 85% of
+  scroll on the event-dense span and fast-forwards the quiet 6,730s tail — transport SPEED only,
+  every reading stays true to the record; samples + track fill follow session time. (2) the new
+  scrub strings + canvas hour labels bumped `--fg-faint` → `--fg-dim` (AA).
+- **Restraint call:** the deck scrub is the ONLY new scrolled motion — receipts/features/pricing/hero
+  untouched (fourth-taste-FAIL risk from scattering motion).
+- **Verify:** astro build + stage clean · vitest **25/25** (site-landing + staleness guard) ·
+  self-review ran 4 rounds to PASS: round-2 caught a live→results swap-height jump (~20px desktop,
+  `.rhud-swap` min-height was calibrated to the shorter results state) → fixed 252→276px; round-3
+  confirmed desktop flat but caught the SAME class at mobile 390w (~84px, taller 2-col live state)
+  → mobile-scoped 364px override in the 720px block; **round-4 full fresh review PASS** — swap +
+  deck heights flat through the DONE_AT boundary at BOTH 1500×980 and 390×844 (and 700×900),
+  contrast rgb(168,159,146) ~7.8:1, density transport climbing, bidirectional determinism,
+  reduced-motion static fallback, no overflow, console clean. **Site stays PRE-PUBLISH; owner
+  taste sign-off on the live scroll feel is the remaining gate; deploy owner-gated.**
+
 ### Cycle 2026-07-15 — ✅ COUNCIL SEAT 6 + BLACKBOOK TEASER SPLIT ("samples, not free meals") — site-only, PRE-PUBLISH, NO gate moved, zero src-tauri, zero src/
 
 **Owner decree:** council the Flight Test landing, ADD a sixth council seat (award-winning web
@@ -526,54 +559,6 @@ AND genuinely <4.5:1 vs `#1a0a2e` (adaptive ink is load-bearing). Zero `src-taur
   bright", the A/B fork) is the point-in-time cycle record; the shipped result is the ✅ header + the
   bullets under it. Whitelist auto-derives from `ROOM_ACCENT_SWATCHES` (no separate `SWATCH_WHITELIST`
   symbol). **Only open item: the owner's one-flip eyeball on the NEW palette before any default-ON flip.**
-
-### Cycle 2026-07-12j — ✅ PER-ROOM ACCENT PICKER SHIPPED LIVE `20e2b50` (curated swatches, behind existing `compy_room_identity` flag DEFAULT OFF; installer SHA-256 `457A2D00…F73EBDCE`, stamp-verified) — owner eyeball is the open gate
-
-**Owner follow-up 2026-07-12b** (after eyeballing Cycle 12i's presets, verdict "it looks good … otherwise
-everything looks good"): the Settings THEME selector now visibly changes only Home when room-identity is
-on (other rooms are locked to presets) — "doesn't make much sense." His fix: **"offer within the tabs
-themselves a very neatly placed little dropdown … on the corner of each tab to individually change the
-color … for each window … the freedom to shift around the colors they want on each page."** Via
-`AskUserQuestion` he picked **"Curated swatches"** (not a free hex field — keeps the dark-ink legibility
-law unbreakable). **NOT committed, NOT shipped.**
-
-- **What it is:** when `compy_room_identity` is ON (SAME flag, no new one — the picker only renders when
-  the flag is on, so flag-off topbar is byte-identical), each room shows a small accent dot in the
-  TOPBAR far-right corner (`.v2-top`, after `.v2-stamp`) reflecting the ACTIVE room's accent; click →
-  10-swatch popover to recolor THAT room; persists per-room; "Reset to default" restores the preset.
-  Re-skins that room's chrome + rig + sparkline via the same scoped `--v2-accent` mechanism as presets.
-- **NEW files:** `src/design/RoomAccentPicker.tsx` (the control) · `src/design/room-accent-picker.css`
-  (scoped `[data-v2="on"]`; swatch colors are INLINE so it stays literal-clean) · `src/design/room-accents.test.tsx`
-  (21 guards: palette legibility ≥4.5:1 vs ink #1a0a2e, whitelist, store round-trip, managed-style
-  scoping+same-element, flag-gating, interaction, + 3 bug→guards).
-- **Modified:** `room-identity.ts` (`ROOM_ACCENT_SWATCHES` 10-swatch palette + `PICKABLE_ROOMS` +
-  `defaultRoomAccent` + `isSwatchHex`) · `theme.ts` (`readRoomAccents`/`setRoomAccent`/`applyRoomAccents`
-  → managed `<style id="compy-room-accents">`, rules scoped `:root[data-room-identity="on"] .v2-room[data-room=X]`
-  with same-element `--v2-accent`+dim+line, whitelist-validated) · `main.tsx` (boot `applyRoomAccents`) ·
-  `ShellV2.tsx` (renders `<RoomAccentPicker>` in topbar when `useRoomIdentityFlag()`) · `Settings.tsx`
-  (row copy points at the corner control) · `surfaces/monitor/SessionStack.tsx` (repaint on
-  `compy:room-identity-changed` — self-review fix b) · `design/tokens-v2-guard.test.ts` (registered
-  `room-accent-picker.css` in V2_CSS).
-- **Verify:** tsc 0 · vitest **1595** (177 files) · **zero `src-tauri`** (`git diff -- src-tauri` empty).
-- **Self-review (self-reviewer subagent, live dev build CDP 9222):** round 1 FAIL (2) → fixed: (a)
-  reduced-motion selector used a spaced `[data-motion] [data-v2]` combinator (both attrs on `<html>` →
-  never matched) → COMPOUND `:root[data-v2="on"][data-motion="reduced"]`; (b) Monitor sparkline didn't
-  repaint on an in-place pick → added `compy:room-identity-changed` listener + `accentTick` dep in
-  `SessionStack` RowCanvas. Round 2 FAIL (1) → fixed: (c) popover floated over the new room on nav →
-  `setOpen(false)` on room change in RoomAccentPicker's room-sync effect. All 3 are bug→guard-pinned.
-  Round 2 confirmed items 1,2,4,5,6,7 PASS. **Round 3 = ✅ PASS 7/7** (agent `a1ea4efadff76d2f9`): item-3
-  fix confirmed (open popover on Lab → click Home tab → `.v2-accent-pop` absent within 50ms, no floating
-  panel/stale label), adjacent behaviors intact (opens on click; pick-after-switch persists + re-skins;
-  Blackbook→Rose `#ff8ac4` persisted across nav). **Self-review is DONE — do NOT re-run it.**
-- **Dev build was left reset to baseline (flag off) on CDP 9222** (displaces installed `72fa005`). Ship
-  restores the installed app.
-- ✅ **DONE 2026-07-12:** committed `20e2b50` (10 explicit paths, no `git add -A`), built (compy crate
-  recompiled → new stamp embedded), silent-reinstalled via `ship-reinstall.ps1` (installer SHA-256
-  `457A2D00…F73EBDCE`, one on the Desktop), **stamp-verified `20e2b50` live** (embedded-hash match).
-  Doc-sync landed: RELEASE_STATE new Snapshot block + installer row; this cycle → ✅;
-  `OWNER_ACTION_CHECKLIST` A9 updated (the picker is the built answer to his "freedom on each page" ask);
-  UI_VISION accent-lock note. **OPEN GATE = owner one-flip eyeball:** Settings → Appearance → "Room accent
-  colors (preview)" ON → the accent dot in each room's top-right corner → click to recolor that room.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 

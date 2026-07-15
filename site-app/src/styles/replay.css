@@ -136,11 +136,53 @@
   justify-items: start;
 }
 
-.rhud-play,
-.rhud-skip {
-  justify-self: start;
-  padding: 10px 20px;
-  font-size: 12.5px;
+/* ---- scrub mode (Director #5) — rendered only when ReplayHUD arms scrub ---- */
+.rhud-timeline {
+  border-block: 1px solid var(--line);
+  padding: 10px 0 4px;
+}
+.rhud-timeline canvas {
+  display: block;
+  width: 100%;
+  height: 72px;
+}
+
+.rhud-scrubhint,
+.rhud-endstamp {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+.rhud-endstamp {
+  color: var(--accent);
+}
+
+/* stable swap height while the deck is pinned, so live -> results doesn't jump.
+   Must cover the TALLER state (live measures ~272px; results ~252px). */
+.rhud-swap {
+  min-height: 276px;
+}
+.rhud-swap .rhud-live,
+.rhud-swap .rhud-results {
+  display: grid;
+  gap: 16px;
+  justify-items: stretch;
+  animation: rhud-fade 0.28s ease-out;
+}
+@keyframes rhud-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rhud-swap .rhud-live,
+  .rhud-swap .rhud-results {
+    animation: none;
+  }
 }
 
 .rhud-cap {
@@ -165,5 +207,9 @@
   }
   .rhud-value--big {
     font-size: 28px;
+  }
+  /* narrow live state is taller (2-col grid + wrapped feed rows) — measured 360px @390w */
+  .rhud-swap {
+    min-height: 364px;
   }
 }

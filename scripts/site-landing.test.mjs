@@ -79,6 +79,15 @@ describe("landing (Flight Test contract v3)", () => {
     expect(html).toContain("nothing attributed to Compy changes");
     // The ▶ control is hydration-gated: static markup must NOT carry a button that can't work.
     expect(rendered).not.toContain("replay the session");
+    // Scrub mode (Director #5) is hydration-gated the same way: the runway class, the
+    // timeline canvas, and the scrub affordance must never reach static/no-JS markup —
+    // reduced-motion and no-JS visitors get the finished summary with no dead runway.
+    expect(rendered).not.toMatch(/class="[^"]*record--scrub/);
+    expect(rendered).not.toMatch(/class="[^"]*rhud-timeline/);
+    expect(rendered).not.toContain("scroll scrubs the record");
+    // The runway hooks the arming targets — both anchors must exist for scrub to arm.
+    expect(html).toContain("data-record");
+    expect(html).toContain("data-runway");
   });
 
   it("replay record is pinned to its provenance and contains no invented per-frame trace", () => {
