@@ -90,7 +90,8 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       4-change active session (both advanced items `elevated_restore: true`, truthful prior snapshots) →
       stop → **No** → honest decline error, session file retained with status `restore-failed` and all
       4 changes intact, NO false success, no extra prompts → retry stop → **Yes** → full restore,
-      session cleared, probe byte-identical to baseline.
+      session cleared, probe byte-identical to baseline. **Owner confirmed exactly 4 prompts total,
+      one per arm ("yes it was 4")** — the pre-fix double-prompt signature is gone.
 
 > **⚠ The runas bug (found BY this checklist, fixed 2026-07-14, commit `db5349e`):** the `runas` crate
 > (1.2.0) never returns `Err` on Windows — a UAC **decline** (ShellExecuteExW → ERROR_CANCELLED 1223)
