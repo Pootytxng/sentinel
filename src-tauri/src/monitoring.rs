@@ -981,7 +981,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 if let Ok(txt) = std::fs::read_to_string(fps_out_path()) {
                     if let Ok(s) = serde_json::from_str::<FpsSample>(&txt) {
                         if s.fps > 0.0 {
-                            acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps);
+                            acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps, elapsed);
                             tip = Some((s.fps, s.low1_fps));
                             if s.low1_fps > 0.0 && timeline.len() < 7200 {
                                 timeline.push((elapsed, s.low1_fps));

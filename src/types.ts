@@ -86,6 +86,10 @@ export type SessionSummary = {
   stutter_timeline?: [number, number][];
   /** Timestamped signals observed during the session (stutter.rs StutterEvent). */
   stutter_events?: { at_secs: number; kind: string; label: string }[];
+  /** Downsampled real FPS trace: (bucket_start_elapsed_secs, mean fps) per 10 s bucket of real
+   *  ~1 Hz samples — never interpolated; gaps in play stay gaps. Kept for the most-recent 20
+   *  sessions, stripped (empty) for older ones (sessions.rs). */
+  fps_series?: [number, number][];
 };
 
 // Recommendation provenance — the honesty level of a rec's IMPACT claim.

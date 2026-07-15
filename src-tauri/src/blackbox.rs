@@ -1344,6 +1344,7 @@ mod blackbox_tests {
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
+            fps_series: Vec::new(),
         }
     }
 

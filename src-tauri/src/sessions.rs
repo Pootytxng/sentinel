@@ -26,6 +26,17 @@ const MAX_SESSIONS: usize = 100;
 /// Sessions shorter than this (seconds) are too brief to debrief or compare fairly — an alt-tab blip
 /// or accidental capture shouldn't produce a verdict or resolve an armed comparison. Owner-tunable.
 const MIN_SESSION_SECS: u64 = 60;
+/// FPS-series downsampling: one point per this many seconds of real elapsed time. Each point is
+/// the MEAN of the real ~1 Hz FPS samples that landed in the bucket — a real aggregate of real
+/// samples, never an interpolation.
+const FPS_SERIES_BUCKET_SECS: u32 = 10;
+/// Series length cap: 6 h at 1 point/10 s. Past this the series just stops (its last x value
+/// states its own coverage — same honesty contract as `stutter_timeline`'s 7200-tick cap).
+const FPS_SERIES_MAX_POINTS: usize = 2160;
+/// Keep the fps series for this many most-recent sessions (the free Sessions view window);
+/// older sessions shed it on save — same policy as `stutter_timeline`'s 5, wider because the
+/// series is ~10× smaller per hour.
+const FPS_SERIES_KEEP: usize = 20;
 
 /// Pure: is a session long enough to be worth keeping?
 fn meets_min_duration(secs: u64) -> bool {
@@ -63,6 +74,12 @@ pub(crate) struct SessionSummary {
     pub(crate) stutter_timeline: Vec<(u32, f64)>,
     #[serde(default)]
     pub(crate) stutter_events: Vec<crate::stutter::StutterEvent>,
+    /// Downsampled real FPS trace: `(bucket_start_elapsed_secs, mean fps)` per 10 s bucket of
+    /// real ~1 Hz samples. Buckets with no presenting game emit nothing (gaps stay gaps). Kept
+    /// for the most-recent FPS_SERIES_KEEP sessions, stripped (empty) for older ones. Additive:
+    /// pre-series sessions parse with this empty.
+    #[serde(default)]
+    pub(crate) fps_series: Vec<(u32, f64)>,
 }
 
 fn round1(x: f64) -> f64 {
@@ -84,6 +101,11 @@ pub(crate) struct SessionAccumulator {
     peak_gpu_usage_pct: Option<u32>,
     peak_ram_used_bytes: Option<u64>,
     ram_total_bytes: Option<u64>,
+    fps_series: Vec<(u32, f64)>,
+    // Current (open) downsample bucket: index = elapsed / FPS_SERIES_BUCKET_SECS.
+    bucket_idx: Option<u32>,
+    bucket_sum: f64,
+    bucket_count: u32,
 }
 
 impl SessionAccumulator {
@@ -100,10 +122,23 @@ impl SessionAccumulator {
             peak_gpu_usage_pct: None,
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
+            fps_series: Vec::new(),
+            bucket_idx: None,
+            bucket_sum: 0.0,
+            bucket_count: 0,
         }
     }
 
-    pub(crate) fn record_fps(&mut self, process_name: &str, fps: f64, frametime_ms: f64, low1_fps: f64) {
+    /// `elapsed_secs` is real wall time into the session (the monitoring loop's own clock) —
+    /// sample index is NOT a substitute, because ticks only arrive while a game presents.
+    pub(crate) fn record_fps(
+        &mut self,
+        process_name: &str,
+        fps: f64,
+        frametime_ms: f64,
+        low1_fps: f64,
+        elapsed_secs: u32,
+    ) {
         if !process_name.is_empty() {
             *self.proc_counts.entry(process_name.to_string()).or_insert(0) += 1;
         }
@@ -111,6 +146,35 @@ impl SessionAccumulator {
         self.frametime_sum += frametime_ms;
         self.low1_sum += low1_fps;
         self.samples += 1;
+
+        let bucket = elapsed_secs / FPS_SERIES_BUCKET_SECS;
+        match self.bucket_idx {
+            Some(b) if b == bucket => {
+                self.bucket_sum += fps;
+                self.bucket_count += 1;
+            }
+            _ => {
+                self.flush_bucket();
+                self.bucket_idx = Some(bucket);
+                self.bucket_sum = fps;
+                self.bucket_count = 1;
+            }
+        }
+    }
+
+    /// Close the open bucket into the series as `(bucket_start_secs, mean fps)`. Past the length
+    /// cap the series stops growing (its last point states its own coverage).
+    fn flush_bucket(&mut self) {
+        if let Some(b) = self.bucket_idx.take() {
+            if self.bucket_count > 0 && self.fps_series.len() < FPS_SERIES_MAX_POINTS {
+                self.fps_series.push((
+                    b * FPS_SERIES_BUCKET_SECS,
+                    round1(self.bucket_sum / self.bucket_count as f64),
+                ));
+            }
+        }
+        self.bucket_sum = 0.0;
+        self.bucket_count = 0;
     }
 
     pub(crate) fn record_sensors(
@@ -138,7 +202,8 @@ impl SessionAccumulator {
         self.samples > 0
     }
 
-    pub(crate) fn finalize(self, duration_secs: u64) -> SessionSummary {
+    pub(crate) fn finalize(mut self, duration_secs: u64) -> SessionSummary {
+        self.flush_bucket(); // the trailing partial bucket is real samples too
         let n = self.samples.max(1) as f64;
         let process_name = self
             .proc_counts
@@ -164,6 +229,7 @@ impl SessionAccumulator {
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
+            fps_series: self.fps_series,
         }
     }
 }
@@ -206,6 +272,12 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     for s in all.iter_mut().take(strip_before) {
         s.stutter_timeline = Vec::new();
     }
+    // The downsampled fps series is ~10× smaller per hour, so it survives a wider window (the
+    // free Sessions view's 20) before it too is shed.
+    let series_strip_before = all.len().saturating_sub(FPS_SERIES_KEEP);
+    for s in all.iter_mut().take(series_strip_before) {
+        s.fps_series = Vec::new();
+    }
     let json = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
     // Atomic swap (mirrors history.rs save_history_to): write beside the live file then rename it
     // in (MoveFileEx + REPLACE_EXISTING on Windows), so a crash mid-write leaves the prior valid
@@ -245,9 +317,9 @@ mod session_tests {
     #[test]
     fn accumulator_computes_averages_and_peaks() {
         let mut acc = SessionAccumulator::new("2026-05-31T00:00:00Z".into(), 2);
-        acc.record_fps("game.exe", 120.0, 8.3, 90.0);
+        acc.record_fps("game.exe", 120.0, 8.3, 90.0, 0);
         acc.record_sensors(Some(60), Some(95), Some(8_000_000_000), Some(32_000_000_000));
-        acc.record_fps("game.exe", 100.0, 10.0, 70.0);
+        acc.record_fps("game.exe", 100.0, 10.0, 70.0, 1);
         acc.record_sensors(Some(64), Some(99), Some(9_000_000_000), Some(32_000_000_000));
         let s = acc.finalize(42);
         assert_eq!(s.samples, 2);
@@ -266,9 +338,9 @@ mod session_tests {
     #[test]
     fn accumulator_picks_dominant_process() {
         let mut acc = SessionAccumulator::new("t".into(), 0);
-        acc.record_fps("alt.exe", 60.0, 16.6, 50.0);
-        acc.record_fps("game.exe", 60.0, 16.6, 50.0);
-        acc.record_fps("game.exe", 60.0, 16.6, 50.0);
+        acc.record_fps("alt.exe", 60.0, 16.6, 50.0, 0);
+        acc.record_fps("game.exe", 60.0, 16.6, 50.0, 1);
+        acc.record_fps("game.exe", 60.0, 16.6, 50.0, 2);
         assert_eq!(acc.finalize(10).process_name, "game.exe");
     }
 
@@ -290,7 +362,7 @@ mod session_tests {
     #[test]
     fn single_sample_session_is_exact() {
         let mut acc = SessionAccumulator::new("t".into(), 0);
-        acc.record_fps("game.exe", 144.0, 6.9, 120.0);
+        acc.record_fps("game.exe", 144.0, 6.9, 120.0, 0);
         let s = acc.finalize(MIN_SESSION_SECS);
         assert_eq!(s.samples, 1);
         assert_eq!(s.avg_fps, 144.0);
@@ -324,7 +396,7 @@ mod session_tests {
         let _ = std::fs::remove_file(&path);
         for i in 0..(MAX_SESSIONS + 5) {
             let mut acc = SessionAccumulator::new(format!("t{i}"), 0);
-            acc.record_fps("g.exe", 100.0 + i as f64, 10.0, 80.0);
+            acc.record_fps("g.exe", 100.0 + i as f64, 10.0, 80.0, 0);
             save_session_to(&path, acc.finalize(i as u64)).unwrap();
         }
         let all = load_sessions_from(&path);
@@ -332,6 +404,88 @@ mod session_tests {
         // oldest kept is t5 (0..4 dropped); newest is the last appended
         assert_eq!(all.first().unwrap().started_at, "t5");
         assert_eq!(all.last().unwrap().started_at, format!("t{}", MAX_SESSIONS + 4));
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn fps_series_downsamples_to_ten_second_buckets() {
+        let mut acc = SessionAccumulator::new("t".into(), 0);
+        // 25 real 1 Hz ticks, fps = 100 + elapsed. Buckets: [0..9] [10..19] [20..24 partial].
+        for e in 0u32..25 {
+            acc.record_fps("g.exe", 100.0 + e as f64, 10.0, 80.0, e);
+        }
+        let s = acc.finalize(25);
+        assert_eq!(
+            s.fps_series,
+            vec![(0, 104.5), (10, 114.5), (20, 122.0)],
+            "each point is the bucket's mean of REAL samples; the trailing partial bucket flushes at finalize"
+        );
+    }
+
+    #[test]
+    fn fps_series_gaps_stay_gaps() {
+        // A game presenting at 0–4 s and again at 30–34 s (minimized between): the empty
+        // buckets emit NOTHING — a gap is a gap, never an interpolated line.
+        let mut acc = SessionAccumulator::new("t".into(), 0);
+        for e in 0u32..5 {
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, e);
+        }
+        for e in 30u32..35 {
+            acc.record_fps("g.exe", 200.0, 5.0, 160.0, e);
+        }
+        let s = acc.finalize(35);
+        assert_eq!(s.fps_series, vec![(0, 100.0), (30, 200.0)]);
+    }
+
+    #[test]
+    fn fps_series_caps_at_max_points() {
+        let mut acc = SessionAccumulator::new("t".into(), 0);
+        // One tick per bucket, 50 buckets past the cap — the series stops, never grows unbounded.
+        for b in 0..(FPS_SERIES_MAX_POINTS + 50) {
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, b as u32 * FPS_SERIES_BUCKET_SECS);
+        }
+        let s = acc.finalize(1);
+        assert_eq!(s.fps_series.len(), FPS_SERIES_MAX_POINTS);
+        assert_eq!(
+            s.fps_series.last().unwrap().0,
+            (FPS_SERIES_MAX_POINTS as u32 - 1) * FPS_SERIES_BUCKET_SECS,
+            "the last kept point states the series' own coverage"
+        );
+    }
+
+    #[test]
+    fn pre_series_sessions_parse_with_empty_series() {
+        // Additive-contract guard: a sessions.json written before fps_series existed must
+        // still parse (serde default), same as the other additive fields.
+        let json = r#"[{
+            "started_at": "t", "duration_secs": 120, "process_name": "g.exe", "samples": 3,
+            "avg_fps": 100.0, "avg_frametime_ms": 10.0, "low1_fps_est": 80.0,
+            "peak_gpu_temp_c": null, "peak_gpu_usage_pct": null, "peak_ram_used_bytes": null,
+            "ram_total_bytes": null, "compy_changes_active": 0
+        }]"#;
+        let all: Vec<SessionSummary> = serde_json::from_str(json).unwrap();
+        assert!(all[0].fps_series.is_empty());
+        assert!(all[0].stutter_timeline.is_empty());
+    }
+
+    #[test]
+    fn fps_series_persists_and_strips_past_keep_window() {
+        let path = std::env::temp_dir().join(format!("compy-sessions-series-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let total = FPS_SERIES_KEEP + 5;
+        for i in 0..total {
+            let mut acc = SessionAccumulator::new(format!("t{i}"), 0);
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+            save_session_to(&path, acc.finalize(90)).unwrap();
+        }
+        let all = load_sessions_from(&path);
+        assert_eq!(all.len(), total);
+        for s in all.iter().take(total - FPS_SERIES_KEEP) {
+            assert!(s.fps_series.is_empty(), "older than the keep window → series shed on save");
+        }
+        for s in all.iter().skip(total - FPS_SERIES_KEEP) {
+            assert_eq!(s.fps_series, vec![(0, 100.0)], "the {FPS_SERIES_KEEP} most recent keep their real series");
+        }
         std::fs::remove_file(&path).ok();
     }
 
