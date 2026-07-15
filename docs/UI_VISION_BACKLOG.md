@@ -422,12 +422,29 @@ Owner (2026-07-03): *"just slapping an Amazon + Newegg link for GPUs isn't the f
 upgrade path is underdeveloped. Flagged as never fully built.
 Source: `docs/superpowers/specs/2026-07-03-owner-optimize-feedback.md`, `docs/OWNER_ACTION_CHECKLIST.md` §B4.
 
-### G. Site / landing glow direction + the dormant "full overhaul" gate
-The 2026-06-12 voice-baptism directive queued: **§B0 site glow** (landing "mediocre/bleak" → artistic
-aurora/glass/silk-light ambient), **§B app visual-refinement marathon**, and **§C FULL OVERHAUL** —
-an owner-empowered trigger (*"only if §B underwhelms the owner"*) that **no later doc ever revisits**.
-Site work belongs to the compy.gg web phase, but the trigger is dangling and should be resolved (still
-armed? dropped?). Source: `docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md:31-80`.
+### G. 🔴 SITE FULL MAKEOVER — owner-commissioned 2026-07-14 (the dormant trigger FIRED, for the site)
+History: the 2026-06-12 voice-baptism directive queued **§B0 site glow** + a dormant **§C FULL
+OVERHAUL** trigger (*"only if §B underwhelms the owner"*) that no later doc revisited
+(`docs/superpowers/specs/2026-06-12-doctrine-voice-baptism-design-refresh.md:31-80`).
+**2026-07-14: the owner saw the shipped two-strip hero (`2eda4eb`) and rejected it outright** —
+*"i do not like the hero site at all and i think it needs a complete makeover"*. The site-side
+trigger is now FIRED and owner-directed. His verbatim requirements:
+- **Research-first, decide together** — deep research on trending web design styles for this space,
+  "spitball what you come up with to me and we can decide together." NOT build-first.
+- **Awwwards-level, state-of-the-art** — *"like our website was made with the funding that fuels
+  SpaceX itself"* — while retaining *"modest credibility and integrity pertaining to what we really
+  are selling."* Use **React Bits** and other web-design tools.
+- **Dark mode default** — *"everyone hates getting flashbanged."*
+- **Sell/show off the app hard, without exhausting navigation** — a visitor who just wants to buy a
+  subscription and move on gets a fast path.
+- **FAQ page/section** · **comparison page vs competitors** ("that obviously make us look good") ·
+  **maybe a mini playable demo of ONE real Compy tool in a simulated environment.**
+- **LATER** (owner: "maybe later once weve completed the important stuff"): walkthrough videos + an
+  app-tour preview video on the home page.
+Constraints that survive the redesign: honest-measurement law (real-provenance receipts, no gain
+claims — `scripts/site-landing.test.mjs` guards stay in spirit), zero-budget law ($0/free-tier,
+Cloudflare Pages), site PRE-PUBLISH until the owner's deploy GO. The APP-side §C overhaul trigger
+stays dormant (app visual work continues under §A–§F).
 
 ### H. ~~Onboarding HoloLens Setup & Tour redesign~~ — ✅ SHIPPED (verified 2026-07-08)
 The hardware-tour flies the camera across the user's REAL rig in the owner's order — `HARDWARE_LESSONS`
