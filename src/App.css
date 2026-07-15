@@ -2778,55 +2778,103 @@ body::before {
   white-space: nowrap;
 }
 
-/* ── Global Gaming-Mode crash-recovery banner (fires on launch, any tab) ────
-   Calm-protective tone, not alarm-amber (consumer-panel Q4): an interrupted session is a fully
-   recoverable state — the receipt is intact — so the banner reads as protection working, not
-   danger. Visibility until resolved (the never-hide law) is untouched. */
-.gaming-recovery-banner {
+/* ── Gaming toasts — small bottom-right popup stack (owner ask 2026-07-14) ──
+   The global crash-recovery prompt + its success twins live in a compact speech-bubble stack
+   down at the bottom-right (was a full-width top bar the owner disliked: "id rather it was
+   like a little popup window down at the bottom right … out of the way"). Calm-protective
+   tone for recovery, ready tint for success (consumer-panel Q4). Never-hide law untouched:
+   the × only hides the bubble for this run — the recovery itself stays pending. */
+.gaming-toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90; /* above content, below the command palette/modal layer (100) */
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  border: 1px solid var(--border-strong, var(--border));
-  background: var(--panel-2, transparent);
-  color: var(--fg);
-  border-radius: 10px;
-  padding: 11px 14px;
-  margin-bottom: 12px;
-  font-size: 0.9rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  width: min(400px, calc(100vw - 32px));
+  pointer-events: none; /* the stack is a ghost; only the bubbles themselves are clickable */
 }
-.gaming-recovery-banner strong {
+.gaming-toast {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  color: var(--fg);
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  box-shadow:
+    0 12px 32px rgb(0 0 0 / 0.4),
+    0 2px 8px rgb(0 0 0 / 0.3);
+  animation: gaming-toast-in 0.26s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+@keyframes gaming-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+:root[data-motion="reduced"] .gaming-toast {
+  animation: none;
+}
+.gaming-toast-msg {
+  margin: 0;
+}
+.gaming-toast-recovery .gaming-toast-msg {
+  padding-right: 20px; /* clears the × */
+}
+.gaming-toast-recovery strong {
   color: var(--accent);
 }
-.gaming-recovery-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+.gaming-toast-ready {
+  border-color: var(--status-ready-line, var(--border-strong));
+  background:
+    linear-gradient(180deg, var(--status-ready-soft, transparent), var(--status-ready-soft, transparent)),
+    linear-gradient(180deg, var(--panel-2), var(--panel));
 }
-/* Its success twin — restore confirmed; ready-status tint instead of attention. */
-.gaming-restored-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  border: 1px solid var(--status-ready-line, var(--border-strong));
-  background: var(--status-ready-soft, transparent);
-  color: var(--fg);
-  border-radius: 10px;
-  padding: 11px 14px;
-  margin-bottom: 12px;
-  font-size: 0.9rem;
-}
-.gaming-restored-banner strong {
+.gaming-toast-ready strong {
   color: var(--status-ready);
 }
-/* Dismissing a success confirmation is benign — the generic .btn-small:hover danger
-   accent would false-signal a destructive action here (self-review catch, 2026-07-08). */
-.gaming-restored-banner .btn-small:hover:not(:disabled) {
+.gaming-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* None of these actions are destructive (restore/review/done) — the generic
+   .btn-small:hover danger accent would false-signal here (self-review catch, 2026-07-08). */
+.gaming-toast .btn-small:hover:not(:disabled) {
   color: var(--fg);
   border-color: var(--border-strong);
+}
+.gaming-toast .btn-small.btn-small-on:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.gaming-toast-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 7px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.gaming-toast-dismiss:hover {
+  color: var(--fg);
+  background: var(--panel-3, var(--panel-2));
 }
 
 /* ── Moment 3 — session debrief card ─────────────────────────────────────── */

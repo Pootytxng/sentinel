@@ -633,6 +633,14 @@ function App() {
   // anyway since sessions can't start). This is what makes recovery greet the user on startup
   // instead of only when they happen to open the Gaming tab.
   const [gamingRecovery, setGamingRecovery] = useState<GamingSessionFile | null>(null);
+  // Owner ask 2026-07-14: the global recovery prompt is a bottom-right toast with a × that
+  // tucks it away. Hidden is THIS-RUN-ONLY presentation state — it never clears
+  // gamingRecovery (never-hide law): the Gaming pane's card + Review path stay live, and a
+  // relaunch (or a fresh recovery, un-hidden below) re-greets while the session is unresolved.
+  const [recoveryToastHidden, setRecoveryToastHidden] = useState(false);
+  useEffect(() => {
+    if (gamingRecovery) setRecoveryToastHidden(false);
+  }, [gamingRecovery]);
   useEffect(() => {
     if (!gamingEnabled) return;
     invoke<GamingSessionFile | null>("get_gaming_session_state")
@@ -1349,92 +1357,108 @@ function App() {
         </div>
       )}
 
-      {/* Defers to the Gaming pane's own richer prompt (Resume / Return / Not now) while a
-          pane is actually MOUNTED — two simultaneous prompts for one event read as a bug
-          (self-review catch, 2026-07-08). Mount-aware, not tab-aware: outside the gaming
-          door the pane isn't on screen, so the banner keeps greeting there (T6c, 2026-07-10).
-          Resume is primary (owner directive 2026-07-10) — his lived flow was
-          restore-then-re-enable-by-hand. */}
-      {showGlobalRecoveryBanner(gamingRecovery !== null, gamingPaneMounted) && gamingRecovery && (
-        <div className="gaming-recovery-banner" role="alert">
-          {/* Protection-first framing (consumer-panel Q4, owner-directed exploration 2026-07-11):
-              the honest state is "recoverable, nothing at risk" — the receipt is intact — so the
-              banner leads with that instead of alarm. Visibility/actions/never-hide unchanged. */}
-          <span>
-            <strong>Nothing&apos;s lost</strong> — a Gaming Mode session was interrupted (
-            {statusLabel(gamingRecovery.status)}) and Compy kept the full restore receipt. Resume
-            it, or restore your settings now?
-          </span>
-          <span className="gaming-recovery-actions">
+      {/* Gaming toast stack — a small bottom-right popup, not a top bar (owner ask 2026-07-14:
+          "a little popup window down at the bottom right … out of the way that you can easily
+          restore or dismiss"). Everything the banners guaranteed carries over unchanged:
+          · Defers to the Gaming pane's own richer prompt while one is actually MOUNTED — two
+            simultaneous prompts for one event read as a bug (self-review catch, 2026-07-08).
+            Mount-aware, not tab-aware (T6c, 2026-07-10).
+          · Resume is primary (owner directive 2026-07-10).
+          · Never-hide law: the × only tucks the toast away for THIS run — it never clears
+            gamingRecovery, so the pane's own card (and Review) keep offering the restore, and
+            the next launch re-greets if the session is still unresolved. */}
+      <div className="gaming-toast-stack">
+        {showGlobalRecoveryBanner(gamingRecovery !== null, gamingPaneMounted) &&
+          gamingRecovery &&
+          !recoveryToastHidden && (
+          <div className="gaming-toast gaming-toast-recovery" role="alert">
             <button
-              className="btn-small btn-small-on"
-              disabled={gamingRestoring || gamingResuming}
-              onClick={resumeGaming}
+              type="button"
+              className="gaming-toast-dismiss"
+              onClick={() => setRecoveryToastHidden(true)}
+              aria-label="Hide this reminder — you can still restore from the Gaming panel"
+              title="Hide — you can still restore from the Gaming panel"
             >
-              {gamingResuming ? "Resuming…" : "Resume Gaming Mode"}
+              ×
             </button>
-            <button
-              className="btn-small"
-              disabled={gamingRestoring || gamingResuming}
-              onClick={() => recoverGaming(true)}
-            >
-              {gamingRestoring ? "Restoring…" : "Restore now"}
-            </button>
-            <button
-              className="btn-small"
-              disabled={gamingRestoring || gamingResuming}
-              onClick={() => {
-                // Ground: the Gaming pane lives in the Lab's Optimize station (there is no
-                // standalone Optimize tab to review on). The recovery is NOT cleared here —
-                // the banner keeps greeting until the pane's own card takes over on mount,
-                // so Review can never dead-end the restore (the old clear did exactly that
-                // when the pane stayed behind a closed disclosure).
-                setActiveTab(labGround ? "Lab" : "Optimize");
-              }}
-            >
-              Review
-            </button>
-          </span>
-        </div>
-      )}
+            {/* Protection-first framing (consumer-panel Q4, owner-directed exploration
+                2026-07-11): the honest state is "recoverable, nothing at risk". */}
+            <p className="gaming-toast-msg">
+              <strong>Nothing&apos;s lost</strong> — a Gaming Mode session was interrupted (
+              {statusLabel(gamingRecovery.status)}) and Compy kept the full restore receipt.
+              Resume it, or restore your settings now?
+            </p>
+            <div className="gaming-toast-actions">
+              <button
+                className="btn-small btn-small-on"
+                disabled={gamingRestoring || gamingResuming}
+                onClick={resumeGaming}
+              >
+                {gamingResuming ? "Resuming…" : "Resume Gaming Mode"}
+              </button>
+              <button
+                className="btn-small"
+                disabled={gamingRestoring || gamingResuming}
+                onClick={() => recoverGaming(true)}
+              >
+                {gamingRestoring ? "Restoring…" : "Restore now"}
+              </button>
+              <button
+                className="btn-small"
+                disabled={gamingRestoring || gamingResuming}
+                onClick={() => {
+                  // Ground: the Gaming pane lives in the Lab's Optimize station (there is no
+                  // standalone Optimize tab to review on). The recovery is NOT cleared here —
+                  // the toast keeps greeting until the pane's own card takes over on mount,
+                  // so Review can never dead-end the restore (the old clear did exactly that
+                  // when the pane stayed behind a closed disclosure).
+                  setActiveTab(labGround ? "Lab" : "Optimize");
+                }}
+              >
+                Review
+              </button>
+            </div>
+          </div>
+        )}
 
-      {/* Resume-success confirmation — the honest counterpart of the restored banner below:
-          names the live session's measured change count (summarizeChanges of the contract
-          the backend returned), never a bare "it worked". */}
-      {showGlobalRestoredBanner(gamingResumed !== null, gamingRecovery !== null, gamingPaneMounted) &&
-        gamingResumed && (
-        <div className="gaming-restored-banner" role="status">
-          <span>
-            <strong>✓ Gaming Mode is back on.</strong> {gamingResumed} — stop it from{" "}
-            {labGround ? "the Lab" : "Optimize"} when you're done.
-          </span>
-          <span className="gaming-recovery-actions">
-            <button className="btn-small" onClick={() => setGamingResumed(null)}>
-              Done
-            </button>
-          </span>
-        </div>
-      )}
+        {/* Resume-success confirmation — the honest counterpart of the restored toast below:
+            names the live session's measured change count (summarizeChanges of the contract
+            the backend returned), never a bare "it worked". */}
+        {showGlobalRestoredBanner(gamingResumed !== null, gamingRecovery !== null, gamingPaneMounted) &&
+          gamingResumed && (
+          <div className="gaming-toast gaming-toast-ready" role="status">
+            <p className="gaming-toast-msg">
+              <strong>✓ Gaming Mode is back on.</strong> {gamingResumed} — stop it from{" "}
+              {labGround ? "the Lab" : "Optimize"} when you're done.
+            </p>
+            <div className="gaming-toast-actions">
+              <button className="btn-small" onClick={() => setGamingResumed(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        )}
 
-      {/* Restore-success confirmation — names exactly what came back (never a silent success).
-          Defers to the Gaming pane's own confirmation card while one is mounted, same as the
-          recovery banner above (self-review catch, round 2, 2026-07-08). */}
-      {showGlobalRestoredBanner(gamingRestored !== null, gamingRecovery !== null, gamingPaneMounted) &&
-        gamingRestored && (
-        <div className="gaming-restored-banner" role="status">
-          <span>
-            <strong>✓ {gamingRestored.headline}.</strong>{" "}
-            {gamingRestored.labels.length > 0
-              ? `${gamingRestored.detail} ${gamingRestored.labels.join(" · ")}.`
-              : gamingRestored.detail}
-          </span>
-          <span className="gaming-recovery-actions">
-            <button className="btn-small" onClick={() => setGamingRestored(null)}>
-              Done
-            </button>
-          </span>
-        </div>
-      )}
+        {/* Restore-success confirmation — names exactly what came back (never a silent success).
+            Defers to the Gaming pane's own confirmation card while one is mounted, same as the
+            recovery toast above (self-review catch, round 2, 2026-07-08). */}
+        {showGlobalRestoredBanner(gamingRestored !== null, gamingRecovery !== null, gamingPaneMounted) &&
+          gamingRestored && (
+          <div className="gaming-toast gaming-toast-ready" role="status">
+            <p className="gaming-toast-msg">
+              <strong>✓ {gamingRestored.headline}.</strong>{" "}
+              {gamingRestored.labels.length > 0
+                ? `${gamingRestored.detail} ${gamingRestored.labels.join(" · ")}.`
+                : gamingRestored.detail}
+            </p>
+            <div className="gaming-toast-actions">
+              <button className="btn-small" onClick={() => setGamingRestored(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {hw && settingsActive ? (
         <Settings

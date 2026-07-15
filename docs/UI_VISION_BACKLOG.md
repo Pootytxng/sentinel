@@ -457,6 +457,17 @@ literally ordered psu→storage→gpu→cpu→ram (`setup-steps.ts:103`), parts 
 hardware, `TourCamera` lerps per `focusId` (`HardwareTourScene.tsx:131`), re-runnable from both Home
 surfaces via `compy:start-tour` (`SetupLauncherCard.tsx`, `App.tsx:558`). Not open work.
 
+### I. Gaming recovery banner → bottom-right toast — ✅ SHIPPED (2026-07-14, same-day as the ask)
+
+Owner (2026-07-14, at Gaming Mode QA sign-off): *"im not a fan of the pop up alert bar at the top of
+compy … id rather it was like a little popup window down at the bottom right similar to like a clippy
+speech bubble alert or just something out of the way that you can easily restore or dismiss."* Built
+verbatim: the global crash-recovery prompt + both success confirmations moved from full-width top bars
+into a fixed bottom-right `.gaming-toast-stack` (App.tsx/App.css) with a × dismiss (this-run-only —
+never clears the recovery; never-hide law intact), Resume primary, slide-in gated on
+`data-motion="reduced"`. Self-reviewer PASS (sr-gaming-toast-*.png). One taste note for the owner: the
+literal speech-bubble *tail* was read as an analogy, not built — say the word if you want the pointy tail.
+
 ---
 
 ## ✅ VERIFIED SHIPPED (2026-07-08 code check — were "claimed-done," now confirmed)
