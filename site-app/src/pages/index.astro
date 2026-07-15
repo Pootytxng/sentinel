@@ -1,0 +1,750 @@
+---
+// compy.gg home — Mission Control (Direction A, spec 2026-07-14-site-makeover-research-spitball).
+// Every number on this page is pinned to a real provenance record:
+//   session showcase → ../data/session-replay.json + site/src/session-receipt.json
+//   honesty receipt  → site/src/proof-receipt.json
+// No gain claims, no fabricated data, zero third-party runtime requests. PRE-PUBLISH.
+import Base from "../layouts/Base.astro";
+import ReplayHUD from "../components/ReplayHUD.tsx";
+import CountUp from "../components/CountUp.tsx";
+---
+
+<Base
+  title="Compy — the PC optimizer that shows its receipts"
+  description="Compy reads your actual hardware, recommends only what it can undo, and measures every change on your rig — including the ones that do nothing. Free, no account, nothing leaves your PC."
+>
+  <!-- ============ topbar ============ -->
+  <header class="topbar">
+    <div class="wrap topbar-in">
+      <a class="mono wordmark" href="/">COMPY<span class="beta-chip">private beta</span></a>
+      <nav class="topnav mono" aria-label="Site">
+        <a href="/library/">Blackbook</a>
+        <a href="#receipts">Receipts</a>
+        <a href="#faq">FAQ</a>
+        <a class="btn btn--primary topnav-cta" href="#waitlist">Join the waitlist</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ============ hero ============ -->
+  <section class="hero">
+    <div class="aurora" aria-hidden="true"></div>
+    <div class="grid-tex" aria-hidden="true"></div>
+    <div class="wrap hero-in">
+      <div class="hero-copy">
+        <p class="kicker">measured, not promised</p>
+        <h1>The PC optimizer that shows its receipts.</h1>
+        <p class="hero-sub">
+          Compy reads your actual hardware, recommends only what it can undo, and measures
+          every change on your rig — including the ones that do nothing.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn--primary" href="#waitlist">Join the waitlist</a>
+          <a class="btn btn--ghost" href="/library/">Read the Blackbook →</a>
+        </div>
+        <p class="hero-note mono">
+          Compy is free. No account, no ads, nothing leaves your PC.
+        </p>
+      </div>
+      <div class="hero-stage">
+        <ReplayHUD client:idle />
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ trust bar ============ -->
+  <div class="trustbar" role="list" aria-label="What Compy will never do">
+    <div class="wrap trustbar-in mono">
+      <span role="listitem">rollback-first</span>
+      <span role="listitem">zero outbound connections</span>
+      <span role="listitem">no kernel driver</span>
+      <span role="listitem">no game injection</span>
+      <span role="listitem">free forever</span>
+    </div>
+  </div>
+
+  <!-- ============ features ============ -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="kicker">the instrument</p>
+        <h2>Built like mission control, not a magic button.</h2>
+        <p>
+          One dashboard that knows your rig, proves what it changes, and can always put
+          things back.
+        </p>
+      </div>
+      <div class="bento">
+        <article class="panel bcard bcard--wide reveal">
+          <h3>Per-rig recommendations</h3>
+          <p>
+            Compy reads your CPU, GPU, RAM and storage first, then recommends only what fits
+            <em>your</em> hardware — not a YouTube preset recorded on someone else's PC.
+          </p>
+        </article>
+        <article class="panel bcard reveal">
+          <h3>Rollback-first</h3>
+          <p>
+            Every change records its exact prior state in the Trust Ledger before it applies.
+            One click puts it back — even if the tweak is later retired.
+          </p>
+        </article>
+        <article class="panel bcard reveal">
+          <h3>The Lab</h3>
+          <p>
+            A benchmark proving ground: apply a tweak, measure it on live game frames, and
+            keep it only if the numbers earn it. Auto-rollback when they don't.
+          </p>
+        </article>
+        <article class="panel bcard reveal">
+          <h3>Monitor</h3>
+          <p>
+            Live fps, frametimes and GPU telemetry, read on-device. No overlay injection, no
+            kernel driver — anti-cheat safe by design.
+          </p>
+        </article>
+        <article class="panel bcard bcard--wide reveal">
+          <h3>Gaming Mode</h3>
+          <p>
+            Session-scoped tweaks that apply when you start playing and revert when you stop —
+            your PC goes back to normal the moment the session ends.
+          </p>
+        </article>
+        <article class="panel bcard reveal">
+          <h3><a href="/library/">The Blackbook →</a></h3>
+          <p>
+            The debunk library: which popular "FPS tweaks" actually do something, which are
+            snake oil, and the evidence either way.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ receipts ============ -->
+  <section id="receipts" class="receipts">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="kicker">receipts</p>
+        <h2>We publish the misses too.</h2>
+        <p>
+          Every optimizer promises. Compy measures — and shows the result either way. These
+          two receipts are real records from a real PC, not marketing copy.
+        </p>
+      </div>
+      <div class="receipt-grid">
+        <article class="panel receipt reveal" aria-label="A measured null result">
+          <header class="receipt-head">
+            <span class="chip">the honesty test</span>
+            <span class="chip chip--accent">measured ✓</span>
+          </header>
+          <h3>Windows Game Mode — did it help?</h3>
+          <dl class="receipt-rows readout">
+            <div><dt>trial</dt><dd>5 baseline vs 5 treatment windows, live game frames</dd></div>
+            <div><dt>result</dt><dd>no gain beyond the ±0.7% session noise floor</dd></div>
+            <div><dt>rollback</dt><dd>restored to the exact prior value ✓</dd></div>
+          </dl>
+          <p class="receipt-cap mono">
+            A real Lab trial, published as-is. When a tweak does nothing, Compy says so.
+          </p>
+        </article>
+        <article class="panel receipt reveal" aria-label="A real recorded session">
+          <header class="receipt-head">
+            <span class="chip">a real session</span>
+            <span class="chip chip--accent">measured ✓</span>
+          </header>
+          <h3>Diablo IV — three hours, measured live</h3>
+          <div class="receipt-stats">
+            <div class="rstat">
+              <span class="rstat-num readout"><CountUp client:visible value={237.3} decimals={1} /></span>
+              <span class="rstat-label mono">avg fps</span>
+            </div>
+            <div class="rstat">
+              <span class="rstat-num readout"><CountUp client:visible value={214.4} decimals={1} /></span>
+              <span class="rstat-label mono">1% low</span>
+            </div>
+            <div class="rstat">
+              <span class="rstat-num readout"><CountUp client:visible value={10776} /></span>
+              <span class="rstat-label mono">samples</span>
+            </div>
+          </div>
+          <p class="receipt-cap mono">
+            Radeon RX 9070 XT · every number read on-device and graphed in Monitor. A
+            measurement showcase — Compy claims none of it as its own doing.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ pricing teaser ============ -->
+  <section id="pricing">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="kicker">pricing</p>
+        <h2>Free forever. Really.</h2>
+        <p>The optimizer, the rollback, the receipts — none of it is behind a paywall.</p>
+      </div>
+      <div class="price-grid">
+        <article class="panel pcard reveal">
+          <header>
+            <h3 class="mono">COMPY</h3>
+            <p class="price readout">Free forever</p>
+          </header>
+          <ul>
+            <li>Per-rig recommendations, all of them</li>
+            <li>Trust Ledger rollback, unlimited</li>
+            <li>Monitor, the Lab, Gaming Mode</li>
+            <li>No account · no ads · no upsell nags</li>
+          </ul>
+          <a class="btn btn--primary" href="#waitlist">Join the waitlist</a>
+        </article>
+        <article class="panel pcard pcard--pro reveal">
+          <header>
+            <h3 class="mono">COMPY PRO <span class="chip">in the works</span></h3>
+            <p class="price readout">No price yet</p>
+          </header>
+          <ul>
+            <li>Long-term monitoring history</li>
+            <li>Multi-rig dashboards</li>
+          </ul>
+          <p class="pcard-note">
+            Nothing to buy until it's real — and Pro will never be required to optimize or
+            roll back.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section id="faq">
+    <div class="wrap faq-wrap">
+      <div class="section-head reveal">
+        <p class="kicker">faq</p>
+        <h2>The questions worth asking an optimizer.</h2>
+      </div>
+      <div class="faq-list reveal">
+        <details>
+          <summary>Is Compy really free?</summary>
+          <p>
+            Yes — free forever, not a trial. A paid Pro tier (monitoring history, multi-rig)
+            is in the works, but everything Compy does today stays free.
+          </p>
+        </details>
+        <details>
+          <summary>Can I undo what it changes?</summary>
+          <p>
+            Always. Before any change applies, Compy records the exact prior state in its
+            Trust Ledger. Rollback restores that recorded value — it works even if the tweak
+            is later removed from the catalog, and it never applies anything it can't undo.
+          </p>
+        </details>
+        <details>
+          <summary>Will it get me banned by anti-cheat?</summary>
+          <p>
+            No. Compy never injects into games and never installs a kernel driver — the two
+            things anti-cheat systems actually punish. Fps and telemetry are read through
+            Windows' own event tracing and GPU vendor libraries.
+          </p>
+        </details>
+        <details>
+          <summary>Does Compy send my data anywhere?</summary>
+          <p>
+            No. The app makes zero outbound connections — your hardware info, sessions and
+            history never leave your PC. The only thing this website stores is the waitlist
+            email you choose to give it.
+          </p>
+        </details>
+        <details>
+          <summary>Does it support my hardware?</summary>
+          <p>
+            AMD GPUs are hardware-verified (it's built on one). NVIDIA detection and
+            NVIDIA-specific tweaks are verified on real hardware; NVIDIA sensor monitoring is
+            implemented but not yet hardware-verified. Intel GPU support is planned. We label
+            confidence honestly rather than claiming everything works everywhere.
+          </p>
+        </details>
+        <details>
+          <summary>How much FPS will I gain?</summary>
+          <p>
+            We won't promise a number — nobody honestly can, because it depends on your rig.
+            Compy measures each change on your PC and shows you the result, including when
+            it's nothing. That's the entire point.
+          </p>
+        </details>
+        <details>
+          <summary>When can I download it?</summary>
+          <p>
+            Compy is in private beta. Join the waitlist below and you'll get one email when
+            the public build is ready — that's the only thing the list is for.
+          </p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ waitlist ============ -->
+  <section id="waitlist" class="waitlist">
+    <div class="wrap waitlist-in reveal">
+      <p class="kicker">launch</p>
+      <h2>Be first in line.</h2>
+      <p class="waitlist-sub">
+        One email when Compy launches. That's it.
+      </p>
+      <form class="waitlist-form" method="POST" action="/api/waitlist" data-waitlist>
+        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
+        <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
+        <button class="btn btn--primary" type="submit">Notify me</button>
+      </form>
+      <p class="waitlist-pending mono" data-waitlist-status role="status"></p>
+      <p class="waitlist-privacy mono">
+        Your email is stored only to send that one launch message — no list-selling, no
+        follow-up drip. The app itself sends nothing off your PC.
+      </p>
+      <!-- KO-FI PLACEHOLDER SLOT: support link appears here once the owner sets a profile URL. -->
+    </div>
+  </section>
+</Base>
+
+<script>
+  import "../scripts/motion.ts";
+
+  // Waitlist progressive enhancement — same-origin /api/waitlist only (no JS still works:
+  // the form natively POSTs and comes back as /?waitlist=ok).
+  const wlForm = document.querySelector<HTMLFormElement>("[data-waitlist]");
+  const wlStatus = document.querySelector<HTMLElement>("[data-waitlist-status]");
+  const setStatus = (msg: string) => {
+    if (wlStatus) wlStatus.textContent = msg;
+  };
+  const wlFlag = new URLSearchParams(location.search).get("waitlist");
+  if (wlFlag === "ok") setStatus("You're on the list. One email at launch — that's it.");
+  if (wlFlag === "err") setStatus("Something went wrong — try again in a minute.");
+  wlForm?.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    setStatus("…");
+    fetch("/api/waitlist", {
+      method: "POST",
+      body: new FormData(wlForm),
+      headers: { accept: "application/json" },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        wlForm.reset();
+        setStatus("You're on the list. One email at launch — that's it.");
+      })
+      .catch(() => setStatus("Something went wrong — try again in a minute."));
+  });
+</script>
+
+<style>
+  /* ---- topbar ---- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: rgba(7, 8, 11, 0.82);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 62px;
+  }
+  .wordmark {
+    font-size: 15px;
+    letter-spacing: 0.3em;
+    color: var(--fg);
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .beta-chip {
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent-line);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .topnav {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    font-size: 12.5px;
+    letter-spacing: 0.05em;
+  }
+  .topnav a {
+    color: var(--fg-dim);
+  }
+  .topnav a:hover {
+    color: var(--accent-bright);
+  }
+  .topnav-cta {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+  .topnav .topnav-cta {
+    color: #071018;
+  }
+  @media (max-width: 720px) {
+    .topnav a:not(.topnav-cta) {
+      display: none;
+    }
+  }
+  @media (max-width: 480px) {
+    /* self-review 2026-07-14: at true 390px the CTA wrapped to two lines and overflowed the
+       viewport — keep it one compact line and drop the chip to make room. */
+    .topnav-cta {
+      padding: 7px 12px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .beta-chip {
+      display: none;
+    }
+  }
+
+  /* ---- hero ---- */
+  .hero {
+    padding: 110px 0 84px;
+    overflow: hidden;
+  }
+  .hero-in {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 56px;
+    align-items: center;
+    position: relative;
+  }
+  .hero-copy {
+    display: grid;
+    gap: 22px;
+    justify-items: start;
+  }
+  .hero-sub {
+    font-size: 18px;
+    color: var(--fg-dim);
+    max-width: 460px;
+  }
+  .hero-ctas {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .hero-note {
+    font-size: 12px;
+    letter-spacing: 0.07em;
+    color: var(--fg-faint);
+  }
+  .hero-stage {
+    min-width: 0;
+  }
+  @media (max-width: 920px) {
+    .hero {
+      padding-top: 72px;
+    }
+    .hero-in {
+      grid-template-columns: 1fr;
+      gap: 44px;
+    }
+  }
+
+  /* ---- trust bar ---- */
+  .trustbar {
+    border-block: 1px solid var(--line);
+    background: var(--bg-2);
+    padding: 16px 0;
+  }
+  .trustbar-in {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+  }
+  .trustbar-in span::before {
+    content: "✓ ";
+    color: var(--accent);
+  }
+
+  /* ---- features bento ---- */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .bcard {
+    padding: 26px 26px 28px;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    transition: border-color 0.25s ease;
+  }
+  .bcard:hover {
+    border-color: var(--accent-line);
+  }
+  .bcard--wide {
+    grid-column: span 2;
+  }
+  .bcard h3 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .bcard p {
+    color: var(--fg-dim);
+    font-size: 14.5px;
+  }
+  @media (max-width: 920px) {
+    .bento {
+      grid-template-columns: 1fr;
+    }
+    .bcard--wide {
+      grid-column: auto;
+    }
+  }
+
+  /* ---- receipts ---- */
+  .receipts {
+    background: var(--bg-2);
+    border-block: 1px solid var(--line);
+  }
+  .receipt-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    /* self-review 2026-07-14: without this the second receipt card (the real-session
+       Diablo IV metrics) clipped off the right edge at mobile widths. */
+    .receipt-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .receipt {
+    padding: 26px;
+    display: grid;
+    gap: 18px;
+    align-content: start;
+  }
+  .receipt-head {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .receipt h3 {
+    font-size: 19px;
+    font-weight: 600;
+  }
+  .receipt-rows {
+    display: grid;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .receipt-rows div {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 12px;
+  }
+  .receipt-rows dt {
+    color: var(--fg-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+    padding-top: 2px;
+  }
+  .receipt-rows dd {
+    color: var(--fg);
+  }
+  .receipt-stats {
+    display: flex;
+    gap: 34px;
+    flex-wrap: wrap;
+  }
+  .rstat {
+    display: grid;
+    gap: 2px;
+  }
+  .rstat-num {
+    font-size: 36px;
+    color: var(--accent-bright);
+    line-height: 1.1;
+  }
+  .rstat-label {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .receipt-cap {
+    font-size: 12px;
+    color: var(--fg-faint);
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    line-height: 1.55;
+  }
+
+  /* ---- pricing ---- */
+  .price-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    max-width: 860px;
+  }
+  .pcard {
+    padding: 30px;
+    display: grid;
+    gap: 20px;
+    align-content: start;
+    justify-items: start;
+  }
+  .pcard header {
+    display: grid;
+    gap: 8px;
+  }
+  .pcard h3 {
+    font-size: 14px;
+    letter-spacing: 0.24em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .price {
+    font-size: 28px;
+    font-weight: 600;
+  }
+  .pcard ul {
+    list-style: none;
+    display: grid;
+    gap: 9px;
+    color: var(--fg-dim);
+    font-size: 14.5px;
+  }
+  .pcard li::before {
+    content: "— ";
+    color: var(--accent);
+  }
+  .pcard--pro {
+    border-style: dashed;
+  }
+  .pcard-note {
+    font-size: 13px;
+    color: var(--fg-faint);
+  }
+  @media (max-width: 720px) {
+    .price-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ---- FAQ ---- */
+  .faq-wrap {
+    max-width: 760px;
+  }
+  .faq-list {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--line-2);
+  }
+  .faq-list details {
+    border-bottom: 1px solid var(--line-2);
+  }
+  .faq-list summary {
+    cursor: pointer;
+    padding: 20px 34px 20px 4px;
+    font-size: 16.5px;
+    font-weight: 550;
+    list-style: none;
+    position: relative;
+  }
+  .faq-list summary::-webkit-details-marker {
+    display: none;
+  }
+  .faq-list summary::after {
+    content: "+";
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 18px;
+  }
+  .faq-list details[open] summary::after {
+    content: "–";
+  }
+  .faq-list summary:hover {
+    color: var(--accent-bright);
+  }
+  .faq-list p {
+    padding: 0 4px 22px;
+    color: var(--fg-dim);
+    font-size: 15px;
+    max-width: 640px;
+  }
+
+  /* ---- waitlist ---- */
+  .waitlist {
+    background: var(--bg-2);
+    border-top: 1px solid var(--line);
+  }
+  .waitlist-in {
+    display: grid;
+    gap: 16px;
+    justify-items: center;
+    text-align: center;
+    max-width: 560px;
+  }
+  .waitlist-in .kicker::before {
+    display: none;
+  }
+  .waitlist-sub {
+    color: var(--fg-dim);
+    font-size: 16px;
+  }
+  .waitlist-form {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 440px;
+    margin-top: 6px;
+  }
+  .waitlist-form input[type="email"] {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 13.5px;
+    padding: 12px 14px;
+  }
+  .waitlist-form input[type="email"]:focus {
+    outline: none;
+    border-color: var(--accent-line);
+  }
+  .waitlist-pending {
+    font-size: 12.5px;
+    color: var(--accent);
+    min-height: 1.2em;
+  }
+  .waitlist-privacy {
+    font-size: 11.5px;
+    color: var(--fg-faint);
+    line-height: 1.6;
+    max-width: 460px;
+  }
+  @media (max-width: 560px) {
+    .waitlist-form {
+      flex-direction: column;
+    }
+  }
+</style>

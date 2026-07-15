@@ -5,14 +5,15 @@
 // live library data, never a hand-written or stale literal.
 //   Guard A (always): every COMMITTED site/ page that states an entry count states the data's count.
 //   Guard B (when dist-site/ exists): dist-site is a byte-exact, complete mirror of the current
-//   staging set (site/ minus build tooling, plus functions/) with no stale extra pages.
+//   staging set (site/ minus build tooling, plus the Astro landing overlay from site-app/dist,
+//   plus functions/) with no stale extra pages.
 // dist-site is regenerated ONLY via scripts/stage-dist-site.mjs (the fix that pairs with this guard).
 import { describe, it, expect } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadLibrary } from "./lib/library-render.mjs";
-import { STAGING_EXCLUDE } from "./stage-dist-site.mjs";
+import { STAGING_EXCLUDE, buildSiteApp } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const siteDir = join(root, "site");
@@ -60,11 +61,18 @@ describe("Guard A — committed site/ copy states the live library count", () =>
 describe.skipIf(!existsSync(distDir))(
   "Guard B — dist-site/ deploy staging tree mirrors the current source exactly",
   () => {
-    // Expected staging set: site/ minus tooling, plus repo-root functions/ under functions/.
+    // Expected staging set: site/ minus tooling, plus the Astro landing overlay (site-app/dist —
+    // index.html + assets-app/, Mission Control makeover 2026-07-14), plus repo-root functions/.
+    // Overlay entries are set AFTER site/ entries so on any name collision the Astro file wins,
+    // matching stageDistSite's cpSync order. site-app/dist is gitignored — rebuild it with the
+    // same command staging uses if it's absent, so the comparison is never against thin air.
+    const siteAppDist = join(root, "site-app", "dist");
+    if (!existsSync(siteAppDist)) buildSiteApp();
     const expected = new Map();
     for (const f of walk(siteDir)) {
       if (!STAGING_EXCLUDE.has(f.split("/")[0])) expected.set(f, join(siteDir, f));
     }
+    for (const f of walk(siteAppDist)) expected.set(f, join(siteAppDist, f));
     for (const f of walk(functionsDir)) expected.set(`functions/${f}`, join(functionsDir, f));
 
     it("carries every expected file, byte-identical to the source (stale tree = fail)", () => {

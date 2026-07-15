@@ -1,184 +1,183 @@
 // @vitest-environment node
-// R4a landing smoke (spec 2026-06-12 §B0): the COMMITTED site/index.html is the artifact the
-// owner taste-gates and the deploy ships — pin its publish-grade contract: doctrine hero, the
-// §B0 sections, zero outbound requests, zero raster assets until the §D art lands, doorknob
-// honesty on the download placeholder.
+// Landing contract v2 (Mission Control makeover, spec 2026-07-14-site-makeover-research-spitball):
+// the landing is no longer a committed static file — it is BUILT from site-app/ (Astro + React
+// islands). The artifact under test is site-app/dist/index.html, rebuilt here when the sources
+// are newer (same build command staging uses), so the guards always judge what would deploy.
+// The R4a guard CONTRACT carries over: real provenance-pinned numbers, zero third-party requests,
+// doorknob honesty, honest waitlist copy, legal links — the assertions target the new markup.
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildSiteApp } from "./stage-dist-site.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const html = readFileSync(join(root, "site", "index.html"), "utf8");
+const appDir = join(root, "site-app");
+const distDir = join(appDir, "dist");
 
-describe("site landing (R4a publish-grade contract)", () => {
-  it("carries the doctrine identity hero + the §B0 sections", () => {
-    // Consumer-panel overhaul 2026-07-11: the hook line is the h1, the doctrine line the kicker.
-    expect(html).toContain("Know which PC tweaks<br />actually help your rig.");
-    expect(html).toMatch(/class="kicker">Measured, not promised\./);
-    expect(html).toContain('id="receipts"'); // 3 value cards
-    expect((html.match(/class="value-card"/g) ?? []).length).toBe(3);
-    expect(html).toContain('id="grades"'); // verdict key (glossary-generated)
-    expect(html).toContain('id="library"'); // debunk showcase
-    expect(html).toContain('id="waitlist"');
-    expect(html).toContain('id="download"'); // future-download placeholder
-    expect(html).toContain("Measured, not promised."); // creed footer line
-    expect(html).toContain("No fabricated numbers");
+// ---------- build-if-stale: test the real deploy artifact, never a stale one ----------
+function newestMtime(path) {
+  const st = statSync(path);
+  if (!st.isDirectory()) return st.mtimeMs;
+  let newest = 0;
+  for (const name of readdirSync(path)) newest = Math.max(newest, newestMtime(join(path, name)));
+  return newest;
+}
+const srcNewest = Math.max(
+  newestMtime(join(appDir, "src")),
+  newestMtime(join(appDir, "astro.config.mjs")),
+  newestMtime(join(appDir, "package.json")),
+);
+const indexPath = join(distDir, "index.html");
+if (!existsSync(indexPath) || statSync(indexPath).mtimeMs < srcNewest) buildSiteApp();
+
+const html = readFileSync(indexPath, "utf8");
+const rendered = html.replace(/<!--[\s\S]*?-->/g, ""); // comments don't render — strip before copy checks
+
+// Provenance records every number on the page is pinned to.
+const replay = JSON.parse(readFileSync(join(appDir, "src", "data", "session-replay.json"), "utf8"));
+const session = JSON.parse(readFileSync(join(root, "site", "src", "session-receipt.json"), "utf8"));
+const proof = JSON.parse(readFileSync(join(root, "site", "src", "proof-receipt.json"), "utf8"));
+
+describe("landing (Mission Control contract v2)", () => {
+  it("carries the Mission Control hero + every section", () => {
+    expect(html).toContain("The PC optimizer that shows its receipts.");
+    expect(html).toContain("measured, not promised"); // hero kicker
+    for (const id of ["features", "receipts", "pricing", "faq", "waitlist"]) {
+      expect(html, `missing section #${id}`).toContain(`id="${id}"`);
+    }
+    // Trust bar: the five never-promises.
+    for (const vow of [
+      "rollback-first",
+      "zero outbound connections",
+      "no kernel driver",
+      "no game injection",
+      "free forever",
+    ]) {
+      expect(html).toContain(vow);
+    }
   });
 
-  it("consumer-panel overhaul contract: free above the fold, accessible proof loop, start-here curation", () => {
-    // "It's free" lives in the hero, before the library section (was footer-only knowledge).
+  it("free is above the fold (consumer-panel law: never footer-only knowledge)", () => {
     const freeAt = html.indexOf("Compy is free.");
     expect(freeAt).toBeGreaterThan(-1);
-    expect(freeAt).toBeLessThan(html.indexOf('id="library"'));
-    // The proof loop is real accessible text (the hero visual), not a decorative aside.
-    expect(html).toContain('class="proof-title"');
-    expect(html).not.toMatch(/class="proof" aria-hidden/);
-    // Every tweak card argues its grade — a one-line "why" beside the chip, not a bare tier chip.
-    expect((html.match(/class="card-why"/g) ?? []).length).toBeGreaterThanOrEqual(10);
-    // Blackbook leads with the start-here trio, not raw entry counts.
-    expect(html).toContain("Start here: three quick reads");
-    expect(html).not.toMatch(/class="section-sub">\s*\d+ tweaks/);
-    // The full count survives on the browse-all link (honest, just demoted).
-    expect(html).toMatch(/Open the full Blackbook — all \d+ entries/);
+    expect(freeAt).toBeLessThan(html.indexOf('id="features"'));
   });
 
-  it("hero receipt is the REAL measured one, pinned to its provenance record (bug→guard, 2026-07-13)", () => {
-    // A consumer-panel persona caught the old strip using fabricated numbers (fast-startup-off
-    // "+8 fps" — a boot-time tweak that cannot move fps). The receipt is now a real Lab →
-    // Benchmark A/B trial; site/src/proof-receipt.json is its provenance. This guard pins the
-    // rendered strip to that record so decorative numbers can't silently return: re-measuring
-    // means updating BOTH files together.
-    const receipt = JSON.parse(readFileSync(join(root, "site", "src", "proof-receipt.json"), "utf8"));
-    expect(html).toContain(receipt.stripLines.title);
-    for (const row of [receipt.stripLines.row1, receipt.stripLines.row2, receipt.stripLines.row3]) {
-      for (const cell of row) expect(html).toContain(cell);
+  it("replay HUD SSRs the REAL measured results and never a dead play button (doorknob law)", () => {
+    // The island's build-time render is the measured summary — no-JS visitors get real content.
+    expect(html).toContain("replay · real recorded session");
+    expect(html).toContain(replay.avgFps.toFixed(1));
+    expect(html).toContain(replay.low1FpsEst.toFixed(1));
+    expect(html).toContain(replay.samples.toLocaleString("en-US"));
+    expect(html).toContain("nothing attributed to Compy changes");
+    // The ▶ control is hydration-gated: static markup must NOT carry a button that can't work.
+    expect(rendered).not.toContain("replay the session");
+  });
+
+  it("replay record is pinned to its provenance and contains no invented per-frame trace", () => {
+    // session-replay.json must stay in lockstep with the audited session receipt.
+    expect(replay.durationSecs).toBe(session.durationSecs);
+    expect(replay.samples).toBe(session.samples);
+    expect(replay.claim).toContain("no gain claim");
+    // The replay animates ONLY true time data — the record must never grow an fps series
+    // (sessions.rs never persisted one; a series here could only be fabricated).
+    for (const key of Object.keys(replay)) {
+      if (Array.isArray(replay[key])) expect(key, "only the real event log may be an array").toBe("events");
     }
-    // Provenance must be complete enough to audit: a ledger entry, a real trial, a clean rollback.
-    expect(receipt.ledgerEntryId).toMatch(/^[a-z-]+-\d+$/);
-    expect(receipt.trial.rolledBack).toBe(true);
-    expect(receipt.recId).toBe(receipt.ledgerEntryId.replace(/-\d+$/, ""));
-    // The known-fabricated mock trio must never reappear in RENDERED copy (the template's
-    // provenance comment may name it — comments don't render, so strip them before matching).
-    const rendered = html.replace(/<!--[\s\S]*?-->/g, "");
+    expect(replay.events.length).toBeGreaterThan(0);
+    for (const e of replay.events) {
+      expect(e.atSecs).toBeGreaterThanOrEqual(0);
+      expect(e.atSecs).toBeLessThanOrEqual(replay.durationSecs);
+    }
+  });
+
+  it("receipts section is pinned to the real provenance records — including the published miss", () => {
+    // Receipt A: the honest null result, from the real Lab trial record.
+    expect(html).toContain(`±${proof.noiseFloorPct.toFixed(1)}% session noise floor`);
+    expect(html).toContain("restored to the exact prior value");
+    expect(proof.trial.rolledBack).toBe(true);
+    expect(proof.ledgerEntryId).toMatch(/^[a-z-]+-\d+$/);
+    expect(proof.recId).toBe(proof.ledgerEntryId.replace(/-\d+$/, ""));
+    // Receipt B: the real session, claiming nothing as Compy's doing.
+    expect(html).toContain("Compy claims none of it as its own doing");
+  });
+
+  it("known-fabricated copy never returns; no gain-claim phrasing anywhere", () => {
     expect(rendered).not.toContain("+8 fps");
     expect(rendered).not.toContain("an example receipt");
-    expect(rendered).not.toMatch(/proof-row"><span class="k">fast-startup-off/);
+    expect(rendered).not.toContain("fast-startup-off");
+    expect(rendered).not.toMatch(/[▲]\s*\d/);
+    expect(rendered).not.toMatch(/\+\d+(\.\d+)?\s*(fps|%)/i);
+    expect(rendered).not.toMatch(/\bboost/i);
+    expect(rendered).not.toMatch(/\bfaster\b/i);
   });
 
-  it("hero session showcase is a REAL session, pinned to provenance, and claims NO gain (owner direction 2026-07-14: positives first, credibility as the shield)", () => {
-    // The win strip is a measurement showcase transcribed from the rig's own Monitor data
-    // (site/src/session-receipt.json). It must never grow a gain/causal claim: the Monitor
-    // "▲37 avg" delta was REJECTED for this slot (its two sessions ran at 94% vs 41% GPU
-    // load — not comparable), so the guard rejects gain-claim phrasing outright.
-    const session = JSON.parse(readFileSync(join(root, "site", "src", "session-receipt.json"), "utf8"));
-    expect(html).toContain(session.stripLines.title);
-    for (const row of [session.stripLines.row1, session.stripLines.row2]) {
-      for (const cell of row) expect(html).toContain(cell);
+  it("makes ZERO third-party requests: every URL is same-origin or compy.gg, fonts self-hosted", () => {
+    // Absolute URLs are allowed ONLY for our own canonical/og metas.
+    for (const m of html.matchAll(/(?:href|src|action)="(https?:\/\/[^"]+)"/g)) {
+      expect(m[1], "external origin on the landing").toMatch(/^https:\/\/compy\.gg\//);
     }
-    expect(html).toContain(session.cap);
-    // Provenance must be auditable: a real session record with duration + sample counts.
-    expect(session.durationSecs).toBeGreaterThan(0);
-    expect(session.samples).toBeGreaterThan(0);
-    expect(session.claim).toContain("no gain claim");
-    // No gain-claim phrasing anywhere in the win strip (▲/+N fps, "faster", "boost", "gained").
-    const winStrip = /<div class="proof proof-win">([\s\S]*?)<\/div>\s*<div class="proof">/.exec(html)?.[1] ?? "";
-    expect(winStrip.length).toBeGreaterThan(0); // the strip is really there, above the honesty receipt
-    expect(winStrip).not.toMatch(/[▲+]\s*\d/);
-    expect(winStrip).not.toMatch(/faster|boost|gain/i);
-  });
-
-  it("makes ZERO third-party requests: no external scripts/styles/fonts/trackers, no raster assets yet", () => {
-    // Every external http(s) reference would be a third-party request — there must be none.
-    // (The waitlist POST is SAME-ORIGIN /api/waitlist — gate-crossing per the 2026-06-12
-    // waitlist-wiring spec: the zero-THIRD-PARTY invariant is preserved, not waived.)
-    expect(html).not.toMatch(/src="https?:\/\//);
-    expect(html).not.toMatch(/href="https?:\/\//);
-    expect(html).not.toMatch(/action="https?:\/\//);
-    expect(html).not.toMatch(/@import|fonts\.googleapis|analytics|gtag|plausible|hotjar|turnstile|challenges\.cloudflare/i);
-    // No raster imagery until Cowork's §D art lands in site/assets/ (slots are comments).
-    expect(html).not.toMatch(/<img\b/);
-    // The only script is ours, and its only network call is the same-origin waitlist POST.
-    expect((html.match(/<script\b/g) ?? []).length).toBeLessThanOrEqual(1);
-    if (html.includes("<script")) expect(html).toContain("data-waitlist");
-    for (const m of html.matchAll(/fetch\(\s*["']([^"']+)["']/g)) {
-      expect(m[1]).toBe("/api/waitlist");
+    expect(html).not.toMatch(/@import|fonts\.googleapis|fonts\.gstatic|analytics|gtag|plausible|hotjar|turnstile|challenges\.cloudflare/i);
+    expect(html).not.toMatch(/<img\b/); // no raster assets on the landing
+    // Every <script src> is our own hashed bundle.
+    for (const m of html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)) {
+      expect(m[1]).toMatch(/^\/assets-app\//);
     }
-  });
-
-  it("download placeholder is honest text — no dead button wearing a knob (doorknob law)", () => {
-    const download = /<section class="wrap" id="download">([\s\S]*?)<\/section>/.exec(html)?.[1] ?? "";
-    expect(download).toContain("invite only");
-    expect(download).not.toMatch(/<button|class="btn"/);
-  });
-
-  it("wrap-combined classes never clobber .wrap's side padding with a shorthand (bug→guard, 2026-07-13)", () => {
-    // The 390px page-edge overflow (Cycle 2026-07-13e log): .topbar/.hero share their element
-    // with .wrap (<header class="wrap topbar">), and a `padding:` SHORTHAND in those blocks
-    // resets .wrap's 24px side padding (same specificity, later in the file) — hero copy ran
-    // edge-to-edge on mobile and the verdict ribbon scrolled the page to 407px. Longhand
-    // padding-top/-bottom is the law for any class that rides a .wrap element.
-    const css = readFileSync(join(root, "site", "library.css"), "utf8");
-    // Scan the landing AND both article templates — every markup source that pairs a class
-    // with .wrap ("wrap article" caught the same bug on all 200+ library pages).
-    const markup =
-      html +
-      readFileSync(join(root, "site", "src", "page.template.html"), "utf8") +
-      readFileSync(join(root, "site", "src", "debunk.template.html"), "utf8");
-    const combined = new Set(
-      [...markup.matchAll(/class="wrap\s+([\w- ]+)"/g)].flatMap((m) => m[1].trim().split(/\s+/)),
-    );
-    expect(combined.size).toBeGreaterThanOrEqual(3); // topbar + hero + article at minimum
-    // Walk every rule (comments stripped so they can't blur block boundaries) and flag any
-    // block that styles a wrap-combined class ITSELF (class in the rightmost compound —
-    // descendant rules like `.article ul.toc` style a different element and may pad freely).
-    const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-    expect(rules.length).toBeGreaterThan(50); // the parse actually saw the stylesheet
-    let checked = 0;
-    for (const [, selectorList, body] of rules) {
-      for (const cls of combined) {
-        const targetsSelf = selectorList.split(",").some((sel) => {
-          const subject = sel.trim().split(/[\s>+~]+/).pop() ?? "";
-          return new RegExp(String.raw`\.${cls}(?![\w-])`).test(subject) && !subject.includes(":");
-        });
-        if (!targetsSelf) continue;
-        checked++;
-        expect(body, `.${cls} block uses a padding shorthand — it zeroes .wrap's side padding`)
-          .not.toMatch(/(^|;|\s)padding\s*:/);
-      }
+    // The shipped JS makes no absolute-URL fetches and carries no tracker domains; the shipped
+    // CSS pulls no remote fonts. (The only network call anywhere is the same-origin waitlist POST.)
+    const assets = readdirSync(join(distDir, "assets-app"));
+    for (const f of assets.filter((f) => f.endsWith(".js"))) {
+      const js = readFileSync(join(distDir, "assets-app", f), "utf8");
+      expect(js, `${f}: absolute-URL fetch`).not.toMatch(/fetch\(\s*["']https?:\/\//);
+      expect(js, `${f}: tracker domain`).not.toMatch(/googletagmanager|google-analytics|plausible\.io|hotjar/i);
     }
-    expect(checked).toBeGreaterThanOrEqual(3); // .topbar/.hero/.article blocks were really examined
-    // And the generated stylesheet must stay in sync with its source.
-    expect(css).toBe(readFileSync(join(root, "site", "src", "library.css"), "utf8"));
+    for (const f of assets.filter((f) => f.endsWith(".css"))) {
+      expect(readFileSync(join(distDir, "assets-app", f), "utf8"), `${f}: remote url()`).not.toMatch(
+        /url\(\s*["']?https?:/,
+      );
+    }
+    // The ONE webfont is really self-hosted (Fontsource JetBrains Mono subsets in the bundle).
+    expect(assets.some((f) => /jetbrains-mono.*\.woff2$/.test(f))).toBe(true);
   });
 
-  it("mobile viewport + og metas present; og:image is LIVE (the §D art exists) and absolute", () => {
-    expect(html).toContain('name="viewport"');
-    expect(html).toContain('property="og:title"');
-    // Scrapers (Discord/Twitter/Facebook) require an ABSOLUTE og:image URL.
-    const active = html.replace(/<!--[\s\S]*?-->/g, "");
-    expect(active).toMatch(/<meta property="og:image" content="https:\/\/[^"]+\/assets\/og\.png"/);
-    expect(active).toContain('name="twitter:card"');
-  });
-
-  it("waitlist is the REAL same-origin form (spec 2026-06-12-waitlist-wiring); Ko-fi stays a placeholder", () => {
-    // Native POST to our own Pages Function — no provider, no third-party script.
+  it("waitlist is the REAL same-origin form with honest privacy copy; Ko-fi stays a placeholder", () => {
     expect(html).toMatch(/<form[^>]*method="POST"[^>]*action="\/api\/waitlist"/);
-    // The hidden honeypot field rides along (bots fill it; the Function drops them silently).
     expect(html).toMatch(/name="website"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*name="website"/);
-    // Honesty law on the new boundary: the email DOES leave the browser — to us only — and
-    // the copy says so plainly; the app's own zero-outbound line stays scoped to the app.
     expect(html).toContain("stored only to send that one launch message");
     expect(html).toContain("The app itself sends nothing off your PC");
+    expect(html).toMatch(/data-waitlist-status[^>]*role="status"|role="status"[^>]*data-waitlist-status/);
     expect(html).toContain("KO-FI PLACEHOLDER SLOT");
   });
 
-  it("links the published legal pages: footer Privacy · Terms + the waitlist note → privacy (point of collection)", () => {
-    expect(html).toMatch(/<a href="privacy\.html">/);
-    expect(html).toMatch(/<a href="eula\.html">/);
-    // The privacy disclosure stays one click away right where the email is collected.
-    const note = /class="waitlist-note">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? "";
-    expect(note).toMatch(/href="privacy\.html"/);
+  it("pricing teaser is honest: Pro has no price and nothing to click (doorknob law)", () => {
+    const pro = /<article class="[^"]*pcard--pro[^"]*"[^>]*>([\s\S]*?)<\/article>/.exec(html)?.[1] ?? "";
+    expect(pro.length).toBeGreaterThan(0);
+    expect(pro).toContain("No price yet");
+    expect(pro).toContain("in the works");
+    expect(pro).toContain("never be required to optimize");
+    expect(pro).not.toMatch(/<button|btn--primary|href="#waitlist"/);
+  });
+
+  it("FAQ keeps the honesty lines (NVIDIA sensor confidence, no fps promises)", () => {
+    expect((html.match(/<details/g) ?? []).length).toBeGreaterThanOrEqual(7);
+    // LOCKED rule 5: NVIDIA sensor monitoring stays "implemented but not yet hardware-verified".
+    expect(html).toContain("not yet hardware-verified");
+    expect(html).toContain("We won't promise a number");
+  });
+
+  it("mobile viewport + og metas present; og:image absolute; canonical is compy.gg", () => {
+    expect(html).toContain('name="viewport"');
+    expect(html).toContain('property="og:title"');
+    expect(rendered).toMatch(/<meta property="og:image" content="https:\/\/compy\.gg\/[^"]*og\.png"/);
+    expect(rendered).toContain('name="twitter:card"');
+    expect(rendered).toMatch(/rel="canonical" href="https:\/\/compy\.gg/);
+  });
+
+  it("links the published legal pages from the footer", () => {
+    expect(html).toMatch(/href="\/privacy\.html"/);
+    expect(html).toMatch(/href="\/eula\.html"/);
+    expect(html).toContain("Measured, not promised."); // the creed line
   });
 });
 
@@ -224,17 +223,16 @@ describe("legal pages (rendered from the .md source — privacy.html / eula.html
   });
 });
 
-// R6 Lane D guard: lock in this session's wins so they can't silently regress. Every COMMITTED
-// top-level site page must (1) link Privacy + Terms in its footer, and (2) add zero external
-// resource origins (per CC's plain-text-external-URLs decision). The gitignored library/ pages
-// render from the same page/debunk templates these pages exercise, so the templates are guarded.
+// R6 Lane D guard: every COMMITTED top-level site/ page must (1) link Privacy + Terms in its
+// footer, and (2) add zero external resource origins. The gitignored library/ pages render from
+// the same page/debunk templates these pages exercise, so the templates are guarded.
 describe("site-wide guard — footer legal links + zero external origins on every committed page", () => {
   const pages = readdirSync(join(root, "site"))
     .filter((f) => f.endsWith(".html"))
     .map((f) => [f, readFileSync(join(root, "site", f), "utf8")]);
 
   it("finds the committed page set", () => {
-    expect(pages.length, "landing + curated debunks + legal").toBeGreaterThanOrEqual(10);
+    expect(pages.length, "curated debunks + legal").toBeGreaterThanOrEqual(10);
   });
 
   it("every page links Privacy + Terms in its footer", () => {
@@ -248,8 +246,42 @@ describe("site-wide guard — footer legal links + zero external origins on ever
     for (const [name, html] of pages) {
       expect(html, `${name}: external href`).not.toMatch(/href="https?:\/\//);
       expect(html, `${name}: external src`).not.toMatch(/src="https?:\/\//);
-      // The landing's one inline <script> is allowed; a <script src=…> (remote) is never.
       expect(html, `${name}: remote <script>`).not.toMatch(/<script\b[^>]*\bsrc=/);
     }
+  });
+});
+
+// bug→guard (2026-07-13, kept from the R4a suite): a `padding:` SHORTHAND on a class that rides a
+// .wrap element resets library.css's .wrap side padding (same specificity, later in the file) —
+// page-edge overflow on mobile. Longhand padding-top/-bottom is the law for wrap-combined classes.
+// (The Astro landing is immune by construction: its .wrap sets width+margin only, no padding.)
+describe("template CSS guard — wrap-combined classes never clobber .wrap's side padding", () => {
+  it("no wrap-combined class block uses a padding shorthand", () => {
+    const css = readFileSync(join(root, "site", "library.css"), "utf8");
+    const markup =
+      readFileSync(join(root, "site", "src", "page.template.html"), "utf8") +
+      readFileSync(join(root, "site", "src", "debunk.template.html"), "utf8");
+    const combined = new Set(
+      [...markup.matchAll(/class="wrap\s+([\w- ]+)"/g)].flatMap((m) => m[1].trim().split(/\s+/)),
+    );
+    expect(combined.size).toBeGreaterThanOrEqual(2); // topbar + article at minimum
+    const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    expect(rules.length).toBeGreaterThan(50); // the parse actually saw the stylesheet
+    let checked = 0;
+    for (const [, selectorList, body] of rules) {
+      for (const cls of combined) {
+        const targetsSelf = selectorList.split(",").some((sel) => {
+          const subject = sel.trim().split(/[\s>+~]+/).pop() ?? "";
+          return new RegExp(String.raw`\.${cls}(?![\w-])`).test(subject) && !subject.includes(":");
+        });
+        if (!targetsSelf) continue;
+        checked++;
+        expect(body, `.${cls} block uses a padding shorthand — it zeroes .wrap's side padding`)
+          .not.toMatch(/(^|;|\s)padding\s*:/);
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(2); // .topbar/.article blocks were really examined
+    // And the generated stylesheet must stay in sync with its source.
+    expect(css).toBe(readFileSync(join(root, "site", "src", "library.css"), "utf8"));
   });
 });

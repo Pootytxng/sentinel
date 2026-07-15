@@ -1,0 +1,274 @@
+{
+  "note": "Provenance for the site Replay HUD (site-app/src/components/ReplayHUD.tsx). REAL session record transcribed 2026-07-14 from the dev rig's %APPDATA%/Compy/sessions.json (sessions.rs) — the SAME session as site/src/session-receipt.json; scripts/site-landing.test.mjs pins the two together. HONESTY CONTRACT: sessions.rs persists summary stats + event timeline ONLY (no per-frame fps series was stored), so the replay animates ONLY what has true time data — the session clock, the ~1Hz sample counter, and these events at their real timestamps. It must NEVER render an invented fps-over-time trace; the fps numbers appear only as end-of-session measured results. No gain claim, no attribution to Compy changes (see session-receipt.json for the ▲37 rejection).",
+  "transcribedAt": "2026-07-14",
+  "source": "%APPDATA%/Compy/sessions.json — Monitor session summary (sessions.rs)",
+  "startedAt": "2026-06-11T03:44:08.793542900+00:00",
+  "game": "Diablo IV",
+  "processName": "Diablo IV.exe",
+  "durationSecs": 10805,
+  "samples": 10776,
+  "avgFps": 237.3,
+  "avgFrametimeMs": 4.7,
+  "low1FpsEst": 214.4,
+  "peakGpuTempC": 48,
+  "peakGpuUsagePct": 98,
+  "rig": "AMD Radeon RX 9070 XT · Ryzen X3D-class 16-thread · Windows 11",
+  "claim": "measurement showcase only — no gain claim, no attribution to Compy changes",
+  "events": [
+    {
+      "atSecs": 34,
+      "kind": "process-start",
+      "label": "powercfg.exe starting"
+    },
+    {
+      "atSecs": 196,
+      "kind": "process-start",
+      "label": "StoreDesktopExtension.exe starting"
+    },
+    {
+      "atSecs": 476,
+      "kind": "process-start",
+      "label": "MoUsoCoreWorker.exe starting"
+    },
+    {
+      "atSecs": 476,
+      "kind": "process-start",
+      "label": "sppsvc.exe starting"
+    },
+    {
+      "atSecs": 647,
+      "kind": "process-start",
+      "label": "MoUsoCoreWorker.exe starting"
+    },
+    {
+      "atSecs": 1154,
+      "kind": "process-start",
+      "label": "CodeSetup-stable-1b50d58d73426c9171299ec4037d01365d995b78.tmp starting"
+    },
+    {
+      "atSecs": 1154,
+      "kind": "process-start",
+      "label": "icacls.exe starting"
+    },
+    {
+      "atSecs": 1154,
+      "kind": "process-start",
+      "label": "CodeSetup-stable-1b50d58d73426c9171299ec4037d01365d995b78.exe starting"
+    },
+    {
+      "atSecs": 1175,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    },
+    {
+      "atSecs": 1888,
+      "kind": "gpu-clock",
+      "label": "a GPU clock drop under load"
+    },
+    {
+      "atSecs": 2022,
+      "kind": "process-start",
+      "label": "sppsvc.exe starting"
+    },
+    {
+      "atSecs": 2257,
+      "kind": "process-start",
+      "label": "updater.exe starting"
+    },
+    {
+      "atSecs": 2463,
+      "kind": "process-start",
+      "label": "MoUsoCoreWorker.exe starting"
+    },
+    {
+      "atSecs": 2728,
+      "kind": "process-start",
+      "label": "sppsvc.exe starting"
+    },
+    {
+      "atSecs": 3103,
+      "kind": "process-start",
+      "label": "vmmem starting"
+    },
+    {
+      "atSecs": 3103,
+      "kind": "process-start",
+      "label": "vmwp.exe starting"
+    },
+    {
+      "atSecs": 3106,
+      "kind": "process-start",
+      "label": "inno_updater.exe starting"
+    },
+    {
+      "atSecs": 3107,
+      "kind": "process-start",
+      "label": "rustup.exe starting"
+    },
+    {
+      "atSecs": 3107,
+      "kind": "process-start",
+      "label": "rustc.exe starting"
+    },
+    {
+      "atSecs": 3107,
+      "kind": "process-start",
+      "label": "rust-analyzer.exe starting"
+    },
+    {
+      "atSecs": 3108,
+      "kind": "process-start",
+      "label": "cargo.exe starting"
+    },
+    {
+      "atSecs": 3109,
+      "kind": "process-start",
+      "label": "rust-analyzer-proc-macro-srv.exe starting"
+    },
+    {
+      "atSecs": 3110,
+      "kind": "process-start",
+      "label": "git.exe starting"
+    },
+    {
+      "atSecs": 3110,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    },
+    {
+      "atSecs": 3111,
+      "kind": "process-start",
+      "label": "node.exe starting"
+    },
+    {
+      "atSecs": 3112,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    },
+    {
+      "atSecs": 3113,
+      "kind": "process-start",
+      "label": "rustup.exe starting"
+    },
+    {
+      "atSecs": 3113,
+      "kind": "process-start",
+      "label": "cargo.exe starting"
+    },
+    {
+      "atSecs": 3113,
+      "kind": "process-start",
+      "label": "cargo-clippy.exe starting"
+    },
+    {
+      "atSecs": 3114,
+      "kind": "ram",
+      "label": "RAM filling up (90%+)"
+    },
+    {
+      "atSecs": 3114,
+      "kind": "process-start",
+      "label": "clippy-driver.exe starting"
+    },
+    {
+      "atSecs": 3117,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    },
+    {
+      "atSecs": 3147,
+      "kind": "process-start",
+      "label": "git.exe starting"
+    },
+    {
+      "atSecs": 3147,
+      "kind": "process-start",
+      "label": "git-remote-https.exe starting"
+    },
+    {
+      "atSecs": 3226,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    },
+    {
+      "atSecs": 3473,
+      "kind": "process-start",
+      "label": "git-remote-https.exe starting"
+    },
+    {
+      "atSecs": 3473,
+      "kind": "process-start",
+      "label": "git.exe starting"
+    },
+    {
+      "atSecs": 3511,
+      "kind": "gpu-clock",
+      "label": "a GPU clock drop under load"
+    },
+    {
+      "atSecs": 3594,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    },
+    {
+      "atSecs": 3766,
+      "kind": "process-start",
+      "label": "pwsh.exe starting"
+    },
+    {
+      "atSecs": 3767,
+      "kind": "process-start",
+      "label": "git.exe starting"
+    },
+    {
+      "atSecs": 3767,
+      "kind": "process-start",
+      "label": "ssh.exe starting"
+    },
+    {
+      "atSecs": 4040,
+      "kind": "process-start",
+      "label": "taskkill.exe starting"
+    },
+    {
+      "atSecs": 4052,
+      "kind": "process-start",
+      "label": "ssh.exe starting"
+    },
+    {
+      "atSecs": 4052,
+      "kind": "process-start",
+      "label": "pwsh.exe starting"
+    },
+    {
+      "atSecs": 4052,
+      "kind": "process-start",
+      "label": "git.exe starting"
+    },
+    {
+      "atSecs": 4074,
+      "kind": "process-start",
+      "label": "rustup.exe starting"
+    },
+    {
+      "atSecs": 4074,
+      "kind": "process-start",
+      "label": "cargo.exe starting"
+    },
+    {
+      "atSecs": 4074,
+      "kind": "process-start",
+      "label": "pwsh.exe starting"
+    },
+    {
+      "atSecs": 4075,
+      "kind": "process-start",
+      "label": "compy_lib-7d065969820b0ea1.exe starting"
+    },
+    {
+      "atSecs": 4075,
+      "kind": "process-start",
+      "label": "powershell.exe starting"
+    }
+  ]
+}

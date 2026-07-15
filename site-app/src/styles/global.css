@@ -1,0 +1,241 @@
+/* compy.gg — Mission Control global styles.
+   Tokens mirror the app's src/App.css :root LITERALLY (Midnight family) — the site IS the
+   instrument. One accent, near-black panels, flat telemetry readouts, restraint. */
+
+:root {
+  --bg: #07080b;
+  --bg-2: #0a0c11;
+  --panel: #0d1016;
+  --panel-2: #11151d;
+  --fg: #eef1f7;
+  --fg-dim: #9aa3b2;
+  --fg-faint: #5c6572;
+  --accent: #6aa9ff;
+  --accent-bright: #93c1ff;
+  --accent-soft: rgba(106, 169, 255, 0.12);
+  --accent-line: rgba(106, 169, 255, 0.3);
+  --accent-glow: rgba(106, 169, 255, 0.35);
+  --ok: #4ade80;
+  --line: rgba(238, 241, 247, 0.08);
+  --line-2: rgba(238, 241, 247, 0.14);
+  --mono: "JetBrains Mono Variable", "Cascadia Mono", "Cascadia Code", "JetBrains Mono",
+    Consolas, ui-monospace, monospace;
+  --ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius: 12px;
+  --radius-sm: 8px;
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--ui);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-bright);
+}
+
+/* ---- layout primitives ---- */
+
+.wrap {
+  width: min(1120px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+section {
+  padding: 96px 0;
+  position: relative;
+}
+
+/* ---- type register ---- */
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.kicker::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  background: var(--accent-line);
+}
+
+h1 {
+  font-size: clamp(38px, 5.4vw, 62px);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  font-weight: 650;
+}
+
+h2 {
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+
+.section-head {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+  margin-bottom: 48px;
+}
+.section-head p {
+  color: var(--fg-dim);
+  font-size: 17px;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+/* ---- telemetry / readout primitives ---- */
+
+.readout {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 4px 11px;
+  white-space: nowrap;
+}
+.chip--accent {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.panel {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+/* ---- buttons ---- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 13px 24px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.btn--primary {
+  background: var(--accent);
+  color: #071018;
+}
+.btn--primary:hover {
+  background: var(--accent-bright);
+  color: #071018;
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--line-2);
+}
+.btn--ghost:hover {
+  border-color: var(--accent-line);
+  color: var(--accent-bright);
+}
+
+/* ---- scroll reveals (motion.ts flips .is-in; reduced-motion never hides content) ---- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal.is-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- the ONE aurora glow (hero only, decorative) ---- */
+
+.aurora {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 75vh;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 55% at 68% 18%, rgba(106, 169, 255, 0.14), transparent 68%),
+    radial-gradient(30% 42% at 22% 8%, rgba(106, 169, 255, 0.08), transparent 65%);
+  filter: blur(2px);
+}
+
+/* grid scanline texture, extremely faint */
+.grid-tex {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(60% 55% at 50% 12%, rgba(0, 0, 0, 0.5), transparent 78%);
+}

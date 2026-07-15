@@ -1,0 +1,148 @@
+/* Replay HUD — flat SpaceX-webcast telemetry register. Imported by ReplayHUD.tsx. */
+
+.rhud {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px 18px;
+  min-height: 348px;
+  align-content: start;
+}
+
+.rhud-top {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rhud-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.rhud-sep {
+  color: var(--fg-faint);
+}
+
+.rhud-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.rhud-grid--results {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.rhud-cell {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: rgba(7, 8, 11, 0.55);
+}
+
+.rhud-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.rhud-value {
+  font-size: 19px;
+  color: var(--fg);
+}
+.rhud-value--big {
+  font-size: 34px;
+  color: var(--accent-bright);
+  line-height: 1.1;
+}
+
+.rhud-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.rhud-fill {
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.rhud-feed {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  min-height: 118px;
+  align-content: start;
+}
+.rhud-feed li {
+  display: flex;
+  gap: 12px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rhud-t {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.rhud-kind {
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.rhud-evlabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rhud-quiet .rhud-evlabel {
+  color: var(--fg-faint);
+}
+
+.rhud-computed {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+}
+
+.rhud-results {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.rhud-play,
+.rhud-skip {
+  justify-self: start;
+  padding: 10px 20px;
+  font-size: 12.5px;
+}
+
+.rhud-cap {
+  font-size: 11.5px;
+  color: var(--fg-faint);
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .rhud-grid,
+  .rhud-grid--results {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .rhud-value--big {
+    font-size: 28px;
+  }
+}

@@ -1,0 +1,90 @@
+---
+// Base layout — shared head + chrome for every site-app page.
+// Zero third-party runtime requests: the one webfont is self-hosted via Fontsource,
+// all scripts are build-time bundled. og metas stay ABSOLUTE (guard-pinned).
+import "@fontsource-variable/jetbrains-mono";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+  path?: string;
+}
+const { title, description, path = "/" } = Astro.props;
+const canonical = new URL(path, "https://compy.gg").href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#07080b" />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content="https://compy.gg/assets/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <slot />
+    <footer class="site-footer">
+      <div class="wrap footer-grid">
+        <div class="footer-creed">
+          <span class="mono footer-mark">COMPY</span>
+          <p>Measured, not promised. Every number on this page was read on a real PC — including the ones that show no gain.</p>
+        </div>
+        <nav class="footer-links mono" aria-label="Legal">
+          <a href="/privacy.html">Privacy</a>
+          <a href="/eula.html">Terms</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--line);
+    padding: 44px 0 56px;
+    background: var(--bg-2);
+  }
+  .footer-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 32px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .footer-creed {
+    max-width: 480px;
+    display: grid;
+    gap: 10px;
+  }
+  .footer-mark {
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    color: var(--fg);
+  }
+  .footer-creed p {
+    color: var(--fg-faint);
+    font-size: 13.5px;
+  }
+  .footer-links {
+    display: flex;
+    gap: 22px;
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+  }
+  .footer-links a {
+    color: var(--fg-dim);
+  }
+  .footer-links a:hover {
+    color: var(--accent-bright);
+  }
+</style>

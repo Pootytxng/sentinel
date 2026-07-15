@@ -165,6 +165,27 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-14b — ✅ SITE MAKEOVER P1: MISSION CONTROL LANDING ON ASTRO — site-only, PRE-PUBLISH, NO gate moved, zero src-tauri, zero src/
+
+**The landing moved out of `site/` into a new Astro + React-islands app (`site-app/`)** per the
+owner-decided makeover (spec `docs/superpowers/specs/2026-07-14-site-makeover-research-spitball.md`:
+Direction A "Mission Control" + Monitor replay demo + Astro rebuild). Home = topbar · hero with
+**ReplayHUD** (the owner's REAL recorded Diablo IV session — session clock + ~1Hz sample counter +
+real events at time-compressed real timestamps, measured results as the end-of-session reveal;
+**no per-frame fps series exists, so none is animated — nothing fabricated**) · trust bar · features
+bento · receipts (Game Mode null-result + Diablo IV, pinned to `site/src/*-receipt.json`) · honest
+Pro teaser (no price, no button) · FAQ (NVIDIA sensor stays "not yet hardware-verified") · same-origin
+waitlist. Design tokens mirrored from App.css; ONE self-hosted font (Fontsource JetBrains Mono);
+zero third-party runtime requests (test-pinned). SSR = measured summary (no-JS visitors see real
+results, no dead button); reduced-motion respected on the WEB (app-side motion law is app-only).
+**Pipeline:** `site/generate.mjs` now content-pages-only; `scripts/stage-dist-site.mjs` dual-builds
+and overlays `site-app/dist/`; `site-landing.test.mjs` rewritten against the BUILT artifact
+(24 tests: provenance pinning, zero-third-party bundle scans, doorknob/pricing/FAQ honesty);
+staleness guard expects the overlay. Verify: vitest **177 files / 1631 green** · self-review
+round 2 **PASS** (round 1 caught 2 real 390px bugs — topbar CTA overflow + clipped receipt card —
+fixed + re-captured). **Site stays PRE-PUBLISH: owner taste gate before any deploy; deploy owner-gated.**
+Next: P2 (/pricing + /compare + FAQ JSON-LD + llms.txt), P3 videos (owner-flagged LATER).
+
 ### Cycle 2026-07-14a — ✅ JARVIS DEVIATIONS RATIFIED + DIRTY-STAMP FALSE-POSITIVE FIXED & GATED — no ship, NO gate moved, zero mutation-boundary code
 
 **Owner ruling (checklist item 2, evidence-first):** both `1d310e1` motion deviations **STAND** —
@@ -676,6 +697,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] session history with hardware snapshot — `sessions.rs:35` (`hw_fingerprint`)
 - [x] drift-regression advisory — `drift.rs`
 - [x] local award/score ledger — drill-down UI: each award expands to its full certified receipt (rec_id handle + metric + 95% CI + points + timestamp) from the existing get_scoreboard data — `260f943`
+- [ ] persist a real DOWNSAMPLED fps-over-time series per session (`sessions.rs` — e.g. ~1 point/10s from the existing ~1Hz samples, additive `#[serde(default)]` field) — TODAY no per-frame/per-second series survives a session (summaries + stutter_events only), which is why the site's ReplayHUD (2026-07-14b) animates clock/counter/events instead of a trace; landing this upgrades the replay demo AND in-app session history to an honest real chart. Read-only/additive, no mutation boundary.
 - [x] hardware-tier segmentation — LOCAL Entry/Mid/High band on the Benchmark surface from measured VRAM·cores·RAM (inputs named); reuses the canonical rig-tier bands via pure `benchRigTier`; like-to-like framing, no cohort/network — `372bde1`
 - [x] percentile display — wired `percentile_rank` as a LOCAL display-only stub: each verified win ranked within the cohort of ALL the user's own wins (the scoreboard ledger), shown as "Top X% of your verified wins" in the award drill-down, labeled "local — no peer cohort yet"; gated below a 4-win floor; never persisted. Peer/cohort percentile stays Phase C gated — `0de96f0` (`benchmark_scoreboard.rs:63`)
 - [x] CPU-runner flake fix (backend lane flagged) — `cpu_kernel` now guarantees ≥1 work chunk (do-while) so a starved tiny-run scheduled past its short deadline still measures real throughput instead of reading 0 and false-failing the shared green baseline; strong `> 0.0` shape assertion kept + a regression guard (`cpu_kernel_runs_at_least_one_chunk_past_deadline`) pins the contract; `benchmark.rs`, cargo 612
