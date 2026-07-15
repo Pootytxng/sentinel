@@ -10,7 +10,7 @@
 > current-truth matrix for every gate, artifact, and release blocker (each row carries a `file:line`).
 > **Where any older text in THIS file or other docs disagrees about *current* gate state, RELEASE_STATE.md
 > wins** — the deep legacy strata (extracted to `docs/CHANGELOG.md` — the `private-beta-001` history, e.g. "Gaming Mode remains/stays
-> gated") are point-in-time records; Gaming Mode is LIVE, service-suspend + debloat are ARMED. Created
+> gated") are point-in-time records; Gaming Mode is LIVE (field QA 10/10, **owner signed off 2026-07-14** — GAMING_MODE_QA.md), service-suspend + debloat are ARMED. Created
 > 2026-06-26 in response to an external audit that named state/doc drift the project's #1 risk.
 
 > **RENAMED Sentinel → Compy (2026-06-04).** The app was renamed for brand/SEO collision reasons

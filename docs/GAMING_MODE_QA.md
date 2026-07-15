@@ -134,9 +134,10 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
 
 ## Sign-off
 
-When all boxes pass: **tell me "Gaming Mode QA signed off"** → I record it here + in `CLAUDE.md` and F1
-is field-proven for 1.0. If any case fails, paste what happened — I fix on a branch (and re-hide the
-feature via the gate if the bug is user-facing) and you re-test the affected case.
+✅ **SIGNED OFF — owner, 2026-07-14 ("gaming mode qa signed off").** F1 Gaming Mode is field-proven
+for 1.0: all 10 live cases passed on real hardware, real UAC prompts, real reboots, with the one bug
+the checklist caught (runas decline misattribution) fixed and re-proven before sign-off. Recorded here,
+in `CLAUDE.md`, `docs/OWNER_ACTION_CHECKLIST.md` §A1, and the RELEASE_STATE Gaming Mode row.
 
 **Case #4 is the one milestone between F1 Gaming Mode and "1.0-confident."**
 
@@ -144,4 +145,4 @@ feature via the gate if the bug is user-facing) and you re-test the affected cas
 live-app automation (CDP over the installed `2eda4eb` build, ground-truth registry/powercfg probe,
 owner present) 2026-07-14; #6/#7 — the real-UAC cancel arms — owner-clicked (No·Yes·No·Yes) on the
 `db5349e` build 2026-07-14, after that checklist run exposed and forced the runas-decline fix above.
-**Remaining: nothing but the owner's words — "Gaming Mode QA signed off".**
+**Owner signed off 2026-07-14 — nothing remains open on this checklist.**
