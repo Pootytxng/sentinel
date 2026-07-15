@@ -1,6 +1,8 @@
 /* compy.gg — Mission Control global styles.
-   Tokens mirror the app's src/App.css :root LITERALLY (Midnight family) — the site IS the
-   instrument. One accent, near-black panels, flat telemetry readouts, restraint. */
+   Art direction: mission-ops flight console (crewed-flight telemetry display; Teenage
+   Engineering restraint). The site IS the instrument: one accent reserved for live values
+   and controls, ruled hairlines instead of card boxes, mono telemetry, wide-industrial
+   display type. Tokens mirror the app's src/App.css :root (Midnight family). */
 
 :root {
   --bg: #07080b;
@@ -20,9 +22,14 @@
   --line-2: rgba(238, 241, 247, 0.14);
   --mono: "JetBrains Mono Variable", "Cascadia Mono", "Cascadia Code", "JetBrains Mono",
     Consolas, ui-monospace, monospace;
+  --display: "Archivo Variable", "Segoe UI", system-ui, sans-serif;
   --ui: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --radius: 12px;
-  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* z scale: content < topbar < hud corners (decorative, pointer-through) */
+  --z-topbar: 40;
+  --z-hud: 60;
   color-scheme: dark;
 }
 
@@ -69,69 +76,72 @@ a:hover {
 /* ---- layout primitives ---- */
 
 .wrap {
-  width: min(1120px, calc(100% - 48px));
+  width: min(1180px, calc(100% - 48px));
   margin: 0 auto;
 }
 
-section {
-  padding: 96px 0;
-  position: relative;
-}
+/* ---- type register ----
+   Display voice: Archivo Variable, wide + heavy — industrial signage.
+   Telemetry voice: JetBrains Mono, tabular. Body: system UI. */
 
-/* ---- type register ---- */
-
-.kicker {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.kicker::before {
-  content: "";
-  width: 22px;
-  height: 1px;
-  background: var(--accent-line);
+h1,
+h2 {
+  font-family: var(--display);
+  font-stretch: 116%;
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: clamp(38px, 5.4vw, 62px);
-  line-height: 1.06;
-  letter-spacing: -0.02em;
-  font-weight: 650;
+  font-size: clamp(42px, 6.4vw, 82px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+  font-weight: 640;
 }
 
 h2 {
-  font-size: clamp(26px, 3.4vw, 38px);
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  font-weight: 600;
-}
-
-.section-head {
-  display: grid;
-  gap: 14px;
-  max-width: 640px;
-  margin-bottom: 48px;
-}
-.section-head p {
-  color: var(--fg-dim);
-  font-size: 17px;
+  font-size: clamp(28px, 3.8vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.018em;
+  font-weight: 620;
 }
 
 .mono {
   font-family: var(--mono);
 }
 
-/* ---- telemetry / readout primitives ---- */
-
 .readout {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- console legend rail: a hairline rule with a mono tag silk-screened on it.
+   The panel-labeling grammar of the app's console stage (part of the ruled chrome,
+   carrying a real datum on the right — never a floating eyebrow). ---- */
+
+.rail {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  border-top: 1px solid var(--line-2);
+  padding-top: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.rail b {
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+.rail .rail-datum {
+  letter-spacing: 0.12em;
+  text-align: right;
+  color: var(--fg-faint);
+}
+
+/* ---- telemetry chips ---- */
 
 .chip {
   display: inline-flex;
@@ -181,7 +191,8 @@ h2 {
   padding: 13px 24px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: background 0.18s var(--ease-out), border-color 0.18s var(--ease-out),
+    color 0.18s var(--ease-out);
 }
 .btn--primary {
   background: var(--accent);
@@ -201,41 +212,81 @@ h2 {
   color: var(--accent-bright);
 }
 
-/* ---- scroll reveals (motion.ts flips .is-in; reduced-motion never hides content) ---- */
+/* ---- corner brackets (the app's console-stage framing) ----
+   .brackets draws four accent corner ticks; requires one <span class="bkt"> child. */
+
+.brackets {
+  position: relative;
+}
+.brackets::before,
+.brackets::after,
+.brackets > .bkt::before,
+.brackets > .bkt::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 0 solid var(--accent-line);
+  pointer-events: none;
+}
+.brackets::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+.brackets::after {
+  top: -1px;
+  right: -1px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+.brackets > .bkt::before {
+  bottom: -1px;
+  left: -1px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+.brackets > .bkt::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+/* ---- scroll reveals (motion.ts flips .is-in; reduced-motion never hides content).
+   Stagger via --d (set inline per element). ---- */
 
 @media (prefers-reduced-motion: no-preference) {
   .reveal {
     opacity: 0;
-    transform: translateY(18px);
-    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translateY(22px);
+    transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out);
+    transition-delay: var(--d, 0s);
   }
   .reveal.is-in {
     opacity: 1;
     transform: none;
   }
+  /* rule-draw: hairlines that draw in from the left */
+  .reveal-rule {
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 1s var(--ease-out);
+    transition-delay: var(--d, 0s);
+  }
+  .reveal-rule.is-in {
+    transform: scaleX(1);
+  }
 }
 
-/* ---- the ONE aurora glow (hero only, decorative) ---- */
-
-.aurora {
-  position: absolute;
-  inset: -20% -10% auto;
-  height: 75vh;
-  pointer-events: none;
-  background:
-    radial-gradient(42% 55% at 68% 18%, rgba(106, 169, 255, 0.14), transparent 68%),
-    radial-gradient(30% 42% at 22% 8%, rgba(106, 169, 255, 0.08), transparent 65%);
-  filter: blur(2px);
-}
-
-/* grid scanline texture, extremely faint */
+/* faint engineering grid, masked */
 .grid-tex {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background-image: linear-gradient(var(--line) 1px, transparent 1px),
     linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(60% 55% at 50% 12%, rgba(0, 0, 0, 0.5), transparent 78%);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(65% 60% at 50% 20%, rgba(0, 0, 0, 0.5), transparent 80%);
 }

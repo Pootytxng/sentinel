@@ -1,8 +1,10 @@
 ---
 // Base layout — shared head + chrome for every site-app page.
-// Zero third-party runtime requests: the one webfont is self-hosted via Fontsource,
-// all scripts are build-time bundled. og metas stay ABSOLUTE (guard-pinned).
+// Zero third-party runtime requests: BOTH webfonts are self-hosted via Fontsource
+// (JetBrains Mono = telemetry voice, Archivo wdth = display voice), all scripts are
+// build-time bundled. og metas stay ABSOLUTE (guard-pinned).
 import "@fontsource-variable/jetbrains-mono";
+import "@fontsource-variable/archivo/wdth.css";
 import "../styles/global.css";
 
 interface Props {

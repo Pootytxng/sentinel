@@ -1,5 +1,8 @@
 ---
 // compy.gg home — Mission Control (Direction A, spec 2026-07-14-site-makeover-research-spitball).
+// Rebuild 2026-07-14 after owner taste-gate FAIL: art direction is the app's ratified
+// instrument-console language (bracketed stage, ruled ledgers, mono telemetry, one accent),
+// not a card-grid template. Reference lane: crewed-flight mission-ops console.
 // Every number on this page is pinned to a real provenance record:
 //   session showcase → ../data/session-replay.json + site/src/session-receipt.json
 //   honesty receipt  → site/src/proof-receipt.json
@@ -7,208 +10,262 @@
 import Base from "../layouts/Base.astro";
 import ReplayHUD from "../components/ReplayHUD.tsx";
 import CountUp from "../components/CountUp.tsx";
+import replay from "../data/session-replay.json";
+
+const rigParts = replay.rig.split(" · "); // ["AMD Radeon RX 9070 XT", "Ryzen X3D-class 16-thread", "Windows 11"]
+const h = Math.floor(replay.durationSecs / 3600);
+const m = Math.floor((replay.durationSecs % 3600) / 60);
+const s = replay.durationSecs % 60;
+const durationClock = `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+const sessionDate = replay.startedAt.slice(0, 10);
+const eventCount = replay.events.length;
+
+const modules = [
+  {
+    tag: "RIG-SCAN",
+    title: "Per-rig recommendations",
+    desc: "Compy reads your CPU, GPU, RAM and storage first, then recommends only what fits your hardware — not a YouTube preset recorded on someone else's PC.",
+    datum: "CPU · GPU · RAM · STORAGE",
+  },
+  {
+    tag: "LEDGER",
+    title: "Rollback-first",
+    desc: "Every change records its exact prior state in the Trust Ledger before it applies. One click puts it back — even if the tweak is later retired.",
+    datum: "PRIOR STATE · RECORDED AT APPLY",
+  },
+  {
+    tag: "LAB",
+    title: "The Lab",
+    desc: "A benchmark proving ground: apply a tweak, measure it on live game frames, and keep it only if the numbers earn it. Auto-rollback when they don't.",
+    datum: "BASELINE VS TREATMENT · LIVE FRAMES",
+  },
+  {
+    tag: "MONITOR",
+    title: "Monitor",
+    desc: "Live fps, frametimes and GPU telemetry, read on-device. No overlay injection, no kernel driver — anti-cheat safe by design.",
+    datum: "ETW · NO INJECTION",
+  },
+  {
+    tag: "GAMING MODE",
+    title: "Gaming Mode",
+    desc: "Session-scoped tweaks that apply when you start playing and revert when you stop — your PC goes back to normal the moment the session ends.",
+    datum: "APPLIES AT START · REVERTS AT STOP",
+  },
+  {
+    tag: "BLACKBOOK",
+    title: "The Blackbook",
+    desc: "The debunk library: which popular “FPS tweaks” actually do something, which are snake oil, and the evidence either way.",
+    datum: "THE DEBUNK LIBRARY",
+    href: "/library/",
+  },
+];
 ---
 
 <Base
   title="Compy — the PC optimizer that shows its receipts"
   description="Compy reads your actual hardware, recommends only what it can undo, and measures every change on your rig — including the ones that do nothing. Free, no account, nothing leaves your PC."
 >
+  <!-- decorative viewport HUD corners (desktop only, pointer-through) -->
+  <div class="hud-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
   <!-- ============ topbar ============ -->
   <header class="topbar">
     <div class="wrap topbar-in">
-      <a class="mono wordmark" href="/">COMPY<span class="beta-chip">private beta</span></a>
+      <a class="mono wordmark" href="/">COMPY</a>
+      <span class="mono topbar-status"><span class="status-dot" aria-hidden="true"></span>private beta</span>
       <nav class="topnav mono" aria-label="Site">
         <a href="/library/">Blackbook</a>
         <a href="#receipts">Receipts</a>
         <a href="#faq">FAQ</a>
-        <a class="btn btn--primary topnav-cta" href="#waitlist">Join the waitlist</a>
+        <a class="btn btn--primary topnav-cta" href="#waitlist" data-magnetic>Join the waitlist</a>
       </nav>
     </div>
   </header>
 
-  <!-- ============ hero ============ -->
+  <!-- ============ hero: the statement, then the instrument deck ============ -->
   <section class="hero">
-    <div class="aurora" aria-hidden="true"></div>
     <div class="grid-tex" aria-hidden="true"></div>
-    <div class="wrap hero-in">
-      <div class="hero-copy">
-        <p class="kicker">measured, not promised</p>
-        <h1>The PC optimizer that shows its receipts.</h1>
+    <div class="hero-bloom" aria-hidden="true"></div>
+    <div class="wrap">
+      <p class="console-rail mono boot" style="--b: 0">
+        <b>measured, not promised</b>
+        <span class="console-rail-datum readout" aria-label="Provenance of the session shown below">
+          SESSION {sessionDate} · {replay.game.toUpperCase()} · {durationClock}
+        </span>
+      </p>
+      <h1 class="boot" style="--b: 1">The PC optimizer that shows its receipts.</h1>
+      <div class="hero-row boot" style="--b: 2">
         <p class="hero-sub">
           Compy reads your actual hardware, recommends only what it can undo, and measures
           every change on your rig — including the ones that do nothing.
         </p>
-        <div class="hero-ctas">
-          <a class="btn btn--primary" href="#waitlist">Join the waitlist</a>
-          <a class="btn btn--ghost" href="/library/">Read the Blackbook →</a>
+        <div class="hero-cta-col">
+          <div class="hero-ctas">
+            <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
+            <a class="btn btn--ghost" href="/library/" data-magnetic>Read the Blackbook →</a>
+          </div>
+          <p class="hero-note mono">Compy is free. No account, no ads, nothing leaves your PC.</p>
         </div>
-        <p class="hero-note mono">
-          Compy is free. No account, no ads, nothing leaves your PC.
-        </p>
       </div>
-      <div class="hero-stage">
-        <ReplayHUD client:idle />
+
+      <!-- the instrument deck: a REAL recorded Monitor session, replayable -->
+      <div class="deck brackets boot" style="--b: 3">
+        <span class="bkt" aria-hidden="true"></span>
+        <div class="deck-rail mono" aria-hidden="true">
+          <span class="deck-tag">MONITOR <i>//</i> SESSION REPLAY</span>
+          <span>READ ON-DEVICE · READ-ONLY</span>
+        </div>
+        <div class="deck-grid">
+          <aside class="deck-flank mono" aria-label="Rig the session was recorded on">
+            <div class="flank-cell"><span class="flank-label">GPU</span><span class="flank-value">{rigParts[0]}</span></div>
+            <div class="flank-cell"><span class="flank-label">CPU</span><span class="flank-value">{rigParts[1]}</span></div>
+            <div class="flank-cell"><span class="flank-label">OS</span><span class="flank-value">{rigParts[2]}</span></div>
+          </aside>
+          <div class="deck-stage">
+            <ReplayHUD client:idle />
+          </div>
+          <aside class="deck-flank deck-flank--right mono" aria-label="Session record totals">
+            <div class="flank-cell"><span class="flank-label">DURATION</span><span class="flank-value readout">{durationClock}</span></div>
+            <div class="flank-cell"><span class="flank-label">SAMPLES</span><span class="flank-value readout">{replay.samples.toLocaleString("en-US")}</span></div>
+            <div class="flank-cell"><span class="flank-label">EVENTS</span><span class="flank-value readout">{eventCount} recorded</span></div>
+          </aside>
+        </div>
       </div>
+
+      <!-- the five vows: the deck's bottom rail -->
+      <ul class="vows mono boot" style="--b: 4" role="list" aria-label="What Compy will never do">
+        <li>rollback-first</li>
+        <li>zero outbound connections</li>
+        <li>no kernel driver</li>
+        <li>no game injection</li>
+        <li>free forever</li>
+      </ul>
     </div>
   </section>
 
-  <!-- ============ trust bar ============ -->
-  <div class="trustbar" role="list" aria-label="What Compy will never do">
-    <div class="wrap trustbar-in mono">
-      <span role="listitem">rollback-first</span>
-      <span role="listitem">zero outbound connections</span>
-      <span role="listitem">no kernel driver</span>
-      <span role="listitem">no game injection</span>
-      <span role="listitem">free forever</span>
-    </div>
-  </div>
-
-  <!-- ============ features ============ -->
-  <section id="features">
+  <!-- ============ the instrument panel (ledger rows, not cards) ============ -->
+  <section id="features" class="features">
     <div class="wrap">
-      <div class="section-head reveal">
-        <p class="kicker">the instrument</p>
+      <div class="rail reveal-rule reveal"><b>THE INSTRUMENT</b><span class="rail-datum">SIX MODULES · ONE LEDGER</span></div>
+      <div class="features-head reveal">
         <h2>Built like mission control, not a magic button.</h2>
-        <p>
+        <p class="section-sub">
           One dashboard that knows your rig, proves what it changes, and can always put
           things back.
         </p>
       </div>
-      <div class="bento">
-        <article class="panel bcard bcard--wide reveal">
-          <h3>Per-rig recommendations</h3>
-          <p>
-            Compy reads your CPU, GPU, RAM and storage first, then recommends only what fits
-            <em>your</em> hardware — not a YouTube preset recorded on someone else's PC.
-          </p>
-        </article>
-        <article class="panel bcard reveal">
-          <h3>Rollback-first</h3>
-          <p>
-            Every change records its exact prior state in the Trust Ledger before it applies.
-            One click puts it back — even if the tweak is later retired.
-          </p>
-        </article>
-        <article class="panel bcard reveal">
-          <h3>The Lab</h3>
-          <p>
-            A benchmark proving ground: apply a tweak, measure it on live game frames, and
-            keep it only if the numbers earn it. Auto-rollback when they don't.
-          </p>
-        </article>
-        <article class="panel bcard reveal">
-          <h3>Monitor</h3>
-          <p>
-            Live fps, frametimes and GPU telemetry, read on-device. No overlay injection, no
-            kernel driver — anti-cheat safe by design.
-          </p>
-        </article>
-        <article class="panel bcard bcard--wide reveal">
-          <h3>Gaming Mode</h3>
-          <p>
-            Session-scoped tweaks that apply when you start playing and revert when you stop —
-            your PC goes back to normal the moment the session ends.
-          </p>
-        </article>
-        <article class="panel bcard reveal">
-          <h3><a href="/library/">The Blackbook →</a></h3>
-          <p>
-            The debunk library: which popular "FPS tweaks" actually do something, which are
-            snake oil, and the evidence either way.
-          </p>
-        </article>
+      <div class="frows" role="list">
+        {
+          modules.map((mod, i) => (
+            <article class="frow reveal" role="listitem" style={`--d: ${(i % 3) * 0.08}s`}>
+              <span class="frow-tag mono">{mod.tag}</span>
+              <div class="frow-body">
+                <h3>{mod.href ? <a href={mod.href}>{mod.title} →</a> : mod.title}</h3>
+                <p>{mod.desc}</p>
+              </div>
+              <span class="frow-datum mono">{mod.datum}</span>
+            </article>
+          ))
+        }
       </div>
     </div>
   </section>
 
-  <!-- ============ receipts ============ -->
+  <!-- ============ receipts: two real records, published as-is ============ -->
   <section id="receipts" class="receipts">
     <div class="wrap">
-      <div class="section-head reveal">
-        <p class="kicker">receipts</p>
+      <div class="rail reveal-rule reveal"><b>RECEIPTS</b><span class="rail-datum">REAL RECORDS · PUBLISHED AS-IS</span></div>
+      <div class="receipts-head reveal">
         <h2>We publish the misses too.</h2>
-        <p>
-          Every optimizer promises. Compy measures — and shows the result either way. These
-          two receipts are real records from a real PC, not marketing copy.
+        <p class="section-sub">
+          Every optimizer promises. Compy measures — and shows the result either way.
+          Exhibit A is a tweak that did nothing, published anyway. Exhibit B is the session
+          from the replay above — the full record behind those numbers.
         </p>
       </div>
-      <div class="receipt-grid">
-        <article class="panel receipt reveal" aria-label="A measured null result">
-          <header class="receipt-head">
-            <span class="chip">the honesty test</span>
-            <span class="chip chip--accent">measured ✓</span>
-          </header>
+
+      <article class="exhibit reveal" aria-label="A measured null result">
+        <header class="exhibit-head mono">
+          <span class="exhibit-id">EXHIBIT A — LAB TRIAL</span>
+          <span class="exhibit-stamps">
+            <span class="stamp stamp--accent">measured ✓</span>
+            <span class="stamp">rolled back ✓</span>
+          </span>
+        </header>
+        <div class="exhibit-body exhibit-body--trial">
           <h3>Windows Game Mode — did it help?</h3>
-          <dl class="receipt-rows readout">
+          <dl class="trial-rows readout">
             <div><dt>trial</dt><dd>5 baseline vs 5 treatment windows, live game frames</dd></div>
             <div><dt>result</dt><dd>no gain beyond the ±0.7% session noise floor</dd></div>
             <div><dt>rollback</dt><dd>restored to the exact prior value ✓</dd></div>
           </dl>
-          <p class="receipt-cap mono">
-            A real Lab trial, published as-is. When a tweak does nothing, Compy says so.
-          </p>
-        </article>
-        <article class="panel receipt reveal" aria-label="A real recorded session">
-          <header class="receipt-head">
-            <span class="chip">a real session</span>
-            <span class="chip chip--accent">measured ✓</span>
-          </header>
+        </div>
+        <footer class="exhibit-cap mono">
+          A real Lab trial, published as-is. When a tweak does nothing, Compy says so —
+          that's the honesty test.
+        </footer>
+      </article>
+
+      <article class="exhibit exhibit--session reveal" aria-label="A real recorded session">
+        <header class="exhibit-head mono">
+          <span class="exhibit-id">EXHIBIT B — MONITOR SESSION</span>
+          <span class="exhibit-stamps">
+            <span class="stamp stamp--accent">measured ✓</span>
+            <span class="stamp">{sessionDate}</span>
+          </span>
+        </header>
+        <div class="exhibit-body exhibit-body--session">
           <h3>Diablo IV — three hours, measured live</h3>
-          <div class="receipt-stats">
-            <div class="rstat">
-              <span class="rstat-num readout"><CountUp client:visible value={237.3} decimals={1} /></span>
-              <span class="rstat-label mono">avg fps</span>
+          <div class="session-nums">
+            <div class="snum">
+              <span class="snum-value readout"><CountUp client:visible value={237.3} decimals={1} /></span>
+              <span class="snum-label mono">avg fps</span>
             </div>
-            <div class="rstat">
-              <span class="rstat-num readout"><CountUp client:visible value={214.4} decimals={1} /></span>
-              <span class="rstat-label mono">1% low</span>
+            <div class="snum">
+              <span class="snum-value readout"><CountUp client:visible value={214.4} decimals={1} /></span>
+              <span class="snum-label mono">1% low</span>
             </div>
-            <div class="rstat">
-              <span class="rstat-num readout"><CountUp client:visible value={10776} /></span>
-              <span class="rstat-label mono">samples</span>
+            <div class="snum">
+              <span class="snum-value readout"><CountUp client:visible value={10776} /></span>
+              <span class="snum-label mono">samples</span>
             </div>
           </div>
-          <p class="receipt-cap mono">
-            Radeon RX 9070 XT · every number read on-device and graphed in Monitor. A
-            measurement showcase — Compy claims none of it as its own doing.
-          </p>
-        </article>
-      </div>
+        </div>
+        <footer class="exhibit-cap mono">
+          The same recorded session as the replay deck above — {rigParts[0]} · every number
+          read on-device and graphed in Monitor. A measurement showcase —
+          Compy claims none of it as its own doing.
+        </footer>
+      </article>
     </div>
   </section>
 
-  <!-- ============ pricing teaser ============ -->
-  <section id="pricing">
+  <!-- ============ pricing: the manifest ============ -->
+  <section id="pricing" class="pricing">
     <div class="wrap">
-      <div class="section-head reveal">
-        <p class="kicker">pricing</p>
+      <div class="pricing-head reveal">
         <h2>Free forever. Really.</h2>
-        <p>The optimizer, the rollback, the receipts — none of it is behind a paywall.</p>
+        <p class="section-sub">The optimizer, the rollback, the receipts — none of it is behind a paywall.</p>
       </div>
-      <div class="price-grid">
-        <article class="panel pcard reveal">
-          <header>
-            <h3 class="mono">COMPY</h3>
-            <p class="price readout">Free forever</p>
-          </header>
-          <ul>
+      <div class="manifest">
+        <div class="manifest-free reveal">
+          <p class="manifest-price mono">COMPY — <b>FREE FOREVER</b></p>
+          <ul class="manifest-list" role="list">
             <li>Per-rig recommendations, all of them</li>
             <li>Trust Ledger rollback, unlimited</li>
             <li>Monitor, the Lab, Gaming Mode</li>
             <li>No account · no ads · no upsell nags</li>
           </ul>
-          <a class="btn btn--primary" href="#waitlist">Join the waitlist</a>
-        </article>
-        <article class="panel pcard pcard--pro reveal">
-          <header>
-            <h3 class="mono">COMPY PRO <span class="chip">in the works</span></h3>
-            <p class="price readout">No price yet</p>
-          </header>
-          <ul>
+          <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
+        </div>
+        <article class="pcard--pro manifest-pro reveal" style="--d: 0.1s">
+          <p class="manifest-price mono manifest-price--pro">COMPY PRO <span class="stamp">in the works</span></p>
+          <p class="pro-price readout">No price yet</p>
+          <ul class="manifest-list manifest-list--pro" role="list">
             <li>Long-term monitoring history</li>
             <li>Multi-rig dashboards</li>
           </ul>
-          <p class="pcard-note">
+          <p class="pro-note">
             Nothing to buy until it's real — and Pro will never be required to optimize or
             roll back.
           </p>
@@ -217,14 +274,16 @@ import CountUp from "../components/CountUp.tsx";
     </div>
   </section>
 
-  <!-- ============ FAQ ============ -->
-  <section id="faq">
-    <div class="wrap faq-wrap">
-      <div class="section-head reveal">
-        <p class="kicker">faq</p>
+  <!-- ============ FAQ: interrogation, split layout ============ -->
+  <section id="faq" class="faq">
+    <div class="wrap faq-grid">
+      <div class="faq-left reveal">
         <h2>The questions worth asking an optimizer.</h2>
+        <p class="section-sub">
+          Straight answers — the same confidence labels the app itself uses.
+        </p>
       </div>
-      <div class="faq-list reveal">
+      <div class="faq-list reveal" style="--d: 0.1s">
         <details>
           <summary>Is Compy really free?</summary>
           <p>
@@ -284,25 +343,32 @@ import CountUp from "../components/CountUp.tsx";
     </div>
   </section>
 
-  <!-- ============ waitlist ============ -->
+  <!-- ============ waitlist: the terminal ============ -->
   <section id="waitlist" class="waitlist">
-    <div class="wrap waitlist-in reveal">
-      <p class="kicker">launch</p>
-      <h2>Be first in line.</h2>
-      <p class="waitlist-sub">
-        One email when Compy launches. That's it.
-      </p>
-      <form class="waitlist-form" method="POST" action="/api/waitlist" data-waitlist>
-        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
-        <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
-        <button class="btn btn--primary" type="submit">Notify me</button>
-      </form>
-      <p class="waitlist-pending mono" data-waitlist-status role="status"></p>
-      <p class="waitlist-privacy mono">
-        Your email is stored only to send that one launch message — no list-selling, no
-        follow-up drip. The app itself sends nothing off your PC.
-      </p>
-      <!-- KO-FI PLACEHOLDER SLOT: support link appears here once the owner sets a profile URL. -->
+    <div class="wrap">
+      <div class="terminal brackets reveal">
+        <span class="bkt" aria-hidden="true"></span>
+        <div class="deck-rail mono" aria-hidden="true">
+          <span class="deck-tag">LAUNCH LIST</span>
+          <span>ONE EMAIL · NOTHING ELSE</span>
+        </div>
+        <div class="terminal-in">
+          <h2>Be first in line.</h2>
+          <p class="section-sub">One email when Compy launches. That's it.</p>
+          <form class="waitlist-form" method="POST" action="/api/waitlist" data-waitlist>
+            <span class="prompt mono" aria-hidden="true">&gt;</span>
+            <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address" />
+            <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" />
+            <button class="btn btn--primary" type="submit" data-magnetic>Notify me</button>
+          </form>
+          <p class="waitlist-pending mono" data-waitlist-status role="status"></p>
+          <p class="waitlist-privacy mono">
+            Your email is stored only to send that one launch message — no list-selling, no
+            follow-up drip. The app itself sends nothing off your PC.
+          </p>
+          <!-- KO-FI PLACEHOLDER SLOT: support link appears here once the owner sets a profile URL. -->
+        </div>
+      </div>
     </div>
   </section>
 </Base>
@@ -338,11 +404,33 @@ import CountUp from "../components/CountUp.tsx";
 </script>
 
 <style>
+  /* ---- viewport HUD corners (decorative chrome; the site IS the instrument) ---- */
+  .hud-corners {
+    position: fixed;
+    inset: 14px;
+    z-index: var(--z-hud);
+    pointer-events: none;
+    opacity: 0.55;
+  }
+  .hud-corners i {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 0 solid var(--line-2);
+  }
+  .hud-corners i:nth-child(1) { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+  .hud-corners i:nth-child(2) { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+  .hud-corners i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+  .hud-corners i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+  @media (max-width: 920px) {
+    .hud-corners { display: none; }
+  }
+
   /* ---- topbar ---- */
   .topbar {
     position: sticky;
     top: 0;
-    z-index: 40;
+    z-index: var(--z-topbar);
     background: rgba(7, 8, 11, 0.82);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
@@ -350,25 +438,32 @@ import CountUp from "../components/CountUp.tsx";
   .topbar-in {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    height: 62px;
+    height: 60px;
+    gap: 18px;
   }
   .wordmark {
     font-size: 15px;
-    letter-spacing: 0.3em;
+    font-weight: 700;
+    letter-spacing: 0.32em;
     color: var(--fg);
+  }
+  .topbar-status {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-  }
-  .beta-chip {
-    font-size: 9.5px;
-    letter-spacing: 0.18em;
+    gap: 7px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--accent);
-    border: 1px solid var(--accent-line);
-    border-radius: 999px;
-    padding: 2px 8px;
+    color: var(--fg-faint);
+    border-left: 1px solid var(--line-2);
+    padding-left: 18px;
+  }
+  .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
   }
   .topnav {
     display: flex;
@@ -376,6 +471,7 @@ import CountUp from "../components/CountUp.tsx";
     gap: 26px;
     font-size: 12.5px;
     letter-spacing: 0.05em;
+    margin-left: auto;
   }
   .topnav a {
     color: var(--fg-dim);
@@ -387,7 +483,8 @@ import CountUp from "../components/CountUp.tsx";
     padding: 8px 16px;
     font-size: 12px;
   }
-  .topnav .topnav-cta {
+  .topnav .topnav-cta,
+  .topnav a.topnav-cta:hover {
     color: #071018;
   }
   @media (max-width: 720px) {
@@ -397,38 +494,71 @@ import CountUp from "../components/CountUp.tsx";
   }
   @media (max-width: 480px) {
     /* self-review 2026-07-14: at true 390px the CTA wrapped to two lines and overflowed the
-       viewport — keep it one compact line and drop the chip to make room. */
+       viewport — keep it one compact line and drop the status readout to make room. */
     .topnav-cta {
       padding: 7px 12px;
       font-size: 11px;
       white-space: nowrap;
     }
-    .beta-chip {
+    .topbar-status {
       display: none;
     }
   }
 
   /* ---- hero ---- */
   .hero {
-    padding: 110px 0 84px;
+    padding: 86px 0 0;
     overflow: hidden;
-  }
-  .hero-in {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: 56px;
-    align-items: center;
     position: relative;
   }
-  .hero-copy {
-    display: grid;
-    gap: 22px;
-    justify-items: start;
+  .hero-bloom {
+    position: absolute;
+    inset: -10% -20% auto;
+    height: 70vh;
+    pointer-events: none;
+    background: radial-gradient(48% 52% at 50% 8%, rgba(106, 169, 255, 0.1), transparent 70%);
+  }
+  .console-rail {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line-2);
+    padding-top: 12px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .console-rail b {
+    font-weight: 600;
+  }
+  .console-rail-datum {
+    color: var(--fg-faint);
+    letter-spacing: 0.12em;
+  }
+  .hero h1 {
+    margin: 40px 0 0;
+    max-width: 15ch;
+  }
+  .hero-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 48px;
+    margin-top: 40px;
+    flex-wrap: wrap;
   }
   .hero-sub {
     font-size: 18px;
     color: var(--fg-dim);
-    max-width: 460px;
+    max-width: 46ch;
+  }
+  .hero-cta-col {
+    display: grid;
+    gap: 12px;
+    justify-items: start;
   }
   .hero-ctas {
     display: flex;
@@ -440,217 +570,435 @@ import CountUp from "../components/CountUp.tsx";
     letter-spacing: 0.07em;
     color: var(--fg-faint);
   }
-  .hero-stage {
-    min-width: 0;
-  }
-  @media (max-width: 920px) {
-    .hero {
-      padding-top: 72px;
-    }
-    .hero-in {
-      grid-template-columns: 1fr;
-      gap: 44px;
-    }
-  }
 
-  /* ---- trust bar ---- */
-  .trustbar {
-    border-block: 1px solid var(--line);
-    background: var(--bg-2);
-    padding: 16px 0;
+  /* ---- the instrument deck ---- */
+  .deck {
+    margin-top: 72px;
+    background: linear-gradient(180deg, rgba(17, 21, 29, 0.6), rgba(13, 16, 22, 0.85));
+    border: 1px solid var(--line);
+    border-radius: 2px;
   }
-  .trustbar-in {
+  .deck-rail {
     display: flex;
     justify-content: space-between;
     gap: 18px;
+    padding: 12px 18px 0;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .deck-tag {
+    color: var(--fg-dim);
+    font-weight: 600;
+  }
+  .deck-tag i {
+    color: var(--accent);
+    font-style: normal;
+  }
+  .deck-grid {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr) 190px;
+    gap: 0;
+    align-items: stretch;
+  }
+  .deck-flank {
+    display: grid;
+    align-content: start;
+    gap: 0;
+    padding: 22px 18px;
+    border-right: 1px solid var(--line);
+  }
+  .deck-flank--right {
+    border-right: 0;
+    border-left: 1px solid var(--line);
+  }
+  .flank-cell {
+    display: grid;
+    gap: 3px;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .flank-cell:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .flank-label {
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    color: var(--fg-faint);
+  }
+  .flank-value {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+  }
+  .deck-stage {
+    min-width: 0;
+    padding: 6px 8px 8px;
+  }
+  @media (max-width: 1080px) {
+    .deck-grid {
+      grid-template-columns: 1fr;
+    }
+    .deck-flank {
+      display: none;
+    }
+  }
+
+  /* ---- the five vows ---- */
+  .vows {
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 14px 22px;
     flex-wrap: wrap;
+    padding: 18px 2px 26px;
+    border-bottom: 1px solid var(--line);
     font-size: 11.5px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--fg-dim);
   }
-  .trustbar-in span::before {
+  .vows li::before {
     content: "✓ ";
     color: var(--accent);
   }
 
-  /* ---- features bento ---- */
-  .bento {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-  .bcard {
-    padding: 26px 26px 28px;
-    display: grid;
-    gap: 10px;
-    align-content: start;
-    transition: border-color 0.25s ease;
-  }
-  .bcard:hover {
-    border-color: var(--accent-line);
-  }
-  .bcard--wide {
-    grid-column: span 2;
-  }
-  .bcard h3 {
+  /* ---- section shared ---- */
+  .section-sub {
+    color: var(--fg-dim);
     font-size: 17px;
-    font-weight: 600;
+    max-width: 58ch;
+  }
+
+  /* ---- features: the ledger ---- */
+  .features {
+    padding: 130px 0 110px;
+  }
+  .features-head {
+    display: grid;
+    gap: 16px;
+    max-width: 720px;
+    margin: 26px 0 64px;
+  }
+  .frows {
+    border-bottom: 1px solid var(--line-2);
+  }
+  .frow {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr) 300px;
+    gap: 28px;
+    align-items: baseline;
+    padding: 26px 2px;
+    border-top: 1px solid var(--line-2);
+    transition: background 0.3s var(--ease-out);
+  }
+  .frow:hover {
+    background: rgba(238, 241, 247, 0.02);
+  }
+  .frow-tag {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--fg-faint);
+    transition: color 0.3s var(--ease-out);
+  }
+  .frow:hover .frow-tag {
+    color: var(--accent);
+  }
+  .frow-body {
+    display: grid;
+    gap: 6px;
+  }
+  .frow-body h3 {
+    font-family: var(--display);
+    font-stretch: 112%;
+    font-size: 21px;
+    font-weight: 620;
     letter-spacing: -0.01em;
   }
-  .bcard p {
+  .frow-body p {
     color: var(--fg-dim);
     font-size: 14.5px;
+    max-width: 60ch;
+  }
+  .frow-datum {
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-align: right;
+    color: var(--fg-faint);
   }
   @media (max-width: 920px) {
-    .bento {
+    .frow {
       grid-template-columns: 1fr;
+      gap: 8px;
     }
-    .bcard--wide {
-      grid-column: auto;
+    .frow-datum {
+      text-align: left;
     }
   }
 
-  /* ---- receipts ---- */
+  /* ---- receipts: exhibits ---- */
   .receipts {
     background: var(--bg-2);
     border-block: 1px solid var(--line);
+    padding: 110px 0 120px;
   }
-  .receipt-grid {
+  .receipts-head {
     display: grid;
-    grid-template-columns: 1fr 1fr;
     gap: 16px;
+    max-width: 720px;
+    margin: 26px 0 56px;
   }
-  @media (max-width: 720px) {
-    /* self-review 2026-07-14: without this the second receipt card (the real-session
-       Diablo IV metrics) clipped off the right edge at mobile widths. */
-    .receipt-grid {
-      grid-template-columns: 1fr;
-    }
+  .exhibit {
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgba(17, 21, 29, 0.5), rgba(13, 16, 22, 0.8));
   }
-  .receipt {
-    padding: 26px;
-    display: grid;
-    gap: 18px;
-    align-content: start;
+  .exhibit + .exhibit {
+    margin-top: 22px;
   }
-  .receipt-head {
+  .exhibit-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 13px 22px;
+    border-bottom: 1px solid var(--line);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--fg-dim);
+  }
+  .exhibit-stamps {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
   }
-  .receipt h3 {
-    font-size: 19px;
-    font-weight: 600;
+  .stamp {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    border: 1px solid var(--line-2);
+    border-radius: 2px;
+    padding: 3px 9px;
   }
-  .receipt-rows {
+  .stamp--accent {
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+  .exhibit-body {
+    padding: 26px 22px 28px;
     display: grid;
-    gap: 10px;
+    gap: 22px;
+  }
+  .exhibit-body h3 {
+    font-family: var(--display);
+    font-stretch: 112%;
+    font-size: clamp(20px, 2.4vw, 27px);
+    font-weight: 620;
+    letter-spacing: -0.012em;
+  }
+  .exhibit-body--trial {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: start;
+  }
+  .trial-rows {
+    display: grid;
+    gap: 0;
     font-size: 13px;
   }
-  .receipt-rows div {
+  .trial-rows div {
     display: grid;
-    grid-template-columns: 92px 1fr;
-    gap: 12px;
+    grid-template-columns: 110px 1fr;
+    gap: 14px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
   }
-  .receipt-rows dt {
+  .trial-rows div:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .trial-rows dt {
     color: var(--fg-faint);
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    font-size: 11px;
+    font-size: 10.5px;
     padding-top: 2px;
   }
-  .receipt-rows dd {
+  .trial-rows dd {
     color: var(--fg);
   }
-  .receipt-stats {
+  .exhibit-body--session {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+  }
+  .session-nums {
     display: flex;
-    gap: 34px;
+    gap: 0;
     flex-wrap: wrap;
   }
-  .rstat {
+  .snum {
     display: grid;
-    gap: 2px;
+    gap: 4px;
+    padding: 0 34px;
+    border-left: 1px solid var(--line);
   }
-  .rstat-num {
-    font-size: 36px;
+  .snum:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .snum-value {
+    font-size: clamp(34px, 4vw, 46px);
     color: var(--accent-bright);
-    line-height: 1.1;
+    line-height: 1.05;
+    font-weight: 500;
   }
-  .rstat-label {
-    font-size: 11px;
-    letter-spacing: 0.16em;
+  .snum-label {
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--fg-faint);
   }
-  .receipt-cap {
+  .exhibit-cap {
     font-size: 12px;
     color: var(--fg-faint);
     border-top: 1px solid var(--line);
-    padding-top: 12px;
+    padding: 13px 22px 15px;
     line-height: 1.55;
   }
-
-  /* ---- pricing ---- */
-  .price-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    max-width: 860px;
-  }
-  .pcard {
-    padding: 30px;
-    display: grid;
-    gap: 20px;
-    align-content: start;
-    justify-items: start;
-  }
-  .pcard header {
-    display: grid;
-    gap: 8px;
-  }
-  .pcard h3 {
-    font-size: 14px;
-    letter-spacing: 0.24em;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .price {
-    font-size: 28px;
-    font-weight: 600;
-  }
-  .pcard ul {
-    list-style: none;
-    display: grid;
-    gap: 9px;
-    color: var(--fg-dim);
-    font-size: 14.5px;
-  }
-  .pcard li::before {
-    content: "— ";
-    color: var(--accent);
-  }
-  .pcard--pro {
-    border-style: dashed;
-  }
-  .pcard-note {
-    font-size: 13px;
-    color: var(--fg-faint);
-  }
-  @media (max-width: 720px) {
-    .price-grid {
+  @media (max-width: 860px) {
+    .exhibit-body--trial,
+    .exhibit-body--session {
       grid-template-columns: 1fr;
+    }
+    .snum {
+      padding: 0 22px;
+    }
+  }
+  @media (max-width: 560px) {
+    .session-nums {
+      display: grid;
+      gap: 18px;
+    }
+    .snum {
+      padding: 0;
+      border-left: 0;
     }
   }
 
-  /* ---- FAQ ---- */
-  .faq-wrap {
-    max-width: 760px;
+  /* ---- pricing: the manifest ---- */
+  .pricing {
+    padding: 120px 0 110px;
+  }
+  .pricing-head {
+    display: grid;
+    gap: 16px;
+    max-width: 720px;
+    margin-bottom: 56px;
+  }
+  .manifest {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 64px;
+    align-items: start;
+  }
+  .manifest-price {
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    color: var(--fg-dim);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .manifest-price b {
+    color: var(--fg);
+    font-weight: 700;
+  }
+  .manifest-list {
+    list-style: none;
+    margin: 22px 0 30px;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .manifest-list li {
+    padding: 13px 2px;
+    border-top: 1px solid var(--line-2);
+    color: var(--fg);
+    font-size: 15.5px;
+  }
+  .manifest-list li::before {
+    content: "✓";
+    color: var(--accent);
+    font-family: var(--mono);
+    margin-right: 14px;
+  }
+  .manifest-pro {
+    border-left: 1px solid var(--line-2);
+    padding-left: 40px;
+    display: grid;
+    gap: 14px;
+    justify-items: start;
+    align-content: start;
+  }
+  .pro-price {
+    font-size: 22px;
+    color: var(--fg-dim);
+  }
+  .manifest-list--pro {
+    margin: 4px 0 6px;
+    border-bottom: 0;
+    width: 100%;
+  }
+  .manifest-list--pro li {
+    color: var(--fg-dim);
+    font-size: 14px;
+    padding: 10px 2px;
+  }
+  .manifest-list--pro li::before {
+    content: "·";
+    color: var(--fg-faint);
+  }
+  .pro-note {
+    font-size: 13px;
+    color: var(--fg-faint);
+    max-width: 40ch;
+  }
+  @media (max-width: 860px) {
+    .manifest {
+      grid-template-columns: 1fr;
+      gap: 56px;
+    }
+    .manifest-pro {
+      border-left: 0;
+      border-top: 1px solid var(--line-2);
+      padding-left: 0;
+      padding-top: 40px;
+    }
+  }
+
+  /* ---- FAQ: split interrogation ---- */
+  .faq {
+    background: var(--bg-2);
+    border-top: 1px solid var(--line);
+    padding: 110px 0 120px;
+  }
+  .faq-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 72px;
+    align-items: start;
+  }
+  .faq-left {
+    position: sticky;
+    top: 110px;
+    display: grid;
+    gap: 16px;
   }
   .faq-list {
-    display: grid;
-    gap: 0;
     border-top: 1px solid var(--line-2);
   }
   .faq-list details {
@@ -658,7 +1006,7 @@ import CountUp from "../components/CountUp.tsx";
   }
   .faq-list summary {
     cursor: pointer;
-    padding: 20px 34px 20px 4px;
+    padding: 21px 38px 21px 2px;
     font-size: 16.5px;
     font-weight: 550;
     list-style: none;
@@ -670,7 +1018,7 @@ import CountUp from "../components/CountUp.tsx";
   .faq-list summary::after {
     content: "+";
     position: absolute;
-    right: 8px;
+    right: 6px;
     top: 50%;
     transform: translateY(-50%);
     font-family: var(--mono);
@@ -684,52 +1032,70 @@ import CountUp from "../components/CountUp.tsx";
     color: var(--accent-bright);
   }
   .faq-list p {
-    padding: 0 4px 22px;
+    padding: 0 2px 24px;
     color: var(--fg-dim);
     font-size: 15px;
-    max-width: 640px;
+    max-width: 62ch;
+  }
+  @media (max-width: 860px) {
+    .faq-grid {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+    .faq-left {
+      position: static;
+    }
   }
 
-  /* ---- waitlist ---- */
+  /* ---- waitlist: the terminal ---- */
   .waitlist {
-    background: var(--bg-2);
-    border-top: 1px solid var(--line);
+    padding: 120px 0 130px;
   }
-  .waitlist-in {
+  .terminal {
+    background: linear-gradient(180deg, rgba(17, 21, 29, 0.6), rgba(13, 16, 22, 0.85));
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  .terminal-in {
     display: grid;
     gap: 16px;
-    justify-items: center;
-    text-align: center;
-    max-width: 560px;
-  }
-  .waitlist-in .kicker::before {
-    display: none;
-  }
-  .waitlist-sub {
-    color: var(--fg-dim);
-    font-size: 16px;
+    justify-items: start;
+    padding: 40px 46px 44px;
   }
   .waitlist-form {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 14px;
     width: 100%;
-    max-width: 440px;
-    margin-top: 6px;
+    max-width: 560px;
+    margin-top: 14px;
+    position: relative;
+  }
+  .prompt {
+    color: var(--accent);
+    font-size: 15px;
   }
   .waitlist-form input[type="email"] {
     flex: 1;
     min-width: 0;
-    background: var(--bg);
-    border: 1px solid var(--line-2);
-    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--line-2);
+    border-radius: 0;
     color: var(--fg);
     font-family: var(--mono);
-    font-size: 13.5px;
-    padding: 12px 14px;
+    font-size: 14px;
+    padding: 11px 2px;
+    transition: border-color 0.2s var(--ease-out);
+  }
+  .waitlist-form input[type="email"]::placeholder {
+    color: var(--fg-faint);
   }
   .waitlist-form input[type="email"]:focus {
     outline: none;
-    border-color: var(--accent-line);
+    border-bottom-color: var(--accent);
   }
   .waitlist-pending {
     font-size: 12.5px;
@@ -740,11 +1106,54 @@ import CountUp from "../components/CountUp.tsx";
     font-size: 11.5px;
     color: var(--fg-faint);
     line-height: 1.6;
-    max-width: 460px;
+    max-width: 52ch;
   }
   @media (max-width: 560px) {
+    .terminal-in {
+      padding: 30px 22px 34px;
+    }
     .waitlist-form {
-      flex-direction: column;
+      flex-wrap: wrap;
+    }
+    .waitlist-form .btn {
+      width: 100%;
+    }
+  }
+
+  /* ---- hero boot sequence (first-load orchestration; CSS-only so SSR/no-JS still animates,
+     and gated on no-preference so reduced-motion users see everything instantly) ---- */
+  @media (prefers-reduced-motion: no-preference) {
+    .boot {
+      opacity: 0;
+      transform: translateY(18px);
+      animation: boot-in 0.9s var(--ease-out) forwards;
+      animation-delay: calc(var(--b) * 0.14s + 0.1s);
+    }
+    h1.boot {
+      filter: blur(6px);
+      animation-name: boot-in-blur;
+    }
+    .console-rail.boot {
+      transform: none;
+      animation-name: boot-in-rail;
+    }
+    @keyframes boot-in {
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+    @keyframes boot-in-blur {
+      to {
+        opacity: 1;
+        transform: none;
+        filter: blur(0);
+      }
+    }
+    @keyframes boot-in-rail {
+      to {
+        opacity: 1;
+      }
     }
   }
 </style>
