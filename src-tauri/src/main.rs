@@ -4,13 +4,16 @@
 fn main() {
     let argv: Vec<String> = std::env::args().collect();
 
-    // Elevated command helper (Wave 0): `compy.exe --run-elevated <hex>` runs ONE validated
-    // PowerShell command windowless (compy.exe is windows-subsystem in release → no console flash)
-    // and exits with its code, BEFORE any Tauri window. See actions::run_elevated_powershell.
+    // Elevated command helper (Wave 0): `compy.exe --run-elevated <hex> <ticket>` runs ONE
+    // validated PowerShell command windowless (compy.exe is windows-subsystem in release → no
+    // console flash) and exits with its code, BEFORE any Tauri window. The hex must byte-match
+    // the one-time dispatch ticket minted by actions::run_elevated_powershell or nothing runs
+    // (the boundary-side second lock). See compy_lib::run_elevated_helper.
     if let Some(pos) = argv.iter().position(|a| a == "--run-elevated") {
-        let code = argv
-            .get(pos + 1)
-            .map_or(2, |hex| compy_lib::run_elevated_helper(hex));
+        let code = match (argv.get(pos + 1), argv.get(pos + 2)) {
+            (Some(hex), Some(ticket)) => compy_lib::run_elevated_helper(hex, ticket),
+            _ => 2,
+        };
         std::process::exit(code);
     }
 

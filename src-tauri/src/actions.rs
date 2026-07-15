@@ -977,7 +977,7 @@ pub(crate) fn elevation_outcome(
 }
 
 /// Whether a `run_elevated_powershell` error PROVES the elevated process never executed — a
-/// launch-level failure (UAC decline, spawn error, or one of the two pre-launch refusals), as
+/// launch-level failure (UAC decline, spawn error, or one of the three pre-launch refusals), as
 /// opposed to "the process ran and failed". Callers that recorded pending changes BEFORE the
 /// elevation (the gaming-session batch) may drop them only when this is true; the polarity is
 /// deliberately conservative — an UNRECOGNIZED error returns false, so anything ambiguous keeps
@@ -990,6 +990,7 @@ pub(crate) fn elevation_error_nothing_ran(err: &str) -> bool {
         || err.starts_with("could not launch elevated process")
         || err.starts_with("cannot find own exe")
         || err.starts_with("elevated command is too long to dispatch")
+        || err.starts_with("elevated dispatch ticket could not be minted")
 }
 
 /// Promote non-terminating cmdlet errors to terminating ones for a SINGLE elevated command, so a
@@ -1083,13 +1084,21 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     if encoded.len() > 30_000 {
         return Err("elevated command is too long to dispatch".to_string());
     }
-    elevation_outcome(elevate_and_wait(
+    // Boundary-side second lock: mint the one-time dispatch ticket the helper will demand (see
+    // mint_elevation_ticket). Mint failure is a third pre-launch refusal — nothing ran.
+    let ticket = mint_elevation_ticket(&encoded)?;
+    let outcome = elevation_outcome(elevate_and_wait(
         exe.as_os_str(),
         &[
             std::ffi::OsStr::new("--run-elevated"),
             std::ffi::OsStr::new(&encoded),
+            ticket.as_os_str(),
         ],
-    ))
+    ));
+    // The helper consumes the ticket on the success path; a UAC decline / launch failure leaves
+    // it behind — clean up either way (best-effort, idempotent).
+    let _ = std::fs::remove_file(&ticket);
+    outcome
 }
 
 /// Hex-encode bytes so an elevated command can ride as a single, quoting-safe argv to the
@@ -1119,6 +1128,54 @@ pub(crate) fn from_hex(s: &str) -> Option<Vec<u8>> {
         i += 2;
     }
     Some(out)
+}
+
+// ─── Elevated-dispatch ticket — the boundary-side second lock (2026-07-15) ──────────────────────
+//
+// The `--run-elevated` helper entry used to run whatever hex it was handed; ALL validation lived
+// caller-side (typed dispatch + ps_safe in this file). Not a live hole — the entry grants no
+// privilege by itself (an external caller runs at its own IL behind its own UAC prompt) — but a
+// future confused-deputy bug could hand it attacker-influenced hex. The ticket is the second lock
+// AT the boundary: `run_elevated_powershell` (the ONLY dispatch point, where every command has
+// already passed validation) mints a one-time file whose content is the EXACT hex it is about to
+// dispatch; the helper refuses any hex that doesn't byte-match its ticket and consumes the ticket
+// before running, so a given dispatch executes at most once. Because the check is content-agnostic
+// exact-equality with what the parent just minted, it can never false-reject a legitimate apply —
+// every apply builder's output passes by construction, present and future.
+
+/// Mint the one-time dispatch ticket for one `--run-elevated` launch. Returns the ticket path to
+/// pass as the helper's second argument. A mint failure is a PRE-LAUNCH refusal (nothing ran) —
+/// the error string is classified by `elevation_error_nothing_ran`.
+pub(crate) fn mint_elevation_ticket(encoded: &str) -> Result<std::path::PathBuf, String> {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = crate::compy_data_dir().join("runtime");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("elevated dispatch ticket could not be minted: {e}"))?;
+    // pid + per-process sequence keeps concurrent dispatches (and processes) from colliding.
+    let path = dir.join(format!(
+        "elev-{}-{}.ticket",
+        std::process::id(),
+        SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    std::fs::write(&path, encoded)
+        .map_err(|e| format!("elevated dispatch ticket could not be minted: {e}"))?;
+    Ok(path)
+}
+
+/// Helper-side verify-and-consume. True ⇒ the ticket file byte-equals the received hex; it is
+/// deleted (consume-once) before the command runs. A deletion failure does not reject — the match
+/// already proved the mint; exact-match is the lock, one-time-ness is best-effort on top. Any read
+/// failure or mismatch ⇒ false, and the helper runs NOTHING. The ticket path arrives via argv
+/// (rather than being re-derived helper-side) so a machine where UAC elevates as a different
+/// account — where %APPDATA% resolves differently in the child — can never false-reject.
+pub(crate) fn consume_elevation_ticket(encoded: &str, ticket_path: &str) -> bool {
+    match std::fs::read(ticket_path) {
+        Ok(content) if content == encoded.as_bytes() => {
+            let _ = std::fs::remove_file(ticket_path);
+            true
+        }
+        _ => false,
+    }
 }
 
 /// Defense-in-depth against elevated-command injection. Any value interpolated into a
@@ -1306,6 +1363,54 @@ mod batch_elevation_tests {
         assert_eq!(from_hex("6x"), None); // one bad nibble
     }
 
+    // ── the `--run-elevated` boundary-side second lock (dispatch ticket) ────────────────
+
+    #[test]
+    fn boundary_rejects_foreign_hex_both_ways() {
+        use super::{consume_elevation_ticket, mint_elevation_ticket};
+        let foreign = to_hex(b"Stop-Computer");
+        // No ticket at all — an external / confused-deputy caller handing the helper its own hex.
+        assert!(!consume_elevation_ticket(&foreign, r"C:\__compy_qa_missing__\no.ticket"));
+        // A REAL ticket exists, but for a DIFFERENT command — swapped hex is rejected too, and
+        // the failed probe must NOT burn the ticket (the legitimate dispatch still verifies).
+        let legit = to_hex(b"exit 0");
+        let ticket = mint_elevation_ticket(&legit).expect("mint");
+        let ticket_s = ticket.to_string_lossy().to_string();
+        assert!(!consume_elevation_ticket(&foreign, &ticket_s));
+        assert!(ticket.exists(), "a rejected probe must not consume the legit ticket");
+        assert!(consume_elevation_ticket(&legit, &ticket_s));
+        assert!(!ticket.exists(), "a verified dispatch consumes its ticket");
+    }
+
+    #[test]
+    fn boundary_accepts_every_dispatch_shape_and_consumes_once() {
+        use super::{consume_elevation_ticket, mint_elevation_ticket};
+        // The lock is exact-equality with what run_elevated_powershell just minted, so every
+        // apply builder's output passes BY CONSTRUCTION — no shape grammar to false-reject.
+        // Pinned with the gnarliest real payload (a composed §4 batch script: quote-escaped
+        // paths, receipts, multi-command items) plus the hex round-trip torture set.
+        let items = vec![
+            ("fast-startup-off".to_string(), vec!["cmdA1; ".to_string()]),
+            ("hags-enable".to_string(), vec!["cmdB1".to_string(), "cmdB2;".to_string()]),
+        ];
+        let batch =
+            compose_batch_script(&items, r"C:\Users\o'brien\receipts.txt").expect("compose");
+        for cmd in [
+            batch.as_str(),
+            "powercfg /setactive 12345678-90ab-cdef-1234-567890abcdef",
+            "try { Set-ItemProperty 'X' -Value 0 } catch { 'fail' }; $x = \"q\"\n\t end",
+            "üñîçødé ⚡",
+        ] {
+            let encoded = to_hex(cmd.as_bytes());
+            let ticket = mint_elevation_ticket(&encoded).expect("mint");
+            let ticket_s = ticket.to_string_lossy().to_string();
+            assert!(consume_elevation_ticket(&encoded, &ticket_s), "must pass: {cmd:.60}");
+            // Consume-once: the same hex cannot ride the same ticket twice.
+            assert!(!consume_elevation_ticket(&encoded, &ticket_s));
+            assert!(!ticket.exists());
+        }
+    }
+
     #[test]
     fn sink_captures_instead_of_elevating_and_disarms_on_take() {
         let guard = ElevationDeferral::begin().expect("arm");
@@ -1465,9 +1570,12 @@ mod elevation_attribution_tests {
         // Any other spawn failure: also never executed.
         let spawn = elevation_outcome(Err(std::io::Error::from_raw_os_error(2))).unwrap_err();
         assert!(elevation_error_nothing_ran(&spawn));
-        // The two pre-launch refusals in run_elevated_powershell (checked before any spawn).
+        // The three pre-launch refusals in run_elevated_powershell (checked before any spawn).
         assert!(elevation_error_nothing_ran("cannot find own exe: os error 2"));
         assert!(elevation_error_nothing_ran("elevated command is too long to dispatch"));
+        assert!(elevation_error_nothing_ran(
+            "elevated dispatch ticket could not be minted: os error 5"
+        ));
     }
 
     #[test]

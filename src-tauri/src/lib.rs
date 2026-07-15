@@ -52,13 +52,24 @@ pub fn run_fps_capture() {
     fps::run_capture();
 }
 
-/// Entry point for the elevated command helper (`compy.exe --run-elevated <hex>`, Wave 0). Decodes
-/// the hex-encoded PowerShell command produced by `actions::run_elevated_powershell` and runs it via
-/// `quiet_command` (CREATE_NO_WINDOW) — windowless in a release build, so no console flashes. Returns
-/// PowerShell's exit code so the parent's `elevation_outcome` attribution is preserved; a bad/missing
-/// or non-UTF-8 arg returns non-zero (fail-safe: the parent reports "approved, but the operation
-/// failed" — never a false success, and never runs garbage). Does NOT depend on the live catalog.
-pub fn run_elevated_helper(hex: &str) -> i32 {
+/// Entry point for the elevated command helper (`compy.exe --run-elevated <hex> <ticket>`, Wave 0).
+/// Decodes the hex-encoded PowerShell command produced by `actions::run_elevated_powershell` and runs
+/// it via `quiet_command` (CREATE_NO_WINDOW) — windowless in a release build, so no console flashes.
+/// Returns PowerShell's exit code so the parent's `elevation_outcome` attribution is preserved; a
+/// bad/missing or non-UTF-8 arg returns non-zero (fail-safe: the parent reports "approved, but the
+/// operation failed" — never a false success, and never runs garbage). Does NOT depend on the live
+/// catalog.
+///
+/// Boundary-side second lock (defense-in-depth, 2026-07-15): the hex must byte-match the one-time
+/// dispatch ticket minted by `run_elevated_powershell` — the sole dispatch point, where every command
+/// has already passed validation — or NOTHING runs (exit 3). A hypothetical future confused-deputy
+/// bug handing this entry attacker-influenced hex has no matching ticket and executes zero
+/// PowerShell. The ticket is consumed (deleted) before the command runs, so a dispatch executes at
+/// most once. See `actions::mint_elevation_ticket` / `consume_elevation_ticket`.
+pub fn run_elevated_helper(hex: &str, ticket_path: &str) -> i32 {
+    if !actions::consume_elevation_ticket(hex, ticket_path) {
+        return 3;
+    }
     let Some(bytes) = actions::from_hex(hex) else {
         return 2;
     };
@@ -1108,6 +1119,34 @@ pub fn run() {
 mod safety_tests {
     use super::*;
     use serde_json::json;
+
+    // ── the `--run-elevated` helper's boundary lock, end-to-end through the real entry ──────
+
+    #[test]
+    fn elevated_helper_runs_nothing_without_a_matching_ticket() {
+        // Foreign hex with no ticket: exit 3 and ZERO PowerShell executed — proven by a command
+        // whose side effect (a marker file) must not appear.
+        let marker =
+            std::env::temp_dir().join(format!("compy-boundary-{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+        let cmd = format!("Set-Content -Path '{}' -Value x", marker.display());
+        let hex = actions::to_hex(cmd.as_bytes());
+        assert_eq!(run_elevated_helper(&hex, r"C:\__compy_qa_missing__\no.ticket"), 3);
+        assert!(!marker.exists(), "rejected hex must execute ZERO PowerShell");
+    }
+
+    #[test]
+    fn elevated_helper_runs_a_minted_dispatch_exactly_once() {
+        // The legitimate path: the same mint run_elevated_powershell performs → the helper runs
+        // the command (real, unelevated PowerShell here — a harmless no-op) and consumes the
+        // ticket. A replay of the SAME argv finds no ticket and runs nothing.
+        let hex = actions::to_hex(b"exit 0");
+        let ticket = actions::mint_elevation_ticket(&hex).expect("mint");
+        let ticket_s = ticket.to_string_lossy().to_string();
+        assert_eq!(run_elevated_helper(&hex, &ticket_s), 0);
+        assert!(!ticket.exists(), "the verified dispatch consumes its ticket");
+        assert_eq!(run_elevated_helper(&hex, &ticket_s), 3, "replay must be refused");
+    }
 
     // §C build stamp: the format is the contract both surfaces (About + dev title) render.
     #[test]

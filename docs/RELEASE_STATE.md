@@ -10,6 +10,26 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-15 (`--run-elevated` BOUNDARY-SIDE GUARD SHIPPED — the Phase B defense-in-depth
+> item from BACKLOG closes; MUTATION-BOUNDARY code (elevation), Cowork adversarial audit warranted;
+> NO gate moved, no installer re-cut yet — rides the next build):** the elevated helper entry no
+> longer runs whatever hex it is handed. `run_elevated_powershell` — the ONLY dispatch point, where
+> every command has already passed typed-dispatch/`ps_safe` validation — now mints a ONE-TIME
+> dispatch ticket (`%APPDATA%\Compy\runtime\elev-<pid>-<seq>.ticket`, content = the exact command
+> hex) and passes its path as a third argv; the helper refuses any hex that doesn't byte-match its
+> ticket (exit 3, runs ZERO PowerShell) and consumes the ticket before running, so a dispatch
+> executes at most once (`mint_elevation_ticket` `actions.rs:1149`, `run_elevated_helper` `lib.rs:69`,
+> argv `main.rs:12`). Content-agnostic exact-match ⇒ can never
+> false-reject a legitimate apply (every builder's output passes by construction). Honest-attribution
+> preserved: mint failure = a third pre-launch refusal classified nothing-ran
+> (`elevation_error_nothing_ran`); helper exit 3 reads "approved, but the operation failed" — never a
+> false success; decline leaves the ticket → parent cleans up. 4 guard tests both directions
+> (foreign hex rejected without burning the legit ticket · batch-script + torture-set payloads pass ·
+> end-to-end helper refuses no-ticket/replay · minted dispatch runs exactly once). Also this cycle:
+> `5752970` shipped the additive downsampled per-session FPS series (`sessions.rs` `fps_series`,
+> read-only, no mutation boundary). Verify: cargo 724/0 (up from 720) · clippy clean · tsc 0 ·
+> vitest 1632/1632. rust-tauri-reviewer verdict recorded in the commit.
+
 > **UPDATE 2026-07-14d (GAMING TOAST SHIPPED `4e46287` — installer SHA-256
 > `EF3A5FC5C930B47C219D17C695FC1B051458A084E445FC8D32BE8341F56D80C5`, live exe stamp-verified
 > (embedded `4e46287`, clean tree — Cowork's site lane committed as `b6f8213` before the build),
@@ -793,10 +813,10 @@
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:500` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **GAMING_MODE_QA.md live checklist 10/10 PASSED 2026-07-14** (#4/#10 owner-run 2026-07-07; #6/#7 real-UAC cancel arms owner-clicked on `db5349e` after that run forced the runas-decline fix — see the QA doc's runas note). **Owner SIGNED OFF 2026-07-14** — F1 is field-proven for 1.0. |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:1921` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. Since T6 (2026-07-07) session-start suspends ride the ONE batched elevation; since T6b (2026-07-08, `bdc9daa`) the restore side batches the same way. |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:1994` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2029` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. Since T6 (2026-07-07) session-start suspends ride the ONE batched elevation; since T6b (2026-07-08, `bdc9daa`) the restore side batches the same way. |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2102` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170`, `lib.rs:679`, `Benchmark.tsx:193` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
-| **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2143` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
+| **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2251` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs` | Built dark 2026-07-09 on the owner's nod (marathon §2a, spec `2026-07-08-lab-proving-ground.md`). Applies the whole safe stack in ONE UAC (reuses the audited `apply_recommendations_batch` — **no new mutation primitive**), measures the cumulative fps delta, then rolls back EXACTLY the changes it created via a multi-change Drop-guard (ledger id-diff; corrupt-ledger read ABORTS before any mutation — rust-tauri-reviewer fix). Commands `start_stack_trial` + `stack_trial_armed` refuse/return false while dark; no FE surface yet. Arming needs: live apply→rollback QA on a real rig + owner sign-off. |
 | **Leftovers restore** | **DARK** (`false`) | `restore_gate()` — `leftovers.rs:727` | Double-dark; detector is read-only, restore path refused + `#[cfg(test)]` bypass only. |
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
@@ -812,8 +832,12 @@
 - Rollback resolves from `history.json` alone, never the live catalog (`history.rs:777`→`actions::resolve_rollback`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned
   (`save_history_to` `history.rs:320`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:2036`).
-- Elevation: relaunch `compy.exe --run-elevated <hex>` (windowless), 4-way honest UAC outcome
-  attribution (`elevation_outcome` `actions.rs:852`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
+- Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
+  outcome attribution (`elevation_outcome` `actions.rs:964`). PowerShell token validators
+  `ps_safe`/`ps_safe_squoted`. Boundary-side second lock (2026-07-15): the helper runs ONLY hex
+  byte-matching the one-time dispatch ticket minted at `run_elevated_powershell`, consumed before
+  execution (`mint_elevation_ticket` `actions.rs:1149` · `consume_elevation_ticket` `actions.rs:1171`
+  · `run_elevated_helper` `lib.rs:69`).
 - Gaming-session advanced tier (USB + PCIe + service suspends) batches to **ONE elevation per
   session start** (T6, 2026-07-07) — and since T6b (`bdc9daa`, 2026-07-08) the restore side
   batches contiguous elevated rollbacks the same way: sink-staged → `compose_batch_script` → single
