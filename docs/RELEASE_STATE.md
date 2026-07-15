@@ -10,6 +10,19 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-14b (DIRTY-STAMP AUDIT + GUARD — no ship, no gate moved):** the LIVE PART B build's
+> full stamp reads **`2eda4eb+dirty · release`** (caught via CDP `get_build_stamp` during the JARVIS
+> deviation-evidence captures). **Audited BENIGN:** tracked tree was clean; the dirty bit came from 89
+> untracked `docs/` files (`git status --porcelain` counts `??` lines), which never compile into the
+> binary — the live exe is code-identical to `2eda4eb`, so the installer row above stands and NO re-cut
+> is needed. Why it slipped: the embedded-HASH verify can't see the dirty bit. Fixes (this commit):
+> `src-tauri/build.rs` dirty check now excludes `docs/` (`:(exclude)docs` pathspec — untracked non-docs
+> still counts) · **new DIRTY-STAMP GATE** in `scripts/ship-reinstall.ps1` step 0b (throws on non-docs
+> tree dirt before install; `-AllowDirty` = deliberate override; red→green proven with a non-docs probe).
+> The next build/ship stamps clean. Also this cycle: **owner RATIFIED both JARVIS motion deviations**
+> (2026-07-14: Dock keeps lift-only, no magnetic pull; no hologram shader-pulse — gauge data-tick stays
+> the vehicle, idle-GPU 0-draws/15s re-proven live) — the A7 "may still overrule" tail is closed.
+>
 > **UPDATE 2026-07-14 (CONSUMER-PANEL PART B SHIPPED `2eda4eb` — installer SHA-256
 > `4B916615DF25A8D4EBEE29E4BAEDAA3C178634209F38D90195A9D5C1643DCC18`, live exe stamp-verified `2eda4eb`
 > via the embedded hash, installed by Claude + LIVE, supersedes the `CA408DF4…AA00F795` installer; NO

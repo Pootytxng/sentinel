@@ -86,8 +86,14 @@ You eyeballed the motion layer (it was pre-enabled on your live build) and appro
 **default-ON** — the retune sweep between rooms, Lenis glide scrolling, magnetic rail tabs, Home
 stage-chrome tilt, and honest gauge ticks are on for everyone, no flip needed. Settings → Appearance
 still has a "JARVIS motion" toggle (now the OFF failsafe). Ships on its own commit + reinstall; your
-live app carries it after this cycle's build. Two disclosed deviations stand (you may still overrule):
-hologram shader-pulses excluded (idle-GPU bar), and the Dock isn't magnetic (it owns the magnify lift).
+live app carries it after this cycle's build. ~~Two disclosed deviations stand (you may still overrule):
+hologram shader-pulses excluded (idle-GPU bar), and the Dock isn't magnetic (it owns the magnify lift).~~
+→ **✅ RATIFIED 2026-07-14 ("lets go with your recommendation")** after an evidence review (captured
+proof: dock 8px lift fires, rail tabs pull the full 4px clamp, hologram 0 GL draws in 15s idle —
+`docs/ui-sweep/shots/deviation-*.png` + `motion-evidence-log.json`). **Both deviations STAND:** Dock
+keeps lift-only; no hologram shader-pulse (the gauge data-tick is the vehicle). Noted for the future,
+NOT queued: if he ever wants shader energy, the agreed shape is a change-triggered pulse (flash on a
+real value change, then back to sleep) — preserves the idle-GPU law.
 
 ### A8. Blackbook console (Phase 4 "The Logbook") — ✅ RESOLVED 2026-07-13 ("it looks much better" + the default-ON directive) → shipped DEFAULT-ON, preview row removed
 Your verdict came in 2026-07-13 with two follow-ups, both done the same day: it's **default-ON for

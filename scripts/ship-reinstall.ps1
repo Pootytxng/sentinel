@@ -8,7 +8,7 @@
 # ("Unexpected token") — a shell quirk, not a script bug. Use the call operator (or run the steps inline):
 #   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1'"            # install + launch
 #   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1' -NoLaunch"  # don't launch
-param([switch]$NoLaunch)
+param([switch]$NoLaunch, [switch]$AllowDirty)
 $ErrorActionPreference = "Stop"
 
 $nsis = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\bundle\nsis\Compy_0.1.0_x64-setup.exe"
@@ -26,6 +26,18 @@ if ((Test-Path $releaseExe) -and $head) {
   if (-not (Select-String -Path $releaseExe -Pattern $head -Quiet)) {
     throw "STALE BUILD: target\release\compy.exe does not embed HEAD ($head) — cargo reused a cached binary. Run: cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml && npm run tauri build"
   }
+}
+
+# 0b) DIRTY-STAMP GATE (bug→guard, 2026-07-14): a build cut from a dirty tree stamps "+dirty" and
+#     nothing downstream ever mechanically checked it — the PART B installer shipped stamped
+#     "2eda4eb+dirty" unnoticed (that one was benign: docs-only untracked files, and build.rs now
+#     excludes docs/ from the dirty check). This gate blocks the REAL case: any tracked change or
+#     non-docs untracked file at ship time means the stamp can't be trusted to equal HEAD's code.
+#     Override deliberately with -AllowDirty (states intent in the transcript).
+$treeDirt = git -C "C:\Users\Kuya\code\sentinel" status --porcelain -- ":(exclude)docs"
+if ($treeDirt -and -not $AllowDirty) {
+  $dirtLines = $treeDirt -join [Environment]::NewLine
+  throw "DIRTY-STAMP: the tree has non-docs changes — the build stamp would read '+dirty' (or lie about HEAD). Commit/stash first, rebuild, then ship. Deliberate override: -AllowDirty.`n$dirtLines"
 }
 
 # 1) Stop any running Compy so the install can replace the exe (single-instance + file lock). Close

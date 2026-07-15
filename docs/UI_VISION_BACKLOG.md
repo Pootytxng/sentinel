@@ -200,11 +200,16 @@ the "0" failsafe, byte-identity re-pinned to explicit "0").** His ranked plan, p
    reason per the owner's own "unless reasonably so" bar):** "shader uniforms from live metrics" is
    NOT pointed at the rig hologram — the bay rests on a demand frameloop (the idle-GPU ~0 law) and a
    continuously-animated uniform would violate the directive's own performance rail `:163-166`. The
-   gauge tick is the honest A.2 vehicle; owner may overrule at eyeball.
+   gauge tick is the honest A.2 vehicle; ~~owner may overrule at eyeball~~ → **owner RATIFIED
+   2026-07-14** after evidence review (0 GL draws in 15s idle re-proven live,
+   `docs/ui-sweep/shots/deviation-hologram-idle.png`). Deviation STANDS; future option if he ever
+   wants shader energy: change-triggered pulse (flash on real value change, then sleep).
 3. **Magnetic cursor + mouse-tilt parallax** — only a small event-parallax on Home's annotation
    plane shipped. Magnetic cursor: ~~NEVER BUILT~~ → **🟢 BUILT `1d310e1`:** delegated MagneticLayer
    (GSAP quickTo, ≤4px pull, expo-out release, coarse-pointer skip) on the rail room tabs; the Dock
-   is deliberately NOT magnetic (it owns the magnify lift — one motion idea per element). Plus the
+   is deliberately NOT magnetic (it owns the magnify lift — one motion idea per element) — **owner
+   RATIFIED 2026-07-14** after evidence review (8px lift + 4px clamp both captured live,
+   `docs/ui-sweep/shots/deviation-dock-hover.png` / `deviation-rail-magnetic.png`). Plus the
    **chrome-plane tilt** on Home's console stage: brackets + corner gauges rotate ≤2.4° off the same
    pointer vars the annotation parallax already writes — the rig canvas never tilts, so drag-orbit
    and part picking stay pixel-exact (the HUD chrome floats over a stable subject).

@@ -1,0 +1,112 @@
+{
+  "dockRestTransform": "none",
+  "railRestTransform": "none",
+  "dockNodes": [
+    {
+      "name": "Monitor",
+      "rect": {
+        "x": 724,
+        "y": 822.984375,
+        "width": 78,
+        "height": 36,
+        "top": 822.984375,
+        "right": 802,
+        "bottom": 858.984375,
+        "left": 724
+      }
+    },
+    {
+      "name": "Blackbook",
+      "rect": {
+        "x": 811,
+        "y": 822.984375,
+        "width": 78,
+        "height": 36,
+        "top": 822.984375,
+        "right": 889,
+        "bottom": 858.984375,
+        "left": 811
+      }
+    },
+    {
+      "name": "Lab",
+      "rect": {
+        "x": 898,
+        "y": 822.984375,
+        "width": 78,
+        "height": 36,
+        "top": 822.984375,
+        "right": 976,
+        "bottom": 858.984375,
+        "left": 898
+      }
+    }
+  ],
+  "railItems": [
+    {
+      "label": "Home",
+      "rect": {
+        "x": 10,
+        "y": 85.671875,
+        "width": 195,
+        "height": 35,
+        "top": 85.671875,
+        "right": 205,
+        "bottom": 120.671875,
+        "left": 10
+      }
+    },
+    {
+      "label": "Monitor",
+      "rect": {
+        "x": 10,
+        "y": 122.671875,
+        "width": 195,
+        "height": 35,
+        "top": 122.671875,
+        "right": 205,
+        "bottom": 157.671875,
+        "left": 10
+      }
+    },
+    {
+      "label": "Blackbook",
+      "rect": {
+        "x": 10,
+        "y": 159.671875,
+        "width": 195,
+        "height": 35,
+        "top": 159.671875,
+        "right": 205,
+        "bottom": 194.671875,
+        "left": 10
+      }
+    },
+    {
+      "label": "Lab",
+      "rect": {
+        "x": 10,
+        "y": 196.671875,
+        "width": 195,
+        "height": 35,
+        "top": 196.671875,
+        "right": 205,
+        "bottom": 231.671875,
+        "left": 10
+      }
+    }
+  ],
+  "dockHoverTransform": "matrix(1, 0, 0, 1, 0, -8)",
+  "dockHoverTarget": "Blackbook",
+  "railMagneticTransform": "matrix(1, 0, 0, 1, 4, 0)",
+  "railMagneticTarget": "Monitor",
+  "railMagneticOffset": {
+    "rcx": 200,
+    "rcy": 140.171875,
+    "elCenterX": 107.5,
+    "elCenterY": 140.171875
+  },
+  "gaugeTickCaptured": false,
+  "glProbeDrawsAfterIdle": 0,
+  "idleWaitMs": 15000
+}

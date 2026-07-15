@@ -13,8 +13,12 @@ fn git_stamp() -> (String, bool) {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "nogit".into());
+    // Dirty means "the shipped binary can differ from HEAD's code" — docs/ never compiles into
+    // the binary, so it is excluded (tracked or untracked); an untracked file anywhere ELSE
+    // (a new src module, a config) still counts. Caught 2026-07-14: 89 untracked docs/ui-sweep
+    // shots stamped the PART B installer "+dirty" from a code-identical tree.
     let dirty = Command::new("git")
-        .args(["status", "--porcelain"])
+        .args(["status", "--porcelain", "--", ":(exclude)docs"])
         .output()
         .ok()
         .filter(|o| o.status.success())

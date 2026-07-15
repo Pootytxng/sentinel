@@ -165,6 +165,21 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-14a — ✅ JARVIS DEVIATIONS RATIFIED + DIRTY-STAMP FALSE-POSITIVE FIXED & GATED — no ship, NO gate moved, zero mutation-boundary code
+
+**Owner ruling (checklist item 2, evidence-first):** both `1d310e1` motion deviations **STAND** —
+Dock keeps lift-only (no magnetic pull; rail tabs own the 4px pull, both captured live) and no
+hologram shader-pulse (gauge data-tick stays the vehicle; 0 GL draws in 15s idle re-proven on the
+live build). Evidence: `docs/ui-sweep/shots/deviation-*.png` + `motion-evidence-log.json`; verdict
+recorded in OWNER_ACTION_CHECKLIST A7 + UI_VISION_BACKLOG §A.2/A.3. Future option (noted, NOT
+queued): change-triggered pulse. **Dirty-stamp incident (self-caught during the captures):** live
+PART B stamp read `2eda4eb+dirty` — audited benign (tracked tree clean; 89 untracked `docs/` files
+tripped `git status --porcelain`'s `??` count; binary code-identical to `2eda4eb`, no re-cut).
+**Fix + bug→guard:** `src-tauri/build.rs` dirty check now `:(exclude)docs` (untracked non-docs
+still counts) · new **DIRTY-STAMP GATE** step 0b in `scripts/ship-reinstall.ps1` (throws on
+non-docs tree dirt pre-install, `-AllowDirty` override; red→green proven with a non-docs probe).
+RELEASE_STATE update 2026-07-14b carries the audit. Next build/ship stamps clean.
+
 ### Cycle 2026-07-13f — ✅ 390px LANDING PAGE-EDGE OVERFLOW FIXED (the pre-existing defect 13e logged) — site-only, NO gate moved, zero src-tauri, zero src/
 
 **Root cause (probed, not guessed):** `.topbar`, `.hero`, and `.article` each share their element
@@ -573,34 +588,6 @@ Appearance → "Blackbook console (preview)").
   pins room chrome to `#a78bfa` under non-Violet themes. Not a defect (0 vendor-purple, internally
   consistent, invisible on the default Violet) — a taste fork: room chrome follows the live theme, or
   stays the violet signature? Owner's call, awaiting his answer.
-
-### Cycle 2026-07-12g — ✅ MONITOR v5 CONSOLE FLIPPED DEFAULT-ON + shipped `e195f70` (owner "flip it default on and silent reinstall")
-
-**Owner approved the Monitor v5 console** (the long-open §A5 eyeball — Flight Deck + Session Stack,
-RTSS-style zero-anchored frametime, live `915e85b`) after I clarified it lived behind the DEFAULT-OFF
-"Monitor console (preview)" toggle he hadn't flipped (his recent "everything looks good" was the
-default face + JARVIS, NOT the flag-gated console — the honest catch prevented shipping a face he
-hadn't actually seen). Verdict: "flip it default on and silent reinstall." Per
-[[ship-approved-work-as-the-build]]: `readMonitorConsole` `=== "1"` → `!== "0"` (default ON, mirrors
-Home/JARVIS); Settings row dropped "(preview)" → "Monitor console" (OFF failsafe); stale "DEFAULT OFF"
-code comments corrected (`Settings.tsx` + `use-hud.ts`; theme.ts was already right). **bug→guard:**
-`monitor-console-flag.test.tsx` re-pinned to DEFAULT-ON polarity (absent === console byte-identical to
-"1"; "0" === classic, both editorial states); sibling `monitor-v2.test.tsx` re-pointed the same commit
-(its own header note demanded it on any default flip). Zero `src-tauri`. Verify: tsc 0 · vitest
-**1522** (172 files) · self-reviewer **PASS 8/8** on the installed build (default-ON Flight Deck in
-Basic+Advanced · "0" restores classic 0-reload · Settings/h1 titles · honest "NO SIGNAL" scopes over
-the owner's REAL session history · dark accent-ink on fills · 0 vendor-purple Crimson · 0 idle
-draws/10s). Ship: installer `3B855DD1…FB003`, silent-reinstalled, **stamp-verified `e195f70` live**,
-one installer on the Desktop.
-- **Follow-up LOGGED (self-reviewer catch, NOT this diff — pre-existing, now exposed to 100% by the
-  default flip):** the Monitor room chrome (buttons/chips/mode-pill) is locked to static violet via
-  `monitor-v2.css`'s `[data-room="play"]` accent re-point (test-pinned), while `SessionStack`'s
-  `readInk()` reads `--ix-accent` directly so its sparkline DOES follow the live theme → an internal
-  accent mismatch under non-Violet themes (invisible on the default Violet; not an
-  illegibility/vendor-purple defect). Owner-taste call — room chrome follows theme, or sparkline
-  matches the violet lock? Surfaced to owner.
-- ✅ §A5 CLOSED. Next open Console-HUD work: **Phase 4 Blackbook "The Logbook"** (Cycle 2026-07-12f —
-  plan written, builds in a FRESH session). Phase 5 (Gaming/Settings chrome + app-wide HUD frame) after.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
