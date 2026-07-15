@@ -1,9 +1,12 @@
 ---
-// compy.gg home — Mission Control (Direction A, spec 2026-07-14-site-makeover-research-spitball).
-// Rebuild 2026-07-14 after owner taste-gate FAIL: art direction is the app's ratified
-// instrument-console language (bracketed stage, ruled ledgers, mono telemetry, one accent),
-// not a card-grid template. Reference lane: crewed-flight mission-ops console.
+// compy.gg home — FLIGHT TEST (owner-approved rework 2026-07-15).
+// Art direction: the real session data IS the art. Pure-black field, one hot signal
+// amber, monumental kinetic display type, and a full-viewport canvas waveform drawn
+// from an ACTUAL recorded Monitor session (per-second 1% low fps — never presented
+// as anything else). Boot preloader counts the real sample total. Crosshair cursor
+// reads real values off the trace.
 // Every number on this page is pinned to a real provenance record:
+//   hero waveform   → ../data/flight-session.json (Marvel Rivals, 2026-06-25)
 //   session showcase → ../data/session-replay.json + site/src/session-receipt.json
 //   honesty receipt  → site/src/proof-receipt.json
 // No gain claims, no fabricated data, zero third-party runtime requests. PRE-PUBLISH.
@@ -11,6 +14,7 @@ import Base from "../layouts/Base.astro";
 import ReplayHUD from "../components/ReplayHUD.tsx";
 import CountUp from "../components/CountUp.tsx";
 import replay from "../data/session-replay.json";
+import flight from "../data/flight-session.json";
 
 const rigParts = replay.rig.split(" · "); // ["AMD Radeon RX 9070 XT", "Ryzen X3D-class 16-thread", "Windows 11"]
 const h = Math.floor(replay.durationSecs / 3600);
@@ -19,6 +23,14 @@ const s = replay.durationSecs % 60;
 const durationClock = `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 const sessionDate = replay.startedAt.slice(0, 10);
 const eventCount = replay.events.length;
+
+// flight-session (the hero trace) — REAL record, see the JSON's provenance note
+const fm = Math.floor(flight.durationSecs / 60);
+const fs = flight.durationSecs % 60;
+const flightClock = `${fm}:${String(fs).padStart(2, "0")}`;
+const flightDate = flight.startedAt.slice(0, 10);
+const flightSamples = flight.samples.toLocaleString("en-US");
+const flightEvents = flight.events.length;
 
 const modules = [
   {
@@ -65,6 +77,37 @@ const modules = [
   title="Compy — the PC optimizer that shows its receipts"
   description="Compy reads your actual hardware, recommends only what it can undo, and measures every change on your rig — including the ones that do nothing. Free, no account, nothing leaves your PC."
 >
+  <!-- ============ boot preloader (revealed by the inline script ONLY when JS runs
+       and the user allows motion; no-JS / reduced-motion users never see it) ============ -->
+  <div class="boot-shell mono" data-boot hidden aria-hidden="true">
+    <div class="boot-in">
+      <span class="boot-tag">COMPY <i>//</i> SESSION RECORD</span>
+      <span class="boot-count readout"><b data-boot-count>0</b><i>/ {flightSamples} samples</i></span>
+      <span class="boot-rule"><i data-boot-rule></i></span>
+      <span class="boot-src">{flight.game.toUpperCase()} · {flightDate} · READ ON-DEVICE</span>
+    </div>
+  </div>
+  <script is:inline>
+    // Arm the boot overlay before the hero parses (zero content flash). Motion-gated:
+    // reduced-motion users go straight to the finished page. A 5s failsafe clears the
+    // overlay even if the module bundle never runs.
+    (function () {
+      try {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        var b = document.querySelector("[data-boot]");
+        if (!b) return;
+        b.hidden = false;
+        document.documentElement.classList.add("booting");
+        setTimeout(function () {
+          if (!b.hasAttribute("data-boot-done")) {
+            b.remove();
+            document.documentElement.classList.remove("booting");
+          }
+        }, 5000);
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- decorative viewport HUD corners (desktop only, pointer-through) -->
   <div class="hud-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
@@ -82,38 +125,65 @@ const modules = [
     </div>
   </header>
 
-  <!-- ============ hero: the statement, then the instrument deck ============ -->
-  <section class="hero">
-    <div class="grid-tex" aria-hidden="true"></div>
-    <div class="hero-bloom" aria-hidden="true"></div>
-    <div class="wrap">
-      <p class="console-rail mono boot" style="--b: 0">
+  <!-- ============ flight hero: the real session IS the art ============ -->
+  <section class="flight" data-flight>
+    <canvas class="flight-wave" data-wave aria-hidden="true"></canvas>
+    <div class="flight-xhair readout" data-xhair hidden aria-hidden="true">
+      <span class="xhair-chip" data-xhair-read></span>
+    </div>
+
+    <div class="flight-body">
+      <p class="flight-kick mono" data-fx-kick>
         <b>measured, not promised</b>
-        <span class="console-rail-datum readout" aria-label="Provenance of the session shown below">
-          SESSION {sessionDate} · {replay.game.toUpperCase()} · {durationClock}
-        </span>
       </p>
-      <h1 class="boot" style="--b: 1">The PC optimizer that shows its receipts.</h1>
-      <div class="hero-row boot" style="--b: 2">
-        <p class="hero-sub">
+      <h1 class="fh1">
+        <span class="fh1-m"><span class="fh1-t fh1-small" data-fx-line>The PC optimizer that</span></span>
+        <span class="fh1-m"><span class="fh1-t fh1-big fh1-outline" data-fx-line>shows its</span></span>
+        <span class="fh1-m"><span class="fh1-t fh1-big fh1-signal" data-fx-line>receipts.</span></span>
+      </h1>
+      <div class="flight-row" data-fx-row>
+        <p class="flight-sub">
           Compy reads your actual hardware, recommends only what it can undo, and measures
           every change on your rig — including the ones that do nothing.
         </p>
-        <div class="hero-cta-col">
-          <div class="hero-ctas">
+        <div class="flight-cta-col">
+          <div class="flight-ctas">
             <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
             <a class="btn btn--ghost" href="/library/" data-magnetic>Read the Blackbook →</a>
           </div>
-          <p class="hero-note mono">Compy is free. No account, no ads, nothing leaves your PC.</p>
+          <p class="flight-note mono">Compy is free. No account, no ads, nothing leaves your PC.</p>
         </div>
       </div>
+    </div>
 
+    <footer class="flight-strip mono" data-fx-strip>
+      <div class="strip-trace">
+        <span class="trace-label">
+          <i class="trace-dot" aria-hidden="true"></i>
+          live trace — per-second 1% low fps · real recorded session · {flightEvents} process events
+        </span>
+        <span class="trace-read readout" data-play-read aria-hidden="true"></span>
+      </div>
+      <dl class="strip-cells readout">
+        <div class="scell"><dt>session</dt><dd>{flight.game} · {flightDate}</dd></div>
+        <div class="scell"><dt>avg fps</dt><dd>{flight.avgFps.toFixed(1)}</dd></div>
+        <div class="scell"><dt>1% low</dt><dd>{flight.low1FpsEst.toFixed(1)}</dd></div>
+        <div class="scell"><dt>duration</dt><dd>{flightClock}</dd></div>
+        <div class="scell"><dt>samples</dt><dd>{flightSamples}</dd></div>
+        <div class="scell scell--wide"><dt>rig</dt><dd>{flight.gpu} · {flight.display}</dd></div>
+      </dl>
+    </footer>
+  </section>
+
+  <!-- ============ the record: the replay deck, a second REAL session ============ -->
+  <section class="record">
+    <div class="wrap">
       <!-- the instrument deck: a REAL recorded Monitor session, replayable -->
-      <div class="deck brackets boot" style="--b: 3">
+      <div class="deck brackets reveal">
         <span class="bkt" aria-hidden="true"></span>
         <div class="deck-rail mono" aria-hidden="true">
           <span class="deck-tag">MONITOR <i>//</i> SESSION REPLAY</span>
-          <span>READ ON-DEVICE · READ-ONLY</span>
+          <span>SESSION {sessionDate} · {replay.game.toUpperCase()} · READ ON-DEVICE · READ-ONLY</span>
         </div>
         <div class="deck-grid">
           <aside class="deck-flank mono" aria-label="Rig the session was recorded on">
@@ -133,7 +203,7 @@ const modules = [
       </div>
 
       <!-- the five vows: the deck's bottom rail -->
-      <ul class="vows mono boot" style="--b: 4" role="list" aria-label="What Compy will never do">
+      <ul class="vows mono reveal" role="list" aria-label="What Compy will never do">
         <li>rollback-first</li>
         <li>zero outbound connections</li>
         <li>no kernel driver</li>
@@ -375,6 +445,7 @@ const modules = [
 
 <script>
   import "../scripts/motion.ts";
+  import "../scripts/flight.ts";
 
   // Waitlist progressive enhancement — same-origin /api/waitlist only (no JS still works:
   // the form natively POSTs and comes back as /?waitlist=ok).
@@ -404,6 +475,72 @@ const modules = [
 </script>
 
 <style>
+  /* ---- boot preloader (motion-gated by the inline script; opaque so nothing flashes) ---- */
+  .boot-shell {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-boot);
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+  }
+  .boot-in {
+    display: grid;
+    gap: 14px;
+    justify-items: start;
+    width: min(420px, calc(100vw - 48px));
+  }
+  .boot-tag {
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    font-weight: 600;
+  }
+  .boot-tag i {
+    color: var(--accent);
+    font-style: normal;
+  }
+  .boot-count {
+    font-size: 15px;
+    color: var(--accent);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .boot-count b {
+    font-weight: 600;
+    font-size: 28px;
+    min-width: 4.2ch;
+    display: inline-block;
+  }
+  .boot-count i {
+    font-style: normal;
+    color: var(--fg-faint);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .boot-rule {
+    width: 100%;
+    height: 1px;
+    background: var(--line-2);
+    position: relative;
+    overflow: hidden;
+  }
+  .boot-rule i {
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+  .boot-src {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--fg-faint);
+  }
+
   /* ---- viewport HUD corners (decorative chrome; the site IS the instrument) ---- */
   .hud-corners {
     position: fixed;
@@ -431,7 +568,7 @@ const modules = [
     position: sticky;
     top: 0;
     z-index: var(--z-topbar);
-    background: rgba(7, 8, 11, 0.82);
+    background: rgba(5, 4, 3, 0.72);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
   }
@@ -485,7 +622,7 @@ const modules = [
   }
   .topnav .topnav-cta,
   .topnav a.topnav-cta:hover {
-    color: #071018;
+    color: var(--accent-ink);
   }
   @media (max-width: 720px) {
     .topnav a:not(.topnav-cta) {
@@ -505,76 +642,266 @@ const modules = [
     }
   }
 
-  /* ---- hero ---- */
-  .hero {
-    padding: 86px 0 0;
-    overflow: hidden;
+  /* ---- flight hero ---- */
+  .flight {
     position: relative;
-  }
-  .hero-bloom {
-    position: absolute;
-    inset: -10% -20% auto;
-    height: 70vh;
-    pointer-events: none;
-    background: radial-gradient(48% 52% at 50% 8%, rgba(106, 169, 255, 0.1), transparent 70%);
-  }
-  .console-rail {
+    min-height: calc(100svh - 60px);
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 18px;
-    flex-wrap: wrap;
-    border-top: 1px solid var(--line-2);
-    padding-top: 12px;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    /* crosshair replaces the pointer over the trace (pointer:fine only, set in JS) */
+  }
+  .flight-wave {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  /* bottom scrim: the trace fades to solid ground under the copy + strip so small
+     text never renders through the waveform (self-review defect, 2026-07-15). Sits
+     above the canvas, below the copy (z 2) and crosshair (z 70). */
+  .flight::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 62%;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(5, 4, 3, 0) 0%,
+      rgba(5, 4, 3, 0.62) 34%,
+      rgba(5, 4, 3, 0.94) 62%,
+      var(--bg) 100%
+    );
+  }
+  @media (max-width: 860px) {
+    /* the type block wraps taller at narrow widths — reach the scrim further up */
+    .flight::before {
+      height: 76%;
+    }
+  }
+  .flight-xhair {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    z-index: var(--z-xhair);
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent 8%, var(--accent-line) 40%, var(--accent-line) 92%, transparent);
+  }
+  .xhair-chip {
+    position: absolute;
+    /* rides the measured wave band, not the copy zone — flight.ts sets the var */
+    top: var(--band-chip-y, 120px);
+    left: 10px;
+    white-space: nowrap;
     font-size: 11px;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.08em;
+    color: var(--accent-bright);
+    background: rgba(5, 4, 3, 0.85);
+    border: 1px solid var(--accent-line);
+    padding: 4px 8px;
+  }
+  .flight-body {
+    position: relative;
+    z-index: 2;
+    /* reserved wave airspace: at wide viewports the justify-end slack already exceeds
+       this and nothing moves; where the type fills the whole hero (≤1440) the hero
+       grows past the viewport instead of letting the trace collide with the copy */
+    margin-top: 150px;
+    padding: clamp(28px, 5vh, 64px) clamp(20px, 4vw, 64px) 0;
+    pointer-events: none; /* let the crosshair read the canvas; buttons re-enable below */
+  }
+  .flight-body a,
+  .flight-body .flight-ctas {
+    pointer-events: auto;
+  }
+  .flight-kick {
+    font-size: 11px;
+    letter-spacing: 0.24em;
     text-transform: uppercase;
     color: var(--accent);
+    border-top: 1px solid var(--line-2);
+    padding-top: 12px;
+    max-width: 340px;
   }
-  .console-rail b {
+  .flight-kick b {
     font-weight: 600;
   }
-  .console-rail-datum {
-    color: var(--fg-faint);
-    letter-spacing: 0.12em;
+  /* monumental type: the statement IS the design. Mixed fill/outline/signal lines. */
+  .fh1 {
+    margin: clamp(18px, 3.5vh, 40px) 0 0;
+    font-stretch: 125%;
+    letter-spacing: -0.03em;
+    line-height: 0.92;
+    max-width: none;
+    text-transform: uppercase;
   }
-  .hero h1 {
-    margin: 40px 0 0;
-    max-width: 15ch;
+  .fh1-m {
+    display: block;
+    overflow: hidden;
+    padding-right: 0.04em; /* keep the italic-ish overhang of the last glyph unclipped */
   }
-  .hero-row {
+  .fh1-t {
+    display: block;
+  }
+  .fh1-small {
+    font-family: var(--mono);
+    font-stretch: 100%;
+    font-size: clamp(12px, 1.4vw, 18px);
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    color: var(--fg-dim);
+    margin-bottom: clamp(10px, 1.8vh, 22px);
+  }
+  .fh1-big {
+    font-size: clamp(56px, 14.5vw, 224px);
+    font-weight: 760;
+    color: var(--fg);
+  }
+  .fh1-outline {
+    color: transparent;
+    -webkit-text-stroke: max(1.5px, 0.011em) var(--fg);
+  }
+  @supports not (-webkit-text-stroke: 1px black) {
+    .fh1-outline {
+      color: var(--fg-dim);
+    }
+  }
+  .fh1-signal {
+    color: var(--accent);
+  }
+  .flight-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    gap: 48px;
-    margin-top: 40px;
+    gap: 40px;
     flex-wrap: wrap;
+    margin-top: clamp(22px, 4vh, 44px);
+    padding-bottom: clamp(24px, 4.5vh, 56px);
   }
-  .hero-sub {
-    font-size: 18px;
+  .flight-sub {
+    font-size: clamp(15px, 1.25vw, 17.5px);
     color: var(--fg-dim);
-    max-width: 46ch;
+    max-width: 44ch;
   }
-  .hero-cta-col {
+  .flight-cta-col {
     display: grid;
     gap: 12px;
     justify-items: start;
   }
-  .hero-ctas {
+  .flight-ctas {
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
   }
-  .hero-note {
+  .flight-note {
     font-size: 12px;
     letter-spacing: 0.07em;
     color: var(--fg-faint);
   }
 
+  /* ---- flight strip: the real numbers, silk-screened on the bottom rail ---- */
+  .flight-strip {
+    position: relative;
+    z-index: 2;
+    border-top: 1px solid var(--line-2);
+    padding: 0 clamp(20px, 4vw, 64px) clamp(16px, 2.5vh, 26px);
+    background: linear-gradient(180deg, rgba(5, 4, 3, 0.55), rgba(5, 4, 3, 0.92));
+  }
+  .strip-trace {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 10px 0 12px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .trace-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .trace-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    flex: none;
+  }
+  .trace-read {
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    min-height: 1.2em;
+  }
+  .strip-cells {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0;
+  }
+  .scell {
+    display: grid;
+    gap: 3px;
+    padding: 2px clamp(18px, 2.6vw, 44px) 0;
+    border-left: 1px solid var(--line);
+  }
+  .scell:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .scell dt {
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+  .scell dd {
+    font-size: clamp(13px, 1.15vw, 16px);
+    color: var(--accent-bright);
+    margin: 0;
+  }
+  .scell--wide dd {
+    color: var(--fg-dim);
+  }
+  @media (max-width: 860px) {
+    .strip-cells {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px 18px;
+    }
+    .scell,
+    .scell:first-child {
+      padding: 0;
+      border-left: 0;
+    }
+    .scell--wide {
+      grid-column: 1 / -1;
+    }
+    .trace-read {
+      display: none;
+    }
+  }
+
+  /* ---- the record section (replay deck + vows) ---- */
+  .record {
+    padding: 110px 0 0;
+  }
+
   /* ---- the instrument deck ---- */
   .deck {
-    margin-top: 72px;
-    background: linear-gradient(180deg, rgba(17, 21, 29, 0.6), rgba(13, 16, 22, 0.85));
+    background: linear-gradient(180deg, rgba(18, 16, 10, 0.6), rgba(13, 11, 7, 0.85));
     border: 1px solid var(--line);
     border-radius: 2px;
   }
@@ -582,6 +909,7 @@ const modules = [
     display: flex;
     justify-content: space-between;
     gap: 18px;
+    flex-wrap: wrap;
     padding: 12px 18px 0;
     font-size: 10px;
     letter-spacing: 0.22em;
@@ -695,7 +1023,7 @@ const modules = [
     transition: background 0.3s var(--ease-out);
   }
   .frow:hover {
-    background: rgba(238, 241, 247, 0.02);
+    background: rgba(242, 237, 228, 0.02);
   }
   .frow-tag {
     font-size: 11px;
@@ -753,7 +1081,7 @@ const modules = [
   .exhibit {
     border: 1px solid var(--line);
     border-radius: 2px;
-    background: linear-gradient(180deg, rgba(17, 21, 29, 0.5), rgba(13, 16, 22, 0.8));
+    background: linear-gradient(180deg, rgba(18, 16, 10, 0.5), rgba(13, 11, 7, 0.8));
   }
   .exhibit + .exhibit {
     margin-top: 22px;
@@ -1052,7 +1380,7 @@ const modules = [
     padding: 120px 0 130px;
   }
   .terminal {
-    background: linear-gradient(180deg, rgba(17, 21, 29, 0.6), rgba(13, 16, 22, 0.85));
+    background: linear-gradient(180deg, rgba(18, 16, 10, 0.6), rgba(13, 11, 7, 0.85));
     border: 1px solid var(--line);
     border-radius: 2px;
     max-width: 880px;
@@ -1117,43 +1445,6 @@ const modules = [
     }
     .waitlist-form .btn {
       width: 100%;
-    }
-  }
-
-  /* ---- hero boot sequence (first-load orchestration; CSS-only so SSR/no-JS still animates,
-     and gated on no-preference so reduced-motion users see everything instantly) ---- */
-  @media (prefers-reduced-motion: no-preference) {
-    .boot {
-      opacity: 0;
-      transform: translateY(18px);
-      animation: boot-in 0.9s var(--ease-out) forwards;
-      animation-delay: calc(var(--b) * 0.14s + 0.1s);
-    }
-    h1.boot {
-      filter: blur(6px);
-      animation-name: boot-in-blur;
-    }
-    .console-rail.boot {
-      transform: none;
-      animation-name: boot-in-rail;
-    }
-    @keyframes boot-in {
-      to {
-        opacity: 1;
-        transform: none;
-      }
-    }
-    @keyframes boot-in-blur {
-      to {
-        opacity: 1;
-        transform: none;
-        filter: blur(0);
-      }
-    }
-    @keyframes boot-in-rail {
-      to {
-        opacity: 1;
-      }
     }
   }
 </style>

@@ -1,25 +1,25 @@
-/* compy.gg — Mission Control global styles.
-   Art direction: mission-ops flight console (crewed-flight telemetry display; Teenage
-   Engineering restraint). The site IS the instrument: one accent reserved for live values
-   and controls, ruled hairlines instead of card boxes, mono telemetry, wide-industrial
-   display type. Tokens mirror the app's src/App.css :root (Midnight family). */
+/* compy.gg — Flight Test global styles (rework 2026-07-15, owner-approved direction).
+   Art direction: the real session data IS the art. Pure-black field, ONE hot signal
+   amber reserved for live data + controls, warm-white ink, mono telemetry voice,
+   monumental display type. The dev-tool default blue is retired everywhere. */
 
 :root {
-  --bg: #07080b;
-  --bg-2: #0a0c11;
-  --panel: #0d1016;
-  --panel-2: #11151d;
-  --fg: #eef1f7;
-  --fg-dim: #9aa3b2;
-  --fg-faint: #5c6572;
-  --accent: #6aa9ff;
-  --accent-bright: #93c1ff;
-  --accent-soft: rgba(106, 169, 255, 0.12);
-  --accent-line: rgba(106, 169, 255, 0.3);
-  --accent-glow: rgba(106, 169, 255, 0.35);
+  --bg: #050403;
+  --bg-2: #0a0805;
+  --panel: #0d0b07;
+  --panel-2: #12100a;
+  --fg: #f2ede4;
+  --fg-dim: #a89f92;
+  --fg-faint: #6f685c;
+  --accent: #ff9a1e;
+  --accent-bright: #ffbe5c;
+  --accent-soft: rgba(255, 154, 30, 0.12);
+  --accent-line: rgba(255, 154, 30, 0.32);
+  --accent-glow: rgba(255, 154, 30, 0.35);
+  --accent-ink: #140a00; /* text ON an amber fill */
   --ok: #4ade80;
-  --line: rgba(238, 241, 247, 0.08);
-  --line-2: rgba(238, 241, 247, 0.14);
+  --line: rgba(242, 237, 228, 0.09);
+  --line-2: rgba(242, 237, 228, 0.16);
   --mono: "JetBrains Mono Variable", "Cascadia Mono", "Cascadia Code", "JetBrains Mono",
     Consolas, ui-monospace, monospace;
   --display: "Archivo Variable", "Segoe UI", system-ui, sans-serif;
@@ -27,9 +27,11 @@
   --radius: 10px;
   --radius-sm: 6px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  /* z scale: content < topbar < hud corners (decorative, pointer-through) */
+  /* z scale: content < topbar < hud corners < crosshair < boot loader */
   --z-topbar: 40;
   --z-hud: 60;
+  --z-xhair: 70;
+  --z-boot: 80;
   color-scheme: dark;
 }
 
@@ -196,11 +198,11 @@ h2 {
 }
 .btn--primary {
   background: var(--accent);
-  color: #071018;
+  color: var(--accent-ink);
 }
 .btn--primary:hover {
   background: var(--accent-bright);
-  color: #071018;
+  color: var(--accent-ink);
 }
 .btn--ghost {
   background: transparent;

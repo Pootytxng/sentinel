@@ -39,9 +39,15 @@ const replay = JSON.parse(readFileSync(join(appDir, "src", "data", "session-repl
 const session = JSON.parse(readFileSync(join(root, "site", "src", "session-receipt.json"), "utf8"));
 const proof = JSON.parse(readFileSync(join(root, "site", "src", "proof-receipt.json"), "utf8"));
 
-describe("landing (Mission Control contract v2)", () => {
-  it("carries the Mission Control hero + every section", () => {
-    expect(html).toContain("The PC optimizer that shows its receipts.");
+describe("landing (Flight Test contract v3)", () => {
+  it("carries the Flight Test hero + every section", () => {
+    // The monumental h1 is split across three mask spans — pin each line, and the
+    // accessible sentence order (small line before the two big lines).
+    expect(html).toContain("The PC optimizer that");
+    expect(html).toContain(">shows its<");
+    expect(html).toContain(">receipts.<");
+    expect(html.indexOf("The PC optimizer that")).toBeLessThan(html.indexOf(">shows its<"));
+    expect(html.indexOf(">shows its<")).toBeLessThan(html.indexOf(">receipts.<"));
     expect(html).toContain("measured, not promised"); // hero kicker
     for (const id of ["features", "receipts", "pricing", "faq", "waitlist"]) {
       expect(html, `missing section #${id}`).toContain(`id="${id}"`);
@@ -80,8 +86,9 @@ describe("landing (Mission Control contract v2)", () => {
     expect(replay.durationSecs).toBe(session.durationSecs);
     expect(replay.samples).toBe(session.samples);
     expect(replay.claim).toContain("no gain claim");
-    // The replay animates ONLY true time data — the record must never grow an fps series
-    // (sessions.rs never persisted one; a series here could only be fabricated).
+    // The replay animates ONLY true time data — this record carries no per-second series
+    // (its source session was transcribed summary-only), so a series appearing here would
+    // be untraceable to the record and must be rejected.
     for (const key of Object.keys(replay)) {
       if (Array.isArray(replay[key])) expect(key, "only the real event log may be an array").toBe("events");
     }
@@ -90,6 +97,37 @@ describe("landing (Mission Control contract v2)", () => {
       expect(e.atSecs).toBeGreaterThanOrEqual(0);
       expect(e.atSecs).toBeLessThanOrEqual(replay.durationSecs);
     }
+  });
+
+  it("flight trace (hero waveform) is a REAL series, internally consistent and honestly labeled", () => {
+    const flight = JSON.parse(
+      readFileSync(join(appDir, "src", "data", "flight-session.json"), "utf8"),
+    );
+    // The canvas may only ever draw real recorded data, labeled as exactly what it is.
+    expect(flight.metric).toBe("per-second 1% low fps");
+    expect(flight.series.length).toBe(flight.seriesPoints);
+    expect(flight.series.length).toBe(flight.samples);
+    // Declared min/max must match the actual series — a hand-edited value breaks lockstep.
+    const values = flight.series.map(([, v]) => v);
+    expect(Math.min(...values)).toBe(flight.seriesMin);
+    expect(Math.max(...values)).toBe(flight.seriesMax);
+    // Timestamps stay monotonic and inside the session window.
+    let prev = -1;
+    for (const [t] of flight.series) {
+      expect(t).toBeGreaterThan(prev);
+      expect(t).toBeLessThanOrEqual(flight.durationSecs);
+      prev = t;
+    }
+    for (const e of flight.events) {
+      expect(e.at).toBeGreaterThanOrEqual(0);
+      expect(e.at).toBeLessThanOrEqual(flight.durationSecs);
+    }
+    // The page must label the trace with its real metric, game, and record stats.
+    expect(html).toContain("per-second 1% low fps");
+    expect(html).toContain(flight.game);
+    expect(html).toContain(flight.avgFps.toFixed(1));
+    expect(html).toContain(flight.low1FpsEst.toFixed(1));
+    expect(html).toContain(flight.samples.toLocaleString("en-US"));
   });
 
   it("receipts section is pinned to the real provenance records — including the published miss", () => {
