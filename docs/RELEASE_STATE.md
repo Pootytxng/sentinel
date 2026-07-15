@@ -813,7 +813,7 @@
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned
   (`save_history_to` `history.rs:320`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:2036`).
 - Elevation: relaunch `compy.exe --run-elevated <hex>` (windowless), 4-way honest UAC outcome
-  attribution (`elevation_outcome` `actions.rs:826`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
+  attribution (`elevation_outcome` `actions.rs:852`). PowerShell token validators `ps_safe`/`ps_safe_squoted`.
 - Gaming-session advanced tier (USB + PCIe + service suspends) batches to **ONE elevation per
   session start** (T6, 2026-07-07) — and since T6b (`bdc9daa`, 2026-07-08) the restore side
   batches contiguous elevated rollbacks the same way: sink-staged → `compose_batch_script` → single
