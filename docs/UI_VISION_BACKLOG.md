@@ -451,6 +451,16 @@ claims — `scripts/site-landing.test.mjs` guards stay in spirit), zero-budget l
 Cloudflare Pages), site PRE-PUBLISH until the owner's deploy GO. The APP-side §C overhaul trigger
 stays dormant (app visual work continues under §A–§F).
 
+**G.1 🔴 QUEUED — scroll-scrubbed telemetry throughline (Design Director change #5, council
+2026-07-15).** The Director's highest-leverage motion idea for the Flight Test landing: the hero's
+real session trace doesn't end at the fold — a scroll-scrubbed thread of the SAME recorded telemetry
+runs the page's full length (the wave scrubbing with scroll position, sections annotating moments in
+the session), making "the session IS the art" the whole page's spine instead of the hero's alone.
+Deliberately QUEUED, not built, in the council-implementation train: the teaser-gating + brand
+unification changes were shippable same-day, but a page-length scroll-driven motion system rushed
+into the same train risks a fourth owner taste FAIL — it deserves its own design pass (storyboard →
+build → self-review at real scroll). Not a substitution: the shipped train never claimed #5.
+
 ### H. ~~Onboarding HoloLens Setup & Tour redesign~~ — ✅ SHIPPED (verified 2026-07-08)
 The hardware-tour flies the camera across the user's REAL rig in the owner's order — `HARDWARE_LESSONS`
 literally ordered psu→storage→gpu→cpu→ram (`setup-steps.ts:103`), parts from `buildRigParts(hw)` real

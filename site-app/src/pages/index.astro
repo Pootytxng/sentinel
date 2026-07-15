@@ -66,8 +66,8 @@ const modules = [
   {
     tag: "BLACKBOOK",
     title: "The Blackbook",
-    desc: "The debunk library: which popular “FPS tweaks” actually do something, which are snake oil, and the evidence either way.",
-    datum: "THE DEBUNK LIBRARY",
+    desc: "Every popular “FPS tweak,” graded: real, placebo, or risky. Every verdict is public — the full write-ups live in the app, next to your own measurements.",
+    datum: "EVERY VERDICT PUBLIC · THE BOOK SHIPS IN THE APP",
     href: "/library/",
   },
 ];
@@ -117,8 +117,8 @@ const modules = [
       <a class="mono wordmark" href="/">COMPY</a>
       <span class="mono topbar-status"><span class="status-dot" aria-hidden="true"></span>private beta</span>
       <nav class="topnav mono" aria-label="Site">
-        <a href="/library/">Blackbook</a>
         <a href="#receipts">Receipts</a>
+        <a href="/library/">Blackbook</a>
         <a href="#faq">FAQ</a>
         <a class="btn btn--primary topnav-cta" href="#waitlist" data-magnetic>Join the waitlist</a>
       </nav>
@@ -149,7 +149,7 @@ const modules = [
         <div class="flight-cta-col">
           <div class="flight-ctas">
             <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
-            <a class="btn btn--ghost" href="/library/" data-magnetic>Read the Blackbook →</a>
+            <a class="btn btn--ghost" href="/library/" data-magnetic>Sample the Blackbook →</a>
           </div>
           <p class="flight-note mono">Compy is free. No account, no ads, nothing leaves your PC.</p>
         </div>
@@ -160,14 +160,14 @@ const modules = [
       <div class="strip-trace">
         <span class="trace-label">
           <i class="trace-dot" aria-hidden="true"></i>
-          live trace — per-second 1% low fps · real recorded session · {flightEvents} process events
+          live trace — per-second 1% low fps (the worst frames, not the average) · real recorded session · {flightEvents} process events
         </span>
         <span class="trace-read readout" data-play-read aria-hidden="true"></span>
       </div>
       <dl class="strip-cells readout">
         <div class="scell"><dt>session</dt><dd>{flight.game} · {flightDate}</dd></div>
         <div class="scell"><dt>avg fps</dt><dd>{flight.avgFps.toFixed(1)}</dd></div>
-        <div class="scell"><dt>1% low</dt><dd>{flight.low1FpsEst.toFixed(1)}</dd></div>
+        <div class="scell"><dt><span title="The average of your worst 1% of frames — the stutter number. Steadier matters more than higher.">1% low</span></dt><dd>{flight.low1FpsEst.toFixed(1)}</dd></div>
         <div class="scell"><dt>duration</dt><dd>{flightClock}</dd></div>
         <div class="scell"><dt>samples</dt><dd>{flightSamples}</dd></div>
         <div class="scell scell--wide"><dt>rig</dt><dd>{flight.gpu} · {flight.display}</dd></div>
@@ -313,6 +313,7 @@ const modules = [
   <!-- ============ pricing: the manifest ============ -->
   <section id="pricing" class="pricing">
     <div class="wrap">
+      <div class="rail reveal-rule reveal"><b>THE MANIFEST</b><span class="rail-datum">FREE FOREVER · PRO IN THE WORKS</span></div>
       <div class="pricing-head reveal">
         <h2>Free forever. Really.</h2>
         <p class="section-sub">The optimizer, the rollback, the receipts — none of it is behind a paywall.</p>
@@ -321,10 +322,10 @@ const modules = [
         <div class="manifest-free reveal">
           <p class="manifest-price mono">COMPY — <b>FREE FOREVER</b></p>
           <ul class="manifest-list" role="list">
-            <li>Per-rig recommendations, all of them</li>
-            <li>Trust Ledger rollback, unlimited</li>
-            <li>Monitor, the Lab, Gaming Mode</li>
-            <li>No account · no ads · no upsell nags</li>
+            <li><span class="mled-tag mono">TUNE</span><span class="mled-desc">Per-rig recommendations, all of them</span><span class="mled-mark mono">✓ INCLUDED</span></li>
+            <li><span class="mled-tag mono">UNDO</span><span class="mled-desc">Trust Ledger rollback, unlimited</span><span class="mled-mark mono">✓ INCLUDED</span></li>
+            <li><span class="mled-tag mono">MODULES</span><span class="mled-desc">Monitor, the Lab, Gaming Mode</span><span class="mled-mark mono">✓ INCLUDED</span></li>
+            <li><span class="mled-tag mono">TERMS</span><span class="mled-desc">No account · no ads · no upsell nags</span><span class="mled-mark mono">✓ INCLUDED</span></li>
           </ul>
           <a class="btn btn--primary" href="#waitlist" data-magnetic>Join the waitlist</a>
         </div>
@@ -332,8 +333,8 @@ const modules = [
           <p class="manifest-price mono manifest-price--pro">COMPY PRO <span class="stamp">in the works</span></p>
           <p class="pro-price readout">No price yet</p>
           <ul class="manifest-list manifest-list--pro" role="list">
-            <li>Long-term monitoring history</li>
-            <li>Multi-rig dashboards</li>
+            <li><span class="mled-tag mono">HISTORY</span><span class="mled-desc">Long-term monitoring history</span><span class="mled-mark mono">PRO</span></li>
+            <li><span class="mled-tag mono">FLEET</span><span class="mled-desc">Multi-rig dashboards</span><span class="mled-mark mono">PRO</span></li>
           </ul>
           <p class="pro-note">
             Nothing to buy until it's real — and Pro will never be required to optimize or
@@ -1040,9 +1041,9 @@ const modules = [
   }
   .frow-body h3 {
     font-family: var(--display);
-    font-stretch: 112%;
-    font-size: 21px;
-    font-weight: 620;
+    font-stretch: 116%;
+    font-size: clamp(22px, 2.2vw, 26px);
+    font-weight: 630;
     letter-spacing: -0.01em;
   }
   .frow-body p {
@@ -1125,9 +1126,9 @@ const modules = [
   }
   .exhibit-body h3 {
     font-family: var(--display);
-    font-stretch: 112%;
-    font-size: clamp(20px, 2.4vw, 27px);
-    font-weight: 620;
+    font-stretch: 116%;
+    font-size: clamp(24px, 2.8vw, 32px);
+    font-weight: 630;
     letter-spacing: -0.012em;
   }
   .exhibit-body--trial {
@@ -1253,16 +1254,25 @@ const modules = [
     border-bottom: 1px solid var(--line-2);
   }
   .manifest-list li {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: baseline;
     padding: 13px 2px;
     border-top: 1px solid var(--line-2);
     color: var(--fg);
     font-size: 15.5px;
   }
-  .manifest-list li::before {
-    content: "✓";
+  .mled-tag {
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    color: var(--fg-faint);
+  }
+  .mled-mark {
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-align: right;
     color: var(--accent);
-    font-family: var(--mono);
-    margin-right: 14px;
   }
   .manifest-pro {
     border-left: 1px solid var(--line-2);
@@ -1286,8 +1296,7 @@ const modules = [
     font-size: 14px;
     padding: 10px 2px;
   }
-  .manifest-list--pro li::before {
-    content: "·";
+  .manifest-list--pro .mled-mark {
     color: var(--fg-faint);
   }
   .pro-note {

@@ -19,6 +19,12 @@
    the Sarah & Caleb seat's natural ally.
 5. **THE EXECUTOR** — Monday morning. The smallest concrete next step; calls out procrastination
    dressed as strategy.
+6. **THE DESIGN DIRECTOR** (added by owner decree 2026-07-15 — agent: `.claude/agents/web-design-director.md`) —
+   award-winning web designer; guides taste calls for web design architecture, UI, motion, and
+   **content exposure** (what the site shows off vs what stays app-exclusive — *samples, not free
+   meals*; precedent: the full ~190-entry Blackbook was published as web pages, defeating its
+   exclusivity). Convenes on every site/web train; advises with ONE named recommendation per fork.
+   Final taste sign-off remains owner territory.
 
 ## When the Council convenes
 

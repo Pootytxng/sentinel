@@ -18,12 +18,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   articleBody,
+  articleHeader,
   assertExportableIds,
   entrySummary,
   escapeHtml,
   glossaryBlock,
   indexSections,
   loadLibrary,
+  stance,
 } from "../scripts/lib/library-render.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +154,66 @@ function articlePage(entry, { cssHref, homeHref, ctaHref }) {
   });
 }
 
+// ---------- teaser tier (council decision 2026-07-15 — samples, not free meals) ----------
+// Non-pick entries publish as TEASERS: the page still ANSWERS the search query's core question
+// in visible text (verdict + what it is — thin/blocked content ranks worse and would contradict
+// "shows its receipts"), but the depth — the evidence, the full write-up, the steps — stays in
+// the app. One .html per entry id is preserved, so every index link and staleness guard holds.
+
+function teaserSections(entry) {
+  const p = (s) => `<p>${escapeHtml(s)}</p>`;
+  const inTheApp = (heading, note) =>
+    `<section class="in-the-app"><h2>${escapeHtml(heading)}</h2><p class="in-the-app-note">${escapeHtml(
+      note,
+    )} The Blackbook publishes its verdicts here — the full write-ups stay in the book, on your rig, next to your own measurements.</p></section>`;
+  switch (entry.type) {
+    case "tweak":
+      return [
+        `<section><h2>What it does</h2>${p(entry.what)}</section>`,
+        `<section><h2>The honest verdict</h2>${p(`Graded ${entry.verdict}.`)}<p class="stance">${escapeHtml(stance(entry.verdict))}</p></section>`,
+        inTheApp("The full graded entry", "The evidence and the why behind this grade ship inside the app."),
+      ].join("\n");
+    case "term":
+      return [
+        `<section><h2>What it means</h2>${p(entry.what)}</section>`,
+        inTheApp("More detail", "The deeper explanation ships inside the app."),
+      ].join("\n");
+    case "trick":
+      return [
+        `<section><h2>The pattern</h2>${p(entry.pattern)}</section>`,
+        inTheApp(
+          "The tell & the honest version",
+          "How to spot it in the wild — and what the honest version looks like — ships inside the app.",
+        ),
+      ].join("\n");
+    case "guide":
+      return [
+        `<section><h2>The goal</h2>${p(entry.goal)}</section>`,
+        inTheApp("Steps & the undo", "The step-by-step — with its undo attached — ships inside the app."),
+      ].join("\n");
+    default:
+      throw new Error(`unknown entry type '${entry.type}' (${entry.id})`);
+  }
+}
+
+function teaserPage(entry, { cssHref, homeHref, ctaHref }) {
+  const title =
+    entry.type === "tweak"
+      ? `${entry.name} — real, placebo, or risky? | Compy Blackbook`
+      : `${entry.name} | Compy Blackbook`;
+  return fill(debunkTemplate, {
+    TITLE: escapeHtml(title),
+    META_DESCRIPTION: escapeHtml(entrySummary(entry)),
+    ARTICLE: [articleHeader(entry, lib), teaserSections(entry)].join("\n"),
+    ENTRY_COUNT: String(entries.length),
+    YEAR: String(year),
+    CSS_HREF: cssHref,
+    HOME_HREF: homeHref,
+    CTA_HREF: ctaHref,
+    FOOTER_PROMISE,
+  });
+}
+
 for (const entry of picks) {
   writeFileSync(
     join(here, `${entry.id}.html`),
@@ -160,27 +222,29 @@ for (const entry of picks) {
   console.log(`wrote site/${entry.id}.html  [${entry.type === "tweak" ? entry.verdict : entry.type}]`);
 }
 
+const pickIds = new Set(config.picks);
 const libDir = join(here, "library");
 rmSync(libDir, { recursive: true, force: true });
 mkdirSync(libDir, { recursive: true });
+let teaserCount = 0;
 for (const entry of entries) {
-  writeFileSync(
-    join(libDir, `${entry.id}.html`),
-    articlePage(entry, { cssHref: "../library.css", homeHref: "../", ctaHref: "../#waitlist" }),
-  );
+  const opts = { cssHref: "../library.css", homeHref: "../", ctaHref: "../#waitlist" };
+  const full = pickIds.has(entry.id);
+  if (!full) teaserCount++;
+  writeFileSync(join(libDir, `${entry.id}.html`), full ? articlePage(entry, opts) : teaserPage(entry, opts));
 }
 
 const pageTemplate = readFileSync(join(here, "src", "page.template.html"), "utf8");
 writeFileSync(
   join(libDir, "index.html"),
   fill(pageTemplate, {
-    TITLE: "The Compy Blackbook — every entry, graded honestly",
+    TITLE: "The Compy Blackbook — every verdict on the record",
     META_DESCRIPTION: escapeHtml(
-      `All ${entries.length} Compy Blackbook entries — tweaks graded honestly, terms in plain English, snake-oil patterns named.`,
+      `All ${entries.length} Compy Blackbook verdicts on the record — ${picks.length} full entries published as the public sample; the complete graded book ships inside the app.`,
     ),
     MAIN: [
       `<h1>The Compy Blackbook</h1>`,
-      `<p>${entries.length} entries — the same library that ships inside the app, none invented. Every verdict is graded, every guide carries its undo.</p>`,
+      `<p>${entries.length} entries, every verdict on the record — none invented. ${picks.length} full write-ups are published below as the public sample; the complete graded book ships inside the app, next to your own rig's measurements.</p>`,
       glossaryBlock(lib),
       indexSections(entries, lib),
     ].join("\n"),
@@ -190,7 +254,9 @@ writeFileSync(
     FOOTER_PROMISE,
   }),
 );
-console.log(`wrote site/library/ — ${entries.length} entries + index (gitignored artifact)`);
+console.log(
+  `wrote site/library/ — ${entries.length} entries (${picks.length} full, ${teaserCount} teasers) + index (gitignored artifact)`,
+);
 
 // ---------- legal pages (rendered from the .md source so they never drift) ----------
 // site/privacy.html + site/eula.html — same chrome as the content pages (wordmark, aurora wash,
