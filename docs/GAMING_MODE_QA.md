@@ -27,14 +27,29 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
 
 ## The checklist — restore must always reach the exact prior state, or fail loudly
 
-- [ ] **1. Normal start → stop.** Start Gaming Mode → confirm power plan switched to max-perf, Windows
+- [x] **1. Normal start → stop.** Start Gaming Mode → confirm power plan switched to max-perf, Windows
       Game Mode on, Game Bar/DVR off (honesty line lists them). Stop → **confirm your exact prior power
       plan + Game Mode/Bar values are restored.** Session file cleared.
-- [ ] **2. Consent gate (first use).** First enable shows the one-time modal (what changes + restore
+      ✅ **PASSED 2026-07-14 (CC-driven live-app run — CDP over the installed `2eda4eb` build, owner
+      present; registry/powercfg ground-truth probe before/after each case):** start applied Game Mode
+      0→1 with truthful prior snapshots in `gaming-session.json`; only 2 changes recorded because the
+      plan was ALREADY Ultimate Performance (honest no-op — the plan-apply path itself was exercised in
+      cases #8/#9 below, Balanced→Ultimate). Stop → probe byte-identical to the pre-start baseline,
+      session file cleared.
+- [x] **2. Consent gate (first use).** First enable shows the one-time modal (what changes + restore
       guarantee) and requires confirmation; subsequent starts are one-click.
-- [ ] **3. App crash while Active.** Start Gaming Mode, then **kill `compy.exe`** (Task Manager) mid-
+      ✅ **PASSED 2026-07-14 (same run):** consent flag (`compy_gaming_consent_v1`) cleared → Start
+      blocked by the modal, NO session started; **Cancel** → nothing applied, flag stays unset; Start →
+      **Enable Gaming Mode** → session starts + flag set; next start = one-click (no modal).
+- [x] **3. App crash while Active.** Start Gaming Mode, then **kill `compy.exe`** (Task Manager) mid-
       session. Relaunch → the toggle should show **Gaming Mode "on"** (live session resumed); click Stop
       → prior state restored. *(An active session resumes rather than false-prompting.)*
+      ✅ **PASSED 2026-07-14 (same run):** killed `compy.exe` mid-session (file stayed `active`) →
+      relaunch shows the **recovery banner** ("a Gaming Mode session was interrupted — still applied,
+      not yet restored" + Resume / Restore now / Review) — the evolved T6c design supersedes the
+      literal "toggle shows on" wording: honest about interrupted state instead of silently resuming.
+      **Resume** → rolled back first, then restarted as a NEW session (`gm-1784075442678`) with clean
+      prior snapshots (rollback-before-restart proven) → Stop → probe byte-identical to baseline.
 - [x] **4. Full reboot while Active. ← the headline case.** Start Gaming Mode → **reboot the PC** without
       stopping. After reboot, launch Compy → it detects the unfinished session (`gaming-session.json`)
       and **prompts to restore**; confirm → **exact prior state restored.** *(This is the one the
@@ -50,7 +65,10 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       `qa10` + the `a_full_elevated_restore_dispatches_exactly_one_elevation` pin — and the visible
       restore confirmation naming every restored change on both surfaces. Next real session run
       doubles as the live eyeball.)*
-- [ ] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
+- [x] **5. Game exits / you stop normally.** Restore fires, prior state restored, session cleared.
+      ✅ **PASSED 2026-07-14 (same run):** Stop → probe byte-identical to baseline, session cleared,
+      and the T6b **visible restore confirmation** live-eyeballed: green "✓ Your settings are back —
+      Restored 2 changes" card naming each change (`docs/ui-sweep/shots/gm-qa-restore-confirmation.png`).
 - [ ] **6. UAC cancel during START (advanced tier).** Enable the USB-SS / PCIe-ASPM advanced toggles,
       start, and **cancel the single UAC prompt** (since T6, 2026-07-07, the whole advanced tier —
       USB + PCIe + any service suspends — rides ONE prompt). → no partial state left; whatever core
@@ -61,11 +79,19 @@ just exercise start/stop without one (the power-plan/registry changes apply rega
       ONE prompt, mirroring #6's start side) → status `RestoreFailed`, the contract is **retained**,
       a clear retry path is shown, it **never reports success**, and the decline is **never followed
       by more prompts**. Retry → completes (ONE prompt again).
-- [ ] **8. Missing power plan at restore.** Apply Gaming Mode, then delete the prior power plan
+- [x] **8. Missing power plan at restore.** Apply Gaming Mode, then delete the prior power plan
       (`powercfg /delete <guid>`) before stopping. Stop → **fails safe with a clear message** (never a
       silent fallback / wrong plan).
-- [ ] **9. External power-plan change mid-session.** Switch power plans manually (Windows) while Gaming
+      ✅ **PASSED 2026-07-14 (same run):** started from a throwaway plan → deleted it mid-session →
+      Stop **FAILED LOUD**: "⚠ Couldn't fully restore your settings — they may still be changed. Try
+      Stop again…", pill stays "on", NO false-success card, session status `restore-failed` with all
+      3 changes **retained**. Resurrected the GUID (`powercfg /duplicatescheme`) → retry Stop → full
+      restore to the stored throwaway plan, session cleared. Cleanup verified probe == baseline.
+- [x] **9. External power-plan change mid-session.** Switch power plans manually (Windows) while Gaming
       Mode is active. Stop → restore still targets the **stored** prior GUID; honest about state.
+      ✅ **PASSED 2026-07-14 (same run):** prior = Balanced (stored `prior_guid` verified in the
+      session file) → switched to High performance externally mid-session → Stop → landed on
+      **Balanced** (the stored GUID, not the live value), session cleared.
 - [x] **10. Advanced tier is opt-in + ONE UAC prompt total.** Confirm the core bundle (power plan +
       Game Mode + Game Bar) applies with **no UAC**; selecting any mix of USB-SS / PCIe-ASPM /
       service suspends fires **exactly ONE prompt** at start (T6) — and, since T6b (2026-07-08),
@@ -87,3 +113,8 @@ is field-proven for 1.0. If any case fails, paste what happened — I fix on a b
 feature via the gate if the bug is user-facing) and you re-test the affected case.
 
 **Case #4 is the one milestone between F1 Gaming Mode and "1.0-confident."**
+
+**Status 2026-07-14: 8 of 10 cases PASSED.** #4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9 CC-driven
+live-app automation (CDP over the installed `2eda4eb` build, ground-truth registry/powercfg probe,
+owner present) 2026-07-14. **Remaining: #6 and #7 — the real-UAC cancel arms** — need the owner's
+hands on the prompts (4 clicks total: Cancel · Yes · Cancel · Yes); everything else is scripted.

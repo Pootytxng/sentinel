@@ -18,13 +18,11 @@
 ## §A — Needs your hands or eyes (owner-run, reversible)
 
 ### A1. Gaming Mode QA — sign it off  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
-The feature is live. **2 of 10 cases are PASSED** (#4 full-reboot headline · #10 one-UAC advanced
-tier). **8 quick cases remain** — most are a start/stop away, one batch in one sitting:
-- ⬜ #1 normal start→stop · ⬜ #2 first-use consent gate · ⬜ #3 app-crash-while-active · ⬜ #5 normal
-  stop restores · ⬜ #6 UAC-cancel at START (one prompt) · ⬜ #7 UAC-cancel at RESTORE (one prompt,
-  since T6b) · ⬜ #8 missing power plan fails safe · ⬜ #9 external power-plan change mid-session.
-- **New since your last run (build `a5352cb`+):** the restore side is now ONE UAC and shows a visible
-  "Your settings are back" confirmation — case #5 or #7 doubles as your eyeball of that.
+The feature is live. **8 of 10 cases are PASSED** (#4/#10 owner-run 2026-07-07; #1/#2/#3/#5/#8/#9
+CC-automated on the installed build with ground-truth probes, 2026-07-14 — evidence per-case in the
+QA doc). **Only 2 remain — the real-UAC cancel arms, ~2 minutes at the keyboard:**
+- ⬜ #6 UAC-cancel at START — CC drives everything, you click **Cancel** on the one prompt.
+- ⬜ #7 UAC-cancel at RESTORE + retry — CC drives, you click **Yes · Cancel · Yes** (3 prompts).
 - **Result → tell Claude:** "Gaming Mode QA signed off". *This is the one milestone between F1 and
   "1.0-confident."*
 
