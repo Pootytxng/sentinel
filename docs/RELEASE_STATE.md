@@ -10,6 +10,15 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-14d (GAMING TOAST SHIPPED `4e46287` — installer SHA-256
+> `EF3A5FC5C930B47C219D17C695FC1B051458A084E445FC8D32BE8341F56D80C5`, live exe stamp-verified
+> (embedded `4e46287`, clean tree — Cowork's site lane committed as `b6f8213` before the build),
+> supersedes the `08605B25…F791F` installer):** owner ask at QA sign-off — the global Gaming Mode
+> crash-recovery banner + success confirmations moved from full-width top bars to a bottom-right
+> `.gaming-toast-stack` popup with a this-run-only × dismiss (never clears the recovery; never-hide
+> law intact). Frontend-only, no gate/mutation change. tsc clean · vitest 1631/1631 · self-reviewer
+> PASS. Gaming Mode QA is **owner-SIGNED-OFF 2026-07-14** (`9cddac7`) — all 10 live cases passed.
+
 > **UPDATE 2026-07-14c (ELEVATION-DECLINE FIX SHIPPED `db5349e` — installer SHA-256
 > `08605B25E8C2E8709826D1AA57F7451BD3FB4221D5716FBB1019051CA32F791F`, live exe stamp-verified
 > `db5349e+dirty · release` via CDP `get_build_stamp` (+dirty audited benign: the parallel Cowork
