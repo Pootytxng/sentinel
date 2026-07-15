@@ -10,9 +10,13 @@
 
 ## Snapshot
 
-> **UPDATE 2026-07-15 (`--run-elevated` BOUNDARY-SIDE GUARD SHIPPED — the Phase B defense-in-depth
-> item from BACKLOG closes; MUTATION-BOUNDARY code (elevation), Cowork adversarial audit warranted;
-> NO gate moved, no installer re-cut yet — rides the next build):** the elevated helper entry no
+> **UPDATE 2026-07-15 (`--run-elevated` BOUNDARY-SIDE GUARD SHIPPED `4bf2a91` — the Phase B
+> defense-in-depth item from BACKLOG closes; MUTATION-BOUNDARY code (elevation), Cowork adversarial
+> audit warranted; NO gate moved. Installer re-cut + silently reinstalled same day: SHA-256
+> `265275CD1494A7E4AE3D64CDD21CAD8494179CD88E647F957C7313BF8E547BC7`, live exe embeds `4bf2a91`
+> [Select-String verified], one installer on the Desktop — dirty-stamp guard overridden
+> deliberately: tree dirt was the parallel site lane's `site/generate.mjs` WIP, not app code):**
+> the elevated helper entry no
 > longer runs whatever hex it is handed. `run_elevated_powershell` — the ONLY dispatch point, where
 > every command has already passed typed-dispatch/`ps_safe` validation — now mints a ONE-TIME
 > dispatch ticket (`%APPDATA%\Compy\runtime\elev-<pid>-<seq>.ticket`, content = the exact command
