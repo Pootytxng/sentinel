@@ -867,7 +867,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     // helper never starts. But with UAC off + an admin account, this process
     // already carries a full admin token, so we can launch the helper DIRECTLY
     // and it inherits the rights needed to open the ETW session. With UAC on,
-    // we use runas to elevate (prompt or auto-approve per policy).
+    // we elevate via the "runas" verb (prompt or auto-approve per policy).
     if uac_disabled() {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -899,33 +899,37 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             }
         }
     } else {
-        // runas .status() blocks for the helper's lifetime, so run it on a
-        // dedicated thread. A declined UAC prompt returns Err quickly.
+        // elevate_and_wait blocks for the helper's lifetime, so run it on a
+        // dedicated thread. A declined UAC prompt returns Err(os error 1223) quickly.
         //
-        // .show(false) => SW_HIDE: launch the elevated helper HIDDEN. The helper
-        // never creates a Tauri window (main.rs returns into run_fps_capture
-        // before tauri::Builder), but in a debug build compy.exe is a
-        // console-subsystem app, so the default SW_NORMAL would pop a visible
-        // console running the capture loop. The direct-spawn path above gets the
-        // same effect via CREATE_NO_WINDOW; this is the runas equivalent.
-        // Optimistically mark a helper live: runas `.status()` blocks for the helper's whole
+        // The launcher runs SW_HIDE: the helper never creates a Tauri window
+        // (main.rs returns into run_fps_capture before tauri::Builder), but in a
+        // debug build compy.exe is a console-subsystem app, so the default
+        // SW_NORMAL would pop a visible console running the capture loop. The
+        // direct-spawn path above gets the same effect via CREATE_NO_WINDOW.
+        // Optimistically mark a helper live: the wait blocks for the helper's whole
         // lifetime, so we can't wait for a separate "spawned" signal. A declined UAC returns
         // quickly and clears it again — a brief, harmless true window.
         helper_running().store(true, Ordering::Release);
         std::thread::spawn(move || {
-            let res = runas::Command::new(exe)
-                .args(&["--fps-capture", "--fps-out", &out, "--fps-alive", &alive])
-                .show(false)
-                .status();
+            use std::ffi::OsStr;
+            let res = crate::actions::elevate_and_wait(
+                exe.as_os_str(),
+                &[
+                    OsStr::new("--fps-capture"),
+                    OsStr::new("--fps-out"),
+                    OsStr::new(&out),
+                    OsStr::new("--fps-alive"),
+                    OsStr::new(&alive),
+                ],
+            );
             helper_running().store(false, Ordering::Release);
             fps_active().store(false, Ordering::Release);
-            // Distinguish a cancelled/failed elevation from a clean stop. The
-            // runas crate ALWAYS returns Ok on Windows (even on UAC cancel it
-            // returns Ok with a non-zero/!0 exit status), so the old `Err(_)`
-            // arm was dead and a cancel was reported as a normal "stopped".
-            // A successfully-run helper exits 0; a cancel yields a non-zero
-            // status -> "declined", which the UI surfaces as a clear "permission
-            // was declined" message.
+            // Distinguish a cancelled/failed elevation from a clean stop. Since 2026-07-14
+            // the launcher is our own elevate_and_wait (the runas crate it replaced ALWAYS
+            // returned Ok on Windows, so a cancel arrived as Ok(!0) and the Err arm was dead).
+            // Now a real UAC decline is Err(os error 1223); a helper that ran and died also
+            // maps to "declined" — same coarse UI state as before, no false "stopped".
             let msg = match res {
                 Ok(s) if s.success() => "stopped",
                 _ => "declined",

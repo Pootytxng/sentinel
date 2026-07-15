@@ -816,13 +816,151 @@ pub(crate) fn parse_batch_receipts(text: &str) -> std::collections::HashMap<Stri
 pub(crate) const ELEVATION_DECLINED_MSG: &str =
     "You didn't approve the elevation prompt — nothing was changed.";
 
-/// Honest attribution for a `runas` outcome (pure — unit-tested with synthetic results). THE TRUST
-/// RULE (tester-found, 2026-06-10): the app must NEVER tell a user they cancelled when they didn't.
-/// A real UAC decline surfaces from ShellExecuteEx as os error 1223 (ERROR_CANCELLED) — a LAUNCH
-/// error, not an exit code — and that is the ONLY outcome allowed to mention declining. A non-zero
-/// EXIT CODE means the user APPROVED elevation and the elevated command itself failed (the previous
-/// code mapped exactly that case to "Did you cancel the UAC prompt?" — backwards, and the decline
-/// path never said "cancelled" at all).
+/// Quote one argument per the MSVC CommandLineToArgvW rules: bare if it has no space/tab/quote,
+/// else wrapped in quotes with `"` escaped as `\"` and backslashes doubled ONLY where they precede
+/// a quote (mid-path backslashes stay literal). Pure; unit-tested.
+fn quote_arg(arg: &str) -> String {
+    if !arg.is_empty() && !arg.contains([' ', '\t', '"']) {
+        return arg.to_string();
+    }
+    let mut out = String::from("\"");
+    let mut backslashes = 0usize;
+    for c in arg.chars() {
+        match c {
+            '\\' => backslashes += 1,
+            '"' => {
+                // n backslashes before a quote must become 2n+1 (they all escape, plus one for `"`)
+                out.push_str(&"\\".repeat(backslashes * 2 + 1));
+                out.push('"');
+                backslashes = 0;
+            }
+            c => {
+                out.push_str(&"\\".repeat(backslashes));
+                backslashes = 0;
+                out.push(c);
+            }
+        }
+    }
+    // Trailing backslashes precede the CLOSING quote, so they double too.
+    out.push_str(&"\\".repeat(backslashes * 2));
+    out.push('"');
+    out
+}
+
+/// Convert a failed ShellExecuteExW result into an `io::Error` that PRESERVES the win32 error
+/// code (the low word of a `HRESULT_FROM_WIN32` HRESULT) — so os error 1223 (ERROR_CANCELLED,
+/// the user declining the UAC prompt) survives to `elevation_outcome`'s decline arm. Pure;
+/// unit-tested with synthetic HRESULTs. This mapping is the exact thing the `runas` crate
+/// dropped (it discarded GetLastError and fabricated an Ok(!0) exit status).
+fn shell_launch_error_to_io(e: windows::core::Error) -> std::io::Error {
+    let win32 = (e.code().0 as u32 & 0xFFFF) as i32;
+    if win32 != 0 {
+        std::io::Error::from_raw_os_error(win32)
+    } else {
+        std::io::Error::other(e.message())
+    }
+}
+
+/// Launch `file` elevated (ShellExecuteExW, verb "runas", hidden) with `args`, wait for it to
+/// exit, and return its REAL exit status — with launch-layer failures surfaced as `io::Error`s
+/// that preserve `GetLastError`. A UAC decline is os error 1223 (ERROR_CANCELLED), which is the
+/// exact signal `elevation_outcome`'s decline arm keys on.
+///
+/// This replaces the `runas` crate (1.2.0), whose Windows impl NEVER returns `Err`: its
+/// `win_runas` collapses a ShellExecuteExW failure (GetLastError discarded — including 1223), a
+/// missing process handle, and a GetExitCodeProcess failure all into an `Ok(!0)` exit status. On
+/// the real path that made `elevation_outcome`'s decline arm dead code, so a declined gaming-mode
+/// start read as "You approved the elevation, but the operation itself failed (exit code -1)" —
+/// a trust-rule violation — and, because a non-launch error may not drop staged contract entries,
+/// the conservative KeepStagedAbort branch then dispatched a spurious SECOND (restore) UAC prompt.
+/// Found live 2026-07-14 during Gaming Mode QA cases #6/#7 on this rig.
+pub(crate) fn elevate_and_wait(
+    file: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+) -> std::io::Result<std::process::ExitStatus> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::process::ExitStatusExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Com::{
+        CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+    };
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+    use windows::Win32::UI::Shell::{
+        ShellExecuteExW, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS,
+        SHELLEXECUTEINFOW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    let mut params = String::new();
+    for arg in args {
+        if !params.is_empty() {
+            params.push(' ');
+        }
+        params.push_str(&quote_arg(&arg.to_string_lossy()));
+    }
+
+    // Wide, NUL-terminated buffers must outlive the ShellExecuteExW call.
+    let file_w: Vec<u16> = file.encode_wide().chain(Some(0)).collect();
+    let verb_w: Vec<u16> = "runas".encode_utf16().chain(Some(0)).collect();
+    let params_w: Vec<u16> = std::ffi::OsStr::new(&params)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+
+    unsafe {
+        // ShellExecuteExW's documented COM setup. An already-initialized thread returns S_FALSE /
+        // RPC_E_CHANGED_MODE and the shell copes either way, so the result is deliberately ignored.
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        let mut sei = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            // NOASYNC: resolve synchronously (we're often on a short-lived thread). NOCLOSEPROCESS:
+            // hand back hProcess so we can wait for the real exit code. FLAG_NO_UI: never let the
+            // shell pop its own error dialog — launch failures come back as GetLastError and are
+            // presented through OUR error surfaces (the UAC consent itself is unaffected).
+            fMask: SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI,
+            lpVerb: PCWSTR(verb_w.as_ptr()),
+            lpFile: PCWSTR(file_w.as_ptr()),
+            lpParameters: PCWSTR(params_w.as_ptr()),
+            // Hidden, like the CREATE_NO_WINDOW direct-spawn path: the elevated launch is recreated
+            // by the UAC broker (AppInfo), and a debug-build console app would otherwise flash.
+            nShow: SW_HIDE.0,
+            ..Default::default()
+        };
+        if let Err(e) = ShellExecuteExW(&mut sei) {
+            // Launch never happened. Preserve the win32 error as a real os error — 1223 here IS
+            // the user declining the UAC prompt.
+            return Err(shell_launch_error_to_io(e));
+        }
+        if sei.hProcess.is_invalid() {
+            // Launch reported success but no handle came back: the elevated process MAY be
+            // running, so this must NOT read as a launch error (launch errors license dropping
+            // staged contract entries). Unknown-exit keeps the conservative approved-but-failed
+            // attribution and the KeepStagedAbort polarity.
+            return Ok(std::process::ExitStatus::from_raw(u32::MAX));
+        }
+        let _ = WaitForSingleObject(sei.hProcess, INFINITE);
+        let mut code: u32 = 0;
+        let status = match GetExitCodeProcess(sei.hProcess, &mut code) {
+            Ok(()) => std::process::ExitStatus::from_raw(code),
+            // Process ran; exit unknowable → same conservative polarity as above.
+            Err(_) => std::process::ExitStatus::from_raw(u32::MAX),
+        };
+        let _ = CloseHandle(sei.hProcess);
+        Ok(status)
+    }
+}
+
+/// Honest attribution for an `elevate_and_wait` outcome (pure — unit-tested with synthetic
+/// results). THE TRUST RULE (tester-found, 2026-06-10): the app must NEVER tell a user they
+/// cancelled when they didn't. A real UAC decline surfaces from ShellExecuteEx as os error 1223
+/// (ERROR_CANCELLED) — a LAUNCH error, not an exit code — and that is the ONLY outcome allowed to
+/// mention declining. A non-zero EXIT CODE means the user APPROVED elevation and the elevated
+/// command itself failed (the previous code mapped exactly that case to "Did you cancel the UAC
+/// prompt?" — backwards, and the decline path never said "cancelled" at all). NOTE 2026-07-14:
+/// while the launcher was the `runas` crate, the decline arm here was DEAD on the real path —
+/// runas never returns Err on Windows, so every decline arrived as Ok(exit -1) and hit the
+/// approved-but-failed arm. `elevate_and_wait` restores the contract this function was built for.
 pub(crate) fn elevation_outcome(
     result: std::io::Result<std::process::ExitStatus>,
 ) -> Result<(), String> {
@@ -898,7 +1036,7 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     // gaming-session start" guard; a sink-captured call above is deliberately NOT counted.
     #[cfg(test)]
     ELEVATION_DISPATCH_COUNT.with(|c| c.set(c.get() + 1));
-    // Test-only seam: deterministically simulate a UAC DECLINE without spawning runas (which would
+    // Test-only seam: deterministically simulate a UAC DECLINE without a real elevation (which would
     // pop a real Secure-Desktop prompt). Returns the same constant as a real decline so the
     // simulated and real paths can't drift. `#[cfg(test)]` removes it from the shipped binary.
     #[cfg(test)]
@@ -914,13 +1052,16 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
         // paths) that -Command mangles. Test-only; cleaned up after. (Production hex-encodes instead.)
         let tmp = std::env::temp_dir().join(format!("compy-qa-{}.ps1", std::process::id()));
         std::fs::write(&tmp, command).map_err(|e| format!("qa seam: temp write failed: {e}"))?;
-        let tmp_s = tmp.to_string_lossy().to_string();
-        let out = elevation_outcome(
-            runas::Command::new("powershell")
-                .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", tmp_s.as_str()])
-                .show(false)
-                .status(),
-        );
+        let out = elevation_outcome(elevate_and_wait(
+            std::ffi::OsStr::new("powershell"),
+            &[
+                std::ffi::OsStr::new("-NoProfile"),
+                std::ffi::OsStr::new("-ExecutionPolicy"),
+                std::ffi::OsStr::new("Bypass"),
+                std::ffi::OsStr::new("-File"),
+                tmp.as_os_str(),
+            ],
+        ));
         let _ = std::fs::remove_file(&tmp);
         return out;
     }
@@ -942,12 +1083,13 @@ pub(crate) fn run_elevated_powershell(command: &str) -> Result<(), String> {
     if encoded.len() > 30_000 {
         return Err("elevated command is too long to dispatch".to_string());
     }
-    elevation_outcome(
-        runas::Command::new(exe)
-            .args(&["--run-elevated", &encoded])
-            .show(false)
-            .status(),
-    )
+    elevation_outcome(elevate_and_wait(
+        exe.as_os_str(),
+        &[
+            std::ffi::OsStr::new("--run-elevated"),
+            std::ffi::OsStr::new(&encoded),
+        ],
+    ))
 }
 
 /// Hex-encode bytes so an elevated command can ride as a single, quoting-safe argv to the
@@ -1337,6 +1479,72 @@ mod elevation_attribution_tests {
         // Unrecognized error text: fail-safe direction is "assume it may have run".
         assert!(!elevation_error_nothing_ran("some future error nobody classified"));
         assert!(!elevation_error_nothing_ran(""));
+    }
+
+    // ── `elevate_and_wait` — the launcher must PROPAGATE launch-layer os errors ─────────
+    // bug→guard (2026-07-14, live QA #6/#7): the `runas` crate it replaced never returned Err on
+    // Windows — a UAC decline (GetLastError 1223) collapsed to Ok(exit -1), which read as "You
+    // approved the elevation, but the operation itself failed" (backwards blame, trust-rule
+    // violation) and, via the conservative KeepStagedAbort branch, fired a spurious second
+    // (restore) UAC prompt after every declined gaming-mode start.
+
+    #[test]
+    fn shell_launch_error_mapping_preserves_the_win32_code() {
+        use super::shell_launch_error_to_io;
+        use windows::core::HRESULT;
+        // THE decline: HRESULT_FROM_WIN32(ERROR_CANCELLED=1223) = 0x800704C7. The exact code
+        // runas discarded — it must arrive as a raw os error so the decline arm fires.
+        let decline = shell_launch_error_to_io(HRESULT(0x800704C7u32 as i32).into());
+        assert_eq!(decline.raw_os_error(), Some(1223), "got: {decline}");
+        let msg = elevation_outcome(Err(decline)).unwrap_err();
+        assert_eq!(msg, ELEVATION_DECLINED_MSG);
+        // Any other launch failure (e.g. ERROR_FILE_NOT_FOUND=2): a real os error too, classified
+        // as could-not-launch → nothing-ran (staged entries may drop), never approved-but-failed.
+        let notfound = shell_launch_error_to_io(HRESULT(0x80070002u32 as i32).into());
+        assert_eq!(notfound.raw_os_error(), Some(2), "got: {notfound}");
+        let msg = elevation_outcome(Err(notfound)).unwrap_err();
+        assert!(msg.starts_with("could not launch elevated process"), "got: {msg}");
+        assert!(super::elevation_error_nothing_ran(&msg));
+    }
+
+    #[test]
+    fn elevate_and_wait_surfaces_a_failed_launch_as_err_never_a_fabricated_exit() {
+        // End-to-end FFI check, CI-safe: a nonexistent target fails at/below ShellExecuteExW with
+        // NO consent UI (and SEE_MASK_FLAG_NO_UI forbids shell error dialogs). The SPECIFIC code
+        // varies by environment (2 file-not-found; 1223 when a sandbox forbids the elevation
+        // broker) — the pinned property is the one runas broke: a launch failure is a REAL
+        // io::Error that downstream classifies as launch-level, never Ok(-1)/approved-but-failed.
+        let err = super::elevate_and_wait(
+            std::ffi::OsStr::new(r"C:\__compy_qa_missing__\definitely-not-here.exe"),
+            &[],
+        )
+        .expect_err("a nonexistent exe must surface as a LAUNCH error, not Ok(-1)");
+        assert!(err.raw_os_error().is_some(), "got: {err}");
+        let msg = elevation_outcome(Err(err)).unwrap_err();
+        assert!(
+            !msg.contains("You approved the elevation"),
+            "launch failure must never read as approved-but-failed: {msg}"
+        );
+        assert!(super::elevation_error_nothing_ran(&msg), "got: {msg}");
+    }
+
+    #[test]
+    fn quote_arg_follows_windows_argv_rules() {
+        use super::quote_arg;
+        assert_eq!(quote_arg("plain"), "plain");
+        assert_eq!(quote_arg(""), "\"\"");
+        assert_eq!(quote_arg("has space"), "\"has space\"");
+        // Mid-path backslashes stay literal inside quotes (the crate we replaced doubled them,
+        // which would have broken any path containing a space).
+        assert_eq!(
+            quote_arg(r"C:\Users\John Smith\fps.json"),
+            r#""C:\Users\John Smith\fps.json""#
+        );
+        // Embedded quotes escape; backslashes immediately before them double.
+        assert_eq!(quote_arg(r#"say "hi""#), r#""say \"hi\"""#);
+        assert_eq!(quote_arg(r#"a\"b c"#), r#""a\\\"b c""#);
+        // Trailing backslashes double before the closing quote.
+        assert_eq!(quote_arg(r"has space\"), r#""has space\\""#);
     }
 }
 

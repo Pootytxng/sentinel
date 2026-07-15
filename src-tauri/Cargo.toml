@@ -35,7 +35,9 @@ sysinfo = "0.33"
 wmi = "0.14"
 winreg = "0.55"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
-runas = "1.2"
+# NOTE: the `runas` crate (1.2.0) was REMOVED 2026-07-14 — its Windows impl never returns Err
+# (ShellExecuteExW failure, incl. a UAC decline, collapses to Ok(exit -1)), which inverted the
+# decline attribution at the elevation boundary. Replaced by actions::elevate_and_wait.
 winapi = { version = "0.3", features = [
   "wingdi",
   "winuser",
@@ -85,6 +87,11 @@ windows = { version = "0.59", features = [
   # no driver of our own. OpenFileMappingW / MapViewOfFile. See cpu_temp.rs.
   "Win32_System_Memory",
   "Win32_Foundation",
+  # actions::elevate_and_wait (the UAC "runas" launch for the elevated self-helper + FPS capture
+  # helper): CoInitializeEx = ShellExecuteExW's documented COM setup; Registry because
+  # SHELLEXECUTEINFOW embeds an HKEY, so the windows crate gates ShellExecuteExW behind it.
+  "Win32_System_Com",
+  "Win32_System_Registry",
 ] }
 
 # ETW (Event Tracing for Windows) consumer for FPS / frametime capture.
