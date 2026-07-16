@@ -1,5 +1,5 @@
 {
-  "_comment": "The curated Library entries published as standalone debunk pages + landing cards. Picked for search intent (what people actually google before breaking their PC) with a deliberate verdict mix — the site celebrates real wins, not just refusals (doctrine §5). Cowork/owner swap freely by id; every id must exist in the Library. Re-run `node site/generate.mjs` after changing.",
+  "_comment": "The curated Library entries published as standalone full pages (the public sample). Picked for search intent (what people actually google before touching their PC) with a deliberate verdict mix — the site celebrates REAL wins, not just refusals (doctrine §5). Batch #2 (2026-07-15, web-design-director SHIP-WITH-CHANGES) added the real-win weight so the sample stops reading refusal-heavy; the verdict==='real' picks also surface in the library index's 'Real wins' strip. ~16% of the 191-entry book is public; the rest ships in the app. Cowork/owner swap freely by id; every id must exist in the Library. Re-run `node site/generate.mjs` after changing.",
   "picks": [
     "useplatformclock",
     "timer-resolution",
@@ -14,6 +14,22 @@
     "tcp-mega-packs",
     "game-boosters",
     "ram-cleaners",
-    "dns-for-gaming"
+    "dns-for-gaming",
+    "rebar-sam",
+    "hags",
+    "nvidia-reflex",
+    "xmp-expo",
+    "fps-cap",
+    "power-plan",
+    "game-dvr-off",
+    "frame-generation",
+    "upscaling-quality",
+    "core-unparking",
+    "close-background-apps-fps",
+    "clean-install-windows",
+    "defrag-ssd",
+    "gsync-freesync",
+    "vsync",
+    "resizable-bar"
   ]
 }

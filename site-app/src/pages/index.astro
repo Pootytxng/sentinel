@@ -123,7 +123,7 @@ const modules = [
   <!-- ============ topbar ============ -->
   <header class="topbar">
     <div class="wrap topbar-in">
-      <a class="mono wordmark" href="/">COMPY</a>
+      <a class="mono wordmark" href="/">C<span class="pulse">o</span>mpy</a>
       <span class="mono topbar-status"><span class="status-dot" aria-hidden="true"></span>private beta</span>
       <nav class="topnav mono" aria-label="Site">
         <a href="#receipts">Receipts</a>
@@ -600,10 +600,17 @@ const modules = [
     gap: 18px;
   }
   .wordmark {
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 700;
-    letter-spacing: 0.32em;
+    letter-spacing: 0.01em;
     color: var(--fg);
+  }
+  /* Unified brand mark: the lit accent "o", matching the generated Blackbook
+     pages (owner taste call, 2026-07-15). Static glow, not animated — reduced-
+     motion safe by construction. */
+  .wordmark .pulse {
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(255, 154, 30, 0.55);
   }
   .topbar-status {
     display: inline-flex;

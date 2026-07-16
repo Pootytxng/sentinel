@@ -119,6 +119,31 @@ function mdToHtml(md) {
 // opt-in Receipts telemetry phase ever ships (owner-gated), this line gets revised WITH it.
 const FOOTER_PROMISE = "Local-only by design · no telemetry · no account";
 
+// ---------- Real-wins strip (library index) — doctrine §5, web-design-director 2026-07-15 ----------
+// The flat alphabetical manifest has no way to FOREGROUND the measured wins — a "Sample" badge in a
+// list isn't loud. This strip sits above the index and surfaces every published pick graded REAL, so
+// the book reads as "here's what actually works" first, refusals second. Data-driven: no hand-picked
+// subset — a pick appears here iff its verdict is "real", so it can never drift from the catalog.
+function realWinsStrip(picks) {
+  const wins = picks.filter((e) => e.type === "tweak" && e.verdict === "real");
+  if (wins.length === 0) return "";
+  const cards = wins
+    .map(
+      (e) =>
+        `<a class="win-card" href="../${escapeHtml(e.id)}.html">` +
+        `<span class="win-chip">Real</span>` +
+        `<h3>${escapeHtml(e.name)}</h3>` +
+        `<p>${escapeHtml(e.what)}</p>` +
+        `<span class="read">Read the verdict →</span></a>`,
+    )
+    .join("\n");
+  return (
+    `<section class="realwins" aria-label="Tweaks we measured and kept">` +
+    `<p class="start-label">Real wins — measured, not promised</p>` +
+    `<div class="realwins-grid">\n${cards}\n</div></section>`
+  );
+}
+
 // ---------- SEO layer (launch-readiness train 2026-07-15) ----------
 // Every generated page declares ONE canonical URL on the production origin. The full-library
 // copy of a curated pick canonicalizes to its TOP-LEVEL page (site/<id>.html) so the two
@@ -280,6 +305,7 @@ writeFileSync(
     MAIN: [
       `<h1>The Compy Blackbook</h1>`,
       `<p>${entries.length} entries, every verdict on the record — none invented. ${picks.length} full write-ups are published below as the public sample; the complete graded book ships inside the app, next to your own rig's measurements.</p>`,
+      realWinsStrip(picks),
       glossaryBlock(lib),
       indexSections(entries, lib, "", pickIds),
     ].join("\n"),

@@ -508,6 +508,41 @@ h2 {
 .article dl dd { margin: 2px 0 0; color: var(--ink-2); }
 .browse-all { margin-top: 28px; }
 
+/* ── Real-wins strip (library index) — doctrine §5: foreground the MEASURED wins above the flat
+   manifest so the book reads "here's what works" first, refusals second. Only verdict==="real"
+   published picks land here (see realWinsStrip in generate.mjs). Green is the win signal; the amber
+   label keeps the brand control-color. Cards are whole-card links; hover is transform/shadow only
+   (no auto-motion → reduced-motion safe by construction). ── */
+.realwins { margin: 8px 0 20px; }
+.realwins .start-label { margin-bottom: 0; }
+.realwins-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 14px;
+  margin-top: 16px;
+}
+.win-card {
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(160deg, rgba(74, 222, 128, 0.30), rgba(255, 255, 255, 0.05) 52%, rgba(74, 222, 128, 0.10)) border-box;
+  border: 1px solid transparent; border-radius: 12px;
+  padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 9px;
+  text-decoration: none; color: inherit;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.win-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.4), 0 0 40px rgba(74, 222, 128, 0.12);
+}
+.win-chip {
+  align-self: flex-start;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--real);
+  border: 1px solid color-mix(in srgb, var(--real) 45%, transparent); border-radius: 999px;
+  padding: 2px 9px; background: rgba(74, 222, 128, 0.08);
+}
+.win-card h3 { font-family: var(--mono); font-size: 16px; line-height: 1.3; margin: 0; color: var(--ink); }
+.win-card p { margin: 0; color: var(--ink-2); font-size: 14px; flex: 1; max-width: none; }
+.win-card .read { font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
+
 /* ── Future-download placeholder (honest: text, never a dead button) ── */
 .download-note {
   border: 1px dashed var(--hairline); border-radius: 12px; padding: 26px 28px;

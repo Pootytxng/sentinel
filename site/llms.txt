@@ -7,7 +7,7 @@ Compy is a free desktop app (Windows, AMD verified; NVIDIA detection verified, s
 ## Start here
 - [Home](https://compy.gg/): what Compy is, real-session replay, and the launch waitlist.
 - [Compare](https://compy.gg/compare): how Compy's approach differs from generic "best tweaks" lists, across five practice axes.
-- [The Blackbook](https://compy.gg/library/): all 191 verdicts on the record — 14 full write-ups published as the public sample; the complete graded book ships in the app.
+- [The Blackbook](https://compy.gg/library/): all 191 verdicts on the record — 30 full write-ups published as the public sample; the complete graded book ships in the app.
 
 ## Full sample entries (public picks)
 - [Force HPET / useplatformclock](https://compy.gg/useplatformclock): Forces Windows to use the High Precision Event Timer via a boot flag. The honest verdict — risky.
@@ -24,6 +24,22 @@ Compy is a free desktop app (Windows, AMD verified; NVIDIA detection verified, s
 - [Game booster apps (Razer Cortex etc.)](https://compy.gg/game-boosters): All-in-one 'booster' apps that promise FPS by closing background apps and 'optimizing' RAM or CPU when a game launches. The honest verdict — placebo.
 - [RAM cleaners / standby-list purgers (ISLC)](https://compy.gg/ram-cleaners): Utilities that 'free' RAM by purging Windows' standby list or trimming process memory on a timer. The honest verdict — placebo.
 - [Changing DNS for lower ping](https://compy.gg/dns-for-gaming): Switching to a third-party 'gaming DNS' expecting lower in-game latency. The honest verdict — placebo.
+- [Resizable BAR / Smart Access Memory](https://compy.gg/rebar-sam): Lets the CPU access the GPU's whole VRAM in one mapping instead of small chunks (BIOS + driver). The honest verdict — real.
+- [Hardware-Accelerated GPU Scheduling (HAGS)](https://compy.gg/hags): Moves GPU scheduling from the OS to the GPU itself (reboot required). The honest verdict — real.
+- [NVIDIA Reflex](https://compy.gg/nvidia-reflex): In-game toggle that syncs rendering to input to genuinely cut click-to-display latency. The honest verdict — real.
+- [XMP / EXPO memory profile](https://compy.gg/xmp-expo): Enables your RAM's rated speed profile in BIOS (it runs slower out of the box). The honest verdict — real.
+- [FPS cap below refresh rate](https://compy.gg/fps-cap): Caps frames ~3 below your monitor's refresh (e.g. 141 on a 144 Hz panel). The honest verdict — real.
+- [High / Ultimate Performance power plan](https://compy.gg/power-plan): Stops Windows from downclocking/parking CPU cores at light load. The honest verdict — real.
+- [Disable Game Bar background recording (Game DVR)](https://compy.gg/game-dvr-off): Turns off Windows' always-on gameplay capture buffer. The honest verdict — real.
+- [Frame Generation (DLSS FG / FSR / AFMF)](https://compy.gg/frame-generation): GPU generates extra in-between frames for higher displayed FPS. The honest verdict — real.
+- [Upscaling (DLSS / FSR / XeSS quality modes)](https://compy.gg/upscaling-quality): Renders at lower resolution and AI-upscales to native. The honest verdict — real.
+- [Core unparking / force all cores active](https://compy.gg/core-unparking): Prevents Windows from parking idle CPU cores. The honest verdict — placebo.
+- [Closing every background app for more FPS](https://compy.gg/close-background-apps-fps): Manually shutting every background program — browser, Discord, wallpaper app — before a game, expecting a meaningful FPS jump. The honest verdict — placebo.
+- [Reinstalling Windows every few months for FPS](https://compy.gg/clean-install-windows): Wiping and reinstalling Windows on a schedule, on the theory that an install 'wears out' and quietly eats FPS. The honest verdict — placebo.
+- [Defragging an SSD for speed](https://compy.gg/defrag-ssd): Running a full defragmenter pass on an SSD the way you would on an old hard drive. The honest verdict — risky.
+- [G-Sync / FreeSync](https://compy.gg/gsync-freesync): The two brand names for VRR (variable refresh rate — the monitor waiting for each frame instead of refreshing on a fixed clock). G-Sync is NVIDIA's; FreeSync is AMD's.
+- [V-Sync (vertical sync)](https://compy.gg/vsync): The old fix for screen tearing: it holds each finished frame until the monitor is ready for it. It removes tearing but adds input lag, because frames sit in a queue waiting their turn.
+- [Resizable BAR / SAM](https://compy.gg/resizable-bar): A BIOS-and-driver feature that lets your CPU reach the graphics card's whole video memory at once, instead of through a small window. AMD's version is branded Smart Access Memory (SAM).
 
 ## Legal
 - [Privacy](https://compy.gg/privacy): local-only app; the waitlist stores only an email + one-way hashed IP, zero third-party trackers.

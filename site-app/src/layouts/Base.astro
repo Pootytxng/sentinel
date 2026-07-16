@@ -45,7 +45,7 @@ const canonical = new URL(path, "https://compy.gg").href;
     <footer class="site-footer">
       <div class="wrap footer-grid">
         <div class="footer-creed">
-          <span class="mono footer-mark">COMPY</span>
+          <span class="mono footer-mark">C<span class="pulse">o</span>mpy</span>
           <p>Measured, not promised. Every number on this page was read on a real PC — including the ones that show no gain.</p>
         </div>
         <nav class="footer-links mono" aria-label="Legal">
@@ -95,9 +95,13 @@ const canonical = new URL(path, "https://compy.gg").href;
     gap: 10px;
   }
   .footer-mark {
-    font-size: 12px;
-    letter-spacing: 0.3em;
+    font-size: 13px;
+    letter-spacing: 0.02em;
     color: var(--fg);
+  }
+  .footer-mark .pulse {
+    color: var(--accent);
+    text-shadow: 0 0 14px rgba(255, 154, 30, 0.5);
   }
   .footer-creed p {
     color: var(--fg-faint);

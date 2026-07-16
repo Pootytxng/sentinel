@@ -16,23 +16,30 @@
   <url><loc>https://compy.gg/game-boosters</loc></url>
   <url><loc>https://compy.gg/ram-cleaners</loc></url>
   <url><loc>https://compy.gg/dns-for-gaming</loc></url>
+  <url><loc>https://compy.gg/rebar-sam</loc></url>
+  <url><loc>https://compy.gg/hags</loc></url>
+  <url><loc>https://compy.gg/nvidia-reflex</loc></url>
+  <url><loc>https://compy.gg/xmp-expo</loc></url>
+  <url><loc>https://compy.gg/fps-cap</loc></url>
+  <url><loc>https://compy.gg/power-plan</loc></url>
+  <url><loc>https://compy.gg/game-dvr-off</loc></url>
+  <url><loc>https://compy.gg/frame-generation</loc></url>
+  <url><loc>https://compy.gg/upscaling-quality</loc></url>
+  <url><loc>https://compy.gg/core-unparking</loc></url>
+  <url><loc>https://compy.gg/close-background-apps-fps</loc></url>
+  <url><loc>https://compy.gg/clean-install-windows</loc></url>
+  <url><loc>https://compy.gg/defrag-ssd</loc></url>
+  <url><loc>https://compy.gg/gsync-freesync</loc></url>
+  <url><loc>https://compy.gg/vsync</loc></url>
+  <url><loc>https://compy.gg/resizable-bar</loc></url>
   <url><loc>https://compy.gg/library/</loc></url>
   <url><loc>https://compy.gg/library/msi-mode</loc></url>
   <url><loc>https://compy.gg/library/disable-vbs</loc></url>
-  <url><loc>https://compy.gg/library/xmp-expo</loc></url>
-  <url><loc>https://compy.gg/library/rebar-sam</loc></url>
   <url><loc>https://compy.gg/library/fan-curves</loc></url>
-  <url><loc>https://compy.gg/library/nvidia-reflex</loc></url>
   <url><loc>https://compy.gg/library/low-latency-mode</loc></url>
   <url><loc>https://compy.gg/library/anti-lag-plus</loc></url>
   <url><loc>https://compy.gg/library/vrr-sync-stack</loc></url>
-  <url><loc>https://compy.gg/library/fps-cap</loc></url>
-  <url><loc>https://compy.gg/library/frame-generation</loc></url>
-  <url><loc>https://compy.gg/library/upscaling-quality</loc></url>
   <url><loc>https://compy.gg/library/shader-cache-size</loc></url>
-  <url><loc>https://compy.gg/library/power-plan</loc></url>
-  <url><loc>https://compy.gg/library/game-dvr-off</loc></url>
-  <url><loc>https://compy.gg/library/hags</loc></url>
   <url><loc>https://compy.gg/library/mpo-disable</loc></url>
   <url><loc>https://compy.gg/library/diagtrack</loc></url>
   <url><loc>https://compy.gg/library/sysmain-superfetch</loc></url>
@@ -41,7 +48,6 @@
   <url><loc>https://compy.gg/library/visual-effects</loc></url>
   <url><loc>https://compy.gg/library/mmcss-systemresponsiveness</loc></url>
   <url><loc>https://compy.gg/library/win32priorityseparation</loc></url>
-  <url><loc>https://compy.gg/library/core-unparking</loc></url>
   <url><loc>https://compy.gg/library/cstates-disable</loc></url>
   <url><loc>https://compy.gg/library/disable-windows-update</loc></url>
   <url><loc>https://compy.gg/library/interrupt-affinity</loc></url>
@@ -56,13 +62,10 @@
   <url><loc>https://compy.gg/library/app-hw-accel-off</loc></url>
   <url><loc>https://compy.gg/library/run-as-admin-fps</loc></url>
   <url><loc>https://compy.gg/library/high-priority-games</loc></url>
-  <url><loc>https://compy.gg/library/defrag-ssd</loc></url>
   <url><loc>https://compy.gg/library/gpu-overclocking</loc></url>
-  <url><loc>https://compy.gg/library/clean-install-windows</loc></url>
   <url><loc>https://compy.gg/library/exclusive-fullscreen-fps</loc></url>
   <url><loc>https://compy.gg/library/monitoring-overlay-fps</loc></url>
   <url><loc>https://compy.gg/library/monitor-overclock-fps</loc></url>
-  <url><loc>https://compy.gg/library/close-background-apps-fps</loc></url>
   <url><loc>https://compy.gg/library/audio-enhancements-fps</loc></url>
   <url><loc>https://compy.gg/library/render-scale</loc></url>
   <url><loc>https://compy.gg/library/disable-hdr-fps</loc></url>
@@ -89,8 +92,6 @@
   <url><loc>https://compy.gg/library/gaming-mouse-dpi-fps</loc></url>
   <url><loc>https://compy.gg/library/xmp</loc></url>
   <url><loc>https://compy.gg/library/vrr</loc></url>
-  <url><loc>https://compy.gg/library/gsync-freesync</loc></url>
-  <url><loc>https://compy.gg/library/vsync</loc></url>
   <url><loc>https://compy.gg/library/frametime</loc></url>
   <url><loc>https://compy.gg/library/one-percent-lows</loc></url>
   <url><loc>https://compy.gg/library/input-latency</loc></url>
@@ -107,7 +108,6 @@
   <url><loc>https://compy.gg/library/amd-undervolting</loc></url>
   <url><loc>https://compy.gg/library/thermal-throttling</loc></url>
   <url><loc>https://compy.gg/library/vram</loc></url>
-  <url><loc>https://compy.gg/library/resizable-bar</loc></url>
   <url><loc>https://compy.gg/library/nvme-ssd-hdd</loc></url>
   <url><loc>https://compy.gg/library/raid</loc></url>
   <url><loc>https://compy.gg/library/pagefile</loc></url>

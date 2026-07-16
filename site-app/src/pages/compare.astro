@@ -66,7 +66,7 @@ const axes = [
 >
   <header class="topbar">
     <div class="wrap topbar-in">
-      <a class="mono wordmark" href="/">COMPY</a>
+      <a class="mono wordmark" href="/">C<span class="pulse">o</span>mpy</a>
       <a class="mono crumb" href="/">← Home</a>
     </div>
   </header>
@@ -136,10 +136,14 @@ const axes = [
     padding: 18px 0;
   }
   .wordmark {
-    font-size: 15px;
-    letter-spacing: 0.3em;
+    font-size: 17px;
+    letter-spacing: 0.01em;
     color: var(--fg);
-    font-weight: 600;
+    font-weight: 700;
+  }
+  .wordmark .pulse {
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(255, 154, 30, 0.55);
   }
   .crumb {
     font-size: 12.5px;
