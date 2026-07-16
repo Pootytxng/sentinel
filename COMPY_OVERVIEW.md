@@ -3,6 +3,14 @@
 *A shareable snapshot of where the project is and where it's going. Written for outside eyes:
 what's good, what's missing, what's a bad idea. Be blunt — "this part is dumb" is useful data.*
 
+> **Last reconciled: 2026-07-15**, against `docs/RELEASE_STATE.md`, `docs/RECEIPTS_DOCTRINE.md`,
+> and `docs/MONETIZATION_PLAN.md` (the authoritative current-state docs — if this file and any of
+> those three ever disagree again, those three win). This file had gone six weeks stale (last
+> touched 2026-06-05) before a 2026-07-15 consumer panel review caught it describing a product
+> that no longer existed: it said Gaming Mode was dark, the catalog was frozen, and monetization
+> was undecided — all wrong by the time of the fix. Re-check this line before trusting anything
+> below it as current.
+
 ---
 
 ## TL;DR (30 seconds)
@@ -12,9 +20,12 @@ worked, and undoes anything, anytime.** It reads your real hardware and speaks p
 what's worth changing on *your* rig, what's already fine, and — the soul of the product — **when a
 tweak did nothing, it says so.**
 
-It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality, fully local:
-no account, no telemetry, nothing leaves your PC. The wedge isn't "boost" — it's being the only
-tool in a snake-oil category that **measures instead of promises.**
+It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality. **Core
+promise: optimize + rollback stay free forever, no account required.** Today, nothing leaves your
+PC — the app is verified zero-outbound, full stop. A future opt-in **Receipts telemetry** feature
+(anonymous, default-off, kill-switched) is planned but **not yet built** — there is no toggle to
+turn on yet, and it won't ship without its own security review and owner sign-off. The wedge isn't
+"boost" — it's being the only tool in a snake-oil category that **measures instead of promises.**
 
 ---
 
@@ -55,17 +66,21 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
 - **No risky internals.** No kernel driver (which is why there's no CPU temperature — reading it
   needs one, and we won't ship one). No game injection — FPS is captured externally via Windows'
   own event tracing, so it's anti-cheat safe by design. GPU sensors via official vendor SDKs.
-- **Local-first.** No account, no telemetry, no remote config, no updater. The Export report is
-  the only thing that ever leaves the machine, and only by the user's hand.
+- **Local-first, with an honest exception planned.** No account, no remote config, no updater
+  today. The Export report is the only thing that currently ever leaves the machine, and only by
+  the user's hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) is
+  planned as a new outbound boundary to power aggregate "measured gains" marketing — it is a
+  separate gated track requiring its own security review and owner sign-off before it can arm.
+  Until then, the verified-zero-outbound property holds.
 
 ## Honesty about the project itself
 
-The codebase is **days old, built at AI-assisted velocity** (~20k lines, 24 Rust modules, 240+
-tests, exactly one TODO). We treat that fact the way Compy treats your PC: small blast radius,
-everything reversible, verification never skipped — and the one feature with a real mutation
-surface (Gaming Mode) is **built but dark** until it passes its own crash-safety QA. The private
-beta exists to *earn* the trust the design claims: twenty real users, real ledgers, real
-rollbacks, before a single public promise.
+The codebase is **weeks old, built at AI-assisted velocity** (~20k+ lines across 35 Rust modules,
+1000+ frontend tests). We treat that fact the way Compy treats your PC: small blast radius,
+everything reversible, verification never skipped. **Gaming Mode is live** — the one feature with
+a real mutation surface passed its own crash-safety QA (10/10 field cases) and the owner signed
+off 2026-07-14. The private beta exists to *earn* the trust the design claims: real testers, real
+ledgers, real rollbacks, before a single public promise.
 
 **Hardware truth:** AMD is hardware-verified (developed on an RX 9070 XT rig). NVIDIA is
 implemented but **not yet verified on real hardware** — and the app says so instead of guessing.
@@ -88,19 +103,29 @@ you to turn off its own telemetry.
 
 ## Status & what gates what
 
-- **Private beta: functionally complete.** The full loop above, plus readiness checks, priority
-  ranking, latency diagnostics, live monitoring + overlay, and local export. Remaining before
-  invites: a small hardening queue (session-end toast, comparison guards), a fresh installer +
-  smoke test under the new name, and recruiting ~20 testers. Distribution: unsigned, invite-only,
-  direct download, fully local.
-- **Money: deliberately zero spend** until the beta proves the product can pay for itself —
-  domains, code signing, legal are all deferred by owner decision. Signing and legal gate the
-  *public* release, not the beta.
-- **Still dark on purpose:** Gaming Mode (until its own QA), remote rules (triple-gated off), the
-  updater (off), catalog expansion (frozen).
-- **Monetization (undecided, leaning):** free diagnosis, one-time paid depth. Safety is never
-  paywalled — rollback and the core recommendations stay free. Final shape gets decided by what
-  testers actually say, not before.
+- **Private beta: functionally complete, still unsent.** The full loop above, plus readiness
+  checks, priority ranking, latency diagnostics, live monitoring + overlay, Gaming Mode (live),
+  and local export. Remaining before invites go out: the beta smoke pass (24 checks, 0 run) and
+  the owner's send GO. Distribution: unsigned, invite-only, direct download, fully local.
+- **The compy.gg marketing site is already live and public** (`compy-bd6.pages.dev`, owner deploy
+  GO 2026-07-15) — landing page, `/compare`, Blackbook content pages, waitlist funnel, SEO
+  plumbing. This is ahead of the app beta send, not behind it: the site is a separate, lower-risk
+  surface the owner has already greenlit independently.
+- **Money: deliberately zero spend** until a phase proves it can pay for itself — domain purchase,
+  code signing, legal, and a Pro entity/payments are all owner-gated. Signing and legal gate the
+  *public app* release; the domain gates the site's canonical URLs; none of this blocks the beta.
+- **Still dark on purpose:** remote rules (triple-gated off), the updater (off), Receipts
+  telemetry (no send path, needs its own security review + owner sign-off), Compy Pro licensing
+  (needs an entity + payments). Gaming Mode is **no longer on this list — it's live.**
+- **The tweak catalog is open, not frozen** (owner decision 2026-07-09): a tweak earns inclusion
+  by measurable benefit under the same permanent safety rails (reversible, no kernel driver/
+  injection, non-security-weakening, stability-safe) — see CLAUDE.md LOCKED rule 6.
+- **Monetization has a real build order**, not an open question: `docs/RECEIPTS_DOCTRINE.md` (the
+  law) + `docs/MONETIZATION_PLAN.md` (the sequencing, 2026-07-15). Four layers ranked by
+  passivity — affiliate upgrade links (hold, needs accounts + data) → content/SEO (live today,
+  $0) → Compy Pro subscription (built dark, ~$3–4/mo or ~$25/yr, needs entity + payments) → B2B
+  licensing (parked, post-traction). **The one durable promise: optimize + rollback stay free
+  forever; Pro sells new value, never gates the free promise.**
 
 ## Open questions (where outside opinions help most)
 
@@ -108,12 +133,14 @@ you to turn off its own telemetry.
    wins: 0." Is absolution — "you're good, stop tweaking" — enough product on its own, or does
    Compy need more win *sources* that aren't toggles: driver-update detection, naming the exact
    device causing input lag, cleaning up tweak-pack damage?
-2. **The flagship bet.** Deepen latency diagnostics until Compy can *name the guilty
-   driver/device*, or build "paramedic mode" — undo the YouTube tweak pack that wrecked your
-   config? One is daily-use depth; the other is a rescue moment with zero competition.
+2. **The flagship bet — DECIDED 2026-07-15.** The rescue-moment surface (undo what a YouTube tweak
+   pack did to your PC) is real product, not a future maybe: it ships publicly as
+   **"Optimization Cleanup"** — a read-only audit that identifies known tweak-pack artifacts,
+   grades them (useful/placebo/risky/outdated/unknown), shows the documented-default Windows
+   state, and only offers automatic restoration where the correct prior state is unambiguous
+   (separate recovery snapshot before any remediation). Not publicly called "Paramedic Mode."
 3. **Does "measures instead of promises" land** with a 20-something gamer, or does it sound like
    homework next to "BOOST FPS NOW"?
-4. **Pricing shape.** A one-time unlock feels right for a local, no-account tool. What would *you*
-   pay for, and how much?
-
-*Thanks for reading — tear it apart.*
+4. **Pricing shape — mostly decided.** Compy Pro is scoped at ~$3–4/mo or ~$25/yr in the doctrine,
+   gated on a legal entity + merchant-of-record + real shipped Pro value. Still genuinely open:
+   the exact price, and what value b
