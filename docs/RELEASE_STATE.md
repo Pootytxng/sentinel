@@ -10,6 +10,22 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-16b (OPTIMIZATION CLEANUP PHASE 0 SHIPPED `55f68b6` — installer SHA-256
+> `7D6C562389CE3944A45A8A5F17E1204D36F0D76392BE4EE209707E778DD17B50`, live exe stamp-verified
+> (embedded `55f68b6`, CLEAN — no `+dirty`; Select-String), one installer on the Desktop, silent
+> reinstall done. Dirty-stamp guard overridden deliberately (2026-07-16a precedent): tree dirt was
+> exclusively parallel-lane files (COWORK_*.md · ui-sweep shots · stray scratchpad png) + this
+> banner's own docs edits; app inputs (`git status --porcelain -- src src-tauri …`) empty at build.
+> Frontend-only, NO gate moved, zero mutation boundary):** the live `leftovers.rs` read-only audit
+> now fronts as **"Optimization Cleanup"** (owner-locked name 2026-07-15) and is UNBURIED from the
+> "Nothing else needs attention" side pile to a first-class Check section (title + blurb + "Check
+> this PC for old tweaks" run button). **Leftovers restore stays DARK** — the gate row below is
+> unchanged (`restore_gate()==false`, no registered command, Phase 1 not scope-gated). terms/tweaks
+> data renamed; title-case "Past Tweaks" pinned as a retired label (stale-reference-guard). Verify:
+> tsc 0 · vitest **1682/1682** (181 files) · self-reviewer **PASS 9/9** (pre-run/busy/real-result/
+> fixture-findings states; contrast 11.3:1 header; no dup mount; dist-site restaged — staleness
+> guard green). Spec: `docs/superpowers/specs/2026-07-16-optimization-cleanup-research-spec.md`.
+
 > **UPDATE 2026-07-16a (APP-LANE TASK LIST CLOSED: room-palette 8-duo+7-solo rework · App.css
 > gradient-ink de-slop · NAV-MOUNT COST FIXED — installer SHA-256
 > `832B7CF3BDBD2603F925EDD18DD9A1669B0AB74CC441A7675769B46F48687A4E`, live exe stamp-verified

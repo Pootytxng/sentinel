@@ -165,6 +165,28 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-16d — ✅ OPTIMIZATION CLEANUP PHASE 0 SHIPPED (CC, owner-directed "ship Phase 0"): `55f68b6` locked name + first-class front door · `f831b5f` landed 16c's stranded deliverables — NO gate moved, zero mutation boundary
+
+- **`f831b5f` — git-lock recovery + 16c's docs landed:** Cycle 2026-07-16c's Cowork session died on
+  its final commit, leaving stale zero-byte `.git/HEAD.lock`/`index.lock` (evidence-verified: 19 min
+  old, no git.exe running, HEAD intact) and its deliverables uncommitted. Removed the locks and landed
+  the 7 pending files exactly as staged (the 4.1 spec · METHODOLOGY.md · consumer-story draft · both
+  panel-review docs · BACKLOG/COMPY_OVERVIEW edits, completing `801ea62`'s truncated file). Parallel-lane
+  COWORK_*.md working artifacts stay untracked, never swept.
+- **`55f68b6` — 4.1 Phase 0 (owner-authorized, superseding the entry's "nothing authorized to build"):**
+  the live `leftovers.rs` read-only audit now fronts as **"Optimization Cleanup"** (owner-locked name,
+  2026-07-15) and is **UNBURIED** — out of the "Nothing else needs attention" drawer to a first-class
+  Check section (title + explainer blurb + "Check this PC for old tweaks" run button; a check the user
+  is meant to RUN can't hide in a leave-it-alone pile). terms.json/tweaks.json renamed (+ alias);
+  title-case "Past Tweaks" pinned as a retired label in stale-reference-guard (lowercase descriptive
+  phrase + the "Past tweak ·" row prefix stay legal); Optimize.test now asserts the section renders ON
+  the open surface, never in the drawer. **Read-only unchanged:** no restore action exists,
+  `restore_gate()` stays double-dark, identifiers keep `leftovers`. Phases 1–3 remain un-scope-gated;
+  the Trust-Ledger-reuse vs separate-mechanism fork is still the first scope-gate call.
+- **Verify:** tsc 0 · vitest 1682/1682 (181 files; new guard rides the existing per-file scans) ·
+  self-reviewer PASS 9/9 (contrast 11.3:1 header, no dup mount, pre-run/busy/result/fixture states) ·
+  installer re-cut + silent reinstall — SHA + stamp in the RELEASE_STATE 2026-07-16b banner.
+
 ### Cycle 2026-07-16c — ✅ PANEL-REVIEW EXECUTION CONTINUED (Cowork): research + content stage on the remaining 4.x items — doc/content only, zero src-tauri, zero site-build changes committed
 
 **Owner's operative mandate:** *"do whatever needs to be done to move forward with all those review
