@@ -165,6 +165,44 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-15d — ✅ APP LANE: CONSOLE TRAINS 1–4 DEFAULT-ON + OVERLAY BACKDROP FIX, SHIPPED LIVE — frontend-only, NO gate moved, zero src-tauri
+
+**Owner's operative mandate:** *"i want this session to be activel finishing remaining work
+pertaining to the app directly seperate from the hero site"* + green light *"ok lets get it all done
+lets go"*. The app lane's four console trains, executed end-to-end and shipped.
+
+- **`50b505e` Train 1 — Monitor console density/backdrop fold-in** (MonitorConsole.tsx/.css;
+  UI_VISION_BACKLOG updated same commit).
+- **`f4b4ada` Train 2 — Settings quiet chrome** (Settings.css only, +75/−33).
+- **`40bce4e` Trains 3+4 — Gaming Mode arm/engage console face** (`compy_gaming_console` DEFAULT ON)
+  **+ app-wide viewport HUD frame & global reticle** (`compy_hud_frame` DEFAULT ON): corner
+  brackets + bottom-right real-values-only mono readout (rig probe · clock — unfetchable segments
+  omitted, never fabricated) + ReticleCursor scoped to the shell. Classic stays reachable via the
+  "0" failsafe — flag-off byte-identity test-pinned (a HudFrame live-clock flake in the
+  byte-identical suite was caught + frozen with fake timers, bug→guard). Nav-timing self-review
+  round 2 caught `.v2-shell:has(> .hud-frame)` taxing the biggest room swaps → replaced with a
+  plain `.v2-shell-hud` class; round-3 A/B (flag on vs "0") proved this train adds no nav cost —
+  **residual Monitor (52–57ms) / Blackbook (80–152ms) nav-mount slowness is PRE-EXISTING**
+  (equally slow flag-off) → open follow-up below.
+- **`f160839` — owner defect FIXED** (*"overlay seems to have a full screen or window size backdrop
+  thats feint but visible… on my fullscreen applications"*): main.tsx sets every skin attribute on
+  documentElement BEFORE branching on the overlay window label, so document-level ambient pseudo
+  layers (App.css `body::before` aurora, seasonal `::after`) painted a faint wash over games.
+  Overlay.css now blanket-kills all six document-level pseudo slots (`content: none !important`);
+  live-verified in the real overlay window over CDP (all six computed `none`). Bug→guard:
+  `src/overlay-ambient-guard.test.ts` (kill rule pinned · bans `content !important` on
+  document-level pseudos · bans `:has()` on the nav-hot shell).
+- **Shipped:** installer SHA-256 `B87B3B3C…B3D20C`, silent-reinstalled, **stamp-verified `f160839`
+  live (clean, no `+dirty`)**, one installer on the Desktop. Dirty-stamp guard overridden
+  deliberately — the dirt was exclusively parallel-lane files (Cowork `COMPY_OVERVIEW.md` + site
+  `site/*.html`), app inputs porcelain-clean.
+- **Verify:** tsc 0 · vitest **1656/1656** (181 files, 8 skipped) · no Rust diff (cargo n/a) ·
+  self-reviewer round-3 **PASS** 7/7 (consent modal exercised + cancelled without starting a
+  session; 52px readout clearance verified at true scrollHeight).
+- **Open follow-up (non-blocking, from round-3 verdict):** investigate what Monitor + Blackbook
+  mount on nav-switch (pre-existing cost, separate from HudFrame/ShellV2 — both proven innocent
+  by the A/B).
+
 ### Cycle 2026-07-15c — ✅ SITE COMPLETION: SEO/LAUNCH PLUMBING + /compare LIVE + DEPLOYED — site-only, NO gate moved, zero src-tauri, zero src/
 
 **Owner's operative directive:** *"deploy go looks good for now… go about doing the full completion
@@ -506,104 +544,6 @@ v5 owner eyeball settles") had CLEARED — the console flipped DEFAULT-ON at `e1
   (Cycle 12l) — do NOT flip without owner sign-off. Next non-gated `[ ]`: see the ShellV2 topbar tagline
   (owner-taste, line ~547) and the deeper data/outbound-gated items (owner-curated / outbound walls).
 
-### Cycle 2026-07-12l — ✅ PALETTE PRUNED 20→15 SHIPPED LIVE `8e6920f` (differentiation prune, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `51B0A754…3862F39A`, stamp-verified) — owner one-flip eyeball on the pruned palette is the open gate
-
-**Owner verdict on the 20-swatch expansion (2026-07-13): "looks good but i agree to prune and widen
-variety more differentiation."** So the direction is approved; he wants the near-dupe clusters cut and
-the survivors spread wider. **Default-ON flip still DEFERRED** until he re-eyeballs the pruned set.
-
-- **✅ SHIPPED `8e6920f`:** `ROOM_ACCENT_SWATCHES` re-curated 20 → **15** (9 bright + 6 dark). Pruned the
-  clusters — four warm-oranges → Amber only; three pinks → one Magenta; teal/cyan overlap → Teal only —
-  re-spread the survivors, added a dark **Olive** `#5f5620` (ink `#f7f3e0`) in the empty dark-gold gap.
-  Removed: Cyan, Gold, Coral, Rose, Hot Pink, Azure, Chartreuse, Tangerine, Indigo; Sky/Lime hexes
-  retuned. Final 15: Violet · Teal · Amber · Emerald · Sky `#46a8ff` · Red `#ff6b6b` · Yellow `#ffe14a`
-  · Lime `#b6f24a` · Magenta `#f45cc6` (bright) + Rust · Olive · Pine · Slate · Plum · Wine (dark).
-- **Differentiation VERIFIED, not eyeballed:** CIEDE2000 across all 15 → minimum non-preset pairwise
-  distance **18.0** (was 13.4 for the Magenta/Rose pair the adversarial review flagged); the only closer
-  pair is the LOCKED Teal/Emerald presets (14.3, both green, unavoidable). Legibility law + adaptive-ink
-  mechanism (`theme.ts`) unchanged. Zero `src-tauri`.
-- **Verify:** tsc 0 · vitest **1600** (177 files) · CIEDE2000 audit · fresh-context adversarial review
-  (Magenta/Rose fix confirmed) · **self-reviewer PASS** (live CDP 1500×980: Monitor/Plum computed text
-  `#f4e9ff` on the dark fill; Blackbook/Magenta computed text `#1a0a2e` on the bright fill; grid 5×3).
-- ✅ **FOLLOW-UP TRAIN DONE — dark-accent-as-TEXT legibility SHIPPED `cc9adb8`** (installer SHA-256
-  `B7931E4E…5A3E92BC`, live-stamp-verified, supersedes `51B0A754…3862F39A`; SAME flag `compy_room_identity`
-  **DEFAULT OFF**). Where chrome used the room accent as direct **foreground TEXT** on a near-black bg
-  (`.dock-node-primary` Home dock, Lab station tabs, blackbook `.bc-tag`/`.bc-state-on`/`.bc-manage`,
-  Monitor `.mc-cap`/session meta) a **DARK** accent rendered ~2.5:1 — the adaptive ink covered
-  accent-as-**FILL** only. **Fix:** each of the 6 dark swatches gained a paired light, hue-carrying
-  `text` tint (`room-identity.ts`, `swatchText()`); `applyRoomAccents` (`theme.ts`) emits
-  `--v2-accent-text`/`--ix-accent-text` (the light tint) for dark picks only — bright picks emit
-  neither. Swept the in-room accent-as-text sites `var(--ix-accent)`→`var(--ix-accent-text)` (dock,
-  blackbook-console, monitor-console, Lab, lab-bento) + `var(--v2-accent)`→`var(--v2-accent-text, var(
-  --v2-accent))` (masthead sep, forward-door arrow, chip-count, home-hud); `home-console` gained
-  `--ix-accent-text` via the fallback (descendant of the managed target). Scoped `.v2-room` overrides
-  for the 3 dual-context glyphs (Check ✓ / GamingMode marker / Learn superseded-link hover) that ALSO
-  render outside a room. A read-only scope audit **corrected the earlier "dozens across arc-instrument/
-  Check/BlackBox/ActionDrawer" estimate** — those render OUT of room (onboarding/FirstCheck/escape-hatch/
-  portal/overlay) so a pick never reaches them; BlackBox already read `--ix-accent-text`. Guards: 3
-  swatch invariants (legibility ≥4.5:1 vs panel · load-bearing · coverage) + swatchText + emit-mechanism.
-  Verify: tsc 0 · vitest **1605** · read-only scope audit · fresh-context adversarial review (2 fixes:
-  Learn hover, emit-test) · self-reviewer **PASS** (live 1500×980: dock `#ef8ea8` ~8.1:1, Monitor
-  `#c79cef`, Blackbook `#68d2a6`, Lab `#98b4e6` ~8.9:1; flag-off byte-identity). **Flag STAYS DEFAULT OFF.**
-- ⛳ **RESUME:** the palette AND the dark-accent-text legibility are both DONE + shipped. The ONE open
-  item is **owner's one-flip eyeball** on the pruned-15, now-fully-legible palette → then the
-  `compy_room_identity` default-ON flip (owner territory).
-
-### Cycle 2026-07-12k — ✅ PALETTE EXPANDED 10→20 SHIPPED LIVE `8a9ab76` (neon brights + adaptive-ink dark tones, behind `compy_room_identity` DEFAULT OFF; installer SHA-256 `97C581BB…EEE7698`, stamp-verified) — SUPERSEDED by Cycle 12l (pruned to 15)
-
-**Owner verdict on the Cycle-12j picker (2026-07-12): "i like it" — the picker feature is APPROVED.**
-Follow-up ask, verbatim: *"maybe more variety of color diversity more neon or bright/dark tone mixed
-idk just more variety."* Owner answered the A/B/both fork: **"i agree with both."**
-
-**✅ SHIPPED (both A + B), `8a9ab76`:** `ROOM_ACCENT_SWATCHES` (`src/design/room-identity.ts`) grew from
-10 bright swatches to **20** — kept the original 10, added **5 new neon/saturated brights** (Magenta
-`#f45cc6` · Azure `#33b1ff` · Chartreuse `#d0f14e` · Tangerine `#ff9a2e` · Hot Pink `#ff5f9e`) and **5
-true DARK tones** (Indigo `#4a37c4` · Wine `#9e1f46` · Pine `#12694a` · Plum `#6b2b9e` · Slate `#33507f`),
-laid out as a clean 5×4 picker grid. **Option B (dark tones) landed via adaptive ink:** each dark swatch
-carries a paired light `ink`; `applyRoomAccents` (`theme.ts`) emits it as BOTH `--v2-accent-ink` AND
-`--ix-accent-ink` in the managed `<style>` per pick (so the light ink reaches every accent-fill consumer,
-incl. Home which never re-points ink), flipping a dark fill to legible light-on-dark; bright picks emit no
-ink override and keep the default dark ink `#1a0a2e`. **Legibility law mechanized BOTH ways**
-(`room-accents.test.tsx`, +5 guards incl. `swatchInk`, the DARK-emits/BRIGHT-doesn't managed-style
-contract, and per-room write isolation): every bright ≥4.5:1 vs `#1a0a2e`; every dark ≥4.5:1 vs ITS ink
-AND genuinely <4.5:1 vs `#1a0a2e` (adaptive ink is load-bearing). Zero `src-tauri`.
-
-- **Verify:** tsc 0 · vitest **1600** (177 files) · fresh-context adversarial diff review **SOUND**
-  (min contrast Pine 5.94:1; all 20 pairwise-distinct) · **self-reviewer PASS** (live CDP 1500×980:
-  Monitor/Indigo computed text `rgb(236,233,255)`=`#ece9ff` on the dark fill; Blackbook/Magenta computed
-  text `rgb(26,10,46)`=`#1a0a2e` on the bright fill — contrast holds both directions).
-- **Default-ON flip is STILL DEFERRED** — do NOT flip `compy_room_identity` default-ON. Owner re-eyeballs
-  the NEW palette first (one flip: Settings → Appearance → "Room accent colors (preview)" ON → click a
-  room's corner accent dot → pick a dark tone). This is the ONE remaining gate.
-
-- **Current palette (10, all bright by necessity):** Violet `#a78bfa` · Teal `#3fd9c2` · Amber `#f0b878`
-  · Emerald `#27e08a` · Sky `#5aa9ff` · Rose `#ff8ac4` · Coral `#ff9163` · Gold `#ffd166` · Lime
-  `#a6e85f` · Cyan `#5fd7f0` (`ROOM_ACCENT_SWATCHES`, `src/design/room-identity.ts:55`).
-- **The hard constraint (why they're all bright):** every swatch is guarded ≥ WCAG 4.5:1 vs the dark
-  accent-ink `--v2-accent-ink #1a0a2e`, because the accent doubles as a **button/pill FILL with dark ink
-  on top** (`room-accents.test.tsx:59`, "button-legibility law"). High-luminance neon/bright colours pass
-  easily; **true dark-tone swatches FAIL** (dark accent under dark ink < 4.5:1) and the guard blocks them.
-- **The ONE design fork the next session must resolve:**
-  - **(A) Bright-only expansion — fast, safe, single-ink architecture untouched:** grow to ~16–20 swatches
-    with far more neon/saturated range (electric blue, magenta, hot pink, chartreuse, orange, aqua,
-    violet-blue, etc.), all still ≥4.5:1 vs `#1a0a2e`. Covers "more neon/bright + more variety" fully;
-    does NOT deliver "dark tone."
-  - **(B) Also unlock dark tones — bigger, touches the ink architecture:** make `--v2-accent-ink`
-    luminance-adaptive (light ink on dark accents) so dark swatches stay legible as fills. Requires: the
-    managed `<style id="compy-room-accents">` (`theme.ts` `applyRoomAccents`) to also emit the paired ink
-    per swatch; the legibility guard extended to test each swatch against ITS ink (not a fixed dark ink);
-    a re-check of every accent-fill use site (buttons/pills/chips) + `button-legibility-guard.test.ts`;
-    self-review pass. **Recommended: do BOTH — (A) for the easy bright variety + (B) for a few dark
-    swatches — so "bright/dark tone mixed" is actually satisfied** (TURBO window has budget for the rigor).
-- **This is a TASTE deliverable** — the owner delegated the picks ("idk just more variety") but the final
-  set is his eyeball. Present the expanded palette live (the picker shows it) and let him approve before
-  the default-ON flip. Legibility law (`#1a0a2e` ink ≥4.5:1, or adaptive ink under option B) is
-  NON-NEGOTIABLE — that's why it's curated swatches, not a free hex field.
-- ✅ **DONE `8a9ab76` (2026-07-13):** owner chose "both" → shipped A (5 neon brights) + B (5 adaptive-ink
-  dark tones), 20 swatches total. The palette/fork context above (10-swatch state, "why they're all
-  bright", the A/B fork) is the point-in-time cycle record; the shipped result is the ✅ header + the
-  bullets under it. Whitelist auto-derives from `ROOM_ACCENT_SWATCHES` (no separate `SWATCH_WHITELIST`
-  symbol). **Only open item: the owner's one-flip eyeball on the NEW palette before any default-ON flip.**
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
