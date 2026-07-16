@@ -353,7 +353,7 @@ export function CoreBar({ index, percent }: { index: number; percent: number }) 
   return (
     <div className="cpu-core" title={`Core ${index}: ${Math.round(percent)}%`}>
       <div className="cpu-core-bar">
-        <div className="cpu-core-fill" style={{ width: `${clamped}%` }} />
+        <div className="cpu-core-fill" style={{ transform: `scaleX(${clamped / 100})` }} />
       </div>
       <div className="cpu-core-label">{Math.round(percent)}%</div>
     </div>

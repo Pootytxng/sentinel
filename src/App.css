@@ -1364,8 +1364,12 @@ html, body, #root {
 
 .cpu-core-fill {
   height: 100%;
+  width: 100%;
   background: linear-gradient(90deg, #4ade80 0%, #6aa9ff 60%, #f5c451 90%);
-  transition: width 200ms ease-out;
+  /* Fill level via scaleX (monitor-panels.tsx CoreBar), not width — this bar re-renders every
+     telemetry tick, and transitioning width relayouts per tick; transform stays composited. */
+  transform-origin: left;
+  transition: transform 200ms ease-out;
 }
 
 .cpu-core-label {
@@ -1853,17 +1857,15 @@ body {
   padding-bottom: 11px;
   border-bottom: 1px solid var(--hairline);
 }
+/* Legacy shell wordmark (dormant — no markup renders `.header` since the shell-v2 topbar).
+   Gradient-clip text removed 2026-07-16 (impeccable anti-pattern, owner-greenlit): solid white. */
 .header h1 {
   font-size: 19px;
   letter-spacing: -0.02em;
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  color: #fff; /* fallback if background-clip:text is unsupported */
-  background: linear-gradient(180deg, #ffffff, #b8c4d8);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #fff;
 }
 .header h1::before {
   content: "";
@@ -1871,7 +1873,6 @@ body {
   height: 9px;
   border-radius: 50%;
   background: var(--ready);
-  -webkit-text-fill-color: initial;
   box-shadow: 0 0 0 3px rgba(70, 217, 138, 0.16), 0 0 12px rgba(70, 217, 138, 0.6);
   animation: live-pulse 3.2s var(--ease) infinite;
 }
@@ -2058,10 +2059,6 @@ body::before {
 
 /* Wordmark with real presence. */
 .header h1 { font-size: 34px; }
-.header h1::after {
-  content: "";
-  -webkit-text-fill-color: initial;
-}
 
 /* Accent edge-lighting on hover — interactive + premium. */
 .card:hover, .monitor-panel:hover, .diag-section:hover {
