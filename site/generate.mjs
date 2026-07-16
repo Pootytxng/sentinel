@@ -207,6 +207,18 @@ function articlePage(entry, { cssHref, homeHref, ctaHref, canonical }) {
 // "shows its receipts"), but the depth — the evidence, the full write-up, the steps — stays in
 // the app. One .html per entry id is preserved, so every index link and staleness guard holds.
 
+// Verbatim-prefix excerpt of a corpus field (Director verdict B change #2, 2026-07-15): each
+// teaser carries 2–3 real sentences of the reasoning so the page answers the query with unique
+// text (thin-content fix), while the depth stays in the book. NEVER invented — a strict prefix
+// of the corpus's own sentences; the trailing "…" is an honest truncation marker, added only
+// when text was actually withheld. Sentence split requires whitespace after the terminator so
+// decimals ("±0.7%") never split.
+function excerpt(text, maxSentences = 2) {
+  const parts = String(text).trim().split(/(?<=[.!?])\s+/);
+  if (parts.length <= maxSentences) return { text: String(text).trim(), truncated: false };
+  return { text: `${parts.slice(0, maxSentences).join(" ")} …`, truncated: true };
+}
+
 function teaserSections(entry) {
   const p = (s) => `<p>${escapeHtml(s)}</p>`;
   const inTheApp = (heading, note) =>
@@ -214,25 +226,48 @@ function teaserSections(entry) {
       note,
     )} The Blackbook publishes its verdicts here — the full write-ups stay in the book, on your rig, next to your own measurements.</p></section>`;
   switch (entry.type) {
-    case "tweak":
+    case "tweak": {
+      // The in-app note only claims withheld text when text WAS withheld (honesty law) —
+      // short whys publish whole, and the note falls back to what is always true: the app
+      // carries the entry cross-linked in the full graded book.
+      const ex = excerpt(entry.why);
       return [
         `<section><h2>What it does</h2>${p(entry.what)}</section>`,
-        `<section><h2>The honest verdict</h2>${p(`Graded ${entry.verdict}.`)}<p class="stance">${escapeHtml(stance(entry.verdict))}</p></section>`,
-        inTheApp("The full graded entry", "The evidence and the why behind this grade ship inside the app."),
-      ].join("\n");
-    case "term":
-      return [
-        `<section><h2>What it means</h2>${p(entry.what)}</section>`,
-        inTheApp("More detail", "The deeper explanation ships inside the app."),
-      ].join("\n");
-    case "trick":
-      return [
-        `<section><h2>The pattern</h2>${p(entry.pattern)}</section>`,
+        `<section><h2>The honest verdict</h2>${p(`Graded ${entry.verdict}. ${ex.text}`)}<p class="stance">${escapeHtml(stance(entry.verdict))}</p></section>`,
         inTheApp(
-          "The tell & the honest version",
-          "How to spot it in the wild — and what the honest version looks like — ships inside the app.",
+          "The full graded entry",
+          ex.truncated
+            ? "The rest of this write-up — the specifics behind the grade — ships inside the app."
+            : "This entry ships inside the app, cross-linked to every related verdict in the graded book.",
         ),
       ].join("\n");
+    }
+    case "term": {
+      const ex = excerpt(entry.more);
+      return [
+        `<section><h2>What it means</h2>${p(entry.what)}</section>`,
+        `<section><h2>More detail</h2>${p(ex.text)}</section>`,
+        inTheApp(
+          "In the Blackbook",
+          ex.truncated
+            ? "The deeper explanation continues inside the app."
+            : "The full Blackbook — every related term and verdict, cross-linked — ships inside the app.",
+        ),
+      ].join("\n");
+    }
+    case "trick": {
+      const ex = excerpt(entry.tell);
+      return [
+        `<section><h2>The pattern</h2>${p(entry.pattern)}</section>`,
+        `<section><h2>The tell</h2>${p(ex.text)}</section>`,
+        inTheApp(
+          "The honest version",
+          ex.truncated
+            ? "The rest of the tell — and what the honest version of this looks like — ships inside the app."
+            : "What the honest version of this looks like ships inside the app.",
+        ),
+      ].join("\n");
+    }
     case "guide":
       return [
         `<section><h2>The goal</h2>${p(entry.goal)}</section>`,
@@ -297,6 +332,8 @@ for (const entry of entries) {
 const pageTemplate = readFileSync(join(here, "src", "page.template.html"), "utf8");
 writeFileSync(
   join(libDir, "index.html"),
+  // The index is a browsing surface, not prose — the .article--index modifier lifts the 720px
+  // article measure so the 191-card grid gets the full .wrap width (Director re-review, 2026-07-16).
   fill(pageTemplate, {
     TITLE: "The Compy Blackbook — every verdict on the record",
     META_DESCRIPTION: escapeHtml(
@@ -315,7 +352,7 @@ writeFileSync(
     CANONICAL: `${SITE_ORIGIN}/library/`,
     JSONLD: "",
     FOOTER_PROMISE,
-  }),
+  }).replace('<main class="wrap article"', '<main class="wrap article article--index"'),
 );
 console.log(
   `wrote site/library/ — ${entries.length} entries (${picks.length} full, ${teaserCount} teasers) + index (gitignored artifact)`,

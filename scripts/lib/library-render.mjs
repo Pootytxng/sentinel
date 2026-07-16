@@ -169,7 +169,10 @@ export function indexSections(entries, lib, hrefPrefix = "", pickIds = null) {
           const sample = pickIds?.has(e.id)
             ? ` <span class="sample-tag" title="Published in full — the rest of the book ships in the app">Sample</span>`
             : "";
-          return `<li><a href="${escapeHtml(hrefPrefix + e.id)}.html">${escapeHtml(e.name)}</a> <span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span>${sample}</li>`;
+          // .toc-card: the site's glass-card vocabulary at index density (Director verdict B
+          // change #1); --sample lights the exposure boundary BEFORE the click. The standalone
+          // export carries no card CSS, so these classes degrade to the plain list there.
+          return `<li class="toc-card${pickIds?.has(e.id) ? " toc-card--sample" : ""}"><a href="${escapeHtml(hrefPrefix + e.id)}.html">${escapeHtml(e.name)}</a><span class="toc-card-meta"><span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span>${sample}</span></li>`;
         })
         .join("\n");
       return `<section><h2>${SECTION_TITLES[type]} (${list.length})</h2><ul class="toc">\n${items}\n</ul></section>`;

@@ -185,9 +185,12 @@ one waits on:
   (Paddle route) + a price you set + shipped Pro value.** The site's "in the works / no price yet"
   card is exactly right until then.
 - **B2B licensing (Layer 4)** — parked, post-traction. No page until you ask.
-- **Wordmark taste fork** (surfaced by the web-design-director): the home page renders "COMPY" as
+- ~~**Wordmark taste fork** (surfaced by the web-design-director): the home page renders "COMPY" as
   all-caps mono; the generated library/debunk pages use a pulsing-"o" wordmark. Director recommends
-  unifying to the all-caps mono. **It's your brand taste call** — say unify / keep-both / your own.
+  unifying to the all-caps mono. **It's your brand taste call** — say unify / keep-both / your own.~~
+  → **✅ RESOLVED 2026-07-15** ("completely follow the design directors taste calls"): unified to
+  the all-caps tracked mono COMPY site-wide (landing, footer, /compare, all generated Blackbook
+  pages); the pulsing-"o" variant is removed.
 
 ### B4. Two substituted asks — confirm or redirect  ·  ⏳
 Both were real asks that got quietly *substituted* rather than done — flagging so you can close or

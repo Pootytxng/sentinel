@@ -137,11 +137,12 @@ body::after {
   padding-top: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--hairline);
   gap: 10px; flex-wrap: wrap; /* 380px floor: the beta chip wraps under the wordmark cleanly */
 }
+/* Unified brand mark: all-caps tracked mono, site-wide (Design Director call,
+   owner-endorsed 2026-07-15) — matches the landing/compare topbar nameplate. */
 .wordmark {
-  font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: 0.01em;
+  font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: 0.32em;
   color: var(--ink); text-decoration: none;
 }
-.wordmark .pulse { color: var(--accent); text-shadow: 0 0 18px rgba(255, 154, 30, 0.55); }
 .beta-chip {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-2); border: 1px solid var(--hairline); border-radius: 999px; padding: 4px 11px;
@@ -447,6 +448,11 @@ h2 {
    the old shorthand zeroed the wrap's 24px side padding, so article body text ran flush to the
    viewport edge on mobile across every library/debunk page. */
 .article { max-width: 720px; margin: 0 auto; padding-top: 64px; padding-bottom: 80px; }
+/* The Blackbook index is a browsing surface, not prose: it takes the full .wrap width so the
+   191-card grid runs 4–5 columns on desktop (Director re-review note, 2026-07-16). Prose inside
+   stays readable — .article p is already capped at var(--measure); cap the glossary dl to match. */
+.article--index { max-width: 1080px; }
+.article--index dl { max-width: var(--measure); }
 .article .chip { margin-bottom: 18px; }
 .article h1 { font-size: clamp(28px, 4.2vw, 42px); }
 .aliases { font-family: var(--mono); font-size: 13px; color: var(--ink-3); margin: 0 0 36px; }
@@ -482,21 +488,49 @@ h2 {
 .in-the-app-note { margin: 0; }
 
 /* ── Full-library index (site/library/index.html) — the manifest ──
-   Ruled instrument rows, not a flat bullet list: name on the left rail, verdict/type chip pushed
-   to the right rail, and the 14 published-in-full entries flagged "Sample". Hover lights the row
-   and nudges it in — the same console grammar as the debunk cards, at list density (191 rows as
-   heavy cards would be the identical-grid AI tell; this stays scannable). */
-.article ul.toc { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--hairline); }
-.article ul.toc li {
-  margin: 0; padding: 11px 12px;
-  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
-  border-bottom: 1px solid var(--hairline);
-  transition: background 160ms ease;
+   The site's glass-card vocabulary at index density (Design Director verdict B change #1,
+   owner-endorsed 2026-07-15): compact cards, name + verdict chip only — no descriptions, so the
+   grid stays scannable at 191 entries. The published-in-full picks (.toc-card--sample) carry a
+   lit amber border + Sample tag, so the sample/locked exposure boundary is legible BEFORE the
+   click. No backdrop-filter here on purpose: 191 blurred nodes would jank scroll. */
+.article ul.toc {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 10px;
 }
-.article ul.toc li:hover { background: var(--glass); }
-.article ul.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
-.article ul.toc li:hover a { color: var(--accent); }
-.article ul.toc .chip { margin-left: auto; } /* verdict/type chip on the right rail */
+.article ul.toc li.toc-card {
+  position: relative; margin: 0; padding: 14px 16px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(165deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04) 50%, rgba(255, 190, 92, 0.08)) border-box;
+  border: 1px solid transparent; border-radius: 12px;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.article ul.toc li.toc-card:hover {
+  transform: translateY(-2px);
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(165deg, rgba(255, 154, 30, 0.42), rgba(255, 255, 255, 0.08) 50%, rgba(255, 122, 69, 0.26)) border-box;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 30px rgba(255, 154, 30, 0.08);
+}
+.article ul.toc a {
+  color: var(--ink); text-decoration: none; font-weight: 500;
+  font-size: 14.5px; line-height: 1.35;
+}
+/* The whole card is the click target; the link's hit area stretches over it. */
+.article ul.toc li.toc-card a::after { content: ""; position: absolute; inset: 0; }
+.article ul.toc li.toc-card:hover a { color: var(--accent); }
+.toc-card-meta { display: flex; align-items: center; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+/* The exposure boundary, visible pre-click: full public write-ups sit behind a lit border. */
+.article ul.toc li.toc-card--sample {
+  background:
+    linear-gradient(var(--glass), var(--glass)) padding-box,
+    linear-gradient(165deg, rgba(255, 154, 30, 0.38), rgba(255, 190, 92, 0.14) 55%, rgba(255, 154, 30, 0.30)) border-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  .article ul.toc li.toc-card { transition: none; }
+  .article ul.toc li.toc-card:hover { transform: none; }
+}
 /* "Sample" marker on the full public picks — a small amber instrument tag, never verdict-colored. */
 .sample-tag {
   font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
