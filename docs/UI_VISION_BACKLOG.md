@@ -371,8 +371,12 @@ contract + ONE staged engage control, presentation-only over the same audited se
 (CSS-only console register) · the app-wide viewport HUD frame + global reticle (`compy_hud_frame` DEFAULT ON — corner
 brackets, honest rig·clock readout, shell-scoped reticle with stage instances self-deferring). Self-reviewer round 1
 caught 3 real defects (readout duplicating ledger/stamp · readout vs bottom content collision · explainer lede breaking
-the title-header law) — fixed + guard-pinned. **Remaining 🔴 from this list: Monitor gauges + `Oscilloscope` kit ·
-History/Black Box flight-recorder log.** Still folds in the remaining §A JARVIS stack
+the title-header law) — fixed + guard-pinned. ~~Remaining 🔴 from this list: Monitor gauges + `Oscilloscope` kit ·
+History/Black Box flight-recorder log.~~ → **🟢 both were ALREADY SHIPPED when this line was written (stale-list fix
+2026-07-16):** Monitor gauges + the real `Oscilloscope` kit on live telemetry = MonitorConsole v5 Flight Deck
+(`compy_monitor_console` DEFAULT ON since 2026-07-12 — DeckScope frametime hero + fps trace + 4 honest ArcGauges over
+the same audited 1 Hz polls) · the flight-recorder log = the Blackbook Logbook (`compy_blackbook_console` DEFAULT ON
+since 2026-07-13). **The per-tab Console rollout list is CLOSED — every phase is live.** Still folds in the remaining §A JARVIS stack
 (decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5) — **the
 A.2/A.3/A.5/A.6 core shipped 2026-07-12 (`1d310e1`, `compy_jarvis_motion` DEFAULT OFF, §A above);
 per-tab Console rollout can now assume the layer exists behind its flag.** **Both owner-gated calls RESOLVED
