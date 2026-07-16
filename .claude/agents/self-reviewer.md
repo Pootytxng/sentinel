@@ -78,6 +78,14 @@ The dev build runs two same-origin webviews + a small default window, so capture
    (click → main-content-change ms, 16ms poll) and state the band — it must stay ≲50ms
    (T1.5 #2 reference: 16–24ms on both the pre- and post-T4c installed builds).
 
+9. **Earn its place** (panel-review brief 2026-07-15 §4.3 — only when the diff ADDS or restyles a
+   visual flourish: gauge, glow/hologram effect, animation, or technical label; otherwise evidence =
+   "n/a, no new flourish" and the item passes) — every flourish must carry meaning: **no decorative
+   gauge without a decision it informs · no hologram/effect without hardware meaning · no animation
+   without a state transition it signals · no technical label without a plain-language explanation
+   beside it.** NAME the flourish and the decision/state/meaning it maps to; "it looks premium" is
+   not a mapping and is a FAIL.
+
 Any item FAILS → still complete the remaining items (report everything found in one pass), then
 return the FAIL verdict. Do not fix anything yourself — you are read-only on verdicts; the
 orchestrator fixes and re-dispatches.
@@ -97,6 +105,7 @@ SELF-REVIEW — <one-line scope>
 6 Wording: <evidence>                              PASS|FAIL
 7 Ask: "<quoted part>" → <met?> (× each part)      PASS|FAIL
 8 Canvas idle: <0-draw rest + orbit-grows numbers, or n/a>  PASS|FAIL
+9 Earn its place: <flourish → meaning mapping, or n/a>      PASS|FAIL
 VERDICT: PASS | FAIL — <if FAIL: minimal precise fix list, element + property + expected value>
 ```
 

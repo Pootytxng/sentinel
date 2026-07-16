@@ -81,6 +81,12 @@ rides · the owner-gated unlock that turns it on.**
   data source** (Director craft #2: what sentence shows as the teaser) — needs an authored, honest
   verdict line per entry, never an auto-truncation that could mislead. Flagged as a content
   follow-up, not a blocker.
+- **Queued content (panel-review brief 2026-07-15 §4.5 + §4.6, both $0 Layer-2 work):** a public
+  **technical methodology page** (how Compy measures: ETW frametimes, noise floor, A/B trials,
+  rollback contract — the "show your work" page that earns the enthusiast/skeptic audience) and a
+  **stutter-story narrative** page (the diagnosis journey told plainly: symptom → capture → culprit →
+  fix → measured after). Content-only, generated/authored under the same honesty rail — no new
+  app surface, no new claims.
 - **KPI (doctrine: one metric per phase):** organic sessions → app downloads. Measurable free via
   Cloudflare Pages analytics once the domain is live.
 

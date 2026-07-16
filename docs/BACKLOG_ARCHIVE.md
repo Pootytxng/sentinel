@@ -5,6 +5,50 @@
 > full history at boot). Same format, newest on top. Grep here for any cycle older than the live board.
 > Current truth lives in docs/RELEASE_STATE.md — these are point-in-time records.
 
+### Cycle 2026-07-13b — ✅ DEAD-CODE CLEANUP + readiness leak fix SHIPPED LIVE `2b64c51` (code `c80678f`; installer SHA-256 `21942094…0930FF4F`, stamp-verified) — NO gate moved
+
+**Turbo-window maintenance pass (owner-directed "full self review, maintenance, dead-code cleanup").** Three
+read-only audits (frontend dead code · Rust dead-code+clippy · doc/stale-ref drift) fanned out; findings
+applied serially, all mechanically verified. **Committed + pushed `c80678f` (18 files, −2154 lines).**
+
+- **Deleted (grep-verified 0 importers, tsc-confirmed):** 7 never-adopted vendored React Bits dirs
+  (`src/design/vendor/{DotField,GlareHover,GooeyNav,Grainient,Noise,PillNav,Radar}`) + `monotonePathD`
+  (`src/design/console/monotone.ts`). `tokens-v2-guard.test.ts` "vendor kit present" floor 12→7;
+  `THIRD_PARTY.md` rows pruned.
+- **readiness.rs retired-label leak FIXED** (drift audit; room-labels-vs-nav-ids law): the applied-changes
+  check detail said "roll it back in **Optimize**" (no standalone Optimize tab exists post the 2026-07-10
+  ground-flip) → both strings now "in **the Lab**" (the undo home; backend can't read the runtime rail
+  flag). The Rust test at `readiness.rs` that ENFORCED the stale text (false-green) → flipped into a
+  bug→guard (asserts "the Lab" present AND no "in Optimize" dead-end).
+- **Verify:** tsc 0 · **vitest 1593/1593** (177 files; −14 = per-component license tests for the removed
+  vendor dirs) · cargo test readiness **35/0**. Zero mutation-boundary / gate changes.
+- ✅ **SHIPPED LIVE 2026-07-13 `2b64c51`.** The next session's ship found HEAD had advanced to `2b64c51`
+  (the docs persist-commit) AFTER the `c80678f` build, so the pre-built NSIS embedded `c80678f` while the
+  stale-gate now demanded `2b64c51` — it would have (correctly) thrown. **Rebuilt at HEAD** (`npm run tauri
+  build`, exit 0; sole `c80678f`→`2b64c51` delta is `docs/BACKLOG.md`, not compiled → binary functionally
+  identical to `c80678f`; `build.rs` re-stamped `COMPY_GIT_HASH=2b64c51` via its `.git/HEAD` rerun trigger) →
+  `scripts/ship-reinstall.ps1` (stale-gate PASSED, silent install exit 0, one installer on Desktop, launched)
+  → **stamp-verified `2b64c51` live** (installed `%LOCALAPPDATA%\Compy\compy.exe` embeds `2b64c51` only — not
+  `530ef8b`/`c80678f`). New installer SHA-256 `219420944926D99318CFB8FFA6D689952D154FF6005756926BF334640930FF4F`,
+  supersedes `703F078B…9EE40B8`/`530ef8b`. **doc-sync same commit:** RELEASE_STATE new UPDATE banner + table
+  Git-HEAD/Current-installer rows re-anchored `530ef8b`→`2b64c51`.
+- **DEFERRED follow-ups (verified-safe, NOT done — flagged for a focused pass):**
+  1. **`theme.ts` 14 orphaned exports** (0-reference, safe delete; superseded by `main.tsx` inline boot):
+     `INSTRUMENT_THEMES`, `readLivingInstrument`, `applyLivingInstrument`, `applyLabGuided`, `applyLabBento`,
+     `applySetupStepper`, `applyFirstCheckTheater`, `applyMonitorCards`, `applyHologramV2`, `applyTwoFutures`,
+     `applyHud`, `applyHomeConsole`, `readDashV2`, `applyDashV2`. Deferred (14 edits in a critical file).
+  2. **`ogl` npm dep likely orphaned** — was pulled ONLY by the deleted Radar + Grainient; verify no other
+     importer, then drop from `package.json` (dedicated dep-prune pass). Noted in `THIRD_PARTY.md`.
+  3. **RigViewer non-chromeless chrome (~140 lines, `src/surfaces/rig/RigViewer.tsx:77-97,114-214`)** — dead
+     in production (only caller `LabConsole.tsx:303` passes `chromeless`), BUT `hologram-orbit-optin-guard.test.tsx`
+     exercises the branch → needs an OWNER product call that LabConsole is the only forever-caller before trimming.
+  4. **CompyHero + readCommitted/applyCommitted** — technically 0-importer but BACKLOG says "kept deliberately"
+     (parked `compy_committed` future landing hero). NO action — documented keep.
+- **Clean results (no action needed):** Rust crate is **0 cargo warnings / 0 clippy lints**; the 14
+  `#[allow(dead_code)]` sites are intentional (gate-dark mutation boundary + published-schema fields). Doc
+  drift: **0 state contradictions** (drift agent re-verified my `530ef8b` doc-sync incl. installer SHA by hash).
+  TODO/stub debt: **0 open** (`latency.rs:944` is a resolved reference).
+
 ### Cycle 2026-07-13a — ✅ MONITOR v5 "frametime" JARGON GLOSS SHIPPED LIVE `530ef8b` (deferred Monitor-jargon bucket closed; installer SHA-256 `703F078B…B99EE40B8`, stamp-verified) — NO gate moved
 
 **Resume (`/clear`, live `72ded53`/`cc9adb8`).** The room-identity palette train was fully done +

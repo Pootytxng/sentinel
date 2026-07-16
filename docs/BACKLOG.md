@@ -165,6 +165,46 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-16b — ✅ PANEL-REVIEW BRIEF EXECUTED (Cowork triage): combined-effect attribution `850dde2` · site copy scoping `60eea80` · 9-item doc triage — NO gate moved, zero src-tauri
+
+**Owner's operative mandate:** *"Read docs/reviews/2026-07-15-cc-brief-panel-review-execution.md and
+execute it"* — Cowork's triage of the 2026-07-15 consumer-panel review, executed in its Part-6 order
+(app lane, parallel to the hero-site lane).
+
+- **`60eea80` — Brief 3.1, site copy scoping:** "free forever" → "**core** stays free forever"
+  (site-only; keeps the promise honest against the dark Compy Pro lane). ⚠️ **Deploy PENDING** — the
+  permission classifier denied `wrangler pages deploy` this session (not retried per protocol);
+  `dist-site` is built + staged, one command when the owner greenlights.
+- **`850dde2` — Brief Part 2, combined-effect attribution audit (honest-measurement law):** a
+  multi-change benchmark delta belongs to the STACK, never one change's win. Single sources in
+  `benchmark-view.ts`: `changesBetweenRuns()` (the ONE graded-window filter — applied_at strictly >
+  baseline_at, ≤ latest_at, unparseable → `[]`) + `changeAttribution(count)` (plural lead + the
+  credit-refusing caveat). Every attributing surface re-pointed: Benchmark EfficacyCard · TwoFutures ·
+  LabV2 room verdict (`labVerdict`) · Bento Checkup Report + guided/ground station readings
+  (`stationReading` via `LabStationFacts.stackedCount`) · LabConsole facts. Singular ≤1-change
+  readings stay byte-identical (pinned). Three self-review rounds — round 1 caught `labVerdict`
+  hardcoded singular, round 2 caught the Checkup Report disagreeing with the room header on the SAME
+  screen — round-3 **PASS** (both renderings live-verified agreeing, 2-change + 1-change states,
+  flags restored). bug→guard: 3 new pinned tests.
+- **Brief Part 4 — 9-item doc triage (this commit):** BACKLOG items 4.1/4.4/4.2/4.8/4.7 ·
+  MONETIZATION_PLAN 4.5+4.6 (non-competitive consumer story + methodology page, Layer 2, $0) ·
+  OWNER_ACTION_CHECKLIST §B2 4.10 (cold-start protocol folded into beta-send planning) + §D 4.9
+  (version policy: `docs/superpowers/specs/2026-07-16-version-policy-proposal.md` drafted, numbering
+  decision FLAGGED to owner, not decided) · UI_VISION_BACKLOG §F cross-ref · self-reviewer rubric
+  item 9 ("earn its place", 4.3).
+- **Brief Part 5 — cross-references confirmed resolving (no new entries, per the brief):** signing /
+  legal venue / domain / beta smoke / tester GO → OWNER_ACTION_CHECKLIST §A2·§B2·§C ✓ · NVIDIA
+  hardware verification → NVIDIA_VALIDATION_PLAN.md (still blocked on hardware, reaffirmed) ✓ ·
+  design-tooling + upgrade-path forks → §B4 + UI_VISION §E/§F ✓ · B2B licensing → MONETIZATION_PLAN
+  Layer 4, parked ✓.
+- **COMPY_OVERVIEW.md drift check (brief's standing ask): PASS** — one Receipts-phrasing nit
+  (reported to the Cowork lane; that file is Cowork-owned, NOT committed here).
+- **Verify:** tsc 0 · vitest **1682/1682** (181 files, +3 guards) · site copy through the existing
+  site test pipeline at `60eea80`.
+- ⛳ **RESUME:** brief fully executed. Owner flags: ① site deploy pending (classifier denial — one
+  `wrangler pages deploy dist-site` when greenlit) · ② version-policy numbering call (§D) · ③
+  standing gates unchanged. Next: the owner's announced "biggest app orientation refinement workflow".
+
 ### Cycle 2026-07-16a — ✅ APP LANE TASK LIST CLOSED: room-palette 8+7 rework · App.css gradient-ink de-slop · nav-mount cost FIXED + SHIPPED LIVE — frontend-only, NO gate moved, zero src-tauri
 
 **Owner's operative mandate:** the three-part order (*"make half of them some good 2 color shift
@@ -501,51 +541,6 @@ sentence rows ("Compy applied…", "You played… for …", "You fact-checked a 
   Desktop, launched) → **stamp-verified `18272be` live**. doc-sync same commit: RELEASE_STATE banner
   + Git-HEAD/installer rows; OWNER_ACTION_CHECKLIST **A8 + A9 → ✅ resolved-by-directive**.
 
-### Cycle 2026-07-13b — ✅ DEAD-CODE CLEANUP + readiness leak fix SHIPPED LIVE `2b64c51` (code `c80678f`; installer SHA-256 `21942094…0930FF4F`, stamp-verified) — NO gate moved
-
-**Turbo-window maintenance pass (owner-directed "full self review, maintenance, dead-code cleanup").** Three
-read-only audits (frontend dead code · Rust dead-code+clippy · doc/stale-ref drift) fanned out; findings
-applied serially, all mechanically verified. **Committed + pushed `c80678f` (18 files, −2154 lines).**
-
-- **Deleted (grep-verified 0 importers, tsc-confirmed):** 7 never-adopted vendored React Bits dirs
-  (`src/design/vendor/{DotField,GlareHover,GooeyNav,Grainient,Noise,PillNav,Radar}`) + `monotonePathD`
-  (`src/design/console/monotone.ts`). `tokens-v2-guard.test.ts` "vendor kit present" floor 12→7;
-  `THIRD_PARTY.md` rows pruned.
-- **readiness.rs retired-label leak FIXED** (drift audit; room-labels-vs-nav-ids law): the applied-changes
-  check detail said "roll it back in **Optimize**" (no standalone Optimize tab exists post the 2026-07-10
-  ground-flip) → both strings now "in **the Lab**" (the undo home; backend can't read the runtime rail
-  flag). The Rust test at `readiness.rs` that ENFORCED the stale text (false-green) → flipped into a
-  bug→guard (asserts "the Lab" present AND no "in Optimize" dead-end).
-- **Verify:** tsc 0 · **vitest 1593/1593** (177 files; −14 = per-component license tests for the removed
-  vendor dirs) · cargo test readiness **35/0**. Zero mutation-boundary / gate changes.
-- ✅ **SHIPPED LIVE 2026-07-13 `2b64c51`.** The next session's ship found HEAD had advanced to `2b64c51`
-  (the docs persist-commit) AFTER the `c80678f` build, so the pre-built NSIS embedded `c80678f` while the
-  stale-gate now demanded `2b64c51` — it would have (correctly) thrown. **Rebuilt at HEAD** (`npm run tauri
-  build`, exit 0; sole `c80678f`→`2b64c51` delta is `docs/BACKLOG.md`, not compiled → binary functionally
-  identical to `c80678f`; `build.rs` re-stamped `COMPY_GIT_HASH=2b64c51` via its `.git/HEAD` rerun trigger) →
-  `scripts/ship-reinstall.ps1` (stale-gate PASSED, silent install exit 0, one installer on Desktop, launched)
-  → **stamp-verified `2b64c51` live** (installed `%LOCALAPPDATA%\Compy\compy.exe` embeds `2b64c51` only — not
-  `530ef8b`/`c80678f`). New installer SHA-256 `219420944926D99318CFB8FFA6D689952D154FF6005756926BF334640930FF4F`,
-  supersedes `703F078B…9EE40B8`/`530ef8b`. **doc-sync same commit:** RELEASE_STATE new UPDATE banner + table
-  Git-HEAD/Current-installer rows re-anchored `530ef8b`→`2b64c51`.
-- **DEFERRED follow-ups (verified-safe, NOT done — flagged for a focused pass):**
-  1. **`theme.ts` 14 orphaned exports** (0-reference, safe delete; superseded by `main.tsx` inline boot):
-     `INSTRUMENT_THEMES`, `readLivingInstrument`, `applyLivingInstrument`, `applyLabGuided`, `applyLabBento`,
-     `applySetupStepper`, `applyFirstCheckTheater`, `applyMonitorCards`, `applyHologramV2`, `applyTwoFutures`,
-     `applyHud`, `applyHomeConsole`, `readDashV2`, `applyDashV2`. Deferred (14 edits in a critical file).
-  2. **`ogl` npm dep likely orphaned** — was pulled ONLY by the deleted Radar + Grainient; verify no other
-     importer, then drop from `package.json` (dedicated dep-prune pass). Noted in `THIRD_PARTY.md`.
-  3. **RigViewer non-chromeless chrome (~140 lines, `src/surfaces/rig/RigViewer.tsx:77-97,114-214`)** — dead
-     in production (only caller `LabConsole.tsx:303` passes `chromeless`), BUT `hologram-orbit-optin-guard.test.tsx`
-     exercises the branch → needs an OWNER product call that LabConsole is the only forever-caller before trimming.
-  4. **CompyHero + readCommitted/applyCommitted** — technically 0-importer but BACKLOG says "kept deliberately"
-     (parked `compy_committed` future landing hero). NO action — documented keep.
-- **Clean results (no action needed):** Rust crate is **0 cargo warnings / 0 clippy lints**; the 14
-  `#[allow(dead_code)]` sites are intentional (gate-dark mutation boundary + published-schema fields). Doc
-  drift: **0 state contradictions** (drift agent re-verified my `530ef8b` doc-sync incl. installer SHA by hash).
-  TODO/stub debt: **0 open** (`latency.rs:944` is a resolved reference).
-
-
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
 When running a `/loop` or scheduled session against "the checklist":
@@ -639,6 +634,13 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] CPU-runner flake fix (backend lane flagged) — `cpu_kernel` now guarantees ≥1 work chunk (do-while) so a starved tiny-run scheduled past its short deadline still measures real throughput instead of reading 0 and false-failing the shared green baseline; strong `> 0.0` shape assertion kept + a regression guard (`cpu_kernel_runs_at_least_one_chunk_past_deadline`) pins the contract; `benchmark.rs`, cargo 612
 - [x] `normalize()` honesty fail-safe — a non-finite raw score now fails SAFE to 0 (no credit) instead of `Inf`→`.clamp(0,100)`→**100** (a fabricated "perfect" component score, the worst honesty failure). Currently unreachable (producers guard divisors via `.max(1e-6)`/`is_finite`) but guarded at the point-of-use so a future producer-guard regression can't invent a maxed score; invalid reference (non-finite/≤0) also → 0. Regression test pins Inf/NaN/-Inf + bad refs (was untested); real-path byte-identical — `2ee51aa` (`benchmark.rs:461`)
 - [x] `completeness_pct()` honesty fail-safe (completeness-critic close-out of the above — the grep'd sibling) — its `ceiling <= 0.0` gate did NOT catch a non-finite input (`NaN <= 0.0` is false), so `+Inf current`→**100** (fabricated "fully optimized") and `NaN`→leaked through `.clamp()`. Now `is_finite` guards both inputs at the point of use, mirroring `normalize()`, so the boundary is uniform + safe-by-construction whenever this still-unwired primitive is wired. comparison::pct (guarded `base>0`, measured-FPS inputs, NaN-delta failure mode) + percentile_rank (u32-derived inputs) assessed safe — class now closed. Regression test pins Inf/NaN; finite-input behavior byte-identical — `dbc8358` (`benchmark_scoreboard.rs:75`)
+
+- [ ] evidence-export tiers — audience-shaped renders of the SAME measured evidence pack (`export.rs`
+  today: `export_report` markdown/JSON + Discord block = the technical-ish default): add **Consumer**
+  ("what changed, in plain English"), **Technical** (full probe/CI detail), and **Support** ("help me,
+  here's my rig + ledger") render tiers over the one data source — presentation-only, no new probes, no
+  new claims, honesty invariants shared. The **Shop** tier is NOT this item — it belongs to the parked
+  Shop Report Mode (Phase D), don't build ahead of it. Provenance: panel-review brief 2026-07-15 §4.4.
 
 ### A3 · CONTENT reorg (Blackbook/Autopsy) — **half built; missing entry metadata**
 - [x] entry dedup lint — `knowledge.lint.test.ts:78`
@@ -739,6 +741,15 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] per-tweak audit trail — `Fix.tsx:423`
 - [x] ledger filter "this rig only" — History checkbox, rendered only when some entry is KNOWN to be from other hardware; hides exactly those (legacy unstamped rows never hidden); hidden count named — `2f5b675`
 - [x] measured-payoff linkage — per-tweak honest payoff meter: `payoff_label_from_action` (history.rs) names the KIND of gain (input latency / background CPU&RAM / network / power&thermal / …), never a fabricated number; rendered as a quiet advisory chip on active + history ledger rows (Fix.tsx)
+- [ ] pre-room intent router — the Lab's symptom router ("What are you here to do?", shipped 2026-07-05
+  via `compy_lab_guided`) covers IN-Lab wayfinding; the remaining gap is the **pre-room-selection entry
+  point**: a first-class "what brought you here today?" entry on Home routing to Monitor / Blackbook / Lab by
+  intent, so a non-technical user never has to know which room owns their problem. Scope ONLY that entry
+  gap — don't rebuild the in-Lab router. Provenance: panel-review brief 2026-07-15 §4.2.
+- [ ] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
+  flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
+  action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel
+  "simple mode" build). Provenance: panel-review brief 2026-07-15 §4.8.
 
 ### A6 · UPGRADE-PATH advisory — **complete** (affiliate tags = Phase D)
 - [x] hardware-limited verdict detection (GPU≥95% / HDD install drive) — `priorities.rs:95`
@@ -887,6 +898,15 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   requirement). Honest attribution kept: mint failure = third pre-launch nothing-ran refusal
   (`elevation_error_nothing_ran`); exit 3 reads approved-but-failed; decline path cleans the ticket up.
   Guard tests both directions incl. end-to-end helper refuse/replay (cargo 724/0, clippy clean).
+- [ ] **"Optimization Cleanup"** (name locked by the owner) — find + classify the residue OTHER tools/guides
+  left behind (registry keys, services, scheduled tasks, orphaned tweak-pack artifacts) as
+  useful / placebo / risky / outdated / unknown, and offer restore ONLY where the prior/default is
+  unambiguous. **Own spec'd train: research → spec → scope-gate — never a same-session build.**
+  Mutation-adjacent ⇒ full mutation-gate before any apply path exists; restores ride a SEPARATE
+  recovery-snapshot mechanism (auditable, not entangled with the main Trust Ledger apply path).
+  Distinct from UI_VISION_BACKLOG §F (upgrade-path engine) — different feature, don't conflate.
+  Provenance: panel-review brief 2026-07-15 §4.1 (`docs/reviews/2026-07-15-cc-brief-panel-review-execution.md`)
+  + archived review (`docs/reviews/2026-07-15-consumer-panel-review.md`).
 
 ## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
 - [BUILT-DARK] Receipts opt-in consent UI + payload preview — `receipts.rs`, `ReceiptsConsent.tsx` (gate off)
@@ -895,6 +915,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 ## PHASE D — Money / distribution 🔒 (owner territory — DEFERRED per current 1.0 focus)
 - [BUILT-DARK] License / Pro gate scaffolding — `license.rs`, `ProGate.tsx`, `pro.ts`
 - [ ] affiliate tag-swap · compy.gg waitlist funnel · Receipts arming · leaderboard · Pro multi-rig · B2B
+- [PARKED] **Shop Report Mode** — B2B evidence workflow for repair/optimization shops (pilot scope when
+  unparked: job name → before scan → approved changes → after scan → rollback availability → signed
+  export). Logged for traceability ONLY — do NOT build ahead of B2B traction (MONETIZATION_PLAN Layer 4
+  posture: "no page until you ask"); the Shop render tier of the A2 evidence-export item defers here.
+  Provenance: panel-review brief 2026-07-15 §4.7.
 - Funnel go-live mechanical steps parked in `docs/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md` (owner-initiated).
 
 ---

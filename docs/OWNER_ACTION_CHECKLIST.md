@@ -159,6 +159,14 @@ rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 current `main`" is made; what's pending is **your GO** to actually send (after A2 smoke). Also open:
 ship `beta-001` frozen vs. cut a fresh `beta-002` from `main`.
 
+**Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
+the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:
+~3 non-technical gamers · 2 people burned by tweak packs before · 2 enthusiasts · 1 privacy-focused
+user · 1 repair tech. Observation protocol (your only job beyond sending): watch or ask about the
+FIRST cold launch un-coached — where they stalled, what they clicked first, whether the verdict read
+as trustworthy plain English — and relay the raw reactions to Claude unfiltered. No survey to build;
+the protocol is "first launch, no help, tell us what confused you."
+
 ### B3. Funnel go-live — two small inputs  ·  ⏳  ·  [`docs/archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md`](archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md)
 Parked since 2026-06-15, waiting on you for: **(a) your Ko-fi profile URL** (to wire the tip/support
 button) and ~~**(b) an explicit "deploy GO"** for the site refresh~~ — **(b) GRANTED 2026-07-15**
@@ -248,6 +256,12 @@ These gate **public** release only (not the local app you use daily). Full list:
 ## §D — Taste / visual sign-offs (as they come up)
 Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
 exact hexes, anything where your eye is the authority.
+- ⏳ **Version numbering call (panel-review brief 2026-07-15 §4.9).** The installer still says
+  `0.1.0` while the app is far past that — a panel reviewer read it as "early alpha, don't trust it."
+  Claude drafted the policy proposal with a recommended scheme:
+  [`superpowers/specs/2026-07-16-version-policy-proposal.md`](superpowers/specs/2026-07-16-version-policy-proposal.md).
+  **Your call = pick the scheme + the next number** (the doc recommends one); Claude never renumbers
+  unilaterally. One-line answer is enough.
 - 🔨 **Site hero verdict: REJECTED → full compy.gg makeover commissioned (2026-07-14).** You saw the
   PART B two-strip hero (`2eda4eb`) and rejected it outright ("needs a complete makeover"). New
   directive logged in `docs/UI_VISION_BACKLOG.md` §G: research-first, spitball directions, decide

@@ -439,6 +439,9 @@ deliberate no? Source: `docs/OWNER_ACTION_CHECKLIST.md:59-61`, `docs/BACKLOG.md:
 Owner (2026-07-03): *"just slapping an Amazon + Newegg link for GPUs isn't the feature."* The advisory
 upgrade path is underdeveloped. Flagged as never fully built.
 Source: `docs/superpowers/specs/2026-07-03-owner-optimize-feedback.md`, `docs/OWNER_ACTION_CHECKLIST.md` §B4.
+Not to be conflated with **"Optimization Cleanup"** (BACKLOG Phase B, panel-review brief 2026-07-15
+§4.1) — that one finds/classifies residue OTHER tools left behind; this one advises hardware upgrades.
+Different features, different lanes.
 
 ### G. 🔴 SITE FULL MAKEOVER — owner-commissioned 2026-07-14 (the dormant trigger FIRED, for the site)
 History: the 2026-06-12 voice-baptism directive queued **§B0 site glow** + a dormant **§C FULL
