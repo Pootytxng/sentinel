@@ -23,6 +23,9 @@
 :root[data-v2="on"] .v2-shell {
   flex: 1;
   min-height: 0;
+  /* Containing block for the app-shell reticle (compy_hud_frame promotes the Target Cursor
+     to shell scope; .lc-reticle positions absolute inside its scope). */
+  position: relative;
   display: grid;
   grid-template-columns: 216px 1fr;
   background: var(--v2-bg);

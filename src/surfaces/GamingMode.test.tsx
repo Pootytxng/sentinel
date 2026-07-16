@@ -2,7 +2,7 @@
 // NOTHING — he couldn't tell it worked. These pins make a silent restore success a red test:
 // after Stop / recovery-restore confirms, a visible confirmation must render and NAME the
 // restored changes (flags-name-it law — never a bare silent success).
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 
@@ -33,9 +33,15 @@ const session = (status: GamingSessionFile["status"]): GamingSessionFile => ({
   started_monitoring: false,
 });
 
+// Sibling re-point (gaming-console default-ON, 2026-07-15): this suite pins the CLASSIC card —
+// the default flipped, its subject didn't (same convention as monitor-v2.test.tsx). The console
+// face's own guards live in gaming-console-flag.test.tsx.
+beforeEach(() => localStorage.setItem("compy_gaming_console", "0"));
+
 afterEach(() => {
   cleanup();
   invokeMock.mockReset();
+  localStorage.clear();
 });
 
 describe("GamingMode restore-success confirmation", () => {

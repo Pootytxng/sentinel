@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { HomeRoom } from "./HomeRoom";
 import { HomeHud } from "./HomeHud";
@@ -159,6 +159,15 @@ const shell = (child: React.ReactNode) => (
 );
 
 describe("Home console flag '0' — the classic failsafe stays byte-identical (the failsafe contract)", () => {
+  // The shell's HUD frame (compy_hud_frame, default ON) mounts a live HH:MM:SS clock — freeze
+  // time so the two sequential renders can't tick across a second boundary and break the
+  // byte-identical comparison (full-suite flake caught 2026-07-15).
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T12:00:00"));
+  });
+  afterEach(() => vi.useRealTimers());
+
   it("hud default (editorial absent): key '0' === direct HomeHud", () => {
     const direct = render(shell(<HomeHud {...props} />)).container.innerHTML;
     cleanup();

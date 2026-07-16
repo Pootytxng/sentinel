@@ -1,0 +1,251 @@
+/* Gaming Mode arm/engage console (compy_gaming_console, console-HUD direction §Gaming Mode,
+   2026-07-15). One staged engage control + armed-tier readouts + the session contract as a live
+   checklist + the restore guarantee as the STANDING light. Calm honesty register — no hologram,
+   no traces (spec-forbidden). Presentation only over the same audited session commands.
+   Scoped under [data-v2="on"] (namespacing, tokens-v2 convention); tokens only. */
+
+/* ── Status strip: state LED + word, guarantee standing light right-aligned ── */
+:root[data-v2="on"] .gc-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0 10px;
+  padding: 8px 0;
+  border-block: 1px solid var(--ix-glass-border, var(--border-strong));
+}
+:root[data-v2="on"] .gc-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ix-text-3, var(--muted));
+}
+:root[data-v2="on"] .gc-led-on {
+  background: var(--status-ready, #2ee68a);
+  animation: v2-gc-led-breathe 2.4s ease-in-out infinite;
+}
+:root[data-v2="on"] .gc-led-warn {
+  background: var(--status-attention, #f0b878);
+}
+/* The standing light: the restore receipt is ALWAYS held — accent, never blinking. */
+:root[data-v2="on"] .gc-led-hold {
+  background: var(--ix-accent-text, var(--ix-accent, var(--accent)));
+}
+:root[data-v2="on"] .gc-state {
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ix-text-1, var(--fg));
+}
+:root[data-v2="on"] .gc-guarantee {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ix-text-3, var(--muted));
+}
+@keyframes v2-gc-led-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ── Console panels (recovery / restored / engage) ── */
+:root[data-v2="on"] .gc-panel {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--ix-glass-border, var(--border-strong));
+  border-top-color: var(--ix-glass-top, var(--ix-glass-border, var(--border-strong)));
+  border-radius: var(--ix-radius, 12px);
+  background: var(--ix-glass-fill, var(--surface, transparent));
+}
+:root[data-v2="on"] .gc-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--muted));
+}
+:root[data-v2="on"] .gc-panel-title::before {
+  content: "";
+  width: 8px;
+  height: 1px;
+  background: var(--ix-accent-text, var(--ix-accent, var(--accent)));
+  flex-shrink: 0;
+}
+:root[data-v2="on"] .gc-prose {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ix-text-2, var(--fg-2));
+}
+:root[data-v2="on"] .gc-recovery {
+  border-color: var(--status-attention-line, var(--status-attention, var(--border-strong)));
+}
+:root[data-v2="on"] .gc-restored {
+  border-color: var(--status-ready-line, var(--border-strong));
+}
+:root[data-v2="on"] .gc-restored .gc-panel-title {
+  color: var(--status-ready);
+}
+:root[data-v2="on"] .gc-restored .gc-panel-title::before {
+  background: var(--status-ready);
+}
+
+/* ── The contract checklist: each change a ticked row (live = lit, restored = settled) ── */
+:root[data-v2="on"] .gc-contract {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+:root[data-v2="on"] .gc-contract-row {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ix-text-1, var(--fg));
+}
+:root[data-v2="on"] .gc-tick {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  flex-shrink: 0;
+  align-self: center;
+  border: 1px solid var(--ix-text-3, var(--muted));
+  background: transparent;
+}
+:root[data-v2="on"] .gc-contract-live .gc-tick {
+  border-color: var(--status-ready, #2ee68a);
+  background: var(--status-ready, #2ee68a);
+}
+:root[data-v2="on"] .gc-contract-done .gc-tick {
+  border-color: var(--status-ready, #2ee68a);
+  background: transparent;
+}
+:root[data-v2="on"] .gc-honesty {
+  margin: 12px 0 0;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ix-text-2, var(--muted));
+}
+
+/* ── Advanced tier readouts ── */
+:root[data-v2="on"] .gc-tier {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ix-glass-border, var(--border-strong));
+}
+:root[data-v2="on"] .gc-tier-title {
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--muted));
+  margin: 0 0 4px;
+}
+:root[data-v2="on"] .gc-tier-sub {
+  margin-top: 10px;
+}
+
+/* ── Controls: the ONE staged engage control + quiet secondary chips ── */
+:root[data-v2="on"] .gc-engage {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--ix-accent-text, var(--ix-accent, var(--accent)));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ix-accent-text, var(--ix-accent, var(--accent)));
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+:root[data-v2="on"] .gc-engage:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ix-accent, var(--accent, #2ee6c0)) 12%, transparent);
+}
+:root[data-v2="on"] .gc-engage:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* Engaged: the control reads as the restore path — ready-status ink, still one control. */
+:root[data-v2="on"] .gc-engage-on {
+  border-color: var(--status-ready, #2ee68a);
+  color: var(--status-ready, #2ee68a);
+}
+:root[data-v2="on"] .gc-engage-on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-ready, #2ee68a) 10%, transparent);
+}
+:root[data-v2="on"] .gc-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--ix-glass-border, var(--border-strong));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ix-text-1, var(--fg));
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+:root[data-v2="on"] .gc-btn:hover:not(:disabled) {
+  border-color: var(--ix-accent, var(--accent));
+}
+:root[data-v2="on"] .gc-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+:root[data-v2="on"] .gc-btn-primary {
+  border-color: var(--ix-accent-text, var(--ix-accent, var(--accent)));
+  color: var(--ix-accent-text, var(--ix-accent, var(--accent)));
+}
+
+/* ── The promise disclosure: collapsed explainer attached to the engage control ── */
+:root[data-v2="on"] .gc-what {
+  margin-top: 10px;
+}
+:root[data-v2="on"] .gc-what summary {
+  cursor: pointer;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--muted));
+  transition: color 160ms ease;
+}
+:root[data-v2="on"] .gc-what summary:hover {
+  color: var(--ix-text-2, var(--fg-2));
+}
+:root[data-v2="on"] .gc-what[open] summary {
+  margin-bottom: 6px;
+}
+:root[data-v2="on"] .gc-what p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2, var(--fg-2));
+}
+
+/* Reduced motion: the console is already static — just stop the engaged LED breathing. */
+:root[data-v2="on"][data-motion="reduced"] .gc-led-on {
+  animation: none;
+}

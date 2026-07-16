@@ -1489,6 +1489,7 @@ function App() {
           onNavigate={navHome}
           ledgerCount={changes.length}
           version={APP_VERSION}
+          rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
         >
           {/* OptimizeV2 keepalive — hoisted OUT of the Home ternary (below) so it persists across
               EVERY tab, Home included (display:none when it isn't the active room). It used to live

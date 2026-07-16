@@ -5,7 +5,9 @@ import {
   readHomeConsole,
   readMonitorConsole,
   readBlackbookConsole,
+  readGamingConsole,
   readRoomIdentity,
+  readHudFrame,
 } from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
@@ -74,6 +76,35 @@ export function useBlackbookConsoleFlag(): boolean {
     const sync = () => setOn(readBlackbookConsole());
     window.addEventListener("compy:blackbook-console-changed", sync);
     return () => window.removeEventListener("compy:blackbook-console-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Gaming Mode arm/engage console flag as live React state (console-HUD direction §Gaming
+// Mode, 2026-07-15; same contract: a flag change fires compy:gaming-console-changed so GamingMode
+// re-branches without a reload). DEFAULT ON per the graduated-flag convention — only an explicit
+// "0" (devtools failsafe) restores the classic card (pinned by gaming-console-flag.test.tsx).
+export function useGamingConsoleFlag(): boolean {
+  const [on, setOn] = useState(readGamingConsole);
+  useEffect(() => {
+    const sync = () => setOn(readGamingConsole());
+    window.addEventListener("compy:gaming-console-changed", sync);
+    return () => window.removeEventListener("compy:gaming-console-changed", sync);
+  }, []);
+  return on;
+}
+
+// The app-wide viewport HUD frame flag as live React state (console-HUD direction §viewport frame,
+// 2026-07-15; same contract: a flag change fires compy:hud-frame-changed so ShellV2 and the
+// stage-scoped ReticleCursor instances re-branch without a reload). DEFAULT ON per the graduated-flag
+// convention — only an explicit "0" (devtools failsafe) restores the frameless shell and hands the
+// reticle back to the stage scopes (pinned by hud-frame-flag.test.tsx).
+export function useHudFrameFlag(): boolean {
+  const [on, setOn] = useState(readHudFrame);
+  useEffect(() => {
+    const sync = () => setOn(readHudFrame());
+    window.addEventListener("compy:hud-frame-changed", sync);
+    return () => window.removeEventListener("compy:hud-frame-changed", sync);
   }, []);
   return on;
 }

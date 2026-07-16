@@ -1,0 +1,77 @@
+/* App-wide viewport HUD frame (compy_hud_frame, console-HUD direction §viewport frame,
+   2026-07-15). Four corner brackets inset just below the custom titlebar + one bottom-right
+   mono readout line of REAL values only (rig probe · clock — a segment that can't be
+   fetched is omitted, never fabricated; ledger/stamp stay in the rail foot/topbar, never
+   repeated here). Entirely static — no keyframes, so reduced-motion is satisfied by
+   construction. pointer-events: none — pure chrome, never intercepts. Scoped under
+   [data-v2="on"]; tokens only. */
+
+:root[data-v2="on"] .hud-frame {
+  position: fixed;
+  /* Below the custom titlebar (--wc-h: 34px in the app; 0px fallback keeps jsdom honest). */
+  inset: calc(var(--wc-h, 0px) + 6px) 6px 6px;
+  pointer-events: none;
+  /* Above stage content (≤5), below every chrome/overlay layer (Learn 50, drawer 80+,
+     palette 100, modals 200+). The frame is ambience, not a lid. */
+  z-index: 40;
+}
+
+/* Corner brackets: two-side hairline borders, accent ink at low presence. */
+:root[data-v2="on"] .hud-frame-c {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  opacity: 0.55;
+  border: 0 solid var(--ix-accent-text, var(--ix-accent, var(--accent)));
+}
+:root[data-v2="on"] .hud-frame-c.tl {
+  top: 0;
+  left: 0;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+:root[data-v2="on"] .hud-frame-c.tr {
+  top: 0;
+  right: 0;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+:root[data-v2="on"] .hud-frame-c.bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+:root[data-v2="on"] .hud-frame-c.br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+/* The readout: one quiet mono line tucked inside the bottom-right bracket.
+   Bottom-left belongs to the rail foot; the topbar owns the top edge. */
+:root[data-v2="on"] .hud-frame-readout {
+  position: absolute;
+  right: 20px;
+  bottom: 2px;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ix-text-3, var(--muted));
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* Clearance: the readout owns the viewport's bottom-right band, so while the frame is
+   mounted the scroll lane gets extra bottom padding — bottom-hugging content leaves
+   (e.g. the session timeline's pin labels, which overhang their container) must never
+   share a pixel row with the readout (self-review 2026-07-15). Keyed off the
+   .v2-shell-hud class ShellV2 sets with the flag, NOT `:has(> .hud-frame)`: a `:has()`
+   on the shell re-evaluates on every DOM mutation underneath it, which taxed exactly
+   the biggest room swaps (Blackbook legs 87–156ms vs the ≲50ms nav bar, self-review
+   round 2). Guard: no :has() keyed on the shell may return (overlay-ambient-guard.test.ts). */
+:root[data-v2="on"] .v2-shell-hud .v2-content {
+  padding-bottom: 52px;
+}

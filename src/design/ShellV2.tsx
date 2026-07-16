@@ -20,11 +20,13 @@ import { Wordmark } from "./Wordmark";
 import { NavGlyph } from "./NavGlyph";
 import { HOME_RAIL, type HomeRailId, type HomeRailItem } from "./homeRail";
 import { useJarvisActive } from "./jarvis/use-jarvis";
-import { useRoomIdentityFlag } from "./use-hud";
+import { useRoomIdentityFlag, useHudFrameFlag } from "./use-hud";
 import { RoomAccentPicker } from "./RoomAccentPicker";
 import { PICKABLE_ROOMS, type PickableRoom } from "./room-identity";
 import { LenisSpine } from "./jarvis/LenisSpine";
 import { MagneticLayer } from "./jarvis/MagneticLayer";
+import { HudFrame } from "./console/HudFrame";
+import { ReticleCursor } from "./console/ReticleCursor";
 import "./shell-v2.css";
 import "./jarvis/jarvis.css";
 
@@ -55,6 +57,7 @@ export function ShellV2({
   onNavigate,
   ledgerCount,
   version,
+  rig,
   children,
 }: {
   items: HomeRailItem[];
@@ -62,6 +65,9 @@ export function ShellV2({
   onNavigate: (id: HomeRailId) => void;
   ledgerCount: number;
   version: string;
+  // Real hardware line for the HUD-frame readout ("CPU · GPU" from the probe); null until the
+  // probe resolves — the readout omits the segment, never fabricates one.
+  rig?: string | null;
   children: ReactNode;
 }) {
   // JARVIS motion layer (§A.3/A.5/A.6, flag compy_jarvis_motion DEFAULT ON + motion full). When
@@ -71,6 +77,10 @@ export function ShellV2({
   // Per-room accent picker (owner 2026-07-12b) — the topbar-corner control appears only when the
   // room-identity flag is on; with it off, the topbar is byte-identical to today.
   const roomIdentity = useRoomIdentityFlag();
+  // App-wide viewport HUD frame + shell-scoped reticle (compy_hud_frame, console-HUD §viewport
+  // frame 2026-07-15, DEFAULT ON). "0" failsafe: neither mounts, and the stage-scoped reticle
+  // instances (which self-defer while this is on) take back over — byte-identical shell.
+  const hudFrame = useHudFrameFlag();
   const shellRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -127,7 +137,7 @@ export function ShellV2({
 
   return (
     <V2NavContext.Provider value={nav}>
-      <div className="v2-shell" ref={shellRef}>
+      <div className={hudFrame ? "v2-shell v2-shell-hud" : "v2-shell"} ref={shellRef}>
         <nav className="v2-rail" aria-label="Rooms">
           <div className="v2-wordmark">
             <Wordmark size={16} />
@@ -195,6 +205,8 @@ export function ShellV2({
         </div>
         {jarvis && <LenisSpine wrapperRef={contentRef} contentRef={wrapRef} />}
         {jarvis && <MagneticLayer scopeRef={shellRef} />}
+        {hudFrame && <HudFrame rig={rig ?? null} />}
+        {hudFrame && <ReticleCursor scopeRef={shellRef} appWide />}
       </div>
     </V2NavContext.Provider>
   );

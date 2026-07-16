@@ -1,20 +1,36 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { useReducedMotion } from "../use-motion";
+import { useHudFrameFlag } from "../use-hud";
 import "./reticle.css";
 
 // ReticleCursor — a game-HUD Target Cursor (reactbits) scoped to a container. It follows the pointer
-// INSIDE `scopeRef` and snaps (corner-spread) over interactive targets ([data-target]/button). It is
-// deliberately STAGE-SCOPED, never app-wide: `cursor: none` is toggled on the scope only while the
-// pointer is inside it, so the native cursor is untouched everywhere else. Renders nothing under
-// reduced motion (Compy's resolved setting) or a coarse pointer — the native cursor stays.
-export function ReticleCursor({ scopeRef }: { scopeRef: RefObject<HTMLElement | null> }) {
+// INSIDE `scopeRef` and snaps (corner-spread) over interactive targets ([data-target]/button).
+// `cursor: none` is toggled on the scope only while the pointer is inside it, so the native cursor
+// is untouched outside the scope. Two scopes exist (compy_hud_frame, console-HUD §viewport frame,
+// 2026-07-15): the app-shell instance ShellV2 mounts with `appWide` while the flag is ON, and the
+// classic stage-scoped instances, which SELF-DEFER while that flag is on (one reticle, never two —
+// centralized here so mount sites need no flag logic; flag "0" hands control back to the stages).
+// Text-entry surfaces (input/textarea/select/contenteditable) escape the reticle: the CSS restores
+// the native cursor there and the move handler hides the brackets. Renders nothing under reduced
+// motion (Compy's resolved setting) or a coarse pointer — the native cursor stays.
+const TEXT_ENTRY = 'input, textarea, select, [contenteditable="true"]';
+
+export function ReticleCursor({
+  scopeRef,
+  appWide,
+}: {
+  scopeRef: RefObject<HTMLElement | null>;
+  appWide?: boolean;
+}) {
   const reduced = useReducedMotion();
+  const hudFrame = useHudFrameFlag();
   const coarse =
     typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+  const standDown = hudFrame && !appWide; // a stage instance defers to the shell's global reticle
   const elRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (reduced || coarse) return;
+    if (reduced || coarse || standDown) return;
     const scope = scopeRef.current;
     const el = elRef.current;
     if (!scope || !el) return;
@@ -31,10 +47,17 @@ export function ReticleCursor({ scopeRef }: { scopeRef: RefObject<HTMLElement | 
       el.style.transform = `translate(${rx}px, ${ry}px) translate(-50%, -50%) scale(${snap ? 1.7 : 1})`;
       raf = requestAnimationFrame(loop);
     };
+    let escaped = false;
     const onMove = (e: PointerEvent) => {
       const r = scope.getBoundingClientRect();
       tx = e.clientX - r.left;
       ty = e.clientY - r.top;
+      // Over text entry the native cursor comes back (reticle.css) — hide the brackets with it.
+      const esc = e.target instanceof Element && !!e.target.closest(TEXT_ENTRY);
+      if (esc !== escaped) {
+        escaped = esc;
+        el.style.opacity = escaped ? "0" : "1";
+      }
     };
     const onEnter = () => {
       scope.classList.add("lc-has-reticle");
@@ -74,9 +97,9 @@ export function ReticleCursor({ scopeRef }: { scopeRef: RefObject<HTMLElement | 
       scope.removeEventListener("pointerout", onOut);
       scope.classList.remove("lc-has-reticle");
     };
-  }, [reduced, coarse, scopeRef]);
+  }, [reduced, coarse, standDown, scopeRef]);
 
-  if (reduced || coarse) return null;
+  if (reduced || coarse || standDown) return null;
   return (
     <div className="lc-reticle" ref={elRef} aria-hidden="true">
       <span className="lc-ret-c tl" />

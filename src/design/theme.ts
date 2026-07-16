@@ -564,6 +564,67 @@ export function applyBlackbookConsole(on: boolean): void {
   }
 }
 
+// Gaming Mode arm/engage console face (console-HUD direction §Gaming Mode, 2026-07-15) — the
+// pane's console register: one staged engage control, armed-tier readouts, the session contract
+// as a live checklist, the restore guarantee as the standing light. PRESENTATION ONLY over the
+// same audited session commands (start/stop/recover/get-state/is-live) — zero new IPC, zero new
+// mutation path. DEFAULT ON per the graduated-flag convention: only an explicit "0"
+// (devtools/localStorage failsafe, no Settings row) restores the classic Gaming Mode card.
+const GAMING_CONSOLE_KEY = "compy_gaming_console";
+
+export function readGamingConsole(): boolean {
+  try {
+    return localStorage.getItem(GAMING_CONSOLE_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyGamingConsole(on: boolean): void {
+  try {
+    localStorage.setItem(GAMING_CONSOLE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:gaming-console-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
+// App-wide viewport HUD frame + global reticle (console-HUD direction §viewport frame, 2026-07-15) —
+// the JARVIS layer's outermost chrome: corner brackets inset below the titlebar + a mono readout
+// line of REAL values only (rig probe, build stamp, ledger count, system clock — fetch-fail → the
+// segment is omitted, never fabricated). Flag ON also promotes the Target Cursor reticle from
+// stage-scoped to app-shell-scoped (stage instances stand down — one reticle, never two).
+// DEFAULT ON per the graduated-flag convention: only an explicit "0" (devtools/localStorage
+// failsafe, no Settings row) restores the frameless shell + stage-scoped reticles.
+const HUD_FRAME_KEY = "compy_hud_frame";
+
+export function readHudFrame(): boolean {
+  try {
+    return localStorage.getItem(HUD_FRAME_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyHudFrame(on: boolean): void {
+  try {
+    localStorage.setItem(HUD_FRAME_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:hud-frame-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Per-room identity accents (owner 2026-07-12 "per-room identity" — see src/design/room-identity.ts
 // for the palette + doctrine). DEFAULT ON since 2026-07-13 (owner eyeballed the picker/palette and
 // directed approved work default-ON): <html data-room-identity="on"> lets room-identity.css scope

@@ -5,6 +5,15 @@
 :root[data-v2="on"] .lc-has-reticle {
   cursor: none;
 }
+/* Text entry escapes the reticle: caret/native cursor comes back (the JS hides the brackets). */
+:root[data-v2="on"] .lc-has-reticle :is(input, textarea, select, [contenteditable="true"]) {
+  cursor: auto;
+}
+/* App-shell instance (compy_hud_frame): above every in-shell overlay (GamingMode modal 1000)
+   so cursor:none never strands an invisible pointer over a drawer/modal; below wc-bar (9000). */
+:root[data-v2="on"] .v2-shell > .lc-reticle {
+  z-index: 1200;
+}
 :root[data-v2="on"] .lc-reticle {
   position: absolute;
   left: 0;

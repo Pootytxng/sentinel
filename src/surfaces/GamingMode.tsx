@@ -17,7 +17,9 @@ import {
   type StartOptions,
 } from "./gaming-mode";
 import { routeSession } from "../data/gaming-session-route";
+import { useGamingConsoleFlag } from "../design/use-hud";
 import "./GamingMode.css";
+import "./gaming-console.css";
 
 const CONSENT_KEY = "compy_gaming_consent_v1";
 
@@ -229,6 +231,234 @@ export function GamingMode() {
 
   const summary = session ? summarizeChanges(session.changes) : null;
 
+  // Console face (compy_gaming_console, DEFAULT ON — "0" devtools failsafe restores the classic
+  // card below). Presentation only: both faces share every hook/handler above — same audited
+  // commands, same consent gate, same recovery routing. Zero new IPC.
+  const consoleOn = useGamingConsoleFlag();
+
+  // The first-use consent modal + error line render identically in both faces — the consent gate
+  // is a mutation boundary, not a styling surface, so it stays ONE tree regardless of the flag.
+  const consentModal = needConsent && (
+    <div className="gaming-modal-backdrop" role="dialog" aria-modal="true" aria-label="Turn on Gaming Mode?">
+      <div className="gaming-modal">
+        <h3>Turn on Gaming Mode?</h3>
+        <p>For this session, Compy will change:</p>
+        <ul className="gaming-diff">
+          {CORE_ITEMS.map((it) => (
+            <li key={it.label}>{it.label}</li>
+          ))}
+          {advUsb && <li>USB selective suspend off (AC)</li>}
+          {advPcie && <li>PCIe ASPM off (AC)</li>}
+          {suspendSvcs.map((n) => (
+            <li key={n}>
+              Suspend {SUSPENDABLE_SERVICES.find((s) => s.name === n)?.label ?? n}
+            </li>
+          ))}
+        </ul>
+        <p className="gaming-guarantee">
+          <strong>Guarantee:</strong> every change is snapshotted before it's made and
+          restored to your <strong>exact</strong> prior state when you stop — even if the
+          app or PC crashes (you'll be asked to restore on next launch). Nothing is
+          permanent.
+        </p>
+        <div className="gaming-actions">
+          <button className="btn-small btn-small-on" onClick={confirmConsent} autoFocus>
+            Enable Gaming Mode
+          </button>
+          <button className="btn-small" onClick={() => setNeedConsent(false)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const errorLine = error && (
+    <div className="gaming-error">
+      <span aria-hidden="true">⚠</span> {error}
+    </div>
+  );
+
+  if (consoleOn) {
+    return (
+      <section className="tab-pane gaming-pane gc-pane">
+        <div className="section-header">
+          <h2 className="section-title">Gaming Mode</h2>
+          <div className="read-only-pill">Session-scoped · auto-restores</div>
+        </div>
+
+        {/* Status strip — the armed/engaged state word + the restore guarantee as the STANDING
+            light (always lit: the receipt discipline holds whether idle, engaged, or recovering). */}
+        <div className="gc-strip">
+          <span
+            className={`gc-led ${active ? "gc-led-on" : recovery ? "gc-led-warn" : ""}`}
+            aria-hidden="true"
+          />
+          <span className="gc-state">
+            {active ? "Engaged" : recovery ? "Interrupted session found" : "Standing by"}
+          </span>
+          <span className="gc-guarantee">
+            <span className="gc-led gc-led-hold" aria-hidden="true" />
+            Restore receipt — every change snapshots before it&apos;s made, exact prior state on stop
+          </span>
+        </div>
+
+        {/* Interrupted-recovery panel — highest priority (same choices + copy as classic) */}
+        {recovery && (
+          <div className="gc-panel gc-recovery">
+            <div className="gc-panel-title">Finish the last Gaming Mode session</div>
+            <p className="gc-prose">
+              Nothing&apos;s lost — the last session ({statusLabel(recovery.status)}) was
+              interrupted, usually because Compy was closed or the PC restarted while it was on.
+              Compy kept the full restore receipt. Pick one:
+            </p>
+            <ul className="gaming-recovery-choices">
+              <li>
+                <strong>Resume Gaming Mode</strong> — roll back, then re-apply it fresh so
+                you&apos;re gaming again.
+              </li>
+              <li>
+                <strong>Return to normal</strong> — roll those settings back and leave Gaming Mode
+                off.
+              </li>
+            </ul>
+            <div className="gaming-actions">
+              <button className="gc-btn gc-btn-primary" disabled={busy} onClick={onResume}>
+                {busy ? "Working…" : "Resume Gaming Mode"}
+              </button>
+              <button className="gc-btn" disabled={busy} onClick={() => onRecover(true)}>
+                Return to normal
+              </button>
+              <button className="link-btn" disabled={busy} onClick={() => onRecover(false)}>
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Restore-success confirmation */}
+        {restored && !session && (
+          <div className="gc-panel gc-restored" role="status">
+            <div className="gc-panel-title">
+              <span className="gaming-restored-check" aria-hidden="true">✓</span>{" "}
+              {restored.headline}
+            </div>
+            <p className="gc-prose">{restored.detail}</p>
+            {restored.labels.length > 0 && (
+              <ul className="gc-contract">
+                {restored.labels.map((label) => (
+                  <li key={label} className="gc-contract-row gc-contract-done">
+                    <span className="gc-tick" aria-hidden="true" />
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="gaming-actions">
+              <button className="gc-btn" onClick={() => setRestored(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* The engage console — armed-tier readouts + ONE staged engage control. */}
+        <div className="gc-panel">
+          {active && summary ? (
+            <>
+              {/* Session contract as a LIVE checklist: the real applied changes from the
+                  backend session file, each held under the restore receipt. */}
+              <div className="gc-panel-title">Session contract — live</div>
+              <ul className="gc-contract">
+                {summary.rows.map((r, i) => (
+                  <li key={i} className="gc-contract-row gc-contract-live">
+                    <span className="gc-tick" aria-hidden="true" />
+                    {r.label}
+                    {r.elevated && <span className="gaming-uac"> · needs admin to restore</span>}
+                  </li>
+                ))}
+              </ul>
+              <p className="gc-honesty">{summary.line}</p>
+              <button className="gc-engage gc-engage-on" disabled={busy} onClick={onStop}>
+                {busy ? "Restoring…" : "Disengage — restore my settings"}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Armed-tier readouts: the core tier always arms; advanced tiers arm per session. */}
+              <div className="gc-panel-title">Armed for this session (all restored on exit)</div>
+              <ul className="gc-contract">
+                {CORE_ITEMS.map((it) => (
+                  <li key={it.label} className="gc-contract-row">
+                    <span className="gc-tick" aria-hidden="true" />
+                    {it.label}
+                    {it.learnId && <>{" "}<WhatsThis id={it.learnId} onOpen={openLibrary} /></>}
+                  </li>
+                ))}
+              </ul>
+              <div className="gc-tier">
+                <div className="gc-tier-title">
+                  Advanced tier (optional · one admin OK covers everything below)
+                </div>
+                <label className="gaming-toggle">
+                  <input
+                    type="checkbox"
+                    checked={advUsb}
+                    onChange={(e) => setAdvUsb(e.target.checked)}
+                  />
+                  USB selective suspend off (AC)
+                </label>
+                <label className="gaming-toggle">
+                  <input
+                    type="checkbox"
+                    checked={advPcie}
+                    onChange={(e) => setAdvPcie(e.target.checked)}
+                  />
+                  PCIe ASPM off (AC)
+                </label>
+                <div className="gc-tier-title gc-tier-sub">
+                  Suspend background services (optional · per session · same single admin OK)
+                </div>
+                {SUSPENDABLE_SERVICES.map((s) => (
+                  <label className="gaming-toggle" key={s.name}>
+                    <input
+                      type="checkbox"
+                      checked={suspendSvcs.includes(s.name)}
+                      onChange={() => toggleSvc(s.name)}
+                    />
+                    {s.label}
+                    {SERVICE_LEARN[s.name] && (
+                      <WhatsThis id={SERVICE_LEARN[s.name]} onOpen={openLibrary} />
+                    )}
+                  </label>
+                ))}
+              </div>
+              <button className="gc-engage" disabled={busy} onClick={onStartClick}>
+                {busy ? "Engaging…" : "Engage Gaming Mode"}
+              </button>
+              {/* The promise explainer lives HERE, collapsed on the control it describes —
+                  never as a standing lede under the title (title-header law, self-review
+                  2026-07-15). The classic fallback face keeps its original paragraph. */}
+              <details className="gc-what">
+                <summary>What does engaging change?</summary>
+                <p>
+                  One switch applies the small set of{" "}
+                  <strong>already-audited, fully reversible</strong> settings above, then
+                  restores your <strong>exact</strong> prior state when you stop — even after
+                  a crash or reboot. No registry clown-car, no risky tweaks: a clean, honest
+                  performance profile that undoes itself.
+                </p>
+              </details>
+            </>
+          )}
+        </div>
+
+        {errorLine}
+        {consentModal}
+      </section>
+    );
+  }
+
   return (
     <section className="tab-pane gaming-pane">
       <div className="section-header">
@@ -393,47 +623,8 @@ export function GamingMode() {
         )}
       </Card>
 
-      {error && (
-        <div className="gaming-error">
-          <span aria-hidden="true">⚠</span> {error}
-        </div>
-      )}
-
-      {/* First-use consent modal */}
-      {needConsent && (
-        <div className="gaming-modal-backdrop" role="dialog" aria-modal="true" aria-label="Turn on Gaming Mode?">
-          <div className="gaming-modal">
-            <h3>Turn on Gaming Mode?</h3>
-            <p>For this session, Compy will change:</p>
-            <ul className="gaming-diff">
-              {CORE_ITEMS.map((it) => (
-                <li key={it.label}>{it.label}</li>
-              ))}
-              {advUsb && <li>USB selective suspend off (AC)</li>}
-              {advPcie && <li>PCIe ASPM off (AC)</li>}
-              {suspendSvcs.map((n) => (
-                <li key={n}>
-                  Suspend {SUSPENDABLE_SERVICES.find((s) => s.name === n)?.label ?? n}
-                </li>
-              ))}
-            </ul>
-            <p className="gaming-guarantee">
-              <strong>Guarantee:</strong> every change is snapshotted before it's made and
-              restored to your <strong>exact</strong> prior state when you stop — even if the
-              app or PC crashes (you'll be asked to restore on next launch). Nothing is
-              permanent.
-            </p>
-            <div className="gaming-actions">
-              <button className="btn-small btn-small-on" onClick={confirmConsent} autoFocus>
-                Enable Gaming Mode
-              </button>
-              <button className="btn-small" onClick={() => setNeedConsent(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {errorLine}
+      {consentModal}
     </section>
   );
 }
