@@ -458,6 +458,8 @@ describe("room-accents: bug→guard (self-review 2026-07-12b)", () => {
     // after the room remounted. Pin the event listener AND that its tick feeds the draw deps.
     expect(sessionStackTsx).toMatch(/addEventListener\(\s*["']compy:room-identity-changed["']/);
     expect(sessionStackTsx).toMatch(/setAccentTick/);
-    expect(sessionStackTsx).toMatch(/roomIdentityOn,\s*accentTick\s*\]/);
+    // 2026-07-16 (nav-mount follow-up): the listener/tick hoisted to the parent — ONE listener,
+    // tick passed down + keying the shared ink cache — but it must still feed every row's draw deps.
+    expect(sessionStackTsx).toMatch(/roomIdentityOn,\s*accentTick,\s*inkFor\s*\]/);
   });
 });

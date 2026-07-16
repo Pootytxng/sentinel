@@ -56,6 +56,14 @@
   padding: 10px 14px; border: 1px solid var(--ix-glass-border); min-width: 0; }
 :root[data-v2="on"] .bc-row-muted { opacity: .62; }
 
+/* Tape disclosure — the tape mounts the recent slice (nav-mount cost); this unrolls the rest.
+   Quiet mono like .bc-manage but muted: it's a read-more, not an action door. */
+:root[data-v2="on"] .bc-tape-more { display: inline-flex; align-self: flex-start; align-items: center;
+  gap: 8px; font-family: var(--ix-mono); font-size: 11px; letter-spacing: .04em; padding: 7px 14px;
+  cursor: pointer; background: transparent; color: var(--ix-text-3); border: 1px solid var(--ix-glass-border);
+  font-variant-numeric: tabular-nums; }
+:root[data-v2="on"] .bc-tape-more:hover { color: var(--ix-text-1); border-color: var(--ix-text-3); }
+
 /* The kind tag — micro-label; the actionable "change" kind rides the accent, the rest stay calm. */
 :root[data-v2="on"] .bc-tag { align-self: baseline; font-family: var(--ix-mono); font-size: 9px;
   letter-spacing: .14em; text-transform: uppercase; padding: 3px 8px; white-space: nowrap;

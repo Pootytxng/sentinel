@@ -343,3 +343,37 @@ describe("BlackbookConsole — naming rail (no second 'Black Box')", () => {
     }
   });
 });
+
+// The tape mounts the RECENT slice, never the machine's whole lifetime in one synchronous render —
+// an uncapped map over every record ever kept was the dominant Blackbook nav-mount cost (80–152ms,
+// scaling with history; nav-mount follow-up, BACKLOG cycle 2026-07-15d). The cap is honest: the
+// strip counts still speak for the FULL record set, and one press unrolls the rest.
+describe("BlackbookConsole — the tape caps its first render (nav-mount guard)", () => {
+  const many = (n: number): LogbookRecord[] =>
+    Array.from({ length: n }, (_, i) =>
+      change({ at: Date.parse("2026-07-10T12:00:00Z") - i * 60_000, id: `c${i}`, title: `Tweak ${i}` }),
+    );
+
+  it("renders at most 30 rows before the press, states the exact older count, unrolls on press", () => {
+    useReduced();
+    const { container } = mountConsole(many(35));
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(30);
+    const more = container.querySelector<HTMLButtonElement>(".bc-tape-more");
+    expect(more).not.toBeNull();
+    expect(more!.textContent).toContain("5 older records");
+    // the strip's count is derived from the FULL records — the cap never understates the ledger
+    expect(
+      container.querySelector('.bc-tile[data-kind="change"] .bc-tile-n')!.textContent,
+    ).toBe("35");
+    fireEvent.click(more!);
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(35);
+    expect(container.querySelector(".bc-tape-more")).toBeNull();
+  });
+
+  it("a tape at or under the cap shows every row and no disclosure button", () => {
+    useReduced();
+    const { container } = mountConsole(many(30));
+    expect(container.querySelectorAll(".bc-tape .bc-row").length).toBe(30);
+    expect(container.querySelector(".bc-tape-more")).toBeNull();
+  });
+});

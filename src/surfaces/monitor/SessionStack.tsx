@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SessionSummary } from "../../types";
 import { useRoomIdentityFlag } from "../../design/use-hud";
 import { monotoneSegments } from "../../design/console/monotone";
@@ -62,19 +62,21 @@ function RowCanvas({
   axisMax,
   newest,
   roomIdentityOn,
+  accentTick,
+  inkFor,
 }: {
   row: StackRow;
   axisMax: number | null;
   newest: boolean;
   roomIdentityOn: boolean;
+  /** Bumped by the parent when a per-room accent pick changes — re-runs the draw (owner 2026-07-12b). */
+  accentTick: number;
+  /** The stack-shared ink resolver — see the cache note in SessionStack. */
+  inkFor: (name: string, fb: string, from?: Element | null) => string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 640, h: 40 });
-  // Repaint when a per-room accent PICK changes --ix-accent in place (owner 2026-07-12b). The draw
-  // effect reads the colour at paint time, but its deps don't observe a live accent change, so
-  // without this the newest trace would keep the old hue until the room remounts (self-review catch).
-  const [accentTick, setAccentTick] = useState(0);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -85,12 +87,6 @@ function RowCanvas({
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const bump = () => setAccentTick((t) => t + 1);
-    window.addEventListener("compy:room-identity-changed", bump);
-    return () => window.removeEventListener("compy:room-identity-changed", bump);
   }, []);
 
   useEffect(() => {
@@ -111,10 +107,10 @@ function RowCanvas({
     // so the newest trace matches the Monitor chrome hue; off ⇒ documentElement (today's value).
     const inkFrom = roomIdentityOn ? wrapRef.current : null;
     const ink = newest
-      ? readInk("--ix-accent", "#b366ff", inkFrom)
-      : readInk("--ix-text-3", "#8a93a6", inkFrom);
-    const warn = readInk("--v2-warn", "#f5c542", inkFrom);
-    const grid = readInk("--ix-glass-border", "rgba(160,170,190,0.3)", inkFrom);
+      ? inkFor("--ix-accent", "#b366ff", inkFrom)
+      : inkFor("--ix-text-3", "#8a93a6", inkFrom);
+    const warn = inkFor("--v2-warn", "#f5c542", inkFrom);
+    const grid = inkFor("--ix-glass-border", "rgba(160,170,190,0.3)", inkFrom);
     const baseY = h - 1;
     const plotH = h - PAD_Y * 2;
     const px = (xf: number) => 1 + xf * (w - 2);
@@ -167,7 +163,7 @@ function RowCanvas({
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }, [row, axisMax, newest, size, roomIdentityOn, accentTick]);
+  }, [row, axisMax, newest, size, roomIdentityOn, accentTick, inkFor]);
 
   return (
     <span className={`ss-canvas-wrap ${row.partial ? "ss-canvas-partial" : ""}`} ref={wrapRef}>
@@ -205,6 +201,15 @@ export function SessionStack({
   const [gameOnly, setGameOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const roomIdentityOn = useRoomIdentityFlag();
+  // Repaint every row when a per-room accent PICK changes --ix-accent in place (owner 2026-07-12b).
+  // Lives here (not per-row) so the stack registers ONE listener, and so the ink cache below can
+  // key on it — the tokens change exactly when this bumps.
+  const [accentTick, setAccentTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setAccentTick((t) => t + 1);
+    window.addEventListener("compy:room-identity-changed", bump);
+    return () => window.removeEventListener("compy:room-identity-changed", bump);
+  }, []);
   const now = useMemo(() => new Date(), []);
   const currentGame = sessions[0]?.process_name || null;
   const filterAvail = useMemo(() => gameFilterAvailable(sessions), [sessions]);
@@ -212,6 +217,30 @@ export function SessionStack({
     () => stackRowsFrom(sessions, gameOnly && filterAvail ? currentGame : null),
     [sessions, gameOnly, filterAvail, currentGame],
   );
+  // Stack-shared ink cache. Each row's draw effect used to call readInk (= getComputedStyle) three
+  // times, and getComputedStyle forces a style recalc — 5 rows paid up to 15 recalcs on every
+  // Monitor nav-in (nav-mount follow-up, BACKLOG cycle 2026-07-15d). All rows sit in the same room,
+  // so the four tokens resolve identically across rows: cache by token name and the whole stack
+  // pays at most four reads per paint generation. Reset on exactly the signals that re-run the
+  // draws for token-relevant reasons — accent pick / identity flag / a new row model (the old
+  // per-draw read picked up e.g. a theme switch on the next data repaint; keying on the model
+  // reference preserves that).
+  const inkCache = useRef<{ key: string; model: unknown; map: Map<string, string> }>({
+    key: "",
+    model: null,
+    map: new Map(),
+  });
+  const inkCacheKey = `${roomIdentityOn ? "room" : "root"}:${accentTick}`;
+  if (inkCache.current.key !== inkCacheKey || inkCache.current.model !== model) {
+    inkCache.current = { key: inkCacheKey, model, map: new Map() };
+  }
+  const inkFor = useCallback((name: string, fb: string, from?: Element | null): string => {
+    const hit = inkCache.current.map.get(name);
+    if (hit !== undefined) return hit;
+    const got = readInk(name, fb, from);
+    inkCache.current.map.set(name, got);
+    return got;
+  }, []);
 
   if (sessions.length === 0) {
     return <p className="ss-empty">no sessions on record yet — play with capture on</p>;
@@ -286,6 +315,8 @@ export function SessionStack({
                   axisMax={model.axisMax}
                   newest={i === 0}
                   roomIdentityOn={roomIdentityOn}
+                  accentTick={accentTick}
+                  inkFor={inkFor}
                 />
                 {row.delta && (
                   <span className="ss-chip">

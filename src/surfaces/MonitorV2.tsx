@@ -73,11 +73,10 @@ export function MonitorV2(props: Props) {
     setMode(m);
     applyViewMode(m); // persists + mirrors onto <html data-view-mode>, same as classic
   };
-  // Same one-shot sensor pre-warm as the classic Monitor shell (read-only, zero new IPC).
-  useEffect(() => {
-    invoke("get_cpu_sensors").catch(() => {});
-    invoke("get_gpu_sensors").catch(() => {});
-  }, []);
+  // (The classic shell's one-shot sensor pre-warm was removed 2026-07-16: every face this shell
+  // mounts — MonitorConsole / Basic tiles / Play live — fires the same get_cpu_sensors +
+  // get_gpu_sensors on ITS mount, so the pre-warm had become a duplicate IPC round-trip on
+  // every nav-in. Nav-mount follow-up, BACKLOG cycle 2026-07-15d.)
 
   // Self-correcting capture poll — ONLY while we believe a capture is live AND the normal poller
   // (the Live face) is unmounted (segment !== "live"). Without this, leaving the Live segment

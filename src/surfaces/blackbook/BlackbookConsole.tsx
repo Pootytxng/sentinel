@@ -47,6 +47,10 @@ const KIND_TAG: Record<LogbookRecord["kind"], string> = {
   autopsy: "Guide check",
 };
 
+// How many tape rows mount before the "show older" press (the SessionStack MAX_STACK_ROWS pattern,
+// sized for a tape: ~a month of typical use above the fold, everything older one press away).
+const TAPE_CAP = 30;
+
 const fmtWhen = (at: number): string => {
   const d = new Date(at);
   const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -191,6 +195,14 @@ export function BlackbookConsole({
     () => (filter ? records.filter((r) => r.kind === filter) : records),
     [records, filter],
   );
+  // The tape renders the RECENT slice, not the machine's whole lifetime: an uncapped map over
+  // every change+session+autopsy ever recorded was the dominant Blackbook nav-mount cost (80–152ms,
+  // scaling with history — nav-mount follow-up, BACKLOG cycle 2026-07-15d). Counts/strip/sinceDate
+  // still derive from the FULL records (the numbers never understate), and one press unrolls the
+  // rest — nothing is hidden, only deferred behind an honest count.
+  const [tapeAll, setTapeAll] = useState(false);
+  const tape = tapeAll ? shown : shown.slice(0, TAPE_CAP);
+  const older = shown.length - tape.length;
   const sinceDate = useMemo(
     () =>
       records.length
@@ -291,7 +303,7 @@ export function BlackbookConsole({
             </span>
           </div>
           <ol className="bc-tape">
-            {shown.map((r, i) => (
+            {tape.map((r, i) => (
             <li
               key={`${r.kind}-${r.at}-${i}`}
               className={`bc-row bc-row-${r.kind}${r.kind === "change" && r.rolledBack ? " bc-row-muted" : ""}`}
@@ -313,6 +325,11 @@ export function BlackbookConsole({
             </li>
           ))}
           </ol>
+          {older > 0 && (
+            <button type="button" className="bc-tape-more" onClick={() => setTapeAll(true)}>
+              show {older} older {older === 1 ? "record" : "records"}
+            </button>
+          )}
         </>
       )}
 
