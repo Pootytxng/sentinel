@@ -1,5 +1,6 @@
 /* Per-room identity accents — scoped under :root[data-room-identity="on"] (the compy_room_identity
-   flag, DEFAULT OFF). See src/design/room-identity.ts for the doctrine + the palette source of truth.
+   flag, DEFAULT ON since 2026-07-13; "0" is the devtools failsafe). See src/design/room-identity.ts
+   for the doctrine + the palette source of truth.
 
    THE MECHANISM: each rule overrides the accent tokens ON the room's own element. Every in-room
    consumer already resolves its colour from these — the room re-point blocks (monitor/blackbook/lab/

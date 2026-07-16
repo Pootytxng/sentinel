@@ -4,7 +4,7 @@
 // hologram already uses (PART_KIND_COLORS — every component KIND keeps its own distinct hue in every
 // theme so the parts are instantly tellable apart), now extended to the room chrome.
 //
-// Behind the `compy_room_identity` flag (DEFAULT OFF): when on, each room scopes its OWN --v2-accent
+// Behind the `compy_room_identity` flag (DEFAULT ON since 2026-07-13): when on, each room scopes its OWN --v2-accent
 // (room-identity.css) so its chrome, HUD masthead, tags, buttons and session sparkline all read one
 // distinguishable hue — theme-independent, like the hologram parts. When off (or absent), every room
 // shares the global violet, byte-identical to today. Home keeps the global brand violet — it IS the
@@ -49,12 +49,14 @@ export function defaultRoomAccent(room: PickableRoom): string {
 
 // The curated swatch palette — SINGLE SOURCE OF TRUTH for both the picker UI and the persisted-value
 // whitelist (theme.ts only ever applies a value found here, so a tampered localStorage can't inject
-// an illegible colour). Re-curated 2026-07-13b on the owner's finish-it directive ("is there anyway
-// to just add some double color options rather than the ugly earth tones like olive … then leave that
-// finished"): the EARTH-TONE darks (Rust/Olive/Pine) are pruned; three DUO swatches join — each pairs
-// a bright PRIMARY (the accent proper: chrome, buttons, text) with a SECONDARY that drives the room's
-// dim/line washes (borders, hover washes, glows), giving a genuine two-colour room without touching
-// any foreground-legibility surface. 9 bright + 3 dark + 3 duo = 15, grid 5×3.
+// an illegible colour). Re-curated 2026-07-16 on the owner's directive ("the 2 color shift options
+// are the favorite amongst the 15 so maybe make half of them some good 2 color shift options and the
+// remaining half all the standard color spectrum"): the deep singles (Slate/Plum/Wine — the last
+// swatches needing adaptive ink/text) retire, the singles half becomes a clean standard-spectrum
+// walk, and the duo half grows to seven. Each DUO pairs a bright PRIMARY (the accent proper: chrome,
+// buttons, text) with a SECONDARY that drives the room's dim/line washes (borders, hover washes,
+// glows), giving a genuine two-colour room without touching any foreground-legibility surface.
+// 8 spectrum singles + 7 duos = 15, grid 5×3.
 //
 // THE LEGIBILITY LAW (non-negotiable — why this is a curated set, not a free hex field): the accent
 // is consumed in TWO foreground roles, each with its own contrast floor, so every swatch is vetted
@@ -86,25 +88,25 @@ export type AccentSwatch = {
 };
 
 export const ROOM_ACCENT_SWATCHES: AccentSwatch[] = [
-  // Row 1 — the four room presets lead + Sky (bright). Hue walk begins.
+  // Row 1 — the four room presets lead + Sky (bright). The spectrum walk begins.
   { name: "Violet", hex: "#a78bfa" }, // Home preset (~255°)
   { name: "Teal", hex: "#3fd9c2" }, // Monitor preset (~172°)
   { name: "Amber", hex: "#f0b878" }, // Blackbook preset (~33°)
   { name: "Emerald", hex: "#27e08a" }, // Lab preset (~154°)
   { name: "Sky", hex: "#46a8ff" }, // azure blue (~210°)
-  // Row 2 — the rest of the bright wheel + the first dark (all brights ≥4.5:1 vs the dark ink)
+  // Row 2 — the rest of the standard spectrum (all ≥4.5:1 vs the dark ink) + the first duos.
   { name: "Red", hex: "#ff6b6b" }, // (~0°)
   { name: "Yellow", hex: "#ffe14a" }, // (~53°)
-  { name: "Lime", hex: "#b6f24a" }, // yellow-green (~80°)
   { name: "Magenta", hex: "#f45cc6" }, // hot fuchsia (~318°)
-  { name: "Slate", hex: "#33507f", ink: "#e9f0fb", text: "#98b4e6" }, // deep steel-blue (~215°)
-  // Row 3 — the remaining darks + the DUOS (owner-named pairs, 2026-07-13b). Earth tones
-  // (Rust/Olive/Pine) pruned on the same directive.
-  { name: "Plum", hex: "#6b2b9e", ink: "#f4e9ff", text: "#c79cef" }, // deep purple (~280°)
-  { name: "Wine", hex: "#9e1f46", ink: "#ffe6ee", text: "#ef8ea8" }, // deep crimson (~338°)
   { name: "Cyan / Midnight", hex: "#35e0e8", hex2: "#3b2a7a" }, // cyan chrome over midnight-purple washes
   { name: "Red / Blue", hex: "#ff6b6b", hex2: "#2f6bff" }, // red chrome over vivid-blue washes
+  // Row 3 — the rest of the duos (2026-07-16: the owner's favourites, grown to half the palette).
+  // Every PRIMARY reuses an already-vetted bright single; secondaries are wash-only (no floor).
   { name: "Lime / Cyan", hex: "#b6f24a", hex2: "#35e0e8" }, // lime chrome over cyan washes
+  { name: "Violet / Teal", hex: "#a78bfa", hex2: "#3fd9c2" }, // the brand pair — violet chrome, teal washes
+  { name: "Magenta / Violet", hex: "#f45cc6", hex2: "#6b2b9e" }, // synthwave — hot pink over deep purple
+  { name: "Amber / Wine", hex: "#f0b878", hex2: "#9e1f46" }, // ember — warm gold over deep crimson
+  { name: "Sky / Emerald", hex: "#46a8ff", hex2: "#27e08a" }, // aurora — azure over emerald washes
 ];
 
 // A swatch's persisted KEY: the bare primary hex for singles (backward-compatible with every pick

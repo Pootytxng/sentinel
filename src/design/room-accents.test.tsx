@@ -80,11 +80,12 @@ describe("room-accents: curated palette is legible + sound", () => {
 
   // The paired ink must be LOAD-BEARING, not decorative: a swatch only carries an `ink` because it is
   // too dark for the default dark ink. This stops a bright swatch being mislabelled "dark" (which
-  // would silently give it a needless light ink) — and proves the "dark tone" ask is really present.
+  // would silently give it a needless light ink). NOTE (2026-07-16 palette rework): the last dark
+  // singles (Slate/Plum/Wine) retired on the owner's spectrum+duo directive, so this set is currently
+  // EMPTY — the guard stays so any future dark swatch is still held to the law.
   it("dark swatches (paired ink) genuinely FAIL the default dark ink — the adaptive ink is required", () => {
     const darkInk = parseHex(ACCENT_INK);
     const darks = ROOM_ACCENT_SWATCHES.filter((s) => s.ink);
-    expect(darks.length, "the palette must actually contain dark-tone swatches").toBeGreaterThan(0);
     for (const s of darks) {
       const ratio = contrast(darkInk, parseHex(s.hex));
       expect(
@@ -115,9 +116,9 @@ describe("room-accents: curated palette is legible + sound", () => {
   // carries a paired light `text` tint that theme.ts emits as --ix-accent-text/--v2-accent-text. Three
   // invariants, mirroring the ink guards: legibility · load-bearing · coverage.
   it("every DARK swatch's accent-TEXT clears WCAG 4.5:1 against the lightest room panel", () => {
+    // (Set currently empty — darks retired 2026-07-16; the guard holds for any future dark swatch.)
     const panel = parseHex(PANEL_LIGHTEST);
     const darks = ROOM_ACCENT_SWATCHES.filter((s) => s.text);
-    expect(darks.length, "the palette must carry paired accent-text tints").toBeGreaterThan(0);
     for (const s of darks) {
       const ratio = contrast(parseHex(s.text!), panel);
       expect(
@@ -260,17 +261,17 @@ describe("room-accents: persisted store round-trips + rejects junk", () => {
   // appearing under another room during rapid probing (unreproduced). Pin the underlying invariant so
   // it can never become real: writing/clearing ONE room's pick must leave every sibling room untouched.
   it("setRoomAccent writes ONLY the target room — sibling picks are never mutated", () => {
-    setRoomAccent("home", "#9e1f46"); // Wine (dark)
-    setRoomAccent("learn", "#f45cc6"); // Magenta (bright)
-    setRoomAccent("play", "#6b2b9e"); // Plum — must not disturb home/learn
+    setRoomAccent("home", "#ffe14a"); // Yellow
+    setRoomAccent("learn", "#f45cc6"); // Magenta
+    setRoomAccent("play", "#f0b878+#9e1f46"); // Amber / Wine duo — must not disturb home/learn
     let got = readRoomAccents();
-    expect(got.home).toBe("#9e1f46");
+    expect(got.home).toBe("#ffe14a");
     expect(got.learn).toBe("#f45cc6");
-    expect(got.play).toBe("#6b2b9e");
+    expect(got.play).toBe("#f0b878+#9e1f46");
     setRoomAccent("play", null); // clearing one leaves the others intact
     got = readRoomAccents();
     expect(got.play).toBeUndefined();
-    expect(got.home).toBe("#9e1f46");
+    expect(got.home).toBe("#ffe14a");
     expect(got.learn).toBe("#f45cc6");
   });
 
@@ -304,40 +305,30 @@ describe("room-accents: managed <style> is scoped + same-element (flag-off inert
     expect(css).toMatch(/--v2-accent-line:color-mix\(in srgb, #46a8ff 25%/);
   });
 
-  // Option B (adaptive ink, owner 2026-07-13): a DARK pick must emit its paired light ink as BOTH the
-  // token (--v2-accent-ink) and the instrument ink (--ix-accent-ink, so it reaches every accent-fill
-  // consumer even in a room that never re-pointed the ink, e.g. Home). A BRIGHT pick emits neither, so
-  // the room keeps the default dark ink #1a0a2e. This is the mechanism that keeps a dark fill legible.
-  it("a DARK pick emits the paired --v2-accent-ink AND --ix-accent-ink; a BRIGHT pick emits neither", () => {
-    setRoomAccent("play", "#6b2b9e"); // Plum (dark, ink #f4e9ff)
-    let css = document.getElementById("compy-room-accents")!.textContent!;
-    expect(css).toContain("--v2-accent:#6b2b9e;");
-    expect(css).toContain("--v2-accent-ink:#f4e9ff;");
-    expect(css).toContain("--ix-accent-ink:#f4e9ff;");
-
-    setRoomAccent("play", "#46a8ff"); // Sky (bright) — replaces the pick, no ink override
-    css = document.getElementById("compy-room-accents")!.textContent!;
-    expect(css).toContain("--v2-accent:#46a8ff;");
-    expect(css).not.toContain("--v2-accent-ink:");
-    expect(css).not.toContain("--ix-accent-ink:");
+  // Adaptive ink/text (owner 2026-07-13, "Option B"): a DARK pick emitted its paired light ink/text
+  // as --v2-accent-ink/--ix-accent-ink and --v2-accent-text/--ix-accent-text. The 2026-07-16 palette
+  // rework retired the last dark swatches (Slate/Plum/Wine → spectrum singles + duos), so the
+  // emission path in theme.ts is DORMANT: swatchInk/swatchText return undefined for every current
+  // swatch, and NO pick may emit an ink/text override (a stray one would flip a bright fill to
+  // light-on-bright — illegible). If a dark swatch ever returns, restore the dark-pick emission pins
+  // from git history (room-accents.test.tsx @ 8e6920f) alongside it.
+  it("no current pick emits --v2-accent-ink/--ix-accent-ink (all swatches live under the default dark ink)", () => {
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      setRoomAccent("play", swatchKey(s));
+      const css = document.getElementById("compy-room-accents")!.textContent!;
+      expect(css, s.name).toContain(`--v2-accent:${s.hex.toLowerCase()};`);
+      expect(css, s.name).not.toContain("--v2-accent-ink:");
+      expect(css, s.name).not.toContain("--ix-accent-ink:");
+    }
   });
 
-  // The adaptive accent-TEXT emission (dark-pick legibility, 2026-07-13) — the MECHANISM half of the fix
-  // (the swatch-data half is guarded above). A DARK pick must write its paired light text as BOTH
-  // --v2-accent-text (for --v2-accent-as-text sites reading it via fallback) AND --ix-accent-text (the
-  // instrument text token the room -v2 re-points map to var(--v2-accent); this same-element override wins
-  // on source order). A BRIGHT pick writes neither, so its accent-text stays the raw, already-legible
-  // accent. This pins theme.ts's emission — a dropped/typo'd `text` decl would slip every swatch-data test.
-  it("a DARK pick emits the paired --v2-accent-text AND --ix-accent-text; a BRIGHT pick emits neither", () => {
-    setRoomAccent("play", "#6b2b9e"); // Plum (dark, text #c79cef)
-    let css = document.getElementById("compy-room-accents")!.textContent!;
-    expect(css).toContain("--v2-accent-text:#c79cef;");
-    expect(css).toContain("--ix-accent-text:#c79cef;");
-
-    setRoomAccent("play", "#46a8ff"); // Sky (bright) — replaces the pick, no text override
-    css = document.getElementById("compy-room-accents")!.textContent!;
-    expect(css).not.toContain("--v2-accent-text:");
-    expect(css).not.toContain("--ix-accent-text:");
+  it("no current pick emits --v2-accent-text/--ix-accent-text (every accent stays legible as raw text)", () => {
+    for (const s of ROOM_ACCENT_SWATCHES) {
+      setRoomAccent("play", swatchKey(s));
+      const css = document.getElementById("compy-room-accents")!.textContent!;
+      expect(css, s.name).not.toContain("--v2-accent-text:");
+      expect(css, s.name).not.toContain("--ix-accent-text:");
+    }
   });
 
   // DUO emission (owner 2026-07-13b): the PRIMARY is the accent proper; the SECONDARY drives ONLY
