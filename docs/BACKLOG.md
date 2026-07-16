@@ -165,6 +165,49 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-16a — ✅ APP LANE TASK LIST CLOSED: room-palette 8+7 rework · App.css gradient-ink de-slop · nav-mount cost FIXED + SHIPPED LIVE — frontend-only, NO gate moved, zero src-tauri
+
+**Owner's operative mandate:** the three-part order (*"make half of them some good 2 color shift
+options and the remaining half all the standard color spectrum… follow through with [the App.css
+gradient text] as well… that should allow for you to ccompletely finish this task list before i send
+the biggest app orientation refinement workflow"*) — every item executed; **the app-lane task list is
+now EMPTY** ahead of the owner's announced orientation-refinement workflow.
+
+- **`92596d6` — room-accent palette reworked 8 duo + 7 solo** (owner pick: duos are the favorites):
+  8 curated two-color shift options + 7 standard-spectrum solids, adaptive-ink law kept per swatch.
+  self-reviewer **PASS 8/8** (duo-fill ink measured legible live).
+- **`47300d9` — App.css gradient-text de-slop + CoreBar scaleX** (the agent-consultant suggestion the
+  owner greenlit): static gradient headline ink retired to solid tokens where it read as template
+  slop; CoreBar bar animates via transform (no layout thrash). Covered by the same PASS.
+- **`b2d775d` — UI_VISION_BACKLOG stale-list fix:** the "Remaining 🔴" per-tab console rollout list
+  was stale — Monitor gauges/oscilloscope + Blackbook flight-recorder had ALREADY shipped (2026-07-12/13);
+  both recorded 🟢 with their ship hashes.
+- **`d0392c9` — nav-mount cost FIXED (closes Cycle 2026-07-15d's open follow-up).** Investigation
+  (delegated, then code-verified) found three root causes: ① MonitorV2's classic-shell one-shot sensor
+  pre-warm duplicated the IPC every face already fires on its own mount → deleted; ② SessionStack ran
+  `readInk`/`getComputedStyle` (forced whole-document style recalc) per-row ×4 tokens (up to 15 recalcs
+  per mount) → ONE hoisted `compy:room-identity-changed` listener + shared memoized ink cache keyed on
+  (identity-flag · accentTick · model), ≤4 reads per mount, in-place accent repaint preserved
+  (guard re-pinned); ③ **Blackbook tape rendered the machine's ENTIRE lifetime history** (dominant cost
+  + the 80–152ms variance) → first render caps at `TAPE_CAP=30` rows with a quiet mono
+  "show N older records" disclosure (`.bc-tape-more`); Receipts Strip counts/sinceDate still derive
+  from the FULL record set. bug→guard: 2 vitest cases pin cap + disclosure + full-count tiles + unroll.
+  Ruled out & left alone: logbook.ts O(n²) same-game lookback (sub-ms), corpus imports, ArcGauge/gsap.
+- **Verify:** tsc 0 · vitest **1666/1666** (181 files) · self-reviewer **PASS 8/8** on the nav-mount
+  train (live 73-record ledger: 30 rows + "show 43 older records" → unroll to 73, button gone; accent
+  pick teal→magenta repainted traces in place; only-new-element check passed — strip counts 53/20
+  unchanged, code-verified full-set).
+- ✅ **SHIPPED 2026-07-16:** `npm run tauri build` → `ship-reinstall.ps1` (dirty-stamp guard tripped on
+  parallel-lane-only dirt — Cowork `COMPY_OVERVIEW.md` + a stray scratchpad png; app inputs
+  porcelain-clean at build → deliberate `-AllowDirty`, 2026-07-15f precedent) → installer SHA-256
+  `832B7CF3BDBD2603F925EDD18DD9A1669B0AB74CC441A7675769B46F48687A4E`, **stamp-verified `b968f0a` live,
+  CLEAN (no `+dirty`)**, one installer on the Desktop. (`b968f0a` = HEAD at build: `d0392c9` + the site
+  lane's site-only `b968f0a` on top; no other app diff.)
+- ⛳ **RESUME:** app-lane list EMPTY; standing owner gates unchanged (room-identity one-flip eyeball ·
+  outbound walls). Non-blocking note for the owner: CoreBar's "Per-core load" detail is only reachable
+  with `compy_monitor_console=0` (non-default) — pre-existing routing, surfaced for awareness. Next:
+  the owner's announced "biggest app orientation refinement workflow".
+
 ### Cycle 2026-07-15d — ✅ APP LANE: CONSOLE TRAINS 1–4 DEFAULT-ON + OVERLAY BACKDROP FIX, SHIPPED LIVE — frontend-only, NO gate moved, zero src-tauri
 
 **Owner's operative mandate:** *"i want this session to be activel finishing remaining work
@@ -501,48 +544,6 @@ applied serially, all mechanically verified. **Committed + pushed `c80678f` (18 
   `#[allow(dead_code)]` sites are intentional (gate-dark mutation boundary + published-schema fields). Doc
   drift: **0 state contradictions** (drift agent re-verified my `530ef8b` doc-sync incl. installer SHA by hash).
   TODO/stub debt: **0 open** (`latency.rs:944` is a resolved reference).
-
-### Cycle 2026-07-13a — ✅ MONITOR v5 "frametime" JARGON GLOSS SHIPPED LIVE `530ef8b` (deferred Monitor-jargon bucket closed; installer SHA-256 `703F078B…B99EE40B8`, stamp-verified) — NO gate moved
-
-**Resume (`/clear`, live `72ded53`/`cc9adb8`).** The room-identity palette train was fully done +
-shipped; its ONE open item is the owner's one-flip eyeball on the pruned-15 legible palette (owner
-territory — did NOT flip `compy_room_identity` default-ON). Pulled the next non-gated `[ ]` item from
-this ledger: **Monitor-surface jargon glosses** (line ~589), whose sequencing gate ("AFTER the Monitor
-v5 owner eyeball settles") had CLEARED — the console flipped DEFAULT-ON at `e195f70` (Cycle 12g).
-
-- **The gap (source-verified, not assumed):** the Monitor v5 console (default face) DeckScope hero
-  passed a plain string `label="frametime"` to `Oscilloscope`, rendering the raw term with no gloss —
-  while its sibling **Play face already glosses it** (`Play.tsx:266` `<Term id="frametime">`) and the
-  Deep-Monitoring section-help does too (`App.tsx:1800`). A jargon gap on the default face against
-  CLAUDE.md's no-jargon promise.
-- **Fix (`530ef8b`, zero `src-tauri`):** `Oscilloscope.label` widened `string → ReactNode`
-  (backward-compatible; mirrors the ArcGauge ReactNode-label precedent — every other caller passes a
-  string, grep-confirmed unchanged) + `DeckScope` passes `label={<Term id="frametime">frametime</Term>}`.
-- **Scope discipline — only "frametime" glossed.** Inventoried the whole Monitor surface: `1% low`
-  (capture status) + `ETW` (honest line) already glossed on the console; FPS/latency/spikes/budget were
-  deliberately LEFT plain — they're consumer relabels, self-explanatory, or have no correct glossary
-  term. Glossing "LOWEST LATENCY" with the `input-latency` term would be FACTUALLY WRONG (the readout is
-  a frametime minimum, not click-to-photon input lag) — facts-first over a lazy gloss. monitor-panels'
-  "frametime"/"FPS" are second-exposures (the section-help above them already glosses frametime) → no
-  re-gloss (one-tooltip-per-label rule).
-- **bug→guard:** `deck-scope.test.tsx` +2 guards — the hero renders a real glossary Term
-  (`.osc-label .kl-term` == "frametime") and the tooltip reveals the definition (a dead id fails soft to
-  plain text, so the guard would find nothing → pins the id stays real).
-- **Verify:** tsc 0 · vitest **1607** (177 files, +2) · **self-reviewer PASS 8/8** (live 1500×980 CDP:
-  `.osc-label .kl-term` `rgb(139,147,167)` uppercase matching siblings, dotted accent underline ~6.37:1
-  on the dark panel; tooltip opens/closes on hover+click, not clipped, definition + Blackbook link
-  intact; FPS/latency/spikes/budget stay plain; backward-compat proven).
-- ✅ **SHIPPED 2026-07-13:** committed `530ef8b` (3 explicit paths, no `git add -A`) → `npm run tauri
-  build` (crate recompiled 28.65s) → `ship-reinstall.ps1` (stale-gate passed, one installer on Desktop,
-  silent `/S`, launch) → installer SHA-256 `703F078BCEA0BBA2BF740F93A7E559A421CB06D82CC5B981C8A6463B99EE40B8`,
-  **stamp-verified `530ef8b` live** (installed exe embeds HEAD). **doc-sync same cycle:** RELEASE_STATE
-  new UPDATE banner + **table Git-HEAD/Current-installer rows re-anchored** `72fa005`→`530ef8b` (they had
-  drifted behind the banners through the whole `8a9ab76`/`8e6920f`/`cc9adb8` palette chain — table-drift
-  class fixed); this cycle + the deferred item → ✅.
-- ⛳ **RESUME:** deferred Monitor-jargon bucket CLOSED. The room-identity palette's owner one-flip eyeball
-  (pruned-15 legible palette → `compy_room_identity` default-ON) remains the standing owner-territory gate
-  (Cycle 12l) — do NOT flip without owner sign-off. Next non-gated `[ ]`: see the ShellV2 topbar tagline
-  (owner-taste, line ~547) and the deeper data/outbound-gated items (owner-curated / outbound walls).
 
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
