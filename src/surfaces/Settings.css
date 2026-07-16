@@ -1,5 +1,8 @@
-/* Settings surface — Instrument, calm + static (no canvas). Token-only (--ix-*) except the theme
-   identity swatches, which must show each theme's literal colors (a color picker exception). */
+/* Settings surface — quiet console chrome (console-HUD direction §Settings, 2026-07-15): same
+   frame + type + honest register as the console rooms, but CALM FORMS — settings are operated,
+   not performed. Mono tracked-uppercase micro-labels, hairline rules, squared chips; no gauges,
+   no brackets, no theater. Token-only (--ix-*) except the theme identity swatches, which must
+   show each theme's literal colors (a color picker exception). */
 
 .set-root {
   position: relative;
@@ -36,15 +39,19 @@
   color: var(--ix-text-1);
   letter-spacing: -0.01em;
 }
+/* Done — a quiet console command, not a glowing pill: accent ink on a hairline chip. */
 .set-done {
-  padding: 8px 18px;
-  border-radius: 999px;
+  padding: 8px 16px;
+  border-radius: 4px;
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
-  background: var(--accent-soft, rgba(46, 230, 192, 0.14));
+  background: transparent;
   color: var(--ix-accent-text);
-  font-size: 13px;
-  font-family: inherit;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
   cursor: pointer;
   transition: border-color 160ms ease;
 }
@@ -66,12 +73,28 @@
   padding: 18px 20px;
   backdrop-filter: blur(7px);
 }
+/* Section title — the console micro-label register (mono, tracked, faint) over a hairline rule.
+   The accent moved from the whole label to a quiet leading tick: honest hierarchy, not a shout. */
 .set-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 14px;
-  font-size: 12px;
-  letter-spacing: 0.07em;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--ix-glass-border);
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ix-accent-text);
+  color: var(--ix-text-3);
+}
+.set-section-title::before {
+  content: "";
+  width: 8px;
+  height: 1px;
+  background: var(--ix-accent-text);
+  flex-shrink: 0;
 }
 .set-section-help {
   margin: -8px 0 14px;
@@ -90,7 +113,10 @@
   min-width: 0;
 }
 .set-field-label {
-  font-size: 11.5px;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--ix-text-3);
   margin: 0 0 8px;
 }
@@ -107,7 +133,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  border-radius: 11px;
+  border-radius: 8px;
   border: 1px solid var(--ix-glass-border);
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
@@ -136,25 +162,37 @@
   text-align: center;
 }
 
+/* Segmented pickers — the console chip register (same idiom as the Monitor face's mc-ov-seg):
+   each option carries its own hairline border, selected = accent ink + border, no fill glow. */
 .set-seg {
   display: inline-flex;
-  border: 1px solid var(--ix-glass-border);
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
 }
 .set-seg-btn {
-  padding: 7px 16px;
-  border: 0;
+  margin-left: -1px;
+  padding: 7px 12px;
+  border: 1px solid var(--ix-glass-border);
   background: transparent;
   color: var(--ix-text-2);
-  font-size: 12.5px;
-  font-family: inherit;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
   cursor: pointer;
-  transition: background 160ms ease, color 160ms ease;
+  transition: border-color 160ms ease, color 160ms ease;
 }
-.set-seg-on {
-  background: var(--accent-soft, rgba(46, 230, 192, 0.16));
+.set-seg-btn:first-child {
+  margin-left: 0;
+}
+.set-seg-btn:hover {
+  border-color: var(--ix-accent);
+  color: var(--ix-text-1);
+}
+.set-seg-on,
+.set-seg-btn.set-seg-on:hover {
+  position: relative;
+  border-color: var(--ix-accent-text);
   color: var(--ix-accent-text);
 }
 
@@ -242,23 +280,27 @@
 }
 .set-status {
   flex-shrink: 0;
-  font-size: 12px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  letter-spacing: 0.06em;
   color: var(--ix-text-2);
   border: 1px solid var(--ix-glass-border);
-  border-radius: 999px;
-  padding: 3px 12px;
+  border-radius: 4px;
+  padding: 4px 10px;
 }
 .set-action {
   flex-shrink: 0;
-  padding: 7px 15px;
-  border-radius: 9px;
+  padding: 8px 14px;
+  border-radius: 4px;
   border: 1px solid var(--ix-glass-border);
   border-top-color: var(--ix-glass-top);
-  background: rgba(255, 255, 255, 0.03);
+  background: transparent;
   color: var(--ix-text-1);
-  font-size: 12.5px;
-  font-family: inherit;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
   cursor: pointer;
   transition: border-color 160ms ease;
 }
@@ -292,10 +334,10 @@
   background: var(--accent-soft, rgba(46, 230, 192, 0.18));
   border-color: var(--ix-accent);
 }
+/* Calm forms: the ON thumb inks accent without the halo glow (operated, not performed). */
 .set-toggle-on .set-toggle-thumb {
   transform: translateX(20px);
   background: var(--ix-accent);
-  box-shadow: 0 0 8px var(--ix-accent);
 }
 .set-toggle:focus-visible {
   outline: 2px solid var(--ix-accent);
