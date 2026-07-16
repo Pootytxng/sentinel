@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
-import { readDisplayRefreshHz } from "../design/theme";
+import {
+  readDisplayRefreshHz,
+  type OverlayDensity,
+  readOverlayDensity,
+  persistOverlayDensity,
+  type OverlayBackdrop,
+  readOverlayBackdrop,
+  persistOverlayBackdrop,
+} from "../design/theme";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { useReducedMotion } from "../design/use-motion";
 import {
@@ -109,12 +117,15 @@ export function MonitorConsole({
   const [fps, setFps] = useState<FpsLite | null>(null);
   const [fpsBusy, setFpsBusy] = useState(false);
   // In-game overlay — the SAME audited commands Play's live face runs, ported verbatim (owner
-  // §A0 item 1: the control must exist on the console face; density/backdrop stay classic-only
-  // for now — logged in UI_VISION_BACKLOG as an explicit residual).
+  // §A0 item 1: the control must exist on the console face). Density/backdrop joined the row
+  // 2026-07-15 (the last §A0 item-1 residual): same persist helpers Settings/Play use — the
+  // overlay window reacts via the cross-window `storage` event, zero new IPC.
   const [overlayOn, setOverlayOn] = useState(false);
   const [corner, setCorner] = useState<string>(
     () => localStorage.getItem("compy_overlay_corner") ?? "top-left",
   );
+  const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
+  const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   // Caller-owned trace buffer (Oscilloscope is a pure render): real polled fps values only.
   const fpsH = useRef<number[]>([]);
   // The frametime window with a CONTENT-STABLE reference (self-review round-1 catch, bug→guard):
@@ -237,6 +248,16 @@ export function MonitorConsole({
     }
   };
 
+  // Density/backdrop persist to localStorage; the overlay (separate window) reacts via `storage`.
+  const chooseDensity = (d: OverlayDensity) => {
+    setDensity(d);
+    persistOverlayDensity(d);
+  };
+  const chooseBackdrop = (b: OverlayBackdrop) => {
+    setBackdrop(b);
+    persistOverlayBackdrop(b);
+  };
+
   // The existing audited capture commands — identical semantics to MonitorBasic/Play's button.
   const toggleCapture = useCallback(async () => {
     setFpsBusy(true);
@@ -314,18 +335,43 @@ export function MonitorConsole({
           >
             {overlayOn ? "Overlay on" : "Overlay"}
           </button>
-          {overlayOn &&
-            CORNERS.map(([c, glyph]) => (
+          {overlayOn && (
+            <>
+              {CORNERS.map(([c, glyph]) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`mc-ov-corner ${corner === c ? "mc-ov-corner-on" : ""}`}
+                  aria-label={`Overlay corner ${c.replace("-", " ")}`}
+                  onClick={() => chooseCorner(c)}
+                >
+                  {glyph}
+                </button>
+              ))}
+              <span className="mc-ov-group" role="group" aria-label="Overlay density">
+                {(["minimal", "standard", "full"] as OverlayDensity[]).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`mc-ov-seg ${density === d ? "mc-ov-seg-on" : ""}`}
+                    aria-pressed={density === d}
+                    onClick={() => chooseDensity(d)}
+                  >
+                    {d === "minimal" ? "Min" : d === "standard" ? "Std" : "Full"}
+                  </button>
+                ))}
+              </span>
               <button
-                key={c}
                 type="button"
-                className={`mc-ov-corner ${corner === c ? "mc-ov-corner-on" : ""}`}
-                aria-label={`Overlay corner ${c.replace("-", " ")}`}
-                onClick={() => chooseCorner(c)}
+                className={`mc-ov-seg ${backdrop === "on" ? "mc-ov-seg-on" : ""}`}
+                aria-pressed={backdrop === "on"}
+                aria-label="Overlay background"
+                onClick={() => chooseBackdrop(backdrop === "on" ? "off" : "on")}
               >
-                {glyph}
+                Backdrop
               </button>
-            ))}
+            </>
+          )}
         </span>
       </div>
 

@@ -47,9 +47,11 @@ full response ive written here seeing how things seem to get lost in translation
 **Decomposed (each its own tracked item — none may be silently dropped or substituted):**
 
 1. **Overlay controls missing on the console face** — ✅ BUILT in v3 (`215e36d`): on/off toggle +
-   corner picker on the console face, same audited commands, not forked. **Explicit residual
-   (NOT silently closed): the density/backdrop overlay config still lives only on the classic
-   Advanced → Live face** — fold into the console face if the owner wants it there.
+   corner picker on the console face, same audited commands, not forked. ✅ **Residual CLOSED
+   2026-07-15:** density (Min/Std/Full) + backdrop chips folded into the console face's overlay
+   row — same persist helpers Settings → Behavior already exposes (the config was never truly
+   dead-ended; Settings has hosted both since the halfway-home re-home), overlay reacts via the
+   cross-window `storage` event, zero new IPC.
 2. **v3 rework — surpass "satisfactory":** classic tiles = liked; Phase-3 instrument cluster =
    satisfactory; he wants a third option that beats both. Spitballed same day per the per-tab law;
    **owner CHOSE the "3D ribbon graph" concept (2026-07-10)** — plan written:
@@ -141,9 +143,9 @@ full response ive written here seeing how things seem to get lost in translation
    to a differentiated 15 2026-07-13** (owner "more neon or bright/dark tone mixed" → "prune and widen
    variety more differentiation"): 9 bright + 6 dark tones with adaptive light ink so dark FILLS stay
    legible; CIEDE2000-verified differentiation (`8e6920f`, installer `51B0A754…3862F39A`, stamp-verified).
-   Owner one-flip eyeball on the pruned palette pending. 🔴 **Follow-up:** accent-as-TEXT (Lab station
-   tabs, Home dock) renders dark picks ~2.5:1 — the adaptive ink covers FILLS only; legibility train
-   queued (BACKLOG Cycle 2026-07-12l, OWNER_ACTION_CHECKLIST §A9).
+   Owner one-flip eyeball on the pruned palette pending. ✅ **Follow-up SHIPPED:** the dark-accent-as-TEXT
+   legibility train landed `cc9adb8` (dark-tone chrome ≥4.5:1 via legibility-adaptive accent-TEXT; live per
+   `72ded53` doc-sync, installer `B7931E4E…`) — the FILLS-only gap is closed (BACKLOG Cycle 2026-07-12l).
 3. **Graphs are a MUST + spike-moment indicators:** measurable finite detail required — the
    frametime graph must mark the EXACT moment of a latency spike (per-sample indicator, not just
    an average). This is a hard requirement for v3, not a nice-to-have.
@@ -363,7 +365,14 @@ self-reviewer rubric item 6. Every Phase 2…N tab adoption must pass this as an
 
 **Still 🔴 OPEN after Ops Console Phase 1:** Phases 2–4 = the per-tab Console rollout (Home cold-open · Monitor gauges + a
 real `Oscilloscope` kit bound to live telemetry · History/Black Box flight-recorder log · Gaming Mode arm/engage console ·
-Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). Still folds in the remaining §A JARVIS stack
+Settings quiet chrome · then the app-wide viewport HUD frame + global reticle). **→ 2026-07-15 batch closes three of
+these:** Gaming Mode arm/engage console (`compy_gaming_console` DEFAULT ON, `"0"` classic failsafe — status strip + armed
+contract + ONE staged engage control, presentation-only over the same audited session commands) · Settings quiet chrome
+(CSS-only console register) · the app-wide viewport HUD frame + global reticle (`compy_hud_frame` DEFAULT ON — corner
+brackets, honest rig·clock readout, shell-scoped reticle with stage instances self-deferring). Self-reviewer round 1
+caught 3 real defects (readout duplicating ledger/stamp · readout vs bottom content collision · explainer lede breaking
+the title-header law) — fixed + guard-pinned. **Remaining 🔴 from this list: Monitor gauges + `Oscilloscope` kit ·
+History/Black Box flight-recorder log.** Still folds in the remaining §A JARVIS stack
 (decode-text A.3 · hologram inertia A.4 / room-transition wipe A.6 · Lenis spine A.5) — **the
 A.2/A.3/A.5/A.6 core shipped 2026-07-12 (`1d310e1`, `compy_jarvis_motion` DEFAULT OFF, §A above);
 per-tab Console rollout can now assume the layer exists behind its flag.** **Both owner-gated calls RESOLVED

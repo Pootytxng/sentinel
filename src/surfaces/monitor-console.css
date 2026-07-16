@@ -17,6 +17,14 @@
   background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
 :root[data-v2="on"] .mc-ov-corner:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
 :root[data-v2="on"] .mc-ov-corner-on { border-color: var(--ix-accent-text); color: var(--ix-accent-text); }
+/* Density/backdrop — same quiet chip register as the corner picker, text instead of glyphs. */
+:root[data-v2="on"] .mc-ov-group { display: inline-flex; gap: 0; }
+:root[data-v2="on"] .mc-ov-group .mc-ov-seg { margin-left: -1px; }
+:root[data-v2="on"] .mc-ov-seg { font-family: var(--ix-mono); font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; line-height: 1; padding: 6px 8px; cursor: pointer;
+  background: transparent; color: var(--ix-text-2); border: 1px solid var(--ix-glass-border); }
+:root[data-v2="on"] .mc-ov-seg:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }
+:root[data-v2="on"] .mc-ov-seg-on { position: relative; border-color: var(--ix-accent-text); color: var(--ix-accent-text); }
 
 /* ── Flight Deck hero (v5) — the frametime scope full-width with scrub/zoom chrome; the delta
    row's plain numbers. Flat by chain law (v3→v4): the ms axis IS the depth. ── */
