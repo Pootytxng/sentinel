@@ -178,6 +178,19 @@ URL.**
   dead link**), and two dormant slots — the footer and the waitlist section — light up the instant
   you give me the URL. One line, regenerate, deploy. **Result → tell Claude: your Ko-fi profile URL.**
 
+### B7. Site auto-deploy — ONE API-token paste  ·  ⏳  ·  NEW 2026-07-16
+The site now ships itself: any push to `main` touching a site input (site/, site-app/, functions/,
+src/data/) restages + deploys via GitHub Actions ([`.github/workflows/deploy-site.yml`](../.github/workflows/deploy-site.yml)).
+Claude already set the account-ID secret; the runner needs one deploy credential only you can mint
+(~2 min, once, free — and it never passes through chat or the repo):
+1. Open <https://dash.cloudflare.com/profile/api-tokens> → **Create Token** → **Create Custom Token**.
+2. Name `compy-pages-deploy` · Permissions: **Account → Cloudflare Pages → Edit** · Account
+   Resources: your account · nothing else → **Continue to summary** → **Create Token** → copy it.
+3. Paste at <https://github.com/Pootytxng/sentinel/settings/secrets/actions/new> as name
+   **`CLOUDFLARE_API_TOKEN`** → **Add secret**.
+Until then the workflow skips green (no red X's) and Claude keeps deploying manually on ask.
+**Result → tell Claude "token's in" and he fires + verifies the first auto-run.**
+
 ### B6. Monetization plan — money-surface unlocks  ·  ⏳  ·  [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
 Drawn up 2026-07-15 at your ask ("draw up a monetization plan … and how best to set it up on the
 site"). The plan documents/sequences what the site is **already built to do** — nothing here is a new

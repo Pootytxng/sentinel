@@ -165,6 +165,20 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-16e — ✅ SITE DEPLOYED + AUTO-DEPLOY WIRED (CC, owner-directed "deploy the site … make it as automated as possible"): live on `compy-bd6.pages.dev` · GitHub Actions deploy lane awaiting ONE owner token paste
+
+- **Manual deploy (the last one):** dist-site restaged fresh (`npm run stage:site`) → `wrangler pages
+  deploy` under the standing deploy GO (checklist B3, 2026-07-15) → apex promotion PROVEN by hash
+  (apex == deployment URL `37fa0e02…`, SHA-256 `FFC5D5ADD8812501…`, 34073 bytes both).
+- **Auto-deploy lane:** `.github/workflows/deploy-site.yml` — push-to-main path-scoped (site/,
+  site-app/, functions/, src/data/, the stage script) → `npm ci` ×2 → `stage:site` → wrangler-action
+  production deploy. Preflight job SKIPS green until the credential exists (no red-X spam);
+  zero-budget (ubuntu 1×, scoped triggers, concurrency-cancel).
+- **Secrets:** `CLOUDFLARE_ACCOUNT_ID` set by CC via `gh secret set` (low-sensitivity). The deploy
+  token is owner-mint-only → **checklist B7** (Pages:Edit-scoped custom token → GitHub secret
+  `CLOUDFLARE_API_TOKEN`; never passes through chat/repo). First auto-run gets fired + verified on
+  his "token's in".
+
 ### Cycle 2026-07-16d — ✅ OPTIMIZATION CLEANUP PHASE 0 SHIPPED (CC, owner-directed "ship Phase 0"): `55f68b6` locked name + first-class front door · `f831b5f` landed 16c's stranded deliverables — NO gate moved, zero mutation boundary
 
 - **`f831b5f` — git-lock recovery + 16c's docs landed:** Cycle 2026-07-16c's Cowork session died on

@@ -1,0 +1,74 @@
+name: Deploy site
+
+# Auto-deploy for the Pages site (compy-bd6.pages.dev) — born 2026-07-16 when the owner asked for
+# maximum automation after the standing deploy GO (OWNER_ACTION_CHECKLIST B3, granted 2026-07-15).
+# Any push to main touching a site input restages dist-site exactly like the local law
+# (scripts/stage-dist-site.mjs) and ships it with wrangler. ZERO-BUDGET: ubuntu runners (1x
+# minutes), scoped path triggers, superseded runs cancelled.
+#
+# Secrets: CLOUDFLARE_ACCOUNT_ID (set by Claude 2026-07-16) + CLOUDFLARE_API_TOKEN (owner-minted,
+# Cloudflare Pages:Edit scope ONLY — checklist item B7). Until the token exists, preflight makes
+# the deploy job SKIP green — a missing credential must never spam red X's.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "site-app/**"
+      - "functions/**"
+      - "src/data/**"
+      - "scripts/stage-dist-site.mjs"
+      - ".github/workflows/deploy-site.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-site
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Deploy credential present?
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.probe.outputs.ready }}
+    steps:
+      - id: probe
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$CF_TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN secret not set — deploy skipped (owner: OWNER_ACTION_CHECKLIST B7)."
+          fi
+
+  deploy:
+    name: Stage + deploy to Cloudflare Pages
+    needs: preflight
+    if: needs.preflight.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site-app/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: site-app
+      - name: Stage dist-site (generate + astro build + clean mirror)
+        run: npm run stage:site
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist-site --project-name compy --branch main --commit-dirty=true
