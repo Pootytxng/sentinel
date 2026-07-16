@@ -165,6 +165,60 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
+### Cycle 2026-07-16c — ✅ PANEL-REVIEW EXECUTION CONTINUED (Cowork): research + content stage on the remaining 4.x items — doc/content only, zero src-tauri, zero site-build changes committed
+
+**Owner's operative mandate:** *"do whatever needs to be done to move forward with all those review
+suggestions"* — picking up where Cycle 2026-07-16b's doc triage left off, moving the still-open 4.x
+items from "logged" to "researched/drafted."
+
+- **`801ea62` — landed CC's COMPY_OVERVIEW.md staleness rewrite** (was sitting uncommitted per
+  2026-07-16b's note) + closed the one Receipts-phrasing nit CC had flagged but not fixed (TL;DR
+  read as if an opt-in sharing toggle already exists; it doesn't yet).
+- **4.1 "Optimization Cleanup" — research stage done, spec drafted:** headline finding — this is
+  mostly already built (`leftovers.rs` live read-only, 7/9 detectors already have dark tested restore
+  resolvers in `actions.rs`). Full spec + the one unresolved architectural fork (Trust-Ledger-reuse
+  vs. the BACKLOG's stated separate mechanism) at
+  `docs/superpowers/specs/2026-07-16-optimization-cleanup-research-spec.md`. Detail folded into the
+  4.1 entry above (PHASE B). **Not scope-gated or mutation-gated — nothing authorized to build yet.**
+- **4.4 export tiers — audited, correction made:** `export.rs` has exactly one render path today; no
+  share-card exists either (the brief assumed one did). All three proposed tiers are genuinely new,
+  not a light pass — resized in the entry above.
+- **4.2 intent router / 4.8 basic mode — gap-checked against real code, not assumed:** confirmed the
+  Lab's in-Lab router is real and shouldn't be rebuilt (4.2 gap is specifically the pre-room entry
+  point, unbuilt). FirstCheck audited against the persona's 5-point basic-mode ask: 3 of 5 already
+  covered, 1 partial (what-changes isn't stated on the verdict card), 1 real gap (the
+  restore-guarantee line is hidden inside the post-click confirm dialog, not on the verdict card
+  itself). Both scoped down to small, concrete additions in the entries above.
+- **4.5 methodology page — content drafted, not yet placed:** `docs/METHODOLOGY.md`, every claim
+  cited to `fps.rs`/`benchmark_verdict.rs`/`comparison.rs`/`recommendations.rs`/`benchmark-view.ts`
+  line numbers (capture mechanism, sample cadence, process/swapchain selection + the real
+  msedgewebview2/323-vs-161 bug history, noise floors, 1%-low method, missing-data handling,
+  Verified/Measured/Expected definitions, combined-effect logic). ⚠️ **Attempted to wire this into
+  `site/generate.mjs` as a new reference page (parallel to the legal-pages pattern) — REVERTED,
+  unverified.** The sandbox's file view of a same-session edit went stale/truncated mid-verification
+  (known failure mode, see [[sandbox-fuse-git-view-unreliable]] memory, now confirmed for non-git
+  file reads too) so `node site/generate.mjs` + the site test suite could not be run reliably this
+  session. Reverted the generate.mjs edit rather than leave an unverified change in a tested build
+  pipeline; the content (docs/METHODOLOGY.md) is safe and ready, the wiring is a small, scoped TODO
+  for CC to apply + verify Windows-side (referencePages array + sitemap line + llms.txt line, design
+  already worked out, ~20 lines).
+- **4.6 non-competitive consumer story — content drafted, placement flagged:**
+  `docs/content-drafts/2026-07-16-non-competitive-consumer-story.md`. Doesn't fit the
+  `debunks.config.json` schema (that's graded tweak verdicts, this is a use-case narrative) — needs a
+  placement decision (site section vs. in-app) from CC/owner, plus a grounding check against what
+  Monitor actually correlates at a stutter timestamp before it ships (flagged in the draft, not
+  independently re-verified here to avoid overclaiming on a time budget).
+- **Verify:** COMPY_OVERVIEW.md commit confirmed via `git log`/`git show` at the time of commit;
+  given this session's own sandbox-staleness finding, CC should re-confirm `801ea62` landed cleanly
+  Windows-side rather than trusting this session's git output alone. No cargo/vitest run this
+  session (no src-tauri or src/ code changed) — the generate.mjs syntax scare was the sandbox's stale
+  copy, not a real defect; the actual file was reverted to its pre-session state via the Edit tool.
+- ⛳ **RESUME:** the honest state of the review is: doc-triage (2026-07-16b) + research/content
+  (2026-07-16c) are done; the two flagship items (4.1 build, 4.4 build) are NOT started and are the
+  real remaining work — everything else here is either shipped, small, or a placement/wiring TODO.
+  Next real decision: does 4.1 Phase 0 (ship the already-live `leftovers.rs` audit under the
+  "Optimization Cleanup" name, near-zero cost) get scope-gated on its own ahead of anything else?
+
 ### Cycle 2026-07-16b — ✅ PANEL-REVIEW BRIEF EXECUTED (Cowork triage): combined-effect attribution `850dde2` · site copy scoping `60eea80` · 9-item doc triage — NO gate moved, zero src-tauri
 
 **Owner's operative mandate:** *"Read docs/reviews/2026-07-15-cc-brief-panel-review-execution.md and
@@ -641,6 +695,12 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   here's my rig + ledger") render tiers over the one data source — presentation-only, no new probes, no
   new claims, honesty invariants shared. The **Shop** tier is NOT this item — it belongs to the parked
   Shop Report Mode (Phase D), don't build ahead of it. Provenance: panel-review brief 2026-07-15 §4.4.
+  **Audit confirmed, 2026-07-16 (Cowork):** `export.rs` (824 lines) has exactly ONE render path —
+  `build_markdown_report` + `build_discord_block`, no struct/enum tiering at all. **Correction to the
+  brief's assumption:** no share-card export exists either (grepped repo-wide) — `docs/BACKLOG.md`'s
+  own "Real-wins strip" section already notes the share-card component is a forward-looking idea, "not
+  queued as a train." So Consumer/Technical/Support are ALL genuinely new, not a light tiering pass
+  over existing variants — size this task accordingly before scoping it as small.
 
 ### A3 · CONTENT reorg (Blackbook/Autopsy) — **half built; missing entry metadata**
 - [x] entry dedup lint — `knowledge.lint.test.ts:78`
@@ -750,6 +810,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
   action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel
   "simple mode" build). Provenance: panel-review brief 2026-07-15 §4.8.
+  **Scope-check done, 2026-07-16 (Cowork), against `FirstCheck.tsx`, the persona's 5-point ask:**
+  (1) one verdict — **covered** (`fc-verdict` headline). (2) one recommended action — **covered**
+  (#1-limiter spotlight, single Apply button). (3) one visible explanation of *what changes* —
+  **partial**: the spotlight shows `top.reason` (why it's a limiter) but nothing on this screen
+  states the actual before→after value. (4) one visible explanation of *how it's restored* — **real
+  gap**: "Compy snapshots the prior state so you can roll this back anytime" only appears inside the
+  confirm-dialog you see AFTER clicking Apply, not as a standing line on the verdict card itself — a
+  user who doesn't click Apply never sees it. (5) one next-step-after-playing — **covered** (footer:
+  "Play something tonight; the session debrief will tell you..."). Net: this is a small, well-scoped
+  copy/layout addition (surface the restore-guarantee line + a plain what-changes line on the
+  existing verdict card), not a new flow.
 
 ### A6 · UPGRADE-PATH advisory — **complete** (affiliate tags = Phase D)
 - [x] hardware-limited verdict detection (GPU≥95% / HDD install drive) — `priorities.rs:95`
@@ -907,6 +978,20 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   Distinct from UI_VISION_BACKLOG §F (upgrade-path engine) — different feature, don't conflate.
   Provenance: panel-review brief 2026-07-15 §4.1 (`docs/reviews/2026-07-15-cc-brief-panel-review-execution.md`)
   + archived review (`docs/reviews/2026-07-15-consumer-panel-review.md`).
+  **Research stage DONE, 2026-07-16 (Cowork):** spec at
+  `docs/superpowers/specs/2026-07-16-optimization-cleanup-research-spec.md`. **Headline finding: this
+  is mostly already built.** `leftovers.rs` (9 detectors) ships live read-only today; 7 of 9 already
+  have typed rollback resolvers built + fixture-tested in `actions.rs`, dark only behind
+  `restore_gate()==false` + no Tauri command registration (Leftovers v2, `docs/superpowers/specs/
+  2026-06-11-leftovers-v2-dark-wave2.md`). Genuinely new: broader detection (registry/service/
+  scheduled-task residue beyond the 9 curated settings), a formal 5-bucket taxonomy, and — the one
+  real architectural fork — this BACKLOG entry says restores need a "SEPARATE recovery-snapshot
+  mechanism," but the already-built dark path reuses the Trust Ledger with a `provenance` tag
+  instead. That conflict is NOT resolved here; it's the first call the scope-gate stage needs to
+  make. Proposed phasing in the spec: Phase 0 (ship the existing read-only audit under the new name,
+  ~free) → Phase 1 (flip the gate on the 7 existing resolvers + run the already-written owner-QA
+  harness) → Phase 2 (taxonomy) → Phase 3 (net-new detection surface). Still not scope-gated or
+  mutation-gated — nothing here is authorized to build.
 
 ## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
 - [BUILT-DARK] Receipts opt-in consent UI + payload preview — `receipts.rs`, `ReceiptsConsent.tsx` (gate off)

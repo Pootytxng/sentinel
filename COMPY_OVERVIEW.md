@@ -143,4 +143,6 @@ you to turn off its own telemetry.
    homework next to "BOOST FPS NOW"?
 4. **Pricing shape — mostly decided.** Compy Pro is scoped at ~$3–4/mo or ~$25/yr in the doctrine,
    gated on a legal entity + merchant-of-record + real shipped Pro value. Still genuinely open:
-   the exact price, and what value b
+   the exact price, and what value beyond history/multi-rig/deep-monitoring justifies it.
+
+*Thanks for reading — tear it apart.*
