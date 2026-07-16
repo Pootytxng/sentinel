@@ -473,6 +473,19 @@ min-height now 276px base / 364px ≤720px, verified flat through the swap at 15
 Site remains PRE-PUBLISH; owner
 taste sign-off on the live scroll feel is the remaining gate.
 
+**G.2 🟢 SHIPPED + DEPLOYED (2026-07-15) — site completion: SEO/launch plumbing + `/compare`.**
+The owner granted the **deploy GO** ("deploy go looks good for now… go about doing the full completion
+of the site… so we can prepare to launch compy") — **so the site is no longer PRE-PUBLISH; it deploys
+autonomously now.** Completed + live on `compy-bd6.pages.dev`: canonical URL scheme app-wide,
+`robots.txt` + `sitemap.xml` (196 URLs, no fabricated freshness), favicons, static `404`, honest
+JSON-LD (no fabricated ratings), and the **new `/compare` page** (Design Director spec, six-seat
+council — five construction-practice axes, never names a competitor, never invents a number, admits
+every tradeoff). Guards 40/40, self-review PASS (`adae2dc1b4d75fff8`), deploy `d8a40fc5` apex-verified.
+**Remaining OPEN visual/site work** (owner's calls): the **mini playable demo** of one real Compy tool
+(§G original requirements) is still unbuilt; `/pricing` + `llms.txt` are open P2 candidates; P3
+walkthrough/tour videos stay owner-flagged LATER. **Launch gate now owner-only:** the `compy.gg`
+domain purchase (every canonical/sitemap/JSON-LD URL already points at it).
+
 ### H. ~~Onboarding HoloLens Setup & Tour redesign~~ — ✅ SHIPPED (verified 2026-07-08)
 The hardware-tour flies the camera across the user's REAL rig in the owner's order — `HARDWARE_LESSONS`
 literally ordered psu→storage→gpu→cpu→ram (`setup-steps.ts:103`), parts from `buildRigParts(hw)` real

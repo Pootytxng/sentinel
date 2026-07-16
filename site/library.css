@@ -32,6 +32,15 @@
 
 html { scroll-behavior: smooth; }
 
+/* Skip link — offscreen until keyboard-focused, then a visible amber tab at the top edge. */
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--accent); color: var(--accent-ink);
+  font-family: var(--mono); font-size: 13.5px; text-decoration: none;
+  padding: 10px 16px; border-radius: 0 0 8px 8px;
+}
+.skip-link:focus-visible { left: 16px; }
+
 /* Keyboard-focus visibility on every interactive element across the site (a11y: the legal pages,
    content pages, and landing all rely on it). Mirrors the app's "no focus-invisible interactive"
    floor. :focus-visible only shows for keyboard users, never on mouse click. */
@@ -497,6 +506,7 @@ footer {
 }
 footer .wrap { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 footer .promise { font-family: var(--mono); }
+footer .link-quiet { font-size: inherit; } /* match the footer's 13.5px, not the body 15.5px */
 
 /* ── Honesty-creed footer ── */
 footer .creed { display: block; }

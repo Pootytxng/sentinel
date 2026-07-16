@@ -11,8 +11,10 @@ interface Props {
   title: string;
   description: string;
   path?: string;
+  /** Pre-serialized JSON-LD (honesty law: real facts only — no fabricated dates/ratings). */
+  jsonld?: string;
 }
-const { title, description, path = "/" } = Astro.props;
+const { title, description, path = "/", jsonld } = Astro.props;
 const canonical = new URL(path, "https://compy.gg").href;
 ---
 
@@ -32,8 +34,13 @@ const canonical = new URL(path, "https://compy.gg").href;
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content="https://compy.gg/assets/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://compy.gg/assets/og.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    {jsonld && <script type="application/ld+json" set:html={jsonld} />}
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <slot />
     <footer class="site-footer">
       <div class="wrap footer-grid">
@@ -51,6 +58,22 @@ const canonical = new URL(path, "https://compy.gg").href;
 </html>
 
 <style>
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--mono);
+    font-size: 13.5px;
+    text-decoration: none;
+    padding: 10px 16px;
+    border-radius: 0 0 8px 8px;
+  }
+  .skip-link:focus-visible {
+    left: 16px;
+  }
   .site-footer {
     border-top: 1px solid var(--line);
     padding: 44px 0 56px;

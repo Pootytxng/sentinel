@@ -110,6 +110,4 @@ Governing law / jurisdiction: these terms are governed by the laws of the **Unit
 State of **[STATE — owner to insert state of residence]**, without regard to conflict-of-laws rules.
 You agree that the state and federal courts located in that state shall have exclusive jurisdiction
 over any dispute arising from these terms or your use of the Software.
-Contact: **Pootytxng** (Compy) — via the project's GitHub issues page:
-https://github.com/Pootytxng/compy/issues
-Project: https://github.com/Pootytxng/compy
+Contact: **Pootytxng** (Compy) — via the contact channel described in `PRIVACY.md`.

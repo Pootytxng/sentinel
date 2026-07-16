@@ -76,6 +76,15 @@ const modules = [
 <Base
   title="Compy — the PC optimizer that shows its receipts"
   description="Compy reads your actual hardware, recommends only what it can undo, and measures every change on your rig — including the ones that do nothing. Free, no account, nothing leaves your PC."
+  jsonld={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Compy",
+    operatingSystem: "Windows",
+    applicationCategory: "UtilitiesApplication",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    url: "https://compy.gg/",
+  }).replace(/</g, "\\u003c")}
 >
   <!-- ============ boot preloader (revealed by the inline script ONLY when JS runs
        and the user allows motion; no-JS / reduced-motion users never see it) ============ -->
@@ -119,6 +128,7 @@ const modules = [
       <nav class="topnav mono" aria-label="Site">
         <a href="#receipts">Receipts</a>
         <a href="/library/">Blackbook</a>
+        <a href="/compare">Compare</a>
         <a href="#faq">FAQ</a>
         <a class="btn btn--primary topnav-cta" href="#waitlist" data-magnetic>Join the waitlist</a>
       </nav>
@@ -126,7 +136,7 @@ const modules = [
   </header>
 
   <!-- ============ flight hero: the real session IS the art ============ -->
-  <section class="flight" data-flight>
+  <section class="flight" id="main" data-flight>
     <canvas class="flight-wave" data-wave aria-hidden="true"></canvas>
     <div class="flight-xhair readout" data-xhair hidden aria-hidden="true">
       <span class="xhair-chip" data-xhair-read></span>
@@ -409,7 +419,8 @@ const modules = [
           <p>
             We won't promise a number — nobody honestly can, because it depends on your rig.
             Compy measures each change on your PC and shows you the result, including when
-            it's nothing. That's the entire point.
+            it's nothing. That's the entire point. Curious how that stacks up against the
+            usual optimizer playbook? <a href="/compare">See how we're built</a>.
           </p>
         </details>
         <details>

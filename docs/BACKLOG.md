@@ -165,7 +165,52 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
-### Cycle 2026-07-15b — ✅ DIRECTOR #5 BUILT: SCROLL-SCRUBBED TELEMETRY THROUGHLINE — site-only, PRE-PUBLISH, NO gate moved, zero src-tauri, zero src/
+### Cycle 2026-07-15c — ✅ SITE COMPLETION: SEO/LAUNCH PLUMBING + /compare LIVE + DEPLOYED — site-only, NO gate moved, zero src-tauri, zero src/
+
+**Owner's operative directive:** *"deploy go looks good for now… go about doing the full completion
+of the site, everything necessary for completion so we can prepare to launch compy"* (a separate
+session handles app finishing touches — this lane stays strictly site: `site/`, `site-app/`,
+`dist-site`, `scripts/site-*`, `functions/`, docs). Executed end-to-end.
+
+- **SEO / launch plumbing:** canonical URL scheme on every page (landing `/`; picks canonicalize to
+  `https://compy.gg/<id>` from BOTH the top-level and `library/` copies — no duplicate-content split;
+  non-picks → `/library/<id>`; legal → `/privacy`, `/eula`; compare → `/compare`); `robots.txt`
+  (Allow all + sitemap pointer); `sitemap.xml` (196 URLs, picks listed once at top level, **no
+  lastmod/priority/changefreq** — honesty law, never fabricate freshness); favicons (bracket-mark
+  `favicon.svg` + hand-built 197-byte `favicon.ico`); static `404.html` (noindex, root-absolute
+  links, no JS — CF Pages serves it with a real HTTP 404); honest JSON-LD (TechArticle on
+  article/teaser pages, SoftwareApplication on landing — guard bans `aggregateRating`/`reviewCount`/
+  `ratingValue`; `<`-escaped); og/twitter card meta pointing at the real `assets/og.png`;
+  skip-link a11y on the generated pages + templates.
+- **NEW `/compare` page (`site-app/src/pages/compare.astro`)** — Design Director spec, full six-seat
+  council 2026-07-15. Five **construction-practice** axes (rollback · kernel/anti-cheat · catalog
+  transparency · telemetry default · cost model), Compy's practice on the record vs "the usual
+  playbook", **each admitting the tradeoff it costs us**. Room laws now guard-pinned: **never names a
+  competitor** (bans CCleaner/Razer Cortex/Wise Care/Advanced SystemCare/Hone/ExitLag), **never
+  invents a performance number** (bans `boost`/`faster`/`+N fps|%`), no gain claims. Kicker: "We
+  don't have the other tools' rigs — or yours — so we won't invent benchmark numbers." Wired into the
+  landing nav (Receipts→Blackbook→Compare→FAQ) + the FAQ FPS answer.
+- **Legal contact fix:** the dead `github.com/Pootytxng/compy` contact links in `PRIVACY.md`/`EULA.md`
+  are replaced with a real channel (reply to the waitlist email); the `[STATE]` venue blank stays
+  intact + test-pinned (owner's to fill).
+- **Guard:** new `scripts/site-seo.test.mjs` companion suite (robots/sitemap honesty, canonicals,
+  favicons, 404, compare axes + competitor/hype bans, landing JSON-LD). Full pipeline **40/40 green**
+  (site-landing + staleness + seo, regenerate/rebuild-if-stale). Self-review **PASS** (agent
+  `adae2dc1b4d75fff8`: computed contrast `#f2ede4` on `#0d0b07` + `#140a00` on `#ff9a1e`; mobile
+  390px no overflow; single footer; nav order; skip-links resolve; no retired-brand copy).
+- **DEPLOYED** (owner's deploy GO): `npx wrangler pages deploy dist-site` → `d8a40fc5.compy-bd6.pages.dev`,
+  **apex promoted + verified** (apex HTML md5 `458dc641203451a34e7eb44eeeb47ec1` == deploy hash;
+  `/compare` + `/sitemap.xml` + `/robots.txt` + favicons 200; real HTTP 404 on unknown routes).
+- **⚠️ Doc reconciliation:** the owner's **deploy GO supersedes** the "Site stays PRE-PUBLISH; owner
+  taste gate before any deploy; deploy owner-gated" language in the older cycles below and in
+  RELEASE_STATE — the site now **deploys autonomously**. Remaining launch gate is owner-only: the
+  **`compy.gg` domain purchase** (canonicals/sitemap/JSON-LD all point at it; site currently lives
+  only on `compy-bd6.pages.dev`).
+- **P2 status:** `/compare` ✅ done, FAQ JSON-LD (`SoftwareApplication` on landing) ✅ done. **Still
+  open P2 candidates:** `/pricing` page · `llms.txt` · the owner-flagged **mini playable demo** of one
+  real Compy tool (UI_VISION_BACKLOG §G). P3 walkthrough/tour videos stay owner-flagged LATER.
+
+### Cycle 2026-07-15b — ✅ DIRECTOR #5 BUILT: SCROLL-SCRUBBED TELEMETRY THROUGHLINE — site-only, NO gate moved, zero src-tauri, zero src/
 
 **The queued Director change #5 got its own train** (owner green light: "proceed with the
 conclusions made by the council and design director"). The `.record` replay deck's ▶ button replay

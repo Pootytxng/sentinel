@@ -161,8 +161,10 @@ ship `beta-001` frozen vs. cut a fresh `beta-002` from `main`.
 
 ### B3. Funnel go-live — two small inputs  ·  ⏳  ·  [`docs/archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md`](archive/cowork-cc-relay/2026-06-15-funnel-golive-todo.cc.md)
 Parked since 2026-06-15, waiting on you for: **(a) your Ko-fi profile URL** (to wire the tip/support
-button) and **(b) an explicit "deploy GO"** for the site refresh. No spend, no risk — just needs
-those two from you when you want the funnel live.
+button) and ~~**(b) an explicit "deploy GO"** for the site refresh~~ — **(b) GRANTED 2026-07-15**
+("deploy go looks good for now"); the site now deploys autonomously and is LIVE on
+`compy-bd6.pages.dev` (SEO plumbing + `/compare` shipped 2026-07-15). **Still open: only (a) the Ko-fi
+URL.**
 
 ### B4. Two substituted asks — confirm or redirect  ·  ⏳
 Both were real asks that got quietly *substituted* rather than done — flagging so you can close or
@@ -207,7 +209,11 @@ These gate **public** release only (not the local app you use daily). Full list:
   **Bug found:** both docs already link to `https://github.com/Pootytxng/compy`, which doesn't exist
   yet (current repo is still `Pootytxng/sentinel`, private) — fix the links when the rename below
   actually happens, don't ship as-is.
-- 🔒 **GitHub repo rename → `compy` + `compy.gg` domain** — bundled at first public exposure.
+- 🔒 **GitHub repo rename → `compy` + `compy.gg` domain** — bundled at first public exposure. **NOW
+  TIMELY (2026-07-15):** the site is deployed and every canonical URL, the sitemap, and the JSON-LD
+  already point at `https://compy.gg`, but the domain isn't purchased — the site currently lives only
+  on `compy-bd6.pages.dev`. Buying `compy.gg` + pointing it at the Pages project is the last
+  owner-only step before the SEO/canonical layer is actually correct in the wild.
 - 🔒 **Receipts telemetry arming** — new outbound-network boundary; needs its security review + a
   consent UI + your sign-off before it can leave the machine (dark by design until then).
 

@@ -119,6 +119,26 @@ function mdToHtml(md) {
 // opt-in Receipts telemetry phase ever ships (owner-gated), this line gets revised WITH it.
 const FOOTER_PROMISE = "Local-only by design · no telemetry · no account";
 
+// ---------- SEO layer (launch-readiness train 2026-07-15) ----------
+// Every generated page declares ONE canonical URL on the production origin. The full-library
+// copy of a curated pick canonicalizes to its TOP-LEVEL page (site/<id>.html) so the two
+// copies never compete in search; everything else canonicalizes to itself.
+const SITE_ORIGIN = "https://compy.gg";
+
+// JSON-LD stays as honest as the prose: name/description/url only — never invented dates,
+// ratings, or review counts (honest-measurement law applies to structured data too).
+const jsonldScript = (obj) =>
+  `\n<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, "\\u003c")}</script>`;
+const articleJsonld = (entry, canonical) =>
+  jsonldScript({
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: entry.name,
+    description: entrySummary(entry),
+    url: canonical,
+    publisher: { "@type": "Organization", name: "Compy", url: `${SITE_ORIGIN}/` },
+  });
+
 const lib = await loadLibrary();
 const { entries } = lib;
 assertExportableIds(entries);
@@ -136,7 +156,7 @@ copyFileSync(join(here, "src", "library.css"), join(here, "library.css"));
 
 const debunkTemplate = readFileSync(join(here, "src", "debunk.template.html"), "utf8");
 
-function articlePage(entry, { cssHref, homeHref, ctaHref }) {
+function articlePage(entry, { cssHref, homeHref, ctaHref, canonical }) {
   const title =
     entry.type === "tweak"
       ? `${entry.name} — real, placebo, or risky? | Compy Blackbook`
@@ -150,6 +170,8 @@ function articlePage(entry, { cssHref, homeHref, ctaHref }) {
     CSS_HREF: cssHref,
     HOME_HREF: homeHref,
     CTA_HREF: ctaHref,
+    CANONICAL: canonical,
+    JSONLD: articleJsonld(entry, canonical),
     FOOTER_PROMISE,
   });
 }
@@ -196,7 +218,7 @@ function teaserSections(entry) {
   }
 }
 
-function teaserPage(entry, { cssHref, homeHref, ctaHref }) {
+function teaserPage(entry, { cssHref, homeHref, ctaHref, canonical }) {
   const title =
     entry.type === "tweak"
       ? `${entry.name} — real, placebo, or risky? | Compy Blackbook`
@@ -210,6 +232,8 @@ function teaserPage(entry, { cssHref, homeHref, ctaHref }) {
     CSS_HREF: cssHref,
     HOME_HREF: homeHref,
     CTA_HREF: ctaHref,
+    CANONICAL: canonical,
+    JSONLD: articleJsonld(entry, canonical),
     FOOTER_PROMISE,
   });
 }
@@ -217,7 +241,12 @@ function teaserPage(entry, { cssHref, homeHref, ctaHref }) {
 for (const entry of picks) {
   writeFileSync(
     join(here, `${entry.id}.html`),
-    articlePage(entry, { cssHref: "library.css", homeHref: "./", ctaHref: "./#waitlist" }),
+    articlePage(entry, {
+      cssHref: "library.css",
+      homeHref: "./",
+      ctaHref: "./#waitlist",
+      canonical: `${SITE_ORIGIN}/${entry.id}`,
+    }),
   );
   console.log(`wrote site/${entry.id}.html  [${entry.type === "tweak" ? entry.verdict : entry.type}]`);
 }
@@ -228,8 +257,14 @@ rmSync(libDir, { recursive: true, force: true });
 mkdirSync(libDir, { recursive: true });
 let teaserCount = 0;
 for (const entry of entries) {
-  const opts = { cssHref: "../library.css", homeHref: "../", ctaHref: "../#waitlist" };
   const full = pickIds.has(entry.id);
+  const opts = {
+    cssHref: "../library.css",
+    homeHref: "../",
+    ctaHref: "../#waitlist",
+    // A pick's library copy canonicalizes to its top-level page — never two competing URLs.
+    canonical: full ? `${SITE_ORIGIN}/${entry.id}` : `${SITE_ORIGIN}/library/${entry.id}`,
+  };
   if (!full) teaserCount++;
   writeFileSync(join(libDir, `${entry.id}.html`), full ? articlePage(entry, opts) : teaserPage(entry, opts));
 }
@@ -251,6 +286,8 @@ writeFileSync(
     CSS_HREF: "../library.css",
     HOME_HREF: "../",
     YEAR: String(year),
+    CANONICAL: `${SITE_ORIGIN}/library/`,
+    JSONLD: "",
     FOOTER_PROMISE,
   }),
 );
@@ -266,12 +303,14 @@ const legalPages = [
   {
     file: "privacy.html",
     src: "PRIVACY.md",
+    canonicalPath: "/privacy",
     title: "Compy — Privacy Policy",
     desc: "How Compy and the Compy website handle your data — the app is local-only; the launch waitlist stores only your email and a one-way hashed IP, with zero third-party trackers.",
   },
   {
     file: "eula.html",
     src: "EULA.md",
+    canonicalPath: "/eula",
     title: "Compy — End-User License Agreement",
     desc: "The Compy End-User License Agreement & disclaimer — proprietary, all rights reserved; rollback is best-effort; the Software is provided as-is with no warranty.",
   },
@@ -287,11 +326,41 @@ for (const lp of legalPages) {
       CSS_HREF: "library.css",
       HOME_HREF: "./",
       YEAR: String(year),
+      CANONICAL: `${SITE_ORIGIN}${lp.canonicalPath}`,
+      JSONLD: "", // legal pages carry no structured data (and stay <script>-free — guard-pinned)
       FOOTER_PROMISE,
     }),
   );
   console.log(`wrote site/${lp.file}  [legal, from docs/${lp.src}]`);
 }
+
+// ---------- robots.txt + sitemap.xml (committed, deployed at the site root) ----------
+// One URL per canonical page: landing, /compare (Astro), each curated pick at top level,
+// the library index, every non-pick library entry, and the two legal pages. Picks appear
+// ONCE (top-level) — their site/library/ copies canonicalize up, so listing both would
+// ship a sitemap that disagrees with the canonicals. No <lastmod>: we don't track real
+// per-page dates and never fabricate them.
+writeFileSync(
+  join(here, "robots.txt"),
+  `User-agent: *\nAllow: /\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`,
+);
+const sitemapPaths = [
+  "/",
+  "/compare",
+  ...picks.map((entry) => `/${entry.id}`),
+  "/library/",
+  ...entries.filter((entry) => !pickIds.has(entry.id)).map((entry) => `/library/${entry.id}`),
+  "/privacy",
+  "/eula",
+];
+writeFileSync(
+  join(here, "sitemap.xml"),
+  `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    sitemapPaths.map((p) => `  <url><loc>${SITE_ORIGIN}${p}</loc></url>`).join("\n") +
+    `\n</urlset>\n`,
+);
+console.log(`wrote site/robots.txt + site/sitemap.xml (${sitemapPaths.length} urls)`);
 
 // ---------- landing: NOT generated here anymore ----------
 // The landing moved to the Astro app in site-app/ (Mission Control makeover, spec

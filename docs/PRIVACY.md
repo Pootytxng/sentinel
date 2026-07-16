@@ -111,9 +111,7 @@ with the corresponding version.
 ## Contact & governing law
 
 **Pootytxng** (Compy). Privacy questions, concerns, or a request to delete your waitlist email:
-open an issue on the project's GitHub issues page — https://github.com/Pootytxng/compy/issues — or
-reply directly to the launch email you receive from the waitlist.
-Project: https://github.com/Pootytxng/compy
+reply directly to any email you receive from the waitlist — replies reach the owner.
 
 This policy, and any dispute relating to it, is governed by the laws of the **United States** and the
 owner's state of residence (see the EULA's governing-law clause for the specific venue).

@@ -10,6 +10,30 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-15e (SITE COMPLETION — SEO/LAUNCH PLUMBING + `/compare` LIVE, DEPLOYED — site-only,
+> NO gate moved, zero `src-tauri/`, zero `src/`):** the compy.gg launch-readiness layer landed and is
+> LIVE on the Pages host. New: canonical URL scheme across every page (landing `/`; picks canonicalize
+> to `https://compy.gg/<id>` from both the top-level and library copies; non-picks → `/library/<id>`;
+> legal → `/privacy`, `/eula`; compare → `/compare`), `robots.txt` + `sitemap.xml` (196 URLs, **no
+> lastmod/priority/changefreq** — honesty law: never fabricate freshness), favicons (bracket-mark
+> `favicon.svg` + hand-built `favicon.ico`), a static `404.html` (noindex, root-absolute links, no JS),
+> honest JSON-LD (TechArticle on articles/teasers, SoftwareApplication on landing — **guard bans
+> aggregateRating/reviewCount/ratingValue**), and the **new `/compare` page** (Design Director spec,
+> council 2026-07-15: five construction-practice axes — rollback · kernel/anti-cheat · catalog
+> transparency · telemetry default · cost model — **never names a competitor, never invents a
+> performance number, admits the tradeoff on every axis**). Guard: new `scripts/site-seo.test.mjs`
+> companion suite; full site pipeline **40/40 green** (site-landing + staleness + seo). Self-review
+> **PASS** (agent `adae2dc1b4d75fff8`: computed contrast verified — `#f2ede4` on `#0d0b07` panel,
+> `#140a00` on `#ff9a1e` primary; mobile 390px no overflow; single footer; nav Receipts→Blackbook→
+> Compare→FAQ→waitlist; skip-links resolve; no retired-brand copy). **DEPLOYED** (owner's deploy GO,
+> 2026-07-15): `npx wrangler pages deploy dist-site` → deploy `d8a40fc5.compy-bd6.pages.dev`, apex
+> **promoted + verified** (apex HTML md5 `458dc641203451a34e7eb44eeeb47ec1` == deploy hash; `/compare`,
+> `/sitemap.xml`, `/robots.txt`, favicons all 200; a real HTTP 404 on unknown routes).
+> **Owner's deploy GO supersedes the older "site stays PRE-PUBLISH / deploy owner-gated" language**
+> in this file and BACKLOG.md — the site now deploys autonomously. STILL owner-gated for launch:
+> the **`compy.gg` domain purchase** (canonicals/sitemap/JSON-LD already point at it; site currently
+> lives only on `compy-bd6.pages.dev`). No app gate moved; no mutation boundary touched.
+
 > **UPDATE 2026-07-15 (`--run-elevated` BOUNDARY-SIDE GUARD SHIPPED `4bf2a91` — the Phase B
 > defense-in-depth item from BACKLOG closes; MUTATION-BOUNDARY code (elevation), Cowork adversarial
 > audit warranted; NO gate moved. Installer re-cut + silently reinstalled same day: SHA-256

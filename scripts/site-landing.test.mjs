@@ -243,8 +243,11 @@ describe("legal pages (rendered from the .md source — privacy.html / eula.html
 
   it("add ZERO external origins: self-hosted CSS only, no external href/src, no trackers/CDNs", () => {
     for (const page of [privacy, eula]) {
-      expect(page).not.toMatch(/src="https?:\/\//);
-      expect(page).not.toMatch(/href="https?:\/\//); // contact URLs render as plain text, never <a href>
+      // Absolute URLs allowed ONLY on our own origin (canonical/og plumbing). Contact URLs in
+      // the prose still render as plain text, never <a href>; no third-party origin appears.
+      for (const [, url] of page.matchAll(/(?:href|src|action)="(https?:\/\/[^"]+)"/g)) {
+        expect(url, "absolute URL off our origin").toMatch(/^https:\/\/compy\.gg\//);
+      }
       // No third-party RESOURCES: legal pages are fully static (no <script>), no @import, no
       // web-font/tracker domains. (The policy PROSE legitimately discusses "analytics"/"tracking" —
       // describing what Compy does NOT do — so we match resource markers, not bare words.)
@@ -266,7 +269,9 @@ describe("legal pages (rendered from the .md source — privacy.html / eula.html
   it("EULA §10's PRIVACY.md reference is a same-origin link to the published policy", () => {
     // Lane C: the legal WORDING is unchanged (".md" text intact); only its link-ness is added.
     expect(eula).toMatch(/<a href="privacy\.html"><code>PRIVACY\.md<\/code><\/a>/);
-    expect(eula).not.toMatch(/href="https?:\/\//); // still zero external origin
+    for (const [, url] of eula.matchAll(/href="(https?:\/\/[^"]+)"/g)) {
+      expect(url, "still zero external origin").toMatch(/^https:\/\/compy\.gg\//);
+    }
   });
 });
 
@@ -284,15 +289,16 @@ describe("site-wide guard — footer legal links + zero external origins on ever
 
   it("every page links Privacy + Terms in its footer", () => {
     for (const [name, html] of pages) {
-      expect(html, `${name}: missing Privacy link`).toMatch(/href="(\.\/)?privacy\.html"/);
-      expect(html, `${name}: missing Terms link`).toMatch(/href="(\.\/)?eula\.html"/);
+      expect(html, `${name}: missing Privacy link`).toMatch(/href="(\.\/|\/)?privacy\.html"/);
+      expect(html, `${name}: missing Terms link`).toMatch(/href="(\.\/|\/)?eula\.html"/);
     }
   });
 
   it("every page adds zero external resource origins (no external href/src, no remote <script>)", () => {
     for (const [name, html] of pages) {
-      expect(html, `${name}: external href`).not.toMatch(/href="https?:\/\//);
-      expect(html, `${name}: external src`).not.toMatch(/src="https?:\/\//);
+      for (const [, url] of html.matchAll(/(?:href|src|action)="(https?:\/\/[^"]+)"/g)) {
+        expect(url, `${name}: absolute URL off our origin`).toMatch(/^https:\/\/compy\.gg\//);
+      }
       expect(html, `${name}: remote <script>`).not.toMatch(/<script\b[^>]*\bsrc=/);
     }
   });

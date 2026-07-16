@@ -5,21 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{{TITLE}}</title>
 <meta name="description" content="{{META_DESCRIPTION}}" />
-<link rel="stylesheet" href="{{CSS_HREF}}" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#050403" />
+<link rel="canonical" href="{{CANONICAL}}" />
+<meta property="og:title" content="{{TITLE}}" />
+<meta property="og:description" content="{{META_DESCRIPTION}}" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="{{CANONICAL}}" />
+<meta property="og:image" content="https://compy.gg/assets/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://compy.gg/assets/og.png" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/favicon.ico" sizes="32x32" />
+<link rel="stylesheet" href="{{CSS_HREF}}" />{{JSONLD}}
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <header class="wrap topbar">
   <a class="wordmark" href="{{HOME_HREF}}">C<span class="pulse">o</span>mpy</a>
   <span class="crumb"><a href="{{HOME_HREF}}">← Home</a></span>
 </header>
 
-<main class="wrap article">
+<main class="wrap article" id="main">
 {{MAIN}}
 </main>
 
 <footer>
   <div class="wrap">
     <span class="promise">{{FOOTER_PROMISE}}</span>
+    <span><a class="link-quiet" href="{{HOME_HREF}}#waitlist">Join the launch list →</a></span>
     <span class="foot-legal"><a href="{{HOME_HREF}}privacy.html">Privacy</a> · <a href="{{HOME_HREF}}eula.html">Terms</a></span>
     <span>© {{YEAR}} Pootytxng · Compy is in private beta</span>
   </div>
