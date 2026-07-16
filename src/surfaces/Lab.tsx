@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AppliedChange,
   BenchmarkState,
   BlackBoxReport,
   LatencyReport,
@@ -9,6 +10,7 @@ import type {
   ArmedComparison,
   ComparisonResult,
 } from "../types";
+import { changesBetweenRuns } from "./benchmark-view";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
@@ -70,6 +72,7 @@ export default function Lab({
   diagnosticsCaptured = false,
   ground = false,
   fast,
+  changes,
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
@@ -96,6 +99,10 @@ export default function Lab({
   // reading; every non-ground path leaves it undefined and never reads it (byte-identity holds by
   // construction). Optional so classic/guided/bento callers pass nothing.
   fast?: LabFastPathProps;
+  // App's Trust Ledger (combined-effect honesty, panel-review brief 2026-07-15 §2): the benchmark
+  // station reading needs it to tell one change's win from a stack's. Ground mode already carries
+  // the same list inside `fast.changes` — this prop is for the non-ground faces (LabV2 → bento).
+  changes?: AppliedChange[];
 }) {
   // Seed from the probe cache so re-opening Advanced paints last-known instantly instead of cold-
   // re-running get_latency_diagnostics (a synchronous MSI/timer/USB scan) every visit.
@@ -243,6 +250,11 @@ export default function Lab({
         )
       : 0;
   const stackApplied = showOptimize && safeReady === 0;
+  // Combined-effect honesty (panel-review brief 2026-07-15 §2): Trust Ledger changes inside the
+  // graded window — the SAME window labVerdict/the efficacy card filter by, so every rendering of
+  // this result agrees on whose win it is. Ground carries the ledger in fast.changes; the
+  // non-ground faces get it via the changes prop (LabV2 threads App's list down).
+  const stackedCount = changesBetweenRuns(bench, changes ?? fast?.changes ?? []).length;
 
   // The identical instrument bodies the classic path renders — one source for both layouts. Station
   // 1 "Optimize" renders the fast-path apply surface (ground mode only; `fast` is present there).
@@ -319,6 +331,7 @@ export default function Lab({
               // Bento is non-ground → no optimize card; the fields are inert here.
               safeReady: 0,
               stackApplied: false,
+              stackedCount,
             }}
             onOpen={openBentoStation}
             openStation={openStation}
@@ -457,6 +470,7 @@ export default function Lab({
                     diagnosticsCaptured,
                     safeReady,
                     stackApplied,
+                    stackedCount,
                   }),
                   connectsLine: LAB_STATIONS[k].connectsLine,
                 }}

@@ -6,7 +6,7 @@ import { useHudFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { peekProbe } from "../data/probe-cache";
 import { labVerdict } from "./lab-v2-data";
-import type { BenchmarkState } from "../types";
+import type { AppliedChange, BenchmarkState } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./lab-v2.css";
@@ -32,12 +32,16 @@ export function LabV2({
   diagnostics,
   vendor = "any",
   diagnosticsCaptured = false,
+  changes = [],
 }: {
   diagnostics?: ReactNode;
   vendor?: GpuVendor;
   // Threads to Lab's latest-readings strip (fill pass, spec 2026-07-05): whether the system
   // report behind the diagnostics slot actually has sections — never claim "captured" otherwise.
   diagnosticsCaptured?: boolean;
+  // App's Trust Ledger (the same list LabGround gets) — the verdict needs it to tell one
+  // change's win from a stack's combined effect (panel-review brief 2026-07-15 §2).
+  changes?: AppliedChange[];
 }) {
   const reduced = useReducedMotion();
   const hud = useHudFlag();
@@ -46,7 +50,7 @@ export function LabV2({
   const [bench, setBench] = useState<BenchmarkState | null>(
     () => peekProbe("benchmark-state") ?? null,
   );
-  const verdict = labVerdict(bench);
+  const verdict = labVerdict(bench, changes);
 
   return (
     <RoomShell
@@ -86,6 +90,7 @@ export function LabV2({
         vendor={vendor}
         onBenchState={setBench}
         diagnosticsCaptured={diagnosticsCaptured}
+        changes={changes}
       />
     </RoomShell>
   );

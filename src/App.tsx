@@ -1634,6 +1634,7 @@ function App() {
                     diagnostics={<DiagnosticsTab sections={diagnostics} />}
                     vendor={detectedVendor}
                     diagnosticsCaptured={diagnostics.length > 0}
+                    changes={changes}
                   />
                 ))}
               {!(activeTab === "Optimize" && optimizeMerged) &&

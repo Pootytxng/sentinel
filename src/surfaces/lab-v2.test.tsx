@@ -8,7 +8,7 @@ import { LabV2 } from "./LabV2";
 import Lab from "./Lab";
 import { labVerdict, labLatestReadings } from "./lab-v2-data";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
-import type { BenchmarkState, Efficacy, LatencyReport } from "../types";
+import type { AppliedChange, BenchmarkState, Efficacy, LatencyReport } from "../types";
 
 // V2-7 guards (bug→guard tier 1): the V2 Lab room composes RoomShell (one verdict, NO door —
 // Lab is the journey's last chapter — and deliberately NO primary action: the instruments ARE
@@ -137,17 +137,105 @@ describe("labVerdict — pure, measured, evidence named in the same breath", () 
     );
   });
 
-  it("never '(s)' across every branch", () => {
-    const branches: (BenchmarkState | null)[] = [
-      null,
-      state(),
-      state({ baseline: { components: [], confidence: "clean", notes: [] } }),
-      state({ efficacy: efficacy({ overall: "improved" }) }),
-      state({ efficacy: efficacy({ overall: "regressed" }) }),
-      state({ efficacy: efficacy({ overall: "no-measurable-change" }) }),
+  // Combined-effect attribution (panel-review brief 2026-07-15 §2, bug→guard): with SEVERAL
+  // Compy changes applied between the two runs, the verdict must speak for the stack — plural
+  // headline + the same credit-refusing caveat the efficacy card / Two Futures carry — and the
+  // singular wording stays pinned for the 0/1-change cases.
+  describe("multi-change attribution", () => {
+    const applied = (n: number, applied_at: string): AppliedChange => ({
+      id: `chg-${n}`,
+      rec_id: `rec-${n}`,
+      rec_title: `Change ${n}`,
+      applied_at,
+      snapshot: null,
+      status: "applied",
+      is_still_active: true,
+    });
+    // Baseline 10:00 → latest run 10:00 next day; the window the grade actually measured.
+    const graded = (over: Partial<Efficacy> = {}) =>
+      state({
+        baseline_at: "2026-07-01T10:00:00Z",
+        latest_at: "2026-07-02T10:00:00Z",
+        efficacy: efficacy(over),
+      });
+    const inWindow = [
+      applied(1, "2026-07-01T12:00:00Z"),
+      applied(2, "2026-07-01T13:00:00Z"),
     ];
-    for (const bench of branches) {
-      const v = labVerdict(bench);
+    const caveat =
+      "These 2 changes were measured together, so the result is their combined effect — it can't be credited to any one of them.";
+
+    it("improved + 2 changes in the window → the stack's win, never one change's", () => {
+      const v = labVerdict(
+        graded({
+          per_component: [
+            { component: "cpu", before: 100, after: 104.2, delta_pct: 4.2, verdict: "improved" },
+          ],
+          overall: "improved",
+        }),
+        inWindow,
+      );
+      expect(v.headline).toBe("Your last benchmarked changes improved this PC together.");
+      expect(v.sub).toBe(`Measured: CPU +4.2% — graded against a 2% noise floor. ${caveat}`);
+    });
+
+    it("regressed + 2 changes → the stack made it worse; the undo coaching goes plural", () => {
+      const v = labVerdict(graded({ overall: "regressed" }), inWindow);
+      expect(v.headline).toBe("Your last benchmarked changes made things worse together.");
+      expect(v.sub).toBe(
+        `Graded against a 2% noise floor. ${caveat} Undo them, or re-run to confirm.`,
+      );
+    });
+
+    it("no measurable change + 2 changes → plural honesty line with the caveat", () => {
+      const v = labVerdict(graded({ overall: "no-measurable-change" }), inWindow);
+      expect(v.headline).toBe("Your last benchmarked changes made no measurable difference.");
+      expect(v.sub).toBe(
+        `Every component stayed inside the 2% noise floor — we call that noise, not a win. ${caveat}`,
+      );
+    });
+
+    it("exactly ONE change in the window keeps the pinned singular wording", () => {
+      const v = labVerdict(graded({ overall: "improved" }), [inWindow[0]]);
+      expect(v.headline).toBe("Your last benchmarked change improved this PC.");
+      expect(v.sub).toBe("Graded against a 2% noise floor.");
+    });
+
+    it("changes OUTSIDE the run window don't count toward the stack", () => {
+      const v = labVerdict(graded({ overall: "improved" }), [
+        applied(1, "2026-06-30T09:00:00Z"), // before the baseline — already in it
+        applied(2, "2026-07-01T12:00:00Z"), // the one change the result measured
+        applied(3, "2026-07-03T09:00:00Z"), // after the latest run — the result never saw it
+      ]);
+      expect(v.headline).toBe("Your last benchmarked change improved this PC.");
+    });
+  });
+
+  it("never '(s)' across every branch", () => {
+    const withWindow = (over: Partial<BenchmarkState>) =>
+      state({ baseline_at: "2026-07-01T10:00:00Z", latest_at: "2026-07-02T10:00:00Z", ...over });
+    const stack: AppliedChange[] = [1, 2].map((n) => ({
+      id: `chg-${n}`,
+      rec_id: `rec-${n}`,
+      rec_title: `Change ${n}`,
+      applied_at: "2026-07-01T12:00:00Z",
+      snapshot: null,
+      status: "applied",
+      is_still_active: true,
+    }));
+    const branches: [BenchmarkState | null, AppliedChange[]][] = [
+      [null, []],
+      [state(), []],
+      [state({ baseline: { components: [], confidence: "clean", notes: [] } }), []],
+      [state({ efficacy: efficacy({ overall: "improved" }) }), []],
+      [state({ efficacy: efficacy({ overall: "regressed" }) }), []],
+      [state({ efficacy: efficacy({ overall: "no-measurable-change" }) }), []],
+      [withWindow({ efficacy: efficacy({ overall: "improved" }) }), stack],
+      [withWindow({ efficacy: efficacy({ overall: "regressed" }) }), stack],
+      [withWindow({ efficacy: efficacy({ overall: "no-measurable-change" }) }), stack],
+    ];
+    for (const [bench, changes] of branches) {
+      const v = labVerdict(bench, changes);
       expect(`${v.headline} ${v.sub ?? ""}`).not.toContain("(s)");
     }
   });

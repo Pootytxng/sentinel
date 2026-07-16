@@ -7,6 +7,8 @@ import { useLibrary } from "./library-context";
 import { useProfile } from "../hooks/use-profile";
 import { PROFILE_META, USE_PROFILES } from "../data/profile-store";
 import {
+  changeAttribution,
+  changesBetweenRuns,
   componentLabel,
   verdictLabel,
   verdictTone,
@@ -265,18 +267,9 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
     !!state?.efficacy && hasBaseline && !!state?.latest && state.latest_at !== state.baseline_at;
 
   // Compy changes (Trust Ledger) applied between the baseline and the latest run — the "Change"
-  // the verdict is attributing the measured delta to.
-  const changesSince =
-    state?.baseline_at && state?.latest_at
-      ? changes.filter((c) => {
-          const t = Date.parse(c.applied_at);
-          return (
-            !Number.isNaN(t) &&
-            t > Date.parse(state.baseline_at!) &&
-            t <= Date.parse(state.latest_at!)
-          );
-        })
-      : [];
+  // the verdict is attributing the measured delta to. Shared window filter so every attributing
+  // surface (this card, Two Futures, the Lab verdict) agrees on what a result covers.
+  const changesSince = changesBetweenRuns(state, changes);
 
   return (
     <div className="bench-wrap">
@@ -671,6 +664,7 @@ function RunCard({ report, at, title }: { report: RunReport; at: string | null; 
 }
 
 function EfficacyCard({ efficacy, changes }: { efficacy: Efficacy; changes: AppliedChange[] }) {
+  const attr = changeAttribution(changes.length);
   return (
     <Card>
       <SectionHeader
@@ -680,8 +674,8 @@ function EfficacyCard({ efficacy, changes }: { efficacy: Efficacy; changes: Appl
       <p className="bench-change">
         {changes.length > 0 ? (
           <>
-            Measuring the effect of:{" "}
-            <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
+            {attr.lead} <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
+            {attr.caveat ? ` ${attr.caveat}` : ""}
           </>
         ) : (
           <>No Compy changes recorded since the baseline — this reflects manual or ambient changes.</>

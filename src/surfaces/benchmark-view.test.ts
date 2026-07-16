@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  changeAttribution,
+  changesBetweenRuns,
   componentLabel,
   verdictLabel,
   verdictTone,
@@ -43,6 +45,54 @@ describe("fmtDelta", () => {
     expect(fmtDelta(-1.14)).toBe("-1.1%");
     expect(fmtDelta(0)).toBe("0%");
     expect(fmtDelta(0.04)).toBe("0%");
+  });
+});
+
+describe("changeAttribution — a multi-change delta never reads as a single change's win", () => {
+  // Panel-review brief 2026-07-15 §2 (bug→guard): with >1 change between the two runs the
+  // measurement can only speak for the stack — the lead must say "combined" and the caveat
+  // must refuse to split the credit.
+  it("one change: plain lead, no caveat", () => {
+    const a = changeAttribution(1);
+    expect(a.lead).toBe("Measuring the effect of:");
+    expect(a.caveat).toBeNull();
+  });
+  it("several changes: combined lead + credit-refusing caveat naming the count", () => {
+    const a = changeAttribution(3);
+    expect(a.lead).toBe("Measuring the combined effect of:");
+    expect(a.caveat).toContain("These 3 changes were measured together");
+    expect(a.caveat).toContain("can't be credited to any one of them");
+  });
+});
+
+describe("changesBetweenRuns — the ONE attribution window every surface filters by", () => {
+  const window = { baseline_at: "2026-07-01T10:00:00Z", latest_at: "2026-07-02T10:00:00Z" };
+  const at = (applied_at: string) => ({ applied_at });
+
+  it("keeps only changes applied strictly after the baseline and no later than the latest run", () => {
+    const kept = changesBetweenRuns(window, [
+      at("2026-07-01T09:00:00Z"), // before the baseline — a change the baseline already measured
+      at("2026-07-01T10:00:00Z"), // AT the baseline instant — exclusive, already in the baseline
+      at("2026-07-01T12:00:00Z"), // in the window
+      at("2026-07-02T10:00:00Z"), // AT the latest run — inclusive, the run measured it
+      at("2026-07-02T11:00:00Z"), // after the latest run — the result never saw it
+    ]);
+    expect(kept.map((c) => c.applied_at)).toEqual([
+      "2026-07-01T12:00:00Z",
+      "2026-07-02T10:00:00Z",
+    ]);
+  });
+
+  it("no recorded window (missing either timestamp, or no bench) → no attribution, never a guess", () => {
+    const c = [at("2026-07-01T12:00:00Z")];
+    expect(changesBetweenRuns(null, c)).toEqual([]);
+    expect(changesBetweenRuns({ baseline_at: window.baseline_at, latest_at: null }, c)).toEqual([]);
+    expect(changesBetweenRuns({ baseline_at: null, latest_at: window.latest_at }, c)).toEqual([]);
+  });
+
+  it("unparseable timestamps drop out rather than mis-attributing", () => {
+    expect(changesBetweenRuns(window, [at("not-a-date"), at("2026-07-01T12:00:00Z")])).toHaveLength(1);
+    expect(changesBetweenRuns({ baseline_at: "garbage", latest_at: window.latest_at }, [at("2026-07-01T12:00:00Z")])).toEqual([]);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { BenchmarkState, BlackBoxReport, LatencyReport, Verdict } from "../types";
+import { changeAttribution } from "./benchmark-view";
 
 // Guided Lab bench (spec 2026-07-05-lab-linear-guided-bench) — the pure data behind the bench:
 // the station order, each station's plain-English contract lines, and the live "what the reading
@@ -142,6 +143,10 @@ export type LabStationFacts = {
   // optimize station, so these stay 0/false there.
   safeReady: number;
   stackApplied: boolean;
+  // Combined-effect honesty (panel-review brief 2026-07-15 §2): how many Trust Ledger changes
+  // landed inside the graded window — callers derive it via changesBetweenRuns (the ONE window
+  // every attributing surface filters by). >1 → the benchmark reading speaks for the stack.
+  stackedCount: number;
 };
 
 const VERDICT_READING: Record<Verdict, string> = {
@@ -149,6 +154,16 @@ const VERDICT_READING: Record<Verdict, string> = {
   "no-measurable-change":
     "Last verdict: No measurable change — it stayed inside the noise floor. That's noise, not a win.",
   regressed: "Last verdict: Regressed — things measured worse. Worth undoing.",
+};
+
+// With several changes inside the graded window the verdict belongs to the STACK — plural lead
+// plus changeAttribution's credit-refusing caveat, mirroring labVerdict (the room header and
+// this reading render the same result on one screen; they must never disagree on whose win it is).
+const VERDICT_READING_STACKED: Record<Verdict, string> = {
+  improved: "Last verdict: Improved — your changes together moved more than the run's own noise.",
+  "no-measurable-change":
+    "Last verdict: No measurable change — the stack stayed inside the noise floor. That's noise, not a win.",
+  regressed: "Last verdict: Regressed — things measured worse together. Worth undoing.",
 };
 
 // Line 3 — "what the reading means", translated to real life. Every branch is either the live
@@ -166,11 +181,16 @@ export function stationReading(key: LabStationKey, f: LabStationFacts): string {
       return f.diagnosticsCaptured
         ? "Report captured — the raw facts about this rig, ready to read."
         : "No reading yet — the system report hasn't been captured.";
-    case "benchmark":
-      if (f.bench?.efficacy) return VERDICT_READING[f.bench.efficacy.overall];
+    case "benchmark": {
+      if (f.bench?.efficacy) {
+        const caveat = changeAttribution(f.stackedCount).caveat;
+        if (caveat) return `${VERDICT_READING_STACKED[f.bench.efficacy.overall]} ${caveat}`;
+        return VERDICT_READING[f.bench.efficacy.overall];
+      }
       if (f.bench?.baseline)
         return "Baseline saved — change one thing, re-run, and the grade lands here.";
       return "No reading yet — set a baseline to start.";
+    }
     case "latency": {
       if (!f.latency) return "No reading yet — open the station and Compy traces the path.";
       const timer =

@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Card, SectionHeader, StatusPill } from "../design";
-import { componentLabel, verdictLabel, verdictTone, fmtDelta } from "./benchmark-view";
+import { changeAttribution, componentLabel, verdictLabel, verdictTone, fmtDelta } from "./benchmark-view";
 import { hasMeasuredPair } from "./two-futures-view";
 import type { AppliedChange, BenchmarkState } from "../types";
 import type { HardwareInfo } from "../App";
@@ -43,6 +43,7 @@ export function TwoFutures({
   }
 
   const eff = bench.efficacy;
+  const attr = changeAttribution(changes.length);
   return (
     <Card>
       <SectionHeader
@@ -53,8 +54,8 @@ export function TwoFutures({
         <p className="bench-change">
           {changes.length > 0 ? (
             <>
-              Measuring the effect of:{" "}
-              <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
+              {attr.lead} <strong>{changes.map((c) => c.rec_title).join(", ")}</strong>.
+              {attr.caveat ? ` ${attr.caveat}` : ""}
             </>
           ) : (
             <>No Compy changes recorded since the baseline — this reflects manual or ambient changes.</>

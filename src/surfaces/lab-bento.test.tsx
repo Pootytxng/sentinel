@@ -35,6 +35,7 @@ const NO_FACTS: LabStationFacts = {
   diagnosticsCaptured: false,
   safeReady: 0,
   stackApplied: false,
+  stackedCount: 0,
 };
 
 describe("compy_lab_bento flag-off byte-identity (the classic failsafe)", () => {
@@ -189,6 +190,7 @@ describe("pure data (one source, no drift)", () => {
       diagnosticsCaptured: true,
       safeReady: 0,
       stackApplied: true,
+      stackedCount: 0,
     };
     const report = labCheckup(labBentoCards(LAB_STATION_ORDER, full));
     expect(report.headline).toBe("Full checkup complete — every station has a reading.");
@@ -198,6 +200,43 @@ describe("pure data (one source, no drift)", () => {
   it("every station has a non-empty lab note", () => {
     for (const k of LAB_STATION_ORDER) {
       expect(LAB_NOTES[k].length).toBeGreaterThan(40);
+    }
+  });
+});
+
+describe("benchmark reading — combined-effect attribution (panel-review brief 2026-07-15 §2)", () => {
+  // bug→guard: the checkup/station reading renders the SAME efficacy result as the room verdict
+  // (labVerdict) — with >1 change inside the graded window it must speak for the stack, never
+  // credit "the change" singular. Round-2 self-review catch.
+  const graded = (overall: string): LabStationFacts => ({
+    ...NO_FACTS,
+    bench: { baseline: {}, baseline_at: null, efficacy: { overall } } as never,
+  });
+
+  it("a 2-change stack reads as the stack's combined effect, never one change's win", () => {
+    const r = stationReading("benchmark", { ...graded("improved"), stackedCount: 2 });
+    expect(r).toBe(
+      "Last verdict: Improved — your changes together moved more than the run's own noise. " +
+        "These 2 changes were measured together, so the result is their combined effect — it can't be credited to any one of them.",
+    );
+    expect(r).not.toContain("the change moved");
+  });
+
+  it("every stacked verdict branch carries the credit-refusing caveat and drops the singular lead", () => {
+    for (const overall of ["improved", "no-measurable-change", "regressed"]) {
+      const r = stationReading("benchmark", { ...graded(overall), stackedCount: 3 });
+      expect(r).toContain("These 3 changes were measured together");
+      expect(r).toContain("can't be credited to any one of them");
+      expect(r).not.toContain("the change moved");
+      expect(r).not.toContain("it stayed inside");
+    }
+  });
+
+  it("exactly one change (or none recorded) keeps the pinned singular reading", () => {
+    for (const stackedCount of [0, 1]) {
+      expect(stationReading("benchmark", { ...graded("improved"), stackedCount })).toBe(
+        "Last verdict: Improved — the change moved more than the run's own noise.",
+      );
     }
   });
 });

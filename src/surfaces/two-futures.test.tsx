@@ -6,7 +6,7 @@ import { TwoFutures } from "./TwoFutures";
 import { BenchmarkTab } from "./Benchmark";
 import { hasMeasuredPair, partGlow } from "./two-futures-view";
 import { readTwoFutures } from "../design/theme";
-import type { BenchmarkState, Efficacy, RunReport } from "../types";
+import type { AppliedChange, BenchmarkState, Efficacy, RunReport } from "../types";
 import type { HardwareInfo } from "../App";
 
 // THE ANTI-FABRICATION GUARD (spec 2026-07-07-two-futures-measured-split, required in the same
@@ -31,12 +31,12 @@ const NO_PAIR = {
 
 // Settable benchmark state so the BenchmarkTab wiring can be pinned both without and WITH a
 // measured pair (the subsume guard below).
-const mocks = vi.hoisted(() => ({ bench: null as unknown }));
+const mocks = vi.hoisted(() => ({ bench: null as unknown, changes: [] as unknown[] }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     if (cmd === "get_benchmark_state") return Promise.resolve(mocks.bench ?? NO_PAIR);
-    if (cmd === "get_applied_changes") return Promise.resolve([]);
+    if (cmd === "get_applied_changes") return Promise.resolve(mocks.changes);
     if (cmd === "get_recommendations") return Promise.resolve([]);
     if (cmd === "get_appliable_rec_ids") return Promise.resolve([]);
     if (cmd === "get_fps_status") return Promise.resolve({ active: false });
@@ -49,6 +49,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   mocks.bench = null;
+  mocks.changes = [];
 });
 
 const hw = {
@@ -240,6 +241,53 @@ describe("flag compy_two_futures — DEFAULT OFF", () => {
     expect(await c.findByText("Since your baseline")).toBeTruthy();
     expect(c.queryByText("Two futures")).toBeNull();
     expect(c.queryByTestId("two-futures-split")).toBeNull();
+  });
+});
+
+// Combined-effect attribution (panel-review brief 2026-07-15 §2, bug→guard): a delta measured
+// with >1 change active belongs to the stack — both attribution surfaces (the split and the
+// efficacy card) must say "combined" and refuse to credit any single change.
+const ledgerChange = (id: string, title: string): AppliedChange =>
+  ({
+    id,
+    rec_id: id,
+    rec_title: title,
+    applied_at: "2026-07-03T12:00:00Z", // inside the baseline→latest window of `pair`
+    snapshot: {},
+    status: "applied",
+    is_still_active: true,
+  }) as AppliedChange;
+
+describe("combined-effect attribution — the stack gets the credit, never one change", () => {
+  it("one change: plain attribution, no combined caveat", () => {
+    const c = render(<TwoFutures bench={pair} hw={null} changes={[ledgerChange("a", "Game Mode")]} />);
+    const line = c.container.querySelector(".bench-change")!;
+    expect(line.textContent).toContain("Measuring the effect of: Game Mode.");
+    expect(line.textContent).not.toMatch(/combined/i);
+  });
+
+  it("two changes in the split: combined lead + credit-refusing caveat", () => {
+    const c = render(
+      <TwoFutures
+        bench={pair}
+        hw={null}
+        changes={[ledgerChange("a", "Game Mode"), ledgerChange("b", "Power plan")]}
+      />,
+    );
+    const line = c.container.querySelector(".bench-change")!;
+    expect(line.textContent).toContain("Measuring the combined effect of: Game Mode, Power plan.");
+    expect(line.textContent).toContain("These 2 changes were measured together");
+    expect(line.textContent).toContain("can't be credited to any one of them");
+  });
+
+  it("two changes in the efficacy card (flag off): same combined wording", async () => {
+    mocks.bench = pair;
+    mocks.changes = [ledgerChange("a", "Game Mode"), ledgerChange("b", "Power plan")];
+    const c = render(<BenchmarkTab />);
+    expect(await c.findByText("Since your baseline")).toBeTruthy();
+    const line = c.container.querySelector(".bench-change")!;
+    expect(line.textContent).toContain("Measuring the combined effect of: Game Mode, Power plan.");
+    expect(line.textContent).toContain("These 2 changes were measured together");
   });
 });
 

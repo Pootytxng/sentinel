@@ -67,6 +67,44 @@ export function trialReasonText(reason: string): string {
   }
 }
 
+// ── Combined-effect attribution (panel-review brief 2026-07-15 §2) ──
+/**
+ * Lead-in + caveat for the "Measuring the effect of: …" attribution line (efficacy card and
+ * Two Futures split). With several changes applied between the two runs the measurement can
+ * only speak for the stack: the lead says "combined" and the caveat refuses to split the
+ * credit. A multi-change delta must never read as any single change's win.
+ */
+export function changeAttribution(count: number): { lead: string; caveat: string | null } {
+  if (count > 1) {
+    return {
+      lead: "Measuring the combined effect of:",
+      caveat: `These ${count} changes were measured together, so the result is their combined effect — it can't be credited to any one of them.`,
+    };
+  }
+  return { lead: "Measuring the effect of:", caveat: null };
+}
+
+/**
+ * The Trust Ledger changes a benchmark result actually measured: applied strictly AFTER the
+ * baseline run and no later than the latest run. This is the ONE window every attributing
+ * surface (efficacy card, Two Futures, the Lab verdict) filters by, so they can never disagree
+ * about which changes a delta covers. Structural input (like RigSpecs above) keeps it pure and
+ * DOM-free; no window recorded → no attribution ([]), never a guess.
+ */
+export function changesBetweenRuns<T extends { applied_at: string }>(
+  bench: { baseline_at?: string | null; latest_at?: string | null } | null,
+  changes: T[],
+): T[] {
+  if (!bench?.baseline_at || !bench?.latest_at) return [];
+  const start = Date.parse(bench.baseline_at);
+  const end = Date.parse(bench.latest_at);
+  if (Number.isNaN(start) || Number.isNaN(end)) return [];
+  return changes.filter((c) => {
+    const t = Date.parse(c.applied_at);
+    return !Number.isNaN(t) && t > start && t <= end;
+  });
+}
+
 // ── A2 hardware-tier segmentation (LOCAL, no cohort/network) ──
 // The measured inputs the rough rig tier reads — a structural subset of HardwareInfo, so this stays
 // a pure, DOM-free, easily-tested helper (no coupling to the full App.tsx type).

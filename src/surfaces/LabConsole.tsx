@@ -14,6 +14,7 @@ import {
   type LabStationFacts,
 } from "./lab-guided-data";
 import { stationHasReading } from "./lab-bento-data";
+import { changesBetweenRuns } from "./benchmark-view";
 import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
@@ -171,6 +172,9 @@ export function LabConsole({
     diagnosticsCaptured,
     safeReady,
     stackApplied,
+    // Combined-effect honesty (panel-review brief 2026-07-15 §2): changes inside the graded
+    // window — the SAME window every attributing surface filters by.
+    stackedCount: changesBetweenRuns(bench, fast.changes ?? []).length,
   };
 
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens

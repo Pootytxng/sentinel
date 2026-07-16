@@ -1,10 +1,12 @@
 import type {
+  AppliedChange,
   BenchComponent,
   BenchmarkState,
   BlackBoxReport,
   ComponentEfficacy,
   LatencyReport,
 } from "../types";
+import { changeAttribution, changesBetweenRuns } from "./benchmark-view";
 
 // Pure verdict/measured derivations for the V2 Lab room (V2-7, spec
 // 2026-07-02-v2-shell-sourcing-and-plan). Same contract as monitorVerdict/blackbookVerdict:
@@ -40,31 +42,57 @@ const evidence = (per: ComponentEfficacy[], verdict: string): string =>
     .map((c) => `${COMPONENT_LABEL[c.component]} ${fmtDelta(c.delta_pct)}`)
     .join(" · ");
 
-export function labVerdict(bench: BenchmarkState | null): LabVerdictLine {
+export function labVerdict(
+  bench: BenchmarkState | null,
+  changes: AppliedChange[] = [],
+): LabVerdictLine {
   const efficacy = bench?.efficacy ?? null;
   if (efficacy) {
     const floor = fmtFloor(efficacy.noise_floor_pct);
+    // Combined-effect honesty (panel-review brief 2026-07-15 §2): with several Compy changes
+    // applied between the two runs, the grade belongs to the STACK — same caveat text as the
+    // efficacy card / Two Futures (one source, changeAttribution), never one change's win.
+    const stacked = changesBetweenRuns(bench, changes);
+    const combined = changeAttribution(stacked.length).caveat;
     if (efficacy.overall === "improved") {
       const ev = evidence(efficacy.per_component, "improved");
-      return {
-        headline: "Your last benchmarked change improved this PC.",
-        sub: ev
-          ? `Measured: ${ev} — graded against a ${floor} noise floor.`
-          : `Graded against a ${floor} noise floor.`,
-      };
+      const graded = ev
+        ? `Measured: ${ev} — graded against a ${floor} noise floor.`
+        : `Graded against a ${floor} noise floor.`;
+      if (combined) {
+        return {
+          headline: "Your last benchmarked changes improved this PC together.",
+          sub: `${graded} ${combined}`,
+        };
+      }
+      return { headline: "Your last benchmarked change improved this PC.", sub: graded };
     }
     if (efficacy.overall === "regressed") {
       const ev = evidence(efficacy.per_component, "regressed");
+      const graded = ev
+        ? `Measured: ${ev} — graded against a ${floor} noise floor.`
+        : `Graded against a ${floor} noise floor.`;
+      if (combined) {
+        return {
+          headline: "Your last benchmarked changes made things worse together.",
+          sub: `${graded} ${combined} Undo them, or re-run to confirm.`,
+        };
+      }
       return {
         headline: "Your last benchmarked change made things worse.",
-        sub: ev
-          ? `Measured: ${ev} — graded against a ${floor} noise floor. Undo it, or re-run to confirm.`
-          : `Graded against a ${floor} noise floor. Undo it, or re-run to confirm.`,
+        sub: `${graded} Undo it, or re-run to confirm.`,
+      };
+    }
+    const noise = `Every component stayed inside the ${floor} noise floor — we call that noise, not a win.`;
+    if (combined) {
+      return {
+        headline: "Your last benchmarked changes made no measurable difference.",
+        sub: `${noise} ${combined}`,
       };
     }
     return {
       headline: "Your last benchmarked change made no measurable difference.",
-      sub: `Every component stayed inside the ${floor} noise floor — we call that noise, not a win.`,
+      sub: noise,
     };
   }
   if (bench?.baseline) {
