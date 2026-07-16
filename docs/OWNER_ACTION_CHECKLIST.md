@@ -165,6 +165,29 @@ button) and ~~**(b) an explicit "deploy GO"** for the site refresh~~ — **(b) G
 ("deploy go looks good for now"); the site now deploys autonomously and is LIVE on
 `compy-bd6.pages.dev` (SEO plumbing + `/compare` shipped 2026-07-15). **Still open: only (a) the Ko-fi
 URL.**
+- **Ko-fi is the single most-ready money surface** ([`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
+  "Bridge"): `src/data/site.ts` `KOFI_URL` is empty by design (empty = no support link ships, **no
+  dead link**), and two dormant slots — the footer and the waitlist section — light up the instant
+  you give me the URL. One line, regenerate, deploy. **Result → tell Claude: your Ko-fi profile URL.**
+
+### B6. Monetization plan — money-surface unlocks  ·  ⏳  ·  [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
+Drawn up 2026-07-15 at your ask ("draw up a monetization plan … and how best to set it up on the
+site"). The plan documents/sequences what the site is **already built to do** — nothing here is a new
+spend or a new outbound boundary. The layers, ranked by passivity, and the owner-only unlocks each
+one waits on:
+- **Content engine (Layer 2)** — LIVE, $0, **no unlock needed.** The near-term lever is *me*
+  publishing more of the Blackbook corpus as full SEO pages. Nothing on you.
+- **Affiliate upgrade links (Layer 1)** — **HOLD.** Needs **① affiliate accounts** (Amazon
+  Associates / Newegg — your signup, a money call) **② enough Receipts data** to make a web
+  bottleneck-report say something true. Until accounts exist, verdicts use plain retailer links (no
+  revenue, still honest).
+- **Compy Pro (Layer 3)** — built dark, correct posture. Needs **a legal entity + merchant-of-record
+  (Paddle route) + a price you set + shipped Pro value.** The site's "in the works / no price yet"
+  card is exactly right until then.
+- **B2B licensing (Layer 4)** — parked, post-traction. No page until you ask.
+- **Wordmark taste fork** (surfaced by the web-design-director): the home page renders "COMPY" as
+  all-caps mono; the generated library/debunk pages use a pulsing-"o" wordmark. Director recommends
+  unifying to the all-caps mono. **It's your brand taste call** — say unify / keep-both / your own.
 
 ### B4. Two substituted asks — confirm or redirect  ·  ⏳
 Both were real asks that got quietly *substituted* rather than done — flagging so you can close or

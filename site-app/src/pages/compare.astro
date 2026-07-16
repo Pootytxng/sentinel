@@ -198,15 +198,33 @@ const axes = [
   .axis-col:not(.axis-col--compy) {
     padding: 20px 0;
   }
+  /* Console legend marker: the axis label is a silk-screened instrument tag, not a
+     floating eyebrow. A hollow tick reads as the reference column; a lit accent tick
+     reads as the built-by-Compy column — a real datum (which side is ours), not decoration. */
   .axis-label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 10.5px;
     letter-spacing: 0.2em;
     color: var(--fg-faint);
     margin-bottom: 10px;
   }
+  .axis-label::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border: 1px solid currentColor;
+    opacity: 0.7;
+  }
   .axis-label--compy {
     color: var(--accent);
+  }
+  .axis-label--compy::before {
+    background: var(--accent);
+    box-shadow: 0 0 7px rgba(255, 154, 30, 0.55);
+    opacity: 1;
   }
   .axis-tradeoff {
     margin-top: 26px;

@@ -281,7 +281,7 @@ writeFileSync(
       `<h1>The Compy Blackbook</h1>`,
       `<p>${entries.length} entries, every verdict on the record — none invented. ${picks.length} full write-ups are published below as the public sample; the complete graded book ships inside the app, next to your own rig's measurements.</p>`,
       glossaryBlock(lib),
-      indexSections(entries, lib),
+      indexSections(entries, lib, "", pickIds),
     ].join("\n"),
     CSS_HREF: "../library.css",
     HOME_HREF: "../",
@@ -361,6 +361,34 @@ writeFileSync(
     `\n</urlset>\n`,
 );
 console.log(`wrote site/robots.txt + site/sitemap.xml (${sitemapPaths.length} urls)`);
+
+// ---------- llms.txt (committed, deployed at the site root) ----------
+// The llmstxt.org convention: a plain-markdown map of the site for LLM/agent readers.
+// Same honesty law as every other surface — only what's true (no invented gain numbers,
+// no fabricated dates). Links point at canonical URLs. The curated picks are listed by
+// name because they're the full public sample; the rest of the book stays in the app.
+const llmsTxt = [
+  `# Compy`,
+  ``,
+  `> A rollback-first Windows configuration safety layer for everyday gamers that happens to optimize. Compy reads your actual PC and tailors safe, reversible settings to your hardware — plain-English, no jargon, undo attached to everything.`,
+  ``,
+  `Compy is a free desktop app (Windows, AMD verified; NVIDIA detection verified, sensors pending). Its public site is a measurement brand: every number shown was read on a real PC, including the ones that show no gain. No fabricated benchmarks, no third-party runtime requests, no account.`,
+  ``,
+  `## Start here`,
+  `- [Home](${SITE_ORIGIN}/): what Compy is, real-session replay, and the launch waitlist.`,
+  `- [Compare](${SITE_ORIGIN}/compare): how Compy's approach differs from generic "best tweaks" lists, across five practice axes.`,
+  `- [The Blackbook](${SITE_ORIGIN}/library/): all ${entries.length} verdicts on the record — ${picks.length} full write-ups published as the public sample; the complete graded book ships in the app.`,
+  ``,
+  `## Full sample entries (public picks)`,
+  ...picks.map((entry) => `- [${entry.name}](${SITE_ORIGIN}/${entry.id}): ${entrySummary(entry)}`),
+  ``,
+  `## Legal`,
+  `- [Privacy](${SITE_ORIGIN}/privacy): local-only app; the waitlist stores only an email + one-way hashed IP, zero third-party trackers.`,
+  `- [Terms](${SITE_ORIGIN}/eula): proprietary EULA; rollback is best-effort; provided as-is.`,
+  ``,
+].join("\n");
+writeFileSync(join(here, "llms.txt"), llmsTxt);
+console.log(`wrote site/llms.txt (${picks.length} sample entries listed)`);
 
 // ---------- landing: NOT generated here anymore ----------
 // The landing moved to the Astro app in site-app/ (Mission Control makeover, spec

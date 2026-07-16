@@ -481,11 +481,29 @@ h2 {
 }
 .in-the-app-note { margin: 0; }
 
-/* ── Full-library index (site/library/index.html) ── */
-.article ul.toc { list-style: none; padding: 0; margin: 0; }
-.article ul.toc li { margin: 7px 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.article ul.toc a { color: var(--ink); text-decoration: none; }
-.article ul.toc a:hover { color: var(--accent); }
+/* ── Full-library index (site/library/index.html) — the manifest ──
+   Ruled instrument rows, not a flat bullet list: name on the left rail, verdict/type chip pushed
+   to the right rail, and the 14 published-in-full entries flagged "Sample". Hover lights the row
+   and nudges it in — the same console grammar as the debunk cards, at list density (191 rows as
+   heavy cards would be the identical-grid AI tell; this stays scannable). */
+.article ul.toc { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--hairline); }
+.article ul.toc li {
+  margin: 0; padding: 11px 12px;
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--hairline);
+  transition: background 160ms ease;
+}
+.article ul.toc li:hover { background: var(--glass); }
+.article ul.toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+.article ul.toc li:hover a { color: var(--accent); }
+.article ul.toc .chip { margin-left: auto; } /* verdict/type chip on the right rail */
+/* "Sample" marker on the full public picks — a small amber instrument tag, never verdict-colored. */
+.sample-tag {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent);
+  border: 1px solid rgba(255, 154, 30, 0.32); border-radius: 999px; padding: 2px 8px;
+  background: rgba(255, 154, 30, 0.08); white-space: nowrap;
+}
 .article dl dt { font-family: var(--mono); color: var(--ink); margin-top: 14px; }
 .article dl dd { margin: 2px 0 0; color: var(--ink-2); }
 .browse-all { margin-top: 28px; }

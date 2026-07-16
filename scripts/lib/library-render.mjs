@@ -151,8 +151,10 @@ export const SECTION_TITLES = {
   guide: "Guides — safe, with the undo attached",
 };
 
-/** Grouped link list over all entries (used on index pages). hrefPrefix e.g. "" or "library/". */
-export function indexSections(entries, lib, hrefPrefix = "") {
+/** Grouped link list over all entries (used on index pages). hrefPrefix e.g. "" or "library/".
+ *  pickIds (optional Set): entries in it get a "Sample" marker — the full public write-ups vs the
+ *  teasers. Left null by the standalone app export (every export page is full → no marker needed). */
+export function indexSections(entries, lib, hrefPrefix = "", pickIds = null) {
   const byType = { tweak: [], term: [], trick: [], guide: [] };
   for (const e of entries) {
     if (!(e.type in byType)) throw new Error(`unknown entry type '${e.type}' (${e.id})`);
@@ -164,7 +166,10 @@ export function indexSections(entries, lib, hrefPrefix = "") {
       const items = list
         .map((e) => {
           const chip = chipFor(e, lib);
-          return `<li><a href="${escapeHtml(hrefPrefix + e.id)}.html">${escapeHtml(e.name)}</a> <span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span></li>`;
+          const sample = pickIds?.has(e.id)
+            ? ` <span class="sample-tag" title="Published in full — the rest of the book ships in the app">Sample</span>`
+            : "";
+          return `<li><a href="${escapeHtml(hrefPrefix + e.id)}.html">${escapeHtml(e.name)}</a> <span class="chip ${escapeHtml(chip.cls)}">${escapeHtml(chip.label)}</span>${sample}</li>`;
         })
         .join("\n");
       return `<section><h2>${SECTION_TITLES[type]} (${list.length})</h2><ul class="toc">\n${items}\n</ul></section>`;

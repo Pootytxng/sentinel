@@ -1,0 +1,30 @@
+# Compy
+
+> A rollback-first Windows configuration safety layer for everyday gamers that happens to optimize. Compy reads your actual PC and tailors safe, reversible settings to your hardware — plain-English, no jargon, undo attached to everything.
+
+Compy is a free desktop app (Windows, AMD verified; NVIDIA detection verified, sensors pending). Its public site is a measurement brand: every number shown was read on a real PC, including the ones that show no gain. No fabricated benchmarks, no third-party runtime requests, no account.
+
+## Start here
+- [Home](https://compy.gg/): what Compy is, real-session replay, and the launch waitlist.
+- [Compare](https://compy.gg/compare): how Compy's approach differs from generic "best tweaks" lists, across five practice axes.
+- [The Blackbook](https://compy.gg/library/): all 191 verdicts on the record — 14 full write-ups published as the public sample; the complete graded book ships in the app.
+
+## Full sample entries (public picks)
+- [Force HPET / useplatformclock](https://compy.gg/useplatformclock): Forces Windows to use the High Precision Event Timer via a boot flag. The honest verdict — risky.
+- [Forcing 0.5 ms global timer resolution](https://compy.gg/timer-resolution): Forces Windows' interrupt timer to its finest interval system-wide. The honest verdict — risky.
+- [Disable / fix the pagefile](https://compy.gg/pagefile-disable): Turns off or hard-caps Windows' virtual memory file. The honest verdict — risky.
+- [Disable Windows Defender](https://compy.gg/disable-defender): Turns off Windows' built-in antivirus for a supposed FPS gain. The honest verdict — risky.
+- [Random registry "FPS boost" hacks](https://compy.gg/registry-fps-hacks): Assorted forum / video registry edits promising free FPS. The honest verdict — placebo.
+- [All-in-one debloat scripts / stripped ISOs](https://compy.gg/debloat-scripts): Scripts or custom Windows images that strip dozens of components at once. The honest verdict — risky.
+- [Disable CPU security mitigations (Spectre/Meltdown)](https://compy.gg/cpu-mitigations): Turns off side-channel attack protections for a small CPU uplift. The honest verdict — risky.
+- [Disable Fullscreen Optimizations](https://compy.gg/fullscreen-optimizations): Turns off Windows' hybrid fullscreen compositor for a specific game's .exe. The honest verdict — real.
+- [Windows Game Mode](https://compy.gg/game-mode): Prioritizes the foreground game for CPU/GPU scheduling and holds back background interruptions. The honest verdict — real.
+- [Disabling SMT / Hyper-Threading for gaming](https://compy.gg/disable-smt-gaming): Turning off your CPU's second thread per core (Hyper-Threading on Intel, SMT on AMD) in BIOS, on the theory that fewer, 'cleaner' threads game better. The honest verdict — placebo.
+- [Network 'mega-pack' tweaks (Nagle, RSS/RSC, netsh stacks)](https://compy.gg/tcp-mega-packs): Bundles of TCP/NIC registry and netsh changes promising lower ping. The honest verdict — placebo.
+- [Game booster apps (Razer Cortex etc.)](https://compy.gg/game-boosters): All-in-one 'booster' apps that promise FPS by closing background apps and 'optimizing' RAM or CPU when a game launches. The honest verdict — placebo.
+- [RAM cleaners / standby-list purgers (ISLC)](https://compy.gg/ram-cleaners): Utilities that 'free' RAM by purging Windows' standby list or trimming process memory on a timer. The honest verdict — placebo.
+- [Changing DNS for lower ping](https://compy.gg/dns-for-gaming): Switching to a third-party 'gaming DNS' expecting lower in-game latency. The honest verdict — placebo.
+
+## Legal
+- [Privacy](https://compy.gg/privacy): local-only app; the waitlist stores only an email + one-way hashed IP, zero third-party trackers.
+- [Terms](https://compy.gg/eula): proprietary EULA; rollback is best-effort; provided as-is.

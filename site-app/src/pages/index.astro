@@ -9,7 +9,7 @@
 //   hero waveform   → ../data/flight-session.json (Marvel Rivals, 2026-06-25)
 //   session showcase → ../data/session-replay.json + site/src/session-receipt.json
 //   honesty receipt  → site/src/proof-receipt.json
-// No gain claims, no fabricated data, zero third-party runtime requests. PRE-PUBLISH.
+// No gain claims, no fabricated data, zero third-party runtime requests.
 import Base from "../layouts/Base.astro";
 import ReplayHUD from "../components/ReplayHUD.tsx";
 import CountUp from "../components/CountUp.tsx";
@@ -1468,7 +1468,9 @@ const modules = [
     color: var(--fg-faint);
   }
   .waitlist-form input[type="email"]:focus {
-    outline: none;
+    /* accent underline PLUS the site-wide focus-visible ring (global.css) —
+       no outline:none here; this is the primary conversion field and must
+       stay keyboard-visible (WCAG 2.4.7). */
     border-bottom-color: var(--accent);
   }
   .waitlist-pending {
