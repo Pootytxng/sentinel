@@ -15,6 +15,22 @@ html.overlay-mode #root {
   height: 100%;
 }
 
+/* Ambient-layer kill (owner defect 2026-07-15): main.tsx sets every skin attribute on
+   documentElement BEFORE branching on the overlay window label, so document-level ambient
+   pseudo layers (App.css body::before aurora, seasonal :root::after, and any future one)
+   paint a faint full-window wash over the game. `background: transparent` above can't stop
+   them — they're ::before/::after children, not backgrounds. Blanket-kill every document-level
+   pseudo layer in the overlay window; overlay chrome lives on .ovl/.ovl2 descendants, which
+   this never touches. Guard: src/overlay-ambient-guard.test.ts. */
+html.overlay-mode::before,
+html.overlay-mode::after,
+html.overlay-mode body::before,
+html.overlay-mode body::after,
+html.overlay-mode #root::before,
+html.overlay-mode #root::after {
+  content: none !important;
+}
+
 .ovl {
   font-family: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
   color: #ffffff;
