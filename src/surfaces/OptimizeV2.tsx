@@ -248,7 +248,7 @@ export function OptimizeV2({
                 <span aria-hidden="true">{pileOpen ? "▾" : "▸"}</span>
                 Nothing else needs attention
                 <span className="ov2-quiet-hint">
-                  measured fine · set aside · deliberately refused · past tweaks
+                  measured fine · set aside · deliberately refused
                 </span>
               </button>
               <div

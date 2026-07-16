@@ -53,6 +53,11 @@ const RETIRED_ROOM = [
   // "Compy's <Retired>" — names a retired room as a Compy feature the user can use (the exact
   // form that slipped the old json-only guard, e.g. "Compy's Check looks for the rot").
   /\bCompy's (Check|Play|Learn|Fix)\b/g,
+  // "Past Tweaks" — the leftovers audit's retired FEATURE label, renamed to the owner-locked
+  // "Optimization Cleanup" (Phase 0, 2026-07-16). Title-case only: the lowercase descriptive
+  // phrase ("past tweaks an old guide left") and the singular finding-row prefix "Past tweak ·"
+  // stay legal — only the capital-T brand is retired.
+  /\bPast Tweaks\b/g,
 ];
 
 // Strip comments so internal shorthand ("// the Play debrief", JSDoc mentioning "in Learn") — which

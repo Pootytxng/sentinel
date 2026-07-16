@@ -191,7 +191,7 @@ export function Optimize({
               >
                 <span className="optimize-sidepile-title">Nothing else needs attention</span>
                 <span className="optimize-sidepile-hint">
-                  measured fine · set aside · deliberately refused · past tweaks
+                  measured fine · set aside · deliberately refused
                 </span>
                 <span aria-hidden="true">{pileOpen ? "▾" : "▸"}</span>
               </button>

@@ -913,23 +913,27 @@ export default function Check({
         </div>
       )}
 
-      {/* Leftovers v1 — pre-existing optimizer rot, read-only, ON-DEMAND. Museum placard, never a
-          siren: receipts (found vs stock default), the matched guide-era tweak, the mechanism cost,
-          and a hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes
-          are reported as unchecked, never counted clean. No restore action exists in v1. */}
-      <SidePileItem order={SIDE_PILE_ORDER.pastTweaks}>
+      {/* Optimization Cleanup (Leftovers v1 engine) — pre-existing optimizer rot, read-only,
+          ON-DEMAND. Public name locked by the owner 2026-07-15 ("Optimization Cleanup", never
+          "Paramedic Mode"); Phase 0 of the 2026-07-16 optimization-cleanup spec ships the live
+          audit under that name as a first-class section — a check the user is meant to RUN can't
+          hide in the "Nothing else needs attention" pile. Code identifiers, command names, ids,
+          and the persisted leftover_adopted provenance deliberately keep "leftovers" (same
+          discipline as the 2026-06-11 "Past Tweaks" era). Museum placard, never a siren: receipts
+          (found vs stock default), the matched guide-era tweak, the mechanism cost, and a
+          hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes are
+          reported as unchecked, never counted clean. No restore action exists in Phase 0 — the
+          dark restore resolvers stay gated (restore_gate()==false, no registered command). */}
       <div className="check-leftovers">
-        {/* Display name "Past Tweaks" (owner pick 2026-06-11) — code identifiers, command names,
-            ids, and the persisted leftover_adopted provenance deliberately keep "leftovers". */}
-        <div className="check-section-label check-section-label-muted">
-          Past Tweaks <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
+        <div className="check-section-label">
+          Optimization Cleanup <WhatsThis id="leftovers" onOpen={onOpenLibrary} />
         </div>
         <p className="check-leftovers-blurb">
-          Tweaks an old guide may have left on this PC before Compy existed. Read-only — checking
-          changes nothing.
+          Tweaks an old guide or optimizer tool may have left on this PC before Compy existed —
+          found, named, and explained. Read-only — checking changes nothing.
         </p>
         <button className="check-leftovers-run" disabled={leftoversBusy} onClick={runLeftovers}>
-          {leftoversBusy ? "Checking…" : "Check for past tweaks"}
+          {leftoversBusy ? "Checking…" : "Check this PC for old tweaks"}
         </button>
         {leftoversErr && (
           <p className="check-leftovers-clean" role="status">
@@ -939,8 +943,8 @@ export default function Check({
         {leftovers && leftovers.findings.length === 0 && (
           <p className="check-leftovers-clean" role="status">
             {leftovers.unavailable.length === 0
-              ? "No past tweaks found — your Windows config matches stock where it matters."
-              : `No past tweaks in the ${leftovers.checked} setting${
+              ? "Nothing to clean up — your Windows config matches stock where it matters."
+              : `Nothing to clean up in the ${leftovers.checked} setting${
                   leftovers.checked === 1 ? "" : "s"
                 } we could read — ${leftovers.unavailable.length} couldn't be read, so nothing is claimed about ${
                   leftovers.unavailable.length === 1 ? "it" : "them"
@@ -948,7 +952,7 @@ export default function Check({
           </p>
         )}
         {leftovers && leftovers.findings.length > 0 && (
-          <ul className="check-list" aria-label="Past tweaks found on this PC">
+          <ul className="check-list" aria-label="Old tweaks found on this PC">
             {leftovers.findings.map((f) => (
               <li key={f.id} className="check-row check-row-info check-leftover-row">
                 <div className="check-row-main">
@@ -985,7 +989,6 @@ export default function Check({
           </ul>
         )}
       </div>
-      </SidePileItem>
     </section>
   );
 }

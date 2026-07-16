@@ -23,8 +23,8 @@ import "./OptimizeStation.css";
 // is presentation: render that apply surface INSIDE a Lab station so it reads as a native member of
 // the numbered spine (stations 2–6), NOT the old bolted-on Optimize panel that made the seam the
 // owner rejected. The enable-all hero leads; Check's broader system-hygiene scan (startup / bloat /
-// preload / leftovers / driver freshness) folds under a "More cleanup (optional)" disclosure so the
-// hero stays the one-tap safe stack.
+// preload / optimization cleanup (leftovers) / driver freshness) folds under a "More cleanup
+// (optional)" disclosure so the hero stays the one-tap safe stack.
 
 // The fast-path prop bundle — everything the OptimizeV2 room already receives (App threads the
 // identical handlers), passed straight through to the audited apply surface. Exported so Lab can
@@ -201,9 +201,10 @@ export function OptimizeStation(props: LabFastPathProps) {
 
       {/* Secondary to the enable-all (Directive 2: most users apply the safe stack and never look
           back). The broader system-hygiene scan — startup load, telemetry tasks, preinstalled
-          apps, past tweaks, driver freshness — lives one disclosure away so it never crowds the
-          hero. Same audited apply path inside; read-only where it advises. (The ARMED telemetry-task
-          disable — the "bloat" of §5 — already lives in the fixes surface above.) */}
+          apps, Optimization Cleanup (the leftovers audit), driver freshness — lives one disclosure
+          away so it never crowds the hero. Same audited apply path inside; read-only where it
+          advises. (The ARMED telemetry-task disable — the "bloat" of §5 — already lives in the
+          fixes surface above.) */}
       <details className="lab-optimize-more" open={expert || undefined}>
         <summary className="lab-optimize-more-summary">More cleanup (optional)</summary>
         <div className="lab-optimize-more-body">

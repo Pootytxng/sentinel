@@ -2,9 +2,9 @@ import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 // Side-pile collapse (P5 UI slim-down, plan §4.1/§5.5).
-// The merged Optimize "Fixes" segment stacks six "leave it alone" piles across TWO components
-// (Check: measured fine · not worth touching · past tweaks; Fix: not for this rig · dismissed ·
-// the refuse pile). The plan's contract wants ONE quiet "Nothing else needs attention" expander
+// The merged Optimize "Fixes" segment stacks five "leave it alone" piles across TWO components
+// (Check: measured fine · not worth touching; Fix: not for this rig · dismissed · the refuse
+// pile). The plan's contract wants ONE quiet "Nothing else needs attention" expander
 // per room — so the Optimize shell owns the expander and each surface TELEPORTS its pile into it
 // via a portal, keeping the pile's data, state, and audited handlers exactly where they live today.
 //
@@ -37,5 +37,4 @@ export const SIDE_PILE_ORDER = {
   notForThisRig: 3,
   dismissed: 4,
   refusePile: 5,
-  pastTweaks: 6,
 } as const;

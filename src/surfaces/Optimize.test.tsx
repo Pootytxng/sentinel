@@ -202,9 +202,12 @@ describe("Optimize — side-pile expander (calm chrome)", () => {
     const body = container.querySelector("#optimize-sidepile-body") as HTMLElement;
     expect(body.hasAttribute("hidden")).toBe(true);
     // Honesty guardrail: the piles are MOVED, never removed — the refuse pile (retitled inside the
-    // drawer to disambiguate from Check's same-named pile) + Past Tweaks keep their full content.
+    // drawer to disambiguate from Check's same-named pile) keeps its full content.
     expect(body.textContent).toContain("Deliberately refused");
-    expect(body.textContent).toContain("Past Tweaks");
+    // Optimization Cleanup (Phase 0 front door, 2026-07-16) is a check the user is meant to RUN —
+    // it renders first-class ON the open surface and is never swallowed by the drawer.
+    expect(screen.getByText("Optimization Cleanup")).toBeTruthy();
+    expect(body.textContent).not.toContain("Optimization Cleanup");
     // Open: the drawer unhides in place.
     fireEvent.click(head);
     expect(head.getAttribute("aria-expanded")).toBe("true");
