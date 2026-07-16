@@ -10,8 +10,9 @@
 // Astro's build.assets is "assets-app" so its hashed assets can never collide with the
 // generator-owned site/assets/.
 //
-// BUILD TOOLING ONLY: dist-site/ is gitignored; building publishes nothing. DEPLOY IS OWNER-GATED —
-// only on the owner's explicit "deploy": wrangler pages deploy dist-site --project-name compy
+// BUILD TOOLING ONLY: dist-site/ is gitignored; building publishes nothing. Deploy is autonomous
+// since the owner's deploy GO (BACKLOG Cycle 2026-07-15c superseded the old owner-gate):
+// wrangler pages deploy dist-site --project-name compy
 //
 // Usage: node scripts/stage-dist-site.mjs   (npm run stage:site)
 
@@ -68,5 +69,5 @@ const invokedAsMain =
   process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedAsMain) {
   const dist = stageDistSite();
-  console.log(`staged ${dist} — deploy stays owner-gated (wrangler pages deploy dist-site --project-name compy)`);
+  console.log(`staged ${dist} — deploy with: wrangler pages deploy dist-site --project-name compy`);
 }

@@ -52,20 +52,22 @@ describe("landing (Flight Test contract v3)", () => {
     for (const id of ["features", "receipts", "pricing", "faq", "waitlist"]) {
       expect(html, `missing section #${id}`).toContain(`id="${id}"`);
     }
-    // Trust bar: the five never-promises.
+    // Trust bar: the five never-promises. "core free forever" is the SCOPED promise
+    // (owner decision 2026-07-15, panel-review brief 3.1): optimize + rollback stay free
+    // forever; Pro is paid depth, never a gate — an unscoped absolute must not return.
     for (const vow of [
       "rollback-first",
       "zero outbound connections",
       "no kernel driver",
       "no game injection",
-      "free forever",
+      "core free forever",
     ]) {
       expect(html).toContain(vow);
     }
   });
 
   it("free is above the fold (consumer-panel law: never footer-only knowledge)", () => {
-    const freeAt = html.indexOf("Compy is free.");
+    const freeAt = html.indexOf("Compy's core is free forever.");
     expect(freeAt).toBeGreaterThan(-1);
     expect(freeAt).toBeLessThan(html.indexOf('id="features"'));
   });
