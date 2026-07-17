@@ -612,8 +612,16 @@ fn same_incident(a: &ProtoIncident, b: &ProtoIncident) -> bool {
 }
 
 /// Normalize an app name for comparison: strip `.exe`, lowercase. So "Game.exe" == "game.exe".
+/// Deliberately NOT `pretty_proc` — matching stays on the raw binary name (minus extension); a
+/// launcher exe and its "-Win64-Shipping" binary are different processes and must not merge.
 fn norm_app(a: &Option<String>) -> Option<String> {
-    a.as_deref().map(|s| pretty_proc(s).to_ascii_lowercase())
+    a.as_deref().map(|s| {
+        let n = s.trim();
+        n.strip_suffix(".exe")
+            .or_else(|| n.strip_suffix(".EXE"))
+            .unwrap_or(n)
+            .to_ascii_lowercase()
+    })
 }
 
 /// Fold `other` into `acc`: keep `acc`'s (newest) time, fill any field `acc` is missing from the
@@ -918,7 +926,7 @@ fn format_when(dt: DateTime<FixedOffset>) -> String {
     dt.format("%b %-d, %-I:%M %p").to_string()
 }
 
-/// Strip a trailing `.exe` (case-insensitive); empty/blank → None (no fabricated game name).
+/// Prettify for DISPLAY; empty/blank → None (no fabricated game name).
 fn pretty_proc_opt(name: &str) -> Option<String> {
     let n = name.trim();
     if n.is_empty() {
@@ -927,12 +935,10 @@ fn pretty_proc_opt(name: &str) -> Option<String> {
     Some(pretty_proc(n))
 }
 
+/// DISPLAY prettifier — the shared one, so headlines strip ".exe" AND the Unreal/GDK
+/// "-Win64-Shipping" wrappers exactly like every other surface. MATCHING never uses this.
 fn pretty_proc(name: &str) -> String {
-    let n = name.trim();
-    n.strip_suffix(".exe")
-        .or_else(|| n.strip_suffix(".EXE"))
-        .unwrap_or(n)
-        .to_string()
+    crate::intelligence::pretty_game_name(name)
 }
 
 /// Render an exception code consistently (`c0000005` → `0xc0000005`); pass through anything that
@@ -1574,6 +1580,27 @@ mod blackbox_tests {
         assert_eq!(pretty_proc("noext"), "noext");
         assert_eq!(pretty_proc_opt("   "), None);
         assert_eq!(pretty_proc_opt(""), None);
+    }
+
+    #[test]
+    fn headline_strips_shipping_suffix_like_every_other_surface() {
+        // bug→guard 2026-07-17: self-review caught "Palworld-Win64-Shipping" in a Black Box
+        // headline while every neighboring surface showed "Palworld" — the local prettifier
+        // only stripped ".exe". Display delegates to the shared intelligence::pretty_game_name.
+        let fields = IncidentFields {
+            faulting_app: Some("Palworld-Win64-Shipping.exe".into()),
+            faulting_module: None,
+            code: None,
+            driver: None,
+        };
+        let h = build_headline(IncidentKind::AppCrash, &fields, "yesterday evening", None);
+        assert!(h.starts_with("Palworld stopped working and closed"), "headline: {h}");
+        assert!(!h.contains("Win64"), "shipping suffix leaked into the headline: {h}");
+        // The correlated game flows through pretty_proc_opt too, so the "while X" clause stays
+        // suppressed when the crashing app IS the game (both sides prettified consistently).
+        let h2 = build_headline(IncidentKind::AppCrash, &fields, "yesterday evening", Some("Palworld"));
+        assert!(!h2.contains("while"), "already-named suppression broke: {h2}");
+        assert_eq!(pretty_proc("Palworld-Win64-Shipping.exe"), "Palworld");
     }
 
     #[test]

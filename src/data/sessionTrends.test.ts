@@ -63,4 +63,18 @@ describe("computeSessionTrends", () => {
   it("needs ≥4 sessions to claim a trend at all", () => {
     expect(computeSessionTrends([s("g.exe", 160), s("g.exe", 100)]).trend).toBeNull();
   });
+
+  it("game rows carry the pretty name, never the raw shipping binary (bug→guard 2026-07-17)", () => {
+    // Self-review caught "Palworld-Win64-Shipping" in .strends-game-name while every neighboring
+    // surface showed "Palworld" — the local prettifier only stripped ".exe". Rows must group AND
+    // display via prettyGameName; the two binaries of one game aggregate as one row.
+    const t = computeSessionTrends([
+      s("Palworld-Win64-Shipping.exe", 140),
+      s("Palworld.exe", 120),
+    ]);
+    expect(t.games).toHaveLength(1);
+    expect(t.games[0].game).toBe("Palworld");
+    expect(t.games[0].sessions).toBe(2);
+    expect(t.games[0].bestAvgFps).toBe(140);
+  });
 });

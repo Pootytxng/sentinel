@@ -360,7 +360,7 @@ fn strip_suffix_ci<'a>(s: &'a str, suffix: &str) -> &'a str {
 /// `src/surfaces/game-name.ts` (consumer panel 2026-07-14 flagged "PALWORLD-WIN64-SHIPPING"):
 /// strip a trailing ".exe" and an Unreal/GDK shipping-binary suffix, leave casing alone.
 /// Session MATCHING always uses the raw `process_name` — never compare pretty names.
-fn pretty_game_name(name: &str) -> String {
+pub(crate) fn pretty_game_name(name: &str) -> String {
     let mut n = strip_suffix_ci(name.trim(), ".exe");
     for sep_a in ["-", "_"] {
         for plat in ["win64", "wingdk"] {

@@ -3,6 +3,7 @@
 // over the data `get_session_summaries` already returns (newest-first). No new IPC, no OS call.
 
 import type { SessionSummary } from "../types";
+import { prettyGameName } from "../surfaces/game-name";
 
 export type GameTrend = {
   game: string; // pretty name (no .exe)
@@ -19,11 +20,8 @@ export type SessionTrendsData = {
   trend: "up" | "down" | "flat" | null;
 };
 
-function pretty(name: string): string {
-  const n = (name || "").trim();
-  if (!n) return "Unknown";
-  return n.replace(/\.exe$/i, "");
-}
+// Display grouping key = the pretty name (prettyGameName also strips Unreal/GDK
+// "-Win64-Shipping" wrappers, so the same game's binaries aggregate as one row).
 
 export function computeSessionTrends(sessions: SessionSummary[]): SessionTrendsData {
   const total = sessions.length;
@@ -31,7 +29,7 @@ export function computeSessionTrends(sessions: SessionSummary[]): SessionTrendsD
   const byGame = new Map<string, GameTrend>();
   for (const s of sessions) {
     if ((s.process_name || "").trim() === "") continue;
-    const g = pretty(s.process_name);
+    const g = prettyGameName(s.process_name) || "Unknown";
     const cur = byGame.get(g);
     if (!cur) {
       byGame.set(g, { game: g, sessions: 1, bestAvgFps: s.avg_fps, lastAvgFps: s.avg_fps });

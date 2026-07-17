@@ -75,7 +75,7 @@ function ComparisonCard({
   return (
     <div className={`cmp cmp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="cmp-head">
-        <span>COMPARISON · {r.rec_title} · two {r.game} sessions</span>
+        <span>COMPARISON · {r.rec_title} · two {prettyGameName(r.game)} sessions</span>
         <span className="cmp-nf">noise floor ±{r.noise_floor_pct}%</span>
       </div>
 
@@ -95,7 +95,7 @@ function ComparisonCard({
             <Term id="one-percent-lows">1% low</Term>
           </h2>
           <p className="cmp-sub">
-            Measured on this rig, in {r.game}, above its own noise across these two sessions — a real
+            Measured on this rig, in {prettyGameName(r.game)}, above its own noise across these two sessions — a real
             signal, not a guarantee for every game or session. You applied it; Compy measured it.
           </p>
         </>
@@ -105,7 +105,7 @@ function ComparisonCard({
           <h2 className="cmp-headline cmp-bad">This made it worse here</h2>
           <p className="cmp-sub">
             Your <Term id="one-percent-lows">1% low</Term> dropped past the{" "}
-            <Term id="noise-floor">noise floor</Term> in {r.game}. No spin — take it back.
+            <Term id="noise-floor">noise floor</Term> in {prettyGameName(r.game)}. No spin — take it back.
           </p>
         </>
       )}
@@ -397,7 +397,7 @@ export function SessionDebrief({
               const ok = await confirm({
                 title: "Replace the armed comparison?",
                 body:
-                  `A comparison is already armed (${existing.rec_title} · ${existing.game}). ` +
+                  `A comparison is already armed (${existing.rec_title} · ${prettyGameName(existing.game)}). ` +
                   "Applying this replaces that baseline with a fresh one.",
                 confirmLabel: "Replace & apply",
               });

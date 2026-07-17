@@ -53,7 +53,7 @@ export function TuningDebrief({
     if (armed && !(armed.kind === "tuning" && armed.game === s.process_name)) {
       const ok = await confirm({
         title: "Replace the armed comparison?",
-        body: `Something is already armed (${armed.rec_title} · ${armed.game}). Arming this undervolt check replaces that baseline.`,
+        body: `Something is already armed (${armed.rec_title} · ${prettyGameName(armed.game)}). Arming this undervolt check replaces that baseline.`,
         confirmLabel: "Replace & arm",
       });
       if (!ok) return;
