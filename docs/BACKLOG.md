@@ -221,6 +221,40 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
 > multi-day absence where the site must update unattended).
 
+### Cycle 2026-07-17a — ✅ INTELLIGENCE PHASE 1 SHIPPED (CC, owner directive `docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §5): `8f612d2` foundation + What-Changed read-only slice · `d45bb1c` game-name class sweep (bug→guard) · LIVE `d45bb1c`
+
+- **Train `8f612d2` (23 files, +3984/−28):** new `src-tauri/src/intelligence.rs` domain layer
+  (identity snapshots · change events · confidence bands **unknown/low/medium/high ONLY**, no
+  numerics) + 3 query commands (`get_intelligence_timeline` · `what_changed_for_session` ·
+  `get_intelligence_headline`) + the FE What-Changed engine + surfaces behind `compy_intelligence`
+  **default ON**. Deterministic/inspectable/local; zero telemetry/network/account/remote; NO
+  mutation-boundary change. 28 new Rust guards + FE pins. Honesty note for future writeups: the
+  query commands are NOT literally pure reads — each calls `refresh_identity_snapshots_async()`
+  which may write `intelligence.json` (own store only, throttled, mutex-guarded, atomic
+  tmp+rename); `monitoring.rs` gains a per-tick `load_session()` BEHAVIORAL additive read
+  populating `SessionSummary.gaming_mode_active` (`#[serde(default)]`).
+- **Fix `d45bb1c` (6 files, +58/−19):** self-review caught `Palworld-Win64-Shipping` in a Black
+  Box headline while every neighboring surface showed `Palworld` — class-swept BOTH language
+  layers (`blackbox.rs` display prettifier delegates to shared `intelligence::pretty_game_name`;
+  FE `sessionTrends`/`SessionDebrief`/`TuningDebrief` display sites on `prettyGameName`).
+  **MATCHING stays raw everywhere** — `norm_app` keeps its own `.exe`-strip (a launcher exe and
+  its shipping binary are different processes and must not merge). bug→guard: cargo
+  `headline_strips_shipping_suffix_like_every_other_surface` + vitest grouping pin.
+- **Reviewer chain:** rust-tauri-reviewer full-diff **"VERDICT: PASS"** + incremental
+  **"Verdict: PASS … none Critical, none Warning"** · train self-review round-2 **PASS** ·
+  fix-lane self-review round-1 **FAIL** (TS sweep missed the Rust-layer prettifier — the
+  completeness-critic-grep failure mode) → fix → round-2 full-fresh **PASS** (live capture on
+  real `sessions.json`, completeness grep both languages: zero additional misses).
+- **Shipped:** installer `Compy_0.9.0_x64-setup.exe` SHA-256
+  `8063F95744C6AF00C760FD3F77DA63FBD9B68B279773307D6D1AEB5773A52E0D`, silent reinstall done, live
+  exe stamp-verified `d45bb1c` CLEAN (no `+dirty`). Verify: cargo **754/754** (count UP) · clippy
+  clean · vitest **1708/1708** (183 files; export-library passed this run) · verify-release-state
+  46/46.
+- **§0.11 lane separation honored:** Optimization Cleanup is its own train — Phase 1 (restore
+  ARMED, shipped 2026-07-16) left exactly where it was; nothing folded in.
+- **Board retention:** 4 oldest cycles (13f/13e/13d/13c) moved verbatim to `BACKLOG_ARCHIVE.md`
+  (104 lines); board at 12 cycles.
+
 ### Cycle 2026-07-16e — ✅ SITE DEPLOYED + AUTO-DEPLOY WIRED (CC, owner-directed "deploy the site … make it as automated as possible"): live on `compy-bd6.pages.dev` · ~~GitHub Actions deploy lane awaiting ONE owner token paste~~ **← CANCELLED, see decree above**
 
 - **Manual deploy (the last one):** dist-site restaged fresh (`npm run stage:site`) → `wrangler pages
@@ -582,110 +616,6 @@ tripped `git status --porcelain`'s `??` count; binary code-identical to `2eda4eb
 still counts) · new **DIRTY-STAMP GATE** step 0b in `scripts/ship-reinstall.ps1` (throws on
 non-docs tree dirt pre-install, `-AllowDirty` override; red→green proven with a non-docs probe).
 RELEASE_STATE update 2026-07-14b carries the audit. Next build/ship stamps clean.
-
-### Cycle 2026-07-13f — ✅ 390px LANDING PAGE-EDGE OVERFLOW FIXED (the pre-existing defect 13e logged) — site-only, NO gate moved, zero src-tauri, zero src/
-
-**Root cause (probed, not guessed):** `.topbar`, `.hero`, and `.article` each share their element
-with `.wrap` (`<header class="wrap topbar">` …) and their `padding:` SHORTHANDS (`22px 0 18px` etc.)
-clobbered `.wrap`'s `0 24px` side padding (same specificity, later in file). Below ~1128px the hero
-ran edge-to-edge and the verdict ribbon (`.verdicts` `right:-10px` + `.vd::after` `inset:-7px`)
-scrolled the page to 407px at a 390px viewport; article body text sat flush at x=0 on every
-library/debunk page. **Fix (`site/src/library.css`, regenerated + restaged):** longhand
-`padding-top/-bottom` on all three rules + `.hero h1` clamp cap 44→42px (the self-reviewer's
-round-1 catch: the correctly-narrowed 569px column wrapped the hard-`<br>` headline to a 3rd line
-at ≥1294px). Desktop effect: topbar/hero now ALIGN with every `.wrap` section (they were the odd
-ones out by 24px). **bug→guard (`scripts/site-landing.test.mjs`): red-PROVEN on the pre-fix CSS**
-— parses every rule, flags a `padding:` shorthand in any block whose subject is a wrap-combined
-class (classes derived from the landing + both article templates), and pins generated==source css.
-Verify: self-reviewer round-1 PASS on 390 visuals/768/1000 band/full-page eyeball + round-2 h1 ==
-exactly 2 line boxes at 1280/1440/1920 (worker hit its session limit mid-round-2; the remaining
-NUMERIC checks closed inline, disclosed: index sw==cw at 1280/1440/1920/390 w/ 0 offenders ·
-article 390 padL/R 24px, h1/p x=24, sw 390 · article 1440 unchanged 720px centered) · site-landing
-**17/17** + staleness guard · full vitest **1610/1610** (177 files). Impeccable-hook notes
-(gradient hero h1, two article `border-left` pulls) = pre-existing taste-gated design, untouched.
-Site stays pre-publish (deploy owner-gated).
-
-### Cycle 2026-07-13e — ✅ SITE HERO RECEIPT IS NOW REAL (mock replaced with a measured trial) — site-only, NO gate moved, zero src-tauri, zero src/
-
-**Cowork consumer-panel follow-up flagged the hero proof strip's numbers as fabricated** (marked
-decorative in source: `fast-startup-off` "+8 fps · 1% low +11" — doubly fake, a boot-time tweak
-can't move fps) — the "measured, not promised" brand illustrating its core claim with an invented
-example. **Replaced with a REAL receipt produced through the app's own Lab → Benchmark
-"Measure this tweak" flow on this rig:** `game-mode` applied 18:28 → measured on live Palworld
-frames (5+5 windows, ~120 fps menu) → verdict **within noise** (no gain beyond the rig's
-same-session calibrated ±0.7% run-to-run floor) → auto-rolled-back (Trust Ledger
-`game-mode-1783992509604`). `game-mode` was the ONLY measurable candidate (every other appliable
-rec is already applied on this rig); per the task's own rule the honest within-noise outcome ships
-un-padded — and it literally demonstrates value card 02's "No measurable change gets called exactly
-that." Provenance record: `site/src/proof-receipt.json`. bug→guard: `site-landing.test.mjs` now
-pins the rendered strip to the provenance record (re-measuring must update both together) + bans
-the fabricated trio from rendered copy. Site regenerated (`node site/generate.mjs`, index only —
-deploy stays owner-gated; site is pre-publish). Verify: site-landing **16/16** · visual pass
-1440px+390px (marginal 390px title overflow caught + fixed by shortening; page-edge mobile
-overflow at 390px was PRE-EXISTING, identical render on the committed page — ✅ fixed in Cycle 13f).
-**Note for a future better receipt:** a Keep-verdict receipt (real measured WIN) can replace this
-one when one occurs naturally — e.g. a tester rig or a fresh Windows state where a START-HERE tweak
-isn't already applied; the provenance+guard structure makes the swap a two-file edit.
-
-### Cycle 2026-07-13d — ✅ GLOSSARY-TOOLTIP TRIO FIXED + SHIPPED LIVE `86ecad1` (installer SHA-256 `1C1F13DC…FE657E0`, stamp-verified) — NO gate moved, zero src-tauri
-
-**Owner-reported (screenshot, Blackbook tape "1% low" gloss):** (1) tooltip overpainted by later tape
-rows — root cause `animation-fill-mode: both` on the `.bc-row` reveal left every row a PERMANENT
-stacking context (filled transform/opacity animation) so later siblings painted over the open tooltip;
-fix `both → backwards` (`blackbook-console.css`) + css-scan guard banning `both`/`forwards`
-(`blackbook-console.test.tsx`). (2) "More in the Blackbook →" unreachable — mouse-leave closed the
-tooltip instantly across its 6px gap; fix 160ms close-grace in `Term.tsx` (wrapper re-entry cancels;
-focus/Escape unchanged) + fake-timer guards (`Term.test.tsx`); benefits every Term site app-wide.
-**(3) found by the fix's self-review (pre-existing):** the deep-link opened the library + expanded the
-category but never SCROLLED — `Learn.tsx`'s scroll-into-view effect missed on first run (category
-still collapsed → no cardRef) and lacked `openCats` in its deps; fixed + guarded (`Learn.test.tsx`,
-spy at `HTMLElement.prototype` where `src/test/setup.ts` stubs it). Verify: tsc 0 · vitest
-**1608/1608** (178 files) · self-reviewer **PASS** (live real data: tooltip opaque `rgb(20,24,36)`
-over sibling rows; real CDP pointer crossed the gap; link navigated, card `rect.top=108` vs 1023+
-off-screen before; stagger + reduced-motion intact; Monitor "frametime" gloss regression-checked).
-Reviewer field-note: on 800×600 dev-CDP mouse tests, scroll `.v2-content.lenis` up first — a row
-below the 600px fold makes `elementFromPoint` return null (environmental, not app behavior).
-
-### Cycle 2026-07-13c — ✅ DEFAULT-ON GRADUATION + duo palette + A+B Blackbook SHIPPED LIVE `18272be` (installer SHA-256 `A8C341DE…61EC1C10`, stamp-verified) — NO gate moved, zero src-tauri
-
-**Owner directives (this cycle, all owner-verbatim):** (1) "everything was supposed to be default on
-to avoid the QA toggle section as per the consumer interest rec" → `compy_room_identity` +
-`compy_blackbook_console` flipped **DEFAULT ON** (readers `!== "0"`, theme.ts; boot attr main.tsx;
-both "(preview)" Settings rows REMOVED — devtools `"0"` failsafe stays, graduated-flag convention);
-(2) "double color options rather than the ugly earth tones like olive … then leave that finished" →
-`ROOM_ACCENT_SWATCHES` (src/design/room-identity.ts) re-curated to **15**: Rust/Olive/Pine pruned, 3
-DUO swatches added (Cyan/Midnight `#35e0e8+#3b2a7a` · Red/Blue `#ff6b6b+#2f6bff` · Lime/Cyan
-`#b6f24a+#35e0e8`; duo = bright PRIMARY for chrome/text, SECONDARY drives only the dim/line washes;
-new helpers swatchKey/splitSwatchKey/swatchDotCss; duo persists as `a+b` key; picker dots render a
-135° split — RoomAccentPicker.tsx, theme.ts applyRoomAccents); (3) Blackbook intuitiveness — owner
-PICKED **"A + B together"** from the concept artifact
-(https://claude.ai/code/artifact/88345144-e138-4b44-a71a-de487aa42929): BUILT in
-src/surfaces/blackbook/BlackbookConsole.tsx + blackbook-console.css — (A) Receipts Strip (3 tappable
-count tiles replace the `bc-status` line, filter the tape, aria-pressed, zero-count disabled) + (B)
-sentence rows ("Compy applied…", "You played… for …", "You fact-checked a guide") + tape section head
-("THE RECORD ─ everything Compy has done on this PC · since <date>", filtered ⇒ "· sessions only").
-- **Round-1 self-review: FAIL with 1 real finding, FIXED:** a Home accent pick recolored chrome but
-  never the rig hologram — use-rig-colors.ts read `.v2-room` while Home's `--ix-accent` re-point
-  lives on the NESTED `.home-console` (custom props don't propagate up). Fix: prefer
-  `.home-console` ?? `.v2-room` (src/surfaces/rig/use-rig-colors.ts) + bug→guard in
-  room-identity.test.ts (call-order pin + stale-comment ban). Everything else round-1 verified PASS
-  with direct evidence (contrast numbers, persistence, failsafes, Settings cleanup).
-- **Verify state:** tsc 0 · vitest **1604/1604** (177 files; guards re-pinned to the new default-ON
-  polarity in room-identity.test.ts / room-accents.test.tsx / blackbook-console-flag.test.tsx /
-  blackbook-v2.test.tsx / hud-rooms-flag.test.tsx (classic suites pin `"0"`); new duo + strip +
-  sentence + filter guards in room-accents.test.tsx + blackbook-console.test.tsx).
-- ✅ **SHIPPED LIVE 2026-07-13 `18272be`.** The round-2 self-reviewer returned before the context
-  refresh fired: **PASS all 8 items** on the owner's REAL 70-record logbook (native 1500×980 — rig
-  recolor pixel-proven for Plum AND Cyan/Midnight with `--ix-accent` read back off `.home-console`;
-  Lab emerald no-regression; strip counts 51/19/0 sum exactly to the tape; changes-tile "13 still
-  on" == the bc-manage jump's number; filter/aria-pressed/disabled-zero live-verified; reduced-motion
-  still; h1 "Blackbook"; field-guide strip unchanged; GL idle 0 draws/18s). One soft note logged: the
-  changes-tile sub and the bc-manage CTA say near-identical things in different roles — wording
-  tighten is a future-polish candidate, judged not-duplication. Committed `18272be` (15 files,
-  explicit paths) → rebuilt (exit 0, exe embeds `18272be`) → ship-reinstall OK (stale-gate PASSED,
-  installer SHA-256 `A8C341DEB55F32630E59144D6CA33CAF205A16B48A34F8923C27D65861EC1C10`, one on
-  Desktop, launched) → **stamp-verified `18272be` live**. doc-sync same commit: RELEASE_STATE banner
-  + Git-HEAD/installer rows; OWNER_ACTION_CHECKLIST **A8 + A9 → ✅ resolved-by-directive**.
 
 ## ⛔ Persistent-workflow protocol (read before declaring "done")
 
