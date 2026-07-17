@@ -27,16 +27,26 @@ export function deriveSystemPosture(input: {
 
   // Dismissed checks are informed user choices — they never drive the attention posture.
   const dismissed = new Set(readiness.dismissed_ids ?? []);
-  const reasons = readiness.checks
-    .filter((c) => c.status === "attention" && !dismissed.has(c.id))
-    .map((c) => c.label);
+  const attentionChecks = readiness.checks.filter(
+    (c) => c.status === "attention" && !dismissed.has(c.id),
+  );
+  const reasons = attentionChecks.map((c) => c.label);
   const n = reasons.length;
 
   if (n > 0) {
+    // Name the specific thing — never a vague "N things need your attention" count. The
+    // owner's name-it-and-fix-it-inline law: a flag names WHAT it found. One flagged check ⇒
+    // the verdict IS that check, by name; several ⇒ lead with the first and honestly count the
+    // rest, so the headline still names a real thing instead of a bare number. (Regression fix
+    // 2026-07-17: the count phrasing had crept back onto Home's verdict strip — guard-pinned.)
+    const top = attentionChecks[0];
+    const headline = n === 1 ? top.label : `${top.label} · and ${n - 1} more`;
     return {
       state: "attention",
-      headline: `${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} your attention`,
-      sub: readiness.advisory || reasons[0],
+      headline,
+      // The check's own detail carries the "why + what to do", so the fix travels WITH the
+      // name rather than a generic "readiness is advisory" disclaimer.
+      sub: top.detail || readiness.advisory,
       attentionCount: n,
       reasons,
     };

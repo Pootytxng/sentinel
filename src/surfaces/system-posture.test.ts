@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { deriveSystemPosture } from "./system-posture";
 import type { GameReadiness, ReadinessCheck } from "../types";
 
-const check = (status: ReadinessCheck["status"], label: string): ReadinessCheck =>
-  ({ id: label, label, status, detail: "", value: null });
+const check = (status: ReadinessCheck["status"], label: string, detail = ""): ReadinessCheck =>
+  ({ id: label, label, status, detail, value: null });
 
 const readiness = (checks: ReadinessCheck[], dismissed: string[] = []): GameReadiness => {
   const d = new Set(dismissed);
@@ -25,13 +25,40 @@ describe("deriveSystemPosture", () => {
     expect(deriveSystemPosture({ readiness: null, activeChanges: 0, monitoringAvailable: false }).state).toBe("scanning");
   });
 
-  it("is 'attention' with the count + reasons when checks need attention", () => {
+  // bug→guard (owner regression 2026-07-17): the vague "N thing(s) need(s) your attention"
+  // count had crept back onto Home's verdict strip. The verdict must NAME the flagged thing
+  // (name-it-and-fix-it-inline law) and never render a bare count headline again.
+  const VAGUE_COUNT = /\bthings?\b[^.]*\bneeds?\b[^.]*attention/i;
+
+  it("attention names the specific thing — one flagged check ⇒ the verdict IS that check", () => {
     const r = readiness([check("ready", "SSD"), check("attention", "Monitor below max refresh")]);
     const p = deriveSystemPosture({ readiness: r, activeChanges: 2, monitoringAvailable: true });
     expect(p.state).toBe("attention");
     expect(p.attentionCount).toBe(1);
     expect(p.reasons).toEqual(["Monitor below max refresh"]);
-    expect(p.headline).toMatch(/attention/i);
+    expect(p.headline).toBe("Monitor below max refresh");
+    expect(p.headline).not.toMatch(VAGUE_COUNT);
+  });
+
+  it("attention with several flagged checks leads with the first, counts the rest — never a bare number", () => {
+    const r = readiness([
+      check("attention", "Monitor below max refresh"),
+      check("attention", "GPU driver age"),
+      check("attention", "Power profile"),
+    ]);
+    const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
+    expect(p.attentionCount).toBe(3);
+    expect(p.headline).toContain("Monitor below max refresh");
+    expect(p.headline).toContain("2 more");
+    expect(p.headline).not.toMatch(VAGUE_COUNT);
+  });
+
+  it("attention sub carries the flagged check's own detail — the fix travels with the name", () => {
+    const r = readiness([
+      check("attention", "Variable refresh rate", "It's OFF — turn it on for smoother pacing."),
+    ]);
+    const p = deriveSystemPosture({ readiness: r, activeChanges: 0, monitoringAvailable: true });
+    expect(p.sub).toBe("It's OFF — turn it on for smoother pacing.");
   });
 
   it("is 'dialed-in' when all checks pass", () => {

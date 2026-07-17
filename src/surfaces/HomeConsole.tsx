@@ -421,7 +421,17 @@ export function HomeConsole({
 
   // The #1 measured limiter — a context row beside the dock: measured fact + its fix route.
   // Clean or still-loading renders NOTHING (the verdict owns "measured clean" — one-owner law).
-  const topLimiter = priorities?.limiters?.[0] ?? null;
+  // One-owner-per-screen (P5 voice law): in the attention state the verdict headline now NAMES
+  // the top flagged item; if the #1 limiter is that same item its identical title would stack a
+  // few hundred px below the verdict, so the limiter row stands down and lets the verdict own it
+  // (the fix route still lives in the verdict dek + the Dock). Mirrors the dek/ForwardDoor
+  // standdowns. `... and ` anchors the several-flagged headline ("<label> · and N more").
+  const rawTopLimiter = priorities?.limiters?.[0] ?? null;
+  const headNormFull = norm(posture.headline);
+  const limNorm = rawTopLimiter ? norm(rawTopLimiter.title) : "";
+  const verdictNamesLimiter =
+    rawTopLimiter != null && (headNormFull === limNorm || headNormFull.startsWith(`${limNorm} and `));
+  const topLimiter = verdictNamesLimiter ? null : rawTopLimiter;
 
   // The Dock IS this room's doors — when it renders, RoomShell's own ForwardDoor would be a
   // second "go to Lab" affordance stacked right under it (self-reviewer catch 2026-07-10,

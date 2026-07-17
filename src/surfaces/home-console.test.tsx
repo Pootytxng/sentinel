@@ -469,6 +469,54 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
   });
 });
 
+// bug→guard (self-review 2026-07-17): the fix that made the attention verdict NAME the top
+// flagged check introduced a DUPLICATION — when that same item is ALSO the #1 limiter, its title
+// rendered twice on Home (the gold verdict headline + the "top limiter" row ~500px below). The
+// limiter row must stand down and let the verdict own the story (one-owner-per-screen, P5 voice).
+const topLimiterRows = (c: HTMLElement) =>
+  Array.from(c.querySelectorAll(".hc-limiter")).filter(
+    (r) => r.querySelector(".hc-limiter-label")?.textContent === "top limiter",
+  );
+
+describe("HomeConsole — verdict/top-limiter one-owner dedup", () => {
+  it("the top-limiter row stands down when the verdict headline already names it (no double string)", () => {
+    // The sole attention check has the SAME title as the sole limiter (the live-machine collision).
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [
+        { id: "disk", label: "C: drive is 87% full", status: "attention", detail: "Free up space.", value: null },
+        { id: "b", label: "B", status: "ready", detail: "", value: null },
+      ],
+      ready_count: 1,
+      attention_count: 1,
+    };
+    const c = mount({ ...props, readiness: attn }).container;
+    // The verdict owns the story…
+    expect(c.querySelector(".hc-verdict-line")!.textContent).toBe("C: drive is 87% full");
+    // …and the "top limiter" row does not restate it.
+    expect(topLimiterRows(c)).toHaveLength(0);
+    // The exact title appears exactly once across the whole console (the regression was twice).
+    expect((c.textContent!.match(/C: drive is 87% full/g) ?? []).length).toBe(1);
+  });
+
+  it("a DIFFERENT flagged check does not suppress an unrelated top limiter (no false standdown)", () => {
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [
+        { id: "ref", label: "Refresh rate below max", status: "attention", detail: "Bump it.", value: null },
+        { id: "b", label: "B", status: "ready", detail: "", value: null },
+      ],
+      ready_count: 1,
+      attention_count: 1,
+    };
+    const c = mount({ ...props, readiness: attn }).container;
+    expect(c.querySelector(".hc-verdict-line")!.textContent).toBe("Refresh rate below max");
+    const row = topLimiterRows(c)[0];
+    expect(row).not.toBeUndefined();
+    expect(row.textContent).toContain("C: drive is 87% full");
+  });
+});
+
 // Intelligence Phase 1, decision 7: Home carries at most ONE concise line — the engine's own
 // verdict sentence verbatim (get_intelligence_headline is non-null ONLY for a real
 // improved/regressed verdict, engine-enforced). Flag "0" must render nothing AND never fetch.
