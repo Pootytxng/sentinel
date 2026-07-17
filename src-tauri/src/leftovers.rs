@@ -721,18 +721,21 @@ fn probe_tcp() -> Value {
     }
 }
 
-/// Leftovers v2 restore gate — DARK (R2-5). Stays false until the restore path passes its own
-/// live UAC QA and the owner flips it deliberately. While false, history::restore_leftover
-/// refuses before any lock/mutation; no Tauri command exposes the path either way.
+/// Leftovers v2 restore gate — ARMED 2026-07-16 (Optimization Cleanup Phase 1, owner present).
+/// Flipped after the owner-present live-UAC QA harness (`history::manual_restore_qa`) passed all
+/// three full loops on real machine state — W32PS, MPO, memcompress: seed → detect → restore
+/// (receipt + prior banked) → rollback exact → cleanup to stock, owner approving every prompt.
+/// `history::restore_leftover` was registered as a Tauri command in the same commit (the second
+/// dark layer); restores ledger into the Trust Ledger with provenance "leftover_adopted".
 pub(crate) fn restore_gate() -> bool {
-    false
+    true
 }
 
 // Test-only: the owner-present live-UAC QA harness (history::manual_restore_qa) arms this
-// thread-local RAII bypass so the dark restore path can be exercised WITHOUT flipping the
-// production gate — restore_gate() above stays false and ships false. Mirrors
-// actions::ForceElevationError: `#[cfg(test)]` compiles all of this out of every shipped
-// binary, and Drop disarms even on panic.
+// thread-local RAII bypass so the restore path can be exercised regardless of the production
+// gate's state (it was the dark-era QA vehicle; kept post-arming so the harness never depends
+// on the gate). Mirrors actions::ForceElevationError: `#[cfg(test)]` compiles all of this out
+// of every shipped binary, and Drop disarms even on panic.
 #[cfg(test)]
 thread_local! {
     static QA_RESTORE_GATE_BYPASS: std::cell::RefCell<bool> =

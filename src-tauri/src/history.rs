@@ -74,7 +74,7 @@ pub(crate) struct AppliedChange {
     pub(crate) ruleset_version_at_apply: Option<String>,
     #[serde(default)]
     pub(crate) elevation_used: Option<bool>,
-    /// Leftovers v2 (R2-5, dark): "leftover_adopted" marks a restore-to-stock receipt. Additive +
+    /// Leftovers v2 (R2-5, armed 2026-07-16): "leftover_adopted" marks a restore-to-stock receipt. Additive +
     /// optional — every pre-existing ledger entry deserializes with None.
     #[serde(default)]
     pub(crate) provenance: Option<String>,
@@ -407,12 +407,13 @@ fn build_applied_change(
     })
 }
 
-/// Leftovers v2 (R2-5, DARK): restore one leftover to its Windows default. NOT a Tauri command —
-/// zero webview reachability — and additionally refused while `leftovers::restore_gate()` is
-/// false (double-dark). Mirrors apply_recommendation exactly: lock → load BEFORE mutate (H1) →
-/// one resolver → receipt with provenance "leftover_adopted" → atomic save. Undo rides the
-/// standard typed rollback path like any other ledger entry.
-#[allow(dead_code)] // dark until the gate flips after its own live UAC QA (owner-gated)
+/// Leftovers v2 (R2-5) — ARMED 2026-07-16: restore one leftover to its Windows default.
+/// Registered Tauri command since the arming commit (previously double-dark: unregistered AND
+/// gate-refused), flipped only after the owner-present live-UAC QA harness passed all three
+/// loops (`manual_restore_qa` — W32PS/MPO/memcompress). Mirrors apply_recommendation exactly:
+/// lock → load BEFORE mutate (H1) → one resolver → receipt with provenance "leftover_adopted" →
+/// atomic save. Undo rides the standard typed rollback path like any other ledger entry.
+#[tauri::command]
 pub(crate) fn restore_leftover(
     detector_id: &str,
     display_title: &str,
@@ -437,7 +438,9 @@ pub(crate) fn restore_leftover(
         "memory-compression-off" => crate::actions::restore_memory_compression(),
         "mmcss-tampering" => crate::actions::restore_mmcss_defaults(),
         "win32-priority-separation" => crate::actions::restore_priority_separation(),
-        // Dark wave 2 (2026-06-11). bcdedit + Defender intentionally have NO resolver.
+        // Wave 2 (2026-06-11; armed 2026-07-16). bcdedit + Defender have NO resolver — permanent
+        // by policy (boot-config risk class / security-settings owner territory), not "not yet";
+        // tripwire-tested in permanently_excluded_detectors_have_no_resolver_even_armed.
         "pagefile-fixed" => crate::actions::restore_pagefile_automatic(),
         "mpo-disabled" => crate::actions::restore_mpo_default(),
         "core-parking-forced" => crate::actions::restore_core_parking_default(),
@@ -1134,13 +1137,14 @@ mod manual_elevation_qa {
 //   cargo test --manifest-path src-tauri/Cargo.toml manual_restore_qa_w32ps -- --ignored --nocapture --test-threads=1
 //   cargo test --manifest-path src-tauri/Cargo.toml manual_restore_qa_mpo -- --ignored --nocapture --test-threads=1
 //   cargo test --manifest-path src-tauri/Cargo.toml manual_restore_qa_memcompress -- --ignored --nocapture --test-threads=1
-// These drive the DARK restore path through the #[cfg(test)] QA gate-bypass seam
-// (leftovers::QaRestoreGateBypass) — restore_gate() itself stays false; none of this exists in a
-// shipped binary. Fixture writes are the documented benign QA set ONLY (W32PS 0x26 ↔ stock 2;
-// OverlayTestMode 5 ↔ delete; memcompress Disable↔Enable-MMAgent — SANCTION PENDING, see its
-// test), each loop asserts the rig STARTS clean before writing anything, and each loop ends back
-// at Windows stock. Receipts are real %APPDATA%\Compy\history.json entries, "QA · "-tagged
-// (cleanup offered after the QA pass).
+// These drive the restore path through the #[cfg(test)] QA gate-bypass seam
+// (leftovers::QaRestoreGateBypass) so the harness works regardless of production gate state;
+// none of this exists in a shipped binary. ALL THREE LOOPS PASSED owner-present 2026-07-16
+// (the arming precondition — restore_gate() flipped true that day). Fixture writes are the
+// documented benign QA set ONLY (W32PS 0x26 ↔ stock 2; OverlayTestMode 5 ↔ delete; memcompress
+// Disable↔Enable-MMAgent — owner-sanctioned + passed 2026-07-16), each loop asserts the rig
+// STARTS clean before writing anything, and each loop ends back at Windows stock. Receipts are
+// real %APPDATA%\Compy\history.json entries, "QA · "-tagged (cleanup offered after the QA pass).
 #[cfg(test)]
 mod manual_restore_qa {
     use super::*;
@@ -1199,6 +1203,9 @@ mod manual_restore_qa {
     #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
     fn manual_restore_qa_w32ps_full_loop() {
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        // Run elevated commands under cargo test (Wave-0 seam) — without this the self-helper
+        // relaunches the TEST binary elevated, which exits 101 (caught live 2026-07-16).
+        let _direct = crate::actions::ForceDirectElevation::begin();
         let original = read_w32ps();
         assert!(
             original.is_none() || original == Some(2),
@@ -1261,6 +1268,7 @@ mod manual_restore_qa {
     #[ignore = "manual leftovers-restore QA — real UAC; click YES on all 4 prompts"]
     fn manual_restore_qa_mpo_full_loop() {
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        let _direct = crate::actions::ForceDirectElevation::begin(); // Wave-0 seam (see w32ps loop)
         let original = read_overlay_test_mode();
         assert!(
             original.is_none(),
@@ -1330,6 +1338,7 @@ mod manual_restore_qa {
             "this loop exercises the admin-only-prior arm — run it from a normal (non-elevated) shell (probe read {state:?})"
         );
         let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        let _direct = crate::actions::ForceDirectElevation::begin(); // Wave-0 seam (see w32ps loop)
         let before_len = load_history().expect("ledger readable").len();
 
         // Elevated read-back helper: the only way to verify ground truth when the read is
@@ -1352,7 +1361,7 @@ mod manual_restore_qa {
         };
 
         println!("\nUAC PROMPT 1/6 — SEED the rotted fixture (Disable-MMAgent). Click YES.");
-        run_elevated_powershell("Disable-MMAgent -MemoryCompression")
+        run_elevated_powershell("if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }")
             .expect("seed (did the prompt get a YES?)");
 
         // Detection stays HONEST about the admin-only read: the detector must report
@@ -1394,7 +1403,7 @@ mod manual_restore_qa {
         assert!(!read_back("post-rollback"), "rollback restored the rotted OFF exactly");
 
         println!("\nUAC PROMPT 6/6 — CLEANUP to Windows stock (Enable-MMAgent). Click YES.");
-        run_elevated_powershell("Enable-MMAgent -MemoryCompression")
+        run_elevated_powershell("if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }")
             .expect("cleanup (did the prompt get a YES?)");
         println!(
             "MEMCOMPRESS LOOP PASS: seed OFF → needs-admin honest → restore (receipt prior=false, banked in-elevation) → ON → rollback → OFF → stock ON."
@@ -1402,44 +1411,42 @@ mod manual_restore_qa {
     }
 }
 
-// ─── Leftovers v2 restore — dark-path tests + the adversarial rollback audit (R2-5) ────────
+// ─── Leftovers v2 restore — armed-path tests + the adversarial rollback audit (R2-5) ────────
 #[cfg(test)]
 mod leftover_restore_tests {
     use super::*;
 
     #[test]
-    fn dark_gate_refuses_before_any_lock_mutation_or_receipt() {
+    fn armed_gate_admits_and_a_declined_elevation_writes_nothing() {
+        // ARMED world (2026-07-16): the gate admits the call, the resolver reads the prior
+        // (W32PS — non-elevated HKLM read, succeeds on any rig) and reaches the elevation seam;
+        // a forced decline there must leave ZERO receipt. No real prompt, no mutation.
+        let _force = ForceElevationError::begin();
         let before = load_history().expect("real ledger readable").len();
-        let err = restore_leftover("memory-compression-off", "QA never runs")
+        let err = restore_leftover("win32-priority-separation", "armed decline test")
             .err()
-            .expect("the dark gate must refuse");
-        assert!(err.contains("not enabled"), "honest gate message: {err}");
+            .expect("forced elevation decline");
+        assert_eq!(err, ELEVATION_DECLINED_MSG, "admitted by the gate, refused at elevation: {err}");
         let after = load_history().expect("readable").len();
-        assert_eq!(before, after, "a refused restore must never write a receipt");
+        assert_eq!(before, after, "a declined restore must never write a receipt");
     }
 
     #[test]
-    fn qa_bypass_seam_opens_the_gate_only_while_armed_and_a_decline_writes_nothing() {
-        // The owner-present QA seam, proven deterministically: the PRODUCTION gate stays false;
-        // armed (with elevation forced to decline) the resolver runs past the gate refusal all
-        // the way to the elevation seam and a declined restore writes NO receipt; dropped, the
-        // dark gate refuses again. No real prompt, no mutation — the prior read is read-only.
-        assert!(!crate::leftovers::restore_gate(), "the production gate ships false");
+    fn production_gate_ships_armed_and_unknown_ids_still_refuse_loud() {
+        // The arming contract: restore_gate() ships true (flipped 2026-07-16 after the
+        // owner-present live-UAC QA passed all three loops), and an unknown leftover id still
+        // refuses loudly BEFORE any elevation — the typed-allowlist rule survives arming.
+        // ForceElevationError stays armed as a belt-and-suspenders guard: if resolver dispatch
+        // ever ran before the id check, this test declines instead of prompting.
+        assert!(crate::leftovers::restore_gate(), "the production gate ships ARMED");
+        let _force = ForceElevationError::begin();
         let before = load_history().expect("real ledger readable").len();
-        {
-            let _qa = crate::leftovers::QaRestoreGateBypass::begin();
-            let _force = ForceElevationError::begin();
-            let err = restore_leftover("win32-priority-separation", "QA seam test")
-                .err()
-                .expect("forced elevation decline");
-            assert_eq!(err, ELEVATION_DECLINED_MSG, "past the gate, refused at elevation: {err}");
-        }
-        let err = restore_leftover("win32-priority-separation", "QA seam test")
+        let err = restore_leftover("totally-unknown-id", "unknown id test")
             .err()
-            .expect("dark again once the guard drops");
-        assert!(err.contains("not enabled"), "gate refusal returns on drop: {err}");
+            .expect("unknown ids must refuse");
+        assert!(err.contains("no restore resolver exists"), "loud allowlist refusal: {err}");
         let after = load_history().expect("readable").len();
-        assert_eq!(before, after, "neither the decline nor the refusal may write a receipt");
+        assert_eq!(before, after, "an unknown-id refusal must never write a receipt");
     }
 
     // ── Memcompress elevated-prior-read (2026-06-12, dark) — the adversarial set ──────────────
@@ -1543,7 +1550,7 @@ mod leftover_restore_tests {
 
     #[test]
     fn wave2_restore_scripts_are_integer_only_and_exit_free() {
-        // Dark wave 2 adversarial: every elevated command is fixed-literal or integer-interpolated —
+        // Wave 2 adversarial: every elevated command is fixed-literal or integer-interpolated —
         // no external string, and exit-free (§4-batchable invariant).
         let scripts = [
             mpo_rollback_script(Some(5)),
@@ -1597,12 +1604,42 @@ mod leftover_restore_tests {
     }
 
     #[test]
-    fn wave2_dark_gate_still_refuses_the_new_detectors() {
-        // The gate covers every detector id uniformly — the new resolvers are as dark as the rest.
+    fn wave2_armed_detectors_reach_elevation_and_a_decline_writes_nothing() {
+        // ARMED world: every wave-2 resolver is admitted by the gate, reads its prior
+        // (non-elevated reads that succeed on any rig — the detector layer runs the same reads
+        // routinely), and reaches the elevation seam; a forced decline leaves ZERO receipt.
+        let _force = ForceElevationError::begin();
+        let before = load_history().expect("real ledger readable").len();
         for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
-            let err = restore_leftover(id, "QA never runs").err().expect("dark gate refuses");
-            assert!(err.contains("not enabled"), "{id}: {err}");
+            let err = restore_leftover(id, "armed decline test")
+                .err()
+                .expect("forced elevation decline");
+            assert_eq!(err, ELEVATION_DECLINED_MSG, "{id}: admitted, refused at elevation: {err}");
         }
+        let after = load_history().expect("readable").len();
+        assert_eq!(before, after, "declined wave-2 restores must never write receipts");
+    }
+
+    #[test]
+    fn permanently_excluded_detectors_have_no_resolver_even_armed() {
+        // The two by-design exclusions (bcdedit timer flags — boot-config risk class; Defender
+        // policy — security-settings owner territory) must stay restore-less FOREVER: even with
+        // the gate armed and elevation theoretically available, dispatch refuses loudly before
+        // any elevation is reachable. If someone ever wires a resolver for these ids, this test
+        // is the tripwire that forces a deliberate owner decision.
+        let _force = ForceElevationError::begin();
+        let before = load_history().expect("real ledger readable").len();
+        for id in ["bcdedit-timer-flags", "defender-policy-off"] {
+            let err = restore_leftover(id, "excluded id test")
+                .err()
+                .expect("excluded ids must refuse");
+            assert!(
+                err.contains("no restore resolver exists"),
+                "{id}: must refuse at dispatch, never reach elevation: {err}"
+            );
+        }
+        let after = load_history().expect("readable").len();
+        assert_eq!(before, after, "excluded-id refusals must never write receipts");
     }
 
     // ── Pagefile resolver (option (a)) — the adversarial set ──────────────────────────────────
@@ -1665,10 +1702,26 @@ mod leftover_restore_tests {
     }
 
     #[test]
-    fn pagefile_dark_gate_pair_contract_and_snapshot_roundtrip_hold() {
-        // Gate: as dark as every other resolver.
-        let err = restore_leftover("pagefile-fixed", "QA never runs").err().expect("dark");
-        assert!(err.contains("not enabled"));
+    fn pagefile_armed_pair_contract_and_snapshot_roundtrip_hold() {
+        // ARMED world, rig-state-dependent by design — three honest outcomes, all mutation-free:
+        // an unreadable prior refuses with "cannot snapshot" BEFORE elevation (the fail-safe
+        // idiom); a non-single-fixed-entry layout refuses with the honest left-as-is message
+        // BEFORE elevation; the validated layout reaches the elevation seam and the forced
+        // decline stops it. Whichever this rig hits, the pinned invariant is the same:
+        // NO receipt without a mutation.
+        let _force = ForceElevationError::begin();
+        let before = load_history().expect("real ledger readable").len();
+        let err = restore_leftover("pagefile-fixed", "armed decline test")
+            .err()
+            .expect("declined or honestly refused");
+        assert!(
+            err == ELEVATION_DECLINED_MSG
+                || err.contains("left as-is")
+                || err.contains("cannot snapshot"),
+            "the decline or one of the two honest refusals: {err}"
+        );
+        let after = load_history().expect("readable").len();
+        assert_eq!(before, after, "no receipt without a mutation");
         // Pair contract: the new variant rejects mismatches.
         assert!(dispatch_rollback(
             &RollbackAction::RestorePagefileFromSnapshot,

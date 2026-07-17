@@ -1009,8 +1009,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   left behind (registry keys, services, scheduled tasks, orphaned tweak-pack artifacts) as
   useful / placebo / risky / outdated / unknown, and offer restore ONLY where the prior/default is
   unambiguous. **Own spec'd train: research → spec → scope-gate — never a same-session build.**
-  Mutation-adjacent ⇒ full mutation-gate before any apply path exists; restores ride a SEPARATE
-  recovery-snapshot mechanism (auditable, not entangled with the main Trust Ledger apply path).
+  Mutation-adjacent ⇒ full mutation-gate before any apply path exists. ~~restores ride a SEPARATE
+  recovery-snapshot mechanism~~ — **fork RESOLVED by the owner 2026-07-16: restores REUSE the
+  Trust Ledger** (provenance `leftover_adopted`, already built) — one rollback story, one audited
+  persistence path; a second snapshot store would duplicate the H1/atomic-save machinery and
+  fragment "undo everything" across two ledgers.
   Distinct from UI_VISION_BACKLOG §F (upgrade-path engine) — different feature, don't conflate.
   Provenance: panel-review brief 2026-07-15 §4.1 (`docs/reviews/2026-07-15-cc-brief-panel-review-execution.md`)
   + archived review (`docs/reviews/2026-07-15-consumer-panel-review.md`).
@@ -1021,13 +1024,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   `restore_gate()==false` + no Tauri command registration (Leftovers v2, `docs/superpowers/specs/
   2026-06-11-leftovers-v2-dark-wave2.md`). Genuinely new: broader detection (registry/service/
   scheduled-task residue beyond the 9 curated settings), a formal 5-bucket taxonomy, and — the one
-  real architectural fork — this BACKLOG entry says restores need a "SEPARATE recovery-snapshot
+  real architectural fork — this BACKLOG entry said restores need a "SEPARATE recovery-snapshot
   mechanism," but the already-built dark path reuses the Trust Ledger with a `provenance` tag
-  instead. That conflict is NOT resolved here; it's the first call the scope-gate stage needs to
-  make. Proposed phasing in the spec: Phase 0 (ship the existing read-only audit under the new name,
-  ~free) → Phase 1 (flip the gate on the 7 existing resolvers + run the already-written owner-QA
-  harness) → Phase 2 (taxonomy) → Phase 3 (net-new detection surface). Still not scope-gated or
-  mutation-gated — nothing here is authorized to build.
+  instead (fork RESOLVED to reuse — owner 2026-07-16, see above). Phasing per the spec:
+  **Phase 0 SHIPPED 2026-07-16 (`55f68b6`)** — read-only audit live as a first-class Check section
+  under the locked name. **Phase 1 SHIPPED 2026-07-16** — full mutation-gate run: owner-present
+  live-UAC QA (W32PS/MPO/memcompress loops ALL PASS, memcompress scripts made state-aware),
+  `restore_gate()` armed + `restore_leftover` registered, armed-world tests, QA receipts cleaned
+  (owner call). Backend-only — no FE restore button yet; that UI is its own later train.
+  **Remaining (still not scope-gated — not authorized to build):** Phase 2 (5-bucket taxonomy) →
+  Phase 3 (net-new detection surface: registry/service/scheduled-task residue beyond the 9 curated
+  settings; candidate detectors from Phase 1 QA: prefetch-sibling flags off, SysMain disabled).
 
 ## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
 - [BUILT-DARK] Receipts opt-in consent UI + payload preview — `receipts.rs`, `ReceiptsConsent.tsx` (gate off)

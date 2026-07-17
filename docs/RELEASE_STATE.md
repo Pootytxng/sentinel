@@ -10,6 +10,25 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-16c (OPTIMIZATION CLEANUP PHASE 1 — LEFTOVERS RESTORE ARMED, a MUTATION GATE
+> FLIPPED):** `restore_gate()` → `true` (`leftovers.rs:730`) **and** `history::restore_leftover`
+> registered as a Tauri command (`lib.rs`) in the same deliberate commit — the double-dark layers
+> both opened at once, exactly as designed. **Precondition satisfied first:** the owner-present
+> live-UAC QA harness (`history.rs` `manual_restore_qa`) passed ALL THREE full loops on real
+> machine state 2026-07-16 — W32PS (0x26→stock 2→rollback 0x26→cleanup 2), MPO (OverlayTestMode
+> 5→delete→rollback 5→cleanup absent), memcompress (seed OFF→restore ON, prior banked
+> in-elevation→rollback OFF→cleanup stock ON) — owner approving every UAC prompt. Memcompress
+> scripts made state-aware first (`if`-guarded Enable/Disable-MMAgent — the cmdlets are
+> non-idempotent, live-proven: Disable throws ERROR_SERVICE_DISABLED from already-off). **Owner
+> decisions:** restores REUSE the Trust Ledger (provenance `leftover_adopted`) — the BACKLOG's
+> "separate recovery-snapshot mechanism" idea is retired; 5 "QA · " receipts deleted from the live
+> ledger (56→51, backup kept). Dark-gate tests rewritten armed-world (+1 new tripwire:
+> `bcdedit-timer-flags`/`defender-policy-off` stay resolver-less forever). Restore stays
+> backend-only — no FE surface calls it yet. Verify: cargo 725/725 (+24 ignored owner-QA; count
+> UP from 724) · clippy clean · vitest 1682/1682 · verify-release-state 46/46 ·
+> rust-tauri-reviewer PASS. Installer rebuild follows in this train (version bump → 0.9.0); stamp
+> line updates at the reinstall commit.
+
 > **UPDATE 2026-07-16b (OPTIMIZATION CLEANUP PHASE 0 SHIPPED `55f68b6` — installer SHA-256
 > `7D6C562389CE3944A45A8A5F17E1204D36F0D76392BE4EE209707E778DD17B50`, live exe stamp-verified
 > (embedded `55f68b6`, CLEAN — no `+dirty`; Select-String), one installer on the Desktop, silent
@@ -904,7 +923,7 @@
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170`, `lib.rs:691`, `Benchmark.tsx:193` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2251` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs` | Built dark 2026-07-09 on the owner's nod (marathon §2a, spec `2026-07-08-lab-proving-ground.md`). Applies the whole safe stack in ONE UAC (reuses the audited `apply_recommendations_batch` — **no new mutation primitive**), measures the cumulative fps delta, then rolls back EXACTLY the changes it created via a multi-change Drop-guard (ledger id-diff; corrupt-ledger read ABORTS before any mutation — rust-tauri-reviewer fix). Commands `start_stack_trial` + `stack_trial_armed` refuse/return false while dark; no FE surface yet. Arming needs: live apply→rollback QA on a real rig + owner sign-off. |
-| **Leftovers restore** | **DARK** (`false`) | `restore_gate()` — `leftovers.rs:727` | Double-dark; detector is read-only, restore path refused + `#[cfg(test)]` bypass only. |
+| **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:730` | Armed after owner-present live-UAC QA (all 3 loops PASS); `history::restore_leftover` registered (`lib.rs`), receipts ride the Trust Ledger with provenance `leftover_adopted`. No FE caller yet — restore UI is a later train. |
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key); FE `pro.ts:14`, `entitlements.ts:14` | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
 | **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:96`; all-zeros pubkey `remote_rules.rs:84` | Double-gated: `verify_chain` ALSO hard-fails on the placeholder key (`remote_rules.rs:235`). Ed25519 verify is real but never runs in shipped builds. |
@@ -917,7 +936,7 @@
   (`KnownService`/`KnownBloatTask`/`AppliedAction`/`RollbackAction`/`Snapshot`, unknown inputs rejected).
 - Rollback resolves from `history.json` alone, never the live catalog (`history.rs:777`→`actions::resolve_rollback`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned
-  (`save_history_to` `history.rs:320`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:2036`).
+  (`save_history_to` `history.rs:320`; test `save_is_an_atomic_swap_leaving_no_tmp` `history.rs:2089`).
 - Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
   outcome attribution (`elevation_outcome` `actions.rs:964`). PowerShell token validators
   `ps_safe`/`ps_safe_squoted`. Boundary-side second lock (2026-07-15): the helper runs ONLY hex

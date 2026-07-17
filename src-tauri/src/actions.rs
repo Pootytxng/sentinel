@@ -201,7 +201,7 @@ pub(crate) enum AppliedAction {
     RestoreMemoryCompressionDefault,
     RestoreMmcssDefaults,
     RestorePrioritySeparationDefault,
-    // Leftovers v2 dark wave 2 (2026-06-11): MPO / core-parking / TCP autotuning. All
+    // Leftovers v2 wave 2 (2026-06-11; armed 2026-07-16): MPO / core-parking / TCP autotuning. All
     // integer-or-fixed-command — no external string enters an elevated command. (Pagefile +
     // bcdedit + Defender deliberately NOT here — see the spec / Review Queue.)
     RestoreMpoDefault,
@@ -245,7 +245,7 @@ pub(crate) enum RollbackAction {
     RestoreMemoryCompressionFromSnapshot,
     RestoreMmcssFromSnapshot,
     RestorePrioritySeparationFromSnapshot,
-    // Dark wave 2.
+    // Wave 2.
     RestoreMpoFromSnapshot,
     RestoreCoreParkingFromSnapshot,
     RestoreTcpAutotuningFromSnapshot,
@@ -330,7 +330,7 @@ pub(crate) enum Snapshot {
     PrioritySeparation {
         prior_value: Option<u32>,
     },
-    // Dark wave 2 — all integer priors (None = the value was absent → rollback removes it).
+    // Wave 2 — all integer priors (None = the value was absent → rollback removes it).
     Mpo {
         prior_overlay_test_mode: Option<u32>,
     },
@@ -483,7 +483,7 @@ fn label_for_snapshot(snap: &Snapshot) -> Option<String> {
         Snapshot::PrioritySeparation { prior_value } => {
             prior_value.map(|v| format!("{v} (0x{v:X})"))
         }
-        // Dark wave 2 — the pre-restore (rotted) value, named for the ledger card.
+        // Wave 2 — the pre-restore (rotted) value, named for the ledger card.
         Snapshot::Mpo { prior_overlay_test_mode } => {
             prior_overlay_test_mode.map(|v| format!("OverlayTestMode {v}"))
         }
@@ -3642,10 +3642,11 @@ pub(crate) fn rollback_hags_enable_typed(prior: Option<u32>) -> Result<(), Strin
     Ok(())
 }
 
-// ─── Leftovers v2 restore resolvers (R2-5 — BUILT DARK) ──────────────────
+// ─── Leftovers v2 restore resolvers (R2-5 — ARMED 2026-07-16) ──────────────────
 //
-// DARK on two independent layers: leftovers::restore_gate() returns false AND no Tauri command
-// exposes these (zero webview reachability). They ride the same audited contract as every apply:
+// Built dark on two independent layers (gate false + no Tauri command); ARMED 2026-07-16 after
+// the owner-present live-UAC QA (history::manual_restore_qa — W32PS/MPO/memcompress full loops
+// PASS). They ride the same audited contract as every apply:
 // snapshot BEFORE mutation, ONE elevated PS per restore (no partial mutation), fail-loud rollback,
 // and the snapshot holds the user's rotted value so the restore itself is reversible.
 // Script builders are PURE so their content is unit-testable without elevation. All interpolated
@@ -3731,7 +3732,11 @@ pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<App
                 .to_string(),
         );
     };
-    run_elevated_powershell("Enable-MMAgent -MemoryCompression")?;
+    // State-aware: MMAgent cmdlets are non-idempotent (live QA 2026-07-16 — Disable throws
+    // ERROR_SERVICE_DISABLED when compression is already off; guard both directions uniformly).
+    run_elevated_powershell(
+        "if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }",
+    )?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreMemoryCompressionDefault,
         rollback_action: RollbackAction::RestoreMemoryCompressionFromSnapshot,
@@ -3747,7 +3752,7 @@ pub(crate) fn restore_memory_compression_with(prior: Option<bool>) -> Result<App
 /// (the §4 compose_batch_script precedent); the file is DATA out, never input in. Exit-free.
 pub(crate) fn memcompress_combined_restore_script(result_path: &str) -> String {
     format!(
-        "$ErrorActionPreference='Stop'; $rf='{}'; $p=(Get-MMAgent).MemoryCompression; Add-Content -LiteralPath $rf -Value \"prior:$p\"; Enable-MMAgent -MemoryCompression; Add-Content -LiteralPath $rf -Value 'done:ok'",
+        "$ErrorActionPreference='Stop'; $rf='{}'; $p=(Get-MMAgent).MemoryCompression; Add-Content -LiteralPath $rf -Value \"prior:$p\"; if (-not $p) {{ Enable-MMAgent -MemoryCompression }}; Add-Content -LiteralPath $rf -Value 'done:ok'",
         result_path.replace('\'', "''")
     )
 }
@@ -3817,8 +3822,15 @@ pub(crate) fn restore_memory_compression() -> Result<ApplyResult, String> {
 
 pub(crate) fn rollback_memory_compression_typed(prior_enabled: Option<bool>) -> Result<(), String> {
     match prior_enabled {
-        Some(true) => run_elevated_powershell("Enable-MMAgent -MemoryCompression"),
-        Some(false) => run_elevated_powershell("Disable-MMAgent -MemoryCompression"),
+        // Idempotent-by-check: Disable-MMAgent throws ERROR_SERVICE_DISABLED when compression is
+        // already off (live QA 2026-07-16), so a drifted rig must not fail its own rollback —
+        // "already at prior" is success, verified in-elevation.
+        Some(true) => run_elevated_powershell(
+            "if (-not (Get-MMAgent).MemoryCompression) { Enable-MMAgent -MemoryCompression }",
+        ),
+        Some(false) => run_elevated_powershell(
+            "if ((Get-MMAgent).MemoryCompression) { Disable-MMAgent -MemoryCompression }",
+        ),
         // Unreachable for entries this code writes (the apply refuses a None prior) — but a
         // hand-edited/corrupt entry must fail LOUD, never guess a security-of-state direction.
         None => Err("This entry has no recorded prior state — cannot roll back blind.".to_string()),
@@ -3858,8 +3870,8 @@ pub(crate) fn rollback_priority_separation_typed(prior: Option<u32>) -> Result<(
     run_elevated_powershell(&priority_separation_rollback_script(prior))
 }
 
-// ─── Leftovers v2 dark wave 2 (2026-06-11) — MPO / core-parking / TCP autotuning ─────────
-// Same dark contract as R2-5: gated off + no IPC, snapshot-before-mutate, ONE elevated PS per
+// ─── Leftovers v2 wave 2 (2026-06-11; armed with R2-5 2026-07-16) — MPO / core-parking / TCP autotuning ─────────
+// Same contract as R2-5: snapshot-before-mutate, ONE elevated PS per
 // restore, fail-loud rollback, pure script builders. Every interpolated value is a u32 (or a
 // fixed literal command); no external string ever enters an elevated command (the integer-only
 // hard line — which is why pagefile, whose rollback needs the user's REG_MULTI_SZ path string,

@@ -922,8 +922,9 @@ export default function Check({
           discipline as the 2026-06-11 "Past Tweaks" era). Museum placard, never a siren: receipts
           (found vs stock default), the matched guide-era tweak, the mechanism cost, and a
           hardware-aware verdict. "Nothing found" is a first-class result; unreadable probes are
-          reported as unchecked, never counted clean. No restore action exists in Phase 0 — the
-          dark restore resolvers stay gated (restore_gate()==false, no registered command). */}
+          reported as unchecked, never counted clean. Phase 1 (2026-07-16) ARMED the restore path
+          backend-side (restore_gate()==true, restore_leftover registered) after owner-present
+          live-UAC QA; this surface doesn't call it yet — the restore UI is its own later train. */}
       <div className="check-leftovers">
         <div className="check-section-label">
           Optimization Cleanup <WhatsThis id="leftovers" onOpen={onOpenLibrary} />

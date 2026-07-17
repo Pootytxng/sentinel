@@ -994,6 +994,7 @@ pub fn run() {
             history::suspend_known_service,
             history::disable_known_bloat_task,
             history::remove_known_preload_app,
+            history::restore_leftover,
             get_preload_apps,
             rollback_change,
             get_applied_changes,
