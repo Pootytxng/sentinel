@@ -165,7 +165,21 @@ Owner's verdict after living with the V2 shell: theme-consistent but reads as **
 > `docs/BACKLOG_ARCHIVE.md` (same format — grep there for history). When appending a new cycle, move
 > the oldest one(s) out if the board exceeds ~12 entries.
 
-### Cycle 2026-07-16e — ✅ SITE DEPLOYED + AUTO-DEPLOY WIRED (CC, owner-directed "deploy the site … make it as automated as possible"): live on `compy-bd6.pages.dev` · GitHub Actions deploy lane awaiting ONE owner token paste
+> ### 🛑 OWNER DECREE 2026-07-16 (via Cowork, owner at the console): AUTO-DEPLOY LANE DROPPED — do not resurface
+>
+> The GitHub-Actions auto-deploy errand (Cloudflare token + GitHub billing unblock, Cycle
+> 2026-07-16e below) is **dead, permanently, by owner decision.** Facts established live in the
+> owner's GitHub dashboard before the call: no failed payment, billed $0; Actions blocked since
+> Jul 9 by the account's $0 Actions budget (stop-usage on); **$12 of ~$16 included free minutes
+> already burned this month** — so "costs nothing" was not guaranteed, making this a zero-budget-law
+> spend gate, and the owner declined. **Standing consequences:** ① the workflow file may stay in the
+> repo (it fails politely) but do NOT ask the owner for the Cloudflare token, a billing change, or
+> any budget raise again — the OWNER_ACTION_CHECKLIST item for the token paste is CANCELLED, remove
+> it on next touch; ② manual `wrangler pages deploy` under the standing B3 deploy GO remains THE
+> publishing path; ③ revisit ONLY if the owner raises it himself (the named trigger he accepted:
+> multi-day absence where the site must update unattended).
+
+### Cycle 2026-07-16e — ✅ SITE DEPLOYED + AUTO-DEPLOY WIRED (CC, owner-directed "deploy the site … make it as automated as possible"): live on `compy-bd6.pages.dev` · ~~GitHub Actions deploy lane awaiting ONE owner token paste~~ **← CANCELLED, see decree above**
 
 - **Manual deploy (the last one):** dist-site restaged fresh (`npm run stage:site`) → `wrangler pages
   deploy` under the standing deploy GO (checklist B3, 2026-07-15) → apex promotion PROVEN by hash

@@ -178,25 +178,17 @@ URL.**
   dead link**), and two dormant slots — the footer and the waitlist section — light up the instant
   you give me the URL. One line, regenerate, deploy. **Result → tell Claude: your Ko-fi profile URL.**
 
-### B7. Site auto-deploy — GitHub billing unblock + ONE API-token paste  ·  ⏳  ·  NEW 2026-07-16
-The site now ships itself: any push to `main` touching a site input (site/, site-app/, functions/,
-src/data/) restages + deploys via GitHub Actions ([`.github/workflows/deploy-site.yml`](../.github/workflows/deploy-site.yml)).
-**⓪ FIRST — Actions is currently BLOCKED at the account level.** Run #1 died in 4s with GitHub's
-banner: *"The job was not started because recent account payments have failed or your spending limit
-needs to be increased."* Fix at <https://github.com/settings/billing> — usually an expired/declined
-card on file, or the Actions spending limit sitting at $0 with the free 2,000 private-repo
-minutes/month exhausted or unavailable. No workflow change can route around this; every Actions run
-(including the designed skip-green path) is dead until the account block clears. **Zero-budget note:**
-this workflow fits comfortably inside the free monthly minutes — clearing the block should cost $0.
-Then the one-time credential (only you can mint it; ~2 min, free — it never passes through chat or
-the repo):
-1. Open <https://dash.cloudflare.com/profile/api-tokens> → **Create Token** → **Create Custom Token**.
-2. Name `compy-pages-deploy` · Permissions: **Account → Cloudflare Pages → Edit** · Account
-   Resources: your account · nothing else → **Continue to summary** → **Create Token** → copy it.
-3. Paste at <https://github.com/Pootytxng/sentinel/settings/secrets/actions/new> as name
-   **`CLOUDFLARE_API_TOKEN`** → **Add secret**.
-Until then the workflow skips green (no red X's) and Claude keeps deploying manually on ask.
-**Result → tell Claude "token's in" and he fires + verifies the first auto-run.**
+### B7. Site auto-deploy  ·  🛑 CANCELLED BY OWNER 2026-07-16 — do not resurface
+Dropped by owner decision, decreed via Cowork with the owner at the console. The real facts (read
+live from the owner's GitHub dashboard, correcting this entry's earlier guesses): **no failed
+payment, billed $0** — the block was the account-level $0 Actions budget (stop-usage on), and
+**$12 of ~$16 included free minutes were already burned by Jul 9**, so "should cost $0" was not
+guaranteed. That makes unblocking a zero-budget-law spend gate; the owner declined it.
+**Standing state:** the workflow file stays (it skips green, no error spam) · manual
+`wrangler pages deploy` under the standing B3 deploy GO is THE publishing path · never ask the
+owner for the Cloudflare token, a billing change, or a budget raise again. Revisit ONLY if the
+owner raises it himself — his accepted trigger: a multi-day absence where the site must update
+unattended. (Cross-ref: BACKLOG steering-log decree above Cycle 2026-07-16e.)
 
 ### B6. Monetization plan — money-surface unlocks  ·  ⏳  ·  [`MONETIZATION_PLAN.md`](MONETIZATION_PLAN.md)
 Drawn up 2026-07-15 at your ask ("draw up a monetization plan … and how best to set it up on the
