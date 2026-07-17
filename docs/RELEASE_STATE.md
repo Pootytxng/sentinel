@@ -10,6 +10,28 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-17b (INTELLIGENCE PHASE 2 SHIPPED `9c6af4b`+`094d834` — installer SHA-256
+> `3EB0FAE5D5AE4D98567B043026656FCE818C2AF28C096EF100789877C570D838`, live exe stamp-verified
+> (embedded `094d834`, CLEAN — no `+dirty`; byte-scan of the installed exe), ONE installer on the
+> Desktop (`Compy_0.9.0_x64-setup.exe`), silent reinstall done. NO gate moved — read-only + one
+> additive `#[serde(default)]` field, zero mutation/capability change):** second train of the owner
+> directive (`docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §6; spec
+> `docs/superpowers/specs/2026-07-17-intelligence-phase2-train2.md`). `9c6af4b` (backend) adds
+> `intelligence_patterns.rs` (six deterministic cross-session detectors — trend/thermal/memory/driver/
+> mode/fade — passive-capped at Medium, §0.12 coverage reasons, command `get_intelligence_patterns`) +
+> `what_changed_between` (the §4D "last good vs first bad session" workflow, reusing the Phase 1 engine
+> verbatim) + an EvidenceGraph re-projection on `WhatChangedReport` (§4C, adds no data, relations never
+> assert causation) + `drift.json` ingestion (external reverts as observed events, always tagged
+> external) + `AppliedChange.rolled_back_at` (additive `#[serde(default)]` stamp, set at rollback time,
+> NEVER retro-dated; rollback LOGIC unchanged, `resolve_rollback` still history-only). `094d834`
+> (frontend) surfaces them Expert-view only (`compy_expert_view`, default OFF): SessionInvestigator +
+> evidence graph in Monitor's What-Changed panel, PatternsTile in Blackbook's logbook (§5E, no fifth
+> room); the plain-language view is unchanged for the normal user. Confidence bands
+> unknown/low/medium/high ONLY (no numerics); deterministic, inspectable, local — zero telemetry/network.
+> Verify: cargo **787/787** (count UP from 754) · clippy clean · vitest **1710/1710** (count UP from
+> 1708) · rust-tauri-reviewer PASS · self-reviewer PASS. §0.11: Optimization Cleanup lane untouched.
+> Phase 3 (experiment engine, §4F) is the next train — fresh session.
+
 > **UPDATE 2026-07-17a (INTELLIGENCE PHASE 1 SHIPPED `8f612d2`+`d45bb1c` — installer SHA-256
 > `8063F95744C6AF00C760FD3F77DA63FBD9B68B279773307D6D1AEB5773A52E0D`, live exe stamp-verified
 > (embedded `d45bb1c`, CLEAN — no `+dirty`; Select-String), ONE installer on the Desktop

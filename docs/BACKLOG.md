@@ -56,9 +56,17 @@ never be conflatable in any doc, commit message, or report).
   (Monitor SessionDebrief WhatChangedPanel · Blackbook logbook observed rows · Home last-session
   line) + expert view + anti-fabrication guards. Flag `compy_intelligence` DEFAULT ON ("0" failsafe
   test-pinned). Zero mutation, zero network, zero capability change.
-- [ ] **Intelligence Phase 2:** richer root-cause graph · cross-session pattern detection · "good
-  session vs bad session" investigation workflow · external drift/change detection · hardware and
-  software event persistence improvements.
+- [x] **Intelligence Phase 2 — patterns, good-vs-bad, evidence graph** — ✅ BUILT + SHIPPED this
+  cycle (`9c6af4b` backend · `094d834` frontend; installer SHA-256 `3EB0FAE5…C570D838`, live exe
+  stamp-verified `094d834` clean). Spec `docs/superpowers/specs/2026-07-17-intelligence-phase2-train2.md`.
+  Delivered: `intelligence_patterns.rs` six cross-session detectors (trend/thermal/memory/driver/mode/
+  fade, passive-capped at Medium, §0.12 coverage reasons) · `what_changed_between` (§4D last-good-vs-
+  first-bad) · EvidenceGraph re-projection (§4C, no new data, no causation language) · `drift.json`
+  ingestion (external reverts as observed events) · `AppliedChange.rolled_back_at` (additive
+  `#[serde(default)]` stamp, rollback logic unchanged). Surfaced Expert-view only (`compy_expert_view`
+  default OFF): SessionInvestigator + evidence graph (Monitor), PatternsTile (Blackbook §5E, no fifth
+  room); plain view unchanged. Read-only + one additive field — zero mutation/network/capability change.
+  cargo 787/787 · clippy clean · vitest 1710/1710 · rust-tauri-reviewer PASS · self-reviewer PASS.
 - [ ] **Intelligence Phase 3:** user-started automatic experiment engine · single-variable
   attribution · stronger baseline/treatment controls · simulator recommendations · automatic
   keep/restore verdict workflow using existing mutation contracts.
