@@ -67,9 +67,22 @@ never be conflatable in any doc, commit message, or report).
   default OFF): SessionInvestigator + evidence graph (Monitor), PatternsTile (Blackbook §5E, no fifth
   room); plain view unchanged. Read-only + one additive field — zero mutation/network/capability change.
   cargo 787/787 · clippy clean · vitest 1710/1710 · rust-tauri-reviewer PASS · self-reviewer PASS.
-- [ ] **Intelligence Phase 3:** user-started automatic experiment engine · single-variable
-  attribution · stronger baseline/treatment controls · simulator recommendations · automatic
-  keep/restore verdict workflow using existing mutation contracts.
+- [~] **Intelligence Phase 3 — experiment engine + optimization simulator** — ✅ BUILT **DARK** this
+  cycle (`<commit>`, groundwork committed — NOT shipped, gate false, zero pixels, no installer). Spec
+  `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md`. Delivered:
+  `experiment.rs` (types + pure simulator w/ seven verbatim verdicts + start→conclude→keep/restore
+  lifecycle + `experiment_gate() -> bool { false }` + six gate-checked commands + `experiments.json`
+  store) ORCHESTRATING the existing mutation boundary (no new apply/rollback primitive, no enum variant;
+  applies via `history::apply_recommendation`, restores via `history::rollback_change`, resolve stays
+  history-only) · delta judged on the SAME 3% floor (`comparison::classify_with_guards`;
+  `DEFAULT_NOISE_FLOOR_PCT` → `pub(crate)`) · additive `history::active_change_count()` · restore-honesty
+  classifier (`restore_already_reverted`, guard-tested, never fabricates "still applied") · FE dark
+  surface (`ExperimentBench.tsx` renders null while gated, test-pinned; mounted in `LabGround.tsx`).
+  cargo 804/804 · clippy clean · tsc clean · vitest ExperimentBench 2/2 · rust-tauri-reviewer PASS ("dark
+  groundwork") · self-reviewer PASS. **ARMING (gate flip) is a future owner-gated commit** — needs live
+  apply→measure→restore QA on the rig + Cowork adversarial audit + owner sign-off (spec §7); the
+  simulator's hardcoded catalog/blocklist/hardware priors (`build_sim_context`) also wire to real
+  sources at arming. Read-only + zero-mutation-while-dark verified.
 - [ ] **Intelligence Phase 4:** hardware-twin intelligence integration · component-level evidence
   highlighting · hardware-health trends · long-term personal knowledge graph.
 - [ ] **Intelligence Phase 5:** evidence-based Upgrade Advisor 2.0 · "buy nothing" verdict ·

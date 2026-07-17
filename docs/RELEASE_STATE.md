@@ -10,6 +10,35 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-17d (INTELLIGENCE PHASE 3 DARK GROUNDWORK COMMITTED `<commit>` — NOT a ship,
+> NO installer rebuilt, NO gate moved.** The experiment engine + optimization simulator land behind
+> `experiment::experiment_gate() -> bool { false }` (`src-tauri/src/experiment.rs`) — every one of the
+> six commands hard-checks the gate and **refuses while dark** (defense-in-depth, mirrors
+> `receipts_gate`/`preload_removal_gate`), and the FE surface (`src/surfaces/ExperimentBench.tsx`,
+> mounted dark in `LabGround.tsx`) **returns null while gated**, test-pinned to render nothing → **zero
+> pixels change, no rebuild/reinstall needed.**):** third train of the owner directive
+> (`docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §4F/§4G; spec
+> `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md`). The engine
+> **ORCHESTRATES the existing audited mutation boundary** — it invents **no new** apply/rollback
+> primitive, adds **no** `AppliedAction`/`RollbackAction`/`Snapshot` variant, applies ONE reversible
+> change via `history::apply_recommendation`, and auto-restores via `history::rollback_change`; rollback
+> still resolves from `history.json` alone (mutation-gate items 1–3 preserved by construction).
+> Delta judged against the SAME 3% noise floor (`comparison::classify_with_guards` on the 1%-low —
+> `comparison::DEFAULT_NOISE_FLOOR_PCT` bumped to `pub(crate)` as the single source of truth). New
+> own-store `experiments.json` (atomic tmp+rename, corrupt→aside, copied verbatim from `intelligence.rs`).
+> Additive read-only helper `history::active_change_count()` for the single-variable warning. Honesty:
+> a restore that fails because the change was **already reverted outside Compy** reports Restored (the
+> change is off — honest), never a fabricated "still applied"; a genuine restore failure aborts LOUD and
+> tells the user to verify in Fix — no fabricated certainty either way (guard-tested
+> `restore_already_reverted`, coupled to `history.rs`'s literal by cross-reference comments). Verify:
+> cargo **804/804** (count UP from 803 — new restore-honesty guard) · clippy clean · tsc clean · vitest
+> ExperimentBench 2/2 (dark render-nothing + armed-copy pins) · rust-tauri-reviewer **PASS ("safe to
+> proceed — merge as dark groundwork")**, its 2 Warnings + honesty/observability Nits fixed in this same
+> commit · self-reviewer **PASS**. **Gate flips only on its own future reviewable commit** after live
+> apply→measure→restore QA on the real rig + Cowork-lane adversarial audit of the orchestration + owner
+> sign-off (§7). Until then the verified zero-mutation-while-dark property holds. §0.11: Optimization
+> Cleanup lane untouched.
+
 > **UPDATE 2026-07-17c (HOME VERDICT REGRESSION FIX SHIPPED `cd66ce9` — installer SHA-256
 > `E3F8E0CE03A2807786196BC52AAF1A21F86A17C8F5C02F0FD5ACC6FE7856EBA8`, live exe stamp-verified
 > (embedded `cd66ce9`, CLEAN — no `+dirty`; byte-scan of the installed exe), ONE installer on the

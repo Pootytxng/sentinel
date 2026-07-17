@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { LabConsole } from "./LabConsole";
+import ExperimentBench from "./ExperimentBench";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
@@ -103,6 +104,10 @@ export function LabGround(props: LabFastPathProps & {
         hw={hw}
         readiness={readiness}
       />
+      {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. DARK:
+          renders NOTHING until experiment_gate() is armed (owner-signed). Zero pixels today; the
+          armed layout is designed at arming with the owner's Lab UI direction. */}
+      <ExperimentBench />
     </RoomShell>
   );
 }

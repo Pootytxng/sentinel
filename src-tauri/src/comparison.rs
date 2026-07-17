@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::sessions::SessionSummary;
 
 /// Default session-to-session run-to-run variance (%); the 1% low is the primary signal. Owner-
-/// tunable later; matches the benchmark engine's conservative 3% floor.
-const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
+/// tunable later; matches the benchmark engine's conservative 3% floor. `pub(crate)` so the
+/// experiment engine (Intelligence Phase 3) references the ONE 3% floor rather than re-declaring it.
+pub(crate) const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
 
 /// Owner-tunable: an armed baseline older than this (days) at finalize is too stale to compare
 /// fairly — drivers/games/Windows move on, so we discard rather than attribute a misleading delta.

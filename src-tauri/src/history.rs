@@ -787,6 +787,8 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
         .ok_or_else(|| format!("change '{}' not found in history", change_id))?;
     let change = history[idx].clone();
     if change.status == "rolled_back" {
+        // NOTE: experiment::restore_already_reverted matches this exact literal to tell an
+        // already-off change from a genuine restore failure — keep the two in sync (guard-tested).
         return Err("change has already been rolled back".into());
     }
 
@@ -834,6 +836,21 @@ pub(crate) fn ledger_len() -> usize {
     // On an unreadable ledger this reads 0 — which DIFFERS from any non-zero armed watermark,
     // so the comparison engine refuses attribution (the fail-safe direction for honesty).
     load_history().unwrap_or_default().len()
+}
+
+/// Count of DISTINCT recs whose LATEST ledger entry is an active apply (status "applied"). Powers the
+/// experiment engine's single-variable warning (Intelligence Phase 3 §4F): "N other Compy changes are
+/// already active". Latest-wins per rec_id (a later rollback clears an earlier apply). Read-only,
+/// additive — no enum/contract change. Corrupt/absent ledger reads 0 (fail-safe: no false warning).
+pub(crate) fn active_change_count() -> usize {
+    use std::collections::BTreeMap;
+    let history = load_history().unwrap_or_default();
+    // Walk in order so the LAST entry per rec_id wins (the ledger is append-only chronological).
+    let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
+    for c in &history {
+        latest.insert(c.rec_id.as_str(), c.status.as_str());
+    }
+    latest.values().filter(|status| **status == "applied").count()
 }
 
 /// Read-only roll-up of the Trust Ledger for surfaces that need counts rather

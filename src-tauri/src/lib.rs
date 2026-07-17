@@ -12,6 +12,7 @@ mod drift; // Drift Watch — notices readiness checks that were good and regres
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
+mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. DARK behind experiment_gate() (orchestrates the existing mutation boundary; no new apply/rollback primitive; zero mutation while dark).
 mod export;
 mod fps;
 mod game_mode_persist; // Game Mode persistence keeper — option 1(b) mechanism C, DARK behind keep_game_mode_gate().
@@ -1053,6 +1054,12 @@ pub fn run() {
             intelligence::what_changed_between,
             intelligence::get_intelligence_headline,
             intelligence_patterns::get_intelligence_patterns,
+            experiment::get_experiment_gate,
+            experiment::get_experiments,
+            experiment::simulate_optimization,
+            experiment::start_experiment,
+            experiment::conclude_experiment,
+            experiment::restore_experiment,
         ])
         .on_window_event(|window, event| {
             // Close behavior (Train #3 §1 — clean exit), now with the opt-in tray branch.
