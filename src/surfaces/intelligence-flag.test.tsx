@@ -122,6 +122,7 @@ const report: WhatChangedOutcome = {
   gap_days: 2,
   notes: [],
   method_note: "Deterministic comparison of two recorded sessions; local records only.",
+  evidence_graph: { nodes: [], edges: [] },
 };
 
 const unavailable: WhatChangedOutcome = {

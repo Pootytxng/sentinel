@@ -9,6 +9,7 @@ import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
 import { BlackbookConsole } from "./blackbook/BlackbookConsole";
+import { PatternsTile } from "./blackbook/PatternsTile";
 import { buildLogbook } from "./blackbook/logbook";
 import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
 import type { GpuVendor } from "./walkthroughs";
@@ -151,15 +152,21 @@ export function BlackbookV2({
             />
           </div>
           {face === "logbook" ? (
-            <BlackbookConsole
-              records={records}
-              vendor={vendor}
-              onOpenLab={() => onOpenLab?.()}
-              onOpenGuide={(fid) => {
-                setGuideFocus(fid ?? null);
-                setFace("guide");
-              }}
-            />
+            <>
+              {/* Intelligence Phase 2 — cross-session pattern synthesis sits above the record tape
+                  (§5E: Blackbook holds the historical record). Self-contained fetch so the console
+                  stays zero-IPC; renders nothing until there's something honest to say. */}
+              <PatternsTile />
+              <BlackbookConsole
+                records={records}
+                vendor={vendor}
+                onOpenLab={() => onOpenLab?.()}
+                onOpenGuide={(fid) => {
+                  setGuideFocus(fid ?? null);
+                  setFace("guide");
+                }}
+              />
+            </>
           ) : (
             <Learn
               asPanel

@@ -25,6 +25,9 @@ export type AppliedChange = {
   snapshot: unknown;
   status: "applied" | "rolled_back";
   is_still_active: boolean;
+  // Stamped when a change is rolled back (Intelligence Phase 2 — dates the rollback event in the
+  // timeline). Additive, #[serde(default)] on the Rust side; absent/null for entries never undone.
+  rolled_back_at?: string | null;
   applied_action?: Record<string, unknown> | null;
   rollback_action?: Record<string, unknown> | null;
   app_version_at_apply?: string | null;
@@ -444,11 +447,90 @@ export type WhatChangedReport = {
   gap_days: number;
   notes: string[];
   method_note: string;
+  /** §4C inspectable evidence graph — a deterministic re-projection of the fields above for
+   *  the Expert view. Adds no new data; the plain-language fields ARE the normal view. */
+  evidence_graph: EvidenceGraph;
 };
 
 export type WhatChangedOutcome =
   | { kind: "unavailable"; reason: string }
   | ({ kind: "report" } & WhatChangedReport);
+
+// ─── §4C evidence graph (Expert view) ───────────────────────────────────────
+// The inspectable node/edge re-projection of a WhatChangedReport. Every node cites the
+// report field it came from; nothing here is new data. Node/edge vocabularies are the §4C
+// sets the two-session engine emits — Intelligence Phase 3 grows them additively.
+export type EvidenceNodeType =
+  | "symptom"
+  | "metric"
+  | "event"
+  | "driver"
+  | "os-update"
+  | "compy-change"
+  | "external-change"
+  | "hypothesis"
+  | "experiment"
+  | "conclusion";
+
+export type EvidenceRelation =
+  | "supports"
+  | "correlates-with"
+  | "occurred-before"
+  | "requires-verification"
+  | "ruled-out-by";
+
+export type EvidenceNode = {
+  id: string;
+  node_type: EvidenceNodeType;
+  label: string;
+  /** Which report field / record this node was derived from — inspectable provenance. */
+  source_reference: string;
+  /** A band, never numeric. Passive observation never exceeds "medium". */
+  reliability: ConfidenceBand;
+};
+
+export type EvidenceEdge = {
+  from: string;
+  to: string;
+  relation: EvidenceRelation;
+  /** Band strength of the relation, never numeric. */
+  weight: ConfidenceBand;
+  explanation: string;
+};
+
+export type EvidenceGraph = {
+  /** id-sorted for a stable, diffable render. */
+  nodes: EvidenceNode[];
+  /** (from, to, relation)-sorted. */
+  edges: EvidenceEdge[];
+};
+
+// ─── Intelligence Phase 2 — cross-session pattern detection (Blackbook) ──────
+// Deterministic trend/thermal/memory/driver/mode/fade detectors over recorded sessions.
+// Passive observation is hard-capped at "medium"; every silent detector says why in coverage.
+export type SessionPattern = {
+  /** Detector id, e.g. "performance-trend". Stable, kebab-case. */
+  id: string;
+  /** Pretty game name, or null for a cross-game synthesis pattern. */
+  game: string | null;
+  title: string;
+  /** Plain-language finding with the real numbers in it. */
+  detail: string;
+  confidence: ConfidenceBand;
+  confidence_reason: string;
+  supporting_evidence: string[];
+  /** What would raise confidence / what argues against the pattern. */
+  raises_confidence: string[];
+  next_test: string | null;
+};
+
+export type PatternReport = {
+  patterns: SessionPattern[];
+  /** §0.12: detectors that stayed silent say exactly why (missing data), never vanish. */
+  coverage: string[];
+  sessions_considered: number;
+  games_considered: number;
+};
 
 export type IntelligenceHeadline = {
   text: string;

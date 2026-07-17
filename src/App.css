@@ -3267,6 +3267,192 @@ body::before {
   margin: 0;
 }
 
+/* ── Intelligence Phase 2 — §4C evidence graph (Expert view, inside the working) ──
+   A deterministic re-projection of the report above: a plain node list + link list, each
+   node citing the record it came from. Sits inside .wcp-detail; a hairline inset sets the
+   inspector region apart from the plain-language blocks. Classic tokens (this panel follows
+   whatever shell it mounts in — the v2 shells re-point --accent/--panel to --v2-*). */
+.wcp-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm, 7px);
+  background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+}
+.wcp-graph-note {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+.wcp-graph-nodes,
+.wcp-graph-edges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wcp-graph-nodes { gap: 5px; }
+.wcp-graph-node {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.wcp-graph-kind {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+/* "What changed" kinds carry the accent so the causal candidates read apart from symptoms/metrics. */
+.wcp-graph-kind-driver,
+.wcp-graph-kind-os-update,
+.wcp-graph-kind-compy-change,
+.wcp-graph-kind-external-change {
+  color: var(--accent-bright);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+.wcp-graph-kind-conclusion {
+  color: var(--fg);
+  border-color: var(--border-strong, var(--border));
+}
+.wcp-graph-label {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+  overflow-wrap: anywhere;
+}
+.wcp-graph-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.wcp-graph-edges {
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+.wcp-graph-edge {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.wcp-graph-edge-line {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+  overflow-wrap: anywhere;
+}
+.wcp-graph-rel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.wcp-graph-why {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+/* ── Intelligence Phase 2 — good-vs-bad session investigator (§4D, Expert view) ───
+   The interactive "what changed between the last good session and the first bad one" tool.
+   Same instrument frame as .wcp; the nested report drops its own frame (the card IS the frame). */
+.wcp-investigate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--r-md, 10px);
+  background: var(--panel-2);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.wcp-inv-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wcp-inv-sub {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.wcp-inv-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.wcp-inv-field {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.wcp-inv-field > span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.wcp-inv-field select {
+  max-width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.wcp-inv-field select:hover { border-color: var(--border-strong, var(--border)); }
+.wcp-inv-field select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+/* Filled accent CTA — dark ink on the bright accent fill (button-legibility guard); matches .btn. */
+.wcp-inv-run {
+  flex: none;
+  align-self: flex-end;
+  padding: 8px 18px;
+  background: var(--accent);
+  color: var(--ix-accent-ink, #06231c);
+  border: 0;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.wcp-inv-run:hover:not(:disabled) { background: var(--accent-hover); }
+.wcp-inv-run:disabled { opacity: 0.5; cursor: not-allowed; }
+.wcp-inv-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.wcp-inv-result { margin-top: 2px; }
+/* The nested report is already inside the investigator's frame — drop its outer margin. */
+.wcp-inv-result .wcp,
+.wcp-inv-result .wcp-unavailable { margin-bottom: 0; }
+
 /* ── Readiness dismiss / Dismissed section ───────────────────────────────── */
 .readiness-row-actions {
   display: flex;

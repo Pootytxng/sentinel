@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   WhatChangedOutcome,
   IntelHypothesis,
   IntelSessionRef,
+  EvidenceGraph,
+  EvidenceNodeType,
+  EvidenceRelation,
+  SessionSummary,
 } from "../types";
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
@@ -14,6 +18,11 @@ import { useExpertView } from "../design/use-expert-view";
 // argues against it, and the next test. Additive beside ComparisonCard (which keeps the rec-scoped
 // A/B story). Read-only; every sentence comes from persisted records. Flag compy_intelligence
 // (default ON) — "0" renders nothing, restoring the prior tree byte-identical.
+//
+// Intelligence Phase 2 adds two Expert-view affordances on the SAME engine + flag: the §4C evidence
+// graph (an inspectable re-projection of the report, no new data) rendered inside the working, and
+// SessionInvestigator — the good-vs-bad picker that compares any two same-game sessions via
+// what_changed_between. Both stay behind Expert view so the everyday face remains plain-language.
 
 const fmtWhen = (iso: string, expert: boolean): string => {
   const d = new Date(iso);
@@ -97,30 +106,95 @@ function SessionLine({
   );
 }
 
-export function WhatChangedPanel({ startedAt, arcV2 = false }: { startedAt: string; arcV2?: boolean }) {
-  const on = useIntelligenceFlag();
-  const expert = useExpertView();
-  const [outcome, setOutcome] = useState<WhatChangedOutcome | null>(null);
+// §4C node/edge vocabularies → the plain words the everyday user would use. Kept a static map so a
+// new backend variant surfaces as a TS error here rather than a silent raw kebab string on screen.
+const NODE_TYPE_LABEL: Record<EvidenceNodeType, string> = {
+  symptom: "Symptom",
+  metric: "Metric",
+  event: "Event",
+  driver: "Driver change",
+  "os-update": "Windows update",
+  "compy-change": "Compy change",
+  "external-change": "Outside change",
+  hypothesis: "Possible cause",
+  experiment: "Next test",
+  conclusion: "Conclusion",
+};
+
+const RELATION_LABEL: Record<EvidenceRelation, string> = {
+  supports: "supports",
+  "correlates-with": "lines up with",
+  "occurred-before": "happened before",
+  "requires-verification": "still needs verifying by",
+  "ruled-out-by": "ruled out by",
+};
+
+// §4C evidence graph — Expert view only. A deterministic, inspectable re-projection of the report
+// above (the wrapper builds it from the finished report; it adds no data). We render it as a plain
+// node list + link list — every node cites where it came from, so an expert can trace each claim
+// back to a record. The directive is explicit: the normal view stays plain-language; only the
+// Expert view exposes the detailed graph.
+function EvidenceGraphBlock({ graph }: { graph: EvidenceGraph }) {
+  if (graph.nodes.length === 0) return null;
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const labelFor = (id: string) => byId.get(id)?.label ?? id;
+  return (
+    <div className="wcp-graph">
+      <span className="wcp-section-label">Evidence graph</span>
+      <p className="wcp-graph-note">
+        A re-projection of the reasoning above — every node cites the record it came from. Nothing
+        new; just the same evidence, laid out so you can trace it.
+      </p>
+      <ul className="wcp-graph-nodes">
+        {graph.nodes.map((n) => (
+          <li className="wcp-graph-node" key={n.id}>
+            <span className={`wcp-graph-kind wcp-graph-kind-${n.node_type}`}>
+              {NODE_TYPE_LABEL[n.node_type]}
+            </span>
+            <span className="wcp-graph-label">{n.label}</span>
+            <span className="wcp-graph-meta">
+              {n.reliability} · {n.source_reference}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {graph.edges.length > 0 && (
+        <ul className="wcp-graph-edges">
+          {graph.edges.map((e, i) => (
+            <li className="wcp-graph-edge" key={`${e.from}|${e.to}|${e.relation}|${i}`}>
+              <span className="wcp-graph-edge-line">
+                <span className="wcp-graph-from">{labelFor(e.from)}</span>{" "}
+                <span className="wcp-graph-rel">{RELATION_LABEL[e.relation]}</span>{" "}
+                <span className="wcp-graph-to">{labelFor(e.to)}</span>
+              </span>
+              {e.explanation && <span className="wcp-graph-why">{e.explanation}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// The full report render, shared by the auto for-this-session panel and the investigator's
+// good-vs-bad comparison. `outcome` is the engine's own union — unavailable renders the honest
+// one-line reason, a report renders the verdict + working. No fabrication path: both faces come
+// straight from persisted records.
+function WhatChangedReportView({
+  outcome,
+  expert,
+  arcV2,
+  headline,
+}: {
+  outcome: WhatChangedOutcome;
+  expert: boolean;
+  arcV2: boolean;
+  /** Overrides the "vs your previous X session" head line — the investigator names both picks. */
+  headline?: string;
+}) {
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!on) return;
-    let alive = true;
-    invoke<WhatChangedOutcome>("what_changed_for_session", { startedAt })
-      .then((o) => {
-        if (alive) setOutcome(o);
-      })
-      .catch(() => {}); // fetch failure → no panel; never a fabricated report
-    return () => {
-      alive = false;
-    };
-  }, [on, startedAt]);
-
-  if (!on || !outcome) return null;
-
   if (outcome.kind === "unavailable") {
-    // Honest empty state — the engine's reason is already a full plain sentence
-    // (e.g. "First recorded Fortnite session — nothing earlier to compare against.").
     return (
       <div className={`wcp wcp-unavailable${arcV2 ? " arc-v2" : ""}`}>
         <span className="wcp-tag">What changed?</span> {outcome.reason}
@@ -138,15 +212,13 @@ export function WhatChangedPanel({ startedAt, arcV2 = false }: { startedAt: stri
   return (
     <div className={`wcp wcp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
       <div className="wcp-head">
-        <span>WHAT CHANGED? · vs your previous {r.game} session</span>
+        <span>{headline ?? `WHAT CHANGED? · vs your previous ${r.game} session`}</span>
         <span className="wcp-nf">noise floor ±{r.noise_floor_pct.toFixed(0)}%</span>
       </div>
 
       <h3 className="wcp-headline">{r.headline}</h3>
 
-      {r.confounded && r.notes.length > 0 && (
-        <p className="wcp-note">{r.notes[0]}</p>
-      )}
+      {r.confounded && r.notes.length > 0 && <p className="wcp-note">{r.notes[0]}</p>}
 
       {showLeader && (
         <>
@@ -250,7 +322,181 @@ export function WhatChangedPanel({ startedAt, arcV2 = false }: { startedAt: stri
             </div>
           )}
 
+          {expert && <EvidenceGraphBlock graph={r.evidence_graph} />}
+
           {expert && <p className="wcp-method">{r.method_note}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WhatChangedPanel({ startedAt, arcV2 = false }: { startedAt: string; arcV2?: boolean }) {
+  const on = useIntelligenceFlag();
+  const expert = useExpertView();
+  const [outcome, setOutcome] = useState<WhatChangedOutcome | null>(null);
+
+  useEffect(() => {
+    if (!on) return;
+    let alive = true;
+    invoke<WhatChangedOutcome>("what_changed_for_session", { startedAt })
+      .then((o) => {
+        if (alive) setOutcome(o);
+      })
+      .catch(() => {}); // fetch failure → no panel; never a fabricated report
+    return () => {
+      alive = false;
+    };
+  }, [on, startedAt]);
+
+  if (!on || !outcome) return null;
+
+  return <WhatChangedReportView outcome={outcome} expert={expert} arcV2={arcV2} />;
+}
+
+// ─── Intelligence Phase 2 — good-vs-bad session investigator (Monitor) ─────────
+// The §4D "what changed between the last good session and the first bad session?" workflow, made
+// interactive: pick any two sessions of the same game and the SAME deterministic engine
+// (what_changed_between) explains the delta. Expert-view only — it's a deliberate investigation
+// tool, not the everyday debrief. Read-only; the picks come from already-recorded sessions.
+
+type GameGroup = { game: string; sessions: SessionSummary[] };
+
+export function SessionInvestigator({
+  sessions,
+  arcV2 = false,
+}: {
+  sessions: SessionSummary[];
+  arcV2?: boolean;
+}) {
+  const on = useIntelligenceFlag();
+  const expert = useExpertView();
+
+  // Group by game (process_name), keep only games with ≥2 sessions — nothing to compare otherwise.
+  // Sessions oldest→newest so "baseline" defaults to the earlier one and "current" to the later.
+  const groups = useMemo<GameGroup[]>(() => {
+    const by = new Map<string, SessionSummary[]>();
+    for (const s of sessions) {
+      const g = s.process_name;
+      if (!g) continue;
+      (by.get(g) ?? by.set(g, []).get(g)!).push(s);
+    }
+    const out: GameGroup[] = [];
+    for (const [game, list] of by) {
+      if (list.length < 2) continue;
+      const sorted = [...list].sort((a, b) => a.started_at.localeCompare(b.started_at));
+      out.push({ game, sessions: sorted });
+    }
+    out.sort((a, b) => a.game.localeCompare(b.game));
+    return out;
+  }, [sessions]);
+
+  const [game, setGame] = useState<string>("");
+  const [baselineAt, setBaselineAt] = useState<string>("");
+  const [currentAt, setCurrentAt] = useState<string>("");
+  const [outcome, setOutcome] = useState<WhatChangedOutcome | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const active = groups.find((g) => g.game === game) ?? groups[0] ?? null;
+
+  // Keep the selections valid as the group set changes (game list, default picks).
+  useEffect(() => {
+    if (!active) {
+      setGame("");
+      setBaselineAt("");
+      setCurrentAt("");
+      return;
+    }
+    if (game !== active.game) setGame(active.game);
+    const starts = active.sessions.map((s) => s.started_at);
+    if (!starts.includes(baselineAt)) setBaselineAt(starts[0]);
+    if (!starts.includes(currentAt)) setCurrentAt(starts[starts.length - 1]);
+  }, [active, game, baselineAt, currentAt]);
+
+  if (!on || !expert || groups.length === 0) return null;
+
+  const run = () => {
+    if (!baselineAt || !currentAt) return;
+    setBusy(true);
+    setOutcome(null);
+    invoke<WhatChangedOutcome>("what_changed_between", {
+      baselineStartedAt: baselineAt,
+      currentStartedAt: currentAt,
+    })
+      .then((o) => setOutcome(o))
+      .catch(() => setOutcome(null)) // fetch failure → no report; never a fabricated one
+      .finally(() => setBusy(false));
+  };
+
+  const optLabel = (s: SessionSummary) =>
+    `${fmtWhen(s.started_at, expert)} · 1% low ${s.low1_fps_est.toFixed(1)} · avg ${s.avg_fps.toFixed(1)}`;
+
+  const sameSession = baselineAt === currentAt;
+
+  return (
+    <div className={`wcp-investigate${arcV2 ? " arc-v2" : ""}`}>
+      <div className="wcp-inv-head">
+        <span className="wcp-tag">Investigate · good vs bad session</span>
+        <span className="wcp-inv-sub">
+          Compare any two of your {active?.game} sessions and Compy explains the delta.
+        </span>
+      </div>
+
+      <div className="wcp-inv-controls">
+        {groups.length > 1 && (
+          <label className="wcp-inv-field">
+            <span>Game</span>
+            <select value={game} onChange={(e) => setGame(e.target.value)}>
+              {groups.map((g) => (
+                <option value={g.game} key={g.game}>
+                  {g.game} ({g.sessions.length})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="wcp-inv-field">
+          <span>Baseline (good)</span>
+          <select value={baselineAt} onChange={(e) => setBaselineAt(e.target.value)}>
+            {active?.sessions.map((s) => (
+              <option value={s.started_at} key={s.started_at}>
+                {optLabel(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="wcp-inv-field">
+          <span>Compare (suspect)</span>
+          <select value={currentAt} onChange={(e) => setCurrentAt(e.target.value)}>
+            {active?.sessions.map((s) => (
+              <option value={s.started_at} key={s.started_at}>
+                {optLabel(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="wcp-inv-run"
+          onClick={run}
+          disabled={busy || sameSession || !baselineAt || !currentAt}
+        >
+          {busy ? "Comparing…" : "Compare"}
+        </button>
+      </div>
+
+      {sameSession && (
+        <p className="wcp-inv-hint">Pick two different sessions to compare.</p>
+      )}
+
+      {outcome && (
+        <div className="wcp-inv-result">
+          <WhatChangedReportView
+            outcome={outcome}
+            expert={expert}
+            arcV2={arcV2}
+            headline="WHAT CHANGED? · between the two sessions you picked"
+          />
         </div>
       )}
     </div>

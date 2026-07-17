@@ -10,7 +10,7 @@ import type {
 import { Term } from "../design/Term";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningDebrief } from "./TuningDebrief";
-import { WhatChangedPanel } from "./WhatChangedPanel";
+import { WhatChangedPanel, SessionInvestigator } from "./WhatChangedPanel";
 import { prettyGameName } from "./game-name";
 import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
@@ -347,6 +347,10 @@ export function SessionDebrief({
       {/* Intelligence Phase 1 — this session vs the previous session of the same game. Additive:
           ComparisonCard above keeps the rec-scoped A/B story; this answers "vs last time". */}
       <WhatChangedPanel startedAt={s.started_at} arcV2={arcV2} />
+
+      {/* Intelligence Phase 2 — §4D good-vs-bad investigator (Expert view only). Pick any two
+          same-game sessions; the same deterministic engine explains the delta. */}
+      {sessions && <SessionInvestigator sessions={sessions} arcV2={arcV2} />}
 
       {/* Tuning before/after — temp + stability delta beside the FPS delta (spec §3). Read-only +
           advisory: arming records a vendor-tool undervolt session-side, never a mutating ledger entry. */}

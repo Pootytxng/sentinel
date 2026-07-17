@@ -54,6 +54,7 @@ const labCss = loadV2Css("surfaces", "lab-v2.css");
 const labConsoleCss = loadV2Css("surfaces", "lab-console.css");
 const monitorConsoleCss = loadV2Css("surfaces", "monitor-console.css");
 const blackbookConsoleCss = loadV2Css("surfaces", "blackbook", "blackbook-console.css");
+const patternsTileCss = loadV2Css("surfaces", "blackbook", "patterns-tile.css");
 const hudRoomsCss = loadV2Css("surfaces", "hud-rooms.css");
 const ambientHudCss = loadV2Css("surfaces", "ambient-hud.css");
 const consoleArcGaugeCss = loadV2Css("design", "console", "arc-gauge.css");
@@ -79,6 +80,7 @@ const V2_CSS: [string, string][] = [
   ["lab-console.css", labConsoleCss],
   ["monitor-console.css", monitorConsoleCss],
   ["blackbook-console.css", blackbookConsoleCss],
+  ["patterns-tile.css", patternsTileCss],
   ["hud-rooms.css", hudRoomsCss],
   ["ambient-hud.css", ambientHudCss],
   ["console/arc-gauge.css", consoleArcGaugeCss],
