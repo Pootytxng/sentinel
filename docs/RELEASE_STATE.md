@@ -10,6 +10,26 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-17c (HOME VERDICT REGRESSION FIX SHIPPED `cd66ce9` — installer SHA-256
+> `E3F8E0CE03A2807786196BC52AAF1A21F86A17C8F5C02F0FD5ACC6FE7856EBA8`, live exe stamp-verified
+> (embedded `cd66ce9`, CLEAN — no `+dirty`; byte-scan of the installed exe), ONE installer on the
+> Desktop (`Compy_0.9.0_x64-setup.exe`), silent reinstall done — supersedes the `3EB0FAE5…C570D838`
+> installer. NO gate moved — pure frontend text-derivation + one boolean standdown, zero
+> mutation/capability change):** owner-caught regression — Home's verdict strip had crept back to the
+> vague "1 thing needs your attention" count headline the owner agreed to retire (name-it-and-fix-it-inline
+> + title-header laws). Fixed at the SOURCE so all three Home faces benefit: `system-posture.ts`
+> `deriveSystemPosture()` attention branch no longer emits a count — single flagged check ⇒ headline IS
+> that check's label, several ⇒ `"<top label> · and N more"`, and `sub` carries the check's own `detail`
+> so the fix travels with the name (`src/surfaces/system-posture.ts`). `HomeConsole.tsx` adds a
+> one-owner-per-screen standdown at the `topLimiter` derivation: when the named verdict already IS the
+> #1 limiter (same title — the live-machine collision, "Applied Compy changes" is both), the "top limiter"
+> row stands down so the string renders exactly once (mirrors the existing `dekRedundant`/ForwardDoor
+> standdowns; `src/surfaces/HomeConsole.tsx`). bug→guard: `system-posture.test.ts` VAGUE_COUNT regex pin
+> (named, never a count) + `home-console.test.tsx` dedup guard (same-title ⇒ 0 top-limiter rows & string
+> count = 1; different check ⇒ no false standdown). Verify: tsc clean · vitest **1714/1714** (count UP
+> from 1710) · self-reviewer PASS (live, real machine attention state — vague count absent, verdict names
+> the check + fix inline, duplicate title count = 1, h1 = "Home"). Frontend-only; cargo/gates untouched.
+
 > **UPDATE 2026-07-17b (INTELLIGENCE PHASE 2 SHIPPED `9c6af4b`+`094d834` — installer SHA-256
 > `3EB0FAE5D5AE4D98567B043026656FCE818C2AF28C096EF100789877C570D838`, live exe stamp-verified
 > (embedded `094d834`, CLEAN — no `+dirty`; byte-scan of the installed exe), ONE installer on the
