@@ -1,4 +1,4 @@
-# ship-reinstall.ps1 — the post-rebuild ship law, codified.
+﻿# ship-reinstall.ps1 — the post-rebuild ship law, codified.
 #
 # After `npm run tauri build`, run this so the LIVE running Compy becomes the just-built version, with
 # exactly ONE (current) installer on the Desktop. The OWNER NEVER installs manually — he only verifies.
@@ -8,6 +8,12 @@
 # ("Unexpected token") — a shell quirk, not a script bug. Use the call operator (or run the steps inline):
 #   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1'"            # install + launch
 #   powershell -NoProfile -Command "& 'C:\Users\Kuya\code\sentinel\scripts\ship-reinstall.ps1' -NoLaunch"  # don't launch
+#
+# ENCODING (bug→guard 2026-07-16): this file MUST start with a UTF-8 BOM. Windows PowerShell 5.1
+# (`powershell`) decodes a BOM-less file as ANSI, so the em-dashes in the throw strings become
+# mojibake that parse-errors the whole script (caught live at the 0.9.0 ship — an edit had re-saved
+# the file without its BOM). pwsh 7 reads UTF-8 either way. Pinned by version-drift-guard.test.mjs
+# Guard C — any tool that re-saves this file must preserve the BOM (or run the guard and find out).
 param([switch]$NoLaunch, [switch]$AllowDirty)
 $ErrorActionPreference = "Stop"
 

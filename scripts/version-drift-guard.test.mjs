@@ -7,6 +7,9 @@
 //   Guard A: all three manifests + Cargo.lock state the SAME version.
 //   Guard B: ship-reinstall.ps1 contains NO hardcoded Compy_<semver> installer literal —
 //   it must derive the filename from tauri.conf.json (the single source of truth).
+//   Guard C: ship-reinstall.ps1 starts with a UTF-8 BOM — Windows PowerShell 5.1 decodes a
+//   BOM-less file as ANSI, turning its em-dashes into mojibake that parse-errors the whole
+//   script (caught live at the 0.9.0 ship after an edit re-saved the file without the BOM).
 // Policy: docs/superpowers/specs/2026-07-16-version-policy-proposal.md (0.9.0 now, 1.0.0 at the bar).
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -50,5 +53,12 @@ describe("Guard B — ship-reinstall.ps1 derives the installer name, never hardc
   it("reads the version from tauri.conf.json", () => {
     expect(ps1).toContain("tauri.conf.json");
     expect(ps1).toContain("Compy_${ver}_x64-setup.exe");
+  });
+});
+
+describe("Guard C — ship-reinstall.ps1 keeps its UTF-8 BOM (PowerShell 5.1 reads ANSI without it)", () => {
+  it("first character is U+FEFF", () => {
+    // readFileSync("utf8") preserves a leading BOM as ﻿ — exactly what we pin.
+    expect(read("scripts/ship-reinstall.ps1").charCodeAt(0)).toBe(0xfeff);
   });
 });
