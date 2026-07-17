@@ -10,7 +10,7 @@
 
 ## Snapshot
 
-> **UPDATE 2026-07-17d (INTELLIGENCE PHASE 3 DARK GROUNDWORK COMMITTED `<commit>` — NOT a ship,
+> **UPDATE 2026-07-17d (INTELLIGENCE PHASE 3 DARK GROUNDWORK COMMITTED `7e00a06` — NOT a ship,
 > NO installer rebuilt, NO gate moved.** The experiment engine + optimization simulator land behind
 > `experiment::experiment_gate() -> bool { false }` (`src-tauri/src/experiment.rs`) — every one of the
 > six commands hard-checks the gate and **refuses while dark** (defense-in-depth, mirrors

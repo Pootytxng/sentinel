@@ -68,7 +68,7 @@ never be conflatable in any doc, commit message, or report).
   room); plain view unchanged. Read-only + one additive field — zero mutation/network/capability change.
   cargo 787/787 · clippy clean · vitest 1710/1710 · rust-tauri-reviewer PASS · self-reviewer PASS.
 - [~] **Intelligence Phase 3 — experiment engine + optimization simulator** — ✅ BUILT **DARK** this
-  cycle (`<commit>`, groundwork committed — NOT shipped, gate false, zero pixels, no installer). Spec
+  cycle (`7e00a06`, groundwork committed — NOT shipped, gate false, zero pixels, no installer). Spec
   `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md`. Delivered:
   `experiment.rs` (types + pure simulator w/ seven verbatim verdicts + start→conclude→keep/restore
   lifecycle + `experiment_gate() -> bool { false }` + six gate-checked commands + `experiments.json`
