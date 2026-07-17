@@ -178,11 +178,18 @@ URL.**
   dead link**), and two dormant slots — the footer and the waitlist section — light up the instant
   you give me the URL. One line, regenerate, deploy. **Result → tell Claude: your Ko-fi profile URL.**
 
-### B7. Site auto-deploy — ONE API-token paste  ·  ⏳  ·  NEW 2026-07-16
+### B7. Site auto-deploy — GitHub billing unblock + ONE API-token paste  ·  ⏳  ·  NEW 2026-07-16
 The site now ships itself: any push to `main` touching a site input (site/, site-app/, functions/,
 src/data/) restages + deploys via GitHub Actions ([`.github/workflows/deploy-site.yml`](../.github/workflows/deploy-site.yml)).
-Claude already set the account-ID secret; the runner needs one deploy credential only you can mint
-(~2 min, once, free — and it never passes through chat or the repo):
+**⓪ FIRST — Actions is currently BLOCKED at the account level.** Run #1 died in 4s with GitHub's
+banner: *"The job was not started because recent account payments have failed or your spending limit
+needs to be increased."* Fix at <https://github.com/settings/billing> — usually an expired/declined
+card on file, or the Actions spending limit sitting at $0 with the free 2,000 private-repo
+minutes/month exhausted or unavailable. No workflow change can route around this; every Actions run
+(including the designed skip-green path) is dead until the account block clears. **Zero-budget note:**
+this workflow fits comfortably inside the free monthly minutes — clearing the block should cost $0.
+Then the one-time credential (only you can mint it; ~2 min, free — it never passes through chat or
+the repo):
 1. Open <https://dash.cloudflare.com/profile/api-tokens> → **Create Token** → **Create Custom Token**.
 2. Name `compy-pages-deploy` · Permissions: **Account → Cloudflare Pages → Edit** · Account
    Resources: your account · nothing else → **Continue to summary** → **Create Token** → copy it.

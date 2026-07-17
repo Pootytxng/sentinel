@@ -10,6 +10,20 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-16d (VERSION 0.9.0 SHIPPED `27bc472` — installer SHA-256
+> `41613F13A046730A663B29AA144AE7DFF120FFD0C604ADE060B4D2A1D6ABB6F9`, live exe stamp-verified
+> (embedded `27bc472`, CLEAN — no `+dirty`: non-docs porcelain empty at build; Select-String), ONE
+> installer on the Desktop (`Compy_0.9.0_x64-setup.exe`), silent reinstall done — this is the
+> reinstall commit the 2026-07-16c banner promised. NO gate moved):** the human-facing version
+> jumps `0.1.0` → **`0.9.0`** across all three manifests + `Cargo.lock` (owner call 2026-07-16:
+> **"0.9.0 now, 1.0.0 at your bar"** — `docs/superpowers/specs/2026-07-16-version-policy-proposal.md`
+> flipped DECIDED; `1.0.0` fires at the release-hardening bar with owner confirm). Drift killed at
+> the class level: `scripts/ship-reinstall.ps1` now DERIVES the installer filename from
+> `tauri.conf.json` (the hardcoded `0.1.0` literal it carried was a silent drift site) and
+> `scripts/version-drift-guard.test.mjs` pins all four version sites + the no-hardcoded-filename
+> invariant. Verify: vitest **1688/1688** (182 files) · cargo 725/725 · clippy clean ·
+> verify-release-state 46/46 · release build exit 0.
+
 > **UPDATE 2026-07-16c (OPTIMIZATION CLEANUP PHASE 1 — LEFTOVERS RESTORE ARMED, a MUTATION GATE
 > FLIPPED):** `restore_gate()` → `true` (`leftovers.rs:730`) **and** `history::restore_leftover`
 > registered as a Tauri command (`lib.rs`) in the same deliberate commit — the double-dark layers
