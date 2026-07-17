@@ -22,6 +22,7 @@ mod hardware;
 mod history;
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
 mod intelligence; // Intelligence Phase 1 — READ-ONLY event timeline + deterministic "What changed?" engine (bands-only confidence, zero mutation, zero network).
+mod intelligence_patterns; // Intelligence Phase 2 — READ-ONLY cross-session pattern detection over recorded sessions.json (deterministic trend/thermal/memory/driver/mode/fade detectors; bands-only, passive-capped at Medium, zero mutation/network).
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
 mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
 mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zeros placeholder pubkey → always free; private key never in repo). No outbound, no Windows mutation.
@@ -1049,7 +1050,9 @@ pub fn run() {
             game_mode_persist::set_keep_game_mode,
             intelligence::get_intelligence_timeline,
             intelligence::what_changed_for_session,
+            intelligence::what_changed_between,
             intelligence::get_intelligence_headline,
+            intelligence_patterns::get_intelligence_patterns,
         ])
         .on_window_event(|window, event| {
             // Close behavior (Train #3 §1 — clean exit), now with the opt-in tray branch.
@@ -1198,6 +1201,7 @@ mod safety_tests {
             elevation_used: None,
             provenance: None,
             hw_fingerprint: None,
+            rolled_back_at: None,
         }
     }
 
@@ -1271,6 +1275,7 @@ mod safety_tests {
             elevation_used: Some(true),
             provenance: None,
             hw_fingerprint: None,
+            rolled_back_at: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

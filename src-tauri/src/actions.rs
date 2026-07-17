@@ -4810,6 +4810,7 @@ mod rollback_tests {
             elevation_used: None,
             provenance: None,
             hw_fingerprint: None,
+            rolled_back_at: None,
         }
     }
 

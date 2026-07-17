@@ -85,6 +85,12 @@ pub(crate) struct AppliedChange {
     /// Local-only; never leaves the machine.
     #[serde(default)]
     pub(crate) hw_fingerprint: Option<crate::hardware::HwFingerprint>,
+    /// Intelligence Phase 2: WHEN the rollback happened, stamped at rollback time (same UTC
+    /// RFC3339 clock as applied_at). Additive + optional — entries rolled back before this
+    /// field existed stay None forever and must NEVER be retro-dated: the intelligence
+    /// timeline emits a dated rollback event only when this stamp genuinely exists.
+    #[serde(default)]
+    pub(crate) rolled_back_at: Option<String>,
 }
 
 // AppliedChange + a freshly-computed `is_still_active` flag. We never persist
@@ -126,6 +132,9 @@ pub(crate) struct AppliedChangeView {
     // driver-INsensitive, unlike the session hash: a driver update must not make your own
     // ledger read "different hardware". None = legacy entry with no stamp (honest unknown).
     on_this_rig: Option<bool>,
+    // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
+    // before the stamp existed — the UI must render that as "date unknown", never a guess.
+    rolled_back_at: Option<String>,
 }
 
 impl AppliedChangeView {
@@ -268,6 +277,7 @@ fn into_view(c: AppliedChange) -> AppliedChangeView {
         payoff_label,
         hw_fingerprint: c.hw_fingerprint,
         on_this_rig,
+        rolled_back_at: c.rolled_back_at,
     }
 }
 
@@ -406,6 +416,7 @@ fn build_applied_change(
         // A5 rig tagging — every receipt path funnels through here, so every new entry
         // records the hardware it was applied on. Local-only.
         hw_fingerprint: Some(crate::hardware::current_fingerprint()),
+        rolled_back_at: None,
     })
 }
 
@@ -784,6 +795,9 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     dispatch_rollback(&action, &snapshot)?;
 
     history[idx].status = "rolled_back".into();
+    // Honest rollback dating (Intelligence Phase 2): stamped at the moment the rollback
+    // actually dispatched. Only entries rolled back from this stamp onward carry a date.
+    history[idx].rolled_back_at = Some(Utc::now().to_rfc3339());
     save_history(&history)?;
     Ok(())
 }
@@ -1790,6 +1804,7 @@ mod history_tests {
             elevation_used: None,
             provenance: None,
             hw_fingerprint: None,
+            rolled_back_at: None,
         }
     }
 

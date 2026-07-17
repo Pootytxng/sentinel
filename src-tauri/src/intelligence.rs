@@ -61,7 +61,8 @@ pub(crate) enum EventScope {
     CompyApplied,
     /// Compy measured this (FPS session, benchmark, A/B verdict).
     Measurement,
-    /// Compy noticed this happened outside itself (driver/Windows/power/hardware change).
+    /// Compy noticed this changed without witnessing who or what changed it
+    /// (driver/Windows/power/hardware change, readiness drift).
     Observed,
 }
 
@@ -84,8 +85,10 @@ pub(crate) struct EventRecord {
     /// For observed changes: the two probe timestamps bounding when it happened.
     /// "Observed between X and Y" — the exact moment was not witnessed.
     pub observed_between: Option<(String, String)>,
-    /// Apply events only: the ledger says this change was later rolled back (the ledger
-    /// records no rollback time, so there is no rollback event to show).
+    /// Apply events only: the ledger says this change was later rolled back. Rollbacks
+    /// stamped from Intelligence Phase 2 on (`rolled_back_at`) also appear as their own
+    /// dated `change-rolled-back` event; older rollbacks have no recorded time, so this
+    /// flag is their only honest trace — never retro-dated into an event.
     pub since_rolled_back: bool,
 }
 
@@ -310,6 +313,8 @@ pub(crate) struct TimelineInputs<'a> {
     pub benchmark_baseline_at: Option<String>,
     pub comparison: Option<&'a crate::comparison::ComparisonResult>,
     pub snapshots: &'a [IdentitySnapshot],
+    /// Active Drift Watch notices (Intelligence Phase 2) — persisted state, never live probes.
+    pub drift_notices: &'a [crate::drift::DriftNotice],
 }
 
 pub(crate) struct TimelineAssembly {
@@ -326,13 +331,15 @@ fn source_priority(event_type: &str) -> u8 {
         "hardware-change" => 1,
         "windows-build-change" => 2,
         "power-plan-change" => 3,
-        "change-applied" => 4,
-        "gaming-mode-active" => 5,
-        "benchmark-baseline" => 6,
-        "verified-win" => 7,
-        "comparison-verdict" => 8,
-        "session" => 9,
-        _ => 10,
+        "readiness-drift" => 4,
+        "change-applied" => 5,
+        "change-rolled-back" => 6,
+        "gaming-mode-active" => 7,
+        "benchmark-baseline" => 8,
+        "verified-win" => 9,
+        "comparison-verdict" => 10,
+        "session" => 11,
+        _ => 12,
     }
 }
 
@@ -617,8 +624,10 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
     let mut events: Vec<EventRecord> = Vec::new();
     let mut dropped = 0usize;
 
-    // 1) Trust-Ledger applies. Rollbacks have NO recorded timestamp — they appear as state
-    //    on the apply event ("since rolled back"), never as a dated event of their own.
+    // 1) Trust-Ledger applies + dated rollbacks. Rollbacks stamped from Intelligence
+    //    Phase 2 on carry `rolled_back_at` and appear as their own dated event; older
+    //    rollbacks have no recorded time and stay state on the apply event only
+    //    ("since rolled back") — never retro-dated.
     for c in inp.applied {
         if parse_utc(&c.applied_at).is_none() {
             dropped += 1;
@@ -641,6 +650,55 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             detail: adopted.then(|| "Adopted leftover — restored to stock via Compy.".to_string()),
             observed_between: None,
             since_rolled_back: rolled_back,
+        });
+        if let Some(rb) = &c.rolled_back_at {
+            if parse_utc(rb).is_none() {
+                dropped += 1;
+            } else {
+                events.push(EventRecord {
+                    id: format!("rollback:{}", c.id),
+                    timestamp: rb.clone(),
+                    event_type: "change-rolled-back".into(),
+                    source: "trust-ledger".into(),
+                    scope: EventScope::CompyApplied,
+                    game: None,
+                    summary: format!("{} rolled back", c.rec_title),
+                    detail: None,
+                    observed_between: None,
+                    since_rolled_back: false,
+                });
+            }
+        }
+    }
+
+    // 1b) Drift Watch notices: readiness checks that were good and have regressed. Dated
+    //     by WHEN Compy noticed; when the last-seen-ready stamp exists the event carries
+    //     the honest observation window ("was ready at X, noticed regressed at Y").
+    //     Honest-copy rule (drift.rs): name WHAT drifted and WHEN noticed — never WHO;
+    //     a drift can be self-inflicted via a Trust-Ledger rollback.
+    for n in inp.drift_notices {
+        if parse_utc(&n.noticed_at).is_none() {
+            dropped += 1;
+            continue;
+        }
+        let window = n
+            .last_ready_at
+            .as_ref()
+            .filter(|a| parse_utc(a).is_some())
+            .map(|a| (a.clone(), n.noticed_at.clone()));
+        events.push(EventRecord {
+            id: format!("drift:{}:{}", n.noticed_at, n.id),
+            timestamp: n.noticed_at.clone(),
+            event_type: "readiness-drift".into(),
+            source: "drift-watch".into(),
+            scope: EventScope::Observed,
+            game: None,
+            summary: format!("{} drifted out of its ready state", n.label),
+            detail: Some(
+                "Noticed on a readiness scan — the change itself was not witnessed, and who or what changed it is not recorded.".into(),
+            ),
+            observed_between: window,
+            since_rolled_back: false,
         });
     }
 
@@ -905,6 +963,10 @@ pub(crate) struct WhatChangedReport {
     pub gap_days: i64,
     pub notes: Vec<String>,
     pub method_note: String,
+    /// §4C inspectable evidence graph — a deterministic re-projection of this report for
+    /// the Expert view. Adds no new data; the plain-language fields above are the normal
+    /// view. Populated by `what_changed`; the `base` builder leaves it empty.
+    pub evidence_graph: EvidenceGraph,
 }
 
 /// Outcome wrapper so "no comparison possible" is an honest first-class answer,
@@ -946,6 +1008,7 @@ fn catalog_index(id: &str) -> usize {
         "compy-config-change",
         "gaming-mode-difference",
         "power-plan-change",
+        "setting-drift",
         "memory-pressure",
         "thermal",
         "game-variance",
@@ -962,6 +1025,7 @@ fn hypothesis_title(id: &str) -> &'static str {
         "compy-config-change" => "Compy configuration changed",
         "gaming-mode-difference" => "Gaming Mode state differed",
         "power-plan-change" => "Power plan changed",
+        "setting-drift" => "A monitored setting drifted",
         "memory-pressure" => "Memory pressure",
         "thermal" => "GPU ran hotter",
         "game-variance" => "Run-to-run variance",
@@ -978,7 +1042,8 @@ struct HypoEval {
     /// Evidence is a per-session recorded fact (fingerprints / stamps on the two compared
     /// sessions themselves), not just a window event — eligible for High.
     direct: bool,
-    /// Environment pressure (memory/thermal) — capped at Medium.
+    /// Medium-capped signal: environment pressure (memory/thermal) or a notice-dated
+    /// drift — real evidence with an honest ceiling below the change family.
     environment: bool,
     next_test: Option<String>,
 }
@@ -1044,9 +1109,326 @@ pub(crate) fn split_window_events(
     (inside, ambiguous)
 }
 
+// ─── §4C evidence graph (Expert view) ────────────────────────────────────
+// A deterministic RE-PROJECTION of a finished WhatChangedReport into the inspectable
+// node/edge graph the directive's Expert view exposes. It adds NO new data — every node
+// cites the report field it came from. The normal view stays plain-language; this is
+// strictly extra structure for users who want to see the wiring. The type vocabulary is
+// the §4C set this two-session comparison can honestly source; Intelligence Phase 3's
+// experiment engine grows it (additive) when it grows the emitter.
+
+/// §4C node vocabulary. Kebab-case serde is the wire contract the Expert-view TS union pins.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum EvidenceNodeType {
+    Symptom,
+    Metric,
+    Event,
+    Driver,
+    OsUpdate,
+    CompyChange,
+    ExternalChange,
+    Hypothesis,
+    Experiment,
+    Conclusion,
+}
+
+/// §4C edge vocabulary — only the relations this derivation actually emits (additive later).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum EvidenceRelation {
+    Supports,
+    CorrelatesWith,
+    OccurredBefore,
+    RequiresVerification,
+    RuledOutBy,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct EvidenceNode {
+    pub id: String,
+    pub node_type: EvidenceNodeType,
+    pub label: String,
+    /// Which report field / record this node was derived from — inspectable provenance.
+    pub source_reference: String,
+    /// How trustworthy this node's own claim is — a band, never numeric. Passive
+    /// observation never exceeds Medium; only Compy's own logged action reads High (a fact).
+    pub reliability: Confidence,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct EvidenceEdge {
+    pub from: String,
+    pub to: String,
+    pub relation: EvidenceRelation,
+    /// Band strength of the relation, never numeric.
+    pub weight: Confidence,
+    pub explanation: String,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+pub(crate) struct EvidenceGraph {
+    pub nodes: Vec<EvidenceNode>,
+    pub edges: Vec<EvidenceEdge>,
+}
+
+fn relation_key(r: EvidenceRelation) -> &'static str {
+    match r {
+        EvidenceRelation::Supports => "supports",
+        EvidenceRelation::CorrelatesWith => "correlates-with",
+        EvidenceRelation::OccurredBefore => "occurred-before",
+        EvidenceRelation::RequiresVerification => "requires-verification",
+        EvidenceRelation::RuledOutBy => "ruled-out-by",
+    }
+}
+
+/// Type a window event by what Compy actually knows about it — never presenting an
+/// externally-observed change as something Compy did (anti-fabrication).
+fn event_node_type(e: &EventRecord) -> EvidenceNodeType {
+    match e.scope {
+        EventScope::CompyApplied => EvidenceNodeType::CompyChange,
+        EventScope::Measurement => EvidenceNodeType::Event,
+        EventScope::Observed => {
+            let t = e.event_type.to_ascii_lowercase();
+            if t.contains("driver") {
+                EvidenceNodeType::Driver
+            } else if t.contains("windows") || t.contains("build") || t.contains("os") {
+                EvidenceNodeType::OsUpdate
+            } else {
+                EvidenceNodeType::ExternalChange
+            }
+        }
+    }
+}
+
+/// A change Compy itself logged is a fact (High). A change Compy only *noticed* by diffing
+/// two identity snapshots is real but detection-inferred — capped at Medium.
+fn event_reliability(e: &EventRecord) -> Confidence {
+    match e.scope {
+        EventScope::CompyApplied => Confidence::High,
+        _ => Confidence::Medium,
+    }
+}
+
+/// Derive the §4C evidence graph from a finished report. Deterministic: nodes and edges
+/// are sorted, so an identical report always yields a byte-identical graph.
+pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
+    let mut nodes: Vec<EvidenceNode> = Vec::new();
+    let mut edges: Vec<EvidenceEdge> = Vec::new();
+
+    // The conclusion — always present. A passive two-session comparison never reads High.
+    let conclusion_reliability = if r.verdict == "inconclusive" {
+        Confidence::Low
+    } else {
+        Confidence::Medium
+    };
+    nodes.push(EvidenceNode {
+        id: "conclusion".into(),
+        node_type: EvidenceNodeType::Conclusion,
+        label: r.headline.clone(),
+        source_reference: "what-changed:verdict".into(),
+        reliability: conclusion_reliability,
+    });
+
+    // Symptom spine — only when there's a measured change to explain.
+    let has_symptom = r.verdict == "improved" || r.verdict == "regressed";
+    if has_symptom {
+        let dir = if r.verdict == "improved" { "rose" } else { "fell" };
+        nodes.push(EvidenceNode {
+            id: "symptom".into(),
+            node_type: EvidenceNodeType::Symptom,
+            label: format!("{}'s 1% lows {dir} this session", r.game),
+            source_reference: "what-changed:verdict".into(),
+            reliability: Confidence::Medium,
+        });
+        edges.push(EvidenceEdge {
+            from: "symptom".into(),
+            to: "conclusion".into(),
+            relation: EvidenceRelation::Supports,
+            weight: Confidence::Medium,
+            explanation: "The measured change is what this verdict explains.".into(),
+        });
+    }
+    let hub = if has_symptom { "symptom" } else { "conclusion" };
+
+    // Metric nodes — the 1% low SUPPORTS the verdict; average FPS only CORRELATES.
+    for (i, o) in r.observations.iter().enumerate() {
+        let id = format!("metric:{i}");
+        let reliability = if o.reference_only || !o.meaningful {
+            Confidence::Low
+        } else {
+            Confidence::Medium
+        };
+        nodes.push(EvidenceNode {
+            id: id.clone(),
+            node_type: EvidenceNodeType::Metric,
+            label: format!("{}: {} → {} ({:+.1}%)", o.metric, o.baseline, o.current, o.delta_pct),
+            source_reference: format!(
+                "session-metric:{}",
+                if o.reference_only { "avg-fps" } else { "low1" }
+            ),
+            reliability,
+        });
+        let (relation, explanation) = if o.reference_only {
+            (
+                EvidenceRelation::CorrelatesWith,
+                "Average FPS moves alongside, but the 1% low is the verdict metric.".to_string(),
+            )
+        } else if o.meaningful {
+            (
+                EvidenceRelation::Supports,
+                format!(
+                    "The 1% low moved {:+.1}% — past the {:.0}% noise floor.",
+                    o.delta_pct, r.noise_floor_pct
+                ),
+            )
+        } else {
+            (
+                EvidenceRelation::CorrelatesWith,
+                format!(
+                    "The 1% low moved only {:+.1}% — inside the {:.0}% noise floor.",
+                    o.delta_pct, r.noise_floor_pct
+                ),
+            )
+        };
+        edges.push(EvidenceEdge {
+            from: id,
+            to: hub.into(),
+            relation,
+            weight: reliability,
+            explanation,
+        });
+    }
+
+    // Events in the window — each OCCURRED BEFORE the result. No causation asserted here;
+    // the correlation lives only where a hypothesis names it.
+    for e in &r.events_between {
+        let reliability = event_reliability(e);
+        nodes.push(EvidenceNode {
+            id: e.id.clone(),
+            node_type: event_node_type(e),
+            label: e.summary.clone(),
+            source_reference: format!("event:{}", e.source),
+            reliability,
+        });
+        edges.push(EvidenceEdge {
+            from: e.id.clone(),
+            to: hub.into(),
+            relation: EvidenceRelation::OccurredBefore,
+            weight: reliability,
+            explanation: "Recorded in the window between the two sessions — it occurred before the result.".into(),
+        });
+    }
+
+    // The single proposed next verification step (a TEST to run, never a fix to apply).
+    let experiment_id = "experiment:next-test";
+    if let Some(next) = &r.next_action {
+        nodes.push(EvidenceNode {
+            id: experiment_id.into(),
+            node_type: EvidenceNodeType::Experiment,
+            label: next.clone(),
+            source_reference: "what-changed:next_action".into(),
+            reliability: Confidence::Unknown, // outcome not yet known
+        });
+    }
+
+    // Leading hypotheses SUPPORT the conclusion; each with a test REQUIRES VERIFICATION.
+    for h in &r.leading_hypotheses {
+        let id = format!("hypothesis:{}", h.id);
+        nodes.push(EvidenceNode {
+            id: id.clone(),
+            node_type: EvidenceNodeType::Hypothesis,
+            label: h.title.clone(),
+            source_reference: format!("hypothesis:{}", h.id),
+            reliability: h.confidence,
+        });
+        edges.push(EvidenceEdge {
+            from: id.clone(),
+            to: "conclusion".into(),
+            relation: EvidenceRelation::Supports,
+            weight: h.confidence,
+            explanation: h
+                .supporting_evidence
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "A candidate explanation for the measured change.".into()),
+        });
+        if let (true, Some(test)) = (r.next_action.is_some(), &h.next_test) {
+            edges.push(EvidenceEdge {
+                from: id,
+                to: experiment_id.into(),
+                relation: EvidenceRelation::RequiresVerification,
+                weight: Confidence::Unknown,
+                explanation: test.clone(),
+            });
+        }
+    }
+
+    // Ruled-out hypotheses: named and connected as RULED-OUT-BY, so the graph shows what
+    // was considered and discarded — never silently dropped (§0.12 demotion-is-a-flag).
+    for h in &r.ruled_out {
+        let id = format!("ruled-out:{}", h.id);
+        nodes.push(EvidenceNode {
+            id: id.clone(),
+            node_type: EvidenceNodeType::Hypothesis,
+            label: h.title.clone(),
+            source_reference: format!("ruled-out:{}", h.id),
+            reliability: Confidence::Unknown,
+        });
+        edges.push(EvidenceEdge {
+            from: id,
+            to: "conclusion".into(),
+            relation: EvidenceRelation::RuledOutBy,
+            weight: Confidence::Unknown,
+            explanation: h
+                .contradicting_evidence
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "Ruled out by the recorded evidence.".into()),
+        });
+    }
+
+    // If there's a next test but no hypothesis carried one, hang it off the conclusion so
+    // the "what to do next" node is never left orphaned.
+    if r.next_action.is_some()
+        && !edges
+            .iter()
+            .any(|e| e.relation == EvidenceRelation::RequiresVerification)
+    {
+        edges.push(EvidenceEdge {
+            from: "conclusion".into(),
+            to: experiment_id.into(),
+            relation: EvidenceRelation::RequiresVerification,
+            weight: Confidence::Unknown,
+            explanation: "The next test to narrow this down.".into(),
+        });
+    }
+
+    // Deterministic ordering — identical reports ⇒ identical graphs (diffable, testable).
+    nodes.sort_by(|a, b| a.id.cmp(&b.id));
+    edges.sort_by(|a, b| {
+        (a.from.as_str(), a.to.as_str(), relation_key(a.relation)).cmp(&(
+            b.from.as_str(),
+            b.to.as_str(),
+            relation_key(b.relation),
+        ))
+    });
+
+    EvidenceGraph { nodes, edges }
+}
+
+/// "What changed?" between two sessions — the plain-language report PLUS its §4C evidence
+/// graph. The graph is a pure re-projection of the finished report (no new data), so it
+/// stays perfectly in sync with the words the normal view shows.
+pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
+    let mut r = what_changed_inner(inp);
+    r.evidence_graph = evidence_graph(&r);
+    r
+}
+
 /// The deterministic core: same inputs → same report, every time. No randomness, no
 /// learned weights, every branch inspectable.
-pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
+fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
     let floor = crate::benchmark::DEFAULT_NOISE_FLOOR_PCT;
     let b = inp.baseline;
     let c = inp.current;
@@ -1071,6 +1453,7 @@ pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
         gap_days: 0,
         notes: Vec::new(),
         method_note: METHOD_NOTE.into(),
+        evidence_graph: EvidenceGraph::default(),
     };
 
     // Comparability gates — each failure is an honest inconclusive, never a guess.
@@ -1317,23 +1700,23 @@ pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
     {
         let mut h = HypoEval::new("compy-config-change");
         h.direct = true;
-        let apply_events: Vec<&EventRecord> = inp
+        let ledger_events: Vec<&EventRecord> = inp
             .events_window
             .iter()
-            .filter(|e| e.event_type == "change-applied")
+            .filter(|e| e.event_type == "change-applied" || e.event_type == "change-rolled-back")
             .collect();
-        for e in &apply_events {
+        for e in &ledger_events {
             h.supporting.push(e.summary.clone());
         }
         if b.compy_changes_active != c.compy_changes_active {
             h.supporting.push(format!(
-                "Active Compy changes: {} during the baseline vs {} during this session (a rollback leaves no dated entry, only the count).",
+                "Active Compy changes: {} during the baseline vs {} during this session (older rollbacks carry no date and show up only in this count).",
                 b.compy_changes_active, c.compy_changes_active
             ));
         }
         if h.supporting.is_empty() {
             h.contradicting.push(format!(
-                "No Compy changes were applied between these sessions and the active-change count matches ({}).",
+                "No Compy changes were applied or rolled back between these sessions and the active-change count matches ({}).",
                 c.compy_changes_active
             ));
         } else {
@@ -1410,6 +1793,32 @@ pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
                     "The power plan wasn't being recorded across this whole window — a change can't be ruled in or out.".into(),
                 );
             }
+        }
+        evals.push(h);
+    }
+
+    // setting-drift: Drift Watch noticed a monitored readiness check regress inside this
+    // window. Dated by NOTICE time (which can lag the change) and silent about who or
+    // what changed it — so it is never direct evidence and never joins the change family
+    // (a power-plan drift and a power-plan-change snapshot can be the SAME underlying
+    // change; family membership would double-count it into a false confound). Capped at
+    // Medium via the environment band. A quiet window pushes nothing at all: drift scans
+    // are opportunistic, so silence neither supports nor rules out.
+    {
+        let mut h = HypoEval::new("setting-drift");
+        h.environment = true;
+        let drift_events: Vec<&EventRecord> = inp
+            .events_window
+            .iter()
+            .filter(|e| e.event_type == "readiness-drift")
+            .collect();
+        for e in &drift_events {
+            h.supporting.push(e.summary.clone());
+        }
+        if !drift_events.is_empty() {
+            h.next_test = Some(
+                "Restore the drifted setting from the readiness check that names it, then play one more session to compare.".into(),
+            );
         }
         evals.push(h);
     }
@@ -1508,7 +1917,7 @@ pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
         let mut h = HypoEval::new("insufficient-evidence");
         if !any_supported {
             h.supporting.push(
-                "Nothing Compy recorded (driver, Windows, Compy config, power plan, hardware, RAM, temps) changed between these sessions.".into(),
+                "Nothing Compy recorded (driver, Windows, Compy config, power plan, monitored settings, hardware, RAM, temps) changed between these sessions.".into(),
             );
             h.next_test = Some(format!(
                 "Play another {game} session with nothing changed — if the difference repeats, there's a real cause to find."
@@ -1538,7 +1947,7 @@ pub(crate) fn what_changed(inp: &WhatChangedInputs) -> WhatChangedReport {
     //   no support → (contradicted ⇒ ruled out, else its gaps go to unknowns)
     //   supported + contradicted → Low
     //   supported + confounded (change family) → Low (attribution refused)
-    //   environment (memory/thermal) → Medium cap
+    //   Medium-capped signal (memory/thermal pressure, notice-dated drift) → Medium
     //   change family, sole supported, direct per-session evidence, |delta| ≥ 2×floor,
     //     gap ≤ 14 days → High; anything less → Medium
     //   insufficient-evidence → Low (absence of evidence is weak evidence)
@@ -1664,6 +2073,7 @@ struct Gathered {
     benchmark_baseline_at: Option<String>,
     comparison: Option<crate::comparison::ComparisonResult>,
     snapshots: Vec<IdentitySnapshot>,
+    drift_notices: Vec<crate::drift::DriftNotice>,
 }
 
 fn gather() -> Gathered {
@@ -1676,6 +2086,7 @@ fn gather() -> Gathered {
         benchmark_baseline_at: crate::benchmark::benchmark_state().baseline_at,
         comparison: crate::comparison::latest_result(),
         snapshots: load_store().identity_snapshots,
+        drift_notices: crate::drift::active_drift_notices(),
     }
 }
 
@@ -1688,6 +2099,7 @@ fn assemble_from(g: &Gathered) -> TimelineAssembly {
         benchmark_baseline_at: g.benchmark_baseline_at.clone(),
         comparison: g.comparison.as_ref(),
         snapshots: &g.snapshots,
+        drift_notices: &g.drift_notices,
     })
 }
 
@@ -1754,6 +2166,74 @@ pub(crate) fn what_changed_for_session(started_at: String) -> WhatChangedOutcome
     refresh_identity_snapshots_async();
     let g = gather();
     what_changed_impl(&g, &started_at)
+}
+
+/// The good-vs-bad investigation core (§4D): compare two sessions the user chose
+/// explicitly, rather than the auto-picked adjacent pair. Same deterministic engine —
+/// only the baseline/current selection differs. Every failure is an honest, first-class
+/// "unavailable," never a guessed or misleading comparison.
+fn what_changed_between_impl(
+    g: &Gathered,
+    baseline_started_at: &str,
+    current_started_at: &str,
+) -> WhatChangedOutcome {
+    let find = |ts: &str| g.sessions.iter().find(|s| s.started_at == ts);
+    let (Some(baseline), Some(current)) = (find(baseline_started_at), find(current_started_at))
+    else {
+        return WhatChangedOutcome::Unavailable {
+            reason: "One of the chosen sessions is no longer in the history — it may have been pruned.".into(),
+        };
+    };
+    if baseline.started_at == current.started_at {
+        return WhatChangedOutcome::Unavailable {
+            reason: "Those are the same session — pick two different sessions to compare.".into(),
+        };
+    }
+    // Like-for-like only: a game's 1% low is only meaningful against itself. Comparing two
+    // different games would look like a verdict but measure nothing honest.
+    if !baseline.process_name.eq_ignore_ascii_case(&current.process_name) {
+        return WhatChangedOutcome::Unavailable {
+            reason: format!(
+                "Those are different games ({} vs {}) — Compy compares a game against itself, so their 1% lows aren't comparable.",
+                pretty_game_name(&baseline.process_name),
+                pretty_game_name(&current.process_name),
+            ),
+        };
+    }
+    let (Some(bt), Some(ct)) = (parse_utc(&baseline.started_at), parse_utc(&current.started_at))
+    else {
+        return WhatChangedOutcome::Unavailable {
+            reason: "One of these sessions has an unreadable timestamp — Compy won't guess at the order.".into(),
+        };
+    };
+    // The engine reads time forward (baseline → current), so the baseline must be the
+    // earlier session. A reverse pick would open a negative window — refuse it plainly
+    // rather than invert the user's choice behind their back.
+    if bt >= ct {
+        return WhatChangedOutcome::Unavailable {
+            reason: "The baseline has to be the earlier session — pick the older one as the baseline and the newer one to investigate.".into(),
+        };
+    }
+    let asm = assemble_from(g);
+    let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
+    WhatChangedOutcome::Report(Box::new(what_changed(&WhatChangedInputs {
+        baseline,
+        current,
+        events_window,
+        events_ambiguous,
+        snapshots: &g.snapshots,
+    })))
+}
+
+/// "What changed?" between two sessions the user picked (the good-vs-bad workflow, §4D).
+#[tauri::command]
+pub(crate) fn what_changed_between(
+    baseline_started_at: String,
+    current_started_at: String,
+) -> WhatChangedOutcome {
+    refresh_identity_snapshots_async();
+    let g = gather();
+    what_changed_between_impl(&g, &baseline_started_at, &current_started_at)
 }
 
 /// Home's single concise line — only when the latest session shows a meaningful delta.
@@ -1844,6 +2324,7 @@ mod tests {
             elevation_used: None,
             provenance: None,
             hw_fingerprint: None,
+            rolled_back_at: None,
         }
     }
 
@@ -1876,6 +2357,7 @@ mod tests {
             benchmark_baseline_at: None,
             comparison: None,
             snapshots,
+            drift_notices: &[],
         }
     }
 
@@ -1918,8 +2400,8 @@ mod tests {
         let ids_a: Vec<&str> = a.events.iter().map(|e| e.id.as_str()).collect();
         let ids_b: Vec<&str> = b.events.iter().map(|e| e.id.as_str()).collect();
         assert_eq!(ids_a, ids_b, "assembly must be input-order independent");
-        // Ascending by time; same-timestamp events: applies (priority 4) before the
-        // session (priority 9), and equal-priority ties break on id.
+        // Ascending by time; same-timestamp events: applies (priority 5) before the
+        // session (priority 11), and equal-priority ties break on id.
         assert_eq!(
             ids_a,
             vec![
@@ -1968,7 +2450,9 @@ mod tests {
     }
 
     #[test]
-    fn rollback_never_becomes_a_dated_event() {
+    fn unstamped_rollback_never_becomes_a_dated_event() {
+        // Pre-Phase-2 ledger entries have no `rolled_back_at`: the rollback stays state
+        // on the apply event ("since rolled back"), never retro-dated into an event.
         let applied = vec![mk_change("c1", "HAGS on", "2026-07-10T10:00:00Z", "rolled_back")];
         let asm = assemble_timeline(&empty_inputs(&applied, &[], &[]));
         assert_eq!(asm.events.len(), 1, "exactly the apply event — no rollback event");
@@ -1976,6 +2460,109 @@ mod tests {
         assert_eq!(ev.event_type, "change-applied");
         assert!(ev.since_rolled_back);
         assert!(ev.summary.contains("since rolled back"));
+    }
+
+    #[test]
+    fn stamped_rollback_becomes_its_own_dated_event() {
+        let mut c1 = mk_change("c1", "HAGS on", "2026-07-10T10:00:00Z", "rolled_back");
+        c1.rolled_back_at = Some("2026-07-11T09:00:00Z".into());
+        let applied = vec![c1];
+        let asm = assemble_timeline(&empty_inputs(&applied, &[], &[]));
+        assert_eq!(asm.dropped_unparseable, 0);
+        assert_eq!(asm.events.len(), 2, "apply event + dated rollback event");
+        let apply = asm.events.iter().find(|e| e.id == "apply:c1").expect("apply event");
+        assert!(apply.since_rolled_back, "apply still carries the rolled-back state");
+        let rb = asm.events.iter().find(|e| e.id == "rollback:c1").expect("rollback event");
+        assert_eq!(rb.event_type, "change-rolled-back");
+        assert_eq!(rb.scope, EventScope::CompyApplied);
+        // Timestamp is COPIED from the ledger stamp, never synthesized.
+        assert_eq!(rb.timestamp, "2026-07-11T09:00:00Z");
+        assert!(rb.summary.contains("rolled back"));
+        assert!(!rb.since_rolled_back);
+    }
+
+    #[test]
+    fn unparseable_rollback_stamp_is_dropped_never_guessed() {
+        let mut c1 = mk_change("c1", "HAGS on", "2026-07-10T10:00:00Z", "rolled_back");
+        c1.rolled_back_at = Some("yesterday-ish".into());
+        let applied = vec![c1];
+        let asm = assemble_timeline(&empty_inputs(&applied, &[], &[]));
+        assert_eq!(asm.events.len(), 1, "only the apply event survives");
+        assert_eq!(asm.events[0].event_type, "change-applied");
+        assert_eq!(asm.dropped_unparseable, 1, "the bad stamp is counted, not invented");
+    }
+
+    fn mk_notice(
+        id: &str,
+        label: &str,
+        last_ready_at: Option<&str>,
+        noticed_at: &str,
+    ) -> crate::drift::DriftNotice {
+        crate::drift::DriftNotice {
+            id: id.into(),
+            label: label.into(),
+            last_ready_at: last_ready_at.map(Into::into),
+            noticed_at: noticed_at.into(),
+        }
+    }
+
+    fn drift_inputs(notices: &[crate::drift::DriftNotice]) -> TimelineInputs<'_> {
+        TimelineInputs {
+            applied: &[],
+            sessions: &[],
+            gaming_slot: None,
+            awards: &[],
+            benchmark_baseline_at: None,
+            comparison: None,
+            snapshots: &[],
+            drift_notices: notices,
+        }
+    }
+
+    #[test]
+    fn drift_notice_with_ready_bound_carries_the_observation_window() {
+        let notices = vec![mk_notice(
+            "power-profile",
+            "Power profile",
+            Some("2026-07-09T08:00:00Z"),
+            "2026-07-11T08:00:00Z",
+        )];
+        let asm = assemble_timeline(&drift_inputs(&notices));
+        assert_eq!(asm.events.len(), 1);
+        let ev = &asm.events[0];
+        assert_eq!(ev.event_type, "readiness-drift");
+        assert_eq!(ev.scope, EventScope::Observed);
+        // Dated by WHEN Compy noticed (the later bound), window from the last-ready stamp.
+        assert_eq!(ev.timestamp, "2026-07-11T08:00:00Z");
+        assert_eq!(
+            ev.observed_between,
+            Some(("2026-07-09T08:00:00Z".to_string(), "2026-07-11T08:00:00Z".to_string()))
+        );
+        assert!(ev.summary.contains("Power profile"));
+        // Honest-copy rule: names WHAT and WHEN, never WHO.
+        let d = ev.detail.as_deref().unwrap_or("");
+        assert!(d.contains("not witnessed") || d.contains("not recorded"));
+    }
+
+    #[test]
+    fn pre_phase2_drift_notice_is_point_dated_never_guessed() {
+        // No last-ready stamp (state persisted before the field existed) → no window;
+        // an unparseable stamp is treated the same, never passed through.
+        for bound in [None, Some("last week")] {
+            let notices = vec![mk_notice("vrr", "VRR", bound, "2026-07-11T08:00:00Z")];
+            let asm = assemble_timeline(&drift_inputs(&notices));
+            assert_eq!(asm.events.len(), 1);
+            assert_eq!(asm.events[0].observed_between, None);
+            assert_eq!(asm.events[0].timestamp, "2026-07-11T08:00:00Z");
+        }
+    }
+
+    #[test]
+    fn unparseable_drift_notice_is_dropped_never_guessed() {
+        let notices = vec![mk_notice("vrr", "VRR", None, "sometime")];
+        let asm = assemble_timeline(&drift_inputs(&notices));
+        assert!(asm.events.is_empty());
+        assert_eq!(asm.dropped_unparseable, 1);
     }
 
     #[test]
@@ -2227,6 +2814,130 @@ mod tests {
             }
         }
         assert!(r.next_action.as_deref().unwrap_or("").contains("one thing at a time"));
+    }
+
+    fn rollback_event(ts: &str, title: &str) -> EventRecord {
+        EventRecord {
+            id: format!("rollback:{ts}"),
+            timestamp: ts.into(),
+            event_type: "change-rolled-back".into(),
+            source: "trust-ledger".into(),
+            scope: EventScope::CompyApplied,
+            game: None,
+            summary: format!("{title} rolled back"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+        }
+    }
+
+    fn drift_event(ts: &str, label: &str) -> EventRecord {
+        EventRecord {
+            id: format!("drift:{ts}"),
+            timestamp: ts.into(),
+            event_type: "readiness-drift".into(),
+            source: "drift-watch".into(),
+            scope: EventScope::Observed,
+            game: None,
+            summary: format!("{label} drifted out of its ready state"),
+            detail: None,
+            observed_between: None,
+            since_rolled_back: false,
+        }
+    }
+
+    #[test]
+    fn stamped_rollback_in_window_supports_compy_config_change() {
+        let (mut b, mut c) = two_sessions(100.0, 88.0); // -12% ≥ 2×floor
+        b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        c.hw_fingerprint = Some(mk_fp("25.5.1"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![rollback_event("2026-07-11T10:00:00Z", "HAGS on")],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(!r.confounded);
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "compy-config-change");
+        assert_eq!(leader.confidence, Confidence::High);
+        assert!(leader.supporting_evidence[0].contains("rolled back"));
+    }
+
+    #[test]
+    fn drift_in_window_raises_setting_drift_capped_at_medium() {
+        let (mut b, mut c) = two_sessions(100.0, 88.0);
+        b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        c.hw_fingerprint = Some(mk_fp("25.5.1"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![drift_event("2026-07-11T10:00:00Z", "Power profile")],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(!r.confounded);
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "setting-drift");
+        // Notice-dated and silent about who changed it — never eligible for High.
+        assert_eq!(leader.confidence, Confidence::Medium);
+        assert!(leader.supporting_evidence[0].contains("Power profile"));
+        assert!(leader
+            .next_test
+            .as_deref()
+            .unwrap_or("")
+            .contains("Restore the drifted setting"));
+    }
+
+    #[test]
+    fn drift_never_joins_the_change_family_confound() {
+        // A drift notice and a ledger event can describe the SAME underlying change —
+        // drift must not double-count into a false "no single cause" refusal.
+        let (mut b, mut c) = two_sessions(100.0, 88.0);
+        b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        c.hw_fingerprint = Some(mk_fp("25.5.1"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        c.compy_changes_active = 1;
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![
+                apply_event("2026-07-11T10:00:00Z", "HAGS on"),
+                drift_event("2026-07-11T11:00:00Z", "Power profile"),
+            ],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(!r.confounded, "one family member + a drift is NOT a confound");
+        let ids: Vec<(&str, &Confidence)> = r
+            .leading_hypotheses
+            .iter()
+            .map(|h| (h.id.as_str(), &h.confidence))
+            .collect();
+        assert!(ids.contains(&("compy-config-change", &Confidence::High)));
+        assert!(ids.contains(&("setting-drift", &Confidence::Medium)));
+    }
+
+    #[test]
+    fn quiet_drift_lane_contributes_nothing() {
+        // Drift scans are opportunistic: a window with no notice neither supports nor
+        // rules out — the hypothesis must not appear at all.
+        let (b, c) = two_sessions(100.0, 88.0);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(r.leading_hypotheses.iter().all(|h| h.id != "setting-drift"));
+        assert!(r.ruled_out.iter().all(|h| h.id != "setting-drift"));
     }
 
     #[test]
@@ -2583,5 +3294,302 @@ mod tests {
         let row = a.events.iter().find(|e| e.event_type == "session").unwrap();
         assert_eq!(row.game.as_deref(), Some("Palworld"));
         assert!(row.summary.starts_with("Palworld session —"), "{}", row.summary);
+    }
+
+    // ── good-vs-bad investigation (§4D — what_changed_between) ──
+
+    /// A `Gathered` carrying only recorded sessions; every other source empty. The
+    /// good-vs-bad picker reads sessions + snapshots alone, so this is enough to exercise
+    /// `what_changed_between_impl`'s selection logic honestly.
+    fn gathered_with(sessions: Vec<SessionSummary>) -> Gathered {
+        Gathered {
+            applied: vec![],
+            sessions,
+            gaming_slot: None,
+            awards: vec![],
+            benchmark_baseline_at: None,
+            comparison: None,
+            snapshots: vec![],
+            drift_notices: vec![],
+        }
+    }
+
+    fn unavailable_reason(out: &WhatChangedOutcome) -> &str {
+        match out {
+            WhatChangedOutcome::Unavailable { reason } => reason,
+            WhatChangedOutcome::Report(_) => panic!("expected Unavailable, got a report"),
+        }
+    }
+
+    #[test]
+    fn explicit_pick_compares_the_two_chosen_sessions_not_the_adjacent_pair() {
+        // Three same-game sessions; the user picks the first (good) and third (bad),
+        // deliberately skipping the middle one the auto-picker (what_changed_for_session)
+        // would have used. The explicit selection must be honored verbatim.
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 96.0, 138.0),
+            mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 80.0, 120.0),
+        ]);
+        let out =
+            what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-03T10:00:00Z");
+        let WhatChangedOutcome::Report(r) = out else {
+            panic!("expected a report, got {out:?}");
+        };
+        assert_eq!(r.baseline.started_at, "2026-07-01T10:00:00Z");
+        assert_eq!(r.current.started_at, "2026-07-03T10:00:00Z");
+        // 100 → 80 in the 1% low is a clear regression, well past the 3% noise floor.
+        assert_eq!(r.verdict, "regressed", "{}", r.headline);
+    }
+
+    #[test]
+    fn same_session_picked_twice_is_refused() {
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 90.0, 130.0),
+        ]);
+        let out =
+            what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-01T10:00:00Z");
+        assert!(
+            unavailable_reason(&out).contains("same session"),
+            "{out:?}"
+        );
+    }
+
+    #[test]
+    fn different_games_are_refused_as_not_comparable() {
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mk_session("2026-07-02T10:00:00Z", "valorant.exe", 240.0, 300.0),
+        ]);
+        let out =
+            what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-02T10:00:00Z");
+        assert!(
+            unavailable_reason(&out).contains("different games"),
+            "{out:?}"
+        );
+    }
+
+    #[test]
+    fn reverse_order_pick_is_refused_not_silently_flipped() {
+        // Baseline picked as the LATER session — the engine reads time forward, so this
+        // must be refused honestly rather than inverted behind the user's back.
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 80.0, 120.0),
+        ]);
+        let out =
+            what_changed_between_impl(&g, "2026-07-03T10:00:00Z", "2026-07-01T10:00:00Z");
+        assert!(
+            unavailable_reason(&out).contains("baseline has to be the earlier session"),
+            "{out:?}"
+        );
+    }
+
+    #[test]
+    fn a_pruned_session_pick_is_unavailable_not_a_guess() {
+        let g = gathered_with(vec![mk_session(
+            "2026-07-01T10:00:00Z",
+            "cp2077.exe",
+            100.0,
+            140.0,
+        )]);
+        let out =
+            what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-09T10:00:00Z");
+        assert!(
+            unavailable_reason(&out).contains("no longer in the history"),
+            "{out:?}"
+        );
+    }
+
+    #[test]
+    fn an_unreadable_timestamp_pick_is_refused() {
+        // Both sessions are found (exact string match) and same-game, but the baseline's
+        // timestamp won't parse — refuse rather than guess at the order.
+        let g = gathered_with(vec![
+            mk_session("not-a-timestamp", "cp2077.exe", 100.0, 140.0),
+            mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 90.0, 130.0),
+        ]);
+        let out = what_changed_between_impl(&g, "not-a-timestamp", "2026-07-02T10:00:00Z");
+        assert!(
+            unavailable_reason(&out).contains("unreadable timestamp"),
+            "{out:?}"
+        );
+    }
+
+    // ── §4C evidence graph (Expert view) ──
+
+    /// Same scenario twice ⇒ byte-identical graph, and nodes/edges come back in a stable
+    /// sorted order (the Expert view is diffable and snapshot-testable). Every node cites
+    /// the report field it came from — the graph invents no data, and asserts no causation.
+    #[test]
+    fn evidence_graph_is_deterministic_sorted_and_sourced() {
+        let (mut b, mut c) = two_sessions(100.0, 88.0);
+        b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        c.hw_fingerprint = Some(mk_fp("25.6.0"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let mk = || {
+            report(&WhatChangedInputs {
+                baseline: &b,
+                current: &c,
+                events_window: vec![apply_event("2026-07-11T12:00:00Z", "HAGS on")],
+                events_ambiguous: vec![],
+                snapshots: &[],
+            })
+            .evidence_graph
+        };
+        let g1 = mk();
+        assert_eq!(
+            serde_json::to_string(&g1).unwrap(),
+            serde_json::to_string(&mk()).unwrap(),
+            "same report must yield an identical graph"
+        );
+        let ids: Vec<&str> = g1.nodes.iter().map(|n| n.id.as_str()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        assert_eq!(ids, sorted, "nodes must be id-sorted");
+        let keys: Vec<(String, String, &str)> = g1
+            .edges
+            .iter()
+            .map(|e| (e.from.clone(), e.to.clone(), relation_key(e.relation)))
+            .collect();
+        let mut ksorted = keys.clone();
+        ksorted.sort();
+        assert_eq!(keys, ksorted, "edges must be (from,to,relation)-sorted");
+        assert!(
+            g1.nodes.iter().all(|n| !n.source_reference.is_empty()),
+            "every node cites its origin"
+        );
+        let json = serde_json::to_string(&g1).unwrap().to_lowercase();
+        assert!(!json.contains("caused by"), "correlation, never causation");
+    }
+
+    /// A measured change grows a symptom spine feeding the conclusion; a flat result keeps
+    /// the conclusion but grows no symptom (nothing to explain).
+    #[test]
+    fn a_measured_change_emits_a_symptom_node_a_flat_one_does_not() {
+        let (b, c) = two_sessions(100.0, 80.0);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(r.verdict, "regressed");
+        let g = &r.evidence_graph;
+        assert!(g
+            .nodes
+            .iter()
+            .any(|n| n.id == "symptom" && n.node_type == EvidenceNodeType::Symptom));
+        assert!(g.edges.iter().any(|e| e.from == "symptom"
+            && e.to == "conclusion"
+            && e.relation == EvidenceRelation::Supports));
+
+        let (b2, c2) = two_sessions(100.0, 100.0);
+        let flat = report(&WhatChangedInputs {
+            baseline: &b2,
+            current: &c2,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(flat.verdict, "no-change");
+        assert!(!flat.evidence_graph.nodes.iter().any(|n| n.id == "symptom"));
+        assert!(flat
+            .evidence_graph
+            .nodes
+            .iter()
+            .any(|n| n.id == "conclusion" && n.node_type == EvidenceNodeType::Conclusion));
+    }
+
+    /// Discarded explanations are shown, not silently dropped (§0.12): each ruled-out
+    /// hypothesis becomes a node linked ruled-out-by → conclusion, and a proposed test
+    /// becomes an experiment node something requires-verification against.
+    #[test]
+    fn ruled_out_hypotheses_render_as_ruled_out_by_edges() {
+        let (mut b, mut c) = two_sessions(100.0, 88.0);
+        b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        c.hw_fingerprint = Some(mk_fp("25.6.0"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(!r.ruled_out.is_empty(), "this scenario rules some out");
+        let g = &r.evidence_graph;
+        for h in &r.ruled_out {
+            let id = format!("ruled-out:{}", h.id);
+            assert!(g.nodes.iter().any(|n| n.id == id), "missing node {id}");
+            assert!(
+                g.edges.iter().any(|e| e.from == id
+                    && e.to == "conclusion"
+                    && e.relation == EvidenceRelation::RuledOutBy),
+                "missing ruled-out-by edge for {id}"
+            );
+        }
+        assert!(r.next_action.is_some());
+        assert!(g
+            .nodes
+            .iter()
+            .any(|n| n.id == "experiment:next-test" && n.node_type == EvidenceNodeType::Experiment));
+        assert!(g
+            .edges
+            .iter()
+            .any(|e| e.relation == EvidenceRelation::RequiresVerification));
+    }
+
+    /// The node/edge vocabulary serializes to the kebab strings the Expert-view TS union
+    /// pins, and reliability/weight are bands (strings), never numbers.
+    #[test]
+    fn graph_enums_serialize_to_the_kebab_strings_the_ts_union_pins() {
+        let (mut b, mut c) = two_sessions(100.0, 88.0);
+        b.hw_fingerprint = Some(mk_fp("25.5.1"));
+        c.hw_fingerprint = Some(mk_fp("25.6.0"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![apply_event("2026-07-11T12:00:00Z", "HAGS on")],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        let j = serde_json::to_value(&r.evidence_graph).unwrap();
+        let node_types: std::collections::HashSet<String> = j["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["node_type"].as_str().unwrap().to_string())
+            .collect();
+        assert!(node_types.contains("conclusion"));
+        assert!(node_types.contains("symptom"));
+        assert!(node_types.contains("metric"));
+        assert!(
+            node_types.iter().all(|t| t == &t.to_lowercase()),
+            "node types must be kebab/lowercase, never TitleCase: {node_types:?}"
+        );
+        let relations: std::collections::HashSet<String> = j["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["relation"].as_str().unwrap().to_string())
+            .collect();
+        assert!(relations.contains("supports"));
+        assert!(
+            relations.iter().any(|rel| rel.contains('-')),
+            "expected a kebab-case relation like occurred-before: {relations:?}"
+        );
+        for n in j["nodes"].as_array().unwrap() {
+            assert!(n["reliability"].is_string(), "reliability is a band, not a number");
+        }
+        for e in j["edges"].as_array().unwrap() {
+            assert!(e["weight"].is_string(), "weight is a band, not a number");
+        }
     }
 }

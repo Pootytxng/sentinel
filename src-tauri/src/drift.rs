@@ -16,6 +16,15 @@ use serde::{Deserialize, Serialize};
 struct DriftState {
     last_good: HashMap<String, bool>,
     noticed_at: HashMap<String, String>,
+    /// Intelligence Phase 2 (additive): the label each active drift carried when noticed, so the
+    /// timeline can name it without re-running checks. Cleared when the drift clears.
+    #[serde(default)]
+    labels: HashMap<String, String>,
+    /// Intelligence Phase 2 (additive): when each check was last seen "ready" — the honest earlier
+    /// bound of a regression window ("was ready at X, noticed regressed at Y"). Updated on every
+    /// ready scan; state files from before this field simply have no earlier bound.
+    #[serde(default)]
+    last_ready_seen: HashMap<String, String>,
 }
 
 /// A surfaced regression: a check that was good and now needs attention.
@@ -60,6 +69,8 @@ fn detect(
             "ready" => {
                 state.last_good.insert(id.clone(), true);
                 state.noticed_at.remove(id);
+                state.labels.remove(id);
+                state.last_ready_seen.insert(id.clone(), now.to_string());
             }
             // Attention while the check was previously good = a regression (a drift).
             "attention" if state.last_good.get(id).copied().unwrap_or(false) => {
@@ -68,6 +79,7 @@ fn detect(
                     .entry(id.clone())
                     .or_insert_with(|| now.to_string())
                     .clone();
+                state.labels.insert(id.clone(), label.clone());
                 drifts.push(Drift {
                     id: id.clone(),
                     label: label.clone(),
@@ -88,6 +100,41 @@ pub(crate) fn detect_and_persist(checks: &[(String, String, String, String)]) ->
     let (drifts, new_state) = detect(checks, &load_state(), &now);
     save_state(&new_state);
     drifts
+}
+
+/// A persisted drift notice for the intelligence timeline. Same honest-copy rule as the module:
+/// WHAT drifted and WHEN it was noticed — never WHO changed it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DriftNotice {
+    pub id: String,
+    pub label: String,
+    /// When the check was last seen ready — the earlier bound of the regression window.
+    /// `None` for state persisted before that stamp existed (never guessed).
+    pub last_ready_at: Option<String>,
+    pub noticed_at: String,
+}
+
+/// Pure mapping from persisted state → notices, sorted by id (HashMap order is not stable).
+/// Labels were captured at notice time; a pre-label state file falls back to the check id.
+fn notices_from(s: &DriftState) -> Vec<DriftNotice> {
+    let mut v: Vec<DriftNotice> = s
+        .noticed_at
+        .iter()
+        .map(|(id, at)| DriftNotice {
+            id: id.clone(),
+            label: s.labels.get(id).cloned().unwrap_or_else(|| id.replace('-', " ")),
+            last_ready_at: s.last_ready_seen.get(id).cloned(),
+            noticed_at: at.clone(),
+        })
+        .collect();
+    v.sort_by(|a, b| a.id.cmp(&b.id));
+    v
+}
+
+/// Read-only accessor for the intelligence timeline: the currently-active drift notices from
+/// disk state alone. Never runs checks (a timeline fetch must not probe the machine).
+pub(crate) fn active_drift_notices() -> Vec<DriftNotice> {
+    notices_from(&load_state())
 }
 
 #[cfg(test)]
@@ -232,6 +279,54 @@ mod drift_tests {
         assert!(d2.is_empty(), "no checks → no drifts");
         assert_eq!(s2.last_good.get("power-profile").copied(), Some(true));
         assert_eq!(s2.noticed_at.get("power-profile").map(String::as_str), Some("T1"));
+    }
+
+    #[test]
+    fn notices_carry_label_and_ready_bound_and_clear_on_ready() {
+        // ready at T0 → last_ready_seen stamped; no notices yet.
+        let (_d0, s0) = detect(&[obs("power-profile", "ready")], &DriftState::default(), "T0");
+        assert!(notices_from(&s0).is_empty());
+        // attention at T1 → one notice with the captured label and the T0 ready bound.
+        let (_d1, s1) = detect(&[obs("power-profile", "attention")], &s0, "T1");
+        let n = notices_from(&s1);
+        assert_eq!(n.len(), 1);
+        assert_eq!(n[0].id, "power-profile");
+        assert_eq!(n[0].label, "power-profile label");
+        assert_eq!(n[0].last_ready_at.as_deref(), Some("T0"));
+        assert_eq!(n[0].noticed_at, "T1");
+        // back to ready at T2 → notice gone, label cleared, ready bound refreshed.
+        let (_d2, s2) = detect(&[obs("power-profile", "ready")], &s1, "T2");
+        assert!(notices_from(&s2).is_empty());
+        assert!(s2.labels.is_empty());
+        assert_eq!(s2.last_ready_seen.get("power-profile").map(String::as_str), Some("T2"));
+    }
+
+    #[test]
+    fn notices_from_pre_phase2_state_fall_back_honestly() {
+        // A drift.json written before labels/last_ready_seen existed: noticed_at only.
+        let mut s = DriftState::default();
+        s.noticed_at.insert("power-profile".into(), "T1".into());
+        let n = notices_from(&s);
+        assert_eq!(n.len(), 1);
+        assert_eq!(n[0].label, "power profile", "label falls back to the id, dashes spaced");
+        assert_eq!(n[0].last_ready_at, None, "no earlier bound is ever invented");
+        assert_eq!(n[0].noticed_at, "T1");
+    }
+
+    #[test]
+    fn notices_are_sorted_by_id_for_determinism() {
+        let (_d0, s0) = detect(
+            &[obs("vrr", "ready"), obs("power-profile", "ready")],
+            &DriftState::default(),
+            "T0",
+        );
+        let (_d1, s1) = detect(
+            &[obs("vrr", "attention"), obs("power-profile", "attention")],
+            &s0,
+            "T1",
+        );
+        let ids: Vec<String> = notices_from(&s1).into_iter().map(|n| n.id).collect();
+        assert_eq!(ids, vec!["power-profile", "vrr"]);
     }
 
     #[test]
