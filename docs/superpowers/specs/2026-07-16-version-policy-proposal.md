@@ -1,6 +1,10 @@
 # Version policy proposal — getting past `0.1.0`
 
-**Status:** DRAFT — awaiting owner call (flagged in `docs/OWNER_ACTION_CHECKLIST.md` §D).
+**Status:** DECIDED — owner call 2026-07-16: **"0.9.0 now, 1.0.0 at your bar"** (Option B). Applied
+same day: all three manifests + Cargo.lock bumped to `0.9.0`; `scripts/ship-reinstall.ps1` now
+DERIVES the installer filename from `tauri.conf.json` (hardcoded literal removed); three-way+lock
+drift-guard added (`scripts/version-drift-guard.test.mjs`). 1.0.0 fires when Claude judges the
+1.0 bar met (release-hardening checklist green) and the owner confirms.
 **Provenance:** panel-review brief 2026-07-15 §4.9 (`docs/reviews/2026-07-15-cc-brief-panel-review-execution.md`)
 + archived review (`docs/reviews/2026-07-15-consumer-panel-review.md`).
 **Rule:** Claude drafts, the owner decides the scheme + the next number. Never renumbered unilaterally.

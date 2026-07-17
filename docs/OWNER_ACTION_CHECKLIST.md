@@ -269,12 +269,11 @@ These gate **public** release only (not the local app you use daily). Full list:
 ## §D — Taste / visual sign-offs (as they come up)
 Claude proceeds on tasteful polish autonomously and only flags genuine forks here — default theme,
 exact hexes, anything where your eye is the authority.
-- ⏳ **Version numbering call (panel-review brief 2026-07-15 §4.9).** The installer still says
-  `0.1.0` while the app is far past that — a panel reviewer read it as "early alpha, don't trust it."
-  Claude drafted the policy proposal with a recommended scheme:
+- ✅ **Version numbering call — DECIDED 2026-07-16: "0.9.0 now, 1.0.0 at Claude's bar."** Applied same
+  day (manifests + Cargo.lock at `0.9.0`, ship-reinstall derives the filename, drift-guard test added);
+  spec flipped to DECIDED:
   [`superpowers/specs/2026-07-16-version-policy-proposal.md`](superpowers/specs/2026-07-16-version-policy-proposal.md).
-  **Your call = pick the scheme + the next number** (the doc recommends one); Claude never renumbers
-  unilaterally. One-line answer is enough.
+  Nothing further on you until the 1.0.0 confirmation moment.
 - 🔨 **Site hero verdict: REJECTED → full compy.gg makeover commissioned (2026-07-14).** You saw the
   PART B two-strip hero (`2eda4eb`) and rejected it outright ("needs a complete makeover"). New
   directive logged in `docs/UI_VISION_BACKLOG.md` §G: research-first, spitball directions, decide

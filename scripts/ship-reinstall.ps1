@@ -11,7 +11,12 @@
 param([switch]$NoLaunch, [switch]$AllowDirty)
 $ErrorActionPreference = "Stop"
 
-$nsis = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\bundle\nsis\Compy_0.1.0_x64-setup.exe"
+# Version is DERIVED from tauri.conf.json (single source of truth) — never hardcode it here.
+# A hardcoded 0.1.0 survived the 0.9.0 bump as a silent drift site; derivation kills the class.
+$conf = Get-Content "C:\Users\Kuya\code\sentinel\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
+$ver = $conf.version
+if (-not $ver) { throw "Could not read .version from tauri.conf.json" }
+$nsis = "C:\Users\Kuya\code\sentinel\src-tauri\target\release\bundle\nsis\Compy_${ver}_x64-setup.exe"
 if (-not (Test-Path $nsis)) { throw "Built NSIS not found — run 'npm run tauri build' first: $nsis" }
 $desk = [Environment]::GetFolderPath("Desktop")
 
@@ -55,7 +60,7 @@ Start-Sleep -Milliseconds 600
 Get-ChildItem $desk -File -ErrorAction SilentlyContinue |
   Where-Object { $_.Name -like "Compy*" -and ($_.Extension -eq ".exe" -or $_.Extension -eq ".msi") } |
   Remove-Item -Force
-$dest = Join-Path $desk "Compy_0.1.0_x64-setup.exe"
+$dest = Join-Path $desk "Compy_${ver}_x64-setup.exe"
 Copy-Item $nsis $dest -Force
 $sha = (Get-FileHash $dest -Algorithm SHA256).Hash
 
