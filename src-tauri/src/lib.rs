@@ -21,6 +21,7 @@ mod gpu_profile; // Read-only GPU profile before/after delta core (advisory; NOT
 mod hardware;
 mod history;
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
+mod intelligence; // Intelligence Phase 1 — READ-ONLY event timeline + deterministic "What changed?" engine (bands-only confidence, zero mutation, zero network).
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
 mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
 mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zeros placeholder pubkey → always free; private key never in repo). No outbound, no Windows mutation.
@@ -1046,6 +1047,9 @@ pub fn run() {
             gaming_session_is_live,
             tray::set_close_to_tray,
             game_mode_persist::set_keep_game_mode,
+            intelligence::get_intelligence_timeline,
+            intelligence::what_changed_for_session,
+            intelligence::get_intelligence_headline,
         ])
         .on_window_event(|window, event| {
             // Close behavior (Train #3 §1 — clean exit), now with the opt-in tray branch.
@@ -1081,6 +1085,11 @@ pub fn run() {
             // Game Mode persistence keeper (option 1(b) mechanism C). No-op while DARK —
             // keep_game_mode_gate() ships false, so this never spawns a thread.
             crate::game_mode_persist::start_keeper();
+            // Intelligence identity snapshot (read-only probe, off-thread + throttled): records
+            // driver/build/power-plan identity at launch so changes become timeline events even
+            // for users who never open the intelligence surfaces. Honest from-now-on — nothing
+            // is backfilled.
+            crate::intelligence::refresh_identity_snapshots_async();
             // §C build stamp (spec 2026-06-12): DEV windows title themselves with the exact build
             // so an owner review can never run against a stale window unnoticed. Release titles
             // stay clean (the stamp lives in Settings → About there).

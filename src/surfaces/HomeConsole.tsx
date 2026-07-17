@@ -1,9 +1,16 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
+import type {
+  AppliedChange,
+  GameReadiness,
+  IntelligenceHeadline,
+  Priorities,
+  SessionSummary,
+} from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
+import { useIntelligenceFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
@@ -290,6 +297,26 @@ export function HomeConsole({
       window.clearInterval(id);
     };
   }, []);
+
+  // ── the Home intelligence line (Intelligence Phase 1, decision 7: Home carries at most ONE
+  // concise line). A single read-only fetch, only while the flag is on; the engine returns a
+  // headline ONLY when it reached a real improved/regressed verdict — null (or a failed fetch)
+  // renders nothing, never a fabricated line. Re-fetched when the session list changes. ──
+  const intelOn = useIntelligenceFlag();
+  const [intelHeadline, setIntelHeadline] = useState<IntelligenceHeadline | null>(null);
+  useEffect(() => {
+    if (!intelOn) {
+      setIntelHeadline(null);
+      return;
+    }
+    let alive = true;
+    invoke<IntelligenceHeadline | null>("get_intelligence_headline")
+      .then((h) => alive && setIntelHeadline(h ?? null))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [intelOn, sessions]);
 
   // ── rig view state (same persisted pref as HomeHud/HomeV2 — Cards vs 3D) ──
   const [rig3d, setRig3d] = useState(() => {
@@ -641,6 +668,26 @@ export function HomeConsole({
             <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
               See in {fixRoomLabel}
             </button>
+          </div>
+        )}
+
+        {/* LAST SESSION — Home's ONE intelligence line (Intelligence Phase 1, decision 7): the
+            engine's own verdict sentence verbatim; the full report lives in Monitor's debrief.
+            Only rendered for a real improved/regressed verdict (the command returns null
+            otherwise), and the door only shows when Monitor is actually on the rail. */}
+        {intelHeadline && (
+          <div className="hc-limiter">
+            <span className="hc-limiter-label">last session</span>
+            <span className="hc-limiter-title">{intelHeadline.text}</span>
+            {onNavigate && rooms?.some((r) => r.key === "play") && (
+              <button
+                type="button"
+                className="hc-btn hc-btn-ghost"
+                onClick={() => onNavigate("play")}
+              >
+                See in {rooms.find((r) => r.key === "play")?.name}
+              </button>
+            )}
           </div>
         )}
 

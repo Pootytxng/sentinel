@@ -278,7 +278,9 @@ fn history_path() -> PathBuf {
 // load/save are split into path-parameterized cores so the JSON round-trip and
 // the corrupt-file-fails-safe behavior are unit-testable without touching the
 // real %APPDATA% history file. The no-arg wrappers preserve prior behavior.
-fn load_history() -> Result<Vec<AppliedChange>, String> {
+// pub(crate): intelligence.rs reads the persisted structs (read-only) for the timeline —
+// the view types drop fields (provenance) the engine needs as evidence.
+pub(crate) fn load_history() -> Result<Vec<AppliedChange>, String> {
     load_history_from(&history_path())
 }
 

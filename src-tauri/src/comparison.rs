@@ -389,6 +389,7 @@ mod comparison_tests {
             ram_total_bytes: None,
             compy_changes_active: 0,
             hw_fingerprint: None,
+            gaming_mode_active: None,
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),

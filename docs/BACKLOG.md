@@ -38,6 +38,48 @@
   gitignored (standing pattern — self-review-reminder is machine-local too), so the ship-reminder
   hook SCRIPT stays local; only its settings.json registration is in git.
 
+## 🧠 INTELLIGENCE PLATFORM LANE (owner directive 2026-07-16 — supersedes priority ordering per its §0.12)
+
+Owner-approved direction: evolve Compy into **evidence-based PC performance intelligence** — the
+measurement layer that can say *what changed, what likely caused it, and what to test next*, from
+local records only. In-git anchor: `docs/superpowers/specs/2026-07-16-intelligence-foundation-train1.md`
+(the Intelligence Phase 1 spec; the directive itself is a Cowork-lane review artifact, not committed).
+**Namespace rule: phases in this lane are always written "Intelligence Phase N"** — never bare
+"Phase N" (Optimization Cleanup owns a separate Phase 0–3 sequence; the two numbering schemes must
+never be conflatable in any doc, commit message, or report).
+
+- [x] **Intelligence Phase 1 — foundation + "What changed?" (read-only vertical slice)** — ✅ BUILT
+  this cycle (hashes in Cycle 2026-07-17a): `intelligence.rs` canonical domain layer + local event
+  timeline (from existing persisted data ONLY — never fabricates historical events) + deterministic
+  two-session "What changed?" engine (fixed hypothesis catalog; enum confidence bands
+  unknown/low/medium/high, never numerics; never causation-from-precedence) + first surfaces
+  (Monitor SessionDebrief WhatChangedPanel · Blackbook logbook observed rows · Home last-session
+  line) + expert view + anti-fabrication guards. Flag `compy_intelligence` DEFAULT ON ("0" failsafe
+  test-pinned). Zero mutation, zero network, zero capability change.
+- [ ] **Intelligence Phase 2:** richer root-cause graph · cross-session pattern detection · "good
+  session vs bad session" investigation workflow · external drift/change detection · hardware and
+  software event persistence improvements.
+- [ ] **Intelligence Phase 3:** user-started automatic experiment engine · single-variable
+  attribution · stronger baseline/treatment controls · simulator recommendations · automatic
+  keep/restore verdict workflow using existing mutation contracts.
+- [ ] **Intelligence Phase 4:** hardware-twin intelligence integration · component-level evidence
+  highlighting · hardware-health trends · long-term personal knowledge graph.
+- [ ] **Intelligence Phase 5:** evidence-based Upgrade Advisor 2.0 · "buy nothing" verdict ·
+  technical prescription contract · consumer report and shop-report exports. (Subsumes the
+  evidence-export-tiers item in PHASE A below and UI_VISION_BACKLOG §F upgrade-path engine —
+  one lane, not two; both entries annotated at source.)
+- [ ] **Intelligence Phase 6:** optional crowd intelligence · only after explicit security/privacy/
+  owner gates · no work in the current train.
+
+**§0.12 demotion flags (owner reviews; nothing dropped without a trace):** open items below that
+neither feed nor serve the intelligence platform are flagged 🔻 at their entries — five as of
+2026-07-17 (curated safe-to-suspend data · debounce/Rapid-Trigger detection · sensor-ID DB · ISP
+speed snapshot · DNS probe), each already blocked on its own gate, so demotion changes nothing
+today. **NOT demoted:** Optimization Cleanup (separate lane per directive §0.11 AND a data source
+for this platform — external drift + tweak-pack residue become timeline events) · pre-room intent
+router + basic-mode simplification (complementary consumer-clarity work per directive §9 — stays
+queued).
+
 ## 🔥 TOP PRIORITY LANE (owner directive 2026-07-05) — de-slop the UI, organic + unique
 
 Full spec: [`docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md`](superpowers/specs/2026-07-05-ui-deslop-organic-directive.md).
@@ -751,6 +793,10 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   own "Real-wins strip" section already notes the share-card component is a forward-looking idea, "not
   queued as a train." So Consumer/Technical/Support are ALL genuinely new, not a light tiering pass
   over existing variants — size this task accordingly before scoping it as small.
+  **→ 🧠 SUBSUMED by Intelligence Phase 5 (2026-07-17, intelligence directive §9):** consumer/
+  technical/shop report exports ship as part of the evidence-based Upgrade Advisor 2.0 lane — do not
+  build this separately; the audit finding above (one render path, no share-card exists) carries
+  forward as Intelligence Phase 5 input.
 
 ### A3 · CONTENT reorg (Blackbook/Autopsy) — **half built; missing entry metadata**
 - [x] entry dedup lint — `knowledge.lint.test.ts:78`
@@ -794,7 +840,9 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 **Services**
 - [x] read-only service inventory by category — `services.rs` (new): WMI enumerate-all → 9 plain-English gaming-relevant categories (vendor/launchers/anti-cheat/Xbox/perf/telemetry/updates/app-updaters/search), live state + factual descriptions, honest "<n> recognised of <m> total" coverage; folds into `get_diagnostics` (no new IPC, zero frontend change); pure-core unit-tested; inventory-not-advice (no safe-to-suspend judgement) — `b5b16b0`
   - [x] coverage expansion — added **Riot Vanguard** (`vgc`, the Valorant/LoL anti-cheat the category was missing), **GOG Galaxy** (`GalaxyClientService`), **NVIDIA Container** (`NvContainerLocalSystem`); faithful inventory-not-advice facts, exact-match (still never guessed), + no-duplicate-Name catalog guard — `32146bc`
-- [ ] curated "safe-to-suspend" reference data (must be owner-curated, never LLM-generated)
+- [ ] curated "safe-to-suspend" reference data (must be owner-curated, never LLM-generated) —
+  🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence
+  platform; already blocked on owner curation, so nothing changes until he supplies the list.
 - [x] use-case profile selector (Gaming/Streaming/Creation/General — localStorage) — `src/data/profile-store.ts` + `src/hooks/use-profile.ts`, surfaced as an advisory "What you mostly do" card on Benchmark; LOCAL label only (frames measurements; no Windows setting / tweak / service touched), guarded readers + cross-window storage relay; 17 tests; no new IPC
 - [x] service-drift detection (extend Leftovers) — `services.rs`: closed curated catalog (Windows Audio · Audio Endpoint Builder · Themes) flagged when startup drifts from stock Automatic (Manual/Disabled only; Boot/System/Unknown never guessed; absent never flagged); receipts + origin-uncertainty + honest nothing-found; folds into Diagnostics, no new IPC; 10 pure tests incl. law guards (no boost/alarm; catalog can't target a Compy-endorsed disable) — `bd170ce`
 - [x] recovery guide — `services.rs`: pure `build_recovery_guide` attaches by-hand, plain-English services.msc restore steps to drift findings (Automatic startup → Start); reference data, NO mutation (Compy performs none); names the exact affected services from the curated const catalog; honest origin-uncertainty + grammar/law guards; folds into Diagnostics as "Background services · How to restore", no new IPC; 5 tests — `a5d5cca`
@@ -809,11 +857,14 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   (already read — `latency.rs` PnP enumeration, real names + VID&PID) against a device→capability list —
   and that list is per-SKU claims about users' hardware, the owner-curated-never-LLM-generated class
   (same rule as safe-to-suspend above). Content half already shipped (`rapid-trigger`/`keyboard-actuation`
-  Learn terms). Unblocks when the owner curates the device list.
+  Learn terms). Unblocks when the owner curates the device list. 🔻 **demotion-flagged 2026-07-17
+  (intelligence directive §0.12):** doesn't feed the intelligence platform; already curation-gated.
 - [ ] sensor ID + known-issue DB (bundled JSON) — 🪪 **owner-curated-data-gated** (assessed 2026-07-05):
   the sensor silicon inside a mouse is not exposed over USB/HID (only the mouse's own product name is —
   already read, `latency.rs`); model→sensor mapping + "known issues" are third-party teardown claims =
   the owner-curated-never-LLM-generated class. Unblocks when the owner curates the DB.
+  🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence
+  platform; already curation-gated.
 - [x] wired-vs-wireless latency model — honest conservative wireless-name advisory, read-only (`27f3651`)
 - [x] keyboard actuation / NKRO / Rapid-Trigger guide — `keyboard-actuation` + `nkro` + `rapid-trigger` input-topic term explainers (pairs with peripheral's switch detection). Honest: actuation = a speed-vs-misfire feel preference (not skill/FPS); NKRO = inputs-not-dropped (not speed); Rapid Trigger needs HE/analog hardware and is **anti-cheat-aware** — flags that Snap Tap / SOCD is banned in CS2 (Valorant currently permits it — honesty fix), rules differ by game, and Compy enables/recommends nothing your game forbids. No fabricated specs. Guard test `knowledge-keyboard.test.ts`. Flagged for owner brand-voice skim.
 - [x] USB-port recommendations — both halves shipped: SHARING (`shared_controller_advisory`) + TIER (`usb_tier_advisory`: honest 2.0-fine-for-input + 3.x/USB4 myth-buster, read-only, owns the tier dimension only — never re-issues the "move device X" call) (`9a045d9`)
@@ -826,11 +877,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] Wi-Fi link quality (band · signal% · link-rate) — enriches the network-connection advisory when on Wi-Fi (read-only `netsh wlan`; parser unit-tested; not verifiable on the wired dev rig)
 - [x] wired-port-aware Wi-Fi nudge — on Wi-Fi AND a wired Ethernet port exists → names it ("plug it in") instead of the hedged "if you can run a cable" (read-only, reuses `has_wired_ethernet_port`; unit-tested)
 - [x] wired link-speed detection — `hardware.rs`: negotiated wired Ethernet rate (MSFT_NetAdapter.Speed, reuses the existing adapter query — zero-outbound, NOT the 📡 ISP/DNS class); pure `active_wired_link_speed` + `format_link_rate`; readiness pill (neutral gigabit+, advisory ≤100 Mbps) + Diagnostics "Wired link speed" row with honest note (low link = old cable/port, still fine for gaming); 5 tests — `6f3f7dd`
-- [ ] ISP speed snapshot (local) — 📡 outbound-gated (a real throughput test must download from a server = first outbound call, same wall as the DNS probe); only the zero-outbound NIC link-rate above is feasible without owner sign-off
+- [ ] ISP speed snapshot (local) — 📡 outbound-gated (a real throughput test must download from a server = first outbound call, same wall as the DNS probe); only the zero-outbound NIC link-rate above is feasible without owner sign-off. 🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence platform; already outbound-gated.
 - [x] network-readiness pills (backend signal) — `hw.network_pills: [{label,tone}]` on HardwareInfo, derived read-only from adapters/Wi-Fi/QoS/wired-port (zero-outbound, no new probe/IPC); tones good/neutral/advisory/unknown mirror the network-connection readiness honesty; 6 pure tests; UI half = content/peripheral — `490e081`
 - [x] network-readiness pills (**UI half**, peripheral) — calm color-coded chips in the Latency surface ("Network connection" card, the online-latency axis); renders the authoritative `hw.network_pills` signal via a narrow `get_hardware_info` read (Benchmark `RigSpecs` precedent — the surface has no `hw` in scope); honest tones (`advisory` = calm accent, never amber/alarm; unknown future tone → neutral), card hidden when unread, no FPS promise; pure `networkPillTone` + 4 tests; live self-reviewed — `b33fcd4`
 - [x] Wi-Fi channel / interference — `channel` surfaced on 2.4 GHz + overlap advisory (only 1/6/11 don't overlap → switch router or to 5 GHz); read-only, parser already read it, unit-tested
-- [ ] DNS resolution-time probe — 📡 outbound-gated (a resolution-time measurement IS a live DNS query = outbound call; held at the same wall as the ISP snapshot above — Cycle 2026-06-25d flagged it as gated)
+- [ ] DNS resolution-time probe — 📡 outbound-gated (a resolution-time measurement IS a live DNS query = outbound call; held at the same wall as the ISP snapshot above — Cycle 2026-06-25d flagged it as gated). 🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence platform; already outbound-gated.
 - [x] powerline / MoCA Learn guides — `powerline-ethernet` + `moca-ethernet` term explainers (network topic): honest no-new-cable wired-grade options for rooms you can't run a cable to. Both name the real win (ping/stability over Wi-Fi, NOT FPS), the practical catches (powerline ← wall-not-surge-strip, circuit-dependent; MoCA ← coax both ends + PoE filter), and when to prefer each. Cross-linked to `wifi-vs-ethernet-fps`; no fabricated speeds. Guard test `knowledge-powerline-moca.test.ts`. Flagged for owner brand-voice skim.
 - [x] QoS advisory — read-only Policy-based-QoS detection (HKLM+HKCU `…\Windows\QoS`); surfaces a named Advisory ONLY when a policy exists (no clutter when clean); honest "as-found, not a problem on its own" framing; unit-tested
 
@@ -856,10 +907,13 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   point**: a first-class "what brought you here today?" entry on Home routing to Monitor / Blackbook / Lab by
   intent, so a non-technical user never has to know which room owns their problem. Scope ONLY that entry
   gap — don't rebuild the in-Lab router. Provenance: panel-review brief 2026-07-15 §4.2.
+  *(2026-07-17, intelligence directive §9: complementary to the intelligence surfaces — stays
+  queued, NOT demoted and NOT part of the intelligence trains.)*
 - [ ] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
   flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
   action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel
-  "simple mode" build). Provenance: panel-review brief 2026-07-15 §4.8.
+  "simple mode" build). Provenance: panel-review brief 2026-07-15 §4.8. *(2026-07-17, intelligence
+  directive §9: complementary consumer-clarity work — stays queued, NOT demoted.)*
   **Scope-check done, 2026-07-16 (Cowork), against `FirstCheck.tsx`, the persona's 5-point ask:**
   (1) one verdict — **covered** (`fc-verdict` headline). (2) one recommended action — **covered**
   (#1-limiter spotlight, single Apply button). (3) one visible explanation of *what changes* —
@@ -1049,6 +1103,12 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   **Remaining (still not scope-gated — not authorized to build):** Phase 2 (5-bucket taxonomy) →
   Phase 3 (net-new detection surface: registry/service/scheduled-task residue beyond the 9 curated
   settings; candidate detectors from Phase 1 QA: prefetch-sibling flags off, SysMain disabled).
+  **Intelligence-platform relationship (2026-07-17, directive §0.11/§9):** Cleanup stays its OWN
+  lane on its own mutation-gate discipline — never folded into intelligence trains — AND is a data
+  source for the platform (external drift in Compy-managed settings + tweak-pack residue surface as
+  timeline events); its Phase 2 taxonomy reuses the shipped real/placebo/risky vocabulary, which is
+  the same grading language the intelligence layer must use. (These are Cleanup Phase numbers, not
+  Intelligence Phase numbers — see the 🧠 lane's namespace rule.)
 
 ## PHASE C — Telemetry / outbound 📡 (stop-rule 3: own spec + security review + owner sign-off; ships DARK)
 - [BUILT-DARK] Receipts opt-in consent UI + payload preview — `receipts.rs`, `ReceiptsConsent.tsx` (gate off)

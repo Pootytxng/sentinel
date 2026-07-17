@@ -90,6 +90,9 @@ export type SessionSummary = {
    *  ~1 Hz samples — never interpolated; gaps in play stay gaps. Kept for the most-recent 20
    *  sessions, stripped (empty) for older ones (sessions.rs). */
   fps_series?: [number, number][];
+  /** Whether a Gaming Mode session was live at ANY monitoring tick (Intelligence Phase 1).
+   *  Absent/null on records written before the field existed — honestly Unknown, never guessed. */
+  gaming_mode_active?: boolean | null;
 };
 
 // Recommendation provenance — the honesty level of a rec's IMPACT claim.
@@ -344,4 +347,113 @@ export type LicenseStatus = {
   armed: boolean; // licensing is active (real signing key embedded) — the gate the UI reads directly
   reason: string; // "no license" | "active" | "license expired …" | "licensing not active" | …
   expires_at: string | null;
+};
+
+// ── Intelligence Phase 1 (mirrors src-tauri/src/intelligence.rs — read-only commands
+// get_intelligence_timeline / what_changed_for_session / get_intelligence_headline).
+// Confidence is a BAND, never a number — no calibration data exists, so a percentage would be
+// probability theater. NOTE: named ConfidenceBand because this file's existing `Confidence`
+// (PriorityItem's high|medium|low) has no "unknown" and the two must not be conflated.
+export type ConfidenceBand = "unknown" | "low" | "medium" | "high";
+
+// Who moved: Compy did it (ledger) · a measurement happened · the machine changed outside Compy.
+export type IntelEventScope = "compy-applied" | "measurement" | "observed";
+
+export type IntelEvent = {
+  /** Deterministic `<kind>:<source-key>` — stable across rebuilds, never random. */
+  id: string;
+  /** RFC3339. For observed deltas this is the LATER bound of the observation window. */
+  timestamp: string;
+  /** "gpu-driver-change" | "hardware-change" | "windows-build-change" | "power-plan-change" |
+   *  "change-applied" | "gaming-mode-active" | "session" | "verified-win" |
+   *  "benchmark-baseline" | "comparison-verdict". */
+  event_type: string;
+  /** Which store produced it (trust-ledger, sessions, identity-snapshot, rig-fingerprint, …). */
+  source: string;
+  scope: IntelEventScope;
+  game: string | null;
+  summary: string;
+  detail: string | null;
+  /** Observed changes only: the two real reading times bounding WHEN it happened — the exact
+   *  moment is honestly unknown, only the window. */
+  observed_between: [string, string] | null;
+  /** Apply events only: the ledger says this change was later rolled back. */
+  since_rolled_back: boolean;
+};
+
+export type IntelligenceTimeline = {
+  /** Newest first. */
+  events: IntelEvent[];
+  /** Records dropped for unparseable timestamps — counted, never coerced into rows. */
+  dropped_unparseable: number;
+  generated_at: string;
+};
+
+export type IntelSessionRef = {
+  started_at: string;
+  game: string;
+  duration_secs: number;
+  samples: number;
+  avg_fps: number;
+  low1_fps: number;
+  /** null = recorded before the field existed — honestly Unknown. */
+  gaming_mode_active: boolean | null;
+  hw_hash: string | null;
+};
+
+export type IntelObservation = {
+  metric: string;
+  baseline: number;
+  current: number;
+  delta_pct: number;
+  /** Cleared the cross-session noise floor (judged on 1% low). */
+  meaningful: boolean;
+  /** Shown for context only, never drives the verdict (avg FPS). */
+  reference_only: boolean;
+};
+
+export type IntelHypothesis = {
+  /** Fixed-catalog id ("gpu-driver-change" … "insufficient-evidence"). */
+  id: string;
+  title: string;
+  confidence: ConfidenceBand;
+  supporting_evidence: string[];
+  contradicting_evidence: string[];
+  missing_evidence: string[];
+  next_test: string | null;
+};
+
+export type WhatChangedReport = {
+  baseline: IntelSessionRef;
+  current: IntelSessionRef;
+  game: string;
+  /** Judged on the 1%-low delta vs the noise floor — comparison.rs's shared vocabulary. */
+  verdict: "improved" | "regressed" | "no-change" | "inconclusive";
+  headline: string;
+  observations: IntelObservation[];
+  noise_floor_pct: number;
+  /** Non-measurement events strictly between the two sessions. */
+  events_between: IntelEvent[];
+  leading_hypotheses: IntelHypothesis[];
+  ruled_out: IntelHypothesis[];
+  /** What Compy genuinely cannot know here — stated, never papered over. */
+  unknowns: string[];
+  next_action: string | null;
+  /** ≥2 change families moved between sessions — single-cause attribution refused. */
+  confounded: boolean;
+  gap_days: number;
+  notes: string[];
+  method_note: string;
+};
+
+export type WhatChangedOutcome =
+  | { kind: "unavailable"; reason: string }
+  | ({ kind: "report" } & WhatChangedReport);
+
+export type IntelligenceHeadline = {
+  text: string;
+  /** Only "improved" | "regressed" ever reach Home — no-change/inconclusive stay in Monitor. */
+  verdict: string;
+  game: string;
+  session_started_at: string;
 };

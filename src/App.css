@@ -3101,6 +3101,172 @@ body::before {
   color: var(--faint);
 }
 
+/* ── What changed? panel (Intelligence Phase 1) — same instrument face as .cmp ─── */
+.wcp {
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--r-md, 10px);
+  background: var(--panel-2);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.wcp-no-change,
+.wcp-inconclusive { border-color: var(--border-strong, var(--border)); } /* honest non-answer — neutral */
+.wcp-improved { border-color: color-mix(in srgb, var(--ready, #46d98a) 36%, var(--border-strong, var(--border))); }
+.wcp-regressed { border-color: color-mix(in srgb, var(--danger, #f3716f) 38%, var(--border-strong, var(--border))); }
+.wcp-unavailable {
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md, 10px);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.wcp-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-right: 6px;
+}
+.wcp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.wcp-nf { white-space: nowrap; }
+.wcp-headline {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  color: var(--fg);
+  line-height: 1.45;
+}
+.wcp-improved .wcp-headline { color: var(--ready, #46d98a); }
+.wcp-regressed .wcp-headline { color: var(--danger, #f3716f); }
+.wcp-note {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+.wcp-section-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.wcp-hypo { margin-bottom: 10px; }
+.wcp-hypo-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.wcp-hypo-title { font-size: 13.5px; color: var(--fg-2, var(--fg)); font-weight: 600; }
+.wcp-hypo-conf {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.wcp-evi { margin: 0 0 6px; }
+.wcp-evi ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+}
+.wcp-evi .wcp-evi-label { display: inline; margin-right: 6px; }
+.wcp-evi-missing ul { color: var(--faint); }
+.wcp-next {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+  margin: 0 0 10px;
+}
+.wcp-next .wcp-section-label { display: inline; margin-right: 6px; }
+.wcp-detail-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 0;
+  padding: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wcp-detail-toggle:hover { color: var(--accent-bright); }
+.wcp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+.wcp-sessions {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wcp-session { display: flex; gap: 8px; }
+.wcp-session-tag {
+  color: var(--faint);
+  min-width: 62px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10.5px;
+  padding-top: 1px;
+}
+.wcp-gap { color: var(--faint); font-size: 10.5px; }
+.wcp-obs { display: flex; flex-direction: column; gap: 3px; }
+.wcp-obs-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-2, var(--fg));
+}
+.wcp-obs-metric { min-width: 62px; color: var(--muted); }
+.wcp-obs-tag { color: var(--faint); font-size: 10.5px; }
+.wcp-between ul,
+.wcp-unknowns ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-2, var(--fg));
+}
+.wcp-between-none {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wcp-between-when { color: var(--faint); }
+.wcp-unknowns ul { color: var(--muted); }
+.wcp-method {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--faint);
+  margin: 0;
+}
+
 /* ── Readiness dismiss / Dismissed section ───────────────────────────────── */
 .readiness-row-actions {
   display: flex;

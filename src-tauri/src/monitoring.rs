@@ -959,6 +959,10 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             let mut prev_procs: Option<std::collections::HashSet<String>> = None;
             let mut prev_clock: Option<u32> = None;
             let mut ram_logged = false;
+            // Gaming Mode presence: a valid session slot at ANY tick marks the whole session —
+            // a save-time-only probe would read false for a Gaming Mode session that ended
+            // before monitoring stopped. Read-only 1 Hz file check, stops once seen.
+            let mut gaming_mode_seen = false;
             // OS chatter that constantly starts/stops — never the culprit, would drown the signal.
             let proc_ignore: [&str; 8] = [
                 "svchost",
@@ -1005,6 +1009,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     Some(cpu.ram_used_bytes),
                     Some(cpu.ram_total_bytes),
                 );
+                if !gaming_mode_seen && crate::gaming_session::load_session().is_some() {
+                    gaming_mode_seen = true;
+                }
 
                 // ── Stutter signals (capped at 50, read-only) ──
                 if events.len() < 50 {
@@ -1069,6 +1076,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             if acc.has_data() {
                 let mut summary = acc.finalize(start.elapsed().as_secs());
                 summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
+                summary.gaming_mode_active = Some(gaming_mode_seen);
                 summary.stutter_insight = crate::stutter::analyze(&timeline, &events);
                 summary.stutter_timeline = timeline;
                 summary.stutter_events = events;

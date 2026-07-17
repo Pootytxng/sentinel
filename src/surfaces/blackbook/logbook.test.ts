@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLogbook, startHereEntries, type LogbookRecord } from "./logbook";
-import type { AppliedChange, SessionSummary } from "../../types";
+import type { AppliedChange, SessionSummary, IntelEvent } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { KNOWLEDGE } from "../../data/knowledge";
 
@@ -44,6 +44,20 @@ const autopsy = (over: Partial<AutopsyLedgerEntry> = {}): AutopsyLedgerEntry => 
   risky: 0,
   unknown: 0,
   scamFlags: 0,
+  ...over,
+});
+
+const intel = (over: Partial<IntelEvent> = {}): IntelEvent => ({
+  id: "gpu-driver-change:2026-07-07T10:00:00Z",
+  timestamp: "2026-07-07T10:00:00Z",
+  event_type: "gpu-driver-change",
+  source: "rig-fingerprint",
+  scope: "observed",
+  game: null,
+  summary: "GPU driver changed: 24.10.1 → 25.1.1",
+  detail: "Noticed between two Compy readings — the exact time isn't recorded, only the window.",
+  observed_between: ["2026-07-06T09:00:00Z", "2026-07-07T10:00:00Z"],
+  since_rolled_back: false,
   ...over,
 });
 
@@ -178,6 +192,72 @@ describe("buildLogbook — vs-previous delta is same-game only", () => {
         x.kind === "session" && x.game === "cyberpunk.exe",
     )!;
     expect(cyber.avgFpsDelta).toBe(null); // no same-game prior
+  });
+});
+
+describe("buildLogbook — observed machine changes (Intelligence Phase 1)", () => {
+  it("maps an observed event verbatim — the engine's own sentence, never rephrased", () => {
+    const r = buildLogbook({ observed: [intel()] });
+    expect(r).toHaveLength(1);
+    expect(r[0]).toEqual({
+      kind: "observed",
+      at: Date.parse("2026-07-07T10:00:00Z"),
+      id: "gpu-driver-change:2026-07-07T10:00:00Z",
+      eventType: "gpu-driver-change",
+      summary: "GPU driver changed: 24.10.1 → 25.1.1",
+      detail: "Noticed between two Compy readings — the exact time isn't recorded, only the window.",
+      observedBetween: [Date.parse("2026-07-06T09:00:00Z"), Date.parse("2026-07-07T10:00:00Z")],
+    });
+  });
+
+  it("tapes ONLY scope-observed events — compy-applied and measurement already have their rows (decision 15)", () => {
+    const r = buildLogbook({
+      observed: [
+        intel({ id: "a", scope: "compy-applied" }),
+        intel({ id: "b", scope: "measurement" }),
+        intel({ id: "c", scope: "observed" }),
+      ],
+    });
+    expect(r).toHaveLength(1);
+    expect((r[0] as { id: string }).id).toBe("c");
+  });
+
+  it("drops an observed event with an unparseable timestamp — never coerced to now/0", () => {
+    expect(buildLogbook({ observed: [intel({ timestamp: "not-a-date" })] })).toEqual([]);
+    const r = buildLogbook({
+      observed: [intel({ id: "bad", timestamp: "" }), intel({ id: "good" })],
+    });
+    expect(r).toHaveLength(1);
+    expect((r[0] as { id: string }).id).toBe("good");
+  });
+
+  it("a half-parseable observed_between window ⇒ between null, but the row survives", () => {
+    const r = buildLogbook({
+      observed: [intel({ observed_between: ["not-a-date", "2026-07-07T10:00:00Z"] })],
+    });
+    expect(r).toHaveLength(1);
+    expect((r[0] as { observedBetween: unknown }).observedBetween).toBe(null);
+  });
+
+  it("null observed_between ⇒ null (no invented window)", () => {
+    const r = buildLogbook({ observed: [intel({ observed_between: null })] });
+    expect((r[0] as { observedBetween: unknown }).observedBetween).toBe(null);
+  });
+
+  it("empty/null observed ⇒ [] — the honest empty state holds for the fourth source too", () => {
+    expect(buildLogbook({ observed: [] })).toEqual([]);
+    expect(buildLogbook({ observed: null })).toEqual([]);
+  });
+
+  it("equal timestamps keep the deterministic 4-kind order (change → session → autopsy → observed)", () => {
+    const t = "2026-07-10T12:00:00Z";
+    const r = buildLogbook({
+      changes: [change({ applied_at: t })],
+      sessions: [session({ started_at: t })],
+      autopsy: [autopsy({ at: Date.parse(t) })],
+      observed: [intel({ timestamp: t })],
+    });
+    expect(r.map((x) => x.kind)).toEqual(["change", "session", "autopsy", "observed"]);
   });
 });
 

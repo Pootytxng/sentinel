@@ -1,15 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import Learn from "./Learn";
 import { RoomShell } from "../design/room-shell";
 import { SegmentedControl } from "../design/SegmentedControl";
 import { useReducedMotion } from "../design/use-motion";
-import { useHudFlag, useBlackbookConsoleFlag } from "../design/use-hud";
+import { useHudFlag, useBlackbookConsoleFlag, useIntelligenceFlag } from "../design/use-hud";
 import { HudMasthead } from "./hud-masthead";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
 import { blackbookVerdict } from "./blackbook-v2-data";
 import { BlackbookConsole } from "./blackbook/BlackbookConsole";
 import { buildLogbook } from "./blackbook/logbook";
-import type { AppliedChange, SessionSummary } from "../types";
+import type { AppliedChange, SessionSummary, IntelEvent, IntelligenceTimeline } from "../types";
 import type { GpuVendor } from "./walkthroughs";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import "./blackbook-v2.css";
@@ -34,9 +35,12 @@ import "./blackbook-v2.css";
 // Phase 4 (plan 2026-07-12-console-hud-phase4-blackbook, direction A "The Logbook"): behind
 // compy_blackbook_console (DEFAULT OFF), the room gains a flight-recorder LOGBOOK face — one
 // reverse-chronological tape unifying the user's real changes, sessions and guide checks
-// (buildLogbook, a PURE view over data App already holds — zero new IPC, zero src-tauri). The
-// field guide (this file's Learn tree) stays reachable via the mode toggle. Flag off renders
-// EXACTLY today's Learn tree, byte-identical for both compy_editorial states (test-pinned).
+// (buildLogbook, a PURE view over data App already holds). Phase 4 itself added zero IPC;
+// Intelligence Phase 1 adds exactly ONE read-only fetch here (get_intelligence_timeline) so the
+// tape can also carry the machine changes Compy merely OBSERVED — still zero mutation, zero
+// network. The field guide (this file's Learn tree) stays reachable via the mode toggle. Flag
+// off renders EXACTLY today's Learn tree, byte-identical for both compy_editorial states
+// (test-pinned).
 
 type Face = "logbook" | "guide";
 const FACES: { id: Face; label: string }[] = [
@@ -74,9 +78,32 @@ export function BlackbookV2({
   // of this is reachable (the classic Learn tree renders directly).
   const [face, setFace] = useState<Face>("logbook");
   const [guideFocus, setGuideFocus] = useState<string | null>(null);
+
+  // Observed machine changes for the tape (Intelligence Phase 1): the ONE read-only IPC this room
+  // makes, and only while BOTH the console face and the intelligence flag are on — classic mode
+  // never fetches. Scope-filtered here AND in buildLogbook (defense in depth: the builder is the
+  // tested honesty spine). A failed fetch ⇒ no observed rows — the tape never fabricates.
+  const intelOn = useIntelligenceFlag();
+  const [observed, setObserved] = useState<IntelEvent[]>([]);
+  useEffect(() => {
+    if (!intelOn || !consoleOn) {
+      setObserved([]);
+      return;
+    }
+    let alive = true;
+    invoke<IntelligenceTimeline>("get_intelligence_timeline")
+      .then((t) => {
+        if (alive) setObserved(t.events.filter((e) => e.scope === "observed"));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [intelOn, consoleOn]);
+
   const records = useMemo(
-    () => buildLogbook({ changes, sessions, autopsy: ledger }),
-    [changes, sessions, ledger],
+    () => buildLogbook({ changes, sessions, autopsy: ledger, observed }),
+    [changes, sessions, ledger, observed],
   );
 
   return (

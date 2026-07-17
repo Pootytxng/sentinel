@@ -9,6 +9,7 @@ import {
   type LogbookChange,
   type LogbookSession,
   type LogbookAutopsy,
+  type LogbookObserved,
 } from "./logbook";
 import "./blackbook-console.css";
 
@@ -45,6 +46,16 @@ const KIND_TAG: Record<LogbookRecord["kind"], string> = {
   change: "Change",
   session: "Session",
   autopsy: "Guide check",
+  observed: "Observed",
+};
+
+// Plural nouns for the filtered section head ("· changes only"). "Observed" is already a
+// collective — appending an s would render "observeds".
+const FILTER_NOUN: Record<LogbookRecord["kind"], string> = {
+  change: "changes",
+  session: "sessions",
+  autopsy: "guide checks",
+  observed: "observed",
 };
 
 // How many tape rows mount before the "show older" press (the SessionStack MAX_STACK_ROWS pattern,
@@ -158,6 +169,25 @@ function AutopsyBody({ r }: { r: LogbookAutopsy }) {
   );
 }
 
+function ObservedBody({ r }: { r: LogbookObserved }) {
+  return (
+    <>
+      <span className="bc-row-title">
+        <b>{r.summary}</b>
+      </span>
+      <span className="bc-row-meta">
+        {r.observedBetween && (
+          <span className="bc-stat">
+            between <b className="bc-mono">{fmtWhen(r.observedBetween[0])}</b> and{" "}
+            <b className="bc-mono">{fmtWhen(r.observedBetween[1])}</b>
+          </span>
+        )}
+        <span className="bc-row-note">{r.detail ?? "Noticed between two Compy readings."}</span>
+      </span>
+    </>
+  );
+}
+
 export function BlackbookConsole({
   records,
   vendor,
@@ -184,7 +214,7 @@ export function BlackbookConsole({
   // Per-kind counts + scam flags — the strip's numbers are DERIVED from the same records the tape
   // renders (they can never disagree with it).
   const counts = useMemo(() => {
-    const c = { change: 0, session: 0, autopsy: 0, scamFlags: 0 };
+    const c = { change: 0, session: 0, autopsy: 0, observed: 0, scamFlags: 0 };
     for (const r of records) {
       c[r.kind]++;
       if (r.kind === "autopsy") c.scamFlags += r.scamFlags;
@@ -280,6 +310,21 @@ export function BlackbookConsole({
                   : "every claim graded"}
             </span>
           </button>
+          {/* Observed machine changes (Intelligence Phase 1) — the tile only mounts once such a
+              record exists: three tiles stay the room's stable face until the fourth kind is real. */}
+          {counts.observed > 0 && (
+            <button
+              type="button"
+              className="bc-tile"
+              data-kind="observed"
+              aria-pressed={filter === "observed"}
+              onClick={() => toggleFilter("observed")}
+            >
+              <span className="bc-tile-k">Changed outside Compy</span>
+              <span className="bc-tile-n bc-mono">{counts.observed}</span>
+              <span className="bc-tile-d">drivers · Windows · hardware · power</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -296,7 +341,7 @@ export function BlackbookConsole({
               strip below already speaks, so the room's two halves finally introduce themselves the
               same way. One line, not a paragraph. */}
           <div className="bc-sect">
-            <span className="bc-sect-t">The record{filter ? ` · ${KIND_TAG[filter].toLowerCase()}s only` : ""}</span>
+            <span className="bc-sect-t">The record{filter ? ` · ${FILTER_NOUN[filter]} only` : ""}</span>
             <span className="bc-sect-rule" aria-hidden="true" />
             <span className="bc-sect-s">
               everything Compy has done on this PC · since <span className="bc-mono">{sinceDate}</span>
@@ -318,8 +363,10 @@ export function BlackbookConsole({
                   <ChangeBody r={r} />
                 ) : r.kind === "session" ? (
                   <SessionBody r={r} />
-                ) : (
+                ) : r.kind === "autopsy" ? (
                   <AutopsyBody r={r} />
+                ) : (
+                  <ObservedBody r={r} />
                 )}
               </div>
             </li>

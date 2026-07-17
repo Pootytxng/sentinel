@@ -8,6 +8,7 @@ import {
   readGamingConsole,
   readRoomIdentity,
   readHudFrame,
+  readIntelligence,
 } from "./theme";
 
 // The Instrument-HUD preview flag as live React state (spec 2026-07-05-ui-deslop-organic-
@@ -119,6 +120,20 @@ export function useRoomIdentityFlag(): boolean {
     const sync = () => setOn(readRoomIdentity());
     window.addEventListener("compy:room-identity-changed", sync);
     return () => window.removeEventListener("compy:room-identity-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Intelligence Phase 1 flag as live React state (owner directive 2026-07-16; same contract:
+// a flag change fires compy:intelligence-changed so the Monitor what-changed panel, Blackbook
+// observed rows and Home headline re-branch without a reload). DEFAULT ON — only an explicit "0"
+// (devtools failsafe) restores the prior tree byte-identical (pinned by intelligence-flag.test.tsx).
+export function useIntelligenceFlag(): boolean {
+  const [on, setOn] = useState(readIntelligence);
+  useEffect(() => {
+    const sync = () => setOn(readIntelligence());
+    window.addEventListener("compy:intelligence-changed", sync);
+    return () => window.removeEventListener("compy:intelligence-changed", sync);
   }, []);
   return on;
 }

@@ -442,6 +442,10 @@ Source: `docs/superpowers/specs/2026-07-03-owner-optimize-feedback.md`, `docs/OW
 Not to be conflated with **"Optimization Cleanup"** (BACKLOG Phase B, panel-review brief 2026-07-15
 §4.1) — that one finds/classifies residue OTHER tools left behind; this one advises hardware upgrades.
 Different features, different lanes.
+**→ 🧠 SUBSUMED by Intelligence Phase 5 (2026-07-17, intelligence directive §9):** the upgrade-path
+engine ships as evidence-based **Upgrade Advisor 2.0** ("buy nothing" verdict · technical
+prescription contract · consumer/shop report exports) in the intelligence lane — see BACKLOG's
+🧠 INTELLIGENCE PLATFORM LANE. One lane, not two; don't build a separate advisory here.
 
 ### G. 🔴 SITE FULL MAKEOVER — owner-commissioned 2026-07-14 (the dormant trigger FIRED, for the site)
 History: the 2026-06-12 voice-baptism directive queued **§B0 site glow** + a dormant **§C FULL

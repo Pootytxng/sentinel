@@ -14,12 +14,18 @@ import type { HardwareInfo } from "../App";
 // masthead, and the header-slop law (no lede/explainer node anywhere in the console header).
 
 // The gauge probes poll on mount; a mutable holder lets tests take the GPU sensor away.
+// headline feeds get_intelligence_headline (Intelligence Phase 1's Home line — null = the
+// engine reached no improved/regressed verdict, the honest default); calls records every
+// invoke so the flag-off pin can assert the IPC was never made.
 const state = vi.hoisted(() => ({
   gpuSensors: [{ temperature_c: 62 }] as unknown,
+  headline: null as unknown,
+  calls: [] as string[],
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
+    state.calls.push(cmd);
     if (cmd === "get_gpu_sensors") return Promise.resolve(state.gpuSensors);
     if (cmd === "get_memory_pressure")
       return Promise.resolve({
@@ -27,6 +33,7 @@ vi.mock("@tauri-apps/api/core", () => ({
         total_bytes: 29.4 * 1024 ** 3,
         level: "ok",
       });
+    if (cmd === "get_intelligence_headline") return Promise.resolve(state.headline);
     return Promise.resolve(null);
   },
 }));
@@ -61,6 +68,8 @@ afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
   state.gpuSensors = [{ temperature_c: 62 }];
+  state.headline = null;
+  state.calls = [];
 });
 
 const hw = {
@@ -457,5 +466,67 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     cleanup();
     const loading = mount({ ...props, priorities: null }).container;
     expect(loading.querySelector(".hc-limiter")).toBeNull();
+  });
+});
+
+// Intelligence Phase 1, decision 7: Home carries at most ONE concise line — the engine's own
+// verdict sentence verbatim (get_intelligence_headline is non-null ONLY for a real
+// improved/regressed verdict, engine-enforced). Flag "0" must render nothing AND never fetch.
+const headlineFixture = {
+  text: "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated (medium confidence).",
+  verdict: "improved",
+  game: "Valorant",
+  session_started_at: "2026-07-10T20:00:00Z",
+};
+
+// Two rows share .hc-limiter (deliberate class reuse) — the micro-label tells them apart.
+const intelRow = (c: HTMLElement): HTMLElement | null =>
+  Array.from(c.querySelectorAll<HTMLElement>(".hc-limiter")).find(
+    (r) => r.querySelector(".hc-limiter-label")?.textContent === "last session",
+  ) ?? null;
+
+describe("HomeConsole — the last-session intelligence line (Intelligence Phase 1)", () => {
+  it("renders the engine's headline verbatim with the door into Monitor (rooms has play)", async () => {
+    state.headline = headlineFixture;
+    const nav = vi.fn();
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: nav }).container;
+    await waitFor(() => expect(intelRow(c)).not.toBeNull());
+    const row = intelRow(c)!;
+    expect(row.querySelector(".hc-limiter-title")!.textContent).toBe(headlineFixture.text);
+    // The headline sentence already names the game — the row adds no second game tag.
+    expect(row.querySelectorAll(".hc-limiter-tag")).toHaveLength(0);
+    const door = row.querySelector("button")!;
+    expect(door.textContent).toBe("See in Monitor");
+    fireEvent.click(door);
+    expect(nav).toHaveBeenCalledWith("play");
+    // The limiter row is untouched beside it — two rows, each with its own label.
+    expect(c.querySelectorAll(".hc-limiter")).toHaveLength(2);
+  });
+
+  it("honest door: no Monitor on the rail ⇒ the line renders without a dead-end button", async () => {
+    state.headline = headlineFixture;
+    const c = mount({
+      ...props,
+      rooms: [{ key: "lab", name: "Lab" }],
+      onNavigate: () => {},
+    }).container;
+    await waitFor(() => expect(intelRow(c)).not.toBeNull());
+    expect(intelRow(c)!.querySelector("button")).toBeNull();
+  });
+
+  it("no verdict ⇒ no line: a null headline renders nothing (never a fabricated sentence)", async () => {
+    state.headline = null;
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    await waitFor(() => expect(state.calls).toContain("get_intelligence_headline"));
+    expect(intelRow(c)).toBeNull();
+  });
+
+  it('compy_intelligence "0" failsafe: no line AND the IPC is never invoked', async () => {
+    localStorage.setItem("compy_intelligence", "0");
+    state.headline = headlineFixture; // even a ready headline must not leak through
+    const c = mount({ ...props, rooms: groundRooms, onNavigate: () => {} }).container;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(intelRow(c)).toBeNull();
+    expect(state.calls).not.toContain("get_intelligence_headline");
   });
 });

@@ -1,13 +1,14 @@
-import type { AppliedChange, SessionSummary } from "../../types";
+import type { AppliedChange, SessionSummary, IntelEvent } from "../../types";
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { KNOWLEDGE, type KnowledgeEntry } from "../../data/knowledge";
 
 // The Logbook tape builder (Console HUD Phase 4, plan 2026-07-12-console-hud-phase4-blackbook,
-// direction A "The Logbook"). A PURE frontend view over data the app ALREADY holds — zero new
-// IPC, zero src-tauri. It MIRRORS three real record sources into one reverse-chronological tape;
-// it never MOVES them (applied changes still live in the Lab's Optimize station, sessions in
-// Monitor, autopsy in its ledger). This is the honesty spine of the room, so it is written and
-// tested first:
+// direction A "The Logbook"). A PURE builder — it does no IO itself; the surface hands it data.
+// It MIRRORS four real record sources into one reverse-chronological tape; it never MOVES them
+// (applied changes still live in the Lab's Optimize station, sessions in Monitor, autopsy in its
+// ledger, observed events in the Rust intelligence timeline — the one read-only IPC the surface
+// fetches for it, Intelligence Phase 1). This is the honesty spine of the room, so it is written
+// and tested first:
 //   • Only REAL records — an unparseable/absent timestamp is DROPPED, never coerced to now/0, so
 //     the tape can never fabricate a row. Empty in ⇒ empty out ⇒ the room's honest empty state.
 //   • The rollback flag rides ONLY change records, and only while the change is genuinely active
@@ -62,12 +63,32 @@ export type LogbookAutopsy = {
   scamFlags: number;
 };
 
-export type LogbookRecord = LogbookChange | LogbookSession | LogbookAutopsy;
+export type LogbookObserved = {
+  kind: "observed";
+  /** ms epoch, from IntelEvent.timestamp (the reading that revealed the change). */
+  at: number;
+  /** Stable timeline event id (from the Rust intelligence timeline). */
+  id: string;
+  /** "hardware-change" | "gpu-driver-change" | "windows-build-change" | "power-plan-change". */
+  eventType: string;
+  /** The engine's own plain sentence ("GPU driver changed: A → B") — rendered verbatim. */
+  summary: string;
+  /** The engine's honest how-we-know note — verbatim, never rephrased into a claim. */
+  detail: string | null;
+  /** Both probe bounds (ms) — the exact moment wasn't witnessed, only the window. */
+  observedBetween: [number, number] | null;
+};
+
+export type LogbookRecord = LogbookChange | LogbookSession | LogbookAutopsy | LogbookObserved;
 
 export type LogbookInput = {
   changes?: AppliedChange[] | null;
   sessions?: SessionSummary[] | null;
   autopsy?: AutopsyLedgerEntry[] | null;
+  /** Intelligence-timeline events (Intelligence Phase 1). Only scope-"observed" rows are taped —
+   *  compy-applied and measurement events already have their own records above (decision 15:
+   *  the tape gains ONLY the event kinds no surface shows; it never re-lists). */
+  observed?: IntelEvent[] | null;
 };
 
 // A finite ms-epoch or null (never coerced). ISO strings → Date.parse; anything unparseable → null.
@@ -77,7 +98,7 @@ function ms(iso: string | null | undefined): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
-export function buildLogbook({ changes, sessions, autopsy }: LogbookInput): LogbookRecord[] {
+export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookInput): LogbookRecord[] {
   const records: LogbookRecord[] = [];
 
   for (const c of changes ?? []) {
@@ -136,8 +157,33 @@ export function buildLogbook({ changes, sessions, autopsy }: LogbookInput): Logb
     });
   }
 
+  // Observed machine changes (Intelligence Phase 1, decision 15): hardware / GPU-driver /
+  // Windows-build / power-plan deltas Compy NOTICED between its own readings — the one record
+  // class no other surface shows. Scope-filtered hard: compy-applied and measurement events
+  // already ride the change/session rows above, and re-listing them would double the tape.
+  for (const ev of observed ?? []) {
+    if (ev.scope !== "observed") continue;
+    const at = ms(ev.timestamp);
+    if (at === null) continue; // no honest timestamp ⇒ no row
+    let between: [number, number] | null = null;
+    if (ev.observed_between) {
+      const a = ms(ev.observed_between[0]);
+      const b = ms(ev.observed_between[1]);
+      if (a !== null && b !== null) between = [a, b];
+    }
+    records.push({
+      kind: "observed",
+      at,
+      id: ev.id,
+      eventType: ev.event_type,
+      summary: ev.summary,
+      detail: ev.detail ?? null,
+      observedBetween: between,
+    });
+  }
+
   // Reverse-chronological — newest first. Array.prototype.sort is stable (ES2019+), so records
-  // that share a timestamp keep insertion order (change → session → autopsy): deterministic.
+  // that share a timestamp keep insertion order (change → session → autopsy → observed): deterministic.
   records.sort((x, y) => y.at - x.at);
   return records;
 }

@@ -625,6 +625,35 @@ export function applyHudFrame(on: boolean): void {
   }
 }
 
+// Intelligence Phase 1 surfaces (owner directive 2026-07-16 — "What changed?" panel in Monitor,
+// observed-change rows in Blackbook, one leading-finding line on Home). All read-only presentation
+// over the deterministic Rust engine (intelligence.rs); no mutation, no network. DEFAULT ON per the
+// graduated-flag convention (owner-commissioned surface): only an explicit "0" (devtools/localStorage
+// failsafe, no Settings row) restores the prior tree byte-identical.
+const INTELLIGENCE_KEY = "compy_intelligence";
+
+export function readIntelligence(): boolean {
+  try {
+    return localStorage.getItem(INTELLIGENCE_KEY) !== "0";
+  } catch {
+    /* ignore — default ON */
+  }
+  return true;
+}
+
+export function applyIntelligence(on: boolean): void {
+  try {
+    localStorage.setItem(INTELLIGENCE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:intelligence-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Per-room identity accents (owner 2026-07-12 "per-room identity" — see src/design/room-identity.ts
 // for the palette + doctrine). DEFAULT ON since 2026-07-13 (owner eyeballed the picker/palette and
 // directed approved work default-ON): <html data-room-identity="on"> lets room-identity.css scope

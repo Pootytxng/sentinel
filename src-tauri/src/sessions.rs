@@ -64,6 +64,11 @@ pub(crate) struct SessionSummary {
     /// sessions parse with this as None.
     #[serde(default)]
     pub(crate) hw_fingerprint: Option<crate::hardware::HwFingerprint>,
+    /// Was a Gaming Mode session live at ANY point during this FPS session? Sampled per tick by
+    /// the monitoring loop (a save-time-only probe would miss a session that ended before
+    /// monitoring stopped). Additive: pre-field records parse as None → honestly Unknown.
+    #[serde(default)]
+    pub(crate) gaming_mode_active: Option<bool>,
     /// Stutter Forensics: at most one hedged insight correlating the worst dips with a signal, or
     /// None when there's no clear pattern. Computed at finalize from the read-only session timeline.
     #[serde(default)]
@@ -226,6 +231,7 @@ impl SessionAccumulator {
             compy_changes_active: self.compy_changes_active,
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
+            gaming_mode_active: None,
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
