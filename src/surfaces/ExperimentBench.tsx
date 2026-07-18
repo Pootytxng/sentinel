@@ -79,6 +79,7 @@ const VERDICT_COPY: Record<string, string> = {
   confounded: "Another change interfered — restored, can't attribute",
   expired: "Baseline too old to judge — restored",
   "insufficient-evidence": "Not enough data to judge — restored",
+  "not-comparable": "Different game — not comparable, restored",
 };
 
 // Honest label per simulator verdict + whether a controlled test is a meaningful next step.
@@ -298,6 +299,9 @@ export default function ExperimentBench() {
         treatmentLow1Fps: treatment.low1_fps_est,
         treatmentSamples: treatment.samples,
         crashed: false,
+        // The game this treatment session actually measured — the backend re-verifies it matches the
+        // baseline (defense-in-depth) rather than trusting our same-game filter above.
+        treatmentGame: treatment.process_name,
       });
       await reload();
     } catch (e) {

@@ -89,16 +89,23 @@ never be conflatable in any doc, commit message, or report).
   boundary, was FIXED + guard-tested pre-ship: the picker locks during `simBusy` + request-id sequencing
   drops superseded reads + the sim card names its exact mutation target — `ExperimentBench.test.tsx`
   "locks the change picker while a simulation is in flight".)
-- [ ] **Measurement Platform 2.0 follow-up — treatment-side game-state fingerprint (additive, V1 limitation).**
-  The controlled experiment (`ExperimentBench`) captures a `GameStateFingerprint` at **baseline** but does
-  NOT re-capture and diff the game/process on the **treatment** side, so a game-swap mid-run (quit the game,
-  launch a different one between baseline and treatment) is **not provably excluded from stored data** — the
-  single-variable assumption could be violated in a way the record can't catch. In practice the orchestrator
-  binds the run to one sitting and a real confound moves the ledger watermark (→ `confounded`/Low) far more
-  often than not, but the game-swap case specifically is unguarded. **Honest fix (additive, safe-default):**
-  capture a treatment-side `GameStateFingerprint` + an equality check that drops `verdict_confidence` to
-  **Unknown** on mismatch (never a silent "same game" assumption). Recorded, not silently gated — decision
-  doc `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4. No mutation-boundary / network / gate change.
+- [x] **Measurement Platform 2.0 follow-up — treatment-side game-match check (additive, V1 limitation) — SHIPPED 2026-07-18.**
+  The controlled experiment (`ExperimentBench`) captured a `GameStateFingerprint` at **baseline** but did
+  NOT re-check the game/process on the **treatment** side, so a game-swap mid-run (quit the game, launch a
+  different one between baseline and treatment) was **not provably excluded from stored data**. **Shipped
+  fix (additive, safe-default, read-only advisory):** `conclude_experiment` now takes an optional
+  `treatment_game: Option<String>` (the treatment session's `process_name`, which the FE already has via
+  `treatmentFor`'s same-game filter — the game identity is the ONE axis that can realistically swap within a
+  single sitting; rig/driver/res are held constant by construction, §1 of the decision doc). `conclude_outcome`
+  runs a pure `game_match(baseline, treatment) → GameMatch` check at **top precedence, before crash + sample
+  gates**: `Mismatch` ⇒ `not-comparable` verdict, restore (`keep=false`), **Unknown** confidence, plain-English
+  "measured a different game … not enough comparable evidence"; `Unverified` (either side blank/absent) proceeds
+  but drops the same-game claim; `Match` earns the "same rig and game" note. **Defense-in-depth** — the FE
+  same-game filter stays, but the backend no longer trusts it (mirrors the `MAX_TEXT_LEN` webview-trust-boundary
+  posture). No apply/rollback mutation, no network, no gate change. Guards: 5 new cargo tests +
+  `not-comparable` added to `no_verdict_note_ever_carries_a_numeric_confidence` + an `ExperimentBench.test.tsx`
+  render guard (the `not-comparable` verdict is unreachable in the live UI by design, so its label is vitest-proven).
+  Decision doc `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4 updated to CLOSED.
 - [ ] **Measurement Platform 2.0 follow-up — `next_test` → experiment structured routing (additive).**
   A leading hypothesis's suggested next test is **free prose** (`next_action` / `next_test` strings) with no
   machine-readable rec-id, so "run the supported next test" cannot be wired into a pre-loaded `ExperimentBench`

@@ -52,6 +52,21 @@ const RUNNING_EXPERIMENT = {
   concluded_at: null,
 };
 
+// A concluded experiment whose treatment session measured a DIFFERENT game than the baseline: the
+// backend's defense-in-depth game-match guard (2026-07-18) declines with the "not-comparable"
+// verdict + Unknown confidence + restore. The FE must render a plain-English label, never the raw slug.
+const NOT_COMPARABLE_EXPERIMENT = {
+  ...KEPT_EXPERIMENT,
+  id: "exp:3-0",
+  status: "restored",
+  verdict: "not-comparable",
+  verdict_confidence: "unknown",
+  verdict_note:
+    "The test session measured a different game (cs2.exe) than the baseline (Valorant), so this " +
+    "isn't a comparable before/after — that's not enough comparable evidence to judge the change.",
+  kept: false,
+};
+
 const VALORANT_SESSION = {
   started_at: "2026-07-17T02:00:00Z",
   duration_secs: 1800,
@@ -134,6 +149,18 @@ describe("ExperimentBench (armed)", () => {
     // The kept experiment renders its plain-English honest verdict, not a raw enum string.
     expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
     expect(screen.getByText("Hardware-accelerated GPU scheduling")).toBeInTheDocument();
+  });
+
+  // Guard for the treatment-game comparability fix (2026-07-18): the backend can now return a
+  // "not-comparable" verdict when the treatment session measured a different game than the baseline.
+  // The history list must render a friendly label for it — never leak the raw "not-comparable" slug.
+  it("renders a plain-English label for a not-comparable (different-game) verdict, never the raw slug", async () => {
+    state.gate = true;
+    state.experiments = [NOT_COMPARABLE_EXPERIMENT];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("experiment-bench")).toBeInTheDocument();
+    expect(await screen.findByText("Different game — not comparable, restored")).toBeInTheDocument();
+    expect(screen.queryByText("not-comparable")).toBeNull();
   });
 
   it("picking a change runs the simulator and offers Start against the real baseline", async () => {

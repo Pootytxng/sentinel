@@ -255,10 +255,51 @@ pub(crate) struct ConcludeOutcome {
     pub note: String,
 }
 
+/// Whether the treatment session measured the SAME game as the baseline — the defense-in-depth
+/// game-identity check at the webview trust boundary (the same posture as `MAX_TEXT_LEN`: a
+/// compromised or buggy UI must not be able to make Compy compare two different games and call it a
+/// clean single-variable result). The FE already offers only a same-game treatment session, but the
+/// BACKEND re-verifies rather than trusting the UI's filter. Decision doc
+/// `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GameMatch {
+    /// Both identities are known and equal (case-insensitive) — the single-variable compare is valid.
+    Match,
+    /// Both known and DIFFERENT — a different game is a different workload, so the before/after is not
+    /// comparable at all; the verdict must decline, never keep a change on a wrong-game reading.
+    Mismatch,
+    /// The treatment game identity wasn't supplied, or either side is blank — honestly unknown. We do
+    /// NOT assume the games matched (never fabricate identity), but this is no worse than before the
+    /// check existed: the verdict proceeds exactly as it did, minus the unearned "same game" claim.
+    Unverified,
+}
+
+/// Compare the baseline game identity to the treatment session's, conservatively: an absent or blank
+/// identity on either side is [`GameMatch::Unverified`] (never silently treated as equal OR as
+/// different) — only two known, non-blank, unequal names are a [`GameMatch::Mismatch`]. Process names
+/// (`"cs2.exe"`) compare case-insensitively after trimming — the same identity the FE filters
+/// treatment sessions by.
+fn game_match(baseline: &str, treatment: Option<&str>) -> GameMatch {
+    let baseline = baseline.trim();
+    match treatment.map(str::trim) {
+        Some(t) if !baseline.is_empty() && !t.is_empty() => {
+            if baseline.eq_ignore_ascii_case(t) {
+                GameMatch::Match
+            } else {
+                GameMatch::Mismatch
+            }
+        }
+        _ => GameMatch::Unverified,
+    }
+}
+
 /// The honest confidence BAND in an experiment verdict (Task F) — NOT a number and NOT a promise. It
 /// answers "how much can you trust this before/after conclusion?" from the QUALITY of the evidence,
 /// never the size of the effect. Precedence mirrors [`conclude_outcome`]:
 ///
+/// - **not-comparable → Unknown** — the treatment measured a different game than the baseline, so
+///   there is no comparable before/after at all; ahead of even the crash signal (a crash in the wrong
+///   game can't be attributed to this change either).
 /// - **crash → High** — a crash is an unambiguous stability failure; the "restore it" conclusion
 ///   does not depend on the fps reading at all.
 /// - **insufficient samples → Unknown** — not enough comparable evidence to judge; the honest "we
@@ -268,6 +309,11 @@ pub(crate) struct ConcludeOutcome {
 /// - **improved / no-change / regressed** (clean guards + enough samples) → High when the treatment
 ///   session is comfortably long (≥ 2× the minimum frames), else Medium — a valid but shorter sample.
 fn verdict_confidence(verdict: &str, treatment_samples: u32, crashed: bool) -> Confidence {
+    // A different-game treatment is not comparable evidence at all — Unknown, ahead of the crash
+    // signal (kept in step with `conclude_outcome`'s top-precedence game-match guard).
+    if verdict == "not-comparable" {
+        return Confidence::Unknown;
+    }
     if crashed {
         return Confidence::High;
     }
@@ -285,7 +331,7 @@ fn verdict_confidence(verdict: &str, treatment_samples: u32, crashed: bool) -> C
 /// The plain-language "what supports / limits this verdict" line (Task F) — the experiment's
 /// methodology in one sentence, in product language (single-variable, comparable-evidence,
 /// direct-comparison-limited). Never a numeric confidence.
-fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool) -> String {
+fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool, game: GameMatch) -> String {
     if crashed {
         return "The game crashed during the test — an unambiguous stability failure on this rig, so \
                 Compy restored the change. This verdict does not rely on the frame-rate reading."
@@ -306,10 +352,21 @@ fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool) -> String 
         "expired" => "The baseline is too old to compare fairly against this session, so direct \
                       comparison is limited."
             .into(),
-        _ => "Baseline and treatment were captured back-to-back on the same rig and game, changing \
-              only this one setting — a clean single-variable comparison. Only the 1% low frame rate \
-              was judged, against the same noise floor the rest of Compy uses."
-            .into(),
+        _ => {
+            // Only claim the games matched when the backend actually VERIFIED it — never a silent
+            // "same game" assumption (decision doc 2026-07-18-experiment-comparability §4). When the
+            // treatment game wasn't supplied we drop the claim rather than assert something unproven;
+            // a genuine Mismatch never reaches here (it returns "not-comparable" upstream).
+            let same_rig_and_game = match game {
+                GameMatch::Match => "on the same rig and game",
+                _ => "on the same rig",
+            };
+            format!(
+                "Baseline and treatment were captured back-to-back {same_rig_and_game}, changing only \
+                 this one setting — a clean single-variable comparison. Only the 1% low frame rate \
+                 was judged, against the same noise floor the rest of Compy uses."
+            )
+        }
     }
 }
 
@@ -323,10 +380,36 @@ pub(crate) fn conclude_outcome(
     treatment_low1: f64,
     treatment_samples: u32,
     crashed: bool,
+    treatment_game: Option<&str>,
     ledger_now: usize,
     now: DateTime<Utc>,
 ) -> ConcludeOutcome {
     let delta = delta_low1_pct(rec.baseline_low1_fps, treatment_low1);
+    let game = game_match(&rec.game, treatment_game);
+
+    // TOP precedence (defense-in-depth, decision doc 2026-07-18-experiment-comparability §3/§4): if
+    // the treatment session measured a KNOWN-different game than the baseline, this is not a
+    // comparable before/after — a different game is a different workload, so nothing about that
+    // session is attributable to the change under test (not even a crash). Decline with an honest
+    // not-comparable verdict at Unknown confidence and RESTORE — never keep a change on a wrong-game
+    // reading, never silently assume the games matched. An UNVERIFIED game (identity not supplied) is
+    // no worse than before this check existed: fall through to the normal precedence below.
+    if game == GameMatch::Mismatch {
+        let treatment_name = treatment_game.map(str::trim).unwrap_or("unknown");
+        return ConcludeOutcome {
+            verdict: "not-comparable".into(),
+            keep: false,
+            delta_low1_pct: delta,
+            stop_reason: Some("treatment-game-differs-from-baseline".into()),
+            confidence: verdict_confidence("not-comparable", treatment_samples, crashed),
+            note: format!(
+                "The test session measured a different game ({treatment_name}) than the baseline \
+                 ({}), so this isn't a comparable before/after — that's not enough comparable \
+                 evidence to judge the change, so Compy restored it and left the result unknown.",
+                rec.game.trim(),
+            ),
+        };
+    }
 
     // A crash during the treatment session means the change is unstable/unsupported on this rig —
     // restore regardless of any fps reading (§4F "stop on crash"), and say so.
@@ -337,7 +420,7 @@ pub(crate) fn conclude_outcome(
             delta_low1_pct: delta,
             stop_reason: Some("crash-during-treatment".into()),
             confidence: verdict_confidence("regressed", treatment_samples, true),
-            note: verdict_note("regressed", treatment_samples, true),
+            note: verdict_note("regressed", treatment_samples, true, game),
         };
     }
 
@@ -350,7 +433,7 @@ pub(crate) fn conclude_outcome(
             delta_low1_pct: delta,
             stop_reason: Some("insufficient-samples".into()),
             confidence: verdict_confidence("insufficient-evidence", treatment_samples, false),
-            note: verdict_note("insufficient-evidence", treatment_samples, false),
+            note: verdict_note("insufficient-evidence", treatment_samples, false, game),
         };
     }
 
@@ -362,7 +445,7 @@ pub(crate) fn conclude_outcome(
     // restore — a change that didn't measurably help has no justification to stay.
     let keep = verdict == "improved";
     let confidence = verdict_confidence(&verdict, treatment_samples, false);
-    let note = verdict_note(&verdict, treatment_samples, false);
+    let note = verdict_note(&verdict, treatment_samples, false, game);
     ConcludeOutcome { verdict, keep, delta_low1_pct: delta, stop_reason: None, confidence, note }
 }
 
@@ -631,6 +714,11 @@ pub(crate) fn conclude_experiment(
     treatment_low1_fps: f64,
     treatment_samples: u32,
     crashed: bool,
+    // The game the treatment session actually measured, for the backend's defense-in-depth
+    // same-game check (the FE offers only a same-game session, but we re-verify — decision doc
+    // 2026-07-18-experiment-comparability §3/§4). `Option` ⇒ IPC-backward-compatible: an older FE
+    // that omits it reads as `Unverified` and the verdict proceeds exactly as before.
+    treatment_game: Option<String>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
@@ -646,6 +734,11 @@ pub(crate) fn conclude_experiment(
         return Err("experiment is not running — nothing to conclude".into());
     }
 
+    // Cap the treatment game at the trust boundary like the other free-text fields (MAX_TEXT_LEN) —
+    // a compromised UI must not be able to smuggle an unbounded string through this command.
+    let treatment_game: Option<String> =
+        treatment_game.map(|g| g.chars().take(MAX_TEXT_LEN).collect());
+
     let now = Utc::now();
     let ledger_now = crate::history::ledger_len();
     let outcome = conclude_outcome(
@@ -653,6 +746,7 @@ pub(crate) fn conclude_experiment(
         treatment_low1_fps,
         treatment_samples,
         crashed,
+        treatment_game.as_deref(),
         ledger_now,
         now,
     );
@@ -904,7 +998,7 @@ mod experiment_tests {
         // no-op lookup commands here (bogus id ⇒ nothing matches ⇒ no mutation). `start_experiment` is
         // deliberately NOT called — it applies a real reversible change through the ledger; that
         // round-trip is proven live on the rig by the ship QA (RELEASE_STATE), never in a unit run.
-        let concluded = conclude_experiment("nonexistent".into(), 120.0, 90.0, 1000, false).unwrap_err();
+        let concluded = conclude_experiment("nonexistent".into(), 120.0, 90.0, 1000, false, None).unwrap_err();
         assert!(!concluded.contains("isn't part of this build"), "gate no longer short-circuits: {concluded}");
         assert!(concluded.contains("not found"));
         let restored = restore_experiment("nonexistent".into()).unwrap_err();
@@ -942,7 +1036,7 @@ mod experiment_tests {
     fn improvement_beyond_noise_is_kept() {
         let r = rec(90.0, 5);
         // +11% on the 1% low, no confound (ledger unchanged), plenty of samples.
-        let o = conclude_outcome(&r, 100.0, 5000, false, 5, Utc::now());
+        let o = conclude_outcome(&r, 100.0, 5000, false, None, 5, Utc::now());
         assert_eq!(o.verdict, "improved");
         assert!(o.keep, "a clean improvement is kept");
         assert!(o.stop_reason.is_none());
@@ -952,7 +1046,7 @@ mod experiment_tests {
     fn a_gain_inside_the_noise_floor_is_no_change_and_restores() {
         let r = rec(100.0, 5);
         // +2% < 3% floor → no-change, never "improved" (never credit inside the noise).
-        let o = conclude_outcome(&r, 102.0, 5000, false, 5, Utc::now());
+        let o = conclude_outcome(&r, 102.0, 5000, false, None, 5, Utc::now());
         assert_eq!(o.verdict, "no-change");
         assert!(!o.keep, "no measurable benefit ⇒ restore to the clean baseline");
     }
@@ -960,7 +1054,7 @@ mod experiment_tests {
     #[test]
     fn a_regression_restores() {
         let r = rec(100.0, 5);
-        let o = conclude_outcome(&r, 80.0, 5000, false, 5, Utc::now());
+        let o = conclude_outcome(&r, 80.0, 5000, false, None, 5, Utc::now());
         assert_eq!(o.verdict, "regressed");
         assert!(!o.keep);
     }
@@ -969,7 +1063,7 @@ mod experiment_tests {
     fn a_confound_refuses_attribution_and_restores() {
         let r = rec(90.0, 5);
         // Ledger advanced past the watermark → another change landed → confounded, even on a big gain.
-        let o = conclude_outcome(&r, 120.0, 5000, false, 6, Utc::now());
+        let o = conclude_outcome(&r, 120.0, 5000, false, None, 6, Utc::now());
         assert_eq!(o.verdict, "confounded");
         assert!(!o.keep, "can't attribute a confounded result → restore");
     }
@@ -978,7 +1072,7 @@ mod experiment_tests {
     fn a_crash_forces_restore_regardless_of_fps() {
         let r = rec(90.0, 5);
         // Even a big apparent gain: a crash means unstable/unsupported → restore + honest stop reason.
-        let o = conclude_outcome(&r, 130.0, 5000, true, 5, Utc::now());
+        let o = conclude_outcome(&r, 130.0, 5000, true, None, 5, Utc::now());
         assert_eq!(o.verdict, "regressed");
         assert!(!o.keep);
         assert_eq!(o.stop_reason.as_deref(), Some("crash-during-treatment"));
@@ -987,10 +1081,74 @@ mod experiment_tests {
     #[test]
     fn too_few_samples_is_insufficient_evidence_not_a_verdict() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, 5, Utc::now());
+        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, 5, Utc::now());
         assert_eq!(o.verdict, "insufficient-evidence");
         assert!(!o.keep, "no verdict on thin evidence ⇒ restore");
         assert_eq!(o.stop_reason.as_deref(), Some("insufficient-samples"));
+    }
+
+    // ── treatment-game comparability guard (defense-in-depth, decision doc 2026-07-18 §3/§4) ──
+
+    /// The pure identity check: known-equal (case-insensitive, trimmed) is Match; known-unequal is
+    /// Mismatch; anything absent or blank is Unverified — NEVER silently equal or unequal.
+    #[test]
+    fn game_match_classifies_conservatively() {
+        assert_eq!(game_match("cs2.exe", Some("cs2.exe")), GameMatch::Match);
+        assert_eq!(game_match("cs2.exe", Some("CS2.EXE")), GameMatch::Match); // case-insensitive
+        assert_eq!(game_match("  cs2.exe ", Some("cs2.exe")), GameMatch::Match); // trimmed
+        assert_eq!(game_match("cs2.exe", Some("valorant.exe")), GameMatch::Mismatch);
+        assert_eq!(game_match("cs2.exe", None), GameMatch::Unverified); // identity not supplied
+        assert_eq!(game_match("cs2.exe", Some("   ")), GameMatch::Unverified); // blank treatment
+        assert_eq!(game_match("", Some("cs2.exe")), GameMatch::Unverified); // blank baseline
+    }
+
+    /// A treatment session that measured a DIFFERENT game than the baseline is not a comparable
+    /// before/after — decline with "not-comparable", restore, and name both games in the note.
+    #[test]
+    fn a_different_treatment_game_is_not_comparable_and_restores() {
+        let r = rec(90.0, 5); // baseline game = "Test"
+        // Even a big apparent gain on the 1% low can't count — it's a different workload.
+        let o = conclude_outcome(&r, 130.0, 5000, false, Some("Other Game"), 5, Utc::now());
+        assert_eq!(o.verdict, "not-comparable");
+        assert!(!o.keep, "a wrong-game reading must never keep the change");
+        assert_eq!(o.stop_reason.as_deref(), Some("treatment-game-differs-from-baseline"));
+        assert_eq!(o.confidence, Confidence::Unknown, "not comparable ⇒ Unknown, never a band");
+        assert!(o.note.contains("Other Game") && o.note.contains("Test"), "names both games");
+        assert!(o.note.contains("not enough comparable evidence"));
+    }
+
+    /// The game-mismatch guard sits ABOVE the crash guard: a crash in a KNOWN-different game still
+    /// isn't attributable to our change, so the verdict is not-comparable (Unknown), not regressed.
+    #[test]
+    fn game_mismatch_takes_precedence_over_crash() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 130.0, 5000, true, Some("Other Game"), 5, Utc::now());
+        assert_eq!(o.verdict, "not-comparable", "wrong game beats the crash signal");
+        assert_eq!(o.confidence, Confidence::Unknown);
+        assert!(!o.keep, "still restores — identical safety to the crash path");
+    }
+
+    /// Verifying the same game (case-insensitively) leaves the normal verdict untouched AND earns the
+    /// "same rig and game" claim in the note — the ONLY path allowed to assert the games matched.
+    #[test]
+    fn a_verified_same_game_keeps_the_normal_verdict_and_claims_same_game() {
+        let r = rec(90.0, 5); // baseline game = "Test"
+        let o = conclude_outcome(&r, 100.0, 5000, false, Some("test"), 5, Utc::now());
+        assert_eq!(o.verdict, "improved", "the guard must not disturb a clean same-game result");
+        assert!(o.keep);
+        assert!(o.note.contains("same rig and game"), "a verified match earns the full claim");
+    }
+
+    /// An UNVERIFIED game (identity not supplied) is no worse than before the check existed: the
+    /// verdict proceeds exactly as it did, but the note DROPS the unearned "same game" assumption.
+    #[test]
+    fn an_unverified_game_proceeds_but_drops_the_same_game_claim() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 100.0, 5000, false, None, 5, Utc::now());
+        assert_eq!(o.verdict, "improved", "no identity ⇒ behaviour unchanged from before the guard");
+        assert!(o.keep);
+        assert!(o.note.contains("on the same rig,"), "still a same-rig single-variable compare");
+        assert!(!o.note.contains("same rig and game"), "never silently assume the games matched");
     }
 
     // ── verdict CONFIDENCE band + methodology note (Task F — bands never numbers) ──
@@ -1000,7 +1158,7 @@ mod experiment_tests {
     #[test]
     fn a_crash_verdict_is_high_confidence_and_says_it_does_not_rely_on_fps() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 130.0, 5000, true, 5, Utc::now());
+        let o = conclude_outcome(&r, 130.0, 5000, true, None, 5, Utc::now());
         assert_eq!(o.confidence, Confidence::High);
         assert!(o.note.to_lowercase().contains("crash"));
         assert!(o.note.contains("does not rely on the frame-rate reading"));
@@ -1010,7 +1168,7 @@ mod experiment_tests {
     #[test]
     fn insufficient_samples_leave_confidence_unknown() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, 5, Utc::now());
+        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, 5, Utc::now());
         assert_eq!(o.confidence, Confidence::Unknown);
         assert!(o.note.contains("not enough comparable evidence"));
     }
@@ -1019,7 +1177,7 @@ mod experiment_tests {
     #[test]
     fn a_clean_verdict_on_a_short_sample_is_medium() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 100.0, MIN_TREATMENT_SAMPLES, false, 5, Utc::now());
+        let o = conclude_outcome(&r, 100.0, MIN_TREATMENT_SAMPLES, false, None, 5, Utc::now());
         assert_eq!(o.verdict, "improved");
         assert_eq!(o.confidence, Confidence::Medium);
         assert!(o.note.contains("single-variable comparison"));
@@ -1034,6 +1192,7 @@ mod experiment_tests {
             100.0,
             MIN_TREATMENT_SAMPLES.saturating_mul(2),
             false,
+            None,
             5,
             Utc::now(),
         );
@@ -1045,7 +1204,7 @@ mod experiment_tests {
     #[test]
     fn a_confounded_verdict_is_low_confidence_regardless_of_gain() {
         let r = rec(90.0, 5);
-        let o = conclude_outcome(&r, 120.0, 5000, false, 6, Utc::now());
+        let o = conclude_outcome(&r, 120.0, 5000, false, None, 6, Utc::now());
         assert_eq!(o.verdict, "confounded");
         assert_eq!(o.confidence, Confidence::Low);
         assert!(o.note.contains("can't be attributed"));
@@ -1057,10 +1216,11 @@ mod experiment_tests {
         let banned = ["% confidence", "confidence:", "score", "% bottleneck", "%bottleneck"];
         let r = rec(90.0, 5);
         let cases = [
-            conclude_outcome(&r, 130.0, 5000, true, 5, Utc::now()), // crash
-            conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, 5, Utc::now()), // insufficient
-            conclude_outcome(&r, 100.0, 5000, false, 5, Utc::now()), // improved
-            conclude_outcome(&r, 120.0, 5000, false, 6, Utc::now()), // confounded
+            conclude_outcome(&r, 130.0, 5000, true, None, 5, Utc::now()), // crash
+            conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, None, 5, Utc::now()), // insufficient
+            conclude_outcome(&r, 100.0, 5000, false, None, 5, Utc::now()), // improved
+            conclude_outcome(&r, 120.0, 5000, false, None, 6, Utc::now()), // confounded
+            conclude_outcome(&r, 100.0, 5000, false, Some("Other Game"), 5, Utc::now()), // not-comparable
         ];
         for o in cases {
             let lc = o.note.to_lowercase();

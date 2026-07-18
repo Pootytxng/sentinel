@@ -1,7 +1,7 @@
 # Decision — Where session-comparability applies, and why the controlled experiment doesn't use it
 
 - **Date:** 2026-07-18
-- **Status:** ACCEPTED (foundation + verdict-confidence band shipped this train)
+- **Status:** ACCEPTED (foundation + verdict-confidence band shipped in the F train; the §3 treatment-side game-match follow-up shipped 2026-07-18)
 - **Scope:** Measurement Platform 2.0, Task F. Records the two DIFFERENT comparability questions Compy
   answers, which surfaces use which, and — the item this note exists to settle — why the **controlled
   experiment** (`ExperimentBench`) is gated by a purpose-built **verdict-confidence band**, NOT by
@@ -73,18 +73,36 @@ Eligibility is a property of the **change and the rig**, decided before a baseli
 is not a two-session comparison and correctly does not touch `comparability.rs`. The confound + sample
 gate (§1) then governs whether the *result* of a run may be trusted. There is no third gate to add.
 
-## 3. The one honest limitation left open
+## 3. The limitation this train left open — now CLOSED (follow-up shipped 2026-07-18)
 
-The experiment captures a `GameStateFingerprint` at **baseline** but does not re-capture and diff the
-game/process on the **treatment** side. So if the user quit the game and launched a *different* one
-between baseline and treatment, the stored record could not detect it — the single-variable assumption
-would be violated in a way the data can't catch. In practice the orchestrator keeps the run bound to one
-sitting and a confound there would move the ledger watermark (→ `confounded`/Low) far more often than
-not, but the game-swap case specifically is **not provably excluded from stored data**.
+**V1 gap (as-shipped in the F train):** the experiment captured a `GameStateFingerprint` at **baseline**
+but did not re-capture and diff the game/process on the **treatment** side. So if the user quit the game
+and launched a *different* one between baseline and treatment, the stored record could not detect it —
+the single-variable assumption would be violated in a way the data couldn't catch. In practice the
+orchestrator keeps the run bound to one sitting and a confound there moves the ledger watermark (→
+`confounded`/Low) far more often than not, but the game-swap case specifically was **not provably
+excluded from stored data**.
 
-This is recorded here as a known V1 limitation rather than silently gated. The honest fix (a
-treatment-side game-state fingerprint + an equality check that drops confidence to Unknown on mismatch)
-is a small additive follow-up, listed in `docs/BACKLOG.md`, not shipped this train.
+**Follow-up (shipped this session, additive, read-only advisory):** `conclude_experiment` now accepts an
+optional `treatment_game: Option<String>` — the process name the treatment session actually measured —
+and `conclude_outcome` runs a pure `game_match(baseline, treatment) → GameMatch` equality check
+(`trim` + `eq_ignore_ascii_case`; either side blank/absent ⇒ `Unverified`, two known-unequal ⇒
+`Mismatch`) at **top precedence, before the crash and sample checks**. On a `Mismatch` the run concludes
+`not-comparable`, restores the change (`keep = false`), and reports **Unknown** confidence with the
+plain-English note that a different game was measured — "not enough comparable evidence to judge." On
+`Match` the note earns the stronger "on the same rig and game" phrasing; on `Unverified` it holds at "on
+the same rig" and makes no same-game claim. This is **defense-in-depth**: the frontend `treatmentFor()`
+still filters treatment sessions to the baseline's game, but the backend no longer *trusts* that filter —
+same posture as the existing `MAX_TEXT_LEN` webview-trust-boundary comment. It changes only what
+confidence to REPORT (advisory), touches no apply/rollback mutation primitive, and adds no network or
+gate surface. Guards: `game_match_classifies_conservatively`,
+`a_different_treatment_game_is_not_comparable_and_restores`, `game_mismatch_takes_precedence_over_crash`,
+`a_verified_same_game_keeps_the_normal_verdict_and_claims_same_game`,
+`an_unverified_game_proceeds_but_drops_the_same_game_claim`, plus the `not-comparable` case added to
+`no_verdict_note_ever_carries_a_numeric_confidence` and a frontend render guard in
+`ExperimentBench.test.tsx`. Because the live UI's same-game filter makes the `not-comparable` verdict
+unreachable in-app, that label's rendering is proven by the vitest render guard rather than a live
+capture.
 
 ## 4. Decision
 
@@ -92,5 +110,6 @@ is a small additive follow-up, listed in `docs/BACKLOG.md`, not shipped this tra
    experiment keeps its purpose-built verdict-confidence band. Do not force `derive` onto the experiment.
 2. **Eligibility stays the simulator** (`simulate`/`SimContext`) — barred/not-applicable/already-
    configured/estimate — not a comparability check.
-3. **Record the treatment-side game-match gap** as a known limitation + a backlog follow-up, never a
-   silent assumption of "same game."
+3. **Close the treatment-side game-match gap** with a backend equality check (shipped 2026-07-18, §3):
+   the experiment now re-verifies the treatment game against the baseline and drops to `not-comparable`
+   /Unknown + restore on mismatch — never a silent assumption of "same game."
