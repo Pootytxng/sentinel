@@ -23,6 +23,25 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-model-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "subagent model-routing guard"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-throttle.mjs\"",
+            "timeout": 10,
+            "statusMessage": "subagent spawn-count check"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",

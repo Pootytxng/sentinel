@@ -72,3 +72,50 @@ match these exactly or point back to this section rather than restate its own co
 Unrelated metric that happens to also round to "200k" and should not be confused with the audit
 red-flag above: `docs/LANE_WORKFLOW.md`'s **~200k output tokens per shipped burst item** — a
 cost-estimation constant for sizing parallel build bursts, nothing to do with context-window size.
+
+## 6. Code-enforced guards (2026-07-18, round 2 — closing the "policy-only" gaps)
+
+The 2026-07-18 audit's remaining open items were all policy sentences with nothing checking them
+in the moment. Two are now real code, one is fixed, two are named honestly as still open rather
+than papered over:
+
+- **Autopilot continuation cap — FIXED (§5).** `MAX_CONTINUES=2` hard-clamped in
+  `stop-continue.mjs`, closing the exact gap the 2026-07-01 spec flagged as unenforced.
+- **Subagent model-routing override — NOW ENFORCED.** `.claude/hooks/subagent-model-guard.mjs`
+  (PreToolUse on the `Agent` tool) denies any call whose `model` field requests opus/fable
+  outside the one documented exception (`web-design-director`, opus). Verified against the real
+  Claude Code Agent-tool schema (`prompt`/`description`/`subagent_type`/`model`), not guessed —
+  live-tested: denies an opus override on `rust-tauri-reviewer`, allows it for
+  `web-design-director`.
+- **Subagent spawn frequency/necessity — ADVISORY ONLY, by design.** "Should this have been a
+  subagent" is a judgment call a hook can't make from a JSON blob, so
+  `.claude/hooks/subagent-throttle.mjs` (PreToolUse on `Agent`) counts spawns per session and
+  injects a reminder (via `additionalContext`, not `permissionDecisionReason` — the latter isn't
+  delivered to the model on an "allow" decision, verified against the current hooks reference)
+  every 3rd spawn, pointing back to the §1 worth-spawning list. It never blocks. This is a real
+  improvement over pure hope, but it is not enforcement — a session can still ignore the reminder.
+- **Persist-before-compaction — NOW VERIFIED, not just instructed.** `context-size-advisor.mjs`
+  used to tell the model to persist state but never checked it happened. It now compares the
+  latest mtime of `docs/BACKLOG.md` and `docs/superpowers/{specs,plans}` against the last time it
+  fired in the same growth-cycle; if nothing changed, the injected reason escalates from a
+  reminder to "step 1 below is not optional this time." Still can't verify the persisted content
+  is actually *sufficient* to resume from cold — only that something was written.
+- **Boot tax — NOT fixed, flagged instead.** `docs/BACKLOG.md` is 124,218 bytes — already past
+  the usage-audit skill's own 120KB flag — while sitting at exactly its 12-cycle retention cap
+  (`docs/BACKLOG.md:250`). There's nothing over-retained to mechanically prune right now; the
+  size is inherent to how verbose 12 cycles are at this project's current logging style, plus
+  older non-cycle content (branch-reconciliation notes, etc.) living permanently in the file
+  past the rolling cycle window. Actually shrinking this requires judgment about what's still
+  load-bearing versus safe to move to `BACKLOG_ARCHIVE.md`/`CHANGELOG.md` — the kind of call this
+  pass deliberately did NOT make unilaterally, per the project's own false-done/never-silently-
+  drop-backlog-items law. Named here as the single largest concrete remaining lever, not solved.
+- **The 150k window number itself is inherited, not re-derived.** It was set 2026-07-02 from that
+  period's burn pattern; nobody has re-tested whether 150k is still the right cutoff specifically
+  for Opus 4.8. Internally consistent now (§5), not empirically re-proven optimal.
+- **`docs/LANE_WORKFLOW.md`'s "Workflow tool"** — its exact live PreToolUse `tool_name` is
+  unverified from this session (no access to a running Claude Code tool-call log to confirm it).
+  Unlike the Agent-tool guards above, which were verified against the documented schema before
+  shipping, a matcher here would be a guess — per the project's own no-speculation rule, it was
+  deliberately NOT built. To close this: in a live CC session, run a Workflow-tool call once and
+  check `tool_name` in the hook debug log (`--debug`) or via a temporary catch-all PreToolUse
+  logging hook, then wire the real matcher.
