@@ -13,7 +13,7 @@
   gap: 16px;
 }
 
-/* The undo/read-only promise, relocated from the header into the Optimize station panel (owner
+/* The reversibility reassurance, relocated from the header into the Optimize station panel (owner
    header-slop law 2026-07-10) — a contextual note next to the one control it qualifies. */
 :root[data-v2="on"] .lc-detail-note {
   margin: 0 0 10px;

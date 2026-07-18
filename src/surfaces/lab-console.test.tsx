@@ -188,18 +188,24 @@ describe("LabConsole", () => {
   it("no lede line — the console opens straight on the stage (owner header-slop law 2026-07-10)", () => {
     const { container } = renderConsole();
     expect(container.querySelector(".lab-console-lede")).toBeNull();
-    // The room's read-only promise lives in the Optimize panel (its context), not the header;
+    // The room's reassurance lives in the Optimize panel (its context), not the header;
     // the undo half moved to Fix's consent line (title-header law) so the panel says it once.
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // closed → nowhere
     fireEvent.click(screen.getByRole("button", { name: /optimize/i }));
     const note = container.querySelector(".lc-detail-note")!.textContent!;
-    expect(note).toMatch(/everything else just reads/i);
-    expect(note).not.toMatch(/undo/i);
-    // bug→guard (self-review 2026-07-17): arming the Intelligence Phase 3 experiment bench in this
-    // same room made the old "the only station ... that changes anything" claim false — TWO stations
-    // now mutate. The note must NOT assert single-mutator exclusivity, and MUST name the bench.
-    expect(note).not.toMatch(/only .*(changes?|change) anything/i);
-    expect(note).toMatch(/controlled experiments/i);
+    // bug→guard (self-review 2026-07-17, rounds 1–3): this note twice shipped a FALSE room-wide
+    // census. Round 1 said "the only station ... that changes anything" — false once Intelligence
+    // Phase 3 armed the Controlled experiments bench. Round 2 said "everything else just reads" —
+    // still false, because Benchmark's ungated "Measure this tweak" tweak-trial (start_tweak_trial →
+    // real apply_recommendation, benchmark_trial.rs) is a mutator too. The Lab has SEVERAL mutators,
+    // each disclosing its own mutation at its own surface, so the durable fix drops the census and
+    // states the one invariant true across every station: everything here is reversible. Guard that
+    // neither false census can return, that undo stays out (it lives on Fix's consent line), and that
+    // the reversibility reassurance stays.
+    expect(note).not.toMatch(/just reads?\b/i); // round-2 false census ("everything else just reads")
+    expect(note).not.toMatch(/only .*(changes?|change) anything/i); // round-1 false sole-mutator claim
+    expect(note).not.toMatch(/undo/i); // undo lives on Fix's consent line (title-header law)
+    expect(note).toMatch(/reversible|rolls? back|nothing.*permanent/i); // the true reassurance must stay
     fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // measure stations: no note
   });

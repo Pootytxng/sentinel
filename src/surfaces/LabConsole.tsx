@@ -249,7 +249,7 @@ export function LabConsole({
   return (
     <div className="lab-console" data-motion={reduced ? "reduced" : "full"}>
       {/* No lede (owner header-slop law 2026-07-10): the console opens straight on the stage —
-          header space above carries header-format text only; the undo/read-only promise lives in
+          header space above carries header-format text only; the reversibility reassurance lives in
           the Optimize panel, next to the one control it qualifies. */}
 
       {/* CONSOLE STAGE — bracketed frame, real 3D hologram center, four corner arc gauges. */}
@@ -323,17 +323,19 @@ export function LabConsole({
           </div>
           <div className="lab-card-body">
             {openStation === "optimize" && (
-              /* The room's read-only promise, relocated from the header (owner header-slop law
-                 2026-07-10) to its context. Since Intelligence Phase 3 armed the experiment bench
-                 (LabGround.tsx), TWO stations in this room mutate — this Optimize station AND
-                 Controlled experiments — so the note names both; the old "the only station ... that
-                 changes anything" claim went false the moment the bench armed (self-review
-                 2026-07-17). The undo half moved to Fix's consent line beside the apply controls
-                 (title-header law) so the panel never says undo twice. */
+              /* The room's reassurance, relocated from the header (owner header-slop law 2026-07-10)
+                 to its context. This note does NOT census which stations mutate — the Lab has several
+                 mutators (this Optimize station, Benchmark's "Measure this tweak" tweak-trial, and the
+                 armed Controlled experiments bench), and each discloses its own mutation at its own
+                 surface. Two prior attempts to census the room from here shipped FALSE claims — "the
+                 only station ... that changes anything" (self-review round 1), then "everything else
+                 just reads" (round 2, which missed Benchmark's ungated tweak-trial). So we state the
+                 one thing true across every station instead: everything here is reversible (rollback-
+                 first, LOCKED rule 3). The undo half stays on Fix's consent line beside the apply
+                 controls (title-header law) so the panel never says undo twice. */
               <p className="lc-detail-note">
-                Two stations here change your PC: this one applies your safe stack in one click, and
-                Controlled experiments below tests a single change, then auto-restores it. Everything
-                else just reads.
+                This station applies your safe stack in one click — and like every change made in this
+                room, it's fully reversible.
               </p>
             )}
             {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}
