@@ -1180,6 +1180,26 @@ mod safety_tests {
         assert!(!real.starts_with(" "));
     }
 
+    // §C build stamp — the dirty check MUST stay root-anchored. build.rs runs with CWD = the crate
+    // root (src-tauri/); a bare `:(exclude)docs` pathspec resolves relative to that CWD and silently
+    // fails to exclude the repo-root docs/, leaking every untracked screenshot back in as "+dirty"
+    // (the 2026-07-17 false-positive on a code-identical arming build). `top` magic anchors it to the
+    // repo root. This pins the fix so a "simplification" can't quietly regress it.
+    #[test]
+    fn build_dirty_check_is_root_anchored() {
+        let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/build.rs"))
+            .expect("read build.rs");
+        assert!(
+            src.contains(":(exclude,top)docs"),
+            "build.rs dirty check must use the root-anchored `:(exclude,top)docs` pathspec"
+        );
+        assert!(
+            !src.contains("\":(exclude)docs\""),
+            "the bare `:(exclude)docs` pathspec is CWD-relative from src-tauri/ and re-introduces \
+             the 2026-07-17 false-`+dirty` bug — keep the `top` magic"
+        );
+    }
+
     fn roundtrips<T>(v: &T) -> bool
     where
         T: serde::Serialize + for<'de> serde::Deserialize<'de>,

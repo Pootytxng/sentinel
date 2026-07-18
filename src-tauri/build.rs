@@ -17,8 +17,16 @@ fn git_stamp() -> (String, bool) {
     // the binary, so it is excluded (tracked or untracked); an untracked file anywhere ELSE
     // (a new src module, a config) still counts. Caught 2026-07-14: 89 untracked docs/ui-sweep
     // shots stamped the PART B installer "+dirty" from a code-identical tree.
+    //
+    // MUST use the `top` pathspec magic: cargo runs this build script with CWD = the crate root
+    // (src-tauri/), and a bare `:(exclude)docs` resolves `docs` RELATIVE to that CWD — i.e. it
+    // would try to exclude the non-existent `src-tauri/docs` and let every repo-root docs/ file
+    // leak back in as "dirty". `:(exclude,top)docs` anchors the path to the repo root regardless
+    // of CWD, which is the whole point. (Regressing to the bare form re-introduces the exact
+    // 2026-07-17 false-positive that stamped a code-identical arming build "+dirty"; the guard
+    // `build_dirty_check_is_root_anchored` in lib.rs pins this.)
     let dirty = Command::new("git")
-        .args(["status", "--porcelain", "--", ":(exclude)docs"])
+        .args(["status", "--porcelain", "--", ":(exclude,top)docs"])
         .output()
         .ok()
         .filter(|o| o.status.success())
