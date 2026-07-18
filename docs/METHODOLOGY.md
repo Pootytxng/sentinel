@@ -120,6 +120,42 @@ itself is computed once, from real timestamps, and reused by every surface that 
 benchmark efficacy card, the Two Futures comparison, and the Lab's verdict all agree on the same
 window, so they can't quietly disagree about what a number means.
 
+## 10. How far a result can be trusted — confidence is a band, never a number
+
+Compy never prints a made-up percentage next to a verdict (no "92% confident," no "optimization
+score"). Trust is reported as one of four honest **bands** — Unknown, Low, Medium, High — and each
+band is earned by the *quality of the evidence*, not the size of the effect.
+
+- **A controlled experiment** (test one change, capture before-and-after in the same sitting) earns
+  its band from what could go wrong in a single sitting: a crash during the test is High confidence in
+  a *failure* (an unambiguous stability problem — the reading doesn't even matter); too few frames
+  captured leaves it **Unknown** ("not enough comparable evidence"); a second change landing mid-test,
+  or a stale baseline, drops it to **Low** (no longer a clean single-variable test); and a clean run is
+  **Medium**, rising to **High** only when it gathered well over the minimum frames. A short note beside
+  every verdict says, in plain language, what supported it and what limited it.
+- The band a verdict shows is always the *lower* of "how good was this measurement" and "how comparable
+  were the things measured" (§11) — a surface may be less sure for its own reasons, but it can never
+  claim to be *more* sure than the comparison honestly allows.
+
+## 11. Comparing two play sessions — the honest limits
+
+When Compy compares two saved sessions (What Changed, the good-vs-bad investigator, an exported
+report), it first asks whether they can *honestly* be compared at all, and states the answer up front:
+
+- **Directly comparable** — same game, same PC, same capture method, nothing changed underneath. A
+  difference can be attributed to what you changed.
+- **Limited** — some condition changed or wasn't recorded (resolution, refresh, graphics API, memory,
+  a game or Windows update), or the two were captured different ways so *only the metrics both recorded
+  were compared*. The comparison still runs, with the limit stated.
+- **Not directly comparable** — a different game, or a different GPU (a different measurement basis
+  entirely). Any difference reflects the changed thing, not a tweak you made.
+- **Not enough comparable evidence** — too little was recorded on one or both sessions to judge (older
+  sessions saved before Compy recorded these conditions). Never assumed to match.
+
+The rule underneath all four: **a condition Compy didn't record never silently becomes "the same."** A
+changed driver, Windows build, or memory amount is offered as a *candidate to check first*, never
+asserted as the cause — correlation is not causation, and the report says so in those words.
+
 ---
 
 *Have a methodology question this page doesn't answer? Tell us — a real question is a bug report

@@ -89,6 +89,16 @@ never be conflatable in any doc, commit message, or report).
   boundary, was FIXED + guard-tested pre-ship: the picker locks during `simBusy` + request-id sequencing
   drops superseded reads + the sim card names its exact mutation target — `ExperimentBench.test.tsx`
   "locks the change picker while a simulation is in flight".)
+- [ ] **Measurement Platform 2.0 follow-up — treatment-side game-state fingerprint (additive, V1 limitation).**
+  The controlled experiment (`ExperimentBench`) captures a `GameStateFingerprint` at **baseline** but does
+  NOT re-capture and diff the game/process on the **treatment** side, so a game-swap mid-run (quit the game,
+  launch a different one between baseline and treatment) is **not provably excluded from stored data** — the
+  single-variable assumption could be violated in a way the record can't catch. In practice the orchestrator
+  binds the run to one sitting and a real confound moves the ledger watermark (→ `confounded`/Low) far more
+  often than not, but the game-swap case specifically is unguarded. **Honest fix (additive, safe-default):**
+  capture a treatment-side `GameStateFingerprint` + an equality check that drops `verdict_confidence` to
+  **Unknown** on mismatch (never a silent "same game" assumption). Recorded, not silently gated — decision
+  doc `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4. No mutation-boundary / network / gate change.
 - [~] **Intelligence Phase 4 — hardware-twin intelligence integration (IN PROGRESS):**
   - [x] **Component-level evidence highlighting (slice 1)** — ✅ BUILT this cycle. `component_evidence.rs`
     is a READ-ONLY projection: it re-keys the existing Intelligence Phase 2 pattern findings
