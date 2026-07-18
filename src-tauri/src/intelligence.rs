@@ -967,6 +967,13 @@ pub(crate) struct WhatChangedReport {
     /// the Expert view. Adds no new data; the plain-language fields above are the normal
     /// view. Populated by `what_changed`; the `base` builder leaves it empty.
     pub evidence_graph: EvidenceGraph,
+    /// Measurement Platform 2.0 (Task F) — how far the two sessions may honestly be compared,
+    /// composed from their capture capabilities + game-state conditions + rig fingerprints. A
+    /// projection of the two INPUT sessions (not this report), so the `base` builder fills it on
+    /// every path — including the inconclusive gates, which is exactly where the reader needs to
+    /// see WHY comparison was limited. Bands-only confidence ceiling; never assumes unrecorded
+    /// context matched.
+    pub comparability: crate::comparability::SessionComparability,
 }
 
 /// Outcome wrapper so "no comparison possible" is an honest first-class answer,
@@ -1454,6 +1461,10 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
         notes: Vec::new(),
         method_note: METHOD_NOTE.into(),
         evidence_graph: EvidenceGraph::default(),
+        // Honest comparability of the two input sessions, computed once here so every return
+        // path (including the inline gates below) carries it. The gates remain hard
+        // short-circuits; this field EXPOSES the structured reason for UI/export.
+        comparability: crate::comparability::derive(b, c),
     };
 
     // Comparability gates — each failure is an honest inconclusive, never a guess.
@@ -2296,6 +2307,8 @@ mod tests {
             stutter_timeline: vec![],
             stutter_events: vec![],
             fps_series: vec![],
+            capture_capabilities: None,
+            game_state: None,
         }
     }
 

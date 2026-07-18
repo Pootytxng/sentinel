@@ -7,7 +7,10 @@ mod benchmark; // Measured-efficacy engine — WIRED (Benchmark tab: run/baselin
 mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclusive) — WIRED: powers the trial verdict + scoreboard awards.
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.
 mod benchmark_trial; // live trial runner — WIRED: calibration + tweak A-B trial (Drop-guarded rollback).
+mod capture; // Measurement Platform 2.0 — the capture-backend boundary + per-session CaptureCapabilities (additive, honesty-first; names/versions/bounds the existing ETW-DXGI frame capture, measures & mutates NOTHING new).
+mod comparability; // Measurement Platform 2.0 (Task F) — the pure session-comparability gate: composes capture_capabilities + game_state + hw_fingerprint into an honest "how far can these two sessions be compared?" verdict (bands-only ceiling, never assumes unrecorded context matched). Additive metadata; blocks nothing, exposes limits.
 mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
+mod game_state; // Measurement Platform 2.0 (Task E) — additive per-session GameStateFingerprint (the honest conditions a session ran under; collects only provable fields, infers nothing).
 mod drift; // Drift Watch — notices readiness checks that were good and regressed (outside Compy).
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.

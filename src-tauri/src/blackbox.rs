@@ -1352,6 +1352,8 @@ mod blackbox_tests {
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
             fps_series: Vec::new(),
+            capture_capabilities: None,
+            game_state: None,
         }
     }
 

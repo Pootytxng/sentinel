@@ -85,6 +85,18 @@ pub(crate) struct SessionSummary {
     /// pre-series sessions parse with this empty.
     #[serde(default)]
     pub(crate) fps_series: Vec<(u32, f64)>,
+    /// What the capture backend could actually measure for THIS session (Measurement Platform 2.0).
+    /// Additive: sessions recorded before this field parse as None → honestly Unknown, never assumed
+    /// to be today's backend. Stamped by the monitoring loop at save time; surfaces/exports/
+    /// comparisons read it so an unsupported metric renders as unavailable, never as a real 0.
+    #[serde(default)]
+    pub(crate) capture_capabilities: Option<crate::capture::CaptureCapabilities>,
+    /// The conditions this session ran under (Measurement Platform 2.0, Task E) — resolution, refresh,
+    /// driver, Windows build, rig hash, etc. Additive: pre-field sessions parse as None → honestly
+    /// Unknown. Stamped by the monitoring loop at save time. The comparability gate composes this WITH
+    /// `capture_capabilities` (kept separate, not re-embedded, to avoid a second source of truth).
+    #[serde(default)]
+    pub(crate) game_state: Option<crate::game_state::GameStateFingerprint>,
 }
 
 fn round1(x: f64) -> f64 {
@@ -236,6 +248,8 @@ impl SessionAccumulator {
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
             fps_series: self.fps_series,
+            capture_capabilities: None,
+            game_state: None,
         }
     }
 }
@@ -472,6 +486,11 @@ mod session_tests {
         let all: Vec<SessionSummary> = serde_json::from_str(json).unwrap();
         assert!(all[0].fps_series.is_empty());
         assert!(all[0].stutter_timeline.is_empty());
+        // Measurement Platform 2.0 additive fields: an old session predates capture_capabilities and
+        // game_state, so both must parse as None (honestly Unknown) — NEVER silently assumed to be
+        // today's backend or back-filled with fabricated conditions.
+        assert!(all[0].capture_capabilities.is_none());
+        assert!(all[0].game_state.is_none());
     }
 
     #[test]

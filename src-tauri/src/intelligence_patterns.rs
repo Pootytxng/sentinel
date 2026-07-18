@@ -617,6 +617,8 @@ mod tests {
             stutter_timeline: vec![],
             stutter_events: vec![],
             fps_series: vec![],
+            capture_capabilities: None,
+            game_state: None,
         }
     }
 

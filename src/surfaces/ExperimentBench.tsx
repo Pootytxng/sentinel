@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
+import { LEDGER_CHANGED_EVENT } from "../types";
 import { prettyGameName } from "./game-name";
 import "./ExperimentBench.css";
 
@@ -208,10 +209,14 @@ export default function ExperimentBench() {
     [hasBaseline],
   );
 
-  // Intelligence Phase 3 fast-follow (W2): the bench loads once when the gate arms, so a change applied
-  // over in Optimize during the same Lab visit would leave the picker + an active simulator read stale.
-  // On refocus (window focus / tab re-shown) reload the ledger and re-derive the active pick's verdict —
-  // an externally-applied pick honestly resolves to "already configured" and Start stops being offered.
+  // Intelligence Phase 3 fast-follow (W2 + Measurement-2.0 Task A): the bench loads once when the gate
+  // arms, so a change applied over in Optimize during the same Lab visit would leave the picker + an
+  // active simulator read stale. Two wake signals reload the ledger and re-derive the active pick's
+  // verdict: (1) OS refocus (window focus / tab re-shown) covers an apply made while the window was
+  // backgrounded; (2) the in-app `compy:ledger-changed` event covers a *same-window* sibling apply (the
+  // Optimize station in the same Lab visit fires no focus/visibilitychange, so refocus alone misses it).
+  // Either way an externally-applied pick honestly resolves to "already configured" and Start stops being
+  // offered. No new mutation path — this is a read-only refresh listening on an additive frontend event.
   useEffect(() => {
     if (!gate) return;
     const onWake = () => {
@@ -221,9 +226,11 @@ export default function ExperimentBench() {
     };
     window.addEventListener("focus", onWake);
     document.addEventListener("visibilitychange", onWake);
+    window.addEventListener(LEDGER_CHANGED_EVENT, onWake);
     return () => {
       window.removeEventListener("focus", onWake);
       document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener(LEDGER_CHANGED_EVENT, onWake);
     };
   }, [gate, pickId, reload, runSim]);
 
@@ -266,6 +273,9 @@ export default function ExperimentBench() {
       setSim(null);
       setPickId("");
       await reload();
+      // Starting an experiment applied its change through the audited path — the ledger changed, so
+      // sibling surfaces (Optimize's applicable list, the Trust Ledger) re-derive. See types.ts note.
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -300,6 +310,8 @@ export default function ExperimentBench() {
     try {
       await invoke<Experiment>("restore_experiment", { experimentId: exp.id });
       await reload();
+      // Restoring rolled the change back through the audited path — ledger changed, siblings re-derive.
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
     } catch (e) {
       setError(String(e));
       await reload();

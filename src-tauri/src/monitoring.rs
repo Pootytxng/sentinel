@@ -12,6 +12,8 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
+
+use crate::capture::CaptureBackend; // the capture-backend boundary (Measurement Platform 2.0)
 use winreg::enums::HKEY_LOCAL_MACHINE;
 use winreg::RegKey;
 
@@ -983,7 +985,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 // Tooltip carry-over: the live tray tooltip reuses this tick's data (no new IPC).
                 let mut tip: Option<(f64, f64)> = None;
                 if let Ok(txt) = std::fs::read_to_string(fps_out_path()) {
-                    if let Ok(s) = serde_json::from_str::<FpsSample>(&txt) {
+                    // Parse the helper's per-tick line through the capture backend (its wire format is
+                    // the backend's concern) — byte-identical to the prior inline serde_json parse.
+                    if let Some(s) = crate::capture::EtwDxgiBackend.parse_sample(&txt) {
                         if s.fps > 0.0 {
                             acc.record_fps(&s.process_name, s.fps, s.avg_frametime_ms, s.low1_fps, elapsed);
                             tip = Some((s.fps, s.low1_fps));
@@ -1080,6 +1084,18 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 summary.stutter_insight = crate::stutter::analyze(&timeline, &events);
                 summary.stutter_timeline = timeline;
                 summary.stutter_events = events;
+                // What this session could actually measure — the honest capability descriptor of the
+                // production ETW-DXGI backend, keyed to the capture start (the session start).
+                summary.capture_capabilities = Some(
+                    crate::capture::EtwDxgiBackend.capabilities(Some(summary.started_at.clone())),
+                );
+                // The honest conditions this session ran under (resolution/refresh/driver/rig hash/…).
+                // collect_v1 populates only provable fields; everything else stays honestly Unknown.
+                summary.game_state = Some(crate::game_state::GameStateFingerprint::collect_v1(
+                    &summary.process_name,
+                    &summary.started_at,
+                    Some(gaming_mode_seen),
+                ));
                 let game = summary.process_name.clone();
                 // Only a real (saved) session fires the "debrief ready" toast — never a short blip.
                 if matches!(crate::sessions::save_session(summary), Ok(true)) {

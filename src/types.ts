@@ -17,6 +17,13 @@ export type HwFingerprint = {
   display: string;
 };
 
+// Fired on `window` whenever the local Trust Ledger changes in-app — an apply, batch apply, rollback,
+// or an experiment conclude/restore. Additive, frontend-only, no mutation path: sibling surfaces that
+// cache ledger-derived state (e.g. the ExperimentBench simulator read) listen and re-derive, so a
+// same-window apply in one surface never leaves another showing a stale "still available" card. OS
+// refocus (focus/visibilitychange) covers cross-window applies; this covers same-window ones.
+export const LEDGER_CHANGED_EVENT = "compy:ledger-changed";
+
 export type AppliedChange = {
   id: string;
   rec_id: string;
@@ -96,6 +103,73 @@ export type SessionSummary = {
   /** Whether a Gaming Mode session was live at ANY monitoring tick (Intelligence Phase 1).
    *  Absent/null on records written before the field existed — honestly Unknown, never guessed. */
   gaming_mode_active?: boolean | null;
+  /** What the capture backend could actually measure for this session (Measurement Platform 2.0).
+   *  Absent on sessions recorded before the field existed — honestly Unknown, NEVER assumed to be
+   *  today's backend. A `supports_*` flag being false means the metric was never captured: render it
+   *  as unavailable, never as a real 0. */
+  capture_capabilities?: CaptureCapabilities | null;
+  /** The conditions this session ran under (Measurement Platform 2.0, Task E) — resolution, refresh,
+   *  driver, Windows build, rig hash, etc. Absent on pre-field sessions — honestly Unknown. Every
+   *  field is optional; a `null`/absent field means "we couldn't prove it", NEVER a fabricated value.
+   *  Used with `capture_capabilities` to decide whether two sessions are comparable. */
+  game_state?: GameStateFingerprint | null;
+};
+
+/** Mirror of the Rust `GameStateFingerprint` (game_state.rs) — the honest conditions a session ran
+ *  under. V1 collects only the provable fields (resolution/refresh/driver/Windows build/rig hash/
+ *  gaming-mode); everything else stays absent = honestly Unknown, never inferred. Display resolution
+ *  is the DISPLAY mode, not the game's render resolution. `capture_capabilities` is intentionally NOT
+ *  duplicated here — it lives at the SessionSummary level. */
+export type GameStateFingerprint = {
+  process_name?: string | null;
+  executable_version?: string | null;
+  executable_hash?: string | null;
+  game_build?: string | null;
+  launcher_manifest_version?: string | null;
+  graphics_api?: string | null;
+  /** Display mode resolution, not the game's internal render resolution. */
+  resolution_width?: number | null;
+  resolution_height?: number | null;
+  display_mode?: string | null;
+  /** Active display refresh at capture; may differ from an exclusive-fullscreen game's chosen mode. */
+  display_refresh_hz?: number | null;
+  active_display_identity?: string | null;
+  fps_cap?: number | null;
+  vsync_state?: string | null;
+  vrr_state?: string | null;
+  upscaler?: string | null;
+  frame_generation_state?: string | null;
+  gpu_driver?: string | null;
+  /** `"{CurrentBuildNumber}.{UBR}"`, e.g. `"26200.1234"`. */
+  windows_build?: string | null;
+  hardware_fingerprint_hash?: string | null;
+  active_compy_change_ids?: string[];
+  gaming_mode_active?: boolean | null;
+  collected_at?: string | null;
+};
+
+/** Mirror of the Rust `CaptureCapabilities` (capture.rs) — the honest, per-session record of what a
+ *  capture backend could measure. Every `supports_*: false` = the metric was never captured (show
+ *  "unavailable", never `0`). Additive on SessionSummary; absent = honestly Unknown. */
+export type CaptureCapabilities = {
+  backend_id: string;
+  backend_version: string;
+  /** Graphics-API families the backend can observe (ETW-DXGI: DirectX 11/12). */
+  graphics_api: string[];
+  supports_app_fps: boolean;
+  supports_presented_fps: boolean;
+  supports_displayed_fps: boolean;
+  supports_frame_type: boolean;
+  supports_generated_frames: boolean;
+  supports_gpu_busy: boolean;
+  supports_display_latency: boolean;
+  supports_input_latency: boolean;
+  supports_dropped_frames: boolean;
+  supports_gpu_telemetry: boolean;
+  /** Human-readable honest caveats about this backend's numbers. */
+  limitations: string[];
+  capture_started_at?: string | null;
+  methodology_version: string;
 };
 
 // Recommendation provenance — the honesty level of a rec's IMPACT claim.
@@ -424,6 +498,42 @@ export type IntelHypothesis = {
   contradicting_evidence: string[];
   missing_evidence: string[];
   next_test: string | null;
+};
+
+// ─── Measurement Platform 2.0 (Task F): session comparability ────────────────
+// How far two sessions may HONESTLY be compared — composed from their capture capabilities,
+// game-state conditions, and rig fingerprints. Additive metadata: it never blocks a surface, it
+// EXPOSES the limits so the UI/export can state them plainly and cap any downstream confidence.
+// Mirror of `crate::comparability` (kebab-case serde).
+export type Comparability =
+  /** Same game, same PC, same capture method, no changed condition detected. */
+  | "comparable"
+  /** Comparable WITH stated limits — a condition changed/wasn't recorded, or only shared metrics
+   *  were captured on both sides. "Direct comparison is limited." */
+  | "partial"
+  /** A direct verdict would mislead (different game, or a GPU change that alters the whole basis). */
+  | "not-comparable"
+  /** Too little recorded context to judge comparability at all (pre-2.0 sessions). Never assumed
+   *  equal — "not enough comparable evidence." */
+  | "unknown";
+
+export type SessionComparability = {
+  verdict: Comparability;
+  /** Plain-language reasons for the verdict. */
+  reasons: string[];
+  /** Conditions that DIFFERED (both sides known, values not equal). */
+  changed_context: string[];
+  /** Conditions we could NOT confirm matched — unrecorded on one/both sessions. Never silently
+   *  becomes "equal." */
+  missing_context: string[];
+  /** Candidate explanations for a measured difference — correlated, NEVER asserted as the cause. */
+  candidate_causes: string[];
+  /** The metric axes BOTH capture backends recorded — the only metrics a comparison may touch. */
+  shared_metrics: string[];
+  /** The CEILING this comparability puts on any downstream conclusion's confidence band. */
+  confidence_limit: ConfidenceBand;
+  /** What a surface may honestly conclude at this verdict — plain-language, ready to render. */
+  allowed_conclusions: string[];
 };
 
 export type WhatChangedReport = {

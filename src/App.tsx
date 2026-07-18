@@ -45,6 +45,7 @@ import { prewarmScan } from "./surfaces/use-scan";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport } from "./types";
+import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
 import { lsGet, lsSet } from "./data/safe-storage";
@@ -855,6 +856,10 @@ function App() {
         recId: rec.id,
         recTitle: rec.title,
       });
+      // The ledger changed in-app — let sibling surfaces that cache ledger-derived state (e.g. the
+      // armed ExperimentBench simulator read) re-derive without waiting for an OS refocus. Additive,
+      // read-only signal; no new mutation path.
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       await refresh();
     } catch (e) {
       fail(
@@ -882,6 +887,9 @@ function App() {
     if (items.length === 0) return { applied: 0, skipped: [] };
     try {
       const report = await invoke<BatchApplyReport>("apply_recommendations_batch", { items });
+      // A batch that applied anything changed the ledger — signal siblings (see apply()'s note). A
+      // batch-level refusal rejects (nothing applied) and is handled in catch, so no false signal.
+      if (report.applied > 0) window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       return {
         applied: report.applied,
         skipped: report.items
@@ -907,6 +915,8 @@ function App() {
     setError(null);
     try {
       await invoke("rollback_change", { changeId: change.id });
+      // Rolling back changes the ledger too — a rec can become available again, so siblings re-derive.
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
       await refresh();
     } catch (e) {
       fail("Couldn't undo that change just now — try again, or undo it from the Trust Ledger.", e);

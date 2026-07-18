@@ -4,6 +4,7 @@
 // start-against-a-real-baseline, a running panel (conclude / restore), and the honest history list.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { LEDGER_CHANGED_EVENT } from "../types";
 
 const state = vi.hoisted(() => ({
   gate: false,
@@ -203,6 +204,34 @@ describe("ExperimentBench (armed)", () => {
     // Start is no longer offered for an already-applied change (the blocked verdict hides the launcher CTA).
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
     // …and the pick stayed visible in the dropdown instead of silently disappearing.
+    expect(screen.getByRole("combobox")).toHaveValue("test-rec");
+  });
+
+  // Guard for Measurement-2.0 Task A (2026-07-18): the refocus fix (W2) only fires on OS focus /
+  // visibilitychange — a change applied over in the sibling Optimize station during the SAME window
+  // visit fires neither, so the bench would stay stale. Applying now dispatches an in-app
+  // `compy:ledger-changed` event; the bench listens and re-derives the active pick from the live
+  // ledger WITHOUT any refocus. Same honest outcome: "Already configured", no Start, pick stays visible.
+  it("re-derives the active pick on an in-app ledger-changed event (sibling apply, same window, no refocus)", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "test-rec" } });
+    expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled();
+
+    // A sibling Optimize apply lands in the same window — no focus/visibilitychange, just the event.
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: true }];
+    state.sim = { ...WORTH_TESTING_SIM, verdict: "already-configured" };
+    fireEvent(window, new Event(LEDGER_CHANGED_EVENT));
+
+    await waitFor(() => expect(screen.getByText("Already configured")).toBeInTheDocument());
+    expect(screen.queryByText("Worth testing")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
     expect(screen.getByRole("combobox")).toHaveValue("test-rec");
   });
 
