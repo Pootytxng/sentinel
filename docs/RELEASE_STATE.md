@@ -10,6 +10,37 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-18b (MEASUREMENT PLATFORM 2.0 — FINAL SLICE LANDED ON MAIN `77b5b89`, CODE-COMPLETE,
+> NOT SHIPPED).** This train was scoped **code-only** (no rebuild, no reinstall, no ship-to-another-machine)
+> — so **the live installer is UNCHANGED**: still `Compy_0.9.0_x64-setup.exe` SHA-256
+> `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF` from `75c38c6` (the 2026-07-18a ship
+> below). `77b5b89` is on `main`, verified green, and awaits a future ship cut. What landed:
+> - **Regression Detective hardening (Task G) — not-comparable reports now assert NO cause.** The
+>   `intelligence.rs` different-rig gate fires BEFORE any FPS delta is computed, so there is no measured
+>   effect to attribute; it no longer pushes a `hardware-change` leading hypothesis (that was a causal
+>   claim with nothing to explain, and it triple-stated the GPU/RAM/Display facts `comparability::derive()`
+>   already carries). The **comparability banner is the SOLE owner** of that framing. The frontend
+>   `showLeader` also gates on `verdict !== "not-comparable"` — double-layered backend+frontend, hostile-
+>   fixture-proof. No fifth room; comparability surfaced in the shared investigator render
+>   (`WhatChangedReportView` used by both `WhatChangedPanel` and `SessionInvestigator`). Bands are words,
+>   never numbers. Laws held: no fabricated causation, correlation never becomes cause.
+> - **`WhatChangedReport` gains `comparability: SessionComparability`** (additive, backend always
+>   populates — old persisted data unaffected; report is computed, not persisted).
+> - **`MIN_COMPARE_SAMPLES` de-duplicated** — single `pub(crate) const` in `intelligence.rs`, imported by
+>   `intelligence_patterns.rs` (one source, can't drift). Decision: `docs/decisions/2026-07-18-prove-a-
+>   change-overlap.md` (ACCEPTED) — two "prove a change" surfaces are complementary layers, not a merge;
+>   `next_test`→experiment routing DEFERRED (prose has no machine-readable rec-id → auto-routing would
+>   fabricate a mapping). BACKLOG carries the additive follow-ups.
+> - **Read-only advisory surface — the mutation/rollback boundary is UNTOUCHED** (`actions.rs` /
+>   `history.rs` / `experiment.rs` / `gaming_orchestrator.rs` byte-identical). **No gate flipped**; the
+>   `compy_intelligence` flag (already default-ON) governs the surface. **Zero-outbound property holds** —
+>   security-surface diff EMPTY (no CSP / capability / telemetry / remote-fetch / updater / signing /
+>   network change; Sections 0.6–0.8 satisfied).
+> - **Verification (none skipped):** cargo test 849/0, clippy clean, `cargo check` clean, tsc 0, vitest
+>   1733/0 (targeted `intelligence::` 47 + `intelligence-flag` 7 green), release-state citation audit 46
+>   ok / 0 broken (exit 0), self-reviewer **PASS 9/9** on a hostile not-comparable fixture. Tauri
+>   production build intentionally NOT run (train forbids shipping).
+>
 > **UPDATE 2026-07-18a (INTELLIGENCE PHASE 4 SLICE 1 SHIPPED LIVE `75c38c6` — installer SHA-256
 > `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`, live exe stamp-verified
 > `75c38c6 · release` (CLEAN — no `+dirty`; CDP `get_build_stamp`), ONE installer on the Desktop
