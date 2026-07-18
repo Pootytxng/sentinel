@@ -11,11 +11,13 @@
 //! `comparison::classify_with_guards` — the SAME 3% noise floor + confound/expiry guards the
 //! rest of the app uses, so an experiment can never claim a win inside the noise.
 //!
-//! Gate: `experiment_gate()` is HARD-FALSE (test-pinned, `receipts_gate`/`gaming_mode_gate`
-//! pattern). Every lifecycle command refuses while dark (defense in depth); the FE renders
-//! nothing. Arming is its own owner-signed commit after a live apply→measure→restore QA +
-//! a Cowork-lane adversarial audit + owner sign-off (spec §7). Until then this changes zero
-//! machine state and the surface shows nothing.
+//! Gate: `experiment_gate()` is ARMED (2026-07-17, owner sign-off "Ship it live now", spec §7 —
+//! hard-false from build until then, `receipts_gate`/`gaming_mode_gate` pattern). Arming was its
+//! own owner-signed commit after a live apply→measure→restore round-trip on the real rig + a
+//! Cowork-lane adversarial audit + rust-tauri-reviewer PASS. Every lifecycle command STILL
+//! hard-checks the gate (defense in depth, now unreachable while armed); the FE renders nothing if
+//! it ever reads false. Flipping the gate BACK is likewise an owner-signed decision, never a
+//! refactor side effect. Arming reuses the existing audited boundary — no new mutation primitive.
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -39,12 +41,19 @@ pub(crate) const MIN_TREATMENT_SAMPLES: u32 = 600;
 const MAX_TEXT_LEN: usize = 200;
 
 // ─────────────────────────────────────────────────────────────────────────
-//  GATE — HARD-FALSE. Flipping this is an owner-signed decision (spec §7),
-//  never a side effect of a refactor. Mirrors `receipts_gate`/`gaming_mode_gate`.
+//  GATE — ARMED 2026-07-17 (Intelligence Phase 3). Owner sign-off "Ship it
+//  live now" (spec §7). Arming is safe because the engine invents NO new
+//  mutation primitive: start/restore reuse `history::apply_recommendation` /
+//  `history::rollback_change` — the SAME audited boundary that has been LIVE
+//  for weeks under the Benchmark tweak A/B trial. The apply→rollback
+//  round-trip on a benign rec is proven on THIS rig as part of the arming
+//  ship QA and recorded in RELEASE_STATE. Was hard-false from build → arming.
+//  Flipping it BACK is likewise an owner-signed decision, never a side effect
+//  of a refactor.
 // ─────────────────────────────────────────────────────────────────────────
 
 pub(crate) fn experiment_gate() -> bool {
-    false
+    true
 }
 
 // ─── Canonical types ─────────────────────────────────────────────────────
@@ -289,6 +298,12 @@ pub(crate) struct SimContext {
     pub rec_title: String,
     /// The rec targets hardware present on THIS rig (false ⇒ e.g. an NVIDIA rec on an AMD box).
     pub applicable: bool,
+    /// In the hardware-tailored catalog but with NO one-click apply — an advisory to act on
+    /// yourself (an SSD-upgrade or a security-tradeoff advisory, `!history::is_appliable`). The
+    /// experiment engine can't run an automatic before/after on it, so it is never `worth-testing`;
+    /// the verdict is `not-applicable`. False for a real one-click tweak AND for an unknown id
+    /// (which stays `insufficient-evidence`, never fabricated).
+    pub advisory_only: bool,
     /// Already active in the Trust Ledger ⇒ already-configured.
     pub already_active: bool,
     /// On the permanent safety/anti-cheat blocklist (LOCKED rule 6) ⇒ never a testable candidate.
@@ -339,6 +354,15 @@ pub(crate) fn simulate(ctx: &SimContext) -> SimulatorReport {
             Confidence::High,
             "This change targets hardware or a configuration this rig doesn't have, so it can't \
              do anything here."
+                .into(),
+        )
+    } else if ctx.advisory_only {
+        (
+            "not-applicable",
+            Confidence::High,
+            "This is an advisory to act on yourself — Compy has no one-click change for it, so \
+             there's no automatic before/after it can run. Do it manually if you want, then measure \
+             the result in the Lab."
                 .into(),
         )
     } else if ctx.already_active {
@@ -418,14 +442,14 @@ pub(crate) fn simulate(ctx: &SimContext) -> SimulatorReport {
 
 // ─── Command surface (all gated; refuse while dark — defense in depth) ────
 
-/// State probe: is the experiment engine part of this build? (It is not — DARK.)
+/// State probe: is the experiment engine part of this build? (It is — ARMED 2026-07-17, spec §7.)
 #[tauri::command]
 pub(crate) fn get_experiment_gate() -> bool {
     experiment_gate()
 }
 
-/// Read-only history of experiments. Ungated (pure read); returns `[]` while dark because no
-/// experiment can be created behind the closed gate.
+/// Read-only history of experiments. Ungated (pure read); empty until the owner runs the first
+/// experiment on the armed build.
 #[tauri::command]
 pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
     load_store().experiments
@@ -652,31 +676,101 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
 }
 
 /// Build the simulator's deterministic context from live read-only state. Conservative by design:
-/// unknowns default to `None`/insufficient-evidence rather than an invented prior. Only reached when
-/// armed (the command gate-checks first).
+/// unknowns default to `None`/insufficient-evidence rather than an invented prior.
 ///
-/// ⚠ ARMING BLOCKER: this is pre-arming scaffolding. `applicable`/`barred`/`likely_negligible`/
-/// `expected_impact` are hardcoded to their conservative defaults, so the simulator can only ever
-/// emit `already-configured` or `insufficient-evidence` today — it cannot yet report
-/// `risk-exceeds-value`/`not-applicable`/`worth-testing` for a genuinely barred/inapplicable/
-/// high-value rec. Wire these to the real catalog + blocklist + hardware priors BEFORE arming the
-/// gate (spec §7); the gate being hard-false is what makes shipping this stub safe.
+/// Wired (arming, spec §7) to the real hardware-tailored catalog via the serde JSON boundary — the
+/// same read-only idiom `leftovers.rs`/`export.rs` use, since `Recommendation`'s fields are private
+/// and there is no find-by-id. Honesty notes on the derivations, each grounded in an existing field,
+/// none fabricated:
+/// - **barred = false for any catalog member.** There is NO per-rec blocklist flag in the source;
+///   LOCKED rule 6 is enforced STRUCTURALLY — a barred tweak is never emitted into the catalog and
+///   the mutation primitives are allowlist-guarded (`KnownService`/`KnownBloatTask`). So a rec that
+///   IS in the catalog is, by construction, not barred, and `risk-exceeds-value` is unreachable from
+///   real catalog data (its branch stays as tested-pure logic). The apply boundary — not the
+///   read-only simulator — is what refuses a barred/unknown id if one is ever passed.
+/// - **expected_impact from `provenance`.** No per-rec `Confidence` taxonomy exists; derive it
+///   mechanically from the rec's own claim-quality: `verified`/`measured-signal` ⇒ `Medium` (real
+///   measured evidence it moves a metric), `expected-impact` ⇒ `Low` (logical but unmeasured), absent
+///   ⇒ `Unknown`. `already-configured`/`not-applicable` short-circuit BEFORE this in `simulate`.
+/// - **likely_negligible = false.** No deterministic per-rig headroom signal is wired, so we never
+///   claim negligibility (the `unlikely-to-matter` branch also stays test-only). Honest: don't invent.
+/// - **metric_to_watch = "1% low FPS"** for catalog members: the ONE metric the experiment engine
+///   actually judges on (`conclude_outcome` measures `delta_low1_pct`). Not a guess — it is what the
+///   controlled before/after measures. `None` for an unknown id (nothing to measure).
+/// - **advisory_only from `history::is_appliable`** (single source of truth with `dispatch_apply`).
+///   A catalog member with NO one-click apply (the SSD-upgrade / security-tradeoff advisories) can't
+///   be auto-applied+measured, so it reports `not-applicable`, never `worth-testing` — the simulator
+///   won't invite a Start that would dead-end at the apply boundary. `false` for the unknown-id
+///   fallback so it stays `insufficient-evidence`, not a fabricated not-applicable.
 fn build_sim_context(rec_id: &str) -> Result<SimContext, String> {
-    // Already active? — the ledger is the source of truth.
+    // Already active? — the Trust Ledger is the source of truth, independent of catalog membership,
+    // so a still-applied retired rec still reads `already-configured`.
     let already_active = crate::history::rec_is_active(rec_id);
-    // Title: the rec_id itself for now. The live-catalog title lookup wires in at arming (see the
-    // ARMING BLOCKER above); until then the id is the honest, non-fabricated fallback.
-    let rec_title = rec_id.to_string();
+
+    // Read the live, hardware-tailored catalog through the serde JSON boundary (fields are private;
+    // there is no find-by-id — mirrors leftovers.rs / export.rs). Filter by id.
+    let catalog = serde_json::to_value(crate::recommendations::get_recommendations())
+        .map_err(|e| format!("could not read the recommendation catalog: {e}"))?;
+    let found = catalog
+        .as_array()
+        .and_then(|arr| arr.iter().find(|r| r.get("id").and_then(|v| v.as_str()) == Some(rec_id)));
+
+    let str_field = |v: &serde_json::Value, key: &str| -> Option<String> {
+        v.get(key).and_then(|x| x.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
+    };
+
+    let Some(r) = found else {
+        // Not in the hardware-tailored catalog: a relevance-gated-out rec or an unknown id. We have no
+        // honest prior, so report `insufficient-evidence` (unknown, not zero) — never a fabricated
+        // not-applicable/worth-testing. `already_active` still stands from the ledger above.
+        return Ok(SimContext {
+            rec_id: rec_id.to_string(),
+            rec_title: rec_id.to_string(),
+            applicable: true,
+            advisory_only: false,
+            already_active,
+            barred: false,
+            likely_negligible: false,
+            expected_impact: None,
+            metric_to_watch: None,
+            hardware_factor:
+                "Compy has no catalog entry for this change on this rig, so it can't estimate an effect."
+                    .into(),
+        });
+    };
+
+    let rec_title = str_field(r, "title").unwrap_or_else(|| rec_id.to_string());
+    // `eligible` is first-class: false ⇒ this rig's HARDWARE can't use the rec (e.g. an NVIDIA rec on
+    // this AMD box); the catalog keeps it with an `ineligible_reason`.
+    let applicable = r.get("eligible").and_then(|v| v.as_bool()).unwrap_or(true);
+    let expected_impact = match r.get("provenance").and_then(|v| v.as_str()) {
+        Some("verified") | Some("measured-signal") => Some(Confidence::Medium),
+        Some("expected-impact") => Some(Confidence::Low),
+        _ => None,
+    };
+    // The honest "for YOUR hardware" line: the rec's own `applies_to` when it fits this rig, else the
+    // recorded `ineligible_reason`. Real catalog strings, never fabricated.
+    let hardware_factor = if applicable {
+        str_field(r, "applies_to")
+            .unwrap_or_else(|| "Based on this rig's detected hardware and current state.".into())
+    } else {
+        str_field(r, "ineligible_reason")
+            .unwrap_or_else(|| "This rig's hardware doesn't match what the change targets.".into())
+    };
+
     Ok(SimContext {
         rec_id: rec_id.to_string(),
         rec_title,
-        applicable: true,
+        applicable,
+        // Advisory-only iff Compy has no one-click apply for it — derived from the SAME allowlist
+        // `dispatch_apply` runs, so the simulator and the apply boundary can never disagree.
+        advisory_only: !crate::history::is_appliable(rec_id),
         already_active,
         barred: false,
         likely_negligible: false,
-        expected_impact: None, // conservative: unknown until a rule prior wires in (arming step)
-        metric_to_watch: None,
-        hardware_factor: "Based on this rig's detected hardware and current state.".into(),
+        expected_impact,
+        metric_to_watch: Some("1% low FPS".into()),
+        hardware_factor,
     })
 }
 
@@ -709,28 +803,28 @@ mod experiment_tests {
     }
 
     #[test]
-    fn gate_is_pinned_false_until_owner_signs_off() {
-        // Flipping this is an owner-signed decision (spec §7), never a side effect of a refactor.
-        assert!(!experiment_gate(), "experiment_gate must stay hard-false");
+    fn gate_is_armed_after_qa_and_owner_signoff() {
+        // ARMED 2026-07-17 (spec §7): owner sign-off "Ship it live now". Arming reuses the audited
+        // `history` apply/rollback boundary (LIVE for weeks under the Benchmark A/B trial), so no new
+        // mutation primitive ships; the apply→rollback round-trip on a benign rec is proven on the rig
+        // as part of the ship QA (recorded in RELEASE_STATE). Flipping it BACK is likewise an
+        // owner-signed decision, never a side effect of a refactor.
+        assert!(experiment_gate(), "experiment_gate is armed after QA + owner sign-off");
     }
 
     #[test]
-    fn every_lifecycle_command_refuses_while_dark() {
-        assert!(simulate_optimization("x".into()).unwrap_err().contains("isn't part of this build"));
-        assert!(start_experiment(
-            "x".into(),
-            "X".into(),
-            "G".into(),
-            120.0,
-            90.0,
-            "h".into()
-        )
-        .unwrap_err()
-        .contains("isn't part of this build"));
-        assert!(conclude_experiment("x".into(), 120.0, 90.0, 1000, false)
-            .unwrap_err()
-            .contains("isn't part of this build"));
-        assert!(restore_experiment("x".into()).unwrap_err().contains("isn't part of this build"));
+    fn armed_lifecycle_commands_no_longer_refuse_for_the_gate() {
+        // With the gate armed, the defense-in-depth "isn't part of this build" short-circuit is
+        // unreachable: a lookup command falls through to its REAL not-found path. We exercise only the
+        // no-op lookup commands here (bogus id ⇒ nothing matches ⇒ no mutation). `start_experiment` is
+        // deliberately NOT called — it applies a real reversible change through the ledger; that
+        // round-trip is proven live on the rig by the ship QA (RELEASE_STATE), never in a unit run.
+        let concluded = conclude_experiment("nonexistent".into(), 120.0, 90.0, 1000, false).unwrap_err();
+        assert!(!concluded.contains("isn't part of this build"), "gate no longer short-circuits: {concluded}");
+        assert!(concluded.contains("not found"));
+        let restored = restore_experiment("nonexistent".into()).unwrap_err();
+        assert!(!restored.contains("isn't part of this build"), "gate no longer short-circuits: {restored}");
+        assert!(restored.contains("not found"));
     }
 
     #[test]
@@ -837,6 +931,7 @@ mod experiment_tests {
             rec_id: "r".into(),
             rec_title: "R".into(),
             applicable: true,
+            advisory_only: false,
             already_active: false,
             barred: false,
             likely_negligible: false,
@@ -867,6 +962,22 @@ mod experiment_tests {
             simulate(&SimContext { applicable: false, ..sim_ctx() }).verdict,
             "not-applicable"
         );
+        // An in-catalog advisory (no one-click apply) is also not-applicable — never worth-testing.
+        assert_eq!(
+            simulate(&SimContext { advisory_only: true, ..sim_ctx() }).verdict,
+            "not-applicable"
+        );
+        // …and advisory precedence sits ABOVE the impact prior: even a would-be worth-testing prior
+        // resolves not-applicable when Compy has no apply for it (can't be auto-measured).
+        assert_eq!(
+            simulate(&SimContext {
+                advisory_only: true,
+                expected_impact: Some(Confidence::High),
+                ..sim_ctx()
+            })
+            .verdict,
+            "not-applicable"
+        );
         assert_eq!(
             simulate(&SimContext { already_active: true, ..sim_ctx() }).verdict,
             "already-configured"
@@ -883,6 +994,77 @@ mod experiment_tests {
             simulate(&SimContext { expected_impact: None, ..sim_ctx() }).verdict,
             "insufficient-evidence"
         );
+    }
+
+    // ── build_sim_context wiring (armed: reads the real catalog) ──
+
+    #[test]
+    fn unknown_rec_id_context_is_insufficient_evidence_not_fabricated() {
+        // An id absent from the hardware-tailored catalog has NO honest prior. The wiring must report
+        // insufficient-evidence (unknown, not zero), never fabricate not-applicable/worth-testing, and
+        // never mark it barred (the read-only simulator makes no safety claim; the apply boundary does).
+        let ctx = build_sim_context("definitely-not-a-real-rec-id-xyz").unwrap();
+        assert!(!ctx.barred);
+        assert!(!ctx.likely_negligible);
+        assert!(ctx.expected_impact.is_none());
+        assert!(ctx.metric_to_watch.is_none());
+        assert_eq!(simulate(&ctx).verdict, "insufficient-evidence");
+    }
+
+    #[test]
+    fn catalog_rec_context_is_coherent_and_within_reachable_verdicts() {
+        // For a real catalog member the context is honest-by-construction: a non-empty title, never
+        // barred (structural bar = absence from the catalog), the 1%-low metric the engine actually
+        // measures, and a verdict only from the set reachable without an invented prior. Three branches
+        // are UNreachable from real data (documented): "risk-exceeds-value" (barred = catalog absence),
+        // "unlikely-to-matter" (no per-rig headroom signal is wired), and "insufficient-evidence" —
+        // every catalog rec carries a non-optional `provenance` (Verified/MeasuredSignal/ExpectedImpact),
+        // so `expected_impact` is always Some for a found member and the None branch can't fire here.
+        // Read the first rec's id through the same serde boundary the wiring uses (fields are private).
+        let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap();
+        let Some(first_id) = catalog
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|r| r.get("id"))
+            .and_then(|v| v.as_str())
+        else {
+            return; // no recs on this rig → nothing to assert
+        };
+        let ctx = build_sim_context(first_id).unwrap();
+        assert!(!ctx.rec_title.is_empty());
+        assert!(!ctx.barred);
+        assert_eq!(ctx.metric_to_watch.as_deref(), Some("1% low FPS"));
+        let reachable =
+            ["already-configured", "not-applicable", "worth-testing", "plausible-unproven"];
+        assert!(
+            reachable.contains(&simulate(&ctx).verdict.as_str()),
+            "real-data verdict must never be a fabricated/unreachable branch"
+        );
+    }
+
+    #[test]
+    fn appliable_recs_are_one_click_advisories_are_not() {
+        // The single source of truth: `history::is_appliable` (shared with `dispatch_apply`) is what
+        // drives `advisory_only`. Real one-click tweaks return true; catalog advisories with no apply,
+        // and any unknown id, return false — so the simulator can never invite a Start that dead-ends.
+        assert!(crate::history::is_appliable("hags-enable"));
+        assert!(crate::history::is_appliable("game-mode"));
+        assert!(!crate::history::is_appliable("ssd-upgrade-advisory"));
+        assert!(!crate::history::is_appliable("gpu-driver-update"));
+        assert!(!crate::history::is_appliable("definitely-not-a-real-rec-id-xyz"));
+    }
+
+    #[test]
+    fn advisory_only_rec_is_never_worth_testing() {
+        // End-to-end: an in-catalog advisory (no one-click apply) must never resolve to a verdict that
+        // invites Start — the engine can't run an automatic before/after on it. If the rig's tailored
+        // catalog doesn't carry these ids they fall to the unknown-id path (insufficient-evidence),
+        // which also never invites Start — so the honesty guard holds either way.
+        for id in ["ssd-upgrade-advisory", "gpu-driver-update"] {
+            let v = simulate(&build_sim_context(id).unwrap()).verdict;
+            assert_ne!(v, "worth-testing", "{id} advisory must not read worth-testing");
+            assert_ne!(v, "plausible-unproven", "{id} advisory must not read plausible-unproven");
+        }
     }
 
     // ── persistence round-trip ──

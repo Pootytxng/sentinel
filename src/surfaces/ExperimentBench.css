@@ -1,0 +1,341 @@
+/* Intelligence Phase 3 — Controlled-experiments bench. Tokens only; inherits the active Instrument
+   theme. Mirrors the Lab instrument idiom (arc-instrument / TuningInstrument): glass card, mono
+   telemetry, accent CTA with legible ink, honest muted secondary text. */
+
+.exp-bench {
+  display: block;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ix-line);
+}
+.exp-bench-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ix-text-1);
+}
+.exp-bench-hint {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2);
+  max-width: 68ch;
+}
+.exp-bench-error {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-1);
+  background: color-mix(in srgb, var(--ix-danger) 12%, var(--ix-glass-fill));
+  border: 1px solid color-mix(in srgb, var(--ix-danger) 38%, var(--ix-glass-border));
+  border-radius: var(--ix-radius);
+}
+
+/* ── Launcher ─────────────────────────────────────────────────────────────── */
+.exp-launch {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.exp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.exp-field-label {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ix-text-3);
+}
+.exp-select,
+.exp-input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ix-text-1);
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-radius: var(--ix-radius);
+  padding: 8px 10px;
+  width: 100%;
+  max-width: 460px;
+}
+.exp-select:focus-visible,
+.exp-input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--ix-accent) 55%, var(--ix-glass-border));
+}
+.exp-select:disabled,
+.exp-input:disabled {
+  opacity: 0.6;
+}
+.exp-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+  max-width: 64ch;
+}
+
+/* ── Simulator read (honest advisory — never a promise) ───────────────────── */
+.exp-sim {
+  padding: 12px 13px;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Names the exact change this verdict + Start button act on — the mutation target, never ambiguous. */
+.exp-sim-rec {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ix-text-1);
+}
+.exp-sim-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Verdict state reads through the label color (house idiom — colored marks, not side stripes). */
+.exp-sim-verdict {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ix-text-1);
+}
+.exp-sim[data-verdict="worth-testing"] .exp-sim-verdict {
+  color: var(--ix-good, var(--ix-accent));
+}
+.exp-sim[data-verdict="plausible-unproven"] .exp-sim-verdict {
+  color: var(--ix-accent-text, var(--ix-accent));
+}
+.exp-sim[data-verdict="risk-exceeds-value"] .exp-sim-verdict {
+  color: var(--ix-danger);
+}
+.exp-sim-conf {
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ix-text-3);
+  white-space: nowrap;
+}
+.exp-sim-why {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}
+.exp-sim-line {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}
+.exp-sim-mark {
+  font-weight: 600;
+  color: var(--ix-text-1);
+}
+
+/* ── Start block ──────────────────────────────────────────────────────────── */
+.exp-start {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.exp-baseline {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2);
+}
+.exp-baseline b {
+  color: var(--ix-text-1);
+  font-variant-numeric: tabular-nums;
+}
+.exp-cta {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--ix-accent);
+  border: 0;
+  color: var(--ix-accent-ink, #06231c);
+  border-radius: var(--ix-radius);
+  padding: 9px 15px;
+}
+.exp-cta:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.exp-cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.exp-cta-ghost {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ix-glass-border);
+  color: var(--ix-text-2);
+  border-radius: var(--ix-radius);
+  padding: 9px 15px;
+}
+.exp-cta-ghost:hover:not(:disabled) {
+  color: var(--ix-text-1);
+  border-color: color-mix(in srgb, var(--ix-text-3) 40%, var(--ix-glass-border));
+}
+.exp-cta-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.exp-fineprint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ix-text-3);
+  max-width: 64ch;
+}
+.exp-fineprint b {
+  color: var(--ix-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Running panel ────────────────────────────────────────────────────────── */
+.exp-running {
+  padding: 13px 14px;
+  background: var(--ix-glass-fill);
+  border: 1px solid color-mix(in srgb, var(--ix-accent) 26%, var(--ix-glass-border));
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.exp-running-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.exp-running-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ix-accent);
+  box-shadow: 0 0 7px var(--ix-accent);
+  flex: none;
+}
+.exp-running-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ix-text-1);
+}
+.exp-running-baseline {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+}
+.exp-running-baseline b {
+  color: var(--ix-text-1);
+  font-variant-numeric: tabular-nums;
+}
+.exp-running-step {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ix-text-2);
+  max-width: 64ch;
+}
+.exp-bench-warn {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ix-text-1);
+  background: color-mix(in srgb, var(--ix-amber) 12%, var(--ix-glass-fill));
+  border: 1px solid color-mix(in srgb, var(--ix-amber) 34%, var(--ix-glass-border));
+  border-radius: var(--ix-radius);
+}
+.exp-running-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+/* ── History ──────────────────────────────────────────────────────────────── */
+.exp-history {
+  margin-top: 16px;
+}
+.exp-history-label {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ix-text-3);
+  margin-bottom: 7px;
+}
+.exp-bench-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.exp-bench-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--ix-text-2);
+  padding: 5px 0;
+  border-bottom: 1px solid var(--ix-line);
+}
+.exp-bench-row:last-child {
+  border-bottom: 0;
+}
+.exp-bench-rec {
+  color: var(--ix-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.exp-bench-verdict {
+  color: var(--ix-text-2);
+  white-space: nowrap;
+}
+.exp-bench-row[data-status="kept"] .exp-bench-verdict {
+  color: var(--ix-good, var(--ix-accent));
+}
+.exp-bench-delta {
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--ix-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.exp-bench-abort {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--ix-amber);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .exp-running-dot {
+    animation: exp-pulse 2.4s ease-in-out infinite;
+  }
+}
+@keyframes exp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

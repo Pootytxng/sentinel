@@ -362,28 +362,51 @@ fn ensure_ledger_writable(history: &[AppliedChange]) -> Result<(), String> {
     })
 }
 
+/// Every rec id Compy can ACTUALLY one-click apply, mapped to its audited `apply_*`. This is the
+/// SINGLE source of truth for "is there a real apply for this id": `dispatch_apply` runs the mapped
+/// fn, and `is_appliable` asks only whether the mapping exists (never running it). Any id not mapped
+/// falls to the caller's "not supported" error. All arms are non-capturing closures so they coerce to
+/// one `fn` pointer type — that lets `is_appliable` be a pure lookup with no second copy of the list.
+#[allow(clippy::redundant_closure)] // uniform closures keep every arm the same fn-pointer type
+fn apply_fn_for(rec_id: &str) -> Option<fn() -> Result<ApplyResult, String>> {
+    let f: fn() -> Result<ApplyResult, String> = match rec_id {
+        "game-mode" => || apply_game_mode(),
+        "visual-effects" => || apply_visual_effects(),
+        "sysmain-disable" => || apply_service_disable(KnownService::SysMain),
+        "nvidia-telemetry" => || apply_service_disable(KnownService::NvTelemetryContainer),
+        "power-ultimate" => || apply_power_ultimate(),
+        "nagle-disable" => || apply_nagle_disable(),
+        "hags-enable" => || apply_hags_enable(),
+        "mouse-accel-off" => || apply_mouse_accel_off(),
+        "game-bar-disable" => || apply_game_bar_disable(),
+        "diagtrack-disable" => || apply_service_disable(KnownService::DiagTrack),
+        "windows-search-disable" => || apply_service_disable(KnownService::WSearch),
+        "fast-startup-off" => || apply_fast_startup_off(),
+        "reserved-storage-off" => || apply_reserved_storage_off(),
+        "usb-selective-suspend-off" => || apply_usb_selective_suspend_off(),
+        "pcie-aspm-off" => || apply_pcie_aspm_off(),
+        "eee-disable" => || apply_eee_disable(),
+        _ => return None,
+    };
+    Some(f)
+}
+
 /// The ONE dispatch from rec id to its audited apply_* — `apply_recommendation` and the §4 batch
 /// orchestrator both go through here, so there is no second copy of the match to drift.
 fn dispatch_apply(rec_id: &str) -> Result<ApplyResult, String> {
-    match rec_id {
-        "game-mode" => apply_game_mode(),
-        "visual-effects" => apply_visual_effects(),
-        "sysmain-disable" => apply_service_disable(KnownService::SysMain),
-        "nvidia-telemetry" => apply_service_disable(KnownService::NvTelemetryContainer),
-        "power-ultimate" => apply_power_ultimate(),
-        "nagle-disable" => apply_nagle_disable(),
-        "hags-enable" => apply_hags_enable(),
-        "mouse-accel-off" => apply_mouse_accel_off(),
-        "game-bar-disable" => apply_game_bar_disable(),
-        "diagtrack-disable" => apply_service_disable(KnownService::DiagTrack),
-        "windows-search-disable" => apply_service_disable(KnownService::WSearch),
-        "fast-startup-off" => apply_fast_startup_off(),
-        "reserved-storage-off" => apply_reserved_storage_off(),
-        "usb-selective-suspend-off" => apply_usb_selective_suspend_off(),
-        "pcie-aspm-off" => apply_pcie_aspm_off(),
-        "eee-disable" => apply_eee_disable(),
-        other => Err(format!("'{}' is not yet supported for one-click apply", other)),
+    match apply_fn_for(rec_id) {
+        Some(f) => f(),
+        None => Err(format!("'{}' is not yet supported for one-click apply", rec_id)),
     }
+}
+
+/// True iff Compy has a real one-click apply for this rec id (`dispatch_apply` would run an `apply_*`,
+/// not its fallback). Read-only — it NEVER runs the apply, just checks the mapping. Shares `apply_fn_for`
+/// with `dispatch_apply` as the single source of truth, so the experiment simulator
+/// (`experiment::build_sim_context`) can flag advisory-only recs as not-testable and never invite a
+/// Start that would dead-end at the apply boundary.
+pub(crate) fn is_appliable(rec_id: &str) -> bool {
+    apply_fn_for(rec_id).is_some()
 }
 
 /// Display-title cap for ledger receipts. Titles come from our own catalog (all < 100 chars);

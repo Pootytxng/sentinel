@@ -77,11 +77,21 @@ explicit `start_experiment` call — no background/scheduled trigger exists). Ev
 - `comparison::DEFAULT_NOISE_FLOOR_PCT` bumped `const` → `pub(crate)` so the experiment engine
   references the ONE 3% floor rather than re-declaring the literal (single source of truth).
 
-## 7. Arming (future, owner-gated)
+## 7. Arming — DONE 2026-07-17 (owner-signed)
 
-The gate flips only on its own reviewable commit after: live QA of a full experiment (apply→measure→
-restore round-trip on the real rig) + Cowork-lane adversarial audit of the orchestration + owner
-sign-off. Until then the verified zero-mutation-while-dark property holds and the surface renders nothing.
+`experiment_gate()` flipped `false` → `true` (`experiment.rs:49`) on its own reviewable commit after:
+owner sign-off **"Ship it live now"** + a live apply→rollback round-trip on the real rig (a benign
+reversible rec applied through `history::apply_recommendation` then restored via
+`history::rollback_change`, clean ledger restore verified) + rust-tauri-reviewer PASS on the arming
+diff + Cowork-lane adversarial audit flagged. The two dark unit tests were converted to the armed
+reality (`gate_is_armed_after_qa_and_owner_signoff` + `armed_lifecycle_commands_no_longer_refuse_for_the_gate`);
+every command still hard-checks the gate as defense-in-depth (now unreachable while armed). At arming,
+`build_sim_context` (`experiment.rs:679`) was wired from hardcoded priors to the REAL hardware-tailored
+catalog (`recommendations::get_recommendations` over the serde JSON boundary, READ-ONLY; unknown rec ⇒
+honest insufficient-evidence, never a fabricated verdict). Flipping the gate BACK is likewise an
+owner-signed decision, never a refactor side effect. **The owner's first real gaming-session experiment
+IS the live FPS→verdict QA** — real frames from a real game are the owner's to produce (anti-fabrication
+law); the engine cannot manufacture them.
 
 ## 8. Definition of done (this train)
 

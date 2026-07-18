@@ -12,7 +12,7 @@ mod drift; // Drift Watch — notices readiness checks that were good and regres
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
 mod diagnostics;
-mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. DARK behind experiment_gate() (orchestrates the existing mutation boundary; no new apply/rollback primitive; zero mutation while dark).
+mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
 mod export;
 mod fps;
 mod game_mode_persist; // Game Mode persistence keeper — option 1(b) mechanism C, DARK behind keep_game_mode_gate().

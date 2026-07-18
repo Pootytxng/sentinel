@@ -67,22 +67,27 @@ never be conflatable in any doc, commit message, or report).
   default OFF): SessionInvestigator + evidence graph (Monitor), PatternsTile (Blackbook §5E, no fifth
   room); plain view unchanged. Read-only + one additive field — zero mutation/network/capability change.
   cargo 787/787 · clippy clean · vitest 1710/1710 · rust-tauri-reviewer PASS · self-reviewer PASS.
-- [~] **Intelligence Phase 3 — experiment engine + optimization simulator** — ✅ BUILT **DARK** this
-  cycle (`7e00a06`, groundwork committed — NOT shipped, gate false, zero pixels, no installer). Spec
-  `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md`. Delivered:
-  `experiment.rs` (types + pure simulator w/ seven verbatim verdicts + start→conclude→keep/restore
-  lifecycle + `experiment_gate() -> bool { false }` + six gate-checked commands + `experiments.json`
-  store) ORCHESTRATING the existing mutation boundary (no new apply/rollback primitive, no enum variant;
-  applies via `history::apply_recommendation`, restores via `history::rollback_change`, resolve stays
-  history-only) · delta judged on the SAME 3% floor (`comparison::classify_with_guards`;
-  `DEFAULT_NOISE_FLOOR_PCT` → `pub(crate)`) · additive `history::active_change_count()` · restore-honesty
-  classifier (`restore_already_reverted`, guard-tested, never fabricates "still applied") · FE dark
-  surface (`ExperimentBench.tsx` renders null while gated, test-pinned; mounted in `LabGround.tsx`).
-  cargo 804/804 · clippy clean · tsc clean · vitest ExperimentBench 2/2 · rust-tauri-reviewer PASS ("dark
-  groundwork") · self-reviewer PASS. **ARMING (gate flip) is a future owner-gated commit** — needs live
-  apply→measure→restore QA on the rig + Cowork adversarial audit + owner sign-off (spec §7); the
-  simulator's hardcoded catalog/blocklist/hardware priors (`build_sim_context`) also wire to real
-  sources at arming. Read-only + zero-mutation-while-dark verified.
+- [x] **Intelligence Phase 3 — experiment engine + optimization simulator** — ✅ **ARMED + SHIPPED**
+  2026-07-17 (owner-signed "Ship it live now"). Groundwork built dark `7e00a06`; arming flips
+  `experiment_gate() -> bool { true }` (`experiment.rs:55`) + wires `build_sim_context` to the REAL
+  hardware-tailored catalog + converts the two dark tests to armed reality + interactive `ExperimentBench`
+  FE (Lab room). Spec `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md` §7.
+  The engine ORCHESTRATES the existing mutation boundary (**no new apply/rollback primitive, no enum
+  variant**; applies via `history::apply_recommendation`, restores via `history::rollback_change`, resolve
+  stays history-only) · delta judged on the SAME 3% floor (`comparison::classify_with_guards`) · simulator
+  reads the catalog READ-ONLY (unknown rec ⇒ honest insufficient-evidence, never a fabricated verdict).
+  Mutation-gate 10/10 + rust-tauri-reviewer PASS + live apply→rollback round-trip on the rig + Cowork
+  audit flagged. **The owner's first real gaming-session experiment IS the live FPS→verdict QA** (real
+  frames are the owner's to produce — anti-fabrication law). Installer + stamp in RELEASE_STATE Snapshot.
+- [ ] **Intelligence Phase 3 fast-follow (W2 — UX staleness, honest today):** `ExperimentBench` doesn't
+  live-refresh its simulator read when a sibling Optimize apply lands within the same Lab visit, so a
+  stale pick can still show e.g. `worth-testing` for something just applied. NOT a correctness bug —
+  server-side `build_sim_context` re-derives `already_active` from the ledger at start, so a stale pick
+  resolves to an honest `already-configured` and never a double-apply. Fast-follow = re-run the sim on
+  ledger-change / window-refocus. (W1, the reselect race AT the apply boundary, was FIXED + guard-tested
+  pre-ship: the picker locks during `simBusy` + request-id sequencing drops superseded reads + the sim
+  card names its exact mutation target — `ExperimentBench.test.tsx` "locks the change picker while a
+  simulation is in flight".)
 - [ ] **Intelligence Phase 4:** hardware-twin intelligence integration · component-level evidence
   highlighting · hardware-health trends · long-term personal knowledge graph.
 - [ ] **Intelligence Phase 5:** evidence-based Upgrade Advisor 2.0 · "buy nothing" verdict ·

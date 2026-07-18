@@ -10,34 +10,34 @@
 
 ## Snapshot
 
-> **UPDATE 2026-07-17d (INTELLIGENCE PHASE 3 DARK GROUNDWORK COMMITTED `7e00a06` — NOT a ship,
-> NO installer rebuilt, NO gate moved.** The experiment engine + optimization simulator land behind
-> `experiment::experiment_gate() -> bool { false }` (`src-tauri/src/experiment.rs`) — every one of the
-> six commands hard-checks the gate and **refuses while dark** (defense-in-depth, mirrors
-> `receipts_gate`/`preload_removal_gate`), and the FE surface (`src/surfaces/ExperimentBench.tsx`,
-> mounted dark in `LabGround.tsx`) **returns null while gated**, test-pinned to render nothing → **zero
-> pixels change, no rebuild/reinstall needed.**):** third train of the owner directive
-> (`docs/reviews/2026-07-16-owner-directive-intelligence-platform.md` §4F/§4G; spec
-> `docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md`). The engine
-> **ORCHESTRATES the existing audited mutation boundary** — it invents **no new** apply/rollback
-> primitive, adds **no** `AppliedAction`/`RollbackAction`/`Snapshot` variant, applies ONE reversible
-> change via `history::apply_recommendation`, and auto-restores via `history::rollback_change`; rollback
-> still resolves from `history.json` alone (mutation-gate items 1–3 preserved by construction).
-> Delta judged against the SAME 3% noise floor (`comparison::classify_with_guards` on the 1%-low —
-> `comparison::DEFAULT_NOISE_FLOOR_PCT` bumped to `pub(crate)` as the single source of truth). New
-> own-store `experiments.json` (atomic tmp+rename, corrupt→aside, copied verbatim from `intelligence.rs`).
-> Additive read-only helper `history::active_change_count()` for the single-variable warning. Honesty:
-> a restore that fails because the change was **already reverted outside Compy** reports Restored (the
-> change is off — honest), never a fabricated "still applied"; a genuine restore failure aborts LOUD and
-> tells the user to verify in Fix — no fabricated certainty either way (guard-tested
-> `restore_already_reverted`, coupled to `history.rs`'s literal by cross-reference comments). Verify:
-> cargo **804/804** (count UP from 803 — new restore-honesty guard) · clippy clean · tsc clean · vitest
-> ExperimentBench 2/2 (dark render-nothing + armed-copy pins) · rust-tauri-reviewer **PASS ("safe to
-> proceed — merge as dark groundwork")**, its 2 Warnings + honesty/observability Nits fixed in this same
-> commit · self-reviewer **PASS**. **Gate flips only on its own future reviewable commit** after live
-> apply→measure→restore QA on the real rig + Cowork-lane adversarial audit of the orchestration + owner
-> sign-off (§7). Until then the verified zero-mutation-while-dark property holds. §0.11: Optimization
-> Cleanup lane untouched.
+> **UPDATE 2026-07-17e (INTELLIGENCE PHASE 3 ARMED — `experiment_gate()` flipped `false` → `true`,
+> owner sign-off "Ship it live now").** The experiment engine + optimization simulator are now LIVE
+> (`experiment::experiment_gate() -> bool { true }`, `src-tauri/src/experiment.rs:55`). This is a
+> mutation-capability GO-LIVE, done its own reviewable commit under full mutation-gate rigor. Arming is
+> safe by construction: the engine invents **no new** apply/rollback primitive and adds **no**
+> `AppliedAction`/`RollbackAction`/`Snapshot` variant — start reuses `history::apply_recommendation`,
+> restore reuses `history::rollback_change`, rollback still resolves from `history.json` alone (the SAME
+> audited boundary LIVE for weeks under the Benchmark tweak A/B trial). Every lifecycle command STILL
+> hard-checks the gate (defense-in-depth, now unreachable while armed); the FE renders nothing if it ever
+> reads false. **Reviewer fix-set landed in this same arming commit** (rust-tauri-reviewer fix-before-merge):
+> the simulator now flags **advisory-only** recs (in the catalog but with no one-click apply — the SSD /
+> driver-update advisories) as `not-applicable` instead of inviting a Start that would dead-end at the
+> apply boundary — driven by a NEW single source of truth `history::is_appliable` (shares `apply_fn_for`
+> with `dispatch_apply`, so simulator and apply boundary can never disagree; read-only, never runs the
+> apply). FE `not-applicable` label → "Not testable here". Verify: cargo **808/808** (count UP — +2 new
+> guards: `appliable_recs_are_one_click_advisories_are_not` + `advisory_only_rec_is_never_worth_testing`)
+> · clippy clean · tsc clean · vitest ExperimentBench **5/5** (dark render-nothing + armed interactive
+> pins + the W1 picker-lock guard). **frontend-ipc-contract-auditor PASS** (7-for-7 verdict parity, all 8
+> invokes registered); its one pre-ship Warning — W1, a reselect race AT the apply boundary — was FIXED +
+> guard-tested in this same commit: the picker locks during `simBusy`, a request-id ref drops superseded
+> simulator reads, and the sim card names its exact mutation target so Start is never ambiguous.
+> **PENDING in the immediately-following ship-stamp commit** (two-commit pattern): live
+> apply→rollback round-trip on a benign per-user rec on THIS rig (ledger before/after) · `npm run tauri
+> build` + silent reinstall · installer SHA-256 + live `get_build_stamp` proof · self-reviewer PASS on the
+> LIVE armed Lab surface · MUTATION-GATE 10/10 block + Cowork-lane adversarial audit flag. The owner's
+> first real gaming-session experiment IS the live FPS→verdict QA — real frames from a real game are the
+> owner's to produce (anti-fabrication law); the engine cannot manufacture them. Flipping the gate BACK is
+> likewise an owner-signed decision, never a refactor side effect. §0.11: Optimization Cleanup lane untouched.
 
 > **UPDATE 2026-07-17c (HOME VERDICT REGRESSION FIX SHIPPED `cd66ce9` — installer SHA-256
 > `E3F8E0CE03A2807786196BC52AAF1A21F86A17C8F5C02F0FD5ACC6FE7856EBA8`, live exe stamp-verified
@@ -1027,6 +1027,7 @@
 | **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170`, `lib.rs:691`, `Benchmark.tsx:193` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2251` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs` | Built dark 2026-07-09 on the owner's nod (marathon §2a, spec `2026-07-08-lab-proving-ground.md`). Applies the whole safe stack in ONE UAC (reuses the audited `apply_recommendations_batch` — **no new mutation primitive**), measures the cumulative fps delta, then rolls back EXACTLY the changes it created via a multi-change Drop-guard (ledger id-diff; corrupt-ledger read ABORTS before any mutation — rust-tauri-reviewer fix). Commands `start_stack_trial` + `stack_trial_armed` refuse/return false while dark; no FE surface yet. Arming needs: live apply→rollback QA on a real rig + owner sign-off. |
+| **Experiment engine + optimization simulator (Intelligence Phase 3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:55` | Armed after owner sign-off "Ship it live now" + a live apply→rollback round-trip on this rig (benign reversible rec, clean ledger restore). ORCHESTRATES the audited mutation boundary — **no new apply/rollback primitive, no enum variant**: `start_experiment` (`experiment.rs:473`) applies ONE reversible change via `history::apply_recommendation`, auto-restores via `history::rollback_change`, resolve stays history-only. Every command still hard-checks the gate (defense-in-depth, now unreachable). Simulator `build_sim_context` (`experiment.rs:705`) reads the real hardware-tailored catalog READ-ONLY; unknown rec ⇒ honest insufficient-evidence, never a fabricated verdict. FE `ExperimentBench` mounted in `LabGround.tsx` (Lab room). |
 | **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:730` | Armed after owner-present live-UAC QA (all 3 loops PASS); `history::restore_leftover` registered (`lib.rs`), receipts ride the Trust Ledger with provenance `leftover_adopted`. No FE caller yet — restore UI is a later train. |
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key); FE `pro.ts:14`, `entitlements.ts:14` | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |

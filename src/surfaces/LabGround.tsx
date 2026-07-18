@@ -104,9 +104,9 @@ export function LabGround(props: LabFastPathProps & {
         hw={hw}
         readiness={readiness}
       />
-      {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. DARK:
-          renders NOTHING until experiment_gate() is armed (owner-signed). Zero pixels today; the
-          armed layout is designed at arming with the owner's Lab UI direction. */}
+      {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator. ARMED
+          2026-07-17 (owner-signed): renders the bench when experiment_gate() is true; still
+          fails-dark (renders NOTHING) if the gate ever reads false. */}
       <ExperimentBench />
     </RoomShell>
   );
