@@ -176,6 +176,36 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
   });
 
+  // Guard for W2 (Intelligence Phase 3 fast-follow, 2026-07-17): the bench loads once when the gate
+  // arms, so a change applied over in Optimize during the same Lab visit would leave the picker's
+  // simulator read stale — still saying "Worth testing" + offering Start for a change already applied.
+  // On refocus the bench MUST reload the ledger and re-derive the active pick's verdict, and the pick
+  // must stay visible (resolving to "already configured") rather than silently vanishing.
+  it("re-derives the active pick from the live ledger on refocus (no stale 'worth-testing' after a sibling apply)", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: false }];
+    state.sessions = [VALORANT_SESSION];
+    state.sim = WORTH_TESTING_SIM;
+    render(<ExperimentBench />);
+    await screen.findByTestId("experiment-bench");
+
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "test-rec" } });
+    expect(await screen.findByText("Worth testing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start experiment/ })).toBeEnabled();
+
+    // A sibling Optimize apply lands: the same rec is now applied and the sim re-reads as already-configured.
+    state.recs = [{ id: "test-rec", title: "Test tweak", eligible: true, currently_applied: true }];
+    state.sim = { ...WORTH_TESTING_SIM, verdict: "already-configured" };
+    fireEvent.focus(window);
+
+    await waitFor(() => expect(screen.getByText("Already configured")).toBeInTheDocument());
+    expect(screen.queryByText("Worth testing")).toBeNull();
+    // Start is no longer offered for an already-applied change (the blocked verdict hides the launcher CTA).
+    expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
+    // …and the pick stayed visible in the dropdown instead of silently disappearing.
+    expect(screen.getByRole("combobox")).toHaveValue("test-rec");
+  });
+
   it("with a running experiment: shows the running panel with conclude + restore", async () => {
     state.gate = true;
     state.experiments = [RUNNING_EXPERIMENT];

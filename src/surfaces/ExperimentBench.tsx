@@ -169,6 +169,64 @@ export default function ExperimentBench() {
     reload();
   }, [gate, reload]);
 
+  // Whether a real before-reading exists — governs the simulator's hypothesis wording. A primitive so
+  // runSim's useCallback stays stable across renders (the focus-refresh effect below depends on it).
+  const hasBaseline = sessions.some((s) => s.avg_fps > 0);
+
+  // Runs the optimization simulator for a pick. `quiet` (the refresh path) re-derives the verdict from
+  // the live ledger WITHOUT the pick/spinner/hypothesis reset — a background refresh never flickers the
+  // card or clobbers the owner's typed hypothesis; a user pick (non-quiet) keeps the full behavior.
+  const runSim = useCallback(
+    async (recId: string, opts?: { quiet?: boolean }) => {
+      const quiet = opts?.quiet ?? false;
+      const reqId = ++simReq.current;
+      if (!quiet) {
+        setPickId(recId);
+        setSim(null);
+        setError(null);
+      }
+      if (!recId) return;
+      if (!quiet) setSimBusy(true);
+      try {
+        const report = await invoke<SimulatorReport>("simulate_optimization", { recId });
+        if (simReq.current !== reqId) return; // a newer read superseded this one — drop the stale sim
+        setSim(report);
+        if (!quiet) {
+          setHypothesis(
+            `${report.metric_to_watch ?? "1% low FPS"} should beat the ${
+              hasBaseline ? "3% noise floor" : "noise floor"
+            }`,
+          );
+        }
+      } catch (e) {
+        if (simReq.current !== reqId) return; // stale error from a superseded pick — ignore
+        if (!quiet) setError(String(e));
+      } finally {
+        if (simReq.current === reqId && !quiet) setSimBusy(false);
+      }
+    },
+    [hasBaseline],
+  );
+
+  // Intelligence Phase 3 fast-follow (W2): the bench loads once when the gate arms, so a change applied
+  // over in Optimize during the same Lab visit would leave the picker + an active simulator read stale.
+  // On refocus (window focus / tab re-shown) reload the ledger and re-derive the active pick's verdict —
+  // an externally-applied pick honestly resolves to "already configured" and Start stops being offered.
+  useEffect(() => {
+    if (!gate) return;
+    const onWake = () => {
+      if (document.visibilityState === "hidden") return;
+      reload();
+      if (pickId) runSim(pickId, { quiet: true });
+    };
+    window.addEventListener("focus", onWake);
+    document.addEventListener("visibilitychange", onWake);
+    return () => {
+      window.removeEventListener("focus", onWake);
+      document.removeEventListener("visibilitychange", onWake);
+    };
+  }, [gate, pickId, reload, runSim]);
+
   if (!gate) return null;
 
   const running = experiments.find((x) => x.status === "running") ?? null;
@@ -184,29 +242,13 @@ export default function ExperimentBench() {
   // The testable universe: catalog changes this rig can use and hasn't already applied.
   const pickable = recs.filter((r) => r.eligible && !r.currently_applied);
 
-  async function runSim(recId: string) {
-    const reqId = ++simReq.current;
-    setPickId(recId);
-    setSim(null);
-    setError(null);
-    if (!recId) return;
-    setSimBusy(true);
-    try {
-      const report = await invoke<SimulatorReport>("simulate_optimization", { recId });
-      if (simReq.current !== reqId) return; // a newer pick superseded this read — drop it, don't commit stale sim
-      setSim(report);
-      setHypothesis(
-        `${report.metric_to_watch ?? "1% low FPS"} should beat the ${
-          baseline ? "3% noise floor" : "noise floor"
-        }`,
-      );
-    } catch (e) {
-      if (simReq.current !== reqId) return; // stale error from a superseded pick — ignore
-      setError(String(e));
-    } finally {
-      if (simReq.current === reqId) setSimBusy(false);
-    }
-  }
+  // If a refocus-refresh just re-derived the active pick as already-applied (it drops out of `pickable`),
+  // keep it in the dropdown so its honest "already configured" verdict stays on screen — the selection
+  // must not silently vanish while its simulator card is still showing.
+  const options =
+    pickId && !pickable.some((r) => r.id === pickId)
+      ? [...pickable, ...recs.filter((r) => r.id === pickId)]
+      : pickable;
 
   async function startExperiment() {
     if (!sim || !baseline) return;
@@ -305,14 +347,14 @@ export default function ExperimentBench() {
               onChange={(e) => runSim(e.target.value)}
             >
               <option value="">Choose a change…</option>
-              {pickable.map((r) => (
+              {options.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.title}
                 </option>
               ))}
             </select>
           </label>
-          {pickable.length === 0 && (
+          {options.length === 0 && (
             <p className="exp-note">
               No changes to test right now — every applicable change is already applied, or nothing in
               the catalog fits this rig.
