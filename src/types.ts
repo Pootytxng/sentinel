@@ -560,6 +560,10 @@ export type WhatChangedReport = {
   /** §4C inspectable evidence graph — a deterministic re-projection of the fields above for
    *  the Expert view. Adds no new data; the plain-language fields ARE the normal view. */
   evidence_graph: EvidenceGraph;
+  /** Measurement Platform 2.0 (Task F) — how far these two sessions may HONESTLY be compared.
+   *  The backend fills it on every report path (including the inconclusive gates), so the
+   *  reader always sees WHY a comparison was limited. Surfaced by WhatChangedReportView. */
+  comparability: SessionComparability;
 };
 
 export type WhatChangedOutcome =

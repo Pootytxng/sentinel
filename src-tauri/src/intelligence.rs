@@ -986,8 +986,10 @@ pub(crate) enum WhatChangedOutcome {
 }
 
 /// Below this many FPS samples a comparison is refused as inconclusive (≈ one minute at
-/// 1 Hz — the same floor the session saver applies via MIN_SESSION_SECS).
-const MIN_COMPARE_SAMPLES: u32 = 60;
+/// 1 Hz — the same floor the session saver applies via MIN_SESSION_SECS). One definition,
+/// re-used by the cross-session pattern detector (`intelligence_patterns.rs`) so the two
+/// can't silently drift out of agreement about what "comparable" means.
+pub(crate) const MIN_COMPARE_SAMPLES: u32 = 60;
 /// Baseline older than this is stale — METHODOLOGY's expired-baseline rail. Caps High.
 const STALE_GAP_DAYS: i64 = 14;
 
@@ -1502,30 +1504,19 @@ fn what_changed_inner(inp: &WhatChangedInputs) -> WhatChangedReport {
     if let (Some(bf), Some(cf)) = (b.hw_fingerprint.as_ref(), c.hw_fingerprint.as_ref()) {
         let same_rig = bf.gpu == cf.gpu && bf.ram_gb == cf.ram_gb && bf.display == cf.display;
         if !same_rig {
-            let mut diffs = Vec::new();
-            if bf.gpu != cf.gpu {
-                diffs.push(format!("GPU: {} → {}", bf.gpu, cf.gpu));
-            }
-            if bf.ram_gb != cf.ram_gb {
-                diffs.push(format!("RAM: {} GB → {} GB", bf.ram_gb, cf.ram_gb));
-            }
-            if bf.display != cf.display {
-                diffs.push(format!("Display: {} → {}", bf.display, cf.display));
-            }
+            // Not-comparable ⇒ assert NO cause. This gate fires BEFORE any FPS delta is
+            // computed, so there is no measured effect to attribute — a "hardware-change"
+            // hypothesis here would be a causal claim with nothing to explain, and it would
+            // triple-state the GPU/RAM/Display facts that comparability::derive() already
+            // carries honestly in the banner (reasons) + the detail (changed_context). The
+            // comparability banner is the SOLE owner of that framing; this gate leaves
+            // leading_hypotheses empty like every sibling inconclusive gate above. next_action
+            // keeps the one thing derive() doesn't express: the actionable instruction.
             let mut r = base(
                 "inconclusive",
                 "These sessions ran on different hardware setups — not an apples-to-apples comparison.".into(),
             );
             r.gap_days = gap_days;
-            r.leading_hypotheses.push(Hypothesis {
-                id: "hardware-change".into(),
-                title: hypothesis_title("hardware-change").into(),
-                confidence: Confidence::Medium,
-                supporting_evidence: diffs,
-                contradicting_evidence: Vec::new(),
-                missing_evidence: Vec::new(),
-                next_test: Some("Compare sessions recorded on the same hardware setup.".into()),
-            });
             r.next_action = Some("Compare sessions recorded on the same hardware setup.".into());
             return r;
         }
@@ -3044,7 +3035,19 @@ mod tests {
         });
         assert_eq!(r.verdict, "inconclusive");
         assert!(r.headline.contains("different hardware"));
-        assert_eq!(r.leading_hypotheses[0].id, "hardware-change");
+        // Not-comparable ⇒ NO asserted cause. The comparability banner owns the "why" (its
+        // reasons + changed_context carry the GPU change honestly); this report must not push a
+        // "hardware-change" hypothesis, which would triple-state the same fact and assert a cause
+        // for a delta it never measured (this gate fires before any FPS delta is computed).
+        assert!(
+            r.leading_hypotheses.is_empty(),
+            "a not-comparable (different-rig) report must not assert a most-likely cause",
+        );
+        // ...and the honest comparability verdict is what carries the hardware break.
+        assert_eq!(
+            r.comparability.verdict,
+            crate::comparability::Comparability::NotComparable,
+        );
     }
 
     #[test]

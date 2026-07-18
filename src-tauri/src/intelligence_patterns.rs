@@ -22,7 +22,7 @@
 
 use serde::Serialize;
 
-use crate::intelligence::{parse_utc, pretty_game_name, Confidence};
+use crate::intelligence::{parse_utc, pretty_game_name, Confidence, MIN_COMPARE_SAMPLES};
 use crate::sessions::SessionSummary;
 
 // ─── Thresholds (fixed, documented — the inspectability contract) ────────
@@ -43,8 +43,8 @@ const MIN_FADE_BUCKETS: usize = 30;
 const THERMAL_TREND_MIN_C: f64 = 5.0;
 /// Total RAM-pressure movement (percentage points) before it is worth reporting.
 const MEMORY_TREND_MIN_PTS: f64 = 5.0;
-/// A session must have this many FPS samples to be comparable (mirrors intelligence.rs).
-const MIN_COMPARE_SAMPLES: u32 = 60;
+// A session must have ≥ MIN_COMPARE_SAMPLES FPS samples to be comparable — imported from
+// intelligence.rs (one definition, shared) rather than re-declared, so the two can't drift.
 /// Per game, only the most recent N comparable sessions are analyzed (stated in coverage).
 const PER_GAME_WINDOW: usize = 20;
 

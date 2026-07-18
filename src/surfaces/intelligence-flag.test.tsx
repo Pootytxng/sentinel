@@ -123,6 +123,51 @@ const report: WhatChangedOutcome = {
   notes: [],
   method_note: "Deterministic comparison of two recorded sessions; local records only.",
   evidence_graph: { nodes: [], edges: [] },
+  // Task F/G — a driver change keeps the sessions comparable while flagging the driver as the first
+  // candidate to check (comparability.rs derive), so this fixture renders the "Directly comparable"
+  // banner with a candidate cause, not a limit.
+  comparability: {
+    verdict: "comparable",
+    reasons: ["Same game, same PC, same capture method, and no changed condition detected."],
+    changed_context: ["GPU driver: 24.10.1 → 25.1.1"],
+    missing_context: [],
+    candidate_causes: [
+      "The GPU driver changed (24.10.1 → 25.1.1) — a candidate explanation to check first, not a proven cause.",
+    ],
+    shared_metrics: ["avg fps", "1% low"],
+    confidence_limit: "high",
+    allowed_conclusions: [
+      "These sessions are directly comparable — same game, same PC, same capture method.",
+      "A measured difference can be attributed to what changed between them.",
+    ],
+  },
+};
+
+// A not-comparable report: the sessions ran on different hardware, so the comparability banner
+// (its reasons + changed_context) is the SOLE owner of the "why". Even though this fixture
+// deliberately carries a non-empty leading_hypotheses (a hostile producer that DID push a cause),
+// the surface must refuse to render a "Most likely cause" card — otherwise it would triple-state
+// the hardware break the banner already carries. Guards the WhatChangedReportView showLeader
+// invariant against a future backend regression (the current backend leaves this empty).
+const notComparableReport: WhatChangedOutcome = {
+  ...report,
+  verdict: "inconclusive",
+  headline:
+    "These sessions ran on different hardware setups — not an apples-to-apples comparison.",
+  confounded: false,
+  // Hostile input: a cause is present in the data; the surface must still suppress it.
+  leading_hypotheses: [{ ...leader, id: "hardware-change", title: "Hardware changed" }],
+  next_action: "Compare sessions recorded on the same hardware setup.",
+  comparability: {
+    verdict: "not-comparable",
+    reasons: ["These sessions ran on different hardware — a direct comparison isn't possible."],
+    changed_context: ["GPU: Radeon RX 9070 XT → GeForce RTX 4070"],
+    missing_context: [],
+    candidate_causes: [],
+    shared_metrics: ["avg fps", "1% low"],
+    confidence_limit: "unknown",
+    allowed_conclusions: [],
+  },
 };
 
 const unavailable: WhatChangedOutcome = {
@@ -163,6 +208,19 @@ describe("WhatChangedPanel — compy_intelligence default ON", () => {
       "Show the working",
     );
     expect(container.querySelector(".wcp-detail")).toBeNull();
+  });
+
+  it("suppresses the 'Most likely cause' card on a not-comparable report — the banner owns the why, no triple-state", async () => {
+    harness.outcome = notComparableReport;
+    const { container } = mountPanel();
+    await waitFor(() => expect(container.querySelector(".wcp-inconclusive")).toBeTruthy());
+    // The comparability banner renders and carries the hardware break...
+    expect(container.querySelector(".wcp-compare")).toBeTruthy();
+    // ...but the surface refuses a "Most likely cause" card even though the fixture supplied one.
+    expect(container.textContent).not.toContain("Most likely cause");
+    expect(container.querySelector(".wcp-hypo-lead")).toBeNull();
+    // The actionable next test still shows — it's the one thing the banner doesn't express.
+    expect(container.textContent).toContain("Next test");
   });
 });
 

@@ -99,6 +99,19 @@ never be conflatable in any doc, commit message, or report).
   capture a treatment-side `GameStateFingerprint` + an equality check that drops `verdict_confidence` to
   **Unknown** on mismatch (never a silent "same game" assumption). Recorded, not silently gated — decision
   doc `docs/decisions/2026-07-18-experiment-comparability.md` §3/§4. No mutation-boundary / network / gate change.
+- [ ] **Measurement Platform 2.0 follow-up — `next_test` → experiment structured routing (additive).**
+  A leading hypothesis's suggested next test is **free prose** (`next_action` / `next_test` strings) with no
+  machine-readable rec-id, so "run the supported next test" cannot be wired into a pre-loaded `ExperimentBench`
+  pick without **fabricating** a prose→catalog-rec mapping (a no-fabrication violation). Deferred until the
+  hypothesis engine can emit a real, OPTIONAL rec-id where a safe mapping provably exists; until then the
+  connection stays a plain-language instruction, not a button. Decision doc
+  `docs/decisions/2026-07-18-prove-a-change-overlap.md` §5. No mutation / network / gate change.
+- [ ] **Measurement Platform 2.0 follow-up — comparability vocabulary chrome convergence (cosmetic).**
+  "What Changed" and `ExperimentBench` now share the comparability WORDS at the domain level (Task G surfaced
+  `SessionComparability` in the shared `WhatChangedReportView`); a later pass could unify their visual chrome
+  (badges / section labels) into one shared component vocabulary. Cosmetic, additive. Any **surface-level
+  reshape** (merging/renaming the "prove a change" rooms themselves) is **owner territory**, not autonomous —
+  logged so the option stays visible. Decision doc `2026-07-18-prove-a-change-overlap.md` §1/§5.
 - [~] **Intelligence Phase 4 — hardware-twin intelligence integration (IN PROGRESS):**
   - [x] **Component-level evidence highlighting (slice 1)** — ✅ BUILT this cycle. `component_evidence.rs`
     is a READ-ONLY projection: it re-keys the existing Intelligence Phase 2 pattern findings

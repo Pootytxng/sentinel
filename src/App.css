@@ -3330,6 +3330,72 @@ body::before {
   margin: 0;
 }
 
+/* ── Measurement Platform 2.0 (Tasks F + G) — the comparison-basis banner ──
+   Stated up front under the headline: how far these two sessions may honestly be compared (the
+   four METHODOLOGY §11 verdicts) + the plain-language "why". A quiet full-hairline card with a
+   faint verdict wash keeps it a caption of the headline, not a competing block — the app-wide
+   verdict idiom (color-mix border + wash + tinted label), NOT a side stripe (border-hygiene
+   design law). The terse before→after values live one expand down in .wcp-compare-detail. */
+.wcp-compare {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin: 0 0 10px;
+  background: color-mix(in srgb, var(--panel-2) 40%, transparent);
+}
+.wcp-compare-band {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-2, var(--fg));
+  line-height: 1.4;
+}
+.wcp-compare-why {
+  margin: 3px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.wcp-compare-why li { margin: 1px 0; }
+/* Verdict tints — full hairline + faint wash via color-mix (the app-wide verdict idiom; no side
+   stripe). comparable = quiet positive; partial/limited = a caution hue; not-comparable = an
+   honest (not alarming) red; unknown stays neutral muted. */
+.wcp-compare-comparable {
+  border-color: color-mix(in srgb, var(--ready, #46d98a) 34%, var(--border));
+  background: color-mix(in srgb, var(--ready, #46d98a) 8%, transparent);
+}
+.wcp-compare-comparable .wcp-compare-band { color: var(--ready, #46d98a); }
+.wcp-compare-partial {
+  border-color: color-mix(in srgb, var(--attention, #f5b740) 36%, var(--border));
+  background: color-mix(in srgb, var(--attention, #f5b740) 9%, transparent);
+}
+.wcp-compare-partial .wcp-compare-band { color: var(--attention, #f5b740); }
+.wcp-compare-not-comparable {
+  border-color: color-mix(in srgb, var(--danger, #f3716f) 36%, var(--border));
+  background: color-mix(in srgb, var(--danger, #f3716f) 8%, transparent);
+}
+.wcp-compare-not-comparable .wcp-compare-band { color: var(--danger, #f3716f); }
+.wcp-compare-unknown .wcp-compare-band { color: var(--muted); }
+/* The finer comparability specifics, inside the working — terse before→after values + the shared
+   metric axes + (Expert) the confidence ceiling. Mono, to read as records, not prose. */
+.wcp-compare-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.wcp-compare-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-2, var(--fg));
+}
+.wcp-compare-key { min-width: 96px; color: var(--muted); }
+.wcp-compare-val { flex: 1 1 200px; min-width: 0; color: var(--fg-2, var(--fg)); word-break: break-word; }
+
 /* ── Intelligence Phase 2 — §4C evidence graph (Expert view, inside the working) ──
    A deterministic re-projection of the report above: a plain node list + link list, each
    node citing the record it came from. Sits inside .wcp-detail; a hairline inset sets the

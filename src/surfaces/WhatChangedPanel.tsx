@@ -8,6 +8,8 @@ import type {
   EvidenceNodeType,
   EvidenceRelation,
   SessionSummary,
+  Comparability,
+  SessionComparability,
 } from "../types";
 import { useIntelligenceFlag } from "../design/use-hud";
 import { useExpertView } from "../design/use-expert-view";
@@ -176,6 +178,77 @@ function EvidenceGraphBlock({ graph }: { graph: EvidenceGraph }) {
   );
 }
 
+// §F/§G comparability — how far two sessions may HONESTLY be compared. The four verdicts map to the
+// plain-language bands METHODOLOGY §11 states up front, so the reader sees the comparison's basis
+// before any cause talk. Static map: a new backend variant surfaces as a TS error here, never a raw
+// kebab band on screen.
+const COMPARABILITY_LABEL: Record<Comparability, string> = {
+  comparable: "Directly comparable",
+  partial: "Direct comparison is limited",
+  "not-comparable": "Not directly comparable",
+  unknown: "Not enough comparable evidence",
+};
+
+// Expert-only confidence-ceiling wording (a BAND, never a number — METHODOLOGY §10).
+const CONF_LIMIT_LABEL: Record<SessionComparability["confidence_limit"], string> = {
+  unknown: "Unknown",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
+// The comparison-basis banner (Tasks F + G). Stated up front, before the headline's cause talk:
+// the verdict band + WHY (the prose `reasons`, plus `missing_context` — the conditions we couldn't
+// confirm matched, which ARE the "why" for a missing-driven Partial/Unknown and must never be
+// silently dropped). The terse before→after values live one expand down in ComparabilityDetail, so
+// this stays prose and that stays values — complementary, not a repeat.
+function ComparabilityBanner({ c }: { c: SessionComparability }) {
+  const why = [...c.reasons, ...c.missing_context];
+  return (
+    <div className={`wcp-compare wcp-compare-${c.verdict}`}>
+      <span className="wcp-compare-band">{COMPARABILITY_LABEL[c.verdict]}</span>
+      {why.length > 0 && (
+        <ul className="wcp-compare-why">
+          {why.map((line, i) => (
+            <li key={i}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// The finer comparability specifics, inside "the working": the exact conditions that differed
+// (before → after values, distinct granularity from the banner's prose), the metric axes both
+// captures actually recorded (the only ones a comparison may honestly touch), and — Expert only —
+// the confidence ceiling this comparability imposes. Renders nothing when there's nothing to add.
+function ComparabilityDetail({ c, expert }: { c: SessionComparability; expert: boolean }) {
+  if (c.changed_context.length === 0 && c.shared_metrics.length === 0 && !expert) return null;
+  return (
+    <div className="wcp-compare-detail">
+      <span className="wcp-section-label">How comparable these are</span>
+      {c.changed_context.length > 0 && (
+        <div className="wcp-compare-row">
+          <span className="wcp-compare-key">What differed</span>
+          <span className="wcp-compare-val">{c.changed_context.join(" · ")}</span>
+        </div>
+      )}
+      {c.shared_metrics.length > 0 && (
+        <div className="wcp-compare-row">
+          <span className="wcp-compare-key">Compared on</span>
+          <span className="wcp-compare-val">{c.shared_metrics.join(", ")}</span>
+        </div>
+      )}
+      {expert && (
+        <div className="wcp-compare-row">
+          <span className="wcp-compare-key">Confidence capped at</span>
+          <span className="wcp-compare-val">{CONF_LIMIT_LABEL[c.confidence_limit]}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The full report render, shared by the auto for-this-session panel and the investigator's
 // good-vs-bad comparison. `outcome` is the engine's own union — unavailable renders the honest
 // one-line reason, a report renders the verdict + working. No fabrication path: both faces come
@@ -207,7 +280,14 @@ function WhatChangedReportView({
   const others = r.leading_hypotheses.slice(1);
   // The headline already names the leader for the plain-language face; the expanded block
   // below shows its evidence. Confounded reports refuse a single cause — no leader block.
-  const showLeader = !r.confounded && leader != null && leader.id !== "insufficient-evidence";
+  // Not-comparable reports also refuse a cause: the ComparabilityBanner is the sole owner of
+  // the "why" (its reasons + changed_context), so a "Most likely cause" card here would
+  // triple-state the same hardware/context break the banner already carries. The backend
+  // leaves leading_hypotheses empty on that path (intelligence.rs different-rig gate); this
+  // invariant defends the surface even if a future producer ever populates one.
+  const notComparable = r.comparability.verdict === "not-comparable";
+  const showLeader =
+    !r.confounded && !notComparable && leader != null && leader.id !== "insufficient-evidence";
 
   return (
     <div className={`wcp wcp-${r.verdict}${arcV2 ? " arc-v2" : ""}`}>
@@ -217,6 +297,8 @@ function WhatChangedReportView({
       </div>
 
       <h3 className="wcp-headline">{r.headline}</h3>
+
+      <ComparabilityBanner c={r.comparability} />
 
       {r.confounded && r.notes.length > 0 && <p className="wcp-note">{r.notes[0]}</p>}
 
@@ -252,6 +334,8 @@ function WhatChangedReportView({
               {r.gap_days} day{r.gap_days === 1 ? "" : "s"} apart
             </div>
           </div>
+
+          <ComparabilityDetail c={r.comparability} expert={expert} />
 
           {r.observations.length > 0 && (
             <div className="wcp-obs">
