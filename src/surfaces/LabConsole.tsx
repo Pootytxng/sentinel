@@ -324,11 +324,16 @@ export function LabConsole({
           <div className="lab-card-body">
             {openStation === "optimize" && (
               /* The room's read-only promise, relocated from the header (owner header-slop law
-                 2026-07-10) to its context: the one station that changes anything. The undo half
-                 moved to Fix's consent line beside the apply controls (title-header law) — this
-                 note keeps only the room-scope fact so the panel never says undo twice. */
+                 2026-07-10) to its context. Since Intelligence Phase 3 armed the experiment bench
+                 (LabGround.tsx), TWO stations in this room mutate — this Optimize station AND
+                 Controlled experiments — so the note names both; the old "the only station ... that
+                 changes anything" claim went false the moment the bench armed (self-review
+                 2026-07-17). The undo half moved to Fix's consent line beside the apply controls
+                 (title-header law) so the panel never says undo twice. */
               <p className="lc-detail-note">
-                The only station in this room that changes anything — everything else just reads.
+                Two stations here change your PC: this one applies your safe stack in one click, and
+                Controlled experiments below tests a single change, then auto-restores it. Everything
+                else just reads.
               </p>
             )}
             {openStation === "optimize" ? <OptimizeStation {...fast} /> : stationBody(openStation)}

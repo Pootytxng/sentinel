@@ -192,8 +192,14 @@ describe("LabConsole", () => {
     // the undo half moved to Fix's consent line (title-header law) so the panel says it once.
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // closed → nowhere
     fireEvent.click(screen.getByRole("button", { name: /optimize/i }));
-    expect(container.querySelector(".lc-detail-note")!.textContent).toMatch(/everything else just reads/i);
-    expect(container.querySelector(".lc-detail-note")!.textContent).not.toMatch(/undo/i);
+    const note = container.querySelector(".lc-detail-note")!.textContent!;
+    expect(note).toMatch(/everything else just reads/i);
+    expect(note).not.toMatch(/undo/i);
+    // bug→guard (self-review 2026-07-17): arming the Intelligence Phase 3 experiment bench in this
+    // same room made the old "the only station ... that changes anything" claim false — TWO stations
+    // now mutate. The note must NOT assert single-mutator exclusivity, and MUST name the bench.
+    expect(note).not.toMatch(/only .*(changes?|change) anything/i);
+    expect(note).toMatch(/controlled experiments/i);
     fireEvent.click(screen.getByRole("button", { name: /benchmark/i }));
     expect(container.querySelector(".lc-detail-note")).toBeNull(); // measure stations: no note
   });
