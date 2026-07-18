@@ -1,32 +1,45 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
-// FirstCheck drives the shared useScan — feed it one ready check and no limiters.
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn((cmd: string) => {
-    if (cmd === "get_game_readiness")
-      return Promise.resolve({
-        checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
-        ready_count: 1,
-        attention_count: 0,
-        unknown_count: 0,
-        advisory_count: 0,
-        advisory: "",
-        dismissed_ids: [],
-        drifts: [],
-      });
-    if (cmd === "get_priorities")
-      return Promise.resolve({ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null });
-    if (cmd === "get_recommendations") return Promise.resolve([]);
-    return Promise.resolve(null);
-  }),
-}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
+import { invoke } from "@tauri-apps/api/core";
 import FirstCheck, { FIRST_CHECK_KEY } from "./FirstCheck";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 
+// FirstCheck drives the shared useScan (get_game_readiness → get_recommendations → priorities_from).
+// Default: one ready check, no limiters (the clean-rig verdict). Reset before every test so a test
+// that overrides the mock (the limiter path below) can't bleed into another.
+const cleanRig = (cmd: string) => {
+  if (cmd === "get_game_readiness")
+    return Promise.resolve({
+      checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+      ready_count: 1,
+      attention_count: 0,
+      unknown_count: 0,
+      advisory_count: 0,
+      advisory: "",
+      dismissed_ids: [],
+      drifts: [],
+    });
+  if (cmd === "priorities_from")
+    return Promise.resolve({
+      limiters: [],
+      already_fine: [],
+      not_worth_touching: [],
+      session_hint: null,
+      upgrade_path: null,
+    });
+  if (cmd === "get_recommendations") return Promise.resolve([]);
+  return Promise.resolve(null);
+};
+
 afterEach(cleanup);
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  vi.mocked(invoke).mockReset();
+  vi.mocked(invoke).mockImplementation(cleanRig as never);
+});
 
 describe("FirstCheck (audit M1)", () => {
   it("clean rig verdict celebrates the measured win without inventing work (doctrine voice)", async () => {
@@ -73,5 +86,57 @@ describe("FirstCheck (audit M1)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Open the dashboard" }));
     expect(onDone).toHaveBeenCalled();
     expect(localStorage.getItem(FIRST_CHECK_KEY)).toBe("1");
+  });
+
+  // bug→guard (BACKLOG:923, Cowork scope-check 2026-07-16): the core reversibility promise
+  // ("Compy snapshots the prior state so you can roll this back anytime") lived ONLY inside the
+  // confirm dialog shown AFTER clicking Apply — a user who never clicks Apply never saw it. Pin:
+  // when the #1 limiter has an applyable fix, that promise renders STANDING on the verdict card,
+  // before any Apply interaction.
+  it("surfaces the restore-guarantee as a standing line on the verdict card (not only post-Apply)", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        });
+      if (cmd === "priorities_from")
+        return Promise.resolve({
+          limiters: [
+            {
+              id: "hags-lim",
+              title: "Hardware GPU Scheduling is off",
+              reason: "Turning it on can smooth frame pacing on your GPU.",
+              linked: "hags",
+              confidence: "high",
+              status: "attention",
+            },
+          ],
+          already_fine: [],
+          not_worth_touching: [],
+          session_hint: null,
+          upgrade_path: null,
+        });
+      if (cmd === "get_recommendations")
+        return Promise.resolve([{ id: "hags", title: "Enable Hardware GPU Scheduling", currently_applied: false }]);
+      return Promise.resolve(null);
+    }) as never);
+
+    render(
+      <ConfirmProvider>
+        <FirstCheck onDone={vi.fn()} />
+      </ConfirmProvider>,
+    );
+
+    // The #1-limiter spotlight resolves with an Apply button (an applyable fix)…
+    expect(await screen.findByRole("button", { name: "Apply" })).toBeInTheDocument();
+    // …and the reversibility promise is already on the card — no Apply click required.
+    expect(screen.getByText(/roll this back anytime/i)).toBeInTheDocument();
   });
 });

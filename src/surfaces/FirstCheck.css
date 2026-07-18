@@ -243,6 +243,21 @@
 .fc-chip-muted {
   color: var(--faint);
 }
+/* Standing reversibility promise under the spotlight action (was only in the post-Apply dialog). */
+.fc-spotlight-reversible {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.fc-spotlight-reversible .fc-rev-mark {
+  color: var(--ready, #46d98a);
+  font-weight: 700;
+  flex: none;
+}
 
 /* #2…N compact */
 .fc-rest {

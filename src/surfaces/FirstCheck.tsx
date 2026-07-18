@@ -162,6 +162,19 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
                     </span>
                   )}
                 </div>
+                {/* Restore guarantee — STANDING on the card, not trapped in the post-Apply confirm
+                    dialog (bug→guard: a user who never clicks Apply must still see the core
+                    reversibility promise). Same true promise as applyLimiter's confirm body; shown
+                    only when there's an applyable fix (a hands-on fix has nothing for Compy to roll
+                    back). Guard: FirstCheck.test.tsx "surfaces the restore-guarantee as a standing line". */}
+                {recFor(top) && (
+                  <p className="fc-spotlight-reversible">
+                    <span className="fc-rev-mark" aria-hidden="true">
+                      ↺
+                    </span>
+                    Compy snapshots the prior state so you can roll this back anytime.
+                  </p>
+                )}
               </div>
             )}
 

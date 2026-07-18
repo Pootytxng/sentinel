@@ -920,7 +920,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   gap — don't rebuild the in-Lab router. Provenance: panel-review brief 2026-07-15 §4.2.
   *(2026-07-17, intelligence directive §9: complementary to the intelligence surfaces — stays
   queued, NOT demoted and NOT part of the intelligence trains.)*
-- [ ] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
+- [x] basic-mode simplification — SCOPE-CHECK FIRST, build only what's missing: FirstCheck's one-verdict
   flow + verdict cards + the answer-first Home already cover most of "one screen, one verdict, one
   action"; audit that flow against the panel's basic-mode ask and close only genuine gaps (no parallel
   "simple mode" build). Provenance: panel-review brief 2026-07-15 §4.8. *(2026-07-17, intelligence
@@ -936,6 +936,16 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   "Play something tonight; the session debrief will tell you..."). Net: this is a small, well-scoped
   copy/layout addition (surface the restore-guarantee line + a plain what-changes line on the
   existing verdict card), not a new flow.
+  ✅ CLOSED 2026-07-18. Gap (4) FIXED: the restore-guarantee now renders as a **standing line**
+  on the #1-limiter spotlight card (`.fc-spotlight-reversible`, `FirstCheck.tsx`), gated on
+  `recFor(top)` (only when there's an applyable fix — a hands-on fix has nothing for Compy to roll
+  back), with the ↺ mark in `--ready`. Same true promise as the confirm-dialog body (LOCKED rule 3
+  makes it honest); appears before any Apply click. Gap (3) before→after value **intentionally NOT
+  built** — `PriorityItem`/`ScanRecLite` carry no such value on this surface, so a stated value would
+  be fabrication (no-fabrication law); the existing `top.reason` + "Expected impact · not yet measured
+  on this rig" chip already give the honest what/why. bug→guard: `FirstCheck.test.tsx` "surfaces the
+  restore-guarantee as a standing line" (4/4 green). Self-reviewer PASS (contrast 6.16:1 muted /
+  10.22:1 mark, 12px gap no overlap, no duplication). tsc clean.
 
 ### A6 · UPGRADE-PATH advisory — **complete** (affiliate tags = Phase D)
 - [x] hardware-limited verdict detection (GPU≥95% / HDD install drive) — `priorities.rs:95`
