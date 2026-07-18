@@ -10,6 +10,41 @@
 
 ## Snapshot
 
+> **UPDATE 2026-07-18a (INTELLIGENCE PHASE 4 SLICE 1 SHIPPED LIVE `75c38c6` — installer SHA-256
+> `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`, live exe stamp-verified
+> `75c38c6 · release` (CLEAN — no `+dirty`; CDP `get_build_stamp`), ONE installer on the Desktop
+> (`Compy_0.9.0_x64-setup.exe`), silent reinstall done — supersedes the `D0D63E48…94575BCB` installer
+> from `28648b2`).** Collapses the `28648b2 → 75c38c6` drift (4 commits; app-code delta `+746/−33`
+> across 9 files, the rest docs-only). Carries two shipped items plus a ship-integrity catch:
+> - **Intelligence Phase 4 slice 1 — component-level evidence highlighting (§4H "hardware twin"):** the
+>   Hardware grid lights a component card ONLY when a real Intelligence pattern implicates it, at that
+>   pattern's OWN confidence band. Architecture is a **read-only PROJECTION, not a new detector** —
+>   `component_evidence.rs` (`attribute()` over `detect_patterns()`, `#[tauri::command]
+>   get_component_evidence`) re-keys existing Intelligence Phase 2 findings BY the hardware component
+>   each names (memory-trend → Memory; thermal-trend / driver-split → GPU); it invents no evidence, and
+>   passive/ambient patterns stay capped at Medium. Flag-gated on the Intelligence flag; a card stays
+>   **neutral** when the flag is off OR the projection fetch fails — never a fabricated glow ("no
+>   decorative component glow without meaning"). On a rig with no qualifying session pattern yet it is
+>   invisible — that IS the design. Mutation/rollback boundary UNTOUCHED (`actions.rs` / `history.rs` /
+>   `experiment.rs` byte-identical `28648b2 → 75c38c6`); zero-outbound property holds (no network /
+>   telemetry / capability change). bug→guard: `border-hygiene-guard.test.ts` guard 3 pins the compound
+>   `.card.card-lit:hover` cascade fix; `HardwareGrid.test.tsx` pins the four honesty invariants
+>   (lit-only-implicated · neutral-when-flag-off · no-glow-on-fetch-fail · band-drives-class).
+> - **W2 fast-follow (`f558d1d`):** the armed Controlled-experiments bench (`ExperimentBench.tsx`)
+>   live-refreshes on window/tab refocus — a pick that became already-applied while you were in Optimize
+>   re-derives to the "Already configured" verdict (Start hidden) and STAYS visible in the picker (guard
+>   "re-derives the active pick from the live ledger on refocus", 6/6).
+> - **Ship-integrity note (the law working):** the FIRST build of `75c38c6` stamped `+dirty` — two stray
+>   CDP-probe PNGs sat in the repo ROOT at build time (non-docs, so build.rs's `:(exclude,top)docs`
+>   pathspec counted them). The **CDP stamp-verify caught it**; the exe-hash byte-scan CANNOT (`+dirty`
+>   is assembled at runtime from `COMPY_GIT_DIRTY`, never stored contiguously — exactly why the law says
+>   "verify via the CDP stamp, not an exe hash"). Fix: PNGs → scratchpad, then `cargo clean -p compy
+>   --release` and rebuild → clean `75c38c6 · release`.
+> - Verify at HEAD `75c38c6`: cargo **819/819** (24 ignored) · clippy clean · tsc clean · vitest **1718
+>   passed / 8 skipped / 0 assertion failures** (the lone "failed FILE" was a 60 s setup-hook timeout in
+>   `scripts/export-library.test.mjs` under concurrent build load — passes 8/8 in isolation, unrelated to
+>   this slice) · citation audit 50 (46 ok · 4 near-drift · 0 broken).
+
 > **UPDATE 2026-07-17f (INTELLIGENCE PHASE 3 SHIPPED LIVE `28648b2` — installer SHA-256
 > `D0D63E489105BE7566769A13A2BA801FE76E95314E07A11938A8A49A94575BCB`, live exe stamp-verified
 > `28648b2 · release` (CLEAN — no `+dirty`; CDP `get_build_stamp` + embedded-hash byte-scan of the
