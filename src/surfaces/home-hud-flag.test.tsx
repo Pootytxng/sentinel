@@ -170,11 +170,21 @@ const shell = (child: React.ReactNode) => (
 
 describe("Instrument-HUD flag-off byte-identity (the classic failsafe)", () => {
   it("flag='0' renders byte-identical to HomeV2 directly", () => {
-    const direct = render(shell(<HomeV2 {...props} />)).container.innerHTML;
-    cleanup();
-    localStorage.setItem("compy_editorial", "0");
-    const off = render(shell(<HomeRoom {...props} />)).container.innerHTML;
-    expect(off).toBe(direct);
+    // HudFrame prints the live wall clock (HH:MM:SS, HudFrame.tsx). The two renders below happen
+    // microseconds apart, so ~1 run in 5 straddled a second boundary and the readout alone differed
+    // — a false-red on a byte-identity failsafe (diagnosed 2026-07-17). Freeze the clock so both
+    // renders capture the identical instant; the DOM equality this test actually guards is unaffected.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00"));
+    try {
+      const direct = render(shell(<HomeV2 {...props} />)).container.innerHTML;
+      cleanup();
+      localStorage.setItem("compy_editorial", "0");
+      const off = render(shell(<HomeRoom {...props} />)).container.innerHTML;
+      expect(off).toBe(direct);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("flag='0': zero HUD DOM present", () => {
