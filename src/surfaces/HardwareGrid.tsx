@@ -1,10 +1,14 @@
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 // Type-only imports (erased at build) — no runtime cycle back into App.tsx, which imports this
 // component as a value. The hardware shape lives in App.tsx; both Homes read the same `hw` object.
 import type { HardwareInfo, GpuInfo } from "../App";
+import type { ComponentEvidence, ComponentEvidenceReport } from "../types";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import { rigTierLine } from "../data/rig-tier";
 import { Term } from "../design/Term";
+import { useIntelligenceFlag } from "../design/use-hud";
 
 // The detailed "Your hardware" card grid — the SINGLE source every Home surface renders, so they
 // can never drift (the regression this restores: the grid once lived only in the classic Overview,
@@ -23,20 +27,88 @@ const fmtDriver = (g: GpuInfo) => {
   return `${version} · ${age} old`;
 };
 
+// Intelligence Phase 4 (§4H hardware twin) — pull the component-evidence projection and key it by
+// component. A card lights ONLY when a real Intelligence Phase 2 pattern implicates that component
+// (see src-tauri/src/component_evidence.rs); this invents nothing. Gated on the Intelligence flag:
+// off ⇒ empty map ⇒ every card renders exactly as before (honest neutral). Fetch failure ⇒ empty
+// map, never a fabricated highlight. Read-only — no mutation, no network, nothing written.
+function useComponentEvidence(enabled: boolean): Map<string, ComponentEvidence> {
+  const [map, setMap] = useState<Map<string, ComponentEvidence>>(() => new Map());
+  useEffect(() => {
+    if (!enabled) {
+      setMap(new Map());
+      return;
+    }
+    let alive = true;
+    try {
+      invoke<ComponentEvidenceReport>("get_component_evidence")
+        .then((report) => {
+          if (!alive) return;
+          const next = new Map<string, ComponentEvidence>();
+          for (const c of report.components) next.set(c.component, c);
+          setMap(next);
+        })
+        .catch(() => {
+          if (alive) setMap(new Map());
+        });
+    } catch {
+      if (alive) setMap(new Map());
+    }
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+  return map;
+}
+
+// The lit-card evidence index: a native <details> disclosure (keyboard-accessible, no JS motion,
+// reduced-motion-safe by construction). Always-visible = the band + one non-causal headline; the
+// disclosure holds the implicating patterns' own findings + the next test that would sharpen them.
+// No "go to another tab" dead-end (flags-name-it-and-fix-it-inline law) — the why lives right here.
+function CardEvidence({ ev }: { ev: ComponentEvidence }) {
+  return (
+    <details className={`hw-evi hw-evi-${ev.confidence}`}>
+      <summary className="hw-evi-summary">
+        <span className="hw-evi-band">{ev.confidence} confidence</span>
+        <span className="hw-evi-headline">{ev.headline}</span>
+      </summary>
+      <div className="hw-evi-body">
+        <ul className="hw-evi-reasons">
+          {ev.reasons.map((r, i) => (
+            <li key={i}>{r}</li>
+          ))}
+        </ul>
+        {ev.next_test && (
+          <p className="hw-evi-next">
+            <span className="hw-evi-next-label">Next test</span>
+            {ev.next_test}
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function Card({
   label,
   value,
   children,
+  evidence,
 }: {
   label: string;
   value: string;
   children: ReactNode;
+  evidence?: ComponentEvidence;
 }) {
   return (
-    <div className="card">
-      <div className="card-label">{label}</div>
+    <div className={evidence ? "card card-lit" : "card"}>
+      <div className="card-label">
+        {label}
+        {evidence && <span className="hw-evi-dot" aria-hidden="true" />}
+      </div>
       <div className="card-value">{value}</div>
       <div className="card-details">{children}</div>
+      {evidence && <CardEvidence ev={evidence} />}
     </div>
   );
 }
@@ -51,6 +123,11 @@ function Detail({ k, v }: { k: ReactNode; v: string | number }) {
 }
 
 export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
+  // §4H hardware twin — the map is keyed by component and holds ONLY implicated components (today:
+  // gpu, memory). Every card reads its own key: an absent key ⇒ undefined ⇒ neutral. Passing the
+  // lookup to all six cards is forward-compatible — when a detector that names a new component
+  // ships, its card lights with no change here.
+  const evidence = useComponentEvidence(useIntelligenceFlag());
   // Rough, transparent rig tier (owner-greenlit 2026-06-22) — see src/data/rig-tier.ts. It names the
   // exact specs it read, and the bands are conservative (a single strong axis can't inflate the tier).
   const tier = rigTierLine(
@@ -68,7 +145,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         </div>
       )}
       <div className="grid">
-        <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand}>
+        <Card label="CPU" value={hw.cpu_arch?.family_label || hw.cpu_brand} evidence={evidence.get("cpu")}>
           {hw.cpu_arch?.architecture && hw.cpu_arch.architecture !== "Unknown" && (
             <Detail
               k="Architecture"
@@ -84,7 +161,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
           <Detail k="Base frequency" v={fmtGHz(hw.cpu_frequency_mhz)} />
         </Card>
 
-        <Card label="Memory" value={fmtGB(hw.ram_total_bytes)}>
+        <Card label="Memory" value={fmtGB(hw.ram_total_bytes)} evidence={evidence.get("memory")}>
           <Detail
             k="In use"
             v={`${fmtGB(hw.ram_used_bytes)} (${Math.round(
@@ -125,6 +202,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         <Card
           label="Graphics"
           value={hw.gpus.length === 0 ? "No GPU detected" : hw.gpus[0].name}
+          evidence={evidence.get("gpu")}
         >
           {hw.gpus.length === 0 ? (
             <Detail
@@ -168,6 +246,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         <Card
           label="System"
           value={hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}`}
+          evidence={evidence.get("system")}
         >
           <Detail
             k="Build"
@@ -193,6 +272,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
         <Card
           label="Storage"
           value={`${hw.disks.length} drive${hw.disks.length === 1 ? "" : "s"}`}
+          evidence={evidence.get("storage")}
         >
           {hw.disks.map((d) => (
             <Detail
@@ -245,7 +325,7 @@ export function HardwareGrid({ hw }: { hw: HardwareInfo }) {
             ? "Not connected"
             : "No adapter detected";
           return (
-            <Card label="Network" value={value}>
+            <Card label="Network" value={value} evidence={evidence.get("network")}>
               {phys.length === 0 ? (
                 <Detail k="Status" v="No physical adapter detected" />
               ) : (

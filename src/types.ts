@@ -539,3 +539,34 @@ export type IntelligenceHeadline = {
   game: string;
   session_started_at: string;
 };
+
+// ─── Intelligence Phase 4 — component evidence (the §4H hardware twin) ───────
+// A PROJECTION of the Intelligence Phase 2 patterns onto the hardware component each one names
+// (get_component_evidence). Invents no evidence and reaches no conclusion the Patterns tile
+// doesn't: a component appears here ONLY if a real pattern implicates it, at that pattern's own
+// band. Absent ⇒ the card renders neutral. Serde mirror of src-tauri/src/component_evidence.rs.
+/** Kebab keys that map to HardwareGrid cards (gpu → Graphics, memory → Memory). Grows as
+ *  detectors that can honestly name a new component are added; an unknown key simply matches no
+ *  card, so the frontend is forward-compatible. */
+export type ComponentKind = "memory" | "gpu";
+
+export type ComponentEvidence = {
+  component: ComponentKind;
+  /** Inherited band (max of the implicating patterns) — never bumped, never numeric. */
+  confidence: ConfidenceBand;
+  /** One at-a-glance, non-causal line for why the card is lit. */
+  headline: string;
+  /** The implicating patterns' own plain-language findings — nothing synthesized. */
+  reasons: string[];
+  /** What would make the picture clearer, from the strongest implicating pattern. */
+  next_test: string | null;
+  /** Detector ids that implicated this component — inspectable provenance. */
+  sources: string[];
+};
+
+export type ComponentEvidenceReport = {
+  /** ONLY implicated components, fixed order; empty ⇒ every card neutral (the honest common case). */
+  components: ComponentEvidence[];
+  /** Passthrough so a surface can tell "no sessions yet" from "sessions exist, nothing implicated". */
+  sessions_considered: number;
+};

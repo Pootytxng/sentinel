@@ -55,3 +55,33 @@ describe("design law: no side-stripe border idioms", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// Guard 3 — the §4H hardware-twin lit-card hover border must OUT-SPECIFY the generic .card:hover.
+// Regression the self-reviewer caught (2026-07-18): a bare `.card-lit:hover` (0,0,2,0) TIES the two
+// generic `.card:hover` rules (the v2 one at ~1926, and the BOLD-LAYER one at ~2123 that paints
+// `border-color: var(--accent-line)`) on specificity and LOSES on source order — the lit hover rule
+// silently never applies, so a lit card and a neutral card hover identically (the lit distinction is
+// lost) and the rule is dead code that would regress the instant those generic rules move. The fix is
+// the compound `.card.card-lit:hover` (0,0,3,0), which wins regardless of order. So: IF any
+// `.card-lit:hover` rule exists, every occurrence MUST be the compound `.card.card-lit:hover` form.
+// Conditional-on-presence so intentionally removing the whole highlight can't false-fail this.
+describe("§4H cascade: lit-card hover must beat the generic .card:hover", () => {
+  it("every .card-lit:hover selector is the compound .card.card-lit:hover form", () => {
+    const offenders: string[] = [];
+    for (const rel of cssFiles()) {
+      // Blank out /* … */ comment BODIES (newlines preserved so line numbers stay true) so prose
+      // that names `.card-lit:hover` — e.g. this rule's own explanatory comment in App.css — is
+      // never mistaken for a live selector.
+      const css = readFileSync(join("src", rel), "utf8").replace(
+        /\/\*[\s\S]*?\*\//g,
+        (m) => m.replace(/[^\n]/g, " "),
+      );
+      css.split("\n").forEach((line, i) => {
+        // A `.card-lit:hover` NOT immediately preceded by `.card` = the bare/ties-and-loses form.
+        if (/(?<!\.card)\.card-lit:hover/.test(line))
+          offenders.push(`${rel}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+});

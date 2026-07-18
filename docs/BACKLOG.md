@@ -79,23 +79,41 @@ never be conflatable in any doc, commit message, or report).
   Mutation-gate 10/10 + rust-tauri-reviewer PASS + live apply→rollback round-trip on the rig + Cowork
   audit flagged. **The owner's first real gaming-session experiment IS the live FPS→verdict QA** (real
   frames are the owner's to produce — anti-fabrication law). Installer + stamp in RELEASE_STATE Snapshot.
-- [ ] **Intelligence Phase 3 fast-follow (W2 — UX staleness, honest today):** `ExperimentBench` doesn't
-  live-refresh its simulator read when a sibling Optimize apply lands within the same Lab visit, so a
-  stale pick can still show e.g. `worth-testing` for something just applied. NOT a correctness bug —
-  server-side `build_sim_context` re-derives `already_active` from the ledger at start, so a stale pick
-  resolves to an honest `already-configured` and never a double-apply. Fast-follow = re-run the sim on
-  ledger-change / window-refocus. (W1, the reselect race AT the apply boundary, was FIXED + guard-tested
-  pre-ship: the picker locks during `simBusy` + request-id sequencing drops superseded reads + the sim
-  card names its exact mutation target — `ExperimentBench.test.tsx` "locks the change picker while a
-  simulation is in flight".)
-- [ ] **Intelligence Phase 4:** hardware-twin intelligence integration · component-level evidence
-  highlighting · hardware-health trends · long-term personal knowledge graph.
+- [x] **Intelligence Phase 3 fast-follow (W2 — UX staleness):** ✅ FIXED `f558d1d`. `ExperimentBench`
+  now re-runs its simulator read on window/tab refocus, so a pick that became already-applied during the
+  same Lab visit re-derives to the honest `already-configured` verdict card (Start withdrawn) and STAYS
+  VISIBLE in the picker via the new `options` list rather than vanishing. Never a correctness bug —
+  server-side `build_sim_context` already re-derived `already_active` from the ledger at start, so a stale
+  pick could never double-apply; this closes the staleness window. Guard: `ExperimentBench.test.tsx`
+  "re-derives the active pick from the live ledger on refocus" (6/6). (W1, the reselect race AT the apply
+  boundary, was FIXED + guard-tested pre-ship: the picker locks during `simBusy` + request-id sequencing
+  drops superseded reads + the sim card names its exact mutation target — `ExperimentBench.test.tsx`
+  "locks the change picker while a simulation is in flight".)
+- [~] **Intelligence Phase 4 — hardware-twin intelligence integration (IN PROGRESS):**
+  - [x] **Component-level evidence highlighting (slice 1)** — ✅ BUILT this cycle. `component_evidence.rs`
+    is a READ-ONLY projection: it re-keys the existing Intelligence Phase 2 pattern findings
+    (`intelligence_patterns::detect_patterns`) BY the hardware component each names (memory-trend → Memory;
+    thermal-trend / driver-split → GPU), inventing no evidence and reaching no conclusion the Patterns tile
+    doesn't. `HardwareGrid` lights a component card ONLY when a real pattern implicates it — accent border +
+    label dot + an expandable evidence disclosure (band · non-causal headline · reasons · suggested next
+    test) at that pattern's own confidence band (passive-capped at Medium, never High). Flag off or a fetch
+    failure ⇒ fully neutral, never a fabricated glow. Command `get_component_evidence`; zero mutation /
+    network / capability change. Guards: `HardwareGrid.test.tsx` (lit / neutral / fetch-fail / band-class) +
+    `component_evidence.rs` 10 tests + the `.card.card-lit:hover` cascade guard in `border-hygiene-guard.test.ts`.
+    cargo / clippy / vitest / tsc green · self-reviewer PASS (§4H, 9/9). Invisible on a rig with no qualifying
+    session pattern yet (correctly neutral until evidence accrues) — that IS the design.
+  - [ ] hardware-health trends · long-term personal knowledge graph (remaining Phase 4 slices).
 - [ ] **Intelligence Phase 5:** evidence-based Upgrade Advisor 2.0 · "buy nothing" verdict ·
   technical prescription contract · consumer report and shop-report exports. (Subsumes the
   evidence-export-tiers item in PHASE A below and UI_VISION_BACKLOG §F upgrade-path engine —
   one lane, not two; both entries annotated at source.)
 - [ ] **Intelligence Phase 6:** optional crowd intelligence · only after explicit security/privacy/
   owner gates · no work in the current train.
+- [ ] **Home HUD: rig-tier / corner-gauge text overlap (pre-existing defect, unrelated to the intelligence
+  lane).** The self-reviewer (Intelligence Phase 4 §4H re-review, 2026-07-18) found `.hc-corner` ArcGauges
+  overlapping `.hc-stage-cards` content on the Home HUD stage (`HomeConsole.tsx` / `home-console.css`) —
+  intermittent, reproduced with zero §4H content present, so proven independent of that diff (NOT a
+  regression). Separate ticket; needs its own self-review when fixed.
 
 **§0.12 demotion flags (owner reviews; nothing dropped without a trace):** open items below that
 neither feed nor serve the intelligence platform are flagged 🔻 at their entries — five as of

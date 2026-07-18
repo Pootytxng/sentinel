@@ -1931,6 +1931,69 @@ body {
 .card-value { font-size: 18px; letter-spacing: -0.01em; }
 .card-label, .section-title, .diag-section-title { color: var(--faint); }
 
+/* ── Intelligence Phase 4 (§4H hardware twin) — component-evidence highlight ─────────────
+   A hardware card becomes ".card-lit" ONLY when a real Intelligence Phase 2 pattern implicates
+   that component (get_component_evidence → src-tauri/src/component_evidence.rs — a read-only
+   projection that invents no evidence). No evidence ⇒ no .card-lit ⇒ the card is byte-identical
+   to before (honest neutral; no decorative glow). These are measured, correlational observations,
+   NOT problems, so the signal is the theme ACCENT (a quiet "look here"), deliberately NOT the amber
+   .detail-flag alarm (which stays reserved for actionable "you should fix this"). Compound selector
+   `.card.card-lit` (0,0,2,0 rest / 0,0,3,0 hover) — NOT `.card-lit` alone — so the lit border beats
+   EVERY generic .card / .card:hover rule regardless of source order, in particular the later BOLD-LAYER
+   `.card:hover` at ~line 2123 (border-color: var(--accent-line)) which a bare .card-lit:hover ties on
+   specificity and loses to on order. The hover rule overrides only border-color, so the BOLD-LAYER
+   accent ring/glow box-shadow still lands — the lit card just reads a stronger accent edge than a
+   neutral card's hover. Static — the only transition is the card's own pre-existing border-color
+   settle (line ~1923); the caret + disclosure are instant, so no reduced-motion gate is needed. */
+.card.card-lit { border-color: color-mix(in srgb, var(--accent) 34%, var(--border)); }
+.card.card-lit:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); }
+.card-lit .card-label { display: flex; align-items: center; gap: 7px; }
+.hw-evi-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); flex: none;
+}
+
+/* The evidence disclosure: an always-visible band + non-causal headline (the <summary>) that expands
+   to the implicating patterns' own findings + the next test. Native <details> ⇒ keyboard-accessible
+   (focusable summary, Enter/Space toggles) with zero JS. */
+.hw-evi { margin-top: 2px; padding-top: 11px; border-top: 1px solid var(--border); }
+.hw-evi-summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  cursor: pointer; list-style: none; color: var(--fg);
+}
+.hw-evi-summary::-webkit-details-marker { display: none; }
+.hw-evi-summary::before {
+  content: ""; flex: none; width: 6px; height: 6px;
+  border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+}
+.hw-evi[open] .hw-evi-summary::before { transform: rotate(45deg); }
+.hw-evi-band {
+  flex: none; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--border); color: var(--muted);
+}
+/* Medium reads a touch stronger than Low; High is never emitted for a component (passive/ambient
+   patterns hard-cap at Medium upstream) but is styled for forward-safety. */
+.hw-evi-medium .hw-evi-band,
+.hw-evi-high .hw-evi-band {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.hw-evi-headline { color: var(--fg); font-size: 12px; line-height: 1.4; }
+.hw-evi-body { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+.hw-evi-reasons {
+  margin: 0; padding-left: 16px;
+  display: flex; flex-direction: column; gap: 4px;
+  color: var(--muted); font-size: 11.5px; line-height: 1.45;
+}
+.hw-evi-next { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.hw-evi-next-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); margin-right: 7px;
+}
+
 /* ── Tabs → tactile, with a glowing active state + pane entrance ────────── */
 .tab-bar { gap: 4px; border-bottom-color: var(--hairline); }
 .tab { border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur) var(--ease), background var(--dur) var(--ease); }

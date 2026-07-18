@@ -24,6 +24,7 @@ mod history;
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
 mod intelligence; // Intelligence Phase 1 — READ-ONLY event timeline + deterministic "What changed?" engine (bands-only confidence, zero mutation, zero network).
 mod intelligence_patterns; // Intelligence Phase 2 — READ-ONLY cross-session pattern detection over recorded sessions.json (deterministic trend/thermal/memory/driver/mode/fade detectors; bands-only, passive-capped at Medium, zero mutation/network).
+mod component_evidence; // Intelligence Phase 4 — READ-ONLY projection of Intelligence Phase 2 patterns onto the hardware component each names (the §4H hardware twin; invents no evidence, inherits each pattern's band, honest-neutral when absent).
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
 mod leftovers; // Leftovers v1 — READ-ONLY pre-existing optimizer-rot detection (pure evaluator + on-demand probe; no restore wired).
 mod license; // Compy Pro — offline Ed25519 license VERIFY only, DARK (all-zeros placeholder pubkey → always free; private key never in repo). No outbound, no Windows mutation.
@@ -1054,6 +1055,7 @@ pub fn run() {
             intelligence::what_changed_between,
             intelligence::get_intelligence_headline,
             intelligence_patterns::get_intelligence_patterns,
+            component_evidence::get_component_evidence,
             experiment::get_experiment_gate,
             experiment::get_experiments,
             experiment::simulate_optimization,
