@@ -340,6 +340,9 @@ pub(crate) fn build_markdown_report(
     }
     let _ = writeln!(o);
 
+    // ── How these measurements were made (methodology + capture capability · Measurement 2.0) ──
+    o.push_str(&build_methodology_section(sessions));
+
     // ── Diagnostics (detection evidence — so a tester's report can self-diagnose every claim) ──
     let _ = writeln!(o, "## Diagnostics\n");
     let diag_sections = as_arr(diagnostics);
@@ -388,6 +391,117 @@ pub(crate) fn build_markdown_report(
         let _ = writeln!(o, "{f}");
     }
 
+    o
+}
+
+/// The methodology + capture-capability section (Measurement Platform 2.0 · Task F / §4). The honest
+/// answer to a skeptic's "how were these numbers measured, and what may they be compared to?" — the
+/// capture backend that produced the sessions, the metric axes it *genuinely* records, its stated
+/// limitations, the methodology version in force, and the comparability rule (only shared metrics,
+/// only matching conditions). Pure: it reads the `capture_capabilities` already stamped on each
+/// session and fabricates nothing. If no session carries a capability record (all pre-2.0 schema),
+/// it says the exact metric set is unknown rather than assuming today's backend — missing stays
+/// unknown. No numeric confidence anywhere; language matches `docs/METHODOLOGY.md`.
+fn build_methodology_section(sessions: &Value) -> String {
+    let mut o = String::new();
+    let _ = writeln!(o, "## How these measurements were made\n");
+
+    // The capability record is stamped per session; today every session shares one backend, so the
+    // first present record describes the method. A future cross-backend run simply renders per-method
+    // instead — but never invents a record for a session that lacks one.
+    let caps = as_arr(sessions)
+        .iter()
+        .find(|s| s.get("capture_capabilities").is_some_and(|c| !c.is_null()))
+        .and_then(|s| s.get("capture_capabilities"));
+
+    let Some(c) = caps else {
+        let _ = writeln!(
+            o,
+            "- Frame rate is measured by observing the frames each game submits to Windows — no game \
+             code is touched and no overlay is injected (anti-cheat-safe by design)."
+        );
+        let _ = writeln!(
+            o,
+            "- These sessions predate the capture-capability record, so the exact metric set they \
+             captured is not known and is treated as unknown — never assumed to match today's method."
+        );
+        let _ = writeln!(
+            o,
+            "- Sessions are live estimates, not benchmark-grade proof. Two sessions are only \
+             comparable when their conditions match; where they differ, direct comparison is limited."
+        );
+        let _ = writeln!(o);
+        return o;
+    };
+
+    // Only the metric axes the backend *genuinely* produces — the honest capability table, straight
+    // from the persisted record (never hard-coded here, so a future backend's richer set renders
+    // truthfully without touching this code).
+    let axes: [(&str, &str); 10] = [
+        ("supports_app_fps", "frames the game submits (app / submit FPS)"),
+        ("supports_presented_fps", "present-completion FPS"),
+        ("supports_displayed_fps", "displayed FPS"),
+        ("supports_frame_type", "real-vs-generated frame type"),
+        ("supports_generated_frames", "frame-generation accounting"),
+        ("supports_gpu_busy", "per-frame GPU-busy time"),
+        ("supports_display_latency", "display latency"),
+        ("supports_input_latency", "input latency"),
+        ("supports_dropped_frames", "dropped-frame accounting"),
+        ("supports_gpu_telemetry", "capture-backend GPU telemetry"),
+    ];
+    let supported: Vec<&str> = axes
+        .iter()
+        .filter(|(k, _)| vbool(c, k) == Some(true))
+        .map(|(_, label)| *label)
+        .collect();
+    let supported_line = if supported.is_empty() {
+        "none recorded".to_string()
+    } else {
+        supported.join(", ")
+    };
+
+    let apis: Vec<&str> = c
+        .get("graphics_api")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let api_line = if apis.is_empty() { "—".to_string() } else { apis.join(", ") };
+
+    let _ = writeln!(
+        o,
+        "- **Capture method:** present-event counting via `{}` (capture-method v{}, methodology {}). \
+         No game code is touched and no overlay is injected — anti-cheat-safe by design.",
+        vstr(c, "backend_id"),
+        vstr(c, "backend_version"),
+        vstr(c, "methodology_version"),
+    );
+    let _ = writeln!(o, "- **Graphics APIs observed:** {api_line}.");
+    let _ = writeln!(o, "- **Metrics actually captured:** {supported_line}.");
+
+    let limitations: Vec<&str> = c
+        .get("limitations")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    if !limitations.is_empty() {
+        let _ = writeln!(o, "- **Known limitations:**");
+        for l in limitations {
+            let _ = writeln!(o, "  - {l}");
+        }
+    }
+
+    let _ = writeln!(
+        o,
+        "- **Comparing sessions:** only metrics both sessions actually captured are compared, and \
+         only when their conditions match (same game, resolution, and capture method). When some \
+         conditions changed, direct comparison is limited and Compy says so rather than guessing."
+    );
+    let _ = writeln!(
+        o,
+        "- Sessions are live estimates, not benchmark-grade proof — see the full methodology at \
+         {SITE_URL}."
+    );
+    let _ = writeln!(o);
     o
 }
 
@@ -752,6 +866,65 @@ mod export_tests {
         assert!(md.contains("Ready 5 / Attention 2 / Unknown 1"));
         assert!(md.contains("Monitor refresh rate"));
         assert!(md.contains("[ATTENTION]"));
+    }
+
+    #[test]
+    fn methodology_section_renders_the_real_capture_capabilities() {
+        // Task F / §4: a session stamped with the production capability record produces an honest
+        // "How these measurements were made" section — the real backend id/version/methodology, the
+        // graphics APIs it can observe, ONLY the metric axes it truly captures, its stated
+        // limitations, and the comparability rule. No fabricated capability, no numeric confidence.
+        let caps = serde_json::to_value(crate::capture::CaptureCapabilities::etw_dxgi(Some(
+            "2026-07-18T00:00:00Z".to_string(),
+        )))
+        .unwrap();
+        let sessions = json!([{
+            "process_name": "game.exe", "avg_fps": 120.0, "low1_fps_est": 90.0,
+            "started_at": "2026-07-18T00:00:00Z", "capture_capabilities": caps
+        }]);
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t", None);
+
+        assert!(md.contains("## How these measurements were made"));
+        assert!(md.contains("etw-dxgi"), "the real backend id, straight from the record");
+        assert!(md.contains("methodology 2026-07-16"), "the methodology version in force");
+        // ONLY app/submit FPS is captured by the ETW-DXGI helper — the richer axes must NOT appear
+        // as captured metrics.
+        let cap_line = md
+            .lines()
+            .find(|l| l.contains("Metrics actually captured:"))
+            .expect("captured-metrics line present");
+        assert!(cap_line.contains("app / submit FPS"));
+        assert!(!cap_line.contains("display latency"), "must not claim an axis it never captures");
+        assert!(!cap_line.contains("GPU-busy"));
+        // Honest limitations surfaced; comparability rule stated in product language.
+        assert!(md.contains("Vulkan and OpenGL"), "the DXGI blind-spot caveat is carried through");
+        assert!(md.contains("only when their conditions match"));
+        assert!(md.to_lowercase().contains("direct comparison is limited"));
+        // Anti-fabrication: no numeric confidence / score anywhere in the section.
+        let section = &md[md.find("## How these measurements").unwrap()..];
+        let section = &section[..section.find("## Diagnostics").unwrap_or(section.len())];
+        for banned in ["% confidence", "confidence:", "score", "%bottleneck", "% bottleneck"] {
+            assert!(
+                !section.to_lowercase().contains(banned),
+                "methodology section must carry no numeric confidence/score: found `{banned}`"
+            );
+        }
+    }
+
+    #[test]
+    fn methodology_section_is_honest_when_sessions_predate_the_capability_record() {
+        // Old-schema guard: a session with NO capture_capabilities (pre-2.0) must not be assumed to
+        // match today's backend — the section says the metric set is unknown, and still states the
+        // comparability limit. Missing stays unknown.
+        let sessions = json!([{ "process_name": "old.exe", "avg_fps": 100.0, "started_at": "x" }]);
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t", None);
+        assert!(md.contains("## How these measurements were made"));
+        assert!(
+            md.contains("predate the capture-capability record"),
+            "old sessions are flagged as unknown, not backfilled with today's method"
+        );
+        assert!(!md.contains("etw-dxgi"), "must not invent a backend id the session never had");
+        assert!(md.to_lowercase().contains("direct comparison is limited"));
     }
 
     #[test]

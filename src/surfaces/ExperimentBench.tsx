@@ -44,6 +44,11 @@ type Experiment = {
   kept: boolean;
   stop_reason: string | null;
   concluded_at: string | null;
+  /** Task F — how much the EVIDENCE QUALITY justifies trusting this verdict (a band, never a
+   *  number). null while Running or on records written before this field existed (honestly unknown). */
+  verdict_confidence: Confidence | null;
+  /** Plain-language "what supports / limits this verdict" line — the experiment's methodology. */
+  verdict_note: string | null;
 };
 
 type SimulatorReport = {

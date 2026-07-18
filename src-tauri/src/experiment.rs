@@ -127,6 +127,15 @@ pub(crate) struct ExperimentRecord {
     pub stop_reason: Option<String>,
     #[serde(default)]
     pub concluded_at: Option<String>,
+    /// How much the EVIDENCE QUALITY justifies trusting this verdict — a BAND, never a number
+    /// (Task F). None while Running or for records written before this field existed (loads as
+    /// honestly unknown, never assumed). Derived by [`verdict_confidence`] at conclude time.
+    #[serde(default)]
+    pub verdict_confidence: Option<Confidence>,
+    /// Plain-language "what supports / limits this verdict" line — the experiment's methodology in
+    /// one sentence. None while Running or on pre-existing records.
+    #[serde(default)]
+    pub verdict_note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -231,13 +240,77 @@ fn delta_low1_pct(baseline_low1: f64, treatment_low1: f64) -> f64 {
 }
 
 /// The honest outcome of concluding an experiment. `verdict` is the surfaced string; `keep` decides
-/// whether the change stays applied; `stop_reason` is set only on an error/blocked path.
+/// whether the change stays applied; `stop_reason` is set only on an error/blocked path. `confidence`
+/// is a BAND (never a number), and `note` is a plain-language methodology/comparability line — the
+/// two together answer "how much can I trust this before/after?" (Task F).
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) struct ConcludeOutcome {
     pub verdict: String,
     pub keep: bool,
     pub delta_low1_pct: f64,
     pub stop_reason: Option<String>,
+    /// How much the evidence QUALITY (not the effect size) justifies trusting this verdict.
+    pub confidence: Confidence,
+    /// Plain-language "what supports / limits this" note — the experiment's methodology in one line.
+    pub note: String,
+}
+
+/// The honest confidence BAND in an experiment verdict (Task F) — NOT a number and NOT a promise. It
+/// answers "how much can you trust this before/after conclusion?" from the QUALITY of the evidence,
+/// never the size of the effect. Precedence mirrors [`conclude_outcome`]:
+///
+/// - **crash → High** — a crash is an unambiguous stability failure; the "restore it" conclusion
+///   does not depend on the fps reading at all.
+/// - **insufficient samples → Unknown** — not enough comparable evidence to judge; the honest "we
+///   don't know", never a fabricated verdict.
+/// - **confounded / expired → Low** — another change happened mid-test, or the baseline is too old:
+///   the before/after is no longer a clean single-variable compare.
+/// - **improved / no-change / regressed** (clean guards + enough samples) → High when the treatment
+///   session is comfortably long (≥ 2× the minimum frames), else Medium — a valid but shorter sample.
+fn verdict_confidence(verdict: &str, treatment_samples: u32, crashed: bool) -> Confidence {
+    if crashed {
+        return Confidence::High;
+    }
+    if treatment_samples < MIN_TREATMENT_SAMPLES {
+        return Confidence::Unknown;
+    }
+    match verdict {
+        "confounded" | "expired" => Confidence::Low,
+        "insufficient-evidence" => Confidence::Unknown,
+        _ if treatment_samples >= MIN_TREATMENT_SAMPLES.saturating_mul(2) => Confidence::High,
+        _ => Confidence::Medium,
+    }
+}
+
+/// The plain-language "what supports / limits this verdict" line (Task F) — the experiment's
+/// methodology in one sentence, in product language (single-variable, comparable-evidence,
+/// direct-comparison-limited). Never a numeric confidence.
+fn verdict_note(verdict: &str, treatment_samples: u32, crashed: bool) -> String {
+    if crashed {
+        return "The game crashed during the test — an unambiguous stability failure on this rig, so \
+                Compy restored the change. This verdict does not rely on the frame-rate reading."
+            .into();
+    }
+    if treatment_samples < MIN_TREATMENT_SAMPLES {
+        return format!(
+            "Only {treatment_samples} frames were captured — below the {MIN_TREATMENT_SAMPLES} Compy \
+             needs for a fair before/after. That is not enough comparable evidence to judge this \
+             change, so it was restored and the result is left as unknown."
+        );
+    }
+    match verdict {
+        "confounded" => "Another change happened during the test, so the before and after are no \
+                         longer a clean single-variable comparison — this result can't be attributed \
+                         to the change under test."
+            .into(),
+        "expired" => "The baseline is too old to compare fairly against this session, so direct \
+                      comparison is limited."
+            .into(),
+        _ => "Baseline and treatment were captured back-to-back on the same rig and game, changing \
+              only this one setting — a clean single-variable comparison. Only the 1% low frame rate \
+              was judged, against the same noise floor the rest of Compy uses."
+            .into(),
+    }
 }
 
 /// PURE conclude logic (§4F steps 6–8). Injected `ledger_now`/`now` so it's testable without disk or
@@ -263,6 +336,8 @@ pub(crate) fn conclude_outcome(
             keep: false,
             delta_low1_pct: delta,
             stop_reason: Some("crash-during-treatment".into()),
+            confidence: verdict_confidence("regressed", treatment_samples, true),
+            note: verdict_note("regressed", treatment_samples, true),
         };
     }
 
@@ -274,6 +349,8 @@ pub(crate) fn conclude_outcome(
             keep: false,
             delta_low1_pct: delta,
             stop_reason: Some("insufficient-samples".into()),
+            confidence: verdict_confidence("insufficient-evidence", treatment_samples, false),
+            note: verdict_note("insufficient-evidence", treatment_samples, false),
         };
     }
 
@@ -284,7 +361,9 @@ pub(crate) fn conclude_outcome(
     // Keep ONLY a clean, attributable improvement. no-change / regressed / confounded / expired all
     // restore — a change that didn't measurably help has no justification to stay.
     let keep = verdict == "improved";
-    ConcludeOutcome { verdict, keep, delta_low1_pct: delta, stop_reason: None }
+    let confidence = verdict_confidence(&verdict, treatment_samples, false);
+    let note = verdict_note(&verdict, treatment_samples, false);
+    ConcludeOutcome { verdict, keep, delta_low1_pct: delta, stop_reason: None, confidence, note }
 }
 
 // ─── §4G Optimization simulator (pure, read-only advisory — never a promise) ──
@@ -523,6 +602,8 @@ pub(crate) fn start_experiment(
         kept: false,
         stop_reason: None,
         concluded_at: None,
+        verdict_confidence: None,
+        verdict_note: None,
     };
     store.schema_version = STORE_SCHEMA_VERSION;
     store.experiments.push(rec.clone());
@@ -585,6 +666,8 @@ pub(crate) fn conclude_experiment(
         recorded_at: now.to_rfc3339(),
     });
     store.experiments[idx].verdict = Some(outcome.verdict.clone());
+    store.experiments[idx].verdict_confidence = Some(outcome.confidence);
+    store.experiments[idx].verdict_note = Some(outcome.note.clone());
     store.experiments[idx].concluded_at = Some(now.to_rfc3339());
 
     if outcome.keep {
@@ -799,6 +882,8 @@ mod experiment_tests {
             kept: false,
             stop_reason: None,
             concluded_at: None,
+            verdict_confidence: None,
+            verdict_note: None,
         }
     }
 
@@ -906,6 +991,83 @@ mod experiment_tests {
         assert_eq!(o.verdict, "insufficient-evidence");
         assert!(!o.keep, "no verdict on thin evidence ⇒ restore");
         assert_eq!(o.stop_reason.as_deref(), Some("insufficient-samples"));
+    }
+
+    // ── verdict CONFIDENCE band + methodology note (Task F — bands never numbers) ──
+
+    /// A crash is an unambiguous stability failure — the "restore it" call doesn't depend on the fps
+    /// reading, so the band is High and the note says exactly that.
+    #[test]
+    fn a_crash_verdict_is_high_confidence_and_says_it_does_not_rely_on_fps() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 130.0, 5000, true, 5, Utc::now());
+        assert_eq!(o.confidence, Confidence::High);
+        assert!(o.note.to_lowercase().contains("crash"));
+        assert!(o.note.contains("does not rely on the frame-rate reading"));
+    }
+
+    /// Thin evidence must render as Unknown — the honest "we don't know", never a fabricated band.
+    #[test]
+    fn insufficient_samples_leave_confidence_unknown() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, 5, Utc::now());
+        assert_eq!(o.confidence, Confidence::Unknown);
+        assert!(o.note.contains("not enough comparable evidence"));
+    }
+
+    /// A clean improvement with a valid-but-short treatment sample sits at Medium…
+    #[test]
+    fn a_clean_verdict_on_a_short_sample_is_medium() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 100.0, MIN_TREATMENT_SAMPLES, false, 5, Utc::now());
+        assert_eq!(o.verdict, "improved");
+        assert_eq!(o.confidence, Confidence::Medium);
+        assert!(o.note.contains("single-variable comparison"));
+    }
+
+    /// …and rises to High once the treatment session is comfortably long (≥ 2× the minimum frames).
+    #[test]
+    fn a_clean_verdict_on_a_long_sample_is_high() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(
+            &r,
+            100.0,
+            MIN_TREATMENT_SAMPLES.saturating_mul(2),
+            false,
+            5,
+            Utc::now(),
+        );
+        assert_eq!(o.verdict, "improved");
+        assert_eq!(o.confidence, Confidence::High);
+    }
+
+    /// A confound can't be attributed, so a big gain still lands at Low — evidence quality, not size.
+    #[test]
+    fn a_confounded_verdict_is_low_confidence_regardless_of_gain() {
+        let r = rec(90.0, 5);
+        let o = conclude_outcome(&r, 120.0, 5000, false, 6, Utc::now());
+        assert_eq!(o.verdict, "confounded");
+        assert_eq!(o.confidence, Confidence::Low);
+        assert!(o.note.contains("can't be attributed"));
+    }
+
+    /// The methodology note is plain language — NEVER a numeric confidence (anti-fabrication guard).
+    #[test]
+    fn no_verdict_note_ever_carries_a_numeric_confidence() {
+        let banned = ["% confidence", "confidence:", "score", "% bottleneck", "%bottleneck"];
+        let r = rec(90.0, 5);
+        let cases = [
+            conclude_outcome(&r, 130.0, 5000, true, 5, Utc::now()), // crash
+            conclude_outcome(&r, 120.0, MIN_TREATMENT_SAMPLES - 1, false, 5, Utc::now()), // insufficient
+            conclude_outcome(&r, 100.0, 5000, false, 5, Utc::now()), // improved
+            conclude_outcome(&r, 120.0, 5000, false, 6, Utc::now()), // confounded
+        ];
+        for o in cases {
+            let lc = o.note.to_lowercase();
+            for b in banned {
+                assert!(!lc.contains(b), "note leaked a numeric-confidence token {b:?}: {}", o.note);
+            }
+        }
     }
 
     // ── restore-failure honesty (anti-fabrication: never claim a state we can't confirm) ──

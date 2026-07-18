@@ -166,7 +166,10 @@ impl CaptureCapabilities {
 /// different one; encoding a speculative process-control signature now would be abstraction theater
 /// (see `docs/decisions/2026-07-18-capture-backend.md`).
 pub(crate) trait CaptureBackend {
-    /// Stable backend id (matches the persisted `CaptureCapabilities::backend_id`).
+    /// Stable backend id (matches the persisted `CaptureCapabilities::backend_id`). No present-day
+    /// caller — it exists for the future backend selector (a second backend picks by id); allowed
+    /// dead until then rather than dropped, so the trait's contract stays whole.
+    #[allow(dead_code)]
     fn id(&self) -> &'static str;
 
     /// The honest capability descriptor for a session this backend captured.
