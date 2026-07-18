@@ -88,7 +88,14 @@ them; make them cheaper:
 3. **The bigger lever is context length, not subagents:** 72% of usage ran at >150k context.
    Long sessions compound cost — every turn re-reads the pile. Mitigation below.
 
-## Session-refresh cadence (the >150k fix, standing)
+## Session-refresh cadence (the >150k fix) — ⚠️ SUPERSEDED 2026-07-14/2026-07-18
+
+**The manual `/compact`/`/clear` cadence below is retired.** As of 2026-07-14, refresh is native
+(`CLAUDE_CODE_AUTO_COMPACT_WINDOW` in `.claude/settings.json`, currently 150000 — see
+`.claude/USAGE_ECONOMICS.md` §5 for the current reconciled numbers) plus the context-size-advisor
+Stop hook (v4 as of 2026-07-18) that only makes sure state is persisted to disk before compaction,
+never asks for a manual command. The CC-side instructions below (type `/compact`/`/clear` yourself)
+are kept for historical record only — do not follow them; follow USAGE_ECONOMICS.md instead.
 
 - **One train per session.** When a train lands (or context clearly >150k / feels sluggish):
   CC → `/compact` mid-task, `/clear` between tasks; Cowork → start a fresh session with the
@@ -159,7 +166,14 @@ context); >150k share should fall only if the queue-cap + `/clear` cadence is ac
 followed — if it doesn't move again, the failure is behavioral, not structural.
 
 **Context-refresh advisor (added 2026-07-05; v2 same day — owner directive "CC hands me the
-paste"):** `.claude/hooks/context-size-advisor.mjs` (Stop hook) stats the session transcript
+paste") — ⚠️ DESCRIPTION BELOW IS STALE, describes v2 file-size-based behavior.** The hook has
+since moved to v3 (2026-07-14, live-usage-parsing — file size is a broken proxy post-compaction,
+since the file keeps growing while live context resets) and v4 (2026-07-18, reads the compact
+window from the env var at runtime instead of a hardcoded threshold). Current behavior, mechanism,
+and the full reconciled number set live in `.claude/USAGE_ECONOMICS.md` §5 and the hook file's own
+header comment — read those, not the paragraph below, for what it actually does today.
+
+`.claude/hooks/context-size-advisor.mjs` (Stop hook) stats the session transcript
 after each turn; past ~1.5 MB (≈ the >150k-token zone) it blocks the stop ONCE (per +1 MB
 growth) and instructs CC to (1) persist any conversation-only state to the spec/BACKLOG, then
 (2) end its reply with a ready-to-send **CONTEXT REFRESH block**: which command to type

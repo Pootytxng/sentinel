@@ -208,6 +208,11 @@ to move each law OUT of memory INTO the toolchain (the chosen enforcement, 2026-
 
 ### PROJECT SKILLS INDEX (2026-07-06 — Fable-window persistence pack)
 
+> Note: "Fable window" here means the Fable-5-on-plan model-availability window (expires, then CC
+> falls back to Opus 4.8 — see the FABLE 5 PROMPTING DEFAULTS section above), NOT the LLM context
+> window discussed under TOKEN DISCIPLINE / `.claude/USAGE_ECONOMICS.md`. Two unrelated meanings of
+> "window" in this file — flagged 2026-07-18 after an audit found the collision confusing.
+
 **`.claude/skills/INDEX.md`** maps every project skill (self-review · impeccable · compy-coverage-sweep
 · **mutation-gate · gate-drift-audit · ship · guard-forge · doc-sync** — the last five added 2026-07-06
 to persist judgment past the Fable window — · **usage-audit**, added 2026-07-13) to its trigger +
