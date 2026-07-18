@@ -209,7 +209,16 @@
   padding: var(--v2-pad);
   overflow-y: auto;
   width: 100%;
-  max-height: 420px;
+  /* Confine the 2D card viewport to the gauge-free MIDDLE band. The four corner ArcGauges are
+     always-present, z-index:2, pinned 22px from the stage edge and ~56px tall, so they intrude
+     ~50px into the 28px-padded content box from the top AND the bottom. A full-height viewport
+     (was 420px) let a tall HardwareGrid scroll its rows UNDER them — padding can't help because a
+     scroll container only protects its extremes, not mid-scroll. .hc-rig's place-items:center
+     splits the reserved band symmetrically, so a bounded max-height keeps every row clear.
+     Ceiling = stage content (420 − 2·28 = 364) − 2·(22 + 56 − 28 ≈ 60) reserve. bug→guard:
+     the "2D card viewport clears the corner gauges" block in home-console.test.tsx
+     (self-reviewer 2026-07-18). */
+  max-height: 240px;
 }
 :root[data-v2="on"] .hc-stage-loading {
   display: grid;

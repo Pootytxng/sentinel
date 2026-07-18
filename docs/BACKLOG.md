@@ -139,11 +139,18 @@ never be conflatable in any doc, commit message, or report).
   one lane, not two; both entries annotated at source.)
 - [ ] **Intelligence Phase 6:** optional crowd intelligence · only after explicit security/privacy/
   owner gates · no work in the current train.
-- [ ] **Home HUD: rig-tier / corner-gauge text overlap (pre-existing defect, unrelated to the intelligence
-  lane).** The self-reviewer (Intelligence Phase 4 §4H re-review, 2026-07-18) found `.hc-corner` ArcGauges
-  overlapping `.hc-stage-cards` content on the Home HUD stage (`HomeConsole.tsx` / `home-console.css`) —
-  intermittent, reproduced with zero §4H content present, so proven independent of that diff (NOT a
-  regression). Separate ticket; needs its own self-review when fixed.
+- [x] **Home HUD: rig-tier / corner-gauge text overlap (pre-existing defect, unrelated to the intelligence
+  lane).** ✅ FIXED 2026-07-18. The self-reviewer (Intelligence Phase 4 §4H re-review) found `.hc-corner`
+  ArcGauges overlapping `.hc-stage-cards` content on the Home HUD stage — intermittent because it only
+  reproduces in 2D card view (`compy_home_rig_3d="0"`; the default 3D hologram leaves the corners clear)
+  AND only when the HardwareGrid is tall enough to scroll rows into the gauge bands, so it was proven
+  independent of the §4H diff (NOT a regression). Root cause: the four corner gauges are always-present
+  (z-index:2, pinned 22px from each stage edge, ~56px tall) while `.hc-stage-cards` was a full-height
+  (max-height:420px) scroll viewport, so a tall grid scrolled its rows UNDER the top/bottom gauges. Fix:
+  confine `.hc-stage-cards` to the gauge-free MIDDLE band (max-height 420→240px) — `home-console.css`.
+  bug→guard: two mechanized guards in `home-console.test.tsx` (a 2D-mode DOM coexistence check + a
+  CSS-contract bound proving the viewport can never span the full stage again). Self-reviewer PASS:
+  5.9–11px clear gaps measured top and bottom at both scroll extremes; 3D path unaffected.
 
 **§0.12 demotion flags (owner reviews; nothing dropped without a trace):** open items below that
 neither feed nor serve the intelligence platform are flagged 🔻 at their entries — five as of

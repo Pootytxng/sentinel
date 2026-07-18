@@ -7,6 +7,8 @@ import { activeChangeCount } from "./dashboard-data";
 import { HomeConsole } from "./HomeConsole";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 // HomeConsole — the console cold-open stage (plan 2026-07-10-console-hud-phase2-home, Task 2+).
 // Pins the honesty rail (absent readings render ArcGauge's NOT-YET, never a fabricated number;
@@ -576,5 +578,51 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
     await new Promise((r) => setTimeout(r, 0));
     expect(intelRow(c)).toBeNull();
     expect(state.calls).not.toContain("get_intelligence_headline");
+  });
+});
+
+// bug→guard (self-reviewer 2026-07-18, flagged intermittently while reviewing §4H in 2D):
+// the four .hc-corner ArcGauges are ALWAYS present (z-index:2, pinned 22px from each stage edge,
+// ~56px tall) regardless of rig view mode. In 2D card mode (compy_home_rig_3d="0") .hc-stage-cards
+// renders the full HardwareGrid; a full-height viewport (was max-height:420px) let a tall grid
+// scroll its rows UNDER the top/bottom gauges — padding can't help a scroll container mid-scroll.
+// The fix confines .hc-stage-cards to the gauge-free MIDDLE band via a bounded max-height. jsdom
+// has no layout engine, so the mechanized guard is (1) a DOM check that the 2D card path and all
+// four corner gauges coexist in one stage (the collision precondition), and (2) a CSS-contract
+// bound proving the viewport can never span the full stage again.
+const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+const block = (css: string, selector: string) => {
+  const m = stripComments(css).match(
+    new RegExp(`${selector.replace(/[.[\]"=]/g, "\\$&")}\\s*\\{([^}]*)\\}`),
+  );
+  if (!m) throw new Error(`selector ${selector} not found`);
+  return m[1];
+};
+
+describe("HomeConsole — 2D card viewport clears the always-present corner gauges (bug→guard)", () => {
+  it("2D mode: the card path and all four corner gauges coexist in one stage (collision precondition)", () => {
+    localStorage.setItem("compy_home_rig_3d", "0");
+    const stage = mount().container.querySelector(".hc-stage")!;
+    // The 2D fallback renders the real HardwareGrid, not the 3D hologram…
+    expect(stage.querySelector(".hc-stage-cards .grid")).not.toBeNull();
+    expect(stage.querySelector('[data-testid="rig-hologram"]')).toBeNull();
+    // …while all four corner gauges are still pinned in the same stage box (they overlap the cards).
+    for (const corner of [".hc-tl", ".hc-tr", ".hc-bl", ".hc-br"]) {
+      expect(stage.querySelector(corner), `${corner} gauge present`).not.toBeNull();
+    }
+  });
+
+  it("CSS: .hc-stage-cards is a scroll viewport confined to a bounded max-height (never full-stage)", () => {
+    const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
+    const cards = block(css, ':root[data-v2="on"] .hc-stage-cards');
+    expect(cards).toMatch(/overflow-y:\s*auto/); // a scroll viewport (clips, then scrolls), not clip
+    const m = cards.match(/max-height:\s*(\d+)px/);
+    expect(m, "max-height must be an explicit px bound").not.toBeNull();
+    const maxH = Number(m![1]);
+    // Stage content = min-height 420 − 2·28 padding = 364px; each corner gauge intrudes
+    // ~(22 inset + 56 tall − 28 padding) = 50px from the top AND the bottom, so the gauge-free band
+    // is 364 − 2·50 = 264px. The viewport must stay within it (the regression was 420px, full-stage).
+    expect(maxH).toBeLessThanOrEqual(264);
+    expect(maxH).toBeGreaterThan(0);
   });
 });
