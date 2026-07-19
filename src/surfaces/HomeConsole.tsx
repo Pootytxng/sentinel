@@ -5,12 +5,13 @@ import type {
   GameReadiness,
   IntelligenceHeadline,
   Priorities,
+  Recommendation,
   SessionSummary,
 } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { useReducedMotion } from "../design/use-motion";
-import { useIntelligenceFlag } from "../design/use-hud";
+import { useIntelligenceFlag, useHomeIntakeFlag } from "../design/use-hud";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { activeChangeCount } from "./dashboard-data";
@@ -23,6 +24,16 @@ import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
+import { useConfirmOptional } from "../design/ConfirmDialog";
+import { safeFixesReadyList } from "./optimize-v2-data";
+import { deriveReverted } from "./use-scan";
+import {
+  HOME_INTAKE_ROWS,
+  HOME_INTAKE_FASTPATH,
+  fastPathReadyHeadline,
+  fastPathApplyLabel,
+  fastPathAppliedNote,
+} from "./home-intake-data";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -57,6 +68,19 @@ type Props = {
   onNavigate?: (key: string) => void;
   /** The rooms the rail actually shows (railFor minus home itself) — honest doors only. */
   rooms?: { key: string; name: string }[];
+  // ── Home intake band (BACKLOG:916, behind compy_home_intake, DEFAULT OFF). The three below
+  //    are the ONLY wiring the pre-room intent router + its one-tap fast path need. All optional:
+  //    an isolated mount (no wiring) simply shows no fast-path row — never a misleading "Checking…".
+  /** The live recommendation catalog. undefined = not wired (no fast path); null = still loading
+   *  (fast-path row shows "Checking…"); array = resolved (ready / all-clear derived honestly). */
+  recs?: Recommendation[] | null;
+  /** Which rec ids have an audited one-click apply (App's APPLIABLE_REC_IDS membership). */
+  isAppliable?: (recId: string) => boolean;
+  /** The audited one-UAC batch-apply primitive (App's applyBatch → apply_recommendations_batch).
+   *  The fast path reuses it verbatim — it opens NO new mutation boundary. */
+  onApplyBatch?: (
+    recIds: string[],
+  ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
 };
 
 const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
@@ -221,8 +245,22 @@ export function HomeConsole({
   fixRoomLabel = "Optimize",
   onNavigate,
   rooms,
+  recs,
+  isAppliable,
+  onApplyBatch,
 }: Props) {
   const reduced = useReducedMotion();
+  // Optional confirm — the fast path (default-OFF) is the only consumer, so HomeConsole must not
+  // hard-require the provider on every mount (see useConfirmOptional). null → runFastPath no-ops.
+  const confirm = useConfirmOptional();
+  const intakeOn = useHomeIntakeFlag();
+  // Fast-path (option C) transient state: a busy guard against double-submit, and a real receipt
+  // built from the batch result (never a fabricated "done" — it names applied AND skipped).
+  const [fastPathBusy, setFastPathBusy] = useState(false);
+  const [fastPathReceipt, setFastPathReceipt] = useState<{
+    applied: number;
+    skipped: number;
+  } | null>(null);
 
   // Cursor-follow accent spotlight on the stage — a border-masked glow that tracks the pointer
   // (LabConsole's exact mechanism). Custom props only; skipped entirely under reduced motion.
@@ -439,6 +477,51 @@ export function HomeConsole({
   // door stays, so Home always has exactly ONE forward affordance.
   const dockRenders = dockNodes.length > 0 && !!onNavigate;
 
+  // ── THE INTAKE BAND (BACKLOG:916 — the pre-room intent router + one-tap fast path, behind
+  // compy_home_intake). The fast path is available ONLY when fully wired (the catalog resolved
+  // to undefined means "no wiring", not "loading") so an isolated mount never shows a stuck
+  // "Checking…"; recs===null IS the loading state. Its apply-set is safeFixesReadyList — the
+  // SAME predicate the Optimize verdict counts, so the count and the applied ids can't diverge.
+  const fastPathAvailable = intakeOn && !!onApplyBatch && !!isAppliable && recs !== undefined;
+  const revertedIds = new Set(deriveReverted(changes).map((r) => r.rec_id));
+  const eligibleStack =
+    recs && isAppliable ? safeFixesReadyList(recs, isAppliable, revertedIds) : [];
+  const stackReady = eligibleStack.length;
+  // Intent rows (option A) filtered to rooms the live rail actually renders — a row must never
+  // point at a room that isn't there (no dead ends). The room LABEL is resolved live from `rooms`.
+  // One-owner-per-screen (P5 voice law): the LAST SESSION block below (intelHeadline) already
+  // answers "how did my last session go" with the engine's own verdict line + its See-in-Monitor
+  // door. When it renders, the intake row asking that same question and routing to that same room
+  // stands down and lets the block own it — mirrors the verdictNamesLimiter/topLimiter and
+  // dek/ForwardDoor standdowns above (self-reviewer catch 2026-07-14, rubric 3 duplication).
+  const lastSessionRendered = !!intelHeadline;
+  const intakeRows = HOME_INTAKE_ROWS.filter(
+    (row) =>
+      rooms?.some((rm) => rm.key === row.room) && !(lastSessionRendered && row.room === "play"),
+  );
+  const intakeRenders = intakeOn && (fastPathAvailable || intakeRows.length > 0);
+
+  // Option C's apply — mirrors FirstCheck's honest inline-apply idiom: confirm names the rollback
+  // guarantee, then the ONE audited batch primitive applies only the safe stack. On success the
+  // ledger event makes App re-scan → recs refresh → the row recomputes to all-clear naturally;
+  // the receipt line reports the REAL applied/skipped counts in the meantime.
+  const runFastPath = async () => {
+    if (!confirm || !onApplyBatch || fastPathBusy || stackReady === 0) return;
+    const ok = await confirm({
+      title: fastPathReadyHeadline(stackReady),
+      body: "Compy snapshots the prior state first, so you can roll every one back anytime from Applied.",
+      confirmLabel: fastPathApplyLabel(stackReady),
+    });
+    if (!ok) return;
+    setFastPathBusy(true);
+    try {
+      const res = await onApplyBatch(eligibleStack.map((r) => r.id));
+      setFastPathReceipt({ applied: res.applied, skipped: res.skipped.length });
+    } finally {
+      setFastPathBusy(false);
+    }
+  };
+
   return (
     <RoomShell
       room="home"
@@ -491,6 +574,67 @@ export function HomeConsole({
           </span>
           {!dekRedundant && <span className="hc-verdict-dek">{dek}</span>}
         </div>
+        {/* THE INTAKE BAND (BACKLOG:916) — the proven Lab "What are you here to do?" idiom lifted
+            one level up to Home: an always-available one-tap fast path (option C) over intent rows
+            that route to the right ROOM (option A). The Dock below stays clean room-name doors
+            (option B door-hints declined — the band already carries the symptom→room map, so
+            duplicating symptoms onto the doors would be the annoyance the owner warned against). */}
+        {intakeRenders && (
+          <section className="hc-intake" aria-label="What are you here to do?">
+            <div className="hc-intake-head">What are you here to do?</div>
+            {/* Option C — the always-available one-tap "just make it faster, safely" fast path.
+                Honest state machine: applied receipt › loading › all-clear › ready-with-apply. */}
+            {fastPathAvailable && (
+              <div className="hc-intake-fast">
+                <span className="hc-intake-fast-symptom">{HOME_INTAKE_FASTPATH.symptom}</span>
+                {fastPathReceipt ? (
+                  <span className="hc-intake-fast-line">
+                    {fastPathAppliedNote(fastPathReceipt.applied, fastPathReceipt.skipped)}
+                  </span>
+                ) : recs === null ? (
+                  <span className="hc-intake-fast-line hc-mono">{HOME_INTAKE_FASTPATH.loading}</span>
+                ) : stackReady === 0 ? (
+                  <span className="hc-intake-fast-line">{HOME_INTAKE_FASTPATH.allClear}</span>
+                ) : (
+                  <>
+                    <span className="hc-intake-fast-line">{fastPathReadyHeadline(stackReady)}</span>
+                    <button
+                      type="button"
+                      className="hc-btn hc-intake-fast-btn"
+                      onClick={runFastPath}
+                      disabled={fastPathBusy}
+                    >
+                      {fastPathBusy ? "Applying…" : fastPathApplyLabel(stackReady)}
+                    </button>
+                    <span className="hc-intake-fast-undo">↺ {HOME_INTAKE_FASTPATH.reversible}</span>
+                  </>
+                )}
+              </div>
+            )}
+            {/* Option A — the intent rows. Each routes to a ROOM (not an in-Lab station); the
+                because-line names the ROOM's action, the label resolves live from the rail. */}
+            {intakeRows.length > 0 && (
+              <ul className="hc-intake-rows">
+                {intakeRows.map((row) => {
+                  const roomName = rooms?.find((rm) => rm.key === row.room)?.name ?? row.room;
+                  return (
+                    <li key={row.symptom}>
+                      <button
+                        type="button"
+                        className="hc-intake-row"
+                        onClick={() => onNavigate?.(row.room)}
+                      >
+                        <span className="hc-intake-row-symptom">{row.symptom}</span>
+                        <span className="hc-intake-row-because">{row.because}</span>
+                        <span className="hc-intake-row-room hc-mono">{roomName} →</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
         {/* CONSOLE STAGE — bracketed frame, the real 3D hologram center, four honest corner
             gauges. No lede (owner header-slop law 2026-07-10): the console opens straight on
             the stage. */}

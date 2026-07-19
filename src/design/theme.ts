@@ -501,6 +501,36 @@ export function applyHomeConsole(on: boolean): void {
   }
 }
 
+// Home intake band (BACKLOG:916 — the pre-room intent router). Lifts the proven Lab
+// "What are you here to do?" symptom-router idiom UP one level to Home: an always-available
+// one-click safe fast-path (option C) + intent rows that route to the right ROOM (option A),
+// sitting above the Dock room-doors. NEW surface → DEFAULT OFF (opt-in, inverted polarity: ON
+// only when the key is literally "1"); flips on only once eyeballed + approved. Event mirrors the
+// home-console idiom so Settings toggles + the useHomeIntakeFlag hook stay in sync.
+const HOME_INTAKE_KEY = "compy_home_intake";
+
+export function readHomeIntake(): boolean {
+  try {
+    return localStorage.getItem(HOME_INTAKE_KEY) === "1";
+  } catch {
+    /* ignore — default OFF */
+  }
+  return false;
+}
+
+export function applyHomeIntake(on: boolean): void {
+  try {
+    localStorage.setItem(HOME_INTAKE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("compy:home-intake-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Monitor console (plan 2026-07-10-console-hud-phase3-monitor, Phase 3 of the Console HUD) —
 // the Monitor room's LIVE face as the console instrument cluster: rolling fps/frametime
 // oscilloscope traces + honest arc gauges over the SAME polls the existing tiles run (zero new

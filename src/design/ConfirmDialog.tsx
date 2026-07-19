@@ -36,6 +36,16 @@ export function useConfirm(): ConfirmFn {
   return fn;
 }
 
+// Non-throwing variant for OPTIONAL confirm consumers. A default-OFF feature (e.g. HomeConsole's
+// compy_home_intake fast path) must not hard-require the provider on every mount of its host
+// screen — the whole Home screen would crash in an isolated mount just because it *might* show a
+// confirm-gated button. Returns null when no <ConfirmProvider> is above; callers MUST guard on it
+// before awaiting (a null confirm = feature simply can't act, never a silent crash). In production
+// the provider is always at the root (main.tsx), so real consumers always get a real fn.
+export function useConfirmOptional(): ConfirmFn | null {
+  return useContext(ConfirmContext);
+}
+
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOpts | null>(null);
   const resolver = useRef<((v: boolean) => void) | null>(null);

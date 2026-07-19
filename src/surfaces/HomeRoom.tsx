@@ -1,4 +1,10 @@
-import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
+import type {
+  AppliedChange,
+  GameReadiness,
+  Priorities,
+  Recommendation,
+  SessionSummary,
+} from "../types";
 import type { HardwareInfo } from "../App";
 import { useHudFlag, useHomeConsoleFlag } from "../design/use-hud";
 import { HomeV2 } from "./HomeV2";
@@ -28,6 +34,15 @@ type Props = {
   onNavigate?: (key: string) => void;
   /** Console-only: the rooms the rail actually shows (railFor minus home) — honest doors. */
   rooms?: { key: string; name: string }[];
+  /** Console intake band only (compy_home_intake, BACKLOG:916): the live recs catalog the
+   *  one-tap fast path derives its safe stack from (null = loading, undefined = not wired). */
+  recs?: Recommendation[] | null;
+  /** Console intake band only: the allowlist gate for one-click-appliable rec ids. */
+  isAppliable?: (recId: string) => boolean;
+  /** Console intake band only: the audited one-UAC batch-apply primitive (App's applyBatch). */
+  onApplyBatch?: (
+    recIds: string[],
+  ) => Promise<{ applied: number; skipped: { title: string; reason: string }[] }>;
 };
 
 export function HomeRoom(props: Props) {

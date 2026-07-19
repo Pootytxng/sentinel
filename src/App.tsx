@@ -1564,6 +1564,12 @@ function App() {
               rooms={railFor(optimizeMerged, labGround)
                 .filter((r) => r.id !== "home")
                 .map((r) => ({ key: r.id, name: r.label }))}
+              // Console intake band only (compy_home_intake, BACKLOG:916): the one-tap fast path
+              // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
+              // through the SAME audited one-UAC batch primitive — no new mutation boundary.
+              recs={recs}
+              isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+              onApplyBatch={applyBatch}
             />
             </>
           ) : (

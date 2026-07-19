@@ -3,6 +3,7 @@ import {
   readHud,
   readLabGround,
   readHomeConsole,
+  readHomeIntake,
   readMonitorConsole,
   readBlackbookConsole,
   readGamingConsole,
@@ -49,6 +50,19 @@ export function useHomeConsoleFlag(): boolean {
     const sync = () => setOn(readHomeConsole());
     window.addEventListener("compy:home-console-changed", sync);
     return () => window.removeEventListener("compy:home-console-changed", sync);
+  }, []);
+  return on;
+}
+
+// The Home intake band flag as live React state (BACKLOG:916 — the pre-room intent router; same
+// contract: the Settings toggle fires compy:home-intake-changed so HomeConsole shows/hides the
+// intake band without a reload). DEFAULT OFF (opt-in) — the band is absent until the key is "1".
+export function useHomeIntakeFlag(): boolean {
+  const [on, setOn] = useState(readHomeIntake);
+  useEffect(() => {
+    const sync = () => setOn(readHomeIntake());
+    window.addEventListener("compy:home-intake-changed", sync);
+    return () => window.removeEventListener("compy:home-intake-changed", sync);
   }, []);
   return on;
 }

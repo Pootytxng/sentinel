@@ -19,11 +19,15 @@ export type OptimizeVerdictLine = {
   sub?: string;
 };
 
-export function safeFixesReady(
+// The ONE "ready to apply, one-click-safe" predicate, as the list of matching recs. Both the
+// count (safeFixesReady) and any consumer that needs the actual rec ids (the Home intake band's
+// one-tap fast path, BACKLOG:916) derive from THIS — so a count and its apply-set can never drift
+// out of a divergent re-implementation of the filter.
+export function safeFixesReadyList(
   recs: Recommendation[],
   isAppliable: (recId: string) => boolean,
   revertedIds?: ReadonlySet<string>,
-): number {
+): Recommendation[] {
   return recs.filter(
     (r) =>
       r.severity === "safe" &&
@@ -31,7 +35,15 @@ export function safeFixesReady(
       !r.currently_applied &&
       r.eligible !== false &&
       !revertedIds?.has(r.id),
-  ).length;
+  );
+}
+
+export function safeFixesReady(
+  recs: Recommendation[],
+  isAppliable: (recId: string) => boolean,
+  revertedIds?: ReadonlySet<string>,
+): number {
+  return safeFixesReadyList(recs, isAppliable, revertedIds).length;
 }
 
 export function optimizeVerdict(

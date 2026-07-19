@@ -171,9 +171,15 @@
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
-:root[data-v2="on"] .hc-btn:hover {
+:root[data-v2="on"] .hc-btn:hover:not(:disabled) {
   border-color: var(--v2-accent-line);
   background: var(--v2-accent-dim);
+}
+/* Disabled/busy state — matches the app-wide .btn:disabled convention so the fast-path button's
+   "Applying…" state reads as inert, not active (self-reviewer catch 2026-07-14, rubric 4). */
+:root[data-v2="on"] .hc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 :root[data-v2="on"] .hc-btn-ghost {
   flex: none;
@@ -181,7 +187,7 @@
   color: var(--v2-muted);
   padding: 5px 11px;
 }
-:root[data-v2="on"] .hc-btn-ghost:hover {
+:root[data-v2="on"] .hc-btn-ghost:hover:not(:disabled) {
   color: var(--v2-text);
 }
 
@@ -569,3 +575,113 @@
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-br { animation-delay: 0.33s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .hc-limiter { animation-delay: 0.26s; }
 :root[data-v2="on"] .home-console[data-motion="full"] .dock { animation-delay: 0.3s; }
+
+/* ── THE INTAKE BAND (BACKLOG:916) — the Lab "What are you here to do?" symptom→station idiom
+   lifted one level up to Home, routing to ROOMS instead of in-Lab stations. Wears the same
+   cmp-glass grammar as the #1-limiter readout and the Lab router: token text only, no accent
+   fills. The one-tap fast path (option C) sits on top, the intent rows (option A) below. Renders
+   only behind compy_home_intake (DEFAULT OFF) — absent entirely until the flag is on. ── */
+:root[data-v2="on"] .hc-intake {
+  display: flex;
+  flex-direction: column;
+  background: var(--ix-glass-fill);
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius);
+  padding: 4px 0 6px;
+}
+/* The section title — a TITLE, not a status line (owner header-slop law): the room's own
+   question, uppercase micro-label, never carrying a verdict. */
+:root[data-v2="on"] .hc-intake-head {
+  padding: 10px 20px 4px;
+  font: 600 11.5px var(--v2-font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ix-text-3);
+}
+
+/* Option C — the always-available one-tap fast path. Two-tier: the felt-words symptom owns the
+   first line, the honest state (loading / all-clear / ready + apply + undo) flows below it. A
+   hairline separates it from the intent rows. */
+:root[data-v2="on"] .hc-intake-fast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 20px 12px;
+  border-bottom: 1px solid var(--ix-glass-border);
+}
+:root[data-v2="on"] .hc-intake-fast-symptom {
+  flex: 1 0 100%;
+  min-width: 0;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ix-text-2);
+}
+:root[data-v2="on"] .hc-intake-fast-line {
+  font-size: 12.5px;
+  color: var(--ix-text-3);
+}
+:root[data-v2="on"] .hc-intake-fast-btn {
+  flex: none;
+}
+:root[data-v2="on"] .hc-intake-fast-undo {
+  flex: none;
+  font-size: 11px;
+  color: var(--ix-text-3);
+  opacity: 0.9;
+}
+
+/* Option A — the intent rows. Same door grammar as the Lab router (each row IS a door: click
+   routes to the room). Symptom (felt words, italic) · because (the room's action, muted) · room
+   label + arrow (accent, right). Token text only, no accent fills. A quiet hover/focus tint is
+   the door affordance the console's other controls carry. */
+:root[data-v2="on"] .hc-intake-rows {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 0;
+}
+:root[data-v2="on"] .hc-intake-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 20px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+:root[data-v2="on"] .hc-intake-row:hover,
+:root[data-v2="on"] .hc-intake-row:focus-visible {
+  background: var(--v2-accent-dim);
+  outline: none;
+}
+:root[data-v2="on"] .hc-intake-row-symptom {
+  flex: 0 1 340px;
+  min-width: 0;
+  font-style: italic;
+  color: var(--ix-text-2);
+}
+:root[data-v2="on"] .hc-intake-row-because {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ix-text-3);
+}
+:root[data-v2="on"] .hc-intake-row-room {
+  flex: none;
+  min-width: 84px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--ix-accent-text);
+}
+
+/* The band rises with the rest of the console — just after the verdict, before the stage. */
+:root[data-v2="on"] .home-console[data-motion="full"] .hc-intake {
+  animation: v2-hc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: 0.04s;
+}
