@@ -24,7 +24,6 @@ const baseProps = {
   onForward: vi.fn(),
   canGoForward: false,
   onRerunSetup: vi.fn(),
-  onRerunCheck: vi.fn(),
   onClose: vi.fn(),
 };
 

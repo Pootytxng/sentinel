@@ -1483,10 +1483,6 @@ function App() {
             setShowSettings(false);
             setShowSetupTour(true);
           }}
-          onRerunCheck={() => {
-            setShowSettings(false);
-            setShowFirstCheck(true);
-          }}
           onClose={() => setShowSettings(false)}
         />
       ) : v2Shell ? (

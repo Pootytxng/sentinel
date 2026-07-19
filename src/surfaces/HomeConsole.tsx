@@ -26,6 +26,7 @@ import { Dock, type DockNode } from "../design/console/Dock";
 import { ReticleCursor } from "../design/console/ReticleCursor";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { safeFixesReadyList } from "./optimize-v2-data";
+import { RerunCheckBand } from "./RerunCheckBand";
 import { deriveReverted } from "./use-scan";
 import {
   HOME_INTAKE_ROWS,
@@ -538,31 +539,7 @@ export function HomeConsole({
           <span className="hc-headline">Home</span>
         </>
       }
-      measured={
-        checking ? (
-          <span className="hc-readout-seg">running checks…</span>
-        ) : (
-          <>
-            <span className="hc-readout-seg">
-              checks{" "}
-              <span className="hc-mono">
-                {readiness!.checks.length - readiness!.unknown_count}/{readiness!.checks.length}
-              </span>{" "}
-              measured
-            </span>
-            <span
-              className={`hc-readout-seg${(readiness!.attention_count ?? 0) > 0 ? " hc-readout-warn" : ""}`}
-            >
-              attention <span className="hc-mono">{readiness!.attention_count}</span>
-            </span>
-          </>
-        )
-      }
-      primaryAction={
-        <button type="button" className="hc-btn" onClick={onRunCheck}>
-          Re-run check
-        </button>
-      }
+      measured={<RerunCheckBand readiness={readiness} checking={checking} onRunCheck={onRunCheck} />}
     >
       <div className="home-console" data-motion={reduced ? "reduced" : "full"}>
         {/* THE COLD-OPEN VERDICT — relocated out of the h1 (title-header law): postureLine's

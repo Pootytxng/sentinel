@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
@@ -9,6 +9,7 @@ import { ScanStream } from "./ScanStream";
 import { BootTheater } from "./BootTheater";
 import { readFirstCheckTheater } from "../design/theme";
 import { useReducedMotion } from "../design/use-motion";
+import { recordLastCheck } from "./last-check";
 import "./FirstCheck.css";
 
 // Moment 2 of the first-experience arc — the first-run "first check" landing.
@@ -82,6 +83,15 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
   const top = limiters[0] ?? null;
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
+
+  // Persist the honest last-check record when a real check resolves to a verdict — Home's Re-run
+  // band reads this to show "2h ago · N/N clean". Re-fires if an in-arc apply re-runs the scan (the
+  // record tracks the LATEST result). The count summary is stored WITH its timestamp so the band
+  // never pairs a live count with an implied time (honesty law).
+  useEffect(() => {
+    if (phase !== "verdict") return;
+    recordLastCheck({ total: checks.length, green: greenChecks.length, fixCount });
+  }, [phase, checks.length, greenChecks.length, fixCount]);
 
   return (
     <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>

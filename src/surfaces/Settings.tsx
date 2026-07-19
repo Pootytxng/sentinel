@@ -98,7 +98,6 @@ export default function Settings({
   appVersion,
   rulesSourceLabel,
   onRerunSetup,
-  onRerunCheck,
   onClose,
   onBack,
   canGoBack,
@@ -112,7 +111,6 @@ export default function Settings({
   onForward: () => void;
   canGoForward: boolean;
   onRerunSetup: () => void;
-  onRerunCheck: () => void;
   onClose: () => void;
 }) {
   const [itheme, setITheme] = useState<InstrumentTheme>(readInstrumentTheme);
@@ -396,15 +394,6 @@ export default function Settings({
             </div>
             <button className="set-action" onClick={onRerunSetup}>
               Re-run setup
-            </button>
-          </div>
-          <div className="set-row">
-            <div className="set-row-text">
-              <div className="set-row-title">Re-run the check</div>
-              <div className="set-row-sub">Re-scan this rig's readiness without the intro.</div>
-            </div>
-            <button className="set-action" onClick={onRerunCheck}>
-              Re-run check
             </button>
           </div>
         </section>

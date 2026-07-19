@@ -1,0 +1,92 @@
+/* Re-run check band — the Home masthead status + action module (owner-approved "A · Status band").
+   Lives in RoomShell's `measured` slot: an upgraded provenance line that carries the SINGLE Re-run
+   affordance (so Home keeps one primary action, never two). Honest by construction — the age only
+   shows when a real check completed (see last-check.ts).
+
+   LAWS (test-pinned in tokens-v2-guard.test.ts):
+   - EVERY selector scoped under [data-v2="on"].
+   - NO color literals (hex/rgb/hsl) — every color from a --v2-* token.
+   - Font declarations reference only var(--v2-font-*). The count ratio is a MACHINE VALUE → mono. */
+
+:root[data-v2="on"] .rcb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-r);
+  background: var(--v2-panel);
+  padding: 14px 18px;
+  font-family: var(--v2-font-sans);
+  font-size: 13px;
+}
+:root[data-v2="on"] .rcb-left {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+:root[data-v2="on"] .rcb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--v2-ok);
+  box-shadow: 0 0 0 3px var(--v2-ok-dim);
+}
+:root[data-v2="on"] .rcb-dot-warn {
+  background: var(--v2-warn);
+  box-shadow: 0 0 0 3px var(--v2-warn-dim);
+}
+:root[data-v2="on"] .rcb-dot-scan {
+  background: var(--v2-faint);
+  box-shadow: 0 0 0 3px var(--v2-line);
+}
+:root[data-v2="on"] .rcb-tag {
+  font-family: var(--v2-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--v2-faint);
+}
+:root[data-v2="on"] .rcb-status {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .rcb-status b {
+  font-weight: 600;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .rcb-num {
+  font-family: var(--v2-font-mono);
+}
+:root[data-v2="on"] .rcb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  font-family: var(--v2-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-text);
+  background: transparent;
+  border: 1px solid var(--v2-accent-line);
+  border-radius: var(--v2-r-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .rcb-btn:hover {
+  background: var(--v2-accent-dim);
+  border-color: var(--v2-accent);
+}
+:root[data-v2="on"] .rcb-btn:disabled {
+  color: var(--v2-faint);
+  border-color: var(--v2-line);
+  cursor: default;
+}
+:root[data-v2="on"] .rcb-ic {
+  display: inline-flex;
+  align-items: center;
+}
