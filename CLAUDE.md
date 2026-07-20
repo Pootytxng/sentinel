@@ -237,7 +237,7 @@ feel/look right). This is the operational meaning of "keep the installer on his 
 ## Stack & where things live
 
 - **Tauri 2** desktop app: Rust core (`src-tauri/`) + React/TypeScript frontend (`src/`).
-- **Single source of truth: `C:\Users\Kuya\code\compy\`** (Windows-side). The old
+- **Single source of truth: `C:\Users\Kuya\code\sentinel\`** (Windows-side; the working dir kept the pre-rename name — see the rename note above, same reason git history still says "sentinel"). The old
   `\\wsl.localhost\...\var\www\compy` WSL/FastAPI scaffold is **superseded/stale** — do
   not use it. WSL is not needed (and breaks anti-cheat via Hyper-V).
 - GitHub remote: `Pootytxng/sentinel`, branch `main` (the repo on GitHub is still named `sentinel`
@@ -296,7 +296,7 @@ Complete as of 2026-07-14 (35 `.rs` files; line counts drift, treat as rough). *
 
 ## LOCKED safety rules — do not cross without an explicit product-owner decision
 
-1. **No kernel driver.** Consequence: **no CPU temperature** (proven impossible in user-mode on this machine — do not re-investigate). GPU temp is fine (vendor SDK).
+1. **No kernel driver.** Compy ships no driver of its own — the anti-cheat-safe / no-driver fundamental (do not re-investigate a Compy-shipped driver). Consequence: **Compy never reads CPU die temperature *itself*** — real die temp needs ring-0 MSR access, i.e. a driver (every tool that shows it ships one; the common WinRing0 is on Microsoft's vulnerable-driver blocklist and trips anti-cheat), so we will not. It DOES **display** a CPU temp when a monitor the user already runs is publishing one — HWiNFO's shared-memory block or the LibreHardwareMonitor / OpenHardwareMonitor WMI namespaces, read-only interop (`cpu_temp.rs`); when nothing is publishing, temp stays **unavailable/unknown, never fabricated**. (The earlier "no CPU temperature, proven impossible" phrasing overstated this: the *lock* is "no Compy driver," not "temp is unshowable.") GPU temp is fine (vendor SDK).
 2. **No game injection.** Anti-cheat-safe. FPS/frametime via ETW (DXGI present events) in an elevated helper; GPU sensors via vendor libs (AMD ADLX / NVIDIA NVML). Overlay only draws over borderless/windowed, not exclusive fullscreen.
 3. **Rollback-first integrity.** Apply captures the full typed rollback contract + snapshot at apply time; rollback resolves from `history.json` ALONE (never the live catalog), so a removed/deprecated rec stays undoable. Never apply a change you can't roll back.
 4. **Signed remote rules — triple-gated OFF.** Real Ed25519 verify is wired (`ed25519-compact`), but remote fetch stays disabled (placeholder all-zeros pubkey, `remote_fetch_enabled()==false`, no CDN URL) until production signing + CDN + staged rollout exist. **The Ed25519 private key NEVER lives in the repo** (not commits, .env, CI, or unencrypted home). **Unsigned remote rules must never ship, even in beta.**

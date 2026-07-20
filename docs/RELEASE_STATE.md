@@ -8,7 +8,24 @@
 > that flips any gate, arms any feature, or rebuilds the installer. Every row carries a `file:line`
 > so it can be re-verified in seconds, never asserted from memory.
 
-## Snapshot
+## CURRENT STATE (authoritative — read this first)
+
+> This block is the single reconciled current-truth summary. The dated `UPDATE …` banners under
+> **Snapshot history** below are a reverse-chronological LOG (newest first) — point-in-time records
+> of individual trains, **not** the current state. Where any banner disagrees with THIS block about
+> *current* state, this block wins. Verified read-only 2026-07-19 (no build, no ship, no
+> Windows-state change).
+
+| Axis | Current truth | How verified |
+|---|---|---|
+| **Source — `main` HEAD** | `408c860` · upstream `origin/main` 0 ahead / 0 behind · **14 commits ahead of the shipped installer** (`75c38c6..408c860`, app-code delta `+4035/−132` over 45 files). **Code-complete, NOT shipped.** | `git rev-parse HEAD` · `git log 75c38c6..HEAD` |
+| **Installed / last-shipped build** | `75c38c6` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`. The installed exe embeds `75c38c6` (mtime 2026-07-18 01:33); ONE installer on the Desktop. This is the newest build any machine actually runs. | Embedded-hash byte-scan of `%LOCALAPPDATA%\Compy\compy.exe` (read-only) |
+| **Public / distributed** | **NONE.** Private beta only — no public download, store listing, or signed public artifact. Public release is gated on **Code signing** + **Legal (EULA/PRIVACY)**, both OPEN in *Release blockers* below. | *Release blockers* (this file) |
+| **Boundary since the shipped build** | The FE / Intelligence / experiment surfaces moved (`experiment.rs` `+331/−9`, the game-match comparability follow-up); **no gate flipped and no new outbound boundary** — the zero-outbound property and every LOCKED gate hold at `408c860` exactly as at `75c38c6`. | `git diff --stat 75c38c6..HEAD` on the boundary files |
+
+**Bottom line:** source `408c860` is code-complete and 14 commits ahead of the live installer `75c38c6`; nothing newer has shipped or been distributed; the next ship is a normal owner-gated rebuild + silent reinstall. Update THIS block in the same commit that ships or flips a gate.
+
+## Snapshot history (reverse-chronological log — superseded by CURRENT STATE above)
 
 > **UPDATE 2026-07-18b (MEASUREMENT PLATFORM 2.0 — FINAL SLICE LANDED ON MAIN `77b5b89`, CODE-COMPLETE,
 > NOT SHIPPED).** This train was scoped **code-only** (no rebuild, no reinstall, no ship-to-another-machine)
@@ -1161,7 +1178,7 @@
 | Legal (EULA license model + jurisdiction, PRIVACY) | **OPEN** — gates PUBLIC release. DRAFTS only. |
 | Receipts security review + consent UI + payload preview + kill switch | **OPEN** — gates arming Receipts telemetry. |
 | Preload-app removal live QA (remove→reinstall round trip, Store links) + owner-curated list | **OPEN** — gates arming preload-app removal (feature is built DARK, not a ship blocker). |
-| Remote-rules semver + production key + CDN + staged rollout | **OPEN** — gates arming remote fetch (currently `version_in_range` is lexicographic, `remote_rules.rs:299`). |
+| Remote-rules production key + CDN + staged rollout | **OPEN** — gates arming remote fetch. (The semver compare is NOT a blocker and never was one at ship: `version_in_range` (`remote_rules.rs:300`) compares NUMERICALLY by delegating to `cmp_version` (`remote_rules.rs:311`), pinned by the test `version_compare_is_numeric_not_lexicographic` (`remote_rules.rs:608`). A pre-2026-07-19 note here read "lexicographic"; that was disproven by the code and is corrected.) |
 
 ## Required owner decisions (live)
 

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+// The visible app version is the SAME canonical string the installer + all three manifests carry
+// (package.json === tauri.conf.json === Cargo.toml === Cargo.lock, pinned equal by
+// scripts/version-drift-guard.test.mjs Guard A). Importing it here, rather than hardcoding a
+// literal, is what keeps the rail from silently drifting from the shipped build — Guard D pins it.
+import pkg from "../package.json";
 import { ONBOARDED_KEY } from "./Onboarding";
 import FirstCheck, { FIRST_CHECK_KEY } from "./surfaces/FirstCheck";
 import { SetupTour, SETUP_TOUR_KEY } from "./surfaces/setup/SetupTour";
@@ -506,7 +511,7 @@ type Priorities = {
 // recorded decision, not a silent loss — see the surface-default governance section in
 // docs/superpowers/plans/2026-06-04-beta-build-order.md.)
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = pkg.version;
 
 function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);

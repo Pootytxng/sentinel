@@ -62,3 +62,23 @@ describe("Guard C — ship-reinstall.ps1 keeps its UTF-8 BOM (PowerShell 5.1 rea
     expect(read("scripts/ship-reinstall.ps1").charCodeAt(0)).toBe(0xfeff);
   });
 });
+
+describe("Guard D — the VISIBLE app version tracks the canonical manifest, never a literal", () => {
+  // bug→guard (2026-07-19): the version shown in the app rail (src/App.tsx APP_VERSION) was a
+  // hardcoded "0.1.0" — invisible to Guards A–C, which only cover the manifests + installer. It
+  // sat two minor versions behind the shipped 0.9.0 build. The fix wires the rail to the SAME
+  // canonical source (package.json) via a JSON import, so a future bump can't leave the UI behind.
+  const app = read("src/App.tsx");
+  const appVersionLine = app.match(/^const APP_VERSION = .*$/m)?.[0];
+
+  it("App.tsx imports the version object from package.json", () => {
+    expect(app).toMatch(/import\s+pkg\s+from\s+["']\.\.\/package\.json["']/);
+  });
+  it("APP_VERSION is assigned from the imported manifest (pkg.version)", () => {
+    expect(appVersionLine).toBeDefined();
+    expect(appVersionLine).toContain("pkg.version");
+  });
+  it("APP_VERSION carries no hardcoded semver literal", () => {
+    expect(appVersionLine).not.toMatch(/["']\d+\.\d+\.\d+["']/);
+  });
+});
