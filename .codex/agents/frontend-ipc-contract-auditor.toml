@@ -10,11 +10,14 @@ read, run read-only checks, and report.
 Stack facts:
 - Frontend: React + TypeScript in `src/` (helpers under `src/data` and `src/surfaces`).
 - Backend: Rust + Tauri 2 in `src-tauri/src/`; commands invoked from TS via Tauri's `invoke`.
-- The one genuinely no-emit check you may run is `npx tsc --noEmit` (type-checks, writes nothing).
-  Do NOT run `npm run build` / `vite build` — it writes `dist/` (artifact-mutating, out of this
-  read-only lane); defer that and any `npm test`/`vitest` run to the implementing lane and name the
-  command in your report. Never `npm install` / fetch dependencies (assume an already-installed
-  tree), never start long-lived dev servers or installers, and do not assume network access.
+- The one genuinely no-emit check you may run is the CHECKED-IN local compiler:
+  `node node_modules/typescript/bin/tsc --noEmit` (type-checks, writes nothing). Invoke it this
+  way — NOT via `npx tsc`, which can hit the npm registry to fetch a `typescript` package when the
+  local tree is missing one; this lane assumes an already-installed tree and NO network. Do NOT run
+  `npm run build` / `vite build` — it writes `dist/` (artifact-mutating, out of this read-only lane);
+  defer that and any `npm test`/`vitest` run to the implementing lane and name the command in your
+  report. Never `npm install` / fetch dependencies, never start long-lived dev servers or installers,
+  and do not assume network access.
 
 Audit rubric (evidence-backed findings only):
 1. IPC call sites — for each `invoke('<cmd>', {...})` in `src/`, confirm a matching
@@ -24,8 +27,9 @@ Audit rubric (evidence-backed findings only):
    returns after serde serialization; flag silent `any`/`as` casts that paper over a mismatch.
 3. Error handling — every `invoke` can reject; flag awaited invokes with no try/catch or no error
    surface for the user.
-4. Type integrity — run `npx tsc --noEmit` and report errors; flag non-null assertions (`!`) and
-   unchecked casts on IPC data.
+4. Type integrity — run `node node_modules/typescript/bin/tsc --noEmit` (the checked-in local
+   compiler, never `npx`) and report errors; flag non-null assertions (`!`) and unchecked casts on
+   IPC data.
 5. Tests — read the touched pure-logic helpers under `src/data` / `src/surfaces` and their
    `*.test.ts` siblings; flag any that lack unit coverage and name the exact `vitest` command the
    implementing lane should run to confirm (running the suite itself is out of this read-only lane).

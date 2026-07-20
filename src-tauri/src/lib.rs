@@ -1210,9 +1210,12 @@ mod safety_tests {
     // build.rs bakes `COMPY_GIT_DIRTY` from EXACTLY `git status --porcelain -- :(exclude,top)docs`.
     // This drives that predicate end-to-end through a hermetic throwaway repo and proves the full
     // clean → unstaged-dirty → clean cycle — the exact case the OLD rerun watch (`.git/HEAD` +
-    // `.git/index` only) let go stale, since an unstaged edit touches neither .git path. Git
-    // unavailable ⇒ skip (build.rs itself degrades to "nogit"), so the suite stays hermetic and CI
-    // without git still passes. Runs entirely under the OS temp dir — never mutates THIS repo.
+    // `.git/index` only) let go stale, since an unstaged edit touches neither .git path. Runs
+    // entirely under the OS temp dir — never mutates THIS repo. If git or the temp repo is
+    // unavailable the guard FAILS LOUDLY (panics) rather than silently returning success: a test
+    // that no-ops when its preconditions are absent is a false-green that proves nothing, and git
+    // is already a hard build dependency (build.rs spawns it), so its absence here is a broken
+    // environment, not a tolerable skip.
     #[test]
     fn build_dirty_predicate_flips_on_unstaged_change() {
         use std::process::Command;
@@ -1228,9 +1231,9 @@ mod safety_tests {
         );
         let repo = std::env::temp_dir().join(format!("compy-dirty-guard-{uniq}"));
         let _ = std::fs::remove_dir_all(&repo);
-        if std::fs::create_dir_all(&repo).is_err() {
-            return; // can't stage a temp dir → skip (asserts nothing)
-        }
+        std::fs::create_dir_all(&repo)
+            .expect("create a throwaway temp repo dir for the build-dirty guard (temp setup must \
+                     not silently pass this test)");
 
         // git bound to the temp repo with a hermetic identity: no signing, no CRLF munging, so the
         // predicate reads the same on any machine.
@@ -1251,10 +1254,15 @@ mod safety_tests {
                 .filter(|o| o.status.success())
         };
 
-        // Git absent/unusable ⇒ skip cleanly (mirrors build.rs's own "nogit" tolerance).
+        // Git absent/unusable ⇒ FAIL LOUDLY, do not silently pass. Clean up the temp dir first so
+        // a panic doesn't strand it.
         if git(&["init"]).is_none() {
             let _ = std::fs::remove_dir_all(&repo);
-            return;
+            panic!(
+                "git init failed in a throwaway temp repo — the COMPY_GIT_DIRTY predicate could not \
+                 be exercised. git is a hard build dependency (build.rs spawns it); its absence is a \
+                 broken environment, and this guard must never silently return success."
+            );
         }
 
         let tracked = repo.join("tracked.rs");
@@ -1288,6 +1296,31 @@ mod safety_tests {
         );
 
         let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    // §C build stamp — the rerun-if-changed watch set is load-bearing and PARTIAL by design.
+    // Once build.rs emits ANY `cargo:rerun-if-changed`, cargo watches ONLY the listed paths (it
+    // drops the default whole-package scan). The OLD set (`.git/HEAD` + `.git/index` alone) went
+    // stale on an unstaged source edit — which touches neither .git path — so `COMPY_GIT_DIRTY`
+    // kept a previous value. This pins the WIDENED set so removing any watched input (a
+    // "simplification") fails loudly instead of silently re-opening the stale-stamp bug. It does
+    // NOT assert cargo actually re-runs the script (that's cargo's behavior, not ours); the set is
+    // deliberately partial — an unstaged change OUTSIDE src-tauri/{src,Cargo.toml,Cargo.lock} still
+    // won't re-trigger it until staged/committed. ship-reinstall.ps1 step 0b (a fresh `git status`
+    // at ship time) is the authoritative backstop for that residual, so no artifact ships with an
+    // unaccounted-for dirty tree.
+    #[test]
+    fn build_rs_declares_dirty_watch_set() {
+        let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/build.rs"))
+            .expect("read build.rs");
+        for path in ["../.git/HEAD", "../.git/index", "src", "Cargo.toml", "Cargo.lock"] {
+            let needle = format!("cargo:rerun-if-changed={path}");
+            assert!(
+                src.contains(&needle),
+                "build.rs must emit `{needle}` — dropping any watched input silently re-opens the \
+                 stale-`COMPY_GIT_DIRTY` bug (an unstaged edit to that input would stop re-stamping)"
+            );
+        }
     }
 
     fn roundtrips<T>(v: &T) -> bool

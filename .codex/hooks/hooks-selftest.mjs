@@ -7,27 +7,36 @@
 // not-Codex-native and/or not-read-only, so their tests are gone; this test also asserts they stay
 // gone (out of hooks.json and off disk).
 //
-// This exercises the hook TWO ways:
+// This exercises the hook FOUR ways:
 //   (A) direct node invocation with Codex-shaped fixtures — apply_patch payloads that carry the edit
 //       in `tool_input.command` (string AND arg-array), plus the `tool_input.file_path` fallback
 //       shape — proving the parse/throttle logic.
-//   (B) the EXACT `commandWindows` string configured in hooks.json, run THROUGH the Windows command
-//       runner (cmd.exe, via a shell), because "the node script works" and "the configured command
-//       line works on Windows" are different claims — (B) catches a broken path/quoting in the config
-//       that (A) would sail past. On a non-Windows host the POSIX `command` is run through the shell
-//       instead, and the leg says so.
+//   (B) hooks.json SCHEMA — the file parses AND carries ONLY the two top-level keys Codex's HooksFile
+//       accepts (`description`, `hooks`). Codex's HooksFile uses `deny_unknown_fields`, so ANY extra
+//       top-level key (e.g. a `"//"` comment) rejects the WHOLE file at load — this section tests that
+//       deny_unknown_fields contract, not merely that the JSON parses.
+//   (C) the EXACT configured `command`/`commandWindows` strings, run THROUGH their NATIVE shells
+//       (commandWindows via cmd.exe; the POSIX command via sh/bash) from THREE CWDs — repo root,
+//       src-tauri/, and a deeper nested dir. The configured lines resolve the repo root via
+//       `git rev-parse --show-toplevel`, so they must fire from any CWD; a CWD-RELATIVE script path
+//       would fire from the root but MISS from a nested dir, failing this section by construction. A
+//       negative control (a deliberately CWD-relative command) proves the nested-CWD test has teeth.
+//   (D) NO repo mutation — the whole run leaves `git status --porcelain` byte-identical (the hook's
+//       only side effect is a %TEMP% throttle marker, which this test also cleans up afterward).
 //
-// HONESTY BOUND (strengthened): a green run proves this script's parse/throttle logic and that the
-// configured Windows command line resolves + emits its advisory. It does NOT and CANNOT prove that
-// Codex activates this hook in-product — how Codex resolves the event, matcher regex, cwd, and stdin
-// lives in Codex's runtime, not here. Only a trusted Codex runtime run proves in-product activation.
-// Do not read a green self-test as "the Codex failsafe is active."
+// HONESTY BOUND (strengthened): a green run proves this script's parse/throttle logic, the hooks.json
+// schema/deny_unknown_fields contract, and that the configured command lines resolve the repo root
+// from any CWD + emit their advisory. It does NOT and CANNOT prove that Codex activates this hook
+// in-product — how Codex resolves the event, matcher regex, cwd, and stdin lives in Codex's runtime,
+// not here. Only a trusted Codex runtime run proves in-product activation. Do not read a green
+// self-test as "the Codex failsafe is active."
 //
 // Run:  node .codex/hooks/hooks-selftest.mjs      (exit 0 = all pass, exit 1 = a check failed)
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const HOOKS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +161,24 @@ let posixCmd = null;
   if (cfg) {
     check("hooks.json parses as JSON", true);
 
+    // §1 deny_unknown_fields contract — Codex's HooksFile derives serde with deny_unknown_fields, so
+    // the ONLY permitted top-level keys are `description` and `hooks`. A stray `"//"`/`"//readonly"`
+    // comment key would reject the entire file at load. This is a SCHEMA guard, not a parse check.
+    const ALLOWED_TOP = new Set(["description", "hooks"]);
+    const topKeys = Object.keys(cfg);
+    const unknownTop = topKeys.filter((k) => !ALLOWED_TOP.has(k));
+    check(
+      "hooks.json has ZERO unknown top-level keys (deny_unknown_fields — a `//` comment key rejects the whole file)",
+      unknownTop.length === 0,
+      unknownTop.length ? `unknown top-level key(s): ${unknownTop.join(", ")}` : ""
+    );
+    check(
+      "hooks.json `description` is the single supported doc key (a non-empty string)",
+      typeof cfg.description === "string" && cfg.description.length > 0,
+      `typeof description = ${typeof cfg.description}`
+    );
+    check("hooks.json carries the required `hooks` object", cfg.hooks != null && typeof cfg.hooks === "object");
+
     // Flatten every configured command entry.
     const entries = [];
     for (const event of Object.values(cfg.hooks || {})) {
@@ -191,33 +218,66 @@ let posixCmd = null;
 }
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[5] configured command line through the SHELL command runner (not node directly)\n");
+process.stdout.write("\n[5] configured command lines through their NATIVE shells, from MULTIPLE CWDs (CWD-independence)\n");
 {
-  // Run the ACTUAL command string from hooks.json via a shell — on Windows that is cmd.exe (the
-  // native command runner the `commandWindows` field exists for); elsewhere it is /bin/sh with the
-  // POSIX `command`. This proves the configured line (path + quoting) actually resolves and emits,
-  // which invoking node on the .mjs directly (sections [1]-[3]) does not establish.
-  const onWindows = process.platform === "win32";
-  const cmdLine = onWindows ? winCmd : posixCmd;
-  if (!cmdLine) {
-    check("a configured command line was available to run through the shell", false, "no command in hooks.json");
-  } else {
-    const r = spawnSync(cmdLine, {
-      shell: true, // Windows → %ComSpec% (cmd.exe); POSIX → /bin/sh. This IS the command runner.
-      cwd: REPO_ROOT,
-      input: JSON.stringify({ session_id: sid(), tool_input: { command: APPLY_UI_TSX } }),
-      encoding: "utf8",
-    });
-    check(
-      `configured ${onWindows ? "commandWindows (cmd.exe)" : "command (/bin/sh)"} fires on a UI apply_patch`,
-      fires(r.stdout || ""),
-      `status=${r.status} stderr=${(r.stderr || "").trim()}`
-    );
-    process.stdout.write(
-      `  note: ran \`${cmdLine}\` via ${onWindows ? "cmd.exe" : "/bin/sh"} — a shell-runner PASS proves the ` +
-        "configured line resolves + emits; it still does NOT prove Codex activates the hook in-product.\n"
-    );
+  // §2: each configured line resolves the repo root via `git rev-parse --show-toplevel`, so it must
+  // fire identically whether Codex runs it from the repo root or a nested dir. We run the EXACT
+  // configured strings through their native shells from three CWDs. A CWD-RELATIVE script path would
+  // resolve from the root but FAIL from src-tauri/ — so a nested-CWD miss fails this section, and the
+  // negative control below proves that discriminator actually has teeth.
+  const EVENT = () => JSON.stringify({ session_id: sid(), tool_input: { command: APPLY_UI_TSX } });
+  const CWDS = [
+    ["repo root", REPO_ROOT],
+    ["src-tauri/", join(REPO_ROOT, "src-tauri")],
+    ["src/surfaces/ (nested)", join(REPO_ROOT, "src", "surfaces")],
+  ];
+
+  // Assemble the runnable legs — one per (configured command × native shell this host can launch).
+  // cmd.exe is native for commandWindows; a POSIX sh is native for the POSIX command. An unavailable
+  // shell is NOTED, never silently skipped.
+  const legs = [];
+  if (winCmd) {
+    if (process.platform === "win32") {
+      legs.push({ label: "commandWindows via cmd.exe", run: (cwd) => spawnSync(winCmd, { shell: true, cwd, input: EVENT(), encoding: "utf8" }) });
+    } else {
+      process.stdout.write("  note: not a Windows host — `commandWindows` (cmd.exe) leg NOTED not run; verify on Windows/CI.\n");
+    }
   }
+  if (posixCmd) {
+    const shBin = ["sh", "bash"].find((b) => {
+      const t = spawnSync(b, ["-c", "exit 0"], { encoding: "utf8" });
+      return !t.error && t.status === 0;
+    });
+    if (shBin) {
+      legs.push({ label: `command via ${shBin}`, run: (cwd) => spawnSync(shBin, ["-c", posixCmd], { cwd, input: EVENT(), encoding: "utf8" }) });
+    } else {
+      process.stdout.write("  note: no POSIX shell (sh/bash) launchable on this host — POSIX `command` leg NOTED not run.\n");
+    }
+  }
+  check("at least one configured command line is runnable through a native shell on this host", legs.length > 0);
+
+  for (const leg of legs) {
+    for (const [cwdLabel, cwd] of CWDS) {
+      const r = leg.run(cwd);
+      check(`${leg.label} fires from ${cwdLabel}`, fires(r.stdout || ""), `status=${r.status} stderr=${(r.stderr || "").trim()}`);
+    }
+  }
+
+  // Negative control — a DELIBERATELY CWD-relative command must fire from the repo root but be SILENT
+  // from src-tauri/. If it ever fired from src-tauri/, the CWD-independence checks above would be
+  // vacuous. This is what makes "the test fails if the script path is relative to session CWD" true.
+  const relCmd = process.platform === "win32"
+    ? "node .codex\\hooks\\self-review-reminder.mjs"
+    : "node .codex/hooks/self-review-reminder.mjs";
+  const relAtRoot = spawnSync(relCmd, { shell: true, cwd: REPO_ROOT, input: EVENT(), encoding: "utf8" });
+  const relAtNested = spawnSync(relCmd, { shell: true, cwd: join(REPO_ROOT, "src-tauri"), input: EVENT(), encoding: "utf8" });
+  check("negative control: a CWD-relative command DOES fire from the repo root", fires(relAtRoot.stdout || ""));
+  check("negative control: the SAME CWD-relative command is SILENT from src-tauri/ (proves the CWD test has teeth)", !fires(relAtNested.stdout || ""));
+
+  process.stdout.write(
+    "  note: these prove the configured lines resolve the repo root from ANY CWD + emit; a PASS still " +
+      "does NOT prove Codex activates the hook in-product.\n"
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -225,6 +285,33 @@ process.stdout.write("\n[6] no repo mutation — the whole run left the working 
 {
   const statusAfter = gitStatus();
   check("git status --porcelain unchanged across the entire self-test", statusAfter === statusBefore, statusAfter === statusBefore ? "" : "working tree changed");
+}
+
+// ---------------------------------------------------------------------------------------------
+process.stdout.write("\n[7] cleanup — remove the throttle markers THIS run created under %TEMP%\n");
+{
+  // §3: the hook's only side effect is a throttle marker in tmpdir. Every marker this run wrote is
+  // keyed by a `selftest-<pid>-…` session id, so its filename is `compy-selfreview-selftest-<pid>-…`.
+  // Remove ONLY that pid-scoped set — a bare `compy-selfreview-*` sweep would clobber a REAL concurrent
+  // Codex/Claude session's live throttle marker, which is not ours to touch.
+  const PREFIX = `compy-selfreview-selftest-${process.pid}-`;
+  let removed = 0;
+  let leftover = 0;
+  try {
+    for (const name of readdirSync(tmpdir())) {
+      if (!name.startsWith(PREFIX)) continue;
+      try {
+        rmSync(join(tmpdir(), name));
+        removed++;
+      } catch {
+        leftover++;
+      }
+    }
+  } catch {
+    /* tmpdir unreadable — nothing we can clean, and nothing was left in the repo */
+  }
+  check(`removed every self-test throttle marker this run created (${removed} removed)`, leftover === 0, leftover ? `${leftover} could not be removed` : "");
+  process.stdout.write(`  note: cleanup is scoped to \`${PREFIX}*\` — other sessions' live markers are left untouched.\n`);
 }
 
 // ---------------------------------------------------------------------------------------------

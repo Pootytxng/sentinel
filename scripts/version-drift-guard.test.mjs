@@ -88,3 +88,25 @@ describe("Guard D — the VISIBLE app version tracks the canonical manifest, nev
     expect(appVersionLine).not.toMatch(/["']\d+\.\d+\.\d+["']/);
   });
 });
+
+describe("Guard E — both production render sites consume APP_VERSION, never a literal", () => {
+  // corrective follow-up (2026-07-20): Guard D pins the DECLARATION
+  // (`const APP_VERSION = pkg.version;`), but a render site could still hand a hardcoded semver to a
+  // component and bypass it entirely (e.g. `<Settings appVersion="0.1.0" />`) — the UI would show
+  // stale text while Guard D stayed green. APP_VERSION reaches the screen through exactly TWO props:
+  // the Settings pane (`appVersion=`) and the ShellV2 rail (`version=`). Pin BOTH to the constant and
+  // forbid a semver literal at either prop, so wiring a fresh site to a literal fails the guard.
+  const app = read("src/App.tsx");
+
+  it("the Settings render site passes appVersion={APP_VERSION}", () => {
+    expect(app).toContain("appVersion={APP_VERSION}");
+  });
+  it("the ShellV2 render site passes version={APP_VERSION}", () => {
+    expect(app).toContain("version={APP_VERSION}");
+  });
+  it("no version prop is fed a hardcoded semver literal", () => {
+    // matches appVersion="1.2.3" / appVersion={"1.2.3"} / version="1.2.3" / version={"1.2.3"};
+    // the wired `={APP_VERSION}` form has no quoted digits, so it never trips this.
+    expect(app).not.toMatch(/\b(?:appVersion|version)=\{?\s*["']\d+\.\d+\.\d+["']/);
+  });
+});

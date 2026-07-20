@@ -9,5 +9,19 @@
 #     additionally spends owner-gated credits. Re-add only if the owner approves a workflow that
 #     needs them — and pin any external command to an exact version, never "@latest".
 
+# Advisory-lane safety floor. Codex's role in this repo is READ-ONLY audit & advice (AGENTS.md lane
+# split), so this config REFUSES writes and REFUSES to prompt for escalation rather than granting a
+# bypass: read-only means a write/exec attempt is denied at the sandbox, and never means "auto-approve
+# every command." These are bare top-level keys and MUST precede the first [table] header (TOML rule).
+#   sandbox_mode = "read-only"  → the filesystem/exec sandbox rejects writes and escalations.
+#   approval_policy = "never"   → no interactive approval prompts; combined with read-only, an action
+#                                 the sandbox forbids is DENIED, not surfaced as an approve/deny prompt.
+# An explicitly owner-authorized IMPLEMENTATION session does NOT edit these defaults. It opts in per
+# launch instead — e.g. `codex --sandbox workspace-write --ask-for-approval on-request`, or a dedicated
+# `[profiles.implement]` block (sandbox_mode = "workspace-write", approval_policy = "on-request")
+# selected with `codex --profile implement`. The safe default stays read-only/never for every other run.
+sandbox_mode = "read-only"
+approval_policy = "never"
+
 [shell_environment_policy]
 inherit = "core"

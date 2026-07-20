@@ -1,7 +1,5 @@
 {
-  "//": "Codex CLI lifecycle hooks for the Compy repo. Codex hooks are a Stable, default-ON system (codex-rs/features: Feature::CodexHooks). Structure per the Codex contract: hooks.<EventName>[].matcher (regex over the Codex tool name) + .hooks[] with type:\"command\" (the ONLY executed type), command (POSIX shell) and commandWindows (native cmd.exe — used verbatim on Windows). Commands are resolved from the repo root (Codex runs hooks with CWD = the workspace root), so they stay relative — no hardcoded workstation path.",
-  "//readonly": "This repo runs Codex as a READ-ONLY advisor (see AGENTS.md lane split). The single retained hook only INJECTS an advisory additionalContext string; it mutates nothing, spawns no build, and never authorizes install/ship/delete/commit. The Claude-lane automation (stop-continue, ship-reminder, subagent model/throttle guards, context-size advisor) was removed 2026-07-20 as not-Codex-native and/or not-read-only.",
-  "//activation": "A green hooks-selftest exercises these scripts' own logic; it does NOT prove Codex activates them in-product. Only a trusted Codex runtime run proves in-product activation.",
+  "description": "Codex CLI lifecycle hooks for the Compy repo. Codex hooks are a Stable, default-ON system (codex-rs Feature::CodexHooks) whose HooksFile parser uses deny_unknown_fields — so ONLY the two documented top-level keys `description` and `hooks` may appear (any comment/extra key rejects the whole file). Structure per the Codex contract: hooks.<EventName>[].matcher (regex over the Codex tool name) + .hooks[] with type:\"command\" (the ONLY executed type), command (POSIX shell) and commandWindows (native cmd.exe — used verbatim on Windows). Both commands resolve the repo root via `git rev-parse --show-toplevel` so they work from ANY session CWD (Codex does not guarantee CWD == workspace root), with no hardcoded workstation path. LANE: this repo runs Codex as a READ-ONLY advisor (AGENTS.md lane split). The single retained hook only INJECTS an advisory additionalContext string; it does not mutate the repository, Compy, or Windows state (its only side effect is a throttle marker under %TEMP%), and never authorizes install/ship/delete/commit. The Claude-lane automation (stop-continue, ship-reminder, subagent model/throttle guards, context-size advisor) was removed 2026-07-20 as not-Codex-native and/or not-read-only. ACTIVATION: a green hooks-selftest exercises these scripts' own logic and this file's schema; it does NOT prove Codex activates them in-product — only a trusted Codex runtime run proves in-product activation.",
   "hooks": {
     "PostToolUse": [
       {
@@ -9,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .codex/hooks/self-review-reminder.mjs",
-            "commandWindows": "node .codex\\hooks\\self-review-reminder.mjs",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/self-review-reminder.mjs\"",
+            "commandWindows": "for /f \"usebackq delims=\" %r in (`git rev-parse --show-toplevel`) do node \"%r/.codex/hooks/self-review-reminder.mjs\"",
             "timeout": 10,
             "statusMessage": "self-review reminder (advisory, read-only)"
           }

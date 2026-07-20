@@ -11,13 +11,13 @@
 //   * Matcher = the Codex tool name `apply_patch`. Codex aliases apply_patch ↔ Write/Edit
 //     (codex-rs/core/src/tools/hook_names.rs), so matching the Codex-native name is correct; we do
 //     NOT match the Claude names "Write"/"Edit" here.
-//   * Codex delivers the edit payload in `tool_input`. The EXACT field shape of apply_patch's
-//     tool_input is NOT source-verified. So this hook reads `tool_input.command` DEFENSIVELY as a
-//     generic string (apply_patch is a command-shaped tool; the patch body carries
-//     `*** Add/Update/Delete/Move File: <path>` headers) and scans it for a UI path. It asserts NO
-//     structured schema, honors `tool_input.file_path` as a fallback shape, and FAILS SILENT (no
-//     reminder) whenever it cannot positively identify a UI file — an advisory nudge must never
-//     block, and a missed nudge is acceptable where a false nudge is not.
+//   * Codex delivers the edit payload in `tool_input`; the official Codex hooks documentation
+//     confirms apply_patch surfaces the patch under `tool_input.command`. This hook still reads it
+//     DEFENSIVELY as a generic string (apply_patch is a command-shaped tool; the patch body carries
+//     `*** Add/Update/Delete/Move File: <path>` headers) and scans it for a UI path — the defensive
+//     parse also honors `tool_input.file_path` as a fallback shape and FAILS SILENT (no reminder)
+//     whenever it cannot positively identify a UI file, because an advisory nudge must never block
+//     and a missed nudge is acceptable where a false nudge is not.
 //
 // A green hooks-selftest proves THIS parse/throttle logic against a documented-shape fixture. It
 // does NOT prove Codex activates this hook in-product — only a trusted Codex runtime run proves that.

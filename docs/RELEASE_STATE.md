@@ -10,27 +10,31 @@
 
 ## CURRENT STATE (authoritative — read this first)
 
-> This block is the single reconciled current-truth summary. It deliberately keeps **four distinct
+> This block is the single reconciled current-truth summary. It deliberately keeps **five distinct
 > identities** that an earlier revision of this block collapsed into one "HEAD" line:
-> **(1) latest audited source baseline** (a static, reviewed commit) · **(2) installed artifact commit**
-> (a static fact about the exe on disk) · **(3) distributed artifact** (private vs public — what any
-> *other* machine can obtain) · **(4) live Git state** (branch position — ahead/behind counts *derived
-> by running git*, stale the instant anyone commits or pushes). **No static hash in this block is "the
-> current HEAD."** A commit hash names a fixed point in history; "current HEAD" is a *live* pointer you
-> learn only by running `git rev-parse HEAD` at read time. The row-4 counts are a timestamped snapshot —
-> **re-derive them on read; do not trust the printed number.** The dated `UPDATE …` banners under
-> **Snapshot history** below are a reverse-chronological LOG of individual trains, **not** current state;
-> where a banner disagrees with THIS block, this block wins. Reconciled read-only 2026-07-20 (no build,
-> no ship, no Windows-state change).
+> **(1) newest locally verified installed build** (a static fact about the exe on the OWNER's disk) ·
+> **(2) current corrective source train** (a static, reviewed commit) · **(3) historically distributed
+> private-beta artifact** (`16069fa` — the only build ever handed to another machine) · **(4) current
+> tester installs + old share-link reachability** (**UNKNOWN** — owner-confirmable only; no telemetry to
+> read it from here) · **(5) `origin/main` tracking ref vs the remote server** (a LOCAL cached pointer
+> that can lag the server until `git fetch`; the ahead/behind counts are *derived by running git* and go
+> stale the instant anyone commits or pushes). **No static hash in this block is "the current HEAD."** A
+> commit hash names a fixed point in history; "current HEAD" is a *live* pointer you learn only by
+> running `git rev-parse HEAD` at read time. The row-5 counts are a timestamped snapshot — **re-derive
+> them on read, and `git fetch` before trusting the `origin/main` comparison; do not trust the printed
+> number.** The dated `UPDATE …` banners under **Snapshot history** below are a reverse-chronological LOG
+> of individual trains, **not** current state; where a banner disagrees with THIS block, this block wins.
+> Reconciled read-only 2026-07-20 (no build, no ship, no Windows-state change).
 
 | # | Identity (kept distinct on purpose) | Current truth | How verified |
 |---|---|---|---|
-| 1 | **Latest audited source baseline** — static; a *reviewed* commit, NOT a live pointer | The corrective-follow-up commit that carries this doc, stacked on `1fc6e87` (the prior local reviewed tip). This is the newest *reviewed* code on `main`. **Code/doc-only — NOT built, NOT shipped.** | `git log --oneline origin/main..HEAD` (read at review time) |
-| 2 | **Installed artifact commit** — static fact about the exe on disk | `75c38c6` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`. The installed exe embeds `75c38c6`; ONE installer on the Desktop. This is the newest build any machine actually runs. | Embedded-hash byte-scan of `%LOCALAPPDATA%\Compy\compy.exe` (read-only) |
-| 3 | **Distributed artifact (private / public)** — what other machines can obtain | **Private:** only the single local Desktop installer above (`75c38c6`) — not sent to any other machine this train. **Public:** **NONE** — no public download, store listing, or signed public artifact. Public release is gated on **Code signing** + **Legal (EULA/PRIVACY)**, both OPEN in *Release blockers* below. | *Release blockers* (this file) |
-| 4 | **Live Git state** — DERIVED by tooling; a snapshot, re-run to refresh | Snapshot @ 2026-07-20: `HEAD` = the corrective-follow-up commit; **3 ahead of `origin/main` (`408c860`), 0 behind** (unpushed local work); **17 ahead of the installed build (`75c38c6`)**. These counts are *computed by running git* and go stale the moment anyone commits or pushes — re-derive, never cite as eternal. | `git rev-parse HEAD` · `git rev-list --left-right --count origin/main...HEAD` · `git rev-list --count 75c38c6..HEAD` |
+| 1 | **Newest locally verified installed build** — static fact about the exe on the OWNER's disk | `75c38c6` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`. The installed exe on THIS (owner) machine embeds `75c38c6`; ONE installer on the Desktop. This is the newest build **on the owner's machine** — it is **NOT** a claim about what any *other* machine runs (see rows 3–4). | Embedded-hash byte-scan of `%LOCALAPPDATA%\Compy\compy.exe` (read-only) |
+| 2 | **Current corrective source train** — static; a *reviewed* commit, NOT a live pointer | The corrective-follow-up commit that carries this doc, stacked on `a59fed7` (the prior local corrective tip). This is the newest *reviewed* code on `main`. **Code/doc-only — NOT built, NOT shipped.** | `git log --oneline origin/main..HEAD` (read at review time) |
+| 3 | **Historically distributed private-beta artifact** — what another machine was actually handed | `16069fa` / `beta/private-beta-001` — the OLD verified **unsigned** private beta (frozen ref, never to be moved). This, not `75c38c6`, is the build a private-beta tester most plausibly still runs; a DIFFERENT risk profile from current `main`. **No newer build has been distributed to any other machine.** **Public:** **NONE** — no public download, store listing, or signed public artifact (gated on **Code signing** + **Legal**, both OPEN in *Release blockers*). | Frozen ref + the deep "Frozen private-beta artifact" row below |
+| 4 | **Current tester installs + old share-link reachability** — UNKNOWN, owner-confirmable only | What any private-beta tester currently runs, and whether the old Drive/share link still resolves, is **NOT knowable from here** — no telemetry (zero-outbound), no local record. **Pending owner confirmation.** Do not assert testers are on any specific build, or that the link is live or dead. | Unknowable without an owner report; no local evidence |
+| 5 | **`origin/main` tracking ref vs the remote server** — LOCAL cache; may lag the server | The LOCAL `origin/main` ref reads `408c860`. That is a *cached* pointer from the last fetch, **not** a live read of the GitHub server — without `git fetch` the server's actual `main` HEAD cannot be asserted. Snapshot @ 2026-07-20: `HEAD` is **3 ahead of the local `origin/main` ref, 0 behind** (unpushed local work); **17 ahead of the installed build (`75c38c6`)**. These counts are *computed by running git* and go stale the moment anyone commits or pushes — re-derive, never cite as eternal. | `git rev-parse origin/main` (local ref) · `git rev-list --left-right --count origin/main...HEAD` · `git rev-list --count 75c38c6..HEAD` — **`git fetch` first to compare to the server** |
 
-**Bottom line:** the reviewed source baseline (this corrective follow-up stacked on `1fc6e87`) is code/doc-only and, as of the 2026-07-20 snapshot, **3 commits ahead of `origin/main` and 17 ahead of the live installer `75c38c6`** — nothing newer has been built, pushed, or distributed. **No gate flipped and no new outbound boundary since `75c38c6`:** the verified zero-outbound property and every LOCKED gate still hold. The ahead/behind numbers are tooling-derived — re-run the commands above rather than trusting them. Update THIS block in the same commit that ships, pushes, or flips a gate.
+**Bottom line:** the owner's live installer is `75c38c6`; the newest *reviewed* source is this corrective follow-up (stacked on `a59fed7`, code/doc-only, **3 ahead of the local `origin/main` ref, 17 ahead of the installer** as of the 2026-07-20 snapshot). **Nothing** newer than `75c38c6` has been built, and nothing has been pushed or distributed this train. The only build any *other* machine was ever handed is the frozen unsigned private beta `16069fa`; **what testers currently run and whether the old share link still resolves are UNKNOWN pending owner confirmation.** `origin/main` (`408c860`) is a LOCAL tracking ref that may lag the server until a `git fetch`. **No gate flipped and no new outbound boundary since `75c38c6`:** the verified zero-outbound property and every LOCKED gate still hold. All ahead/behind numbers are tooling-derived — re-run the commands above (and `git fetch` for the server) rather than trusting them. **Update THIS block in the same commit that ships or flips a gate; a PUSH is verified/refreshed AFTER it lands** — re-derive the row-5 counts (and `git fetch`) once the remote has the commit, since the tracking ref only advances post-push.
 
 ## Snapshot history (reverse-chronological log — superseded by CURRENT STATE above)
 
@@ -1157,7 +1161,7 @@
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key); FE `pro.ts:14`, `entitlements.ts:14` | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
 | **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:96`; all-zeros pubkey `remote_rules.rs:84` | Double-gated: `verify_chain` ALSO hard-fails on the placeholder key (`remote_rules.rs:235`). Ed25519 verify is real but never runs in shipped builds. |
 | **Auto-updater** | **OFF / absent** | no `plugins`/`updater` block in `tauri.conf.json`; no updater dep in `Cargo.toml` | — |
-| **Outbound network** | **NONE** | no `reqwest`/`ureq`/`hyper`/HTTP client anywhere in `src-tauri/src` or `Cargo.toml` (2026-07-11 audit: whole-tree grep, zero hits besides a `// Future:` comment in `remote_rules.rs:368`); **production** CSP `security.csp.connect-src` (`tauri.conf.json:46`) is `'self' ipc: http://ipc.localhost` — the `ws://localhost:1420 http://localhost:1420` tokens belong to the separate dev-only `devCsp` field (`tauri.conf.json:51`, not shipped). Both are local-only; zero external origins either way — the correction only fixes which field the doc was quoting, doesn't change the conclusion. | Verified-zero-outbound property holds while Receipts + remote-fetch stay dark. |
+| **Outbound network** | **NONE** | no `reqwest`/`ureq`/`hyper`/HTTP client anywhere in `src-tauri/src` or `Cargo.toml` (2026-07-11 audit: whole-tree grep, zero hits besides a `// Future:` comment at `remote_rules.rs:395` — the comment spans 395–396); **production** CSP `security.csp.connect-src` (`tauri.conf.json:46`) is `'self' ipc: http://ipc.localhost` — the `ws://localhost:1420 http://localhost:1420` tokens belong to the separate dev-only `devCsp` field (`tauri.conf.json:51`, not shipped). Both are local-only; zero external origins either way — the correction only fixes which field the doc was quoting, doesn't change the conclusion. | Verified-zero-outbound property holds while Receipts + remote-fetch stay dark. |
 
 ## Mutation safety posture (unchanged LOCKED rules)
 
