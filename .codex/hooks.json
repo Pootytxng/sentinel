@@ -1,0 +1,65 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent-model-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "subagent model-routing guard"
+          },
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent-throttle.mjs\"",
+            "timeout": 10,
+            "statusMessage": "subagent spawn-count check"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/self-review-reminder.mjs\"",
+            "timeout": 10,
+            "statusMessage": "self-review reminder"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/ship-reminder.mjs\"",
+            "timeout": 10,
+            "statusMessage": "ship-law reminder"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/stop-continue.mjs\"",
+            "timeout": 20,
+            "statusMessage": "autopilot: checking task queue"
+          },
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/context-size-advisor.mjs\"",
+            "timeout": 10,
+            "statusMessage": "context-size advisor"
+          }
+        ]
+      }
+    ]
+  }
+}

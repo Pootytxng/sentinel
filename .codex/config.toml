@@ -1,0 +1,13 @@
+# Codex project config for the Compy repo.
+#
+# Deliberately minimal. Removed 2026-07-19 (portability/lane-hardening train):
+#   - shell_environment_policy.set CLAUDE_CODE_SUBAGENT_MODEL / CLAUDE_CODE_AUTO_COMPACT_WINDOW:
+#     these are Claude Code env-var names; they do not configure Codex, so they did nothing here.
+#     (Codex hooks that read them fall back to safe defaults on their own.)
+#   - [mcp_servers.shadcn] / [mcp_servers.v0]: UI-generation/build MCP servers. Codex's role in
+#     this repo is read-only audit & advice (see AGENTS.md lane split), which needs neither; v0
+#     additionally spends owner-gated credits. Re-add only if the owner approves a workflow that
+#     needs them — and pin any external command to an exact version, never "@latest".
+
+[shell_environment_policy]
+inherit = "core"
