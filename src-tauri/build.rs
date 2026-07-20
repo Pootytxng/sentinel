@@ -39,10 +39,26 @@ fn main() {
     let (hash, dirty) = git_stamp();
     println!("cargo:rustc-env=COMPY_GIT_HASH={hash}");
     println!("cargo:rustc-env=COMPY_GIT_DIRTY={}", if dirty { "1" } else { "0" });
-    // Re-stamp when the checked-out commit moves. (The dirty flag is best-effort between
-    // commits — cargo can't watch the whole tree for it; a rebuild after any code change
-    // refreshes it anyway, which is exactly when it matters.)
+    // Re-run this stamp when an input that can make the binary differ from HEAD changes. Once a
+    // build script emits ANY rerun-if-changed, cargo watches ONLY the listed paths (it drops its
+    // default whole-package scan) — so the OLD watch set (`.git/HEAD` + `.git/index` alone) went
+    // STALE on an unstaged working-tree edit: changing a compiled source without `git add` touches
+    // NEITHER .git path, so build.rs never re-ran and `COMPY_GIT_DIRTY` kept its previous value.
+    // (The old comment here claimed "a rebuild after any code change refreshes it anyway" — that is
+    // FALSE: a source edit recompiles the crate but does NOT by itself re-run the build script.)
+    //   ../.git/HEAD   — the checked-out commit moving (new commit ⇒ re-stamp hash + dirty)
+    //   ../.git/index  — staging (`git add`) ⇒ re-stamp
+    //   src / Cargo.toml / Cargo.lock — UNSTAGED edits to this crate's compiled inputs ⇒ re-stamp dirty
+    // Residual (documented, not silently ignored): an unstaged change OUTSIDE
+    // src-tauri/{src,Cargo.toml,Cargo.lock} — e.g. a repo-root config, capabilities/, or the frontend
+    // ../src bundle — still won't re-trigger this script on its own until it is staged or committed.
+    // The backstop is ship-reinstall.ps1 step 0b, which takes a FRESH `git status` at ship time, so no
+    // artifact leaves with an unaccounted-for dirty tree. The predicate's behavior (clean → unstaged
+    // dirty → clean) is pinned by `build_dirty_predicate_flips_on_unstaged_change` in lib.rs.
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/index");
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=Cargo.toml");
+    println!("cargo:rerun-if-changed=Cargo.lock");
     tauri_build::build()
 }

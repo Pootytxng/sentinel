@@ -10,20 +10,27 @@
 
 ## CURRENT STATE (authoritative — read this first)
 
-> This block is the single reconciled current-truth summary. The dated `UPDATE …` banners under
-> **Snapshot history** below are a reverse-chronological LOG (newest first) — point-in-time records
-> of individual trains, **not** the current state. Where any banner disagrees with THIS block about
-> *current* state, this block wins. Verified read-only 2026-07-19 (no build, no ship, no
-> Windows-state change).
+> This block is the single reconciled current-truth summary. It deliberately keeps **four distinct
+> identities** that an earlier revision of this block collapsed into one "HEAD" line:
+> **(1) latest audited source baseline** (a static, reviewed commit) · **(2) installed artifact commit**
+> (a static fact about the exe on disk) · **(3) distributed artifact** (private vs public — what any
+> *other* machine can obtain) · **(4) live Git state** (branch position — ahead/behind counts *derived
+> by running git*, stale the instant anyone commits or pushes). **No static hash in this block is "the
+> current HEAD."** A commit hash names a fixed point in history; "current HEAD" is a *live* pointer you
+> learn only by running `git rev-parse HEAD` at read time. The row-4 counts are a timestamped snapshot —
+> **re-derive them on read; do not trust the printed number.** The dated `UPDATE …` banners under
+> **Snapshot history** below are a reverse-chronological LOG of individual trains, **not** current state;
+> where a banner disagrees with THIS block, this block wins. Reconciled read-only 2026-07-20 (no build,
+> no ship, no Windows-state change).
 
-| Axis | Current truth | How verified |
-|---|---|---|
-| **Source — `main` HEAD** | `408c860` · upstream `origin/main` 0 ahead / 0 behind · **14 commits ahead of the shipped installer** (`75c38c6..408c860`, app-code delta `+4035/−132` over 45 files). **Code-complete, NOT shipped.** | `git rev-parse HEAD` · `git log 75c38c6..HEAD` |
-| **Installed / last-shipped build** | `75c38c6` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`. The installed exe embeds `75c38c6` (mtime 2026-07-18 01:33); ONE installer on the Desktop. This is the newest build any machine actually runs. | Embedded-hash byte-scan of `%LOCALAPPDATA%\Compy\compy.exe` (read-only) |
-| **Public / distributed** | **NONE.** Private beta only — no public download, store listing, or signed public artifact. Public release is gated on **Code signing** + **Legal (EULA/PRIVACY)**, both OPEN in *Release blockers* below. | *Release blockers* (this file) |
-| **Boundary since the shipped build** | The FE / Intelligence / experiment surfaces moved (`experiment.rs` `+331/−9`, the game-match comparability follow-up); **no gate flipped and no new outbound boundary** — the zero-outbound property and every LOCKED gate hold at `408c860` exactly as at `75c38c6`. | `git diff --stat 75c38c6..HEAD` on the boundary files |
+| # | Identity (kept distinct on purpose) | Current truth | How verified |
+|---|---|---|---|
+| 1 | **Latest audited source baseline** — static; a *reviewed* commit, NOT a live pointer | The corrective-follow-up commit that carries this doc, stacked on `1fc6e87` (the prior local reviewed tip). This is the newest *reviewed* code on `main`. **Code/doc-only — NOT built, NOT shipped.** | `git log --oneline origin/main..HEAD` (read at review time) |
+| 2 | **Installed artifact commit** — static fact about the exe on disk | `75c38c6` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`. The installed exe embeds `75c38c6`; ONE installer on the Desktop. This is the newest build any machine actually runs. | Embedded-hash byte-scan of `%LOCALAPPDATA%\Compy\compy.exe` (read-only) |
+| 3 | **Distributed artifact (private / public)** — what other machines can obtain | **Private:** only the single local Desktop installer above (`75c38c6`) — not sent to any other machine this train. **Public:** **NONE** — no public download, store listing, or signed public artifact. Public release is gated on **Code signing** + **Legal (EULA/PRIVACY)**, both OPEN in *Release blockers* below. | *Release blockers* (this file) |
+| 4 | **Live Git state** — DERIVED by tooling; a snapshot, re-run to refresh | Snapshot @ 2026-07-20: `HEAD` = the corrective-follow-up commit; **3 ahead of `origin/main` (`408c860`), 0 behind** (unpushed local work); **17 ahead of the installed build (`75c38c6`)**. These counts are *computed by running git* and go stale the moment anyone commits or pushes — re-derive, never cite as eternal. | `git rev-parse HEAD` · `git rev-list --left-right --count origin/main...HEAD` · `git rev-list --count 75c38c6..HEAD` |
 
-**Bottom line:** source `408c860` is code-complete and 14 commits ahead of the live installer `75c38c6`; nothing newer has shipped or been distributed; the next ship is a normal owner-gated rebuild + silent reinstall. Update THIS block in the same commit that ships or flips a gate.
+**Bottom line:** the reviewed source baseline (this corrective follow-up stacked on `1fc6e87`) is code/doc-only and, as of the 2026-07-20 snapshot, **3 commits ahead of `origin/main` and 17 ahead of the live installer `75c38c6`** — nothing newer has been built, pushed, or distributed. **No gate flipped and no new outbound boundary since `75c38c6`:** the verified zero-outbound property and every LOCKED gate still hold. The ahead/behind numbers are tooling-derived — re-run the commands above rather than trusting them. Update THIS block in the same commit that ships, pushes, or flips a gate.
 
 ## Snapshot history (reverse-chronological log — superseded by CURRENT STATE above)
 
@@ -337,7 +344,7 @@
 > dispatch ticket (`%APPDATA%\Compy\runtime\elev-<pid>-<seq>.ticket`, content = the exact command
 > hex) and passes its path as a third argv; the helper refuses any hex that doesn't byte-match its
 > ticket (exit 3, runs ZERO PowerShell) and consumes the ticket before running, so a dispatch
-> executes at most once (`mint_elevation_ticket` `actions.rs:1149`, `run_elevated_helper` `lib.rs:69`,
+> executes at most once (`mint_elevation_ticket` `actions.rs:1149`, `run_elevated_helper` `lib.rs:76`,
 > argv `main.rs:12`). Content-agnostic exact-match ⇒ can never
 > false-reject a legitimate apply (every builder's output passes by construction). Honest-attribution
 > preserved: mint failure = a third pre-launch refusal classified nothing-ran
@@ -1111,6 +1118,13 @@
 > preview on, the standalone Optimize rail tab still coexists with the Lab hero, and the Optimize-panel open-on-click-vs-always
 > call is owner-gated before default-ON (OWNER_ACTION_CHECKLIST).
 
+> **⟢ HISTORICAL ship-snapshot table (2026-07-17, HEAD `28648b2`) — SUPERSEDED, NOT current state.**
+> This "Field | Value" table records the 2026-07-17 `28648b2` ship. It is **older than the CURRENT
+> STATE block at the top of this file**, and its installed-build facts are STALE: the live installer
+> is now `Compy_0.9.0_x64-setup.exe` from **`75c38c6`** (SHA-256 `2F13B9F4…FCDC0AF`), per CURRENT
+> STATE. Kept for history; do NOT read the row below as the current installed artifact. Where it
+> disagrees with CURRENT STATE, CURRENT STATE wins.
+
 | Field | Value |
 |---|---|
 | Git HEAD | `28648b2` + this ship-docs commit (branch `main`, 2026-07-17 — the live installer is built from exactly `28648b2`; live stamp-verified `28648b2 · release` CLEAN via CDP `get_build_stamp` + embedded-hash byte-scan). **Chain since the previous table refresh (`d45bb1c`, 2026-07-17a):** `9c6af4b`+`094d834` (Intelligence Phase 2 — cross-session patterns · good-vs-bad investigator · evidence graph) → `cd66ce9` (Home verdict regression fix) → `7e00a06` (Intelligence Phase 3 DARK — engine + optimization simulator) → `e16b231` (Phase 3 ARM — `experiment_gate()` `false`→`true` + FE ExperimentBench, mutation-gate GO-LIVE) → `aa570d2` (build.rs `+dirty` root-anchor fix) → `4cc4ed5`/`04684e6` (Lab Optimize note rounds 1–2 — reversibility invariant, bug→guard) → `28648b2` (HUD byte-identity flake fix, HEAD at build); see the top Snapshot banners for each. **Prior refresh chain (`b968f0a`→`d45bb1c`, 2026-07-16→17a):** `3455782` (leftovers restore ARMED — Optimization Cleanup Phase 1 mutation-gate flip) → `27bc472` (version 0.1.0 → 0.9.0, owner call) → `c8c9cdc`/`dca1bc9`/`0078f70` (0.9.0 ship-docs · ship-reinstall BOM guard · auto-deploy-cancel decree) → `8f612d2` (Intelligence Phase 1 foundation + What-Changed slice) → `d45bb1c` (game-name display class sweep, HEAD at build); see the top Snapshot banners for each. **Older chain (`86ecad1`→`b968f0a`):** `4bf2a91` (`--run-elevated` boundary-side guard, 2026-07-15 re-cut) → `50b505e`/`f4b4ada`/`40bce4e`/`f160839` (console trains 1–4 default-ON + overlay backdrop fix, 2026-07-15f ship) → site-lane commits (site-only) → `92596d6`/`47300d9`/`b2d775d`/`d0392c9` (palette 8+7 rework · gradient-ink de-slop · UI-vision doc fix · nav-mount cost fix) → `b968f0a` (site-only, HEAD at build); see the top Snapshot banners for each. Older chain (`72fa005`→`86ecad1`): `8a9ab76` (accent palette 10→20) → `8e6920f` (pruned 20→15) → `cc9adb8` (dark-accent-as-TEXT legibility) → `530ef8b` (Monitor v5 "frametime" gloss) → `c80678f`/`2b64c51` (dead-code cleanup + readiness fix) → `18272be` (`compy_room_identity` + `compy_blackbook_console` **GRADUATED DEFAULT-ON**, 15-swatch duo palette, A+B Blackbook Receipts Strip + sentence rows, Home-rig accent-scope fix) → `86ecad1` (this ship: tooltip overpaint + unreachable tooltip link + dead deep-link scroll); see the top Snapshot banners for each. |
@@ -1131,10 +1145,10 @@
 
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
-| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:511` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **GAMING_MODE_QA.md live checklist 10/10 PASSED 2026-07-14** (#4/#10 owner-run 2026-07-07; #6/#7 real-UAC cancel arms owner-clicked on `db5349e` after that run forced the runas-decline fix — see the QA doc's runas note). **Owner SIGNED OFF 2026-07-14** — F1 is field-proven for 1.0. |
+| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:518` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **GAMING_MODE_QA.md live checklist 10/10 PASSED 2026-07-14** (#4/#10 owner-run 2026-07-07; #6/#7 real-UAC cancel arms owner-clicked on `db5349e` after that run forced the runas-decline fix — see the QA doc's runas note). **Owner SIGNED OFF 2026-07-14** — F1 is field-proven for 1.0. |
 | **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2029` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. UI in `GamingMode.tsx`. Since T6 (2026-07-07) session-start suspends ride the ONE batched elevation; since T6b (2026-07-08, `bdc9daa`) the restore side batches the same way. |
 | **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2102` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170`, `lib.rs:691`, `Benchmark.tsx:193` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170`, `lib.rs:699`, `Benchmark.tsx:193` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal (Phase-B "bloat removal")** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2251` | Built dark 2026-07-06 on the owner's nod (spec `2026-07-06-preload-app-removal-dark.md`). Per-user `Remove-AppxPackage` over a curated 4-app starter list (Solitaire · Feedback Hub · News · Office hub — **Spotify cut by owner curation 2026-07-06:** same package id as a real daily-driver install, no honest "stub" framing; may return behind a usage check); two-tier honest undo (silent re-register verified by re-read, else Store-page hand-off returning Err). Scope decisions: `HKCU\Run` DELETION dropped (the reversible disable already ships, `set_startup_entry_enabled`); Clipchamp/To Do excluded as data-adjacent. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs: live remove→reinstall QA (`qa_remove_then_reinstall_round_trip`) + every Store ProductId link-verified + owner curates the final list + sign-off. |
 | **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs` | Built dark 2026-07-09 on the owner's nod (marathon §2a, spec `2026-07-08-lab-proving-ground.md`). Applies the whole safe stack in ONE UAC (reuses the audited `apply_recommendations_batch` — **no new mutation primitive**), measures the cumulative fps delta, then rolls back EXACTLY the changes it created via a multi-change Drop-guard (ledger id-diff; corrupt-ledger read ABORTS before any mutation — rust-tauri-reviewer fix). Commands `start_stack_trial` + `stack_trial_armed` refuse/return false while dark; no FE surface yet. Arming needs: live apply→rollback QA on a real rig + owner sign-off. |
 | **Experiment engine + optimization simulator (Intelligence Phase 3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:55` | Armed after owner sign-off "Ship it live now" + a live apply→rollback round-trip on this rig (benign reversible rec, clean ledger restore). ORCHESTRATES the audited mutation boundary — **no new apply/rollback primitive, no enum variant**: `start_experiment` (`experiment.rs:473`) applies ONE reversible change via `history::apply_recommendation`, auto-restores via `history::rollback_change`, resolve stays history-only. Every command still hard-checks the gate (defense-in-depth, now unreachable). Simulator `build_sim_context` (`experiment.rs:705`) reads the real hardware-tailored catalog READ-ONLY; unknown rec ⇒ honest insufficient-evidence, never a fabricated verdict. FE `ExperimentBench` mounted in `LabGround.tsx` (Lab room). |
@@ -1157,7 +1171,7 @@
   `ps_safe`/`ps_safe_squoted`. Boundary-side second lock (2026-07-15): the helper runs ONLY hex
   byte-matching the one-time dispatch ticket minted at `run_elevated_powershell`, consumed before
   execution (`mint_elevation_ticket` `actions.rs:1149` · `consume_elevation_ticket` `actions.rs:1171`
-  · `run_elevated_helper` `lib.rs:69`).
+  · `run_elevated_helper` `lib.rs:76`).
 - Gaming-session advanced tier (USB + PCIe + service suspends) batches to **ONE elevation per
   session start** (T6, 2026-07-07) — and since T6b (`bdc9daa`, 2026-07-08) the restore side
   batches contiguous elevated rollbacks the same way: sink-staged → `compose_batch_script` → single

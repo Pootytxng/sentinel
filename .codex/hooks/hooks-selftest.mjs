@@ -1,33 +1,33 @@
 #!/usr/bin/env node
-// Codex hook self-test (2026-07-19, portability/lane-hardening train).
+// Codex hook self-test (corrective follow-up 2026-07-20).
 //
-// Purpose: DEMONSTRATE — not merely assert on paper — that the six hooks in this directory
-// behave as documented, using nothing but harmless, local, read-only-to-the-repo operations:
-//   * reminder / context delivery      → self-review-reminder, ship-reminder, subagent-throttle,
-//                                         context-size-advisor emit additionalContext / a block
-//                                         reason on their trigger inputs, and stay silent otherwise.
-//   * narrow denial                     → subagent-model-guard DENIES only a non-exception
-//                                         non-sonnet override (opus + non-web-design-director,
-//                                         fable at all) and ALLOWS the documented exception + the
-//                                         default (sonnet/haiku/no-override).
-//   * stop behavior                     → stop-continue ALLOWS the stop when autopilot is disarmed
-//                                         (no state file) and when stop_hook_active is already set.
-//   * no Compy / Windows mutation       → the whole run leaves `git status --porcelain` byte-identical
-//                                         (no repo write) and every hook side effect lands only under
-//                                         the OS temp dir (throttle/checkpoint markers), never the
-//                                         repo, registry, services, or any Windows state.
+// Scope: the Codex lane now retains exactly ONE hook — self-review-reminder.mjs, a PostToolUse hook
+// matched on the Codex-native `apply_patch` tool name. The five Claude-lane hooks (stop-continue,
+// ship-reminder, subagent-model-guard, subagent-throttle, context-size-advisor) were REMOVED as
+// not-Codex-native and/or not-read-only, so their tests are gone; this test also asserts they stay
+// gone (out of hooks.json and off disk).
 //
-// This exercises the SCRIPTS. It does NOT and CANNOT exercise Codex's own hook runtime (how Codex
-// resolves the shell, cwd, env, and matcher regex for each event) — that lives in Codex, not here.
-// So a green run proves the hook logic is correct and harmless; it does not prove "the Codex
-// failsafes are active." Only Codex running these hooks live proves that.
+// This exercises the hook TWO ways:
+//   (A) direct node invocation with Codex-shaped fixtures — apply_patch payloads that carry the edit
+//       in `tool_input.command` (string AND arg-array), plus the `tool_input.file_path` fallback
+//       shape — proving the parse/throttle logic.
+//   (B) the EXACT `commandWindows` string configured in hooks.json, run THROUGH the Windows command
+//       runner (cmd.exe, via a shell), because "the node script works" and "the configured command
+//       line works on Windows" are different claims — (B) catches a broken path/quoting in the config
+//       that (A) would sail past. On a non-Windows host the POSIX `command` is run through the shell
+//       instead, and the leg says so.
+//
+// HONESTY BOUND (strengthened): a green run proves this script's parse/throttle logic and that the
+// configured Windows command line resolves + emits its advisory. It does NOT and CANNOT prove that
+// Codex activates this hook in-product — how Codex resolves the event, matcher regex, cwd, and stdin
+// lives in Codex's runtime, not here. Only a trusted Codex runtime run proves in-product activation.
+// Do not read a green self-test as "the Codex failsafe is active."
 //
 // Run:  node .codex/hooks/hooks-selftest.mjs      (exit 0 = all pass, exit 1 = a check failed)
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HOOKS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -48,23 +48,31 @@ function check(name, cond, detail = "") {
   }
 }
 
-// A fresh, filesystem-safe session id per invocation so each hook's tmpdir throttle marker starts
-// clean and the trigger fires deterministically (markers are the whole point of "tmpdir only").
+// A fresh, filesystem-safe session id per fire so the hook's tmpdir throttle marker starts clean and
+// the trigger fires deterministically (the throttle keys off session_id).
 let seq = 0;
 const sid = () => `selftest-${process.pid}-${Date.now()}-${seq++}`;
 
-// Run a hook script as Codex would: pipe a JSON event on stdin, read stdout. Returns {stdout,status}.
-function runHook(script, payload, envOverrides = {}) {
-  const r = spawnSync(process.execPath, [join(HOOKS_DIR, script)], {
+// Codex-shaped apply_patch bodies. apply_patch carries the edit as a patch envelope whose file
+// headers are `*** Update/Add/Delete/Move File: <path>`. A UI edit touches src/**/*.{tsx,css}.
+const APPLY_UI_TSX =
+  "*** Begin Patch\n*** Update File: src/surfaces/home/HomeHud.tsx\n@@\n-const a = 1;\n+const a = 2;\n*** End Patch";
+const APPLY_UI_CSS =
+  "*** Begin Patch\n*** Update File: src/theme.css\n@@\n-.a{color:red}\n+.a{color:blue}\n*** End Patch";
+const APPLY_BACKEND =
+  "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-let a = 1;\n+let a = 2;\n*** End Patch";
+
+// Run self-review-reminder.mjs directly under node with a JSON event on stdin. Returns {stdout,status}.
+function runHook(payload) {
+  const r = spawnSync(process.execPath, [join(HOOKS_DIR, "self-review-reminder.mjs")], {
     input: JSON.stringify(payload),
     encoding: "utf8",
     cwd: REPO_ROOT,
-    env: { ...process.env, ...envOverrides },
   });
-  return { stdout: r.stdout || "", status: r.status, stderr: r.stderr || "" };
+  return { stdout: r.stdout || "", status: r.status };
 }
 function parse(stdout) {
-  const line = stdout.trim().split("\n").filter(Boolean).pop();
+  const line = (stdout || "").trim().split("\n").filter(Boolean).pop();
   if (!line) return null;
   try {
     return JSON.parse(line);
@@ -72,160 +80,158 @@ function parse(stdout) {
     return null;
   }
 }
+const fires = (out) => /self-review discipline/.test(parse(out)?.hookSpecificOutput?.additionalContext || "");
 
-// Snapshot the repo working tree so we can PROVE the run mutated nothing tracked/untracked in it.
-function gitStatus() {
-  return spawnSync("git", ["status", "--porcelain"], { cwd: REPO_ROOT, encoding: "utf8" }).stdout;
-}
+// Snapshot the working tree so we can PROVE the run mutated nothing tracked/untracked in the repo.
+const gitStatus = () =>
+  spawnSync("git", ["status", "--porcelain"], { cwd: REPO_ROOT, encoding: "utf8" }).stdout;
 const statusBefore = gitStatus();
 
 process.stdout.write("\n== Codex hook self-test ==\n");
 process.stdout.write(`repo root: ${REPO_ROOT}\n`);
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[1] subagent-model-guard.mjs — narrow denial (deny only non-exception non-sonnet)\n");
+process.stdout.write("\n[1] self-review-reminder — Codex apply_patch fixtures (tool_input.command)\n");
 {
-  const deny1 = parse(runHook("subagent-model-guard.mjs", { tool_input: { model: "opus", subagent_type: "general-purpose" } }).stdout);
-  check("opus + general-purpose is DENIED", deny1?.hookSpecificOutput?.permissionDecision === "deny", JSON.stringify(deny1));
+  const strTsx = runHook({ session_id: sid(), tool_input: { command: APPLY_UI_TSX } });
+  check("apply_patch command (string) touching a src/*.tsx fires the reminder", fires(strTsx.stdout));
 
-  const deny2 = parse(runHook("subagent-model-guard.mjs", { tool_input: { model: "fable", subagent_type: "web-design-director" } }).stdout);
-  check("fable is DENIED even for web-design-director (fable never)", deny2?.hookSpecificOutput?.permissionDecision === "deny");
+  const strCss = runHook({ session_id: sid(), tool_input: { command: APPLY_UI_CSS } });
+  check("apply_patch command touching a src/*.css fires the reminder", fires(strCss.stdout));
 
-  const allow1 = runHook("subagent-model-guard.mjs", { tool_input: { model: "opus", subagent_type: "web-design-director" } });
-  check("opus + web-design-director is ALLOWED (documented exception, silent)", parse(allow1.stdout) === null && allow1.status === 0);
+  const arr = runHook({ session_id: sid(), tool_input: { command: ["apply_patch", APPLY_UI_TSX] } });
+  check("apply_patch command as an arg-array (joined + scanned) fires the reminder", fires(arr.stdout));
 
-  const allow2 = runHook("subagent-model-guard.mjs", { tool_input: { model: "sonnet", subagent_type: "general-purpose" } });
-  check("sonnet default is ALLOWED (silent)", parse(allow2.stdout) === null && allow2.status === 0);
-
-  const allow3 = runHook("subagent-model-guard.mjs", { tool_input: { subagent_type: "general-purpose" } });
-  check("no model override is ALLOWED (governed elsewhere, silent)", parse(allow3.stdout) === null && allow3.status === 0);
+  const shape = parse(strTsx.stdout)?.hookSpecificOutput || {};
+  check(
+    "emits a PostToolUse additionalContext, never a deny/permissionDecision",
+    shape.hookEventName === "PostToolUse" && !("permissionDecision" in shape)
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[2] subagent-throttle.mjs — advisory reminder on the 3rd spawn, never a block\n");
+process.stdout.write("\n[2] self-review-reminder — file_path fallback + non-UI silence\n");
+{
+  const rel = runHook({ session_id: sid(), tool_input: { file_path: "src/App.tsx" } });
+  check("repo-relative file_path src/*.tsx fires (fallback shape)", fires(rel.stdout));
+
+  const abs = runHook({ session_id: sid(), tool_input: { file_path: `${REPO_ROOT}/src/App.tsx` } });
+  check("absolute file_path src/*.tsx fires (fallback shape)", fires(abs.stdout));
+
+  const backend = runHook({ session_id: sid(), tool_input: { command: APPLY_BACKEND } });
+  check("a backend-only apply_patch (src-tauri/src/lib.rs) is SILENT", parse(backend.stdout) === null && backend.status === 0);
+
+  const empty = runHook({ session_id: sid(), tool_input: {} });
+  check("an apply_patch with no path in the payload is SILENT (fails safe, no false nag)", parse(empty.stdout) === null && empty.status === 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+process.stdout.write("\n[3] self-review-reminder — per-session throttle (advisory, at most once / 15 min)\n");
 {
   const s = sid();
-  const r1 = parse(runHook("subagent-throttle.mjs", { session_id: s, tool_input: {} }).stdout);
-  const r2 = parse(runHook("subagent-throttle.mjs", { session_id: s, tool_input: {} }).stdout);
-  const r3 = parse(runHook("subagent-throttle.mjs", { session_id: s, tool_input: {} }).stdout);
-  check("spawns 1 and 2 are silent (below threshold)", r1 === null && r2 === null);
-  check("spawn 3 delivers additionalContext (SUBAGENT COUNT CHECK)", /SUBAGENT COUNT CHECK/.test(r3?.hookSpecificOutput?.additionalContext || ""));
-  check("throttle NEVER denies — permissionDecision stays allow", r3?.hookSpecificOutput?.permissionDecision === "allow");
+  const first = runHook({ session_id: s, tool_input: { command: APPLY_UI_TSX } });
+  const second = runHook({ session_id: s, tool_input: { command: APPLY_UI_TSX } });
+  check("first UI edit in a session fires", fires(first.stdout));
+  check("an immediate second UI edit in the SAME session is throttled (silent)", parse(second.stdout) === null);
 }
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[3] self-review-reminder.mjs — fires on a UI file, silent on non-UI\n");
+process.stdout.write("\n[4] hooks.json — single retained hook, commandWindows present, removed hooks GONE\n");
+const REMOVED = ["stop-continue", "ship-reminder", "subagent-model-guard", "subagent-throttle", "context-size-advisor"];
+let cfg = null;
+let winCmd = null;
+let posixCmd = null;
 {
-  // Repo-relative path (Codex-style) — exercises the portability broadening in the hook's regex.
-  const ui = parse(runHook("self-review-reminder.mjs", { session_id: sid(), tool_input: { file_path: "src/App.tsx" } }).stdout);
-  check("repo-relative src/*.tsx edit delivers the self-review additionalContext", /self-review/.test(ui?.hookSpecificOutput?.additionalContext || ""));
-  // Absolute path (Claude-style) — the same hook must still fire.
-  const uiAbs = parse(runHook("self-review-reminder.mjs", { session_id: sid(), tool_input: { file_path: `${REPO_ROOT}/src/App.tsx` } }).stdout);
-  check("absolute src/*.tsx edit delivers the self-review additionalContext", /self-review/.test(uiAbs?.hookSpecificOutput?.additionalContext || ""));
-  check("it is a PostToolUse additionalContext, never a deny/block", ui?.hookSpecificOutput?.hookEventName === "PostToolUse" && !("permissionDecision" in (ui?.hookSpecificOutput || {})));
+  const hooksJsonPath = join(HOOKS_DIR, "..", "hooks.json");
+  const raw = readFileSync(hooksJsonPath, "utf8");
+  try {
+    cfg = JSON.parse(raw);
+  } catch (e) {
+    check("hooks.json parses as JSON", false, String(e));
+  }
+  if (cfg) {
+    check("hooks.json parses as JSON", true);
 
-  const backend = runHook("self-review-reminder.mjs", { session_id: sid(), tool_input: { file_path: "src-tauri/src/lib.rs" } });
-  check("a non-UI (.rs) edit is silent", parse(backend.stdout) === null && backend.status === 0);
+    // Flatten every configured command entry.
+    const entries = [];
+    for (const event of Object.values(cfg.hooks || {})) {
+      for (const group of event) {
+        for (const h of group.hooks || []) entries.push({ ...h, matcher: group.matcher });
+      }
+    }
+    check("exactly ONE hook entry is configured (the retained self-review reminder)", entries.length === 1, `found ${entries.length}`);
+
+    const e0 = entries[0] || {};
+    check("the retained hook matches the Codex-native `apply_patch` tool name", e0.matcher === "apply_patch", String(e0.matcher));
+    check('the retained hook is type "command" (the only executed type)', e0.type === "command");
+    check("the retained hook targets self-review-reminder.mjs", /self-review-reminder\.mjs/.test(`${e0.command} ${e0.commandWindows}`));
+
+    // Every configured hook MUST carry both a POSIX command and a native-Windows commandWindows.
+    check("every configured hook has a POSIX `command`", entries.every((e) => typeof e.command === "string" && e.command.length > 0));
+    check("every configured hook has a native-Windows `commandWindows`", entries.every((e) => typeof e.commandWindows === "string" && e.commandWindows.length > 0));
+
+    winCmd = e0.commandWindows;
+    posixCmd = e0.command;
+
+    // No hardcoded workstation path, no Claude-only env token, and none of the removed hooks linger.
+    const allCmds = entries.flatMap((e) => [e.command, e.commandWindows].filter(Boolean));
+    check("no configured command references a hardcoded workstation path", !allCmds.some((c) => /[A-Za-z]:\\Users|\/Users\//.test(c)));
+    check("no residual ${CLAUDE_PROJECT_DIR} (not a Codex contract)", !allCmds.some((c) => c.includes("CLAUDE_PROJECT_DIR")));
+    check(
+      "no removed hook is still referenced in hooks.json",
+      !REMOVED.some((name) => raw.includes(`${name}.mjs`)),
+      REMOVED.filter((n) => raw.includes(`${n}.mjs`)).join(", ")
+    );
+  }
 }
-
-// ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[4] ship-reminder.mjs — fires on a tauri build, silent on other bash\n");
+// The removed hook scripts must also be gone from disk.
 {
-  const build = parse(runHook("ship-reminder.mjs", { session_id: sid(), tool_input: { command: "npm run tauri build" } }).stdout);
-  check("`tauri build` delivers the ship-law additionalContext", /ship LAW/.test(build?.hookSpecificOutput?.additionalContext || ""));
-
-  const other = runHook("ship-reminder.mjs", { session_id: sid(), tool_input: { command: "git status" } });
-  check("an unrelated bash command is silent", parse(other.stdout) === null && other.status === 0);
+  const stillOnDisk = REMOVED.filter((name) => existsSync(join(HOOKS_DIR, `${name}.mjs`)));
+  check("every removed hook script is deleted from disk", stillOnDisk.length === 0, stillOnDisk.join(", "));
 }
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[5] stop-continue.mjs — allows the stop when disarmed / already continuing\n");
+process.stdout.write("\n[5] configured command line through the SHELL command runner (not node directly)\n");
 {
-  // No .codex/autopilot.json → disarmed → must ALLOW (never emit decision:block).
-  const disarmedPath = join(HOOKS_DIR, "..", "autopilot.json");
-  const disarmed = runHook("stop-continue.mjs", { session_id: sid() });
-  const disarmedOut = parse(disarmed.stdout);
-  check("disarmed (no autopilot.json present) ALLOWS the stop", !existsSync(disarmedPath) && (disarmedOut === null || disarmedOut.decision !== "block") && disarmed.status === 0);
-
-  const active = runHook("stop-continue.mjs", { session_id: sid(), stop_hook_active: true });
-  const activeOut = parse(active.stdout);
-  check("stop_hook_active=true ALLOWS the stop (never loops)", (activeOut === null || activeOut.decision !== "block") && active.status === 0);
+  // Run the ACTUAL command string from hooks.json via a shell — on Windows that is cmd.exe (the
+  // native command runner the `commandWindows` field exists for); elsewhere it is /bin/sh with the
+  // POSIX `command`. This proves the configured line (path + quoting) actually resolves and emits,
+  // which invoking node on the .mjs directly (sections [1]-[3]) does not establish.
+  const onWindows = process.platform === "win32";
+  const cmdLine = onWindows ? winCmd : posixCmd;
+  if (!cmdLine) {
+    check("a configured command line was available to run through the shell", false, "no command in hooks.json");
+  } else {
+    const r = spawnSync(cmdLine, {
+      shell: true, // Windows → %ComSpec% (cmd.exe); POSIX → /bin/sh. This IS the command runner.
+      cwd: REPO_ROOT,
+      input: JSON.stringify({ session_id: sid(), tool_input: { command: APPLY_UI_TSX } }),
+      encoding: "utf8",
+    });
+    check(
+      `configured ${onWindows ? "commandWindows (cmd.exe)" : "command (/bin/sh)"} fires on a UI apply_patch`,
+      fires(r.stdout || ""),
+      `status=${r.status} stderr=${(r.stderr || "").trim()}`
+    );
+    process.stdout.write(
+      `  note: ran \`${cmdLine}\` via ${onWindows ? "cmd.exe" : "/bin/sh"} — a shell-runner PASS proves the ` +
+        "configured line resolves + emits; it still does NOT prove Codex activates the hook in-product.\n"
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[6] context-size-advisor.mjs — silent under threshold, checkpoint block over it\n");
-{
-  // Under threshold / no transcript → silent, harmless.
-  const empty = runHook("context-size-advisor.mjs", { session_id: sid() });
-  check("no transcript_path → silent (advisory, never breaks a stop)", parse(empty.stdout) === null && empty.status === 0);
-
-  const looping = runHook("context-size-advisor.mjs", { session_id: sid(), stop_hook_active: true });
-  check("stop_hook_active=true → silent (never loops)", parse(looping.stdout) === null && looping.status === 0);
-
-  // Over threshold: build a fake transcript in the OS temp dir (NOT the repo) whose last assistant
-  // usage exceeds the warn line, and confirm the hook emits a checkpoint block. All reads of repo
-  // docs inside the hook are stat-only (read-only); its only writes are tmpdir markers.
-  const scratch = mkdtempSync(join(tmpdir(), "compy-hooks-selftest-"));
-  const fakeTranscript = join(scratch, "transcript.jsonl");
-  writeFileSync(
-    fakeTranscript,
-    JSON.stringify({ type: "assistant", message: { usage: { input_tokens: 200000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }) + "\n"
-  );
-  const over = parse(
-    runHook(
-      "context-size-advisor.mjs",
-      { session_id: sid(), transcript_path: fakeTranscript },
-      { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "150000", CLAUDE_PROJECT_DIR: REPO_ROOT }
-    ).stdout
-  );
-  check("~200k live context emits a CONTEXT CHECKPOINT block", over?.decision === "block" && /CONTEXT CHECKPOINT/.test(over?.reason || ""));
-  // The checkpoint's job is persist-to-disk + let native auto-compact refresh — NOT stop the work or
-  // run the old owner-paste flow. (The reason text mentions "paste"/"clear" only inside "do NOT …"
-  // instructions, so assert the genuine positive properties, not naive substring absence.)
-  const reason = over?.reason || "";
-  check(
-    "the checkpoint tells the model to persist to disk and lets auto-compact refresh (no stop)",
-    /persist the working state to disk/.test(reason) && /auto-compact/.test(reason) && /do NOT stop the work/i.test(reason)
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[7] no repo mutation — the whole run left the working tree byte-identical\n");
+process.stdout.write("\n[6] no repo mutation — the whole run left the working tree byte-identical\n");
 {
   const statusAfter = gitStatus();
   check("git status --porcelain unchanged across the entire self-test", statusAfter === statusBefore, statusAfter === statusBefore ? "" : "working tree changed");
 }
 
 // ---------------------------------------------------------------------------------------------
-process.stdout.write("\n[8] hooks.json is valid and every referenced script exists\n");
-{
-  const hooksJsonPath = join(HOOKS_DIR, "..", "hooks.json");
-  let cfg = null;
-  try {
-    cfg = JSON.parse(readFileSync(hooksJsonPath, "utf8"));
-  } catch (e) {
-    check("hooks.json parses as JSON", false, String(e));
-  }
-  if (cfg) {
-    check("hooks.json parses as JSON", true);
-    const cmds = [];
-    for (const event of Object.values(cfg.hooks || {})) {
-      for (const group of event) {
-        for (const h of group.hooks || []) {
-          if (h.command) cmds.push(h.command);
-        }
-      }
-    }
-    check("every hook command node-invokes a .mjs under .codex/hooks", cmds.length > 0 && cmds.every((c) => /\.codex\/hooks\/[\w-]+\.mjs/.test(c)));
-    const referenced = cmds.map((c) => c.match(/\.codex\/hooks\/([\w-]+\.mjs)/)?.[1]).filter(Boolean);
-    const missing = referenced.filter((f) => !existsSync(join(HOOKS_DIR, f)));
-    check("every referenced hook script file exists on disk", missing.length === 0, missing.join(", "));
-    check("no hook command references a hardcoded workstation path", !cmds.some((c) => /[A-Za-z]:\\|Users[\\/]/.test(c)));
-    check("no residual ${CLAUDE_PROJECT_DIR} (not a Codex contract)", !cmds.some((c) => c.includes("CLAUDE_PROJECT_DIR")));
-  }
-}
-
-// ---------------------------------------------------------------------------------------------
+process.stdout.write(
+  "\nReminder: this proves the retained hook's LOGIC and that its configured command line runs. It " +
+    "does NOT prove the hook is active inside a real Codex session — only a trusted Codex runtime run does.\n"
+);
 process.stdout.write(`\n== ${failed === 0 ? "PASS" : "FAIL"}: ${passed} checks passed, ${failed} failed ==\n`);
 if (failed > 0) {
   process.stdout.write("Failures:\n" + fails.map((f) => `  - ${f}`).join("\n") + "\n");

@@ -6,12 +6,13 @@
 //! flagged by anti-cheat). So Compy never reads it directly — it only **displays** what a tool
 //! the user already chose to install is publishing.
 //!
-//! Sources (read-only, no driver in Compy): the LibreHardwareMonitor / OpenHardwareMonitor WMI
-//! namespaces (present only while that app is running). Returns `None` when nothing is publishing —
-//! the honest "bring your own monitor" default; never a fabricated number.
-//!
-//! (HWiNFO exposes a shared-memory block instead of WMI; wiring that is a documented follow-up that
-//! needs a live HWiNFO to validate the struct layout, so it's intentionally not shipped unverified.)
+//! Sources (all read-only interop, NO driver in Compy), tried in order by `read_cpu_temp_inner`:
+//!   1. **HWiNFO** — its `Global\HWiNFO_SENS_SM2` shared-memory sensor block (most common with
+//!      gamers), mapped read-only via `OpenFileMappingW`/`MapViewOfFile` (`read_hwinfo`, tried FIRST).
+//!   2. **LibreHardwareMonitor / OpenHardwareMonitor** — their WMI namespaces (`read_ohm`).
+//! Each source exists only while that app is running. When NOTHING is publishing a value the CPU
+//! temp is **unknown** — `read_cpu_temp` returns `None`, the honest "bring your own monitor" default;
+//! Compy never fabricates a number.
 
 use serde::{Deserialize, Serialize};
 

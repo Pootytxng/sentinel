@@ -13,7 +13,7 @@ mod comparison; // M4 cross-session comparison engine (arm → finalize-delta �
 mod game_state; // Measurement Platform 2.0 (Task E) — additive per-session GameStateFingerprint (the honest conditions a session ran under; collects only provable fields, infers nothing).
 mod drift; // Drift Watch — notices readiness checks that were good and regressed (outside Compy).
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
-mod cpu_temp; // CPU temp via interop with a user-installed monitor (LHM/OHM) — driver-free.
+mod cpu_temp; // CPU temp via interop with a user-installed monitor (HWiNFO/LHM/OHM) — driver-free.
 mod diagnostics;
 mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
 mod export;
@@ -666,8 +666,9 @@ fn cancel_benchmark() {
     benchmark::cancel_benchmark();
 }
 
-// CPU temp via interop with a user-installed monitor (LHM/OHM). None when none is running —
-// Compy never reads it directly (no kernel driver). See cpu_temp.rs.
+// CPU temp via interop with a user-installed monitor (HWiNFO shared memory, tried first, then
+// LHM/OHM WMI). None when none is running — Compy never reads it directly (no kernel driver);
+// no published value means unknown, never fabricated. See cpu_temp.rs.
 #[tauri::command]
 fn get_cpu_temp() -> Option<cpu_temp::CpuTemp> {
     cpu_temp::read_cpu_temp()
@@ -1203,6 +1204,90 @@ mod safety_tests {
             "the bare `:(exclude)docs` pathspec is CWD-relative from src-tauri/ and re-introduces \
              the 2026-07-17 false-`+dirty` bug — keep the `top` magic"
         );
+    }
+
+    // §C build stamp — the dirty predicate must actually FLIP on an unstaged working-tree edit.
+    // build.rs bakes `COMPY_GIT_DIRTY` from EXACTLY `git status --porcelain -- :(exclude,top)docs`.
+    // This drives that predicate end-to-end through a hermetic throwaway repo and proves the full
+    // clean → unstaged-dirty → clean cycle — the exact case the OLD rerun watch (`.git/HEAD` +
+    // `.git/index` only) let go stale, since an unstaged edit touches neither .git path. Git
+    // unavailable ⇒ skip (build.rs itself degrades to "nogit"), so the suite stays hermetic and CI
+    // without git still passes. Runs entirely under the OS temp dir — never mutates THIS repo.
+    #[test]
+    fn build_dirty_predicate_flips_on_unstaged_change() {
+        use std::process::Command;
+
+        // Unique throwaway repo, isolated from this repo AND the global git config.
+        let uniq = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let repo = std::env::temp_dir().join(format!("compy-dirty-guard-{uniq}"));
+        let _ = std::fs::remove_dir_all(&repo);
+        if std::fs::create_dir_all(&repo).is_err() {
+            return; // can't stage a temp dir → skip (asserts nothing)
+        }
+
+        // git bound to the temp repo with a hermetic identity: no signing, no CRLF munging, so the
+        // predicate reads the same on any machine.
+        let git = |args: &[&str]| -> Option<std::process::Output> {
+            Command::new("git")
+                .args([
+                    "-c", "user.name=compy-test",
+                    "-c", "user.email=compy-test@example.invalid",
+                    "-c", "commit.gpgsign=false",
+                    "-c", "core.autocrlf=false",
+                    "-c", "core.safecrlf=false",
+                    "-c", "init.defaultBranch=main",
+                ])
+                .args(args)
+                .current_dir(&repo)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+        };
+
+        // Git absent/unusable ⇒ skip cleanly (mirrors build.rs's own "nogit" tolerance).
+        if git(&["init"]).is_none() {
+            let _ = std::fs::remove_dir_all(&repo);
+            return;
+        }
+
+        let tracked = repo.join("tracked.rs");
+        std::fs::write(&tracked, "// v1\n").expect("write v1");
+        assert!(git(&["add", "tracked.rs"]).is_some(), "git add");
+        assert!(git(&["commit", "-m", "init"]).is_some(), "git commit");
+
+        // The EXACT predicate build.rs bakes into COMPY_GIT_DIRTY: dirty ⇔ non-empty porcelain.
+        let is_dirty = || -> bool {
+            let out = git(&["status", "--porcelain", "--", ":(exclude,top)docs"])
+                .expect("git status");
+            !out.stdout.is_empty()
+        };
+
+        // 1. Freshly committed tree reads clean.
+        assert!(!is_dirty(), "a freshly-committed tree must read clean (dirty=0)");
+        // 2. UNSTAGED edit to a compiled input flips it dirty — the case that used to go stale.
+        std::fs::write(&tracked, "// v2 unstaged edit\n").expect("write v2");
+        assert!(is_dirty(), "an unstaged working-tree edit must read dirty (dirty=1)");
+        // 3. Reverting the edit returns it to clean.
+        assert!(git(&["checkout", "--", "tracked.rs"]).is_some(), "git checkout --");
+        assert!(!is_dirty(), "reverting the edit must read clean again (dirty=0)");
+
+        // Pin that the predicate exercised here is the one build.rs actually ships (shape, not
+        // formatting): both defining tokens must be present in build.rs.
+        let build_src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/build.rs"))
+            .expect("read build.rs");
+        assert!(
+            build_src.contains("--porcelain") && build_src.contains(":(exclude,top)docs"),
+            "the git-status command under test must match build.rs's COMPY_GIT_DIRTY predicate"
+        );
+
+        let _ = std::fs::remove_dir_all(&repo);
     }
 
     fn roundtrips<T>(v: &T) -> bool

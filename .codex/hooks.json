@@ -1,62 +1,18 @@
 {
+  "//": "Codex CLI lifecycle hooks for the Compy repo. Codex hooks are a Stable, default-ON system (codex-rs/features: Feature::CodexHooks). Structure per the Codex contract: hooks.<EventName>[].matcher (regex over the Codex tool name) + .hooks[] with type:\"command\" (the ONLY executed type), command (POSIX shell) and commandWindows (native cmd.exe — used verbatim on Windows). Commands are resolved from the repo root (Codex runs hooks with CWD = the workspace root), so they stay relative — no hardcoded workstation path.",
+  "//readonly": "This repo runs Codex as a READ-ONLY advisor (see AGENTS.md lane split). The single retained hook only INJECTS an advisory additionalContext string; it mutates nothing, spawns no build, and never authorizes install/ship/delete/commit. The Claude-lane automation (stop-continue, ship-reminder, subagent model/throttle guards, context-size advisor) was removed 2026-07-20 as not-Codex-native and/or not-read-only.",
+  "//activation": "A green hooks-selftest exercises these scripts' own logic; it does NOT prove Codex activates them in-product. Only a trusted Codex runtime run proves in-product activation.",
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent-model-guard.mjs\"",
-            "timeout": 10,
-            "statusMessage": "subagent model-routing guard"
-          },
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent-throttle.mjs\"",
-            "timeout": 10,
-            "statusMessage": "subagent spawn-count check"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "apply_patch",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/self-review-reminder.mjs\"",
+            "command": "node .codex/hooks/self-review-reminder.mjs",
+            "commandWindows": "node .codex\\hooks\\self-review-reminder.mjs",
             "timeout": 10,
-            "statusMessage": "self-review reminder"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/ship-reminder.mjs\"",
-            "timeout": 10,
-            "statusMessage": "ship-law reminder"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/stop-continue.mjs\"",
-            "timeout": 20,
-            "statusMessage": "autopilot: checking task queue"
-          },
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/context-size-advisor.mjs\"",
-            "timeout": 10,
-            "statusMessage": "context-size advisor"
+            "statusMessage": "self-review reminder (advisory, read-only)"
           }
         ]
       }

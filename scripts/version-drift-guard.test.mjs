@@ -78,6 +78,12 @@ describe("Guard D — the VISIBLE app version tracks the canonical manifest, nev
     expect(appVersionLine).toBeDefined();
     expect(appVersionLine).toContain("pkg.version");
   });
+  it("APP_VERSION is EXACTLY `const APP_VERSION = pkg.version;` (the required production assignment)", () => {
+    // corrective follow-up (2026-07-20): pin the exact assignment, not merely "contains pkg.version".
+    // A form like `const APP_VERSION = pkg.version || "0.9.0";` would satisfy the looser check while
+    // smuggling a hardcoded fallback literal back into the shipped UI — this forbids that whole class.
+    expect(appVersionLine).toBe("const APP_VERSION = pkg.version;");
+  });
   it("APP_VERSION carries no hardcoded semver literal", () => {
     expect(appVersionLine).not.toMatch(/["']\d+\.\d+\.\d+["']/);
   });

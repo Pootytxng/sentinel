@@ -1,11 +1,26 @@
 #!/usr/bin/env node
-// PostToolUse(Write|Edit) hook — when a Compy UI file (src/**/*.{tsx,css}) is edited, inject a
-// reminder to run the `self-review` skill before claiming the change done. The owner asked to be made
-// "more vigilant" of the self-review law after shipping a muted button + duplicate banner (2026-06-20).
+// Codex PostToolUse(apply_patch) hook — when an apply_patch edit touches a Compy UI file
+// (src/**/*.{tsx,css}), inject a NON-BLOCKING advisory reminder to run the self-review discipline
+// before the change is claimed done. The self-review law exists because green tsc/vitest + a glance
+// once shipped a muted-on-accent button + a duplicate banner (CLAUDE.md § SELF-REVIEW + BUG→GUARD,
+// 2026-06-20). This is the SOLE hook the Codex lane retains; the Claude-lane automation
+// (stop-continue, ship-reminder, the subagent model/throttle guards, the context-size advisor) was
+// REMOVED in the corrective follow-up (2026-07-20) as not-Codex-native and/or not-read-only.
 //
-// Design: PATH-based (reads tool_input.file_path — works in any worktree, unlike a git-diff Stop hook
-// that only sees the main checkout); NON-blocking (additionalContext only — never wedges a turn);
-// throttled to ~once / 15 min per session so it nudges without spamming on every edit.
+// Codex contract this hook is written against (source-verified in codex-rs, 2026-07-20):
+//   * Matcher = the Codex tool name `apply_patch`. Codex aliases apply_patch ↔ Write/Edit
+//     (codex-rs/core/src/tools/hook_names.rs), so matching the Codex-native name is correct; we do
+//     NOT match the Claude names "Write"/"Edit" here.
+//   * Codex delivers the edit payload in `tool_input`. The EXACT field shape of apply_patch's
+//     tool_input is NOT source-verified. So this hook reads `tool_input.command` DEFENSIVELY as a
+//     generic string (apply_patch is a command-shaped tool; the patch body carries
+//     `*** Add/Update/Delete/Move File: <path>` headers) and scans it for a UI path. It asserts NO
+//     structured schema, honors `tool_input.file_path` as a fallback shape, and FAILS SILENT (no
+//     reminder) whenever it cannot positively identify a UI file — an advisory nudge must never
+//     block, and a missed nudge is acceptable where a false nudge is not.
+//
+// A green hooks-selftest proves THIS parse/throttle logic against a documented-shape fixture. It
+// does NOT prove Codex activates this hook in-product — only a trusted Codex runtime run proves that.
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,16 +29,28 @@ let data;
 try {
   data = JSON.parse(readFileSync(0, "utf8"));
 } catch {
-  process.exit(0);
+  process.exit(0); // not JSON on stdin → nothing to advise on
 }
 
-const fp = data?.tool_input?.file_path || "";
-// Match a `src/…​.{tsx,css}` UI file whether the harness passes an ABSOLUTE path (Claude Code) or a
-// REPO-RELATIVE one (Codex may) — `src` must still be a path segment, so `mysrc/x.tsx` won't false-fire.
-if (!/(^|[\\/])src[\\/].*\.(tsx|css)$/.test(fp)) process.exit(0); // only UI source files
+// Gather every string the edit payload might carry a touched path in, WITHOUT asserting a schema:
+// apply_patch's `command` (string or arg-array), plus a `file_path` fallback if a surface passes one.
+const ti = (data && data.tool_input) || {};
+const parts = [];
+if (typeof ti.command === "string") parts.push(ti.command);
+else if (Array.isArray(ti.command)) parts.push(ti.command.join("\n"));
+if (typeof ti.file_path === "string") parts.push(ti.file_path);
+const blob = parts.join("\n");
+if (!blob) process.exit(0);
 
-// Throttle: at most once per ~15 min per session (keyed by session_id).
-const sid = String(data?.session_id || "x").replace(/[^a-z0-9-]/gi, "");
+// A UI file is a `src/….{tsx,css}` path where `src` is a real path segment (so `mysrc/x.tsx` and
+// `dist/src/x.css` won't false-fire — the segment must be preceded by start/space/quote/paren/slash).
+// apply_patch headers (`*** Update File: src/App.tsx`) and a bare file_path both contain such a token,
+// so a single scan of the whole blob covers either shape with no shape assumption.
+const UI = /(^|[\s"'`(\\/])src[\\/][^\s"'`)]*\.(tsx|css)\b/;
+if (!UI.test(blob)) process.exit(0);
+
+// Throttle: at most once per ~15 min per session (keyed by session_id), tmpdir-only side effect.
+const sid = String((data && data.session_id) || "x").replace(/[^a-z0-9-]/gi, "");
 const marker = join(tmpdir(), `compy-selfreview-${sid}`);
 const NOW = Date.now();
 try {
@@ -34,17 +61,22 @@ try {
 try {
   writeFileSync(marker, String(NOW));
 } catch {
-  /* ignore */
+  /* best-effort; a failed throttle write must not block the edit */
 }
 
 const msg =
-  "UI file changed (src/**/*.{tsx,css}). Before claiming this done, run the `self-review` skill — " +
-  "which now means DISPATCH the `self-reviewer` subagent (sonnet) with the quoted ask + files/elements " +
-  "touched, and quote its SELF-REVIEW verdict block in your report. Do NOT capture or cdp-eval inline " +
-  "in this session (token law 2026-07-05: evidence stays in the worker's context). Green tsc/vitest " +
-  "are NOT a visual review (they missed the muted button + duplicate banner).";
+  "A Compy UI file (src/**/*.{tsx,css}) was edited. Before this change is claimed done, run the " +
+  "self-review discipline: actually LOOK at the rendered result at real resolution — legibility/" +
+  "contrast on colored fills, duplication vs a sibling surface, hover/empty/loading states, layout " +
+  "overflow, stale wording, and every part of the ask. This is the project self-review law " +
+  "(CLAUDE.md § SELF-REVIEW + BUG→GUARD). The read-only `self-reviewer` agent " +
+  "(.codex/agents/self-reviewer.toml) is the evidence-gatherer. Green tsc/vitest are NOT a visual " +
+  "review — they once missed a muted-on-accent button and a duplicate banner. Advisory only; nothing " +
+  "is blocked.";
 
 process.stdout.write(
-  JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: msg } }),
+  JSON.stringify({
+    hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: msg },
+  })
 );
 process.exit(0);
