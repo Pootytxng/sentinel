@@ -70,6 +70,15 @@ const APPLY_UI_CSS =
   "*** Begin Patch\n*** Update File: src/theme.css\n@@\n-.a{color:red}\n+.a{color:blue}\n*** End Patch";
 const APPLY_BACKEND =
   "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-let a = 1;\n+let a = 2;\n*** End Patch";
+// Negative fixtures for the header-anchored UI detector (corrective follow-up 2026-07-20): the
+// detector must key off the apply_patch FILE HEADER path (repo-root `src/…`), NEVER an arbitrary
+// `src/` substring anywhere in the patch text. Both of these must be SILENT:
+//   * a dist/ build artifact whose path CONTAINS "src/" but is not a repo-root src/ file, and
+//   * a backend file whose patch BODY merely mentions a frontend path in a changed/context line.
+const APPLY_DIST_CSS =
+  "*** Begin Patch\n*** Add File: dist/src/generated.css\n@@\n+.x{color:red}\n*** End Patch";
+const APPLY_BACKEND_MENTIONS_FRONTEND =
+  "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-// see src/App.tsx for the TS contract\n+// see src/App.tsx and src/theme.css for the TS contract\n*** End Patch";
 
 // Run self-review-reminder.mjs directly under node with a JSON event on stdin. Returns {stdout,status}.
 function runHook(payload) {
@@ -80,11 +89,17 @@ function runHook(payload) {
   });
   return { stdout: r.stdout || "", status: r.status };
 }
+// Oracle that MATCHES Codex: its hook output parser (codex-rs/hooks/src/engine/output_parser.rs)
+// trims the hook's ENTIRE stdout and parses it as ONE JSON value — it does NOT split lines and take
+// the last one. So parse the WHOLE trimmed stdout here. This is the corrective-follow-up fix (2026-
+// 07-20): the old last-line split MASKED a hook whose stdout carried a prefix (e.g. a cmd.exe
+// command-echo line before the JSON) — that hook JSON.parse-fails in Codex and its advisory is
+// discarded, so it must fail HERE too, not be salvaged by picking the last line.
 function parse(stdout) {
-  const line = (stdout || "").trim().split("\n").filter(Boolean).pop();
-  if (!line) return null;
+  const s = (stdout || "").trim();
+  if (!s) return null;
   try {
-    return JSON.parse(line);
+    return JSON.parse(s);
   } catch {
     return null;
   }
@@ -129,6 +144,18 @@ process.stdout.write("\n[2] self-review-reminder — file_path fallback + non-UI
 
   const backend = runHook({ session_id: sid(), tool_input: { command: APPLY_BACKEND } });
   check("a backend-only apply_patch (src-tauri/src/lib.rs) is SILENT", parse(backend.stdout) === null && backend.status === 0);
+
+  const distCss = runHook({ session_id: sid(), tool_input: { command: APPLY_DIST_CSS } });
+  check(
+    "a dist/src/*.css build artifact (path CONTAINS 'src/' but is not repo-root src/) is SILENT",
+    parse(distCss.stdout) === null && distCss.status === 0
+  );
+
+  const backendMentions = runHook({ session_id: sid(), tool_input: { command: APPLY_BACKEND_MENTIONS_FRONTEND } });
+  check(
+    "a backend apply_patch that only MENTIONS src/App.tsx in a body line is SILENT (header-anchored, not text-matched)",
+    parse(backendMentions.stdout) === null && backendMentions.status === 0
+  );
 
   const empty = runHook({ session_id: sid(), tool_input: {} });
   check("an apply_patch with no path in the payload is SILENT (fails safe, no false nag)", parse(empty.stdout) === null && empty.status === 0);
@@ -261,6 +288,34 @@ process.stdout.write("\n[5] configured command lines through their NATIVE shells
       const r = leg.run(cwd);
       check(`${leg.label} fires from ${cwdLabel}`, fires(r.stdout || ""), `status=${r.status} stderr=${(r.stderr || "").trim()}`);
     }
+  }
+
+  // §P0 (corrective follow-up 2026-07-20) — the WINDOWS leg's stdout must be Codex-parseable: the
+  // WHOLE trimmed stdout is EXACTLY one JSON object, with NO cmd.exe command-echo prefix ahead of it.
+  // This is the defect the old last-line-split oracle masked. Under default ECHO ON, `for /f … do
+  // node …` echoes the expanded do-body (`C:\…>node "…"`) before the JSON, so JSON.parse(whole
+  // stdout) throws and Codex discards the advisory. `@echo off &` + a leading `@` on the do-command
+  // suppress it. The `fires()` checks above now use the whole-stdout oracle and so already fail on a
+  // prefix; this asserts the property DIRECTLY and un-maskably (whole-JSON + no echo token).
+  if (winCmd && process.platform === "win32") {
+    const r = spawnSync(winCmd, { shell: true, cwd: REPO_ROOT, input: EVENT(), encoding: "utf8" });
+    const raw = (r.stdout || "").trim();
+    let whole = null;
+    try {
+      whole = JSON.parse(raw);
+    } catch {
+      whole = null;
+    }
+    check(
+      "commandWindows stdout is EXACTLY one JSON object (whole trimmed stdout parses — Codex's contract)",
+      whole !== null && typeof whole === "object",
+      whole === null ? `whole stdout did not parse as JSON: ${JSON.stringify(raw.slice(0, 120))}` : ""
+    );
+    check(
+      "commandWindows stdout carries NO cmd.exe command-echo prefix before the JSON",
+      raw.startsWith("{") && !/>\s*node\b/i.test(raw) && !/rev-parse/i.test(raw),
+      raw.startsWith("{") ? "" : `stdout begins with a non-JSON prefix: ${JSON.stringify(raw.slice(0, 80))}`
+    );
   }
 
   // Negative control — a DELIBERATELY CWD-relative command must fire from the repo root but be SILENT

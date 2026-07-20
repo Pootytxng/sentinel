@@ -23,7 +23,7 @@
 // does NOT prove Codex activates this hook in-product — only a trusted Codex runtime run proves that.
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 let data;
 try {
@@ -32,22 +32,41 @@ try {
   process.exit(0); // not JSON on stdin → nothing to advise on
 }
 
-// Gather every string the edit payload might carry a touched path in, WITHOUT asserting a schema:
-// apply_patch's `command` (string or arg-array), plus a `file_path` fallback if a surface passes one.
+// Collect the FILE PATHS this edit actually targets — NOT the whole patch text. apply_patch names
+// the touched files in its envelope HEADERS (`*** Add|Update|Delete|Move File: <path>` and the
+// rename target `*** Move to: <path>`); those header paths are repo-ROOT-relative. Reading ONLY the
+// headers (never arbitrary body/context lines) is what stops a backend patch that merely MENTIONS a
+// frontend path in a changed line from false-firing. `tool_input.file_path` is honored as a fallback
+// shape. (corrective follow-up 2026-07-20: the old regex scanned the entire blob and matched any
+// `src/` substring, so `dist/src/x.css` and a body-mention both false-fired — this anchors instead.)
 const ti = (data && data.tool_input) || {};
-const parts = [];
-if (typeof ti.command === "string") parts.push(ti.command);
-else if (Array.isArray(ti.command)) parts.push(ti.command.join("\n"));
-if (typeof ti.file_path === "string") parts.push(ti.file_path);
-const blob = parts.join("\n");
-if (!blob) process.exit(0);
+const cmd =
+  typeof ti.command === "string"
+    ? ti.command
+    : Array.isArray(ti.command)
+      ? ti.command.join("\n")
+      : "";
+const candidates = [];
+const FILE_HEADER = /^\*\*\*\s+(?:Add|Update|Delete|Move)\s+File:\s+(.+?)\s*$/gm;
+const MOVE_TO = /^\*\*\*\s+Move to:\s+(.+?)\s*$/gm;
+for (const re of [FILE_HEADER, MOVE_TO]) {
+  let m;
+  while ((m = re.exec(cmd)) !== null) candidates.push(m[1]);
+}
+if (typeof ti.file_path === "string") candidates.push(ti.file_path);
+if (!candidates.length) process.exit(0);
 
-// A UI file is a `src/….{tsx,css}` path where `src` is a real path segment (so `mysrc/x.tsx` and
-// `dist/src/x.css` won't false-fire — the segment must be preceded by start/space/quote/paren/slash).
-// apply_patch headers (`*** Update File: src/App.tsx`) and a bare file_path both contain such a token,
-// so a single scan of the whole blob covers either shape with no shape assumption.
-const UI = /(^|[\s"'`(\\/])src[\\/][^\s"'`)]*\.(tsx|css)\b/;
-if (!UI.test(blob)) process.exit(0);
+// A UI file is a repo-ROOT `src/….{tsx,css}`. Normalize each candidate (strip surrounding quotes,
+// make an absolute path repo-root-relative, forward-slash it, drop a leading `./` or `/`) and require
+// it to START with `src/` — so `src-tauri/src/lib.rs` (backend) and `dist/src/generated.css` (build
+// artifact) are correctly EXCLUDED, and only a genuine frontend source file fires.
+const isUiFile = (raw) => {
+  let p = String(raw).trim().replace(/^["'`]+|["'`]+$/g, "");
+  if (/^([A-Za-z]:[\\/]|[\\/])/.test(p)) p = relative(process.cwd(), p);
+  p = p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+  return /^src\/.*\.(tsx|css)$/i.test(p);
+};
+if (!candidates.some(isUiFile)) process.exit(0);
 
 // Throttle: at most once per ~15 min per session (keyed by session_id), tmpdir-only side effect.
 const sid = String((data && data.session_id) || "x").replace(/[^a-z0-9-]/gi, "");

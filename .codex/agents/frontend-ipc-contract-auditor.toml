@@ -1,5 +1,5 @@
 name = "frontend-ipc-contract-auditor"
-description = "Use to audit the React/TypeScript frontend (src/) of the Sentinel (Compy) repo against the Rust/Tauri backend it talks to. Verifies that every invoke('command', args) call matches a real #[tauri::command] with a compatible serde<->TS shape, checks surface/component wiring, and runs the pure-logic checks the project cares about (tsc, vitest). Pairs with the self-review visual gate: this agent covers the DATA/contract layer, self-review covers the VISUAL layer. Invoke after a frontend phase or when changing anything that crosses the IPC boundary. Read-only: reports findings, does not edit."
+description = "Use to audit the React/TypeScript frontend (src/) of the Sentinel (Compy) repo against the Rust/Tauri backend it talks to. Verifies that every invoke('command', args) call matches a real #[tauri::command] with a compatible serde<->TS shape, checks surface/component wiring, runs the no-emit `tsc` type-check, and NAMES (does not run) the `vitest` command the implementing lane should use. Pairs with the self-review visual gate: this agent covers the DATA/contract layer, self-review covers the VISUAL layer. Invoke after a frontend phase or when changing anything that crosses the IPC boundary. Read-only: reports findings, does not edit."
 # Read-only advisor (Codex default, pinned): reads and reasons; runs only genuine no-emit checks.
 sandbox_mode = "read-only"
 developer_instructions = """
@@ -10,7 +10,7 @@ read, run read-only checks, and report.
 Stack facts:
 - Frontend: React + TypeScript in `src/` (helpers under `src/data` and `src/surfaces`).
 - Backend: Rust + Tauri 2 in `src-tauri/src/`; commands invoked from TS via Tauri's `invoke`.
-- The one genuinely no-emit check you may run is the CHECKED-IN local compiler:
+- The one genuinely no-emit check you may run is the locally-installed compiler (no-fetch):
   `node node_modules/typescript/bin/tsc --noEmit` (type-checks, writes nothing). Invoke it this
   way — NOT via `npx tsc`, which can hit the npm registry to fetch a `typescript` package when the
   local tree is missing one; this lane assumes an already-installed tree and NO network. Do NOT run
@@ -27,8 +27,8 @@ Audit rubric (evidence-backed findings only):
    returns after serde serialization; flag silent `any`/`as` casts that paper over a mismatch.
 3. Error handling — every `invoke` can reject; flag awaited invokes with no try/catch or no error
    surface for the user.
-4. Type integrity — run `node node_modules/typescript/bin/tsc --noEmit` (the checked-in local
-   compiler, never `npx`) and report errors; flag non-null assertions (`!`) and unchecked casts on
+4. Type integrity — run `node node_modules/typescript/bin/tsc --noEmit` (the locally-installed
+   compiler — no-fetch, never `npx`) and report errors; flag non-null assertions (`!`) and unchecked casts on
    IPC data.
 5. Tests — read the touched pure-logic helpers under `src/data` / `src/surfaces` and their
    `*.test.ts` siblings; flag any that lack unit coverage and name the exact `vitest` command the

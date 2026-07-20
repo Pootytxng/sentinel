@@ -1213,9 +1213,11 @@ mod safety_tests {
     // `.git/index` only) let go stale, since an unstaged edit touches neither .git path. Runs
     // entirely under the OS temp dir — never mutates THIS repo. If git or the temp repo is
     // unavailable the guard FAILS LOUDLY (panics) rather than silently returning success: a test
-    // that no-ops when its preconditions are absent is a false-green that proves nothing, and git
-    // is already a hard build dependency (build.rs spawns it), so its absence here is a broken
-    // environment, not a tolerable skip.
+    // that no-ops when its preconditions are absent is a false-green that proves nothing. NOTE the
+    // scope of that requirement: git is a requirement of THIS TEST'S ENVIRONMENT, NOT a hard
+    // production build dependency — build.rs spawns git but deliberately DEGRADES to a `nogit` stamp
+    // when git is absent (a git-less source build still compiles). So its absence here means a broken
+    // *test* environment, not that Compy can't build; the loud failure guards the test's own validity.
     #[test]
     fn build_dirty_predicate_flips_on_unstaged_change() {
         use std::process::Command;
@@ -1260,8 +1262,9 @@ mod safety_tests {
             let _ = std::fs::remove_dir_all(&repo);
             panic!(
                 "git init failed in a throwaway temp repo — the COMPY_GIT_DIRTY predicate could not \
-                 be exercised. git is a hard build dependency (build.rs spawns it); its absence is a \
-                 broken environment, and this guard must never silently return success."
+                 be exercised. git is required by THIS TEST'S environment (not a hard production \
+                 dependency: build.rs degrades to a `nogit` stamp when git is absent); a missing git \
+                 here is a broken test environment, and this guard must never silently return success."
             );
         }
 
@@ -1302,13 +1305,16 @@ mod safety_tests {
     // Once build.rs emits ANY `cargo:rerun-if-changed`, cargo watches ONLY the listed paths (it
     // drops the default whole-package scan). The OLD set (`.git/HEAD` + `.git/index` alone) went
     // stale on an unstaged source edit — which touches neither .git path — so `COMPY_GIT_DIRTY`
-    // kept a previous value. This pins the WIDENED set so removing any watched input (a
-    // "simplification") fails loudly instead of silently re-opening the stale-stamp bug. It does
-    // NOT assert cargo actually re-runs the script (that's cargo's behavior, not ours); the set is
-    // deliberately partial — an unstaged change OUTSIDE src-tauri/{src,Cargo.toml,Cargo.lock} still
-    // won't re-trigger it until staged/committed. ship-reinstall.ps1 step 0b (a fresh `git status`
-    // at ship time) is the authoritative backstop for that residual, so no artifact ships with an
-    // unaccounted-for dirty tree.
+    // kept a previous value. This pins COMPY's EXPLICIT set so removing any watched input (a
+    // "simplification") fails loudly instead of silently re-opening the stale-stamp bug. Note this
+    // is only the explicit set: `tauri_build::build()` emits its OWN watchers on top (notably
+    // `tauri.conf.json` and `capabilities/`), so the EFFECTIVE combined set is wider than the five
+    // strings pinned here — this test does not (and need not) assert those. It also does NOT assert
+    // cargo actually re-runs the script (that's cargo's behavior, not ours); the explicit set is
+    // deliberately partial — an unstaged change OUTSIDE src-tauri/{src,Cargo.toml,Cargo.lock} and
+    // outside tauri_build's own watched inputs still won't re-trigger it until staged/committed.
+    // ship-reinstall.ps1 step 0b (a fresh `git status` at ship time) is the authoritative backstop
+    // for that residual, so no artifact ships with an unaccounted-for dirty tree.
     #[test]
     fn build_rs_declares_dirty_watch_set() {
         let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/build.rs"))

@@ -49,12 +49,16 @@ fn main() {
     //   ../.git/HEAD   — the checked-out commit moving (new commit ⇒ re-stamp hash + dirty)
     //   ../.git/index  — staging (`git add`) ⇒ re-stamp
     //   src / Cargo.toml / Cargo.lock — UNSTAGED edits to this crate's compiled inputs ⇒ re-stamp dirty
-    // Residual (documented, not silently ignored): an unstaged change OUTSIDE
-    // src-tauri/{src,Cargo.toml,Cargo.lock} — e.g. a repo-root config, capabilities/, or the frontend
-    // ../src bundle — still won't re-trigger this script on its own until it is staged or committed.
-    // The backstop is ship-reinstall.ps1 step 0b, which takes a FRESH `git status` at ship time, so no
-    // artifact leaves with an unaccounted-for dirty tree. The predicate's behavior (clean → unstaged
-    // dirty → clean) is pinned by `build_dirty_predicate_flips_on_unstaged_change` in lib.rs.
+    // EXPLICIT vs EFFECTIVE watch set: the five rerun-if-changed lines below are COMPY's explicit set.
+    // `tauri_build::build()` (called at the end of main) emits its OWN watchers on top — notably
+    // `tauri.conf.json` AND `capabilities/` — so the EFFECTIVE combined set already covers those two;
+    // they are NOT residuals (an earlier version of this comment wrongly listed capabilities/ as an
+    // uncovered residual). Genuine residual (documented, not silently ignored): an unstaged change
+    // OUTSIDE both sets — e.g. a repo-root config file or the frontend ../src bundle — still won't
+    // re-trigger this script on its own until it is staged or committed. The backstop is
+    // ship-reinstall.ps1 step 0b, which takes a FRESH `git status` at ship time, so no artifact leaves
+    // with an unaccounted-for dirty tree. The predicate's behavior (clean → unstaged dirty → clean) is
+    // pinned by `build_dirty_predicate_flips_on_unstaged_change` in lib.rs.
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/index");
     println!("cargo:rerun-if-changed=src");
