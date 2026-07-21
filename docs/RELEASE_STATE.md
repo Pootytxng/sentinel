@@ -27,21 +27,133 @@
 > of individual trains, **not** current state; where a banner disagrees with THIS block, this block wins.
 > Reconciled 2026-07-20: the audit-corrective train (`c1071c1..05f0ce4`) was **pushed to `origin/main`
 > via fast-forward** this date — an **AUDIT-CORRECTIVE closure, NOT a release closure**: no gate flipped,
-> no build, no ship to another machine, no Windows-state change. Push ≠ ship. The row-2 code stays
-> **NOT built, NOT shipped** — only pushed.
+> no build, no ship to another machine, no Windows-state change. Push ≠ ship.
+> **Updated 2026-07-20b (release-validation build):** HEAD `37a166c` — which now subsumes that train and the
+> whole `75c38c6..37a166c` accumulation (Measurement Platform 2.0 + Home masthead/intake, 20 commits) — was
+> **release-built AND silently reinstalled onto the OWNER's own machine** via `scripts/ship-reinstall.ps1`.
+> So the row-2 code is **no longer "NOT built"**: it is **built + installed on the owner's machine, still
+> NOT distributed** to any other machine (directive step 12 held — no tester send, no share-link change). The
+> installed build (row 1) now **EQUALS** HEAD. This was a **release-VALIDATION** pass on the owner's box, not
+> a tester/public release: no gate flipped, no new outbound boundary, the mutation/rollback modules
+> byte-identical across the delta, and no live apply/rollback exercised *in that pass* (closed later the same
+> date — next paragraph).
+> **Updated 2026-07-20c (RUNTIME CLOSURE — this update ships as a DOCS-ONLY commit):** the two runtime items
+> 20b left open are **CLOSED on the installed `37a166c` build itself**: the **orphaned Gaming Mode session**
+> `gm-1784436112238` was recovered through the app's own **Restore** path (owner-clicked; restore completed
+> clean — session file cleared, no quarantine, ledger consistent), and a **live rollback → reapply cycle ran through
+> the installed release UI** on the benign Windows Game Mode rec (HKCU, non-elevated, zero UAC; ledger 55 → 56,
+> new entry `game-mode-1784599052740` with the full typed rollback contract; machine left in its original
+> Game-Mode-ON state). **Private beta = GO for invite-only distribution** (the send itself stays an owner
+> action — nothing has been distributed); **public release stays BLOCKED** on Code signing + Legal. This
+> closure commit is **documentation-only**: it advances HEAD one commit past `37a166c` with zero
+> source/product/version/gate delta — the **validated binary source remains `37a166c`**, the installed NSIS
+> SHA-256 `6BC2F7DF…F5A2C4` is unchanged, and **no rebuild/reinstall is warranted by a docs-only HEAD
+> advance**. Still open, honestly: elevated mutation/rollback not exercised this pass · NVIDIA sensor lane not
+> hardware-verified · multi-rec batch apply not runtime-exercised · live Codex hook activation pending
+> (unrelated to the Compy binary). Full evidence: the 2026-07-20c snapshot entry below.
 
 | # | Identity (kept distinct on purpose) | Current truth | How verified |
 |---|---|---|---|
-| 1 | **Newest locally verified installed build** — static fact about the exe on the OWNER's disk | `75c38c6` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `2F13B9F41A8DB4AEDCEC87E90FD4560829F84EE70818BAD102F095C9EFCDC0AF`. The installed exe on THIS (owner) machine embeds `75c38c6`; ONE installer on the Desktop. This is the newest build **on the owner's machine** — it is **NOT** a claim about what any *other* machine runs (see rows 3–4). | Embedded-hash byte-scan of `%LOCALAPPDATA%\Compy\compy.exe` (read-only) |
-| 2 | **Current corrective source train** — static; a *reviewed* commit, NOT a live pointer | The corrective-follow-up commit that carries this doc, stacked on `9b89ee0` (the prior local corrective tip). This is the newest *reviewed* code on `main`. **Code/doc-only — NOT built, NOT shipped.** | `git log --oneline origin/main..HEAD` (read at review time) |
+| 1 | **Newest locally verified installed build** — static fact about the exe on the OWNER's disk | `37a166c` → **`Compy_0.9.0_x64-setup.exe`**, installer SHA-256 `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4` (3,826,464 B / 3.65 MB). The installed exe on THIS (owner) machine (`%LOCALAPPDATA%\Compy\compy.exe`, 14,837,760 B) embeds `37a166c` and reports runtime stamp `37a166c · release` (CLEAN, no `+dirty`); ONE Compy installer on the Desktop. **Built + silently reinstalled 2026-07-20** via `scripts/ship-reinstall.ps1` (release-validation on the owner's box). **Runtime closure 2026-07-20c on THIS exact build:** live rollback → reapply cycle through the installed UI (Windows Game Mode rec; ledger round-trip field-perfect, zero UAC) **+** the orphaned Gaming Mode session recovered via the app's own Restore path (owner-clicked) — see the 2026-07-20c snapshot entry. This is the newest build **on the owner's machine** — it is **NOT** a claim about what any *other* machine runs (see rows 3–4). | Embedded-hash byte-scan of the installed exe (read-only) **+** live runtime build STAMP over CDP |
+| 2 | **Current corrective source train** — static; a *reviewed* commit, NOT a live pointer | HEAD `37a166c` = `origin/main` = the newest *reviewed* code on `main` (subsumes the audit-corrective train **and** the `75c38c6..37a166c` Measurement-Platform-2.0 / Home-masthead-intake accumulation — 20 commits). **As of 2026-07-20b it is BUILT + installed on the owner's machine (row 1) — still NOT distributed to any other machine (step 12 held).** **As of 2026-07-20c the newest commit on `main` is a DOCUMENTATION-ONLY runtime-closure commit stacked ONE past `37a166c`** (this file's closure records; zero source/product/version/gate delta) — **`37a166c` remains the validated binary source**, and a docs-only HEAD advance does **NOT** obligate a rebuild/reinstall (row 1 unchanged). | `git log --oneline origin/main..HEAD` (empty ⇒ in sync; read at review time) |
 | 3 | **Historically distributed private-beta artifact(s)** — what other machines were actually handed | The repo records prove **more than one** private build left this machine: `16069fa` / `beta/private-beta-001` (the OLD verified **unsigned** private beta, frozen ref, never to be moved) **AND** a later kit cut from **`fc940fe`** — an NSIS `Compy_0.1.0_x64-setup.exe`, SHA-256 `5F2549E7EDD6BC94440D3C24ECCC0CB784005DAC520DE2490BB81F3260021F18`, hosted on Google Drive and DM'd to testers (`docs/CHANGELOG.md:378-391`, `docs/archive/cowork-handoff-board-2026-06.md:354-356`); `fc940fe` is 349 commits after `16069fa`. So the earlier claim that `16069fa` was the *only* build ever handed to another machine is **FALSE**. A frozen *source* ref does not prove which *binary* a tester received; the **exact last artifact each tester installed is UNKNOWN pending owner reconciliation** (row 4). **Public:** **NONE** — no public download, store listing, or signed public artifact (gated on **Code signing** + **Legal**, both OPEN in *Release blockers*). | Repo records (CHANGELOG + archived handoff board) + frozen ref; exact tester binary owner-confirmable only |
 | 4 | **Current tester installs + old share-link reachability** — UNKNOWN, owner-confirmable only | What any private-beta tester currently runs, and whether the old Drive/share link still resolves, is **NOT knowable from here** — no telemetry (zero-outbound), no local record. **Pending owner confirmation.** Do not assert testers are on any specific build, or that the link is live or dead. | Unknowable without an owner report; no local evidence |
-| 5 | **`origin/main` tracking ref vs the remote server** — LOCAL cache; may lag the server | **Post-push (2026-07-20):** the audit-corrective train `c1071c1..05f0ce4` **landed on the server via fast-forward** (`408c860..05f0ce4`, no force); `origin/main` advanced from `408c860` to `05f0ce4` and HEAD is **in sync** at that tip, except for the trailing doc-sync commit that carries THIS update (which is itself then pushed FF, restoring sync). Numbers still go stale on the next commit — `git fetch` and re-derive live before trusting. `HEAD` remains **ahead of the installed build** (`75c38c6`). **The exact ahead / installed-distance integers are deliberately NOT committed here** — they are volatile (they change on every commit and push) and were stale within one commit the last time this row baked them. Derive them live at read time with the commands at right; tie any snapshot you record to the exact `HEAD` commit it was taken at, and `git fetch` before trusting the `origin/main` comparison. | `git rev-parse origin/main` (local ref) · `git rev-list --left-right --count origin/main...HEAD` (ahead/behind) · `git rev-list --count 75c38c6..HEAD` (installed distance) — **`git fetch` first to compare to the server** |
+| 5 | **`origin/main` tracking ref vs the remote server** — LOCAL cache; may lag the server | **Post-push (2026-07-20):** the audit-corrective train `c1071c1..05f0ce4` **landed on the server via fast-forward** (`408c860..05f0ce4`, no force); `origin/main` advanced from `408c860` to `05f0ce4` and HEAD is **in sync** at that tip. Numbers still go stale on the next commit — `git fetch` and re-derive live before trusting. **As of 2026-07-20b, HEAD `37a166c` = `origin/main` = the installed build (row 1)** — the prior "HEAD ahead of the installed build (`75c38c6`)" gap is **closed** (verified live: `git rev-list --left-right --count origin/main...HEAD` = `0  0`; `75c38c6..HEAD` = 20). **As of 2026-07-20c HEAD advances ONE docs-only closure commit past `37a166c`** — committed locally; the push follows owner approval of that exact diff, so `origin/main` stays `37a166c` until it lands; the installed build (row 1) stays `37a166c` either way. **The exact ahead / installed-distance integers are deliberately NOT committed here** — they are volatile (they change on every commit and push) and were stale within one commit the last time this row baked them. Derive them live at read time with the commands at right; tie any snapshot you record to the exact `HEAD` commit it was taken at, and `git fetch` before trusting the `origin/main` comparison. | `git rev-parse origin/main` (local ref) · `git rev-list --left-right --count origin/main...HEAD` (ahead/behind) · `git rev-list --count 75c38c6..HEAD` (installed distance) — **`git fetch` first to compare to the server** |
 
-**Bottom line:** the owner's live installer is `75c38c6`; the newest *reviewed* source is this corrective follow-up (stacked on `9b89ee0`, code/doc-only, unpushed and ahead of both `origin/main` and the installer — **derive the exact counts live; they are intentionally not baked here**). **Nothing** newer than `75c38c6` has been built or distributed. The audit-corrective train (`c1071c1..05f0ce4`) **was pushed to `origin/main` via fast-forward on 2026-07-20** — an **audit-corrective closure, NOT a release closure**: it flipped no gate, built no binary, and shipped to no other machine (push ≠ ship). At least **two** private builds were handed to other machines historically — the frozen unsigned private beta `16069fa` **AND** a later kit cut from `fc940fe` (row 3) — so `16069fa` was **not** the only one; **what testers currently run and whether the old share link still resolves are UNKNOWN pending owner confirmation.** `origin/main` (`408c860`) is a LOCAL tracking ref that may lag the server until a `git fetch`. **No gate flipped and no new outbound boundary since `75c38c6`:** the verified zero-outbound property and every LOCKED gate still hold. All ahead/behind numbers are tooling-derived — re-run the commands above (and `git fetch` for the server) rather than trusting them. **Update THIS block in the same commit that ships or flips a gate; a PUSH is verified/refreshed AFTER it lands** — re-derive the row-5 counts (and `git fetch`) once the remote has the commit, since the tracking ref only advances post-push.
+**Bottom line (updated 2026-07-20b):** the owner's live installer is now **`37a166c`** — HEAD = `origin/main` = the installed build are all the **same** commit; the `75c38c6`→`37a166c` accumulation (20 commits: Measurement Platform 2.0 + Home masthead/intake) was **release-built AND silently reinstalled onto the owner's machine** this date. So the older "nothing newer than `75c38c6` has been built" line is **retired** — `37a166c` IS built + installed here. **Distribution is still ZERO, though:** nothing newer than the historical private-beta kits (row 3) has been sent to any *other* machine — this was a release-VALIDATION pass on the owner's own box (step 12 held: no tester send, no share-link change). The earlier audit-corrective train (`c1071c1..05f0ce4`) **was pushed to `origin/main` via fast-forward on 2026-07-20** and is now subsumed by `37a166c` — that push was an **audit-corrective closure, NOT a release closure** (push ≠ ship); the subsequent 2026-07-20b build is what put this code on the owner's disk, and it too shipped to **no other machine**. At least **two** private builds were handed to other machines historically — the frozen unsigned private beta `16069fa` **AND** a later kit cut from `fc940fe` (row 3) — so `16069fa` was **not** the only one; **what testers currently run and whether the old share link still resolves are UNKNOWN pending owner confirmation.** `origin/main` (`37a166c`) is a LOCAL tracking ref that may lag the server until a `git fetch`. **No gate flipped and no new outbound boundary across `75c38c6..37a166c`:** the verified zero-outbound property and every LOCKED gate still hold (delta confirmed: 11 mutation modules byte-identical, IPC `#[tauri::command]` count 90→90, no capabilities/CSP change, no new outbound-network code). All ahead/behind numbers are tooling-derived — re-run the commands above (and `git fetch` for the server) rather than trusting them. **Update THIS block in the same commit that ships or flips a gate; a PUSH is verified/refreshed AFTER it lands** — re-derive the row-5 counts (and `git fetch`) once the remote has the commit, since the tracking ref only advances post-push. **2026-07-20c runtime closure:** the installed `37a166c` build itself passed the two live checks 20b had deferred — the orphaned Gaming Mode session `gm-1784436112238` recovered through the app's own Restore path (owner-clicked), and a live **rollback → reapply** cycle ran through the installed UI on the Windows Game Mode rec with a field-perfect Trust-Ledger round-trip (55 → 56 entries, zero UAC, machine left in its original Game-Mode-ON state). **Private beta: GO for invite-only distribution** — the send itself remains an owner action (ships-to-others stop; step 12 still held, nothing distributed). **Public release: still BLOCKED** on Code signing + Legal (Release blockers). The closure lands as a **documentation-only commit** advancing HEAD one past `37a166c` with zero product delta — the validated binary source and the installed NSIS SHA-256 (`6BC2F7DF…F5A2C4`) are unchanged, and **no rebuild/reinstall follows from a docs-only HEAD advance**.
 
 ## Snapshot history (reverse-chronological log — superseded by CURRENT STATE above)
 
+> **UPDATE 2026-07-20c (RUNTIME CLOSURE ON THE INSTALLED `37a166c` BUILD — PRIVATE BETA GO FOR INVITE-ONLY;
+> THIS COMMIT IS DOCS-ONLY, NO REBUILD).**
+> The two runtime items 2026-07-20b honestly left open are **CLOSED**, exercised on the installed release
+> build itself (`%LOCALAPPDATA%\Compy\compy.exe`, runtime stamp `37a166c · release`), not in dev:
+>
+> - **Orphaned Gaming Mode session RECOVERED through the app's legitimate path:** `gm-1784436112238` (status
+>   active, full typed rollback contract intact) was resolved via the in-app **Restore** — clicked by the
+>   OWNER (his confirmed click). Restore completed clean: `gaming-session.json` absent afterward, **no
+>   quarantine file, no RestoreFailed marker**, Trust Ledger consistent. The orphan-recovery path the
+>   architecture promises (detect → surface Resume-vs-Restore → staged restore) is **live-proven end-to-end
+>   on this exact build**.
+> - **Live rollback → reapply cycle through the installed UI** (Windows Game Mode rec — deliberately benign:
+>   pure HKCU `GameBar` keys, `elevation_used: false`, so this closes the *unelevated* mutation lane only):
+>   - **Rollback — 2026-07-21T01:48:35Z** (evening of 2026-07-20 local): executed at the machine through the
+>     installed UI by a human click (physical-presence evidence; attribution is evidence-based inference,
+>     distinct from the owner-testimony line above). Registry read back `AllowAutoGameMode=0` /
+>     `AutoGameModeEnabled=0` — equal to the ledger snapshot priors; entry `game-mode-1784419404776` stamped
+>     `rolled_back` at that instant; no ledger entry added or removed.
+>   - **Reapply — 2026-07-21T01:57:32Z:** a real click on the live Optimize toggle (CDP-driven UI automation
+>     against the installed build — the app's own click path end-to-end; no registry shortcut). **Zero UAC**
+>     (consent.exe watched throughout — never appeared; expected for HKCU). Registry → `1/1`. New ledger
+>     entry `game-mode-1784599052740` **field-perfect**: snapshot priors `0/0` (the true pre-apply state),
+>     status `applied`, typed `enable-game-mode` / `restore-game-mode-from-snapshot` contract, app version
+>     `0.9.0`, ruleset `1.0.0-baseline`, `elevation_used: false`. Ledger **55 → 56** entries; every
+>     pre-existing entry **byte-unchanged** (raw-JSON set-difference); unrelated-state baseline (DVR keys ·
+>     SysMain/DiagTrack/WSearch service state · power-plan + USB-suspend + ASPM values) **identical**
+>     before/after.
+>   - **Final state = original:** machine left in its pre-test Game-Mode-ON state (`1/1`); clean relaunch
+>     with the debug port closed; UI shows the applied entry active; footer ledger count 56.
+> - **Verdict:** 20b (source/build verify · install · stamp · zero-outbound · smoke) **+** this runtime
+>   closure ⇒ **the `37a166c` NSIS artifact (SHA-256 `6BC2F7DF…F5A2C4`) is GO for invite-only private-beta
+>   distribution.** The send itself is an owner action (ships-to-others stop) — **nothing has been
+>   distributed** (step 12 still held). **Public release stays BLOCKED:** Code signing + Legal (Release
+>   blockers below, unchanged).
+> - **Docs-only commit distinction (do NOT rebuild off this):** this closure lands as a **documentation-only
+>   commit created after validation** — repo HEAD advances one commit past `37a166c` with **zero
+>   source/product/version/gate/artifact delta**. The **validated binary source remains `37a166c`**; the
+>   installed NSIS remains `Compy_0.9.0_x64-setup.exe` SHA-256
+>   `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4`. The reinstall law binds app-code
+>   builds, not doc commits — **no rebuild/reinstall is warranted by this HEAD advance.**
+> - **Coverage gaps that stay OPEN (named honestly, unchanged by this closure):** **elevated**
+>   mutation/rollback not exercised this pass (the cycle was deliberately HKCU/non-elevated; the most recent
+>   live elevated proofs remain the 2026-07-16 owner-present leftovers QA and the 2026-07-07/08 batched-tier
+>   session QA) · **NVIDIA sensor lane** still "implemented, not hardware-verified" (LOCKED rule 5 — no
+>   monitored NVIDIA session yet) · **multi-rec batch apply** not runtime-exercised (single-rec cycle only;
+>   the §2a stack-trial gate stays DARK) · **live Codex hook activation** still pending — externally blocked
+>   (ChatGPT/Codex usage limit until 2026-07-26), `.codex/*` advisor scaffold only, **unrelated to the Compy
+>   binary**.
+>
+> **UPDATE 2026-07-20b (RELEASE-VALIDATION BUILD — `37a166c` BUILT + INSTALLED ON OWNER MACHINE, NOT DISTRIBUTED).**
+> First full **build + install** of the accumulated code-complete-but-unshipped work (`75c38c6..37a166c`, 20
+> commits: Measurement Platform 2.0 + Home masthead/intake behind `compy_home_intake` **DEFAULT OFF** + the
+> Codex read-only advisor scaffold + identity/version doc reconciliation) onto the **owner's own machine**. This
+> is a **release-VALIDATION** pass, **not** a tester or public release — **no artifact was distributed** (directive
+> step 12 held: no tester send, no share-link change).
+>
+> - **Source commit:** `37a166c` (`37a166ca4825c7320477b67af6a258456065ab18`) = HEAD = `origin/main`, code tree
+>   clean, `COMPY_GIT_DIRTY=0`.
+> - **Artifacts built** (`npm run tauri build` from `37a166c`):
+>   - NSIS `Compy_0.9.0_x64-setup.exe` — **3,826,464 B (3.65 MB)**, SHA-256
+>     `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4`.
+>   - MSI `Compy_0.9.0_x64_en-US.msi` — **5,328,896 B (5.08 MB)**, SHA-256
+>     `45819019532D956DA177840920463AC895E1F2A48A34D1174B476297A550F572`.
+> - **Installed** via `scripts/ship-reinstall.ps1` (stop → keep ONLY the new NSIS on Desktop → `/S` silent →
+>   launch). **Live == build, confirmed two ways:** the installed `%LOCALAPPDATA%\Compy\compy.exe` (14,837,760 B)
+>   byte-embeds `37a166c` (no stale `75c38c6`/`408c860`/`05f0ce4`, no contiguous `+dirty`), **and** the live runtime
+>   build STAMP over CDP reads `37a166c · release` (clean). One Compy installer on the Desktop; single-instance
+>   confirmed; the debug CDP port was closed on relaunch.
+> - **Safety envelope UNCHANGED by the delta (verified, not assumed):** all **11 mutation/rollback modules**
+>   (`actions` · `history` · `gaming_orchestrator` · `gaming_session` · `game_mode_persist` · `services` ·
+>   `gpu_profile` · `remote_rules` · `receipts` · `license` · `drift`) are **byte-identical** across
+>   `75c38c6..37a166c`; the `#[tauri::command]` IPC count is **90 → 90** (no new command); **no** capabilities /
+>   `tauri.conf.json` / CSP change; **no** new outbound-network code (no added `reqwest`/`http`/`TcpStream`), and
+>   live zero-outbound held on this exact build.
+> - **Gated systems match declarations:** remote-rules fetch OFF (placeholder pubkey, triple-gated), updater
+>   absent, Receipts telemetry built-dark default-OFF, Compy Pro license built-dark — all unchanged by the delta.
+> - **Source verification (green):** cargo **856 passed / 0 failed / 24 ignored** · vitest **188 files / 1777
+>   passed** · `tsc --noEmit` **clean** · `verify-release-state --strict` **53/53 ok**.
+> - **Packaged-app smoke:** launched clean, onboarding already past (app not first-run), hardware detection +
+>   navigation + readiness + monitoring surfaces render; **tab-nav / scanning lag evaluated on the RELEASE build**
+>   (release binary, not the debug/HMR dev build the earlier lag report came from).
+> - **NOT done / honestly open (as written at 20b):** no artifact distributed (step 12) · **no live apply/rollback
+>   exercised** (mutation is owner-territory; boundary proven by byte-identity + tests, not by a live mutation
+>   that pass) — **CLOSED 2026-07-20c** (live rollback → reapply cycle through the installed UI; entry above) ·
+>   onboarding not re-triggered (app past first-run) · uninstall/reinstall-from-clean not exercised (destructive) ·
+>   an **orphaned Gaming Mode session** (`gm-1784436112238`, status active, full typed rollback contract intact)
+>   was present on disk — surfaced to the owner as a **Resume-vs-Restore** decision (Restore triggers elevation +
+>   service/power-plan mutation → owner-territory; NOT clicked at 20b) — **CLOSED 2026-07-20c** (owner clicked
+>   **Restore**; recovered clean — entry above).
+>
 > **UPDATE 2026-07-20 (AUDIT-CORRECTIVE TRAIN PUSHED — `c1071c1..05f0ce4` → `origin/main`; NOT A RELEASE).**
 > An independent Codex acceptance audit had returned a **"DO NOT PUSH"** verdict on the `c1071c1..9b89ee0`
 > train; the narrow corrective follow-up `05f0ce4` (stacked additively on `9b89ee0`, no rewrite) resolved
@@ -1144,7 +1256,7 @@
 > **⟢ HISTORICAL ship-snapshot table (2026-07-17, HEAD `28648b2`) — SUPERSEDED, NOT current state.**
 > This "Field | Value" table records the 2026-07-17 `28648b2` ship. It is **older than the CURRENT
 > STATE block at the top of this file**, and its installed-build facts are STALE: the live installer
-> is now `Compy_0.9.0_x64-setup.exe` from **`75c38c6`** (SHA-256 `2F13B9F4…FCDC0AF`), per CURRENT
+> is now `Compy_0.9.0_x64-setup.exe` from **`37a166c`** (SHA-256 `6BC2F7DF…F5A2C4`), per CURRENT
 > STATE. Kept for history; do NOT read the row below as the current installed artifact. Where it
 > disagrees with CURRENT STATE, CURRENT STATE wins.
 
@@ -1208,7 +1320,7 @@
 | Item | Status |
 |---|---|
 | Manual-mutation apply/rollback QA | **CLOSED** 2026-05-31 (owner sign-off) — `RELEASE_QA.md:3`. NOT an open blocker. |
-| Private-beta functional blockers | **NONE** for the frozen `16069fa` build (`PACKAGING_SIGNING_PLAN.md:131`). Current `main` wants its own fresh installed-build QA if shipped. |
+| Private-beta functional blockers | **NONE** for the frozen `16069fa` build (`PACKAGING_SIGNING_PLAN.md:131`). Current `main` wants its own fresh installed-build QA if shipped. **For the current installed `37a166c` build that QA is DONE** — 2026-07-20b (build/install/stamp/zero-outbound/smoke) + 2026-07-20c (live rollback → reapply cycle + orphan recovery through the installed UI) ⇒ **GO for invite-only private beta** (the send itself = owner action; Code signing + Legal still gate PUBLIC). |
 | Gaming Mode live reboot-while-active QA | **CLOSED 2026-07-07 (owner-run)** — physical reboot + "Restore now" on the `48ca9ec` build: session contract cleared, every probed value matched his standing ledger state; case #4 PASSED in `GAMING_MODE_QA.md` (`a21f310`). This row had lagged the close by a day — fixed 2026-07-08. |
 | Gaming Mode enable fires ~5–6 UAC prompts | **CLOSED 2026-07-07/08** — T6 built the session-start batch (ONE `--run-elevated` invocation: `apply_elevated_tier`, `gaming_orchestrator.rs:201`; ≤1-dispatch cargo pin; no-partial contract + UAC-decline honesty preserved; UAC *policy* settings untouched per standing rule); owner live-confirmed exactly ONE enable UAC 2026-07-07 (case #10 PASSED). T6b (`bdc9daa`, 2026-07-08) batches the restore side the same way; owner's live restore-side eyeball pending (next real session). |
 | Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
@@ -1219,6 +1331,6 @@
 
 ## Required owner decisions (live)
 
-1. **Beta artifact choice — DECIDED (owner, 2026-07-06): current `main`.** ("I like the current main build, it's more complete in the way I want it.") Frozen `16069fa` stays archival. Consequence armed: fresh full installed-build QA on `main` (2026-07-06 train T5, now REQUIRED) + owner-run GAMING_MODE_QA.md live case #4 (reboot-while-active) before any send.
+1. **Beta artifact choice — DECIDED (owner, 2026-07-06): current `main`.** ("I like the current main build, it's more complete in the way I want it.") Frozen `16069fa` stays archival. Consequence armed: fresh full installed-build QA on `main` (2026-07-06 train T5, now REQUIRED) + owner-run GAMING_MODE_QA.md live case #4 (reboot-while-active) before any send. **That consequence is now SATISFIED for `37a166c`:** case #4 was owner-run 2026-07-07; the fresh installed-build QA + runtime closure landed 2026-07-20b/c (CURRENT STATE + snapshot entries) — the remaining owner action is the send decision itself.
 2. Code-signing route + legal finalization (PUBLIC gates).
 3. When/whether to arm Receipts (its own security review + owner sign-off).
