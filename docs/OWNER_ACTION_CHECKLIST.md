@@ -159,6 +159,22 @@ rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 current `main`" is made; what's pending is **your GO** to actually send (after A2 smoke). Also open:
 ship `beta-001` frozen vs. cut a fresh `beta-002` from `main`.
 
+**Distribution protocol (owner-dictated 2026-07-21 — the runbook when the GO comes):**
+Release label: **"Compy 0.9.0 Invite-Only Private Beta — Validated binary source: 37a166c"**.
+The artifact is the exact validated NSIS built from `37a166c` — `Compy_0.9.0_x64-setup.exe`,
+SHA-256 `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4` (3,826,464 bytes;
+re-verified intact on the Desktop 2026-07-21). Note: repo HEAD `0e988ce` is the docs-only
+runtime-closure commit, NOT the binary source — it requires no rebuild. At send time:
+1. Recalculate the file's SHA-256 immediately before uploading; it must match the value above.
+2. Upload to the private tester location; **never overwrite the validated file with a different
+   build under the same filename.**
+3. Test the download from a second browser or device; hash the downloaded copy — same SHA-256.
+4. Tell testers up front: unsigned invite-only beta; SmartScreen "unknown publisher" warnings
+   are expected.
+5. Record who received it and the exact link/artifact each person got.
+The send decision + recipient list are yours; Claude runs the mechanics (hash, upload,
+download-test, record-keeping) on your GO.
+
 **Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
 the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:
 ~3 non-technical gamers · 2 people burned by tweak packs before · 2 enthusiasts · 1 privacy-focused
