@@ -185,11 +185,13 @@ has since killed the old link (verified dead unauthenticated), renamed the file
 `RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip`, and re-verified the correct link
 end-to-end (anonymous download, SHA-256 `6BC2F7DF…F5A2C4` exact):
 https://drive.google.com/file/d/1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n/view?usp=sharing
-1. **Tell Claude who (if anyone) received the old link** → they get the correction + the verified
-   link, and the recipients table in `BETA_DISTRIBUTION_RECORD.md` gets its real rows.
-2. **Re-send using ONLY the link above** — per the record's new MANDATORY SEND RULE: no link goes
-   to a human until hash-verified through that exact public link (this one was, 2026-07-22 AM).
-Anyone clicking the old link now just sees "request access" — safe; the correction DM covers it.
+1. ~~Tell Claude who received the old link~~ → ✅ DONE 2026-07-22: **Matcher · Chinaman · J ·
+   Zoid · Sultan · Majin** — recorded in `BETA_DISTRIBUTION_RECORD.md`.
+2. ~~Re-send using ONLY the link above~~ → ✅ DONE 2026-07-22 (~9 AM PDT): owner sent the
+   correction + verified link to all six; the exact sent link was re-verified unauthenticated
+   **post-send** (HTTP 200 · SHA-256 exact) and the old link re-confirmed dead in the same pass.
+**Nothing left on you for this incident.** The open risk item is now §A2 (smoke pass, 0/24) —
+six people hold a working install link. Anyone clicking the old link sees "request access" — safe.
 
 **Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
 the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:

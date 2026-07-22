@@ -49,7 +49,20 @@ tracker's "📋 paste when a tester goes quiet" template, which already covers e
 
 | Recipient | Date sent | Link / artifact |
 |---|---|---|
-| ⚠️ UNKNOWN — owner to confirm who (if anyone) received the WRONG link on 2026-07-22 AM | 2026-07-22 (before ~08:00 PDT) | OLD stale-kit link (now dead, file renamed) — each recipient is owed the correction + the verified 0.9.0 link above |
+| Matcher | 2026-07-22 | verified 0.9.0 link `1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n` (after the AM wrong-link correction) |
+| Chinaman | 2026-07-22 | verified 0.9.0 link — same |
+| J | 2026-07-22 | verified 0.9.0 link — same |
+| Zoid | 2026-07-22 | verified 0.9.0 link — same |
+| Sultan | 2026-07-22 | verified 0.9.0 link — same |
+| Majin | 2026-07-22 | verified 0.9.0 link — same |
+
+**Send story (owner-reported + live-verified 2026-07-22):** all six first received the STALE kit
+link that morning (the wrong-link incident above; that link died ~08:30 PDT — whether anyone
+downloaded before the kill is unknown), then the owner sent each the correction DM containing the
+verified 0.9.0 link. Post-send re-verify (~9 AM PDT): the exact sent link re-downloaded
+unauthenticated → HTTP 200, `MZ`, 3,826,464 B, SHA-256 `6BC2F7DF…F5A2C4` (exact), and the old link
+re-confirmed dead in the same pass. **Install status per tester: unknown until they report** —
+`BETA_TESTER_TRACKER.md` is the follow-up surface.
 
 ## Prior distribution surfaces (historical)
 
