@@ -609,6 +609,18 @@ function App() {
       /* non-fatal */
     }
     setShowSetupTour(false);
+    // Same class of bug as FirstCheck's onDone (Cowork audit, 2026-07-19): the tour can apply real
+    // recommendations via its own internal useScan/rerun (SetupTour.tsx's applyLimiter/applyReversal,
+    // invoke("apply_recommendation")), which never touched App's top-level readiness/recs/changes/
+    // priorities state. Without this, closing the tour after applying something left Home/Optimize/
+    // the Trust Ledger showing pre-tour data until an unrelated action happened to refresh().
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately NOT depending on
+    // `refresh` (it's a plain unmemoized arrow, re-created every render): this callback's
+    // identity must stay stable across renders (see comment above — SetupTour's mount effect
+    // re-fires and steals focus back to Next if onDone churns). `refresh` only calls invoke()
+    // + the always-stable useState setters, so an "older" closure over it is functionally
+    // identical to a fresh one — nothing it captures changes in a way that matters here.
   }, []);
   // Gaming Mode (F1) is gated — the backend returns false until its mutation QA
   // + owner sign-off, so the tab never appears by default (the surface is dark).
@@ -1331,7 +1343,20 @@ function App() {
         />
       )}
       {showFirstCheck && (
-        <FirstCheck onDone={() => setShowFirstCheck(false)} arcV2 />
+        <FirstCheck
+          onDone={() => {
+            setShowFirstCheck(false);
+            // A Home-triggered re-run resolves its OWN fresh verdict inside FirstCheck (and
+            // correctly updates the RerunCheckBand's honest last-check snapshot there) but never
+            // touched App's top-level `readiness` — so the console's Readiness gauge (score +
+            // "N of M checks passed" note, HomeConsole.tsx) kept showing the PRE-rerun numbers
+            // until some unrelated apply/rollback happened to call refresh(). Same resync every
+            // other state-changing action already gets (onChanged={refresh} elsewhere) — re-run
+            // is exactly that class of event too. Bug found in Cowork audit of 408c860, 2026-07-19.
+            void refresh();
+          }}
+          arcV2
+        />
       )}
       {showEncyclopedia && (
         <Learn
