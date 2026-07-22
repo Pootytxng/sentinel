@@ -792,6 +792,13 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] `normalize()` honesty fail-safe — a non-finite raw score now fails SAFE to 0 (no credit) instead of `Inf`→`.clamp(0,100)`→**100** (a fabricated "perfect" component score, the worst honesty failure). Currently unreachable (producers guard divisors via `.max(1e-6)`/`is_finite`) but guarded at the point-of-use so a future producer-guard regression can't invent a maxed score; invalid reference (non-finite/≤0) also → 0. Regression test pins Inf/NaN/-Inf + bad refs (was untested); real-path byte-identical — `2ee51aa` (`benchmark.rs:461`)
 - [x] `completeness_pct()` honesty fail-safe (completeness-critic close-out of the above — the grep'd sibling) — its `ceiling <= 0.0` gate did NOT catch a non-finite input (`NaN <= 0.0` is false), so `+Inf current`→**100** (fabricated "fully optimized") and `NaN`→leaked through `.clamp()`. Now `is_finite` guards both inputs at the point of use, mirroring `normalize()`, so the boundary is uniform + safe-by-construction whenever this still-unwired primitive is wired. comparison::pct (guarded `base>0`, measured-FPS inputs, NaN-delta failure mode) + percentile_rank (u32-derived inputs) assessed safe — class now closed. Regression test pins Inf/NaN; finite-input behavior byte-identical — `dbc8358` (`benchmark_scoreboard.rs:75`)
 
+- [ ] FPS presenter picker: desktop apps can win between matches — live §6 evidence 2026-07-22
+  (40-min Marvel Rivals watch): with the game closed/loading, the dominant-presenter pick wandered
+  to Discord/RadeonSoftware/Code/claude (electron/DXGI presenters). The empty-name/dwm case is
+  FIXED (`f96347d` — unnameable presenter can never win), but a session that starts before the
+  game launches can still attribute early samples to a desktop app. Candidate polish: fullscreen/
+  foreground heuristic, or a known-desktop-app denylist extension, or only attach once a presenter
+  sustains game-like present rates. Honesty question, not a crash — design it before arming.
 - [ ] evidence-export tiers — audience-shaped renders of the SAME measured evidence pack (`export.rs`
   today: `export_report` markdown/JSON + Discord block = the technical-ish default): add **Consumer**
   ("what changed, in plain English"), **Technical** (full probe/CI detail), and **Support** ("help me,
