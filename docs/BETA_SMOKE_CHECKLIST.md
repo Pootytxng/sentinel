@@ -30,8 +30,9 @@ before assuming an MSI exists too. NotSigned by design.
 - ✅ Identity strings: only the two intentional legacy literals remain (migration copy-*source* + `serde(alias)`); frontend clean; ETW session `Compy-FPS`; config `Compy` / `gg.compy.app` / `0.9.0` / `compy.gg`.
 - ✅ Single-instance plugin wired first; migration is copy-not-move + atomic staging-rename + OnceLock-guarded, with a unit test; rollback resolves purely from local `history.json` (which migration copies verbatim).
 - ✅ Export identity (`# Compy Report`, `compy-report-*`, UTF-8 BOM, `compy_version`); no HTTP-client dependency + CSP locks `connect-src` to self/ipc.
-- ✅ Suites green — re-derived live 2026-07-22 for this pass: **cargo 856/856 (+24 ignored) ·
-  npm 188 files / 1777 tests**. The npm-side flakes seen during this pass were root-caused (not
+- ✅ Suites green — re-derived live 2026-07-22 for this pass: **cargo 858/858 (+24 ignored) ·
+  npm 188 files / 1777 tests** (cargo count includes the two `f96347d` presenter-guard tests added
+  after the live §6 catch below). The npm-side flakes seen during this pass were root-caused (not
   product defects) and permanently guarded in `878a3a9`: drive-letter-casing dual-instance wrapper
   (`scripts/run-vitest.mjs`), export-library timeout headroom, and an awaited passive-effect assert
   in monitor-console. Final clean run: 188/188 · 1777/1777 · exit 0. If this checklist is re-run in
