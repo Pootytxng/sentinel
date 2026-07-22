@@ -17,7 +17,12 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 
 - FROM: "an optimizer that promises nothing" (honesty as a vow of silence).
 - TO: **"the measurement brand that proves everything — and gets paid when the proof says 'buy a GPU.'"**
-- The free app is the **trust engine + funnel**, forever. Money lives in the layers around it.
+- The free app is the **trust engine + funnel**. Money lives in the layers around it.
+- **SHARPENED (owner decree 2026-07-21): Compy is NOT a free product.** The end-state is a
+  **free tier vs. paid monthly** split — the free tier exists as the funnel option, but the goal
+  is **complete monetization**. Never brand/describe Compy as "a free app" in outward copy
+  (site, bios, store text); say "free tier" / "free version" when the split must be named.
+  The earlier "free forever" phrasing on this line is superseded.
 - We do not enter the snake-oil lane (fake promises, fear UX, scareware counters). Not as morals —
   as strategy: it's the most crowded lane, it torches our only differentiator, and one Reddit
   thread of brand damage kills every funnel below. **The gates ARE the moat.**
