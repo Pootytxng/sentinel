@@ -31,9 +31,11 @@ before assuming an MSI exists too. NotSigned by design.
 - ✅ Single-instance plugin wired first; migration is copy-not-move + atomic staging-rename + OnceLock-guarded, with a unit test; rollback resolves purely from local `history.json` (which migration copies verbatim).
 - ✅ Export identity (`# Compy Report`, `compy-report-*`, UTF-8 BOM, `compy_version`); no HTTP-client dependency + CSP locks `connect-src` to self/ipc.
 - ✅ Suites green — re-derived live 2026-07-22 for this pass: **cargo 856/856 (+24 ignored) ·
-  npm 188 files / 1777 tests**. (One npm test file failed on a cold first run with ~664s environment
-  time; the full clean re-run passed everything — flake, not a product defect.) If this checklist is
-  re-run in a later cycle, re-derive again — counts grow every cycle.
+  npm 188 files / 1777 tests**. The npm-side flakes seen during this pass were root-caused (not
+  product defects) and permanently guarded in `878a3a9`: drive-letter-casing dual-instance wrapper
+  (`scripts/run-vitest.mjs`), export-library timeout headroom, and an awaited passive-effect assert
+  in monitor-console. Final clean run: 188/188 · 1777/1777 · exit 0. If this checklist is re-run in
+  a later cycle, re-derive again — counts grow every cycle.
 
 ---
 
