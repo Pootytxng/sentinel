@@ -6,10 +6,12 @@ fails, stop and report it. **"Beta shippable" is your call after this pass** —
 
 **Build under test:** `Compy_0.9.0_x64-setup.exe` (NSIS, 3,826,464 B / 3.65 MB) —
 `src-tauri\target\release\bundle\nsis\`, built from `37a166c`, SHA-256 `6BC2F7DF…F5A2C4` — the exact
-artifact now staged for distribution (`docs/BETA_DISTRIBUTION_RECORD.md`). **Updated 2026-07-22:**
-this line previously named the 0.1.0-era MSI + NSIS pair; whether an MSI is still produced for 0.9.0
-wasn't re-verified this pass, so only the NSIS this beta actually ships is named here — confirm
-before assuming an MSI exists too. NotSigned by design.
+artifact now staged for distribution (`docs/BETA_DISTRIBUTION_RECORD.md`). **Updated 2026-07-22b:**
+the MSI question from earlier this date is closed — the same-day `970f801` rebuild produced BOTH
+bundles (`Compy_0.9.0_x64_en-US.msi`, 5,328,896 B, alongside the NSIS), so 0.9.0 does still emit an
+MSI; the NSIS remains the only artifact this beta ships. Note the owner's OWN box now runs the newer
+`970f801` build (§6 presenter fix — RELEASE_STATE 22b entry); the distributed artifact the invitees
+hold is still this `37a166c` NSIS. NotSigned by design.
 
 > **Scope note (added 2026-07-22):** sections 2 and 8 below (migration, retiring old Sentinel) test
 > the OWNER's OWN machine history (pre-rename `%APPDATA%\Sentinel` data). The actual 0.9.0
@@ -129,7 +131,15 @@ FPS + helper exit · overall does-it-feel-right. Everything else above is alread
 
 ## 6. Live FPS helper  *(~1 min, needs a DX11/DX12 game running)*
 - [ ] With a game running + monitoring on, the FPS/frametime panel + overlay show live numbers.
-- [ ] Turn monitoring off / close the app → the elevated helper exits on its own (no lingering `compy.exe` in Task Manager).
+- [x] Turn monitoring off / close the app → the elevated helper exits on its own (no lingering `compy.exe` in Task Manager). *(Machine-verified live 2026-07-22: after the app closed, the heartbeat went stale and helper PID 8424 self-exited ≤15s — watcher log "section 6 exit box: PASS".)*
+
+> **Live evidence 2026-07-22 (owner's Marvel Rivals sitting, pre-fix `37a166c` build):** capture ran the
+> whole session (1189 + 666 samples across two watchers, avg ~265–285 fps) and DID attribute to
+> `Marvel-Win64-Shipping.exe` — but ALSO, persistently, to an empty-named dwm presenter at fabricated
+> rates (the picker bug), and to desktop apps between matches. The dwm bug is FIXED + regression-guarded
+> (`f96347d`, live on the owner's box as `970f801`); the between-matches attribution is a BACKLOG design
+> item (`34bd173`). **The first box above should be eyeballed on the FIXED build at the owner's next
+> sitting** — the panel should now name the game, never a blank/desktop process while one is fullscreen.
 
 ## 7. Single-instance + export + network  *(~1 min)*
 - [ ] Launch Compy a second time → it **focuses the existing window**, no second instance.
