@@ -25,6 +25,17 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/workflow-usage-guard.mjs\"",
+            "timeout": 10,
+            "statusMessage": "workflow-usage guard"
+          }
+        ]
+      },
+      {
         "matcher": "Agent",
         "hooks": [
           {

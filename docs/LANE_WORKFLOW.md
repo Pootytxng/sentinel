@@ -54,6 +54,10 @@ Workflow({ scriptPath: 'scripts/compy-burst.workflow.js', args: { maxItems: 2 } 
 # with a budget directive ("+300k" on the turn), it auto-sizes to fit and hard-caps spend.
 ```
 Watch it live with the read-only dashboard: `pwsh scripts/lane-dashboard.ps1`.
+
+The tool's PreToolUse `tool_name` is **`Workflow`** (empirically confirmed 2026-07-22 via a
+catch-all logging hook); every call trips the advisory usage guard
+`.claude/hooks/workflow-usage-guard.mjs` (see `.claude/USAGE_ECONOMICS.md` §2/§6).
 Cadence: **owner triggers a burst** when they want progress (or schedule periodic bursts). Each burst is bounded
 and its cost is known up front — no standing token drain between bursts.
 

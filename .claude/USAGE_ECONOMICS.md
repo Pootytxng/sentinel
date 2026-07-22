@@ -112,8 +112,12 @@ than papered over:
 - **The 150k window number itself is inherited, not re-derived.** It was set 2026-07-02 from that
   period's burn pattern; nobody has re-tested whether 150k is still the right cutoff specifically
   for Opus 4.8. Internally consistent now (§5), not empirically re-proven optimal.
-- **`docs/LANE_WORKFLOW.md`'s "Workflow tool"** — its exact live PreToolUse `tool_name` is
-  unverified from this session (no access to a running Claude Code tool-call log to confirm it).
+- **`docs/LANE_WORKFLOW.md`'s "Workflow tool" — CONFIRMED + GUARDED (2026-07-22).** The live
+  PreToolUse `tool_name` is `Workflow`, captured empirically via a temporary catch-all logging
+  hook + a no-op workflow run (0 agents), not assumed. Now guarded:
+  `.claude/hooks/workflow-usage-guard.mjs` (PreToolUse, matcher `Workflow`) injects the §2
+  reminder on every call — advisory like `subagent-throttle.mjs`, since "was this workflow
+  warranted" is judgment, not mechanics. Live-fired in-session: the reminder reached the model.
   Unlike the Agent-tool guards above, which were verified against the documented schema before
   shipping, a matcher here would be a guess — per the project's own no-speculation rule, it was
   deliberately NOT built. To close this: in a live CC session, run a Workflow-tool call once and
