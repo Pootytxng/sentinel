@@ -53,8 +53,8 @@ eyes-on run. What's left for the human sitting is listed at the end of this bloc
   so per this checklist's own fallback HQ relied on the migration unit test + code review and
   confirmed the current ledger renders: **56 entries** timeline verified live
   (`docs/ui-sweep/shots/a2-tooltip.png` — mislabeled filename, it frames the Blackbook ledger).
-- **§3:** staged fresh-profile run — tour auto-opens (**10 steps**, not the "3 steps" written below;
-  copy drift in this doc, intent holds), real rig read (RX 9070 XT · Ryzen 7 9850X3D · 31.4 GB ·
+- **§3:** staged fresh-profile run — tour auto-opens (**10 steps** — §3's body copy said "3 steps",
+  corrected this pass), real rig read (RX 9070 XT · Ryzen 7 9850X3D · 31.4 GB ·
   Win11 Core 25H2), line icons / **no emoji**, Next×9 → Finish clean; FirstCheck runs real checks
   live (counter to 16, "16 checks · 1.2s"), verdict + #1 limiter named inline, "Open the dashboard"
   lands. Shots: `a2-firstrun-1/tour1/check.png` — personally reviewed, clean.
@@ -62,9 +62,9 @@ eyes-on run. What's left for the human sitting is listed at the end of this bloc
   "More in the Blackbook" opens + flashes the right entry; search filters 85→18 on "vrr" with an
   honest empty state; type chips work (Guides 8 · Tricks 14); Autopsy grades honestly
   ("3 real · 0 placebo · 1 risky · 1 unrecognized", "Risky — refused", won't-guess copy) and the
-  "Safe how-to available →" chip appears on guide-matched claims — **theme-accent violet, not the
-  literal "green" written below** (drift note; same for "Knowledge library" → it's the **Blackbook**
-  now). *Human remainder: enable monitoring (UAC) + overlay over a real game.*
+  "Safe how-to available →" chip appears on guide-matched claims — **theme-accent violet** (§4's
+  body copy said "green" chip + "Knowledge library"; both corrected this pass → accent-colored +
+  **Blackbook**). *Human remainder: enable monitoring (UAC) + overlay over a real game.*
 - **§5 / §6:** not automatable by design — UAC clicks and a live DX11/12 game are the owner's.
 - **§7:** second launch focuses the existing window (1 process, foreground=compy); export produced
   `compy-report-*.md` + `.json`, UTF-8 BOM intact, title "# Compy Report", version 0.9.0, zero
@@ -113,14 +113,14 @@ FPS + helper exit · overall does-it-feel-right. Everything else above is alread
 - [ ] No stale 0.1.0 process or Start-menu duplicate; single-instance behavior still holds (second launch focuses the window).
 
 ## 3. First-run guided arc, end to end  *(~3 min — the whole reason the beta exists)*
-- [ ] First launch shows the new onboarding (3 steps, your real rig snapshot, line icons — **no emoji**), not the old 4-step lecture.
+- [ ] First launch shows the new guided Setup & Tour (10 steps, your real rig snapshot, line icons — **no emoji**), not the old 4-step lecture.
 - [ ] First-check landing runs the real checks, shows honest elapsed (~seconds), then the verdict + #1 limiter.
 - [ ] "Open the dashboard" lands cleanly. Re-run via the footer link works.
 
 ## 4. Tooltips + Library + overlay (visual)  *(~3 min)*
 - [ ] Hover/tap a dotted-underline term (e.g. **1% low** on a debrief, or **VRR / driver / power plan** on a readiness row) → tooltip shows the plain-English "what"; **positioning isn't clipped** at screen edges.
-- [ ] "More in the library" opens the **Knowledge library**, focused + flashing the right entry.
-- [ ] Library: search works; type filter chips work; **Autopsy a guide** → paste a tweak list → honest grade + a green "Safe how-to available" chip where applicable.
+- [ ] "More in the Blackbook" opens the **Blackbook**, focused + flashing the right entry.
+- [ ] Blackbook: search works; type filter chips work; **Autopsy a guide** → paste a tweak list → honest grade + an accent-colored "Safe how-to available" chip where applicable.
 - [ ] Enable monitoring (1 UAC prompt — **accept**); overlay draws over a borderless/windowed game and is readable.
 
 ## 5. UAC accept / cancel UX  *(~1 min)*
