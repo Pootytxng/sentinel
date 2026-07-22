@@ -35,6 +35,9 @@ QA doc):
 **24 checks, currently 0 run.** The critical one is **migration** (`%APPDATA%\Sentinel` → `\Compy`
 copy on first launch). Only matters when you're actually ready to send the beta (see §B2) — parked
 here so it isn't forgotten at send time.
+- **⚠️ NOW URGENT (2026-07-22):** a link already went out (the wrong one — see the §B2 incident
+  note; since fixed), so testers may install cold any moment once you re-send. Open a fresh
+  session with **"run the A2 beta smoke pass"** before — or in parallel with — the re-send.
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
 ### A3. Lab Ops Console — ✅ RESOLVED (your round-4 "ALL GOOD", 2026-07-10) → default-ON SHIPPED
@@ -175,6 +178,19 @@ runtime-closure commit, NOT the binary source — it requires no rebuild. At sen
 The send decision + recipient list are yours; Claude runs the mechanics (hash, upload,
 download-test, record-keeping) on your GO.
 
+**⚠️ INCIDENT 2026-07-22 AM — the wrong link went out; two things now on YOU:**
+The OLD June kit's link (stale `fc940fe` 0.1.0 build) was sent out instead of the staged 0.9.0
+link — protocol steps 3 (verify the actual link) and 5 (record recipients) were skipped. Cowork
+has since killed the old link (verified dead unauthenticated), renamed the file
+`RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip`, and re-verified the correct link
+end-to-end (anonymous download, SHA-256 `6BC2F7DF…F5A2C4` exact):
+https://drive.google.com/file/d/1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n/view?usp=sharing
+1. **Tell Claude who (if anyone) received the old link** → they get the correction + the verified
+   link, and the recipients table in `BETA_DISTRIBUTION_RECORD.md` gets its real rows.
+2. **Re-send using ONLY the link above** — per the record's new MANDATORY SEND RULE: no link goes
+   to a human until hash-verified through that exact public link (this one was, 2026-07-22 AM).
+Anyone clicking the old link now just sees "request access" — safe; the correction DM covers it.
+
 **Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
 the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:
 ~3 non-technical gamers · 2 people burned by tweak packs before · 2 enthusiasts · 1 privacy-focused
@@ -246,13 +262,26 @@ about was never built.** Now consolidated into [`UI_VISION_BACKLOG.md`](UI_VISIO
 built then rejected + **deleted**; the JARVIS motion stack (magnetic cursor, GSAP data-reactivity, hologram
 inertia) is being built via the APPROVED **Ops Console** rollout
 (`docs/superpowers/specs/2026-07-09-compy-console-hud-direction.md`; the Instrument-Bench bento was
-rejected on sight). **Correction (2026-07-11 audit — this line previously contradicted
-UI_VISION_BACKLOG.md and was wrong):** Lenis smooth-scroll is **NOT dropped — still unbuilt, still
-open** (UI_VISION_BACKLOG.md §A.5, verified 0 files). The HoloLens onboarding tour redesign is **NOT
-open — it SHIPPED** (verified 2026-07-08, UI_VISION_BACKLOG.md §H) and should not have been listed
-here as unresolved. Also still genuinely open there: CommandPalette, the site-glow/"full overhaul"
-gate, the magnetic-cursor slice (only a narrower "reticle Target Cursor" shipped so far), GSAP
-data-reactivity (not built as specified), and the room-transition wipe (partial).
+rejected on sight). **Correction (2026-07-11 audit — this line previously contradicted UI_VISION_BACKLOG.md and was
+wrong):** Lenis smooth-scroll — **UPDATE 2026-07-22: this correction is now ITSELF stale.** The
+2026-07-11 audit found Lenis "still unbuilt, verified 0 files" — true then, but the JARVIS motion
+train shipped 2026-07-12 (`1d310e1`) and built it: `src/design/jarvis/LenisSpine.tsx` exists,
+imports `lenis@1.3.25`, and is mounted in `ShellV2.tsx` behind the `jarvis` flag (A7 above confirms
+that flag is default-ON, owner-ratified 2026-07-14). UI_VISION_BACKLOG.md §A.5 already reflects this
+(🟢 BUILT) — only this file's paraphrase had drifted out of sync with it. The HoloLens onboarding
+tour redesign is **NOT open — it SHIPPED** (verified 2026-07-08, UI_VISION_BACKLOG.md §H) and should
+not have been listed here as unresolved.
+**Also corrected 2026-07-22 (same stale-paraphrase pattern — re-verified against current code, and
+UI_VISION_BACKLOG.md already had these right):** the magnetic-cursor slice is **BUILT**, not just a
+narrower "reticle" — `MagneticLayer.tsx` (delegated magnetic pull via GSAP `quickTo`) is imported and
+mounted in `ShellV2.tsx`, commit `1d310e1`. GSAP data-reactivity is **BUILT** — `ArcGauge`'s
+count-up/ring-sweep plus a GSAP data-tick flash on real measured changes. The room-transition wipe
+itself is **BUILT** (`1d310e1`, keyed remount on room change in `ShellV2.tsx`) — what's actually
+still partial is a *different*, narrower sub-piece: Monitor's "living oscilloscope trace" treatment
+for its meters (Home has one trace; Monitor's rollout is incomplete) — don't conflate the two.
+**Still genuinely open, unchanged:** CommandPalette (deliberately parked — `ShellV2.tsx`'s own
+comment: "a search box that does nothing would be a fake affordance — banned," owner call post-P6)
+and the site-glow/"full overhaul" gate.
 - **You said "there's more I'm missing" + "capture it first"** — done (this doc). **Next → tell me if
   the 🔴 list is complete or still short an item.** The first build target is **DECIDED** — the Instrument
   Bench Phase-1 build (the drag gallery is deleted, not a build option). Note: your original **"Feature Roadmap Checklist (CC Brief)"**
