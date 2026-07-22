@@ -30,10 +30,51 @@ before assuming an MSI exists too. NotSigned by design.
 - ✅ Identity strings: only the two intentional legacy literals remain (migration copy-*source* + `serde(alias)`); frontend clean; ETW session `Compy-FPS`; config `Compy` / `gg.compy.app` / `0.9.0` / `compy.gg`.
 - ✅ Single-instance plugin wired first; migration is copy-not-move + atomic staging-rename + OnceLock-guarded, with a unit test; rollback resolves purely from local `history.json` (which migration copies verbatim).
 - ✅ Export identity (`# Compy Report`, `compy-report-*`, UTF-8 BOM, `compy_version`); no HTTP-client dependency + CSP locks `connect-src` to self/ipc.
-- ⏳ Suites green: **re-run `cargo test` / `npm test` right before this pass and confirm 100%** — this
-  line hardcoded `206/206` / `114/114`, the 0.1.0-era count; badly stale now (cargo was already
-  787/787 as of the 2026-07-17 Intelligence Phase 2 ship alone, and grows every cycle). Don't trust
-  either old number — re-derive live rather than treating this line as still-current evidence.
+- ✅ Suites green — re-derived live 2026-07-22 for this pass: **cargo 856/856 (+24 ignored) ·
+  npm 188 files / 1777 tests**. (One npm test file failed on a cold first run with ~664s environment
+  time; the full clean re-run passed everything — flake, not a product defect.) If this checklist is
+  re-run in a later cycle, re-derive again — counts grow every cycle.
+
+---
+
+## HQ automated pass — 2026-07-22 (headless coverage of the sections below)
+
+*Run end-to-end on the dev box against the exact staged installer (SHA-256 match re-verified).
+Everything here is machine-verified; the boxes below stay unticked because they are the OWNER's
+eyes-on run. What's left for the human sitting is listed at the end of this block.*
+
+- **§1 (partial):** window title **Compy**, rail Home·Monitor·Blackbook·Lab, version **0.9.0**,
+  live stamp **`37a166c · release`**, zero "Sentinel" strings in rendered UI. *Human remainder:
+  real installer run + SmartScreen → Run anyway + Start-menu entry.*
+- **§2:** unstageable here — no `%APPDATA%\Sentinel` exists on this box (already merged long ago),
+  so per this checklist's own fallback HQ relied on the migration unit test + code review and
+  confirmed the current ledger renders: **56 entries** timeline verified live
+  (`docs/ui-sweep/shots/a2-tooltip.png` — mislabeled filename, it frames the Blackbook ledger).
+- **§3:** staged fresh-profile run — tour auto-opens (**10 steps**, not the "3 steps" written below;
+  copy drift in this doc, intent holds), real rig read (RX 9070 XT · Ryzen 7 9850X3D · 31.4 GB ·
+  Win11 Core 25H2), line icons / **no emoji**, Next×9 → Finish clean; FirstCheck runs real checks
+  live (counter to 16, "16 checks · 1.2s"), verdict + #1 limiter named inline, "Open the dashboard"
+  lands. Shots: `a2-firstrun-1/tour1/check.png` — personally reviewed, clean.
+- **§4 (automated half):** tooltip shows plain-English "what", in-viewport (DOM-assert);
+  "More in the Blackbook" opens + flashes the right entry; search filters 85→18 on "vrr" with an
+  honest empty state; type chips work (Guides 8 · Tricks 14); Autopsy grades honestly
+  ("3 real · 0 placebo · 1 risky · 1 unrecognized", "Risky — refused", won't-guess copy) and the
+  "Safe how-to available →" chip appears on guide-matched claims — **theme-accent violet, not the
+  literal "green" written below** (drift note; same for "Knowledge library" → it's the **Blackbook**
+  now). *Human remainder: enable monitoring (UAC) + overlay over a real game.*
+- **§5 / §6:** not automatable by design — UAC clicks and a live DX11/12 game are the owner's.
+- **§7:** second launch focuses the existing window (1 process, foreground=compy); export produced
+  `compy-report-*.md` + `.json`, UTF-8 BOM intact, title "# Compy Report", version 0.9.0, zero
+  Sentinel strings; **zero outbound connections** from compy.exe during a normal session.
+- **§8:** uninstall `/S` → app removed, **`%APPDATA%\Compy` fully intact** (history.json 40503 B,
+  sessions, exports, runtime all present; Recycle Bin clean) → reinstall `/S` → live stamp
+  `37a166c · release`, **ledger renders all 56 pre-existing entries**. The WebView2 profile
+  (`%LOCALAPPDATA%\gg.compy.app`) also survives uninstall, so UI state (dismissed tour) persists
+  too. "Retire old Sentinel app" = **N/A on this box** (no Sentinel install exists).
+
+**What actually needs the owner's sitting:** §1 installer/SmartScreen/Start-menu · §2b on a
+0.1.0-era tester box · §4 monitoring UAC + overlay over a game · §5 UAC accept/cancel · §6 live-game
+FPS + helper exit · overall does-it-feel-right. Everything else above is already machine-proven.
 
 ---
 
