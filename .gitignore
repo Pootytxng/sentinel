@@ -86,5 +86,5 @@ docs/usage-audit/
 # machine-local QA evidence (cited from docs but not shipped in the repo)
 docs/ui-sweep/shots/
 
-# stray local build-output staging dir (not produced by any tracked script)
-/release-out/
+# local build-output staging dir (rel091 worktree stages here; not produced by any tracked script)
+release-out/

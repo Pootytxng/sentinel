@@ -8,6 +8,9 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
+// 2026-07-22: an Electron-hosted bridge shell leaks NODE_ENV=production into children; production React lacks React.act and 608 render tests false-fail. Tests always run in vitest's own env.
+delete process.env.NODE_ENV;
+
 const trueCwd = realpathSync.native(process.cwd());
 // vitest's exports map doesn't expose the bin file directly — resolve package.json (always
 // exported) and read the bin field from it.
