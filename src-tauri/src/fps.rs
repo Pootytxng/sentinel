@@ -96,6 +96,16 @@ pub(crate) fn select_game_presenter(
         if c.recent.len() < 2 {
             continue;
         }
+        // A presenter we couldn't even NAME can never be "the game": resolve_process_name
+        // returns "" when OpenProcess fails — which is exactly the protected/system-process
+        // case (live catch 2026-07-22: dwm.exe's name failed to resolve on the dev box, so
+        // "" slid past the name denylist below and the compositor won at a fabricated
+        // 803 fps). Games are user-session processes the elevated helper can always open;
+        // an unnameable presenter is a system process, and a session can't honestly
+        // attribute to a nameless one anyway.
+        if c.name.is_empty() {
+            continue;
+        }
         if PRESENTER_DENYLIST.iter().any(|d| c.name.eq_ignore_ascii_case(d)) {
             continue;
         }
@@ -515,6 +525,24 @@ mod presenter_selection_tests {
             cand(400, "compy.exe", 0xC, 100),
         ])
         .is_none());
+    }
+
+    // THE GUARD (live catch, 2026-07-22 Marvel Rivals smoke session): dwm.exe's name failed to
+    // resolve (OpenProcess denied even elevated), so the empty-named compositor bypassed the
+    // name denylist and was reported as the game at 803 fps. Unnameable presenters never win.
+    #[test]
+    fn unnameable_presenter_never_wins_even_with_the_most_frames() {
+        let picked = select_game_presenter(vec![
+            cand(1816, "", 0xA, 803), // dwm whose name resolution failed
+            cand(12264, "Marvel-Win64-Shipping.exe", 0xB, 240),
+        ])
+        .expect("the game is picked");
+        assert_eq!(picked.1, "Marvel-Win64-Shipping.exe");
+    }
+
+    #[test]
+    fn only_unnameable_presenters_means_no_game_not_a_nameless_one() {
+        assert!(select_game_presenter(vec![cand(1816, "", 0xA, 803)]).is_none());
     }
 
     #[test]
