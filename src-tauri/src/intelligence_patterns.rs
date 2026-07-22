@@ -41,6 +41,8 @@ const MIN_FADE_SESSIONS: usize = 4;
 const MIN_FADE_BUCKETS: usize = 30;
 /// Total peak-GPU-temp movement (°C) across a trend before it is worth reporting.
 const THERMAL_TREND_MIN_C: f64 = 5.0;
+/// Total peak-CPU-temp movement (°C) across a trend before it is worth reporting.
+const CPU_THERMAL_TREND_MIN_C: f64 = 5.0;
 /// Total RAM-pressure movement (percentage points) before it is worth reporting.
 const MEMORY_TREND_MIN_PTS: f64 = 5.0;
 // A session must have ≥ MIN_COMPARE_SAMPLES FPS samples to be comparable — imported from
@@ -288,6 +290,49 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
             coverage.push(format!(
                 "Thermal trend for {game}: only {} of {n} sessions recorded a peak GPU temperature.",
                 temps.len()
+            ));
+        }
+
+        // ── cpu-thermal-trend: peak CPU temperature over time ──
+        let cpu_temps: Vec<f64> = lane
+            .sessions
+            .iter()
+            .filter_map(|s| s.peak_cpu_temp_c.map(|t| t as f64))
+            .collect();
+        if cpu_temps.len() >= MIN_TREND_SESSIONS {
+            let (first_fit, last_fit) = fitted_span(&cpu_temps);
+            let change_c = round1(last_fit - first_fit);
+            if change_c.abs() >= CPU_THERMAL_TREND_MIN_C {
+                let strong = cpu_temps.len() >= STRONG_TREND_SESSIONS && change_c.abs() >= 8.0;
+                patterns.push(SessionPattern {
+                    id: "cpu-thermal-trend".into(),
+                    game: Some(game.clone()),
+                    title: format!("{game} sessions are running the CPU {}", if change_c > 0.0 { "hotter" } else { "cooler" }),
+                    detail: format!(
+                        "Peak CPU temperature in {game} moved about {change_c:+.0} °C across {} sessions (fitted ~{:.0} °C → ~{:.0} °C).",
+                        cpu_temps.len(), first_fit, last_fit
+                    ),
+                    confidence: if strong { Confidence::Medium } else { Confidence::Low },
+                    confidence_reason: if strong {
+                        "A sustained multi-session move well past normal variation.".into()
+                    } else {
+                        "A small or short-window move — ambient temperature alone can explain a few degrees.".into()
+                    },
+                    supporting_evidence: vec![format!(
+                        "Peak CPU temps recorded across {} sessions of {game} (via HWiNFO/LibreHardwareMonitor interop — none fabricated).",
+                        cpu_temps.len()
+                    )],
+                    raises_confidence: vec![
+                        "More sessions continuing the climb.".into(),
+                        "The same climb showing up in the GPU thermal trend too (points at the case/cooling, not one component).".into(),
+                    ],
+                    next_test: (change_c > 0.0).then(|| "Check CPU cooler contact/dust and case airflow, then watch the next session's peak CPU temperature in Monitor.".to_string()),
+                });
+            }
+        } else if n >= MIN_TREND_SESSIONS {
+            coverage.push(format!(
+                "CPU thermal trend for {game}: only {} of {n} sessions recorded a peak CPU temperature (no HWiNFO/LibreHardwareMonitor running).",
+                cpu_temps.len()
             ));
         }
 
@@ -619,6 +664,8 @@ mod tests {
             fps_series: vec![],
             capture_capabilities: None,
             game_state: None,
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
         }
     }
 
@@ -700,6 +747,29 @@ mod tests {
         let p = r.patterns.iter().find(|p| p.id == "thermal-trend").expect("fires");
         assert!(p.detail.contains("°C"));
         assert!(p.title.contains("hotter"));
+    }
+
+    #[test]
+    fn cpu_thermal_creep_is_detected_with_real_numbers() {
+        let s: Vec<SessionSummary> = (0..6)
+            .map(|i| {
+                let mut s = mk_session(&day(i), "cp2077.exe", 100.0);
+                s.peak_cpu_temp_c = Some(60 + (i as u32) * 3); // 60 → 75
+                s
+            })
+            .collect();
+        let r = detect_patterns(&s);
+        let p = r.patterns.iter().find(|p| p.id == "cpu-thermal-trend").expect("fires");
+        assert!(p.detail.contains("°C"));
+        assert!(p.title.contains("hotter"));
+    }
+
+    #[test]
+    fn cpu_thermal_trend_stays_silent_without_readings() {
+        // No monitor running (peak_cpu_temp_c always None) — never fabricate a trend.
+        let s: Vec<SessionSummary> = (0..6).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
+        let r = detect_patterns(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "cpu-thermal-trend"));
     }
 
     #[test]

@@ -1354,6 +1354,8 @@ mod blackbox_tests {
             fps_series: Vec::new(),
             capture_capabilities: None,
             game_state: None,
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
         }
     }
 

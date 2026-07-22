@@ -984,7 +984,22 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 let elapsed = start.elapsed().as_secs() as u32;
                 // Tooltip carry-over: the live tray tooltip reuses this tick's data (no new IPC).
                 let mut tip: Option<(f64, f64)> = None;
-                if let Ok(txt) = std::fs::read_to_string(fps_out_path()) {
+                // Freshness gate (0.9.1): the helper now emits NOTHING when no game is
+                // positively attached (fail-closed attribution), so fps.json can legitimately
+                // sit frozen at its last sample. Same <3 s mtime rule as get_fps_status —
+                // without it, this 1 Hz recorder would re-record that frozen sample forever.
+                let fps_fresh = std::fs::metadata(fps_out_path())
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|m| m.elapsed().ok())
+                    .map(|e| e < std::time::Duration::from_secs(3))
+                    .unwrap_or(false);
+                let fps_txt = if fps_fresh {
+                    std::fs::read_to_string(fps_out_path()).ok()
+                } else {
+                    None
+                };
+                if let Some(txt) = fps_txt {
                     // Parse the helper's per-tick line through the capture backend (its wire format is
                     // the backend's concern) — byte-identical to the prior inline serde_json parse.
                     if let Some(s) = crate::capture::EtwDxgiBackend.parse_sample(&txt) {
@@ -1006,6 +1021,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 }
                 let gpu_usage = gpus.iter().filter_map(|g| g.utilization_gpu_pct).max();
                 let gpu_clock = gpus.iter().filter_map(|g| g.graphics_clock_mhz).max();
+                let gpu_hotspot_temp = gpus.iter().filter_map(|g| g.hotspot_temperature_c).max();
                 let cpu = get_cpu_sensors();
                 acc.record_sensors(
                     gpu_temp,
@@ -1013,6 +1029,10 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     Some(cpu.ram_used_bytes),
                     Some(cpu.ram_total_bytes),
                 );
+                // Same driver-free interop as get_cpu_temp (cpu_temp.rs) — None when no HWiNFO/LHM/OHM
+                // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.
+                let cpu_temp = crate::cpu_temp::read_cpu_temp().map(|t| t.temp_c.round() as u32);
+                acc.record_thermals(cpu_temp, gpu_hotspot_temp);
                 if !gaming_mode_seen && crate::gaming_session::load_session().is_some() {
                     gaming_mode_seen = true;
                 }

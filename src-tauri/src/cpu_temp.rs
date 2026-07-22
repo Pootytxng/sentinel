@@ -10,6 +10,7 @@
 //!   1. **HWiNFO** — its `Global\HWiNFO_SENS_SM2` shared-memory sensor block (most common with
 //!      gamers), mapped read-only via `OpenFileMappingW`/`MapViewOfFile` (`read_hwinfo`, tried FIRST).
 //!   2. **LibreHardwareMonitor / OpenHardwareMonitor** — their WMI namespaces (`read_ohm`).
+//!
 //! Each source exists only while that app is running. When NOTHING is publishing a value the CPU
 //! temp is **unknown** — `read_cpu_temp` returns `None`, the honest "bring your own monitor" default;
 //! Compy never fabricates a number.

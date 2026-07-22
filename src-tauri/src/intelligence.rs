@@ -2300,6 +2300,8 @@ mod tests {
             fps_series: vec![],
             capture_capabilities: None,
             game_state: None,
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
         }
     }
 

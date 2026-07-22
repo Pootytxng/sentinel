@@ -113,6 +113,13 @@ export type SessionSummary = {
    *  field is optional; a `null`/absent field means "we couldn't prove it", NEVER a fabricated value.
    *  Used with `capture_capabilities` to decide whether two sessions are comparable. */
   game_state?: GameStateFingerprint | null;
+  /** Peak CPU temp via read-only monitor interop (HWiNFO/LHM/OHM — cpu_temp.rs). Absent/null when
+   *  no compatible monitor was running during the session — honestly Unknown, never fabricated
+   *  (Compy ships no driver of its own). Absent on pre-field sessions too. */
+  peak_cpu_temp_c?: number | null;
+  /** Peak GPU hotspot (junction) temperature — AMD-specific; null on NVIDIA (NVML doesn't expose
+   *  it) and on pre-field sessions. */
+  peak_gpu_hotspot_temp_c?: number | null;
 };
 
 /** Mirror of the Rust `GameStateFingerprint` (game_state.rs) — the honest conditions a session ran

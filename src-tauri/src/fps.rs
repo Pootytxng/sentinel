@@ -72,12 +72,32 @@ const PRESENTER_DENYLIST: &[&str] = &[
     "textinputhost.exe",
 ];
 
+/// Read-only window evidence for a presenting pid, probed once per tick. The positive
+/// "this is actually a game" identification (0.9.1): a denylist can only name the apps we
+/// know about, and rate can't tell a game menu from Discord — so attribution requires the
+/// presenter to LOOK like a game being played, not merely to out-present everything else.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct WindowEvidence {
+    /// The pid owns at least one visible, unowned, non-cloaked top-level window.
+    /// Electron-style apps (Discord, VS Code, Claude, browsers) present from a GPU child
+    /// process that owns NO windows — this signal excludes that whole class structurally,
+    /// with no denylist entry per app.
+    pub owns_visible_toplevel: bool,
+    /// The foreground window belongs to this pid — the user is actually in it.
+    pub foreground: bool,
+    /// One of its visible top-level windows covers its monitor's full bounds (exclusive
+    /// fullscreen or borderless). A maximized desktop app stops at the work area
+    /// (taskbar), so it never satisfies this.
+    pub covers_monitor: bool,
+}
+
 /// One (process, swapchain) presenter candidate in the current stats window.
 pub(crate) struct PresenterCandidate {
     pub pid: u32,
     pub name: String,
     pub swapchain: u64,
     pub recent: Vec<f64>,
+    pub evidence: WindowEvidence,
 }
 
 /// PURE: pick "the game" among per-(pid, swapchain) candidates — TWO stages:
@@ -125,6 +145,98 @@ pub(crate) fn select_game_presenter(
         .filter(|c| c.pid == win_pid && c.recent.len() >= 2)
         .max_by_key(|c| (c.recent.len(), std::cmp::Reverse(c.swapchain)))
         .map(|c| (win_pid, win_name, c.recent))
+}
+
+// ---------------------------------------------------------------------------
+// Sticky attachment (0.9.1) — fail-closed attribution.
+//
+// The 0.9.0 defect: the dominant-presenter pick above ran statelessly every
+// tick, and EVERYTHING presents through DXGI — so when the game went quiet
+// between matches, the report wandered to Discord / Radeon Software / VS Code /
+// Claude (tester Export, 2026-07-22). A denylist can't enumerate every desktop
+// app and present-rate can't distinguish a game menu from an Electron app, so
+// the fix is positive identification + stickiness:
+//
+//  ACQUIRE  a candidate only when it looks like a game being PLAYED (named,
+//           not denylisted, owns a visible top-level window, is foreground,
+//           and that window covers its monitor) AND it wins for
+//           ATTACH_STREAK_TICKS consecutive ticks.
+//  ATTACHED report ONLY that pid. Foreground is NOT re-required (alt-tab
+//           safe). If it goes silent (menu / loading / minimized), emit
+//           NOTHING — never re-pick. Consumers already treat a >3 s-stale
+//           fps.json as no-sample, so silence degrades cleanly.
+//  RELEASE  only when the process is gone (or its pid was recycled by a
+//           different image), returning to fail-closed acquisition.
+//
+// No sample is always preferred over a wrong sample.
+
+/// Consecutive qualified-winner ticks (~500 ms each) required to attach.
+const ATTACH_STREAK_TICKS: u32 = 3;
+
+pub(crate) enum Attachment {
+    Unattached { last_pid: Option<u32>, streak: u32 },
+    Attached { pid: u32, name: String },
+}
+
+impl Attachment {
+    pub(crate) fn new() -> Self {
+        Attachment::Unattached { last_pid: None, streak: 0 }
+    }
+}
+
+/// Does this candidate positively look like a game the user is playing?
+/// (Name/denylist checks are re-applied inside `select_game_presenter`; the
+/// window evidence is the acquisition-only addition.)
+fn qualifies_as_game(c: &PresenterCandidate) -> bool {
+    c.evidence.owns_visible_toplevel && c.evidence.foreground && c.evidence.covers_monitor
+}
+
+/// PURE: advance the attachment state machine one tick. `alive` answers "is
+/// pid still a live process running this image?" (injected so tests need no
+/// OS). Returns the next state plus the report to emit — `None` means emit
+/// nothing this tick (fail-closed).
+pub(crate) fn advance_attachment(
+    state: Attachment,
+    candidates: Vec<PresenterCandidate>,
+    alive: &dyn Fn(u32, &str) -> bool,
+) -> (Attachment, Option<(u32, String, Vec<f64>)>) {
+    match state {
+        Attachment::Attached { pid, name } => {
+            // Report the attached game's dominant swapchain — and nothing else,
+            // no matter who out-presents it this tick.
+            let frames = candidates
+                .into_iter()
+                .filter(|c| c.pid == pid && c.recent.len() >= 2)
+                .max_by_key(|c| (c.recent.len(), std::cmp::Reverse(c.swapchain)))
+                .map(|c| c.recent);
+            match frames {
+                Some(f) => {
+                    let report = (pid, name.clone(), f);
+                    (Attachment::Attached { pid, name }, Some(report))
+                }
+                // Silent tick: between matches / loading / minimized. Emit
+                // nothing; stay attached while the process lives.
+                None if alive(pid, &name) => (Attachment::Attached { pid, name }, None),
+                None => (Attachment::new(), None),
+            }
+        }
+        Attachment::Unattached { last_pid, streak } => {
+            let qualified: Vec<PresenterCandidate> =
+                candidates.into_iter().filter(qualifies_as_game).collect();
+            match select_game_presenter(qualified) {
+                Some((pid, name, frames)) => {
+                    let streak = if last_pid == Some(pid) { streak + 1 } else { 1 };
+                    if streak >= ATTACH_STREAK_TICKS {
+                        (Attachment::Attached { pid, name: name.clone() }, Some((pid, name, frames)))
+                    } else {
+                        (Attachment::Unattached { last_pid: Some(pid), streak }, None)
+                    }
+                }
+                // No fully-qualified game presenter → no sample. Never guess.
+                None => (Attachment::new(), None),
+            }
+        }
+    }
 }
 
 // How far back the per-second stats window looks, and how often we report.
@@ -258,6 +370,114 @@ fn resolve_process_name(pid: u32) -> String {
     }
 }
 
+/// One EnumWindows pass → WindowEvidence per pid of interest. Read-only: no
+/// window, process, or policy state is touched.
+fn probe_window_evidence(pids: &[u32]) -> HashMap<u32, WindowEvidence> {
+    use windows::Win32::Foundation::{HWND, LPARAM, RECT};
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetForegroundWindow, GetWindow, GetWindowRect, GetWindowThreadProcessId,
+        IsWindowVisible, GW_OWNER,
+    };
+
+    struct Ctx {
+        evidence: HashMap<u32, WindowEvidence>,
+    }
+
+    // Borderless/fullscreen windows match their monitor bounds exactly; a few px
+    // of tolerance absorbs DPI-virtualization rounding, while a maximized desktop
+    // window still misses by the taskbar height (~40+ px), so it never passes.
+    const COVER_TOLERANCE_PX: i32 = 4;
+
+    unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> windows::Win32::Foundation::BOOL {
+        let ctx = unsafe { &mut *(lparam.0 as *mut Ctx) };
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+        let Some(ev) = ctx.evidence.get_mut(&pid) else {
+            return true.into(); // not a presenting pid — keep enumerating
+        };
+        // Only visible, unowned (true top-level), non-cloaked windows count as
+        // game-window evidence. Cloaked = a DWM-hidden ghost (suspended UWP,
+        // virtual-desktop resident) that IsWindowVisible still reports true for.
+        if !unsafe { IsWindowVisible(hwnd) }.as_bool()
+            || unsafe { GetWindow(hwnd, GW_OWNER) }.is_ok_and(|o| !o.is_invalid())
+        {
+            return true.into();
+        }
+        let mut cloaked = 0u32;
+        let cloak_ok = unsafe {
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED,
+                &mut cloaked as *mut u32 as *mut _,
+                std::mem::size_of::<u32>() as u32,
+            )
+        };
+        if cloak_ok.is_ok() && cloaked != 0 {
+            return true.into();
+        }
+        ev.owns_visible_toplevel = true;
+
+        let mut rect = RECT::default();
+        if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
+            let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+            let mut info = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            if unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
+                let m = info.rcMonitor;
+                if rect.left <= m.left + COVER_TOLERANCE_PX
+                    && rect.top <= m.top + COVER_TOLERANCE_PX
+                    && rect.right >= m.right - COVER_TOLERANCE_PX
+                    && rect.bottom >= m.bottom - COVER_TOLERANCE_PX
+                {
+                    ev.covers_monitor = true;
+                }
+            }
+        }
+        true.into()
+    }
+
+    let mut ctx = Ctx {
+        evidence: pids.iter().map(|&p| (p, WindowEvidence::default())).collect(),
+    };
+    unsafe {
+        let _ = EnumWindows(Some(enum_cb), LPARAM(&mut ctx as *mut Ctx as isize));
+        let fg = GetForegroundWindow();
+        if !fg.is_invalid() {
+            let mut fg_pid = 0u32;
+            GetWindowThreadProcessId(fg, Some(&mut fg_pid));
+            if let Some(ev) = ctx.evidence.get_mut(&fg_pid) {
+                ev.foreground = true;
+            }
+        }
+    }
+    ctx.evidence
+}
+
+/// Is `pid` still a live process running the image we attached to? Guards both
+/// process exit and (rare) pid recycling — either releases the attachment.
+fn process_alive_as(pid: u32, expected_name: &str) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+    use windows::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    let running = unsafe {
+        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            return false;
+        };
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(handle, &mut code).is_ok();
+        let _ = CloseHandle(handle);
+        ok && code == STILL_ACTIVE.0 as u32
+    };
+    running && resolve_process_name(pid).eq_ignore_ascii_case(expected_name)
+}
+
 fn write_atomic(path: &str, contents: &str) {
     let tmp = format!("{path}.tmp");
     if std::fs::write(&tmp, contents).is_ok() {
@@ -373,6 +593,9 @@ pub fn run_capture() {
     );
 
     let stdout = std::io::stdout();
+    // Sticky game attachment (0.9.1): acquire on positive window evidence +
+    // streak, then report ONLY the attached pid; silence emits nothing.
+    let mut attachment = Attachment::new();
     loop {
         std::thread::sleep(Duration::from_millis(REPORT_INTERVAL_MS));
         let now = Instant::now();
@@ -398,10 +621,12 @@ pub fn run_capture() {
             !tr.samples.is_empty()
         });
 
-        // The "game" is the dominant allowed process, then ITS dominant swapchain — the pick is
-        // the pure, guard-tested select_game_presenter (Compy's own UI / compositor / shell can
-        // never win; per-chain frametimes keep a second in-process chain from poisoning the
-        // average). Names resolve once per pid here.
+        // Build per-(pid, swapchain) candidates, then advance the sticky
+        // attachment machine: acquisition runs the pure, guard-tested
+        // select_game_presenter over WINDOW-QUALIFIED candidates only (Compy's
+        // own UI / compositor / shell / windowless Electron GPU processes can
+        // never win); once attached, only that pid is ever reported. Names
+        // resolve once per pid here; window evidence probes once per tick.
         let mut names: HashMap<u32, String> = HashMap::new();
         let mut candidates: Vec<PresenterCandidate> = Vec::new();
         for ((pid, swapchain), tr) in map.iter() {
@@ -423,9 +648,31 @@ pub fn run_capture() {
                 name,
                 swapchain: *swapchain,
                 recent,
+                evidence: WindowEvidence::default(),
             });
         }
-        let best = select_game_presenter(candidates);
+        drop(map);
+        let pids: Vec<u32> = candidates.iter().map(|c| c.pid).collect();
+        let evidence = probe_window_evidence(&pids);
+        for c in &mut candidates {
+            c.evidence = evidence.get(&c.pid).copied().unwrap_or_default();
+        }
+        let was_attached = matches!(&attachment, Attachment::Attached { .. });
+        let (next, best) = advance_attachment(
+            std::mem::replace(&mut attachment, Attachment::new()),
+            candidates,
+            &|pid, name| process_alive_as(pid, name),
+        );
+        attachment = next;
+        match (&attachment, was_attached) {
+            (Attachment::Attached { pid, name }, false) => {
+                eprintln!("[compy-fps] attached to {name} (pid {pid})");
+            }
+            (Attachment::Unattached { .. }, true) => {
+                eprintln!("[compy-fps] game exited — detached, watching for the next one.");
+            }
+            _ => {}
+        }
 
         if let Some((pid, process_name, frametimes)) = best {
             let frames = frametimes.len();
@@ -487,6 +734,7 @@ mod presenter_selection_tests {
             name: name.to_string(),
             swapchain,
             recent: vec![6.2; frames],
+            evidence: super::WindowEvidence::default(),
         }
     }
 
@@ -650,5 +898,194 @@ mod heartbeat_tests {
         let path = p.to_string_lossy().to_string();
         assert!(!heartbeat_stale(&path), "a just-written heartbeat must not be stale");
         let _ = std::fs::remove_file(&p);
+    }
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    //! THE GUARDS (tester Export, 2026-07-22): between matches the 0.9.0 report wandered to
+    //! Discord / Radeon Software / VS Code / Claude. Attribution is now positive-evidence
+    //! (window ownership + foreground + monitor coverage) with sticky attachment — ambiguous
+    //! ticks emit NOTHING, and an attached game is never abandoned for a chattier presenter.
+
+    use super::{advance_attachment, Attachment, PresenterCandidate, WindowEvidence, ATTACH_STREAK_TICKS};
+
+    const GAME: WindowEvidence = WindowEvidence {
+        owns_visible_toplevel: true,
+        foreground: true,
+        covers_monitor: true,
+    };
+    /// Electron-style presenter (Discord / VS Code / Claude / browsers): the GPU child
+    /// process presents but owns no windows at all.
+    const WINDOWLESS: WindowEvidence = WindowEvidence {
+        owns_visible_toplevel: false,
+        foreground: false,
+        covers_monitor: false,
+    };
+    /// A maximized desktop app in focus: owns its window, is foreground, but stops at the
+    /// work area (taskbar) — never full monitor bounds.
+    const MAXIMIZED_FG: WindowEvidence = WindowEvidence {
+        owns_visible_toplevel: true,
+        foreground: true,
+        covers_monitor: false,
+    };
+
+    fn cand(pid: u32, name: &str, frames: usize, evidence: WindowEvidence) -> PresenterCandidate {
+        PresenterCandidate {
+            pid,
+            name: name.to_string(),
+            swapchain: 0xA,
+            recent: vec![6.2; frames],
+            evidence,
+        }
+    }
+
+    fn always_alive(_: u32, _: &str) -> bool {
+        true
+    }
+    fn never_alive(_: u32, _: &str) -> bool {
+        false
+    }
+
+    /// Run enough ticks with the same candidates to satisfy the acquisition streak.
+    fn attach(candidates: impl Fn() -> Vec<PresenterCandidate>) -> (Attachment, Option<(u32, String, Vec<f64>)>) {
+        let mut state = Attachment::new();
+        let mut last = None;
+        for _ in 0..ATTACH_STREAK_TICKS {
+            let (next, report) = advance_attachment(state, candidates(), &always_alive);
+            state = next;
+            last = Some(report);
+        }
+        (state, last.expect("ran at least one tick"))
+    }
+
+    #[test]
+    fn windowless_electron_presenter_never_attaches_even_dominant() {
+        // Discord's GPU process out-presents everything and nothing else runs: no sample, ever.
+        let mut state = Attachment::new();
+        for _ in 0..10 {
+            let (next, report) =
+                advance_attachment(state, vec![cand(500, "Discord.exe", 400, WINDOWLESS)], &always_alive);
+            assert!(report.is_none(), "a windowless presenter must never produce a sample");
+            state = next;
+        }
+        assert!(matches!(state, Attachment::Unattached { .. }));
+    }
+
+    #[test]
+    fn foreground_maximized_desktop_app_never_attaches() {
+        // Radeon Software maximized and focused: presents plenty, but doesn't cover the monitor.
+        let mut state = Attachment::new();
+        for _ in 0..10 {
+            let (next, report) = advance_attachment(
+                state,
+                vec![cand(600, "RadeonSoftware.exe", 300, MAXIMIZED_FG)],
+                &always_alive,
+            );
+            assert!(report.is_none(), "a non-covering desktop app must never produce a sample");
+            state = next;
+        }
+    }
+
+    #[test]
+    fn qualified_game_attaches_after_streak_not_first_tick() {
+        let mut state = Attachment::new();
+        let mk = || vec![cand(100, "game.exe", 161, GAME)];
+        for tick in 1..=ATTACH_STREAK_TICKS {
+            let (next, report) = advance_attachment(state, mk(), &always_alive);
+            state = next;
+            if tick < ATTACH_STREAK_TICKS {
+                assert!(report.is_none(), "no sample before the streak completes (tick {tick})");
+            } else {
+                assert_eq!(report.expect("attach tick reports").1, "game.exe");
+            }
+        }
+        assert!(matches!(state, Attachment::Attached { .. }));
+    }
+
+    #[test]
+    fn attached_game_gone_silent_yields_no_sample_and_no_wander() {
+        // THE 0.9.0 defect scenario: the game sits in a between-matches screen (stops
+        // presenting) while Discord dominates the present stream. 0.9.0 reported Discord;
+        // now: nothing is emitted and the attachment holds.
+        let (mut state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        for _ in 0..20 {
+            let (next, report) = advance_attachment(
+                state,
+                vec![
+                    cand(500, "Discord.exe", 400, WINDOWLESS),
+                    // Even a FULLY qualified other candidate must not steal the attachment:
+                    cand(700, "SomeOtherGame.exe", 300, GAME),
+                ],
+                &always_alive,
+            );
+            assert!(report.is_none(), "attached-but-silent must emit nothing");
+            assert!(
+                matches!(next, Attachment::Attached { pid: 100, .. }),
+                "attachment must not wander while the game lives"
+            );
+            state = next;
+        }
+    }
+
+    #[test]
+    fn attached_game_reported_even_when_out_presented_and_backgrounded() {
+        // Alt-tab safe: once attached, the game is reported without re-checking foreground,
+        // and a chattier presenter can't displace it.
+        let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        let backgrounded = WindowEvidence { foreground: false, ..GAME };
+        let (next, report) = advance_attachment(
+            state,
+            vec![
+                cand(100, "game.exe", 90, backgrounded),
+                cand(500, "Discord.exe", 400, WINDOWLESS),
+            ],
+            &always_alive,
+        );
+        let (pid, name, _) = report.expect("attached game still reports");
+        assert_eq!((pid, name.as_str()), (100, "game.exe"));
+        assert!(matches!(next, Attachment::Attached { pid: 100, .. }));
+    }
+
+    #[test]
+    fn game_death_releases_and_next_game_needs_full_requalification() {
+        let (state, _) = attach(|| vec![cand(100, "game.exe", 161, GAME)]);
+        // Game process dies (or its pid is recycled): silent tick + alive=false → released.
+        let (state, report) = advance_attachment(state, vec![], &never_alive);
+        assert!(report.is_none());
+        assert!(matches!(state, Attachment::Unattached { .. }), "death must release");
+        // The next game must earn attachment through the full evidence+streak gate again.
+        let (state, report) = advance_attachment(state, vec![cand(700, "NextGame.exe", 200, GAME)], &always_alive);
+        assert!(report.is_none(), "one qualified tick must not re-attach instantly");
+        assert!(matches!(state, Attachment::Unattached { streak: 1, .. }));
+    }
+
+    #[test]
+    fn streak_resets_when_the_qualified_winner_changes() {
+        let mut state = Attachment::new();
+        let (next, _) = advance_attachment(state, vec![cand(100, "a.exe", 100, GAME)], &always_alive);
+        state = next;
+        let (next, _) = advance_attachment(state, vec![cand(200, "b.exe", 100, GAME)], &always_alive);
+        state = next;
+        let (state, report) = advance_attachment(state, vec![cand(100, "a.exe", 100, GAME)], &always_alive);
+        assert!(report.is_none(), "a flapping winner must never reach the streak");
+        assert!(matches!(state, Attachment::Unattached { streak: 1, .. }));
+    }
+
+    #[test]
+    fn denylist_and_nameless_guards_still_hold_at_acquisition() {
+        // Window evidence is an ADDITIONAL gate, not a replacement: a denylisted or nameless
+        // presenter with perfect window evidence still never attaches (f96347d preserved).
+        let mut state = Attachment::new();
+        for _ in 0..10 {
+            let (next, report) = advance_attachment(
+                state,
+                vec![cand(300, "msedgewebview2.exe", 400, GAME), cand(400, "", 500, GAME)],
+                &always_alive,
+            );
+            assert!(report.is_none());
+            state = next;
+        }
+        assert!(matches!(state, Attachment::Unattached { .. }));
     }
 }

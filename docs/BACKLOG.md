@@ -109,7 +109,15 @@ never be conflatable in any doc, commit message, or report).
     `component_evidence.rs` 10 tests + the `.card.card-lit:hover` cascade guard in `border-hygiene-guard.test.ts`.
     cargo / clippy / vitest / tsc green · self-reviewer PASS (§4H, 9/9). Invisible on a rig with no qualifying
     session pattern yet (correctly neutral until evidence accrues) — that IS the design.
-  - [ ] hardware-health trends · long-term personal knowledge graph (remaining Phase 4 slices).
+  - [x] **CPU thermal-peak tracking (hardware-health trends, slice 2)** — ✅ BUILT this cycle.
+    `SessionAccumulator::record_thermals` (`sessions.rs`) tracks per-session `peak_cpu_temp_c` /
+    `peak_gpu_hotspot_temp_c` as a running max-so-far — a tick with no reading holds the prior peak,
+    never fabricates one — threaded through `SessionSummary` and `types.ts`. New `cpu-thermal-trend`
+    cross-session detector (`intelligence_patterns.rs`, alongside the existing GPU thermal-trend)
+    fires only once ≥`MIN_TREND_SESSIONS` sessions carry a real peak reading, silent otherwise;
+    Medium confidence only on a sustained multi-session move, Low on a small/short one. cargo
+    869/869 · tsc clean · vitest 1777/1777.
+  - [ ] long-term personal knowledge graph (remaining Phase 4 slice).
 - [ ] **Intelligence Phase 5:** evidence-based Upgrade Advisor 2.0 · "buy nothing" verdict ·
   technical prescription contract · consumer report and shop-report exports. (Subsumes the
   evidence-export-tiers item in PHASE A below and UI_VISION_BACKLOG §F upgrade-path engine —
@@ -720,13 +728,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] `normalize()` honesty fail-safe — a non-finite raw score now fails SAFE to 0 (no credit) instead of `Inf`→`.clamp(0,100)`→**100** (a fabricated "perfect" component score, the worst honesty failure). Currently unreachable (producers guard divisors via `.max(1e-6)`/`is_finite`) but guarded at the point-of-use so a future producer-guard regression can't invent a maxed score; invalid reference (non-finite/≤0) also → 0. Regression test pins Inf/NaN/-Inf + bad refs (was untested); real-path byte-identical — `2ee51aa` (`benchmark.rs:461`)
 - [x] `completeness_pct()` honesty fail-safe (completeness-critic close-out of the above — the grep'd sibling) — its `ceiling <= 0.0` gate did NOT catch a non-finite input (`NaN <= 0.0` is false), so `+Inf current`→**100** (fabricated "fully optimized") and `NaN`→leaked through `.clamp()`. Now `is_finite` guards both inputs at the point of use, mirroring `normalize()`, so the boundary is uniform + safe-by-construction whenever this still-unwired primitive is wired. comparison::pct (guarded `base>0`, measured-FPS inputs, NaN-delta failure mode) + percentile_rank (u32-derived inputs) assessed safe — class now closed. Regression test pins Inf/NaN; finite-input behavior byte-identical — `dbc8358` (`benchmark_scoreboard.rs:75`)
 
-- [ ] FPS presenter picker: desktop apps can win between matches — live §6 evidence 2026-07-22
-  (40-min Marvel Rivals watch): with the game closed/loading, the dominant-presenter pick wandered
-  to Discord/RadeonSoftware/Code/claude (electron/DXGI presenters). The empty-name/dwm case is
-  FIXED (`f96347d` — unnameable presenter can never win), but a session that starts before the
-  game launches can still attribute early samples to a desktop app. Candidate polish: fullscreen/
-  foreground heuristic, or a known-desktop-app denylist extension, or only attach once a presenter
-  sustains game-like present rates. Honesty question, not a crash — design it before arming.
+- [x] **FPS presenter picker: desktop apps winning between matches — FIXED this cycle (0.9.1).**
+  Live §6 evidence 2026-07-22 (40-min Marvel Rivals watch) showed the dominant-presenter pick
+  wandering to Discord/RadeonSoftware/Code/claude while the game sat closed/loading. Fix is
+  positive window evidence + sticky attachment (`fps.rs`): acquisition now requires the candidate
+  to own a visible top-level window, be foreground, AND cover its monitor's full bounds (excludes
+  the whole windowless-Electron-GPU-process class structurally, no per-app denylist entry needed)
+  for `ATTACH_STREAK_TICKS` consecutive ticks; once attached, only that pid is ever reported and a
+  silent tick (menu/loading) emits nothing rather than re-picking — never abandoned for a chattier
+  presenter, released only when the process actually dies/recycles. `monitoring.rs`'s FPS recorder
+  gets a matching freshness gate (<3s mtime) since `fps.json` can now legitimately sit frozen.
+  9 new attachment-state-machine tests. cargo 869/869.
 - [ ] evidence-export tiers — audience-shaped renders of the SAME measured evidence pack (`export.rs`
   today: `export_report` markdown/JSON + Discord block = the technical-ish default): add **Consumer**
   ("what changed, in plain English"), **Technical** (full probe/CI detail), and **Support** ("help me,

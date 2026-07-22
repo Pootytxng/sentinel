@@ -97,6 +97,16 @@ pub(crate) struct SessionSummary {
     /// `capture_capabilities` (kept separate, not re-embedded, to avoid a second source of truth).
     #[serde(default)]
     pub(crate) game_state: Option<crate::game_state::GameStateFingerprint>,
+    /// Peak CPU temperature via read-only interop (HWiNFO shared memory / LibreHardwareMonitor
+    /// WMI — `cpu_temp.rs`). None when no compatible monitor is running — never fabricated; Compy
+    /// ships no driver of its own, so it can only display a temp another tool is already publishing
+    /// (LOCKED rule 1). Additive: pre-field sessions parse as None → honestly Unknown.
+    #[serde(default)]
+    pub(crate) peak_cpu_temp_c: Option<u32>,
+    /// Peak GPU hotspot (junction) temperature — AMD-specific, the hottest on-die sensor RDNA
+    /// cards expose. None on NVIDIA (NVML doesn't expose it) and on pre-field sessions. Additive.
+    #[serde(default)]
+    pub(crate) peak_gpu_hotspot_temp_c: Option<u32>,
 }
 
 fn round1(x: f64) -> f64 {
@@ -118,6 +128,8 @@ pub(crate) struct SessionAccumulator {
     peak_gpu_usage_pct: Option<u32>,
     peak_ram_used_bytes: Option<u64>,
     ram_total_bytes: Option<u64>,
+    peak_cpu_temp_c: Option<u32>,
+    peak_gpu_hotspot_temp_c: Option<u32>,
     fps_series: Vec<(u32, f64)>,
     // Current (open) downsample bucket: index = elapsed / FPS_SERIES_BUCKET_SECS.
     bucket_idx: Option<u32>,
@@ -139,6 +151,8 @@ impl SessionAccumulator {
             peak_gpu_usage_pct: None,
             peak_ram_used_bytes: None,
             ram_total_bytes: None,
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
             fps_series: Vec::new(),
             bucket_idx: None,
             bucket_sum: 0.0,
@@ -215,6 +229,19 @@ impl SessionAccumulator {
         }
     }
 
+    /// CPU temp (HWiNFO/LibreHardwareMonitor interop, `cpu_temp.rs`) and GPU hotspot (junction)
+    /// temp — both optional and tool/vendor-dependent, tracked as running peaks like
+    /// `record_sensors`. Kept separate so callers without a thermal reading can skip it cleanly.
+    pub(crate) fn record_thermals(&mut self, cpu_temp_c: Option<u32>, gpu_hotspot_temp_c: Option<u32>) {
+        if let Some(t) = cpu_temp_c {
+            self.peak_cpu_temp_c = Some(self.peak_cpu_temp_c.map_or(t, |p| p.max(t)));
+        }
+        if let Some(t) = gpu_hotspot_temp_c {
+            self.peak_gpu_hotspot_temp_c =
+                Some(self.peak_gpu_hotspot_temp_c.map_or(t, |p| p.max(t)));
+        }
+    }
+
     pub(crate) fn has_data(&self) -> bool {
         self.samples > 0
     }
@@ -250,6 +277,8 @@ impl SessionAccumulator {
             fps_series: self.fps_series,
             capture_capabilities: None,
             game_state: None,
+            peak_cpu_temp_c: self.peak_cpu_temp_c,
+            peak_gpu_hotspot_temp_c: self.peak_gpu_hotspot_temp_c,
         }
     }
 }
@@ -353,6 +382,17 @@ mod session_tests {
         assert_eq!(s.ram_total_bytes, Some(32_000_000_000));
         assert_eq!(s.compy_changes_active, 2);
         assert_eq!(s.process_name, "game.exe");
+    }
+
+    #[test]
+    fn accumulator_tracks_thermal_peaks_and_never_fabricates_absent_readings() {
+        let mut acc = SessionAccumulator::new("2026-07-22T00:00:00Z".into(), 0);
+        acc.record_thermals(Some(58), Some(72));
+        acc.record_thermals(Some(63), None); // no hotspot reading this tick — peak must hold
+        acc.record_thermals(None, Some(80)); // no CPU reading this tick — peak must hold
+        let s = acc.finalize(60);
+        assert_eq!(s.peak_cpu_temp_c, Some(63));
+        assert_eq!(s.peak_gpu_hotspot_temp_c, Some(80));
     }
 
     #[test]

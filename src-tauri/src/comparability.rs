@@ -560,6 +560,8 @@ mod tests {
             fps_series: Vec::new(),
             capture_capabilities: Some(CaptureCapabilities::etw_dxgi(None)),
             game_state: Some(gs()),
+            peak_cpu_temp_c: None,
+            peak_gpu_hotspot_temp_c: None,
         }
     }
 
