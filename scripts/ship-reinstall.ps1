@@ -59,7 +59,21 @@ foreach ($p in (Get-Process compy -ErrorAction SilentlyContinue)) {
   if ($p.MainWindowHandle -ne 0) { $p.CloseMainWindow() | Out-Null }
 }
 Start-Sleep -Milliseconds 1500
-Get-Process compy -ErrorAction SilentlyContinue | Stop-Process -Force
+# Force-kill stragglers we CAN kill — per-process, denial-tolerant (bug→guard 2026-07-22): the
+# ELEVATED fps-capture helper is Access-denied from this non-elevated shell, and under
+# ErrorActionPreference=Stop the old single-pipeline Stop-Process died on it BEFORE killing the
+# main app or staging anything (caught live mid-smoke-QA). The helper needs no kill anyway — it
+# self-exits ~4s after the main app's fps.alive heartbeat goes stale — so kill what we can, then
+# WAIT for the rest to drain.
+Get-Process compy -ErrorAction SilentlyContinue | ForEach-Object {
+  try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch {}
+}
+$drainDeadline = (Get-Date).AddSeconds(20)
+while ((Get-Process compy -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $drainDeadline)) {
+  Start-Sleep -Milliseconds 500
+}
+$left = Get-Process compy -ErrorAction SilentlyContinue
+if ($left) { throw "compy process(es) still alive 20s after close+kill (PID $(($left.Id) -join ', ')) — a helper that won't self-exit is a real defect (and would hold the exe lock through the install); investigate before shipping." }
 Start-Sleep -Milliseconds 600
 
 # 2) Desktop hygiene: remove EVERY Compy installer, then stage ONLY the current NSIS (one file).
