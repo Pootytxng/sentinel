@@ -1,0 +1,20 @@
+# doc-budget.ps1 - line budgets for hot docs (owner token-efficiency decree 2026-07-22)
+# FAIL = MOVE history/log sections to docs/archive/ (append at top, leave a pointer), never delete. Re-run after.
+$budgets = @{
+  "docs/RELEASE_STATE.md" = 300
+  "docs/BACKLOG.md" = 1400
+  "docs/OWNER_ACTION_CHECKLIST.md" = 450
+  "docs/BETA_DISTRIBUTION_RECORD.md" = 250
+  "CLAUDE.md" = 400
+}
+$root = Split-Path $PSScriptRoot -Parent
+$fail = 0
+foreach ($f in ($budgets.Keys | Sort-Object)) {
+  $p = Join-Path $root $f
+  if (-not (Test-Path $p)) { Write-Host "SKIP  $f (missing)"; continue }
+  $n = (Get-Content $p).Count
+  $b = $budgets[$f]
+  if ($n -le $b) { Write-Host "PASS  $f  $n/$b" }
+  else { Write-Host "FAIL  $f  $n/$b  -> archive history/log sections to docs/archive/, never delete"; $fail = 1 }
+}
+if ($fail) { exit 1 } else { Write-Host "doc-budget: ALL PASS" }

@@ -327,3 +327,19 @@ the real `runas` branch is live (not the direct-spawn fallback). To revert: set 
 3. Skim `docs/OWNER_ACTION_CHECKLIST.md` — the owner-facing open items. Don't silently pass over them; if one is now unblocked or the owner asks, surface it.
 4. For anything UI/visual — read `docs/UI_VISION_BACKLOG.md` 🔴 OPEN section. Do NOT report the UI as "done"/"queue empty" off RELEASE_STATE alone; those track the shipped reskin, not the owner's unbuilt motion/interaction vision.
 5. Treat any file:line claim as point-in-time — verify against current code before asserting.
+
+## TOKEN LAW (owner decree 2026-07-22 — after a same-week usage cap-out; permanent, both lanes)
+
+1. **Docs carry CURRENT STATE only.** History, dated banners, and logs live in `docs/archive/*`
+   (move, never delete, leave a pointer — precedent: `archive/RELEASE_STATE_HISTORY.md`).
+   `scripts/doc-budget.ps1` enforces line budgets: run it in every verify pass; a FAIL means
+   archive before you commit.
+2. **Read big docs by section** (search first, then offset/length) — never whole-file re-reads of
+   RELEASE_STATE / BACKLOG / CHANGELOG when a section answers the question.
+3. **Edit with minimal anchors** — smallest unique match, ≤3 lines of context. Paragraph-sized
+   anchors echo walls of text through the model twice.
+4. **Terse reports** (extends the terse-report law): outcome · evidence · what's-next; cite
+   `path#section` instead of restating doc content.
+5. **Screenshots/images only when the next action depends on seeing one.**
+6. A weekly Cowork scheduled sweep ("Sentinel weekly token/doc budget sweep", Mondays 6 AM PT)
+   runs the budget check and archives overages. Extend that sweep — never build a parallel monitor.
