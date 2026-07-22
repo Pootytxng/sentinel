@@ -32,12 +32,15 @@ QA doc):
 - ✅ Sign-off — given 2026-07-14, recorded in the QA doc, CLAUDE.md, and RELEASE_STATE.
 
 ### A2. Beta smoke pass — before any invites go out  ·  full list: [`BETA_SMOKE_CHECKLIST.md`](BETA_SMOKE_CHECKLIST.md)
-**24 checks, currently 0 run.** The critical one is **migration** (`%APPDATA%\Sentinel` → `\Compy`
-copy on first launch). Only matters when you're actually ready to send the beta (see §B2) — parked
-here so it isn't forgotten at send time.
-- **⚠️ NOW URGENT (2026-07-22):** a link already went out (the wrong one — see the §B2 incident
-  note; since fixed), so testers may install cold any moment once you re-send. Open a fresh
-  session with **"run the A2 beta smoke pass"** before — or in parallel with — the re-send.
+**Status 2026-07-22 (supersedes "0 run"):** the **headless half is machine-verified** — see the
+checklist's "HQ automated pass" block (§1 partial · §3 · §4-auto · §7 · §8; suites re-derived
+cargo 858 / npm 1777; a real §6 presenter bug was caught and fixed same-day — `970f801` is on YOUR
+box only). **What remains is your ~15-min eyes-on sitting, while six invitees hold a working
+install link:** §1 SmartScreen/Start-menu · §4 monitoring UAC + overlay over a real game · §5 UAC
+accept/cancel (CC hit an unexplained silent-elevation on this box mid-§5 — resolve that first) ·
+§6 live-game FPS · overall feel. §2 Sentinel-migration is N/A for the new external testers; **§2b
+upgrade over 0.1.0-era `%APPDATA%\Compy` applies to some of the six.** Resume the live CC session
+to run the sitting.
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
 ### A3. Lab Ops Console — ✅ RESOLVED (your round-4 "ALL GOOD", 2026-07-10) → default-ON SHIPPED
@@ -166,8 +169,11 @@ ship `beta-001` frozen vs. cut a fresh `beta-002` from `main`.
 Release label: **"Compy 0.9.0 Invite-Only Private Beta — Validated binary source: 37a166c"**.
 The artifact is the exact validated NSIS built from `37a166c` — `Compy_0.9.0_x64-setup.exe`,
 SHA-256 `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4` (3,826,464 bytes;
-re-verified intact on the Desktop 2026-07-21). Note: repo HEAD `0e988ce` is the docs-only
-runtime-closure commit, NOT the binary source — it requires no rebuild. At send time:
+re-verified intact on the Desktop 2026-07-21). Note: repo HEAD moves — derive it live
+(`git rev-parse HEAD`); never trust a hash baked into this paragraph. The validated binary source
+for THIS beta stays `37a166c`; newer main commits (e.g. `970f801`, the §6 presenter fix now on the
+owner's box) do NOT change what the six invitees hold. **OPEN (owner call): ride `37a166c` for this
+beta or cut a 0.9.1 with the presenter fix — decide in CC with the delta in context.** At send time:
 1. Recalculate the file's SHA-256 immediately before uploading; it must match the value above.
 2. Upload to the private tester location; **never overwrite the validated file with a different
    build under the same filename.**

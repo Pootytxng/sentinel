@@ -82,3 +82,6 @@ compy-license.key
 
 # Weekly usage-audit reports (machine-local, auto-written by the CompyUsageAudit scheduled task)
 docs/usage-audit/
+
+# machine-local QA evidence (cited from docs but not shipped in the repo)
+docs/ui-sweep/shots/
