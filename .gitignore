@@ -85,3 +85,4 @@ docs/usage-audit/
 
 # machine-local QA evidence (cited from docs but not shipped in the repo)
 docs/ui-sweep/shots/
+release-out/
