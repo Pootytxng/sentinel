@@ -739,6 +739,17 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
   presenter, released only when the process actually dies/recycles. `monitoring.rs`'s FPS recorder
   gets a matching freshness gate (<3s mtime) since `fps.json` can now legitimately sit frozen.
   9 new attachment-state-machine tests. cargo 869/869.
+- [ ] fps.rs pid-recycle re-check on the "still presenting" path — 0.9.1 review Warning (rust-tauri
+  reviewer, 2026-07-22): `Attachment::Attached`'s frames-present arm (`fps.rs:411`) never re-verifies
+  the pid still maps to the attached image; only the silent-tick arm calls `alive(pid, name)`. If the
+  OS recycles the exact pid to a different DXGI-presenting image inside the 3s `STALE_AFTER` window,
+  real frametimes get reported under the old game's name (mislabel, not fabrication). Narrow race,
+  non-blocking for 0.9.1 — fix: name/liveness re-check in the `Some(frames)` branch + a test for the
+  recycle-while-presenting path (the existing death test only covers the silent path).
+- [ ] vitest 4th flake class (low): under full-suite worker contention, a file can error at
+  collection with "Vitest failed to find the current suite" (seen once 2026-07-22 on the two
+  `src/surfaces/setup/` files; both pass isolated AND on full-suite re-run). Not one of the three
+  878a3a9 classes. If it recurs, investigate pool/maxWorkers; a single re-run is the current answer.
 - [ ] evidence-export tiers — audience-shaped renders of the SAME measured evidence pack (`export.rs`
   today: `export_report` markdown/JSON + Discord block = the technical-ish default): add **Consumer**
   ("what changed, in plain English"), **Technical** (full probe/CI detail), and **Support** ("help me,
