@@ -77,9 +77,27 @@ eyes-on run. What's left for the human sitting is listed at the end of this bloc
   (`%LOCALAPPDATA%\gg.compy.app`) also survives uninstall, so UI state (dismissed tour) persists
   too. "Retire old Sentinel app" = **N/A on this box** (no Sentinel install exists).
 
-**What actually needs the owner's sitting:** §1 installer/SmartScreen/Start-menu · §2b on a
-0.1.0-era tester box · §4 monitoring UAC + overlay over a game · §5 UAC accept/cancel · §6 live-game
-FPS + helper exit · overall does-it-feel-right. Everything else above is already machine-proven.
+**Owner-sitting status after the 2026-07-22 waiver ("fully take over or skip"):**
+
+- **§2b upgrade-over-0.1.0 — AUTOMATED PASS (Cowork, 2026-07-22):** real cycle on this box — data+app
+  backed up (hash-verified) → 0.1.0 re-cut installed → virgin 0.1.0-era data seeded by actually
+  running it → the EXACT distributed artifact (downloaded through the live tester link, SHA-256
+  re-verified `6BC2F7DF…`) installed over it → first launch alive 18s+, window up, old data
+  preserved and extended (`intelligence.json` beside `drift.json`), zero crash events, Start-menu
+  entry present → owner's `970f801` build + real data restored byte-exact (history.json hash +
+  39/39 files), backups removed. Caveats named: the 0.1.0 artifact was the Jul-16 re-cut
+  (`7D6C5623…`), schema-era representative, not byte-identical to the `fc940fe` kit exe; the seed
+  was thin (only `drift.json` after ~46s idle), so upgrade-with-RICH old history rides on the
+  migration unit tests + §8's 56-entry ledger reinstall proof. Residual risk: LOW.
+- **Skipped by owner directive, risk named:** §1 SmartScreen click-through (invite text already
+  warns; Windows-standard behavior, not app code — trivial) · §4/§6 overlay + FPS over a live game
+  (automating the owner's game account risks anticheat — not doing that; mitigations: live
+  desktop-app attribution evidence `34bd173`, presenter guards `f96347d`, helper-exit PASS, prior
+  Gaming-Mode live QA — LOW-MODERATE, revisit only if a tester reports FPS weirdness) · §5 UAC
+  accept/cancel (UAC policy verified stock-healthy read-only 2026-07-22; the runas decline path was
+  live-proven in Gaming QA #6/#7 — LOW) · does-it-feel-right (owner runs the app daily — de facto).
+- **The sitting is no longer requested of the owner.** Open item on this beta: the ride-`37a166c`
+  vs cut-0.9.1 call (§B2 in the owner checklist).
 
 ---
 

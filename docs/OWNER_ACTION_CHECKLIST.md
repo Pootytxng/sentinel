@@ -35,12 +35,14 @@ QA doc):
 **Status 2026-07-22 (supersedes "0 run"):** the **headless half is machine-verified** — see the
 checklist's "HQ automated pass" block (§1 partial · §3 · §4-auto · §7 · §8; suites re-derived
 cargo 858 / npm 1777; a real §6 presenter bug was caught and fixed same-day — `970f801` is on YOUR
-box only). **What remains is your ~15-min eyes-on sitting, while six invitees hold a working
-install link:** §1 SmartScreen/Start-menu · §4 monitoring UAC + overlay over a real game · §5 UAC
-accept/cancel (CC hit an unexplained silent-elevation on this box mid-§5 — resolve that first) ·
-§6 live-game FPS · overall feel. §2 Sentinel-migration is N/A for the new external testers; **§2b
-upgrade over 0.1.0-era `%APPDATA%\Compy` applies to some of the six.** Resume the live CC session
-to run the sitting.
+box only). **SITTING WAIVED by your 2026-07-22 directive ("fully take over or skip") — resolution:** §2b
+(the one item with real tester-facing detriment) was **run fully automated and PASSED** — the exact
+link-served artifact installed over genuinely-seeded 0.1.0-era data, launched clean, data
+preserved, zero crash events; your build + real data restored byte-exact after. §1/§4/§5/§6-live
+and "feel" are **formally skipped with named risks (LOW to LOW-MODERATE)** — full grades in
+`BETA_SMOKE_CHECKLIST.md`'s waiver block. Nothing here needs your hands anymore. Note: your UAC
+policy checked stock-healthy (read-only); CC's "silent elevation" observation was not a policy
+hole. **The only open beta item is the ride-vs-recut call in §B2.**
 - **Result → tell Claude:** "Beta smoke passed" (or paste anything that looked off).
 
 ### A3. Lab Ops Console — ✅ RESOLVED (your round-4 "ALL GOOD", 2026-07-10) → default-ON SHIPPED

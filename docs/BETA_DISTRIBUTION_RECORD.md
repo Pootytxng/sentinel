@@ -14,6 +14,12 @@
 - SHA-256: `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4`
 - Size: 3,826,464 bytes
 - Never overwrite this file with a different build under the same filename.
+- **Canonical artifact location: Drive fileId `1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n` — verify through
+  the link, never through a local path.** The Desktop copy ceased to be this artifact on
+  2026-07-22 05:32: the `970f801` rebuild overwrote `C:\Users\Kuya\Desktop\Compy_0.9.0_x64-setup.exe`
+  under the same filename (caught by pre-QA re-hash — `4B597830…`, 3,825,592 B). Local paths are
+  convenience copies, not identity; the send rule's through-the-link verification is what protects
+  testers from exactly this class of drift.
 
 **Protocol checklist (2026-07-21 GO — staging executed 2026-07-22 via Cowork/Chrome):**
 
@@ -102,10 +108,15 @@ re-confirmed dead in the same pass. **Install status per tester: unknown until t
   unauthenticated fetch → Google access-denied HTML, not the zip · Drive Details → "Private to
   you". The file was also **renamed in place** (same fileId, dead link unchanged) to
   `RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip` so it can never again be mistaken for
-  the current artifact when grabbing a link in a hurry. Why it re-opened between 11:37 PM and
-  morning is **unresolved** (no further event visible in the Activity panel as rendered;
-  owner-confirmable in Drive Activity) — treat "restricted once" as a NON-durable state: the
-  durable guards are this record, the rename, and the mandatory send rule above.
+  the current artifact when grabbing a link in a hurry. **Corrected 2026-07-22 PM:** the "11:37 PM restrict" and "11:41 PM rename" Activity entries are
+  display-bug mislabels of Cowork's OWN 8:27/8:37 AM actions (proven: the rename demonstrably
+  happened 8:37 AM this date yet renders as "11:41 PM Jul 21" — this panel's timestamps cannot be
+  trusted for forensics). Real sequence on corroborated evidence only: restricted ~7:57 PM
+  (API-confirmed by the prior session) → **re-shared 9:16 PM** (Activity + API `modifiedTime`
+  agree) → stayed open all night → killed 8:27 AM. No phantom third re-open; one re-share, origin
+  still unattributed (owner-in-parallel or session mis-click). Treat "restricted once" as a
+  NON-durable state: the durable guards are this record, the rename, and the mandatory send rule
+  above.
 - Historical kits handed to other machines: frozen unsigned private beta `16069fa` and the
   `fc940fe` kit above (see `RELEASE_STATE.md` row 3). What those testers currently run remains
   unknown (zero-outbound: no telemetry).
