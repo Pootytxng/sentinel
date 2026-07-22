@@ -10,7 +10,10 @@
 // It checks LOCATION, not TRUTH — a gate that flipped value with an unchanged line number still needs the
 // layer-2 source re-read (see the skill). Run from anywhere: node scripts/verify-release-state.mjs [--strict]
 //   exit 0 = all citations anchored (NEAR drift ≤40 lines warns unless --strict)
-//   exit 1 = any MISSING-FILE / LINE-OOB / DRIFT / GONE (or NEAR under --strict)
+//   exit 1 = any MISSING-FILE / LINE-OOB / DRIFT / GONE (or NEAR under --strict),
+//            OR zero citations found, OR a required section is missing entirely.
+// The last two guard the f21c170 class (2026-07-22: a doc diet accidentally cut the live Gate matrix +
+// Release blockers; the verifier passed vacuously on the gutted file). An empty contract is a failure.
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,8 +120,17 @@ for (const r of results) {
 }
 const bad = results.filter((r) => ["MISSING-FILE", "LINE-OOB", "GONE", "DRIFT"].includes(r.verdict));
 const near = results.filter((r) => r.verdict === "NEAR");
-console.log(`\n${results.length} citations: ${results.filter((r) => r.verdict.startsWith("OK")).length} ok · ${near.length} near-drift · ${bad.length} broken`);
-if (bad.length || (STRICT && near.length)) {
-  console.log("FIX-FORWARD: re-anchor each citation in the SAME commit as whatever moved it (precedent c056fee).");
+
+// --- structural coverage (the f21c170 guard) ---------------------------------------------------
+const REQUIRED_SECTIONS = ["CURRENT STATE", "Gate matrix", "Release blockers"];
+const missingSections = REQUIRED_SECTIONS.filter(
+  (s) => !docLines.some((l) => /^#{1,3}\s/.test(l) && l.includes(s))
+);
+for (const s of missingSections) console.log(`MISSING-SECTION  '${s}' — required section absent from RELEASE_STATE.md`);
+if (citations.length === 0) console.log("ZERO-COVERAGE    no `file:line` citations found — the matrix contract is empty");
+
+console.log(`\n${results.length} citations: ${results.filter((r) => r.verdict.startsWith("OK")).length} ok · ${near.length} near-drift · ${bad.length} broken · ${missingSections.length} missing section(s)`);
+if (bad.length || missingSections.length || citations.length === 0 || (STRICT && near.length)) {
+  console.log("FIX-FORWARD: re-anchor each citation in the SAME commit as whatever moved it (precedent c056fee); restore any cut required section from the pre-diet copy.");
   process.exit(1);
 }
