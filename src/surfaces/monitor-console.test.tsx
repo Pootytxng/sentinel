@@ -241,7 +241,11 @@ describe("MonitorConsole — helper stopped ⇒ honest stillness (b)", () => {
       { timeout: 3000 },
     );
     expect(container.querySelectorAll(".osc-trace").length).toBe(0);
-    expect(props.onFpsActive).toHaveBeenLastCalledWith(false);
+    // The mirror fires in a passive effect (post-paint) — the DOM can show no-signal a beat
+    // before it flushes under load, so await it (flaked at full-suite load 2026-07-22).
+    await waitFor(() => expect(props.onFpsActive).toHaveBeenLastCalledWith(false), {
+      timeout: 3000,
+    });
   }, 8000);
 });
 

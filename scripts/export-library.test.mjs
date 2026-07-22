@@ -24,7 +24,9 @@ beforeAll(async () => {
       .filter((f) => f.endsWith(".html"))
       .map((f) => [f, readFileSync(join(outDir, f), "utf8")]),
   );
-}, 60_000);
+  // 37s standalone on the dev box, but the real export competes with the full suite's worker
+  // pool for CPU — 60s flaked under load (caught 2026-07-22 smoke pass), so give it real headroom.
+}, 180_000);
 
 afterAll(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true });
@@ -97,5 +99,5 @@ describe("export-library", () => {
     expect(again.entryCount).toBe(entries.length);
     const files = readdirSync(outDir).filter((f) => f.endsWith(".html"));
     expect(files.length).toBe(entries.length + 1);
-  }, 60_000);
+  }, 180_000); // same headroom as the beforeAll export — flaked at 60s under full-suite load
 });
