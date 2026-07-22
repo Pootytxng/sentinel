@@ -13,30 +13,7 @@
 
 ---
 
-## 🧰 TOOLCHAIN — Fable-window persistence pack (Cowork lane, 2026-07-06)
-
-> Owner directive: use the closing Fable-5 window to persist its judgment as toolchain assets
-> (skills/guards/scripts) so post-Fable models (Opus 4.8 / Sonnet) execute at the same floor.
-> Extend-and-consolidate, NOT replace (owner-confirmed): everything below slots beside the existing
-> self-review / impeccable / coverage-sweep stack.
-
-- [x] **5 new project skills** — `.claude/skills/{mutation-gate, gate-drift-audit, ship, guard-forge,
-  doc-sync}` + **`.claude/skills/INDEX.md`** (trigger + cheapest-executor routing for all 8 skills,
-  plus 4 tier-2 spec'd-not-built entries: receipts-copy-lint · new-tester-onboarding · council-strip ·
-  receipts-arming-review). CLAUDE.md got a pointer stanza (PROJECT SKILLS INDEX).
-- [x] **`scripts/verify-release-state.mjs`** — mechanizes layer-1 of the gate-drift audit (parses every
-  backticked `path:line` citation in RELEASE_STATE.md, binds adjacent symbols, verifies location).
-  **Proved itself on first run:** caught 6 citations drifted 77–253 lines (preload/receipt trains grew
-  actions.rs/history.rs above the cited symbols) — all re-anchored same pass, layer-2 source re-read
-  confirmed every gate VALUE unchanged (one truth fix: CSP note now quotes the literal connect-src).
-  Script now exits 0 (21/21 anchored).
-- [x] **`ship-reminder` PostToolUse(Bash) hook** — nudges the silent-reinstall law + RELEASE_STATE row
-  after any `tauri build` (same pattern/throttle as self-review-reminder; behavior-tested pos+neg).
-- [x] **Commit this train from the CC lane (Windows-side)** — committed 2026-07-07 from CC on `main`
-  as `feat(toolchain): Fable persistence pack — 5 skills + INDEX + gate-drift script (6 citations re-anchored) + ship hook`.
-  Verify script re-run at commit time: 22/22 citations anchored, exit 0. Note: `.claude/hooks/` is
-  gitignored (standing pattern — self-review-reminder is machine-local too), so the ship-reminder
-  hook SCRIPT stays local; only its settings.json registration is in git.
+> **🧰 TOOLCHAIN — Fable-window persistence pack** (2026-07-06) — COMPLETE 2026-07-07: all 4 items shipped; living pointer = CLAUDE.md → PROJECT SKILLS INDEX. Moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22 tier-1 board diet).
 
 ## 🧠 INTELLIGENCE PLATFORM LANE (owner directive 2026-07-16 — supersedes priority ordering per its §0.12)
 
@@ -161,23 +138,7 @@ for this platform — external drift + tweak-pack residue become timeline events
 router + basic-mode simplification (complementary consumer-clarity work per directive §9 — stays
 queued).
 
-## 🔥 TOP PRIORITY LANE (owner directive 2026-07-05) — de-slop the UI, organic + unique
-
-Full spec: [`docs/superpowers/specs/2026-07-05-ui-deslop-organic-directive.md`](superpowers/specs/2026-07-05-ui-deslop-organic-directive.md).
-Owner's verdict after living with the V2 shell: theme-consistent but reads as **generic AI-slop template design** — wants organic/unique, concise, crafted copy, and **trending design tooling (Figma / v0-Vercel MCPs)** used anywhere the UI uses recognizable AI defaults. Elevated to top priority per his instruction (after a confirmed clean stop — HEAD `b413204`, main synced, nothing stranded).
-
-- [x] **Bug fixes (aesthetic-independent, ship now):** (#4) Home last-session numbers graded per-rig via `metric-grade.ts` + (#5) hologram stage fills its frame — **shipped `c945c88`** (2026-07-05), bug→guard tone-class pins in `home-v2.test.tsx`, live-verified via embedded hash (see RELEASE_STATE).
-- [x] **Redesign lane — COMPLETE 2026-07-06 (`394dd2f` live). Direction CORRECTED (owner 2026-07-05, after seeing the built editorial): EDITORIAL RETIRED → pure Instrument / Stark-HUD.** Serif fights a live-telemetry app; the LOCKED direction is a clean, restrained operator-console HUD (mono/display type, gauges, oscilloscope traces, HUD brackets, scanline/CRT, JARVIS layer). The one hard steer: never gamer-RGB/neon.
-  - [x] ~~Editorial Home pilot + 4-room rollout~~ — built (`1aa85d6`/`f3e90c1`), owner REVERSED on sight; **retired + deleted in `b60a2b5`** (serif fonts, `editorial-rooms.css`, `HomeEditorial`, room masthead branches all gone).
-  - [x] **Pure-HUD Home pilot** — **shipped `b60a2b5`** (2026-07-05): `HomeHud` behind the SAME preview flag (key `compy_editorial` kept so the owner's opt-in carries over; now `data-hud` / Settings "Instrument HUD (preview)", **DEFAULT OFF**). System-console masthead (scan LED · segmented CHECKS/ATTENTION readout · uppercase display verdict) · bracketed + ruler-ticked bay around the real drag-orbit hologram, whisper scanline (stage + page CRT skin), event-driven parallax · telemetry column (fps-vs-Hz ring gauge — measured ratio only, renders only when both sides were read; graded ink carried over; oscilloscope trace on graph-grid) · ranked priority queue. Flag-off byte-identity pinned (`home-hud-flag.test.tsx`); **HUD is HOME-ONLY — the four rooms ignore the flag, pinned by `hud-rooms-untouched.test.tsx`** (checkpoint contract). Zero src-tauri. Self-review shots `docs/ui-sweep/shots/hud/`.
-  - [x] #1 walk-the-bench rework — **shipped `f3e90c1`**, survives the correction (it rides `compy_lab_guided`, not the aesthetic flag): step-through REMOVED, symptom router leads as **"What are you here to do?"**; still DEFAULT OFF for the owner's eyeball.
-  - [x] 🎨 **OWNER CHECKPOINT — round 1 verdict IN (2026-07-05): "needs changes first — type & copy voice"** (direction approved, no reject). Fix shipped `d577bd9`: verdict h1 → sentence case (the uppercase banner was the offender), buttons/segs/units/trace-cap drop uppercase (HUD register stays in micro-labels + readout + mono values), tracking normalized 0.14em, notes/dek/readings rebalanced; copy de-smugged (dropped "never guessed" / "a lesser tool would invent" / "not generic advice" tics; CPU callout now "no temp — Compy won't ship a kernel driver"; "//" → "·"; "Loading your rig in 3D…"). tsc 0 · vitest 1029 · self-reviewer PASS (computed textTransform/contrast/overflow evidence at native 1500×980). **Round-2 owner note landed mid-review ("keep the lightning border around the hologram") → shipped `6b2f46f`:** ElectricBorder frames the HUD hologram bay (its one sanctioned use-class, HomeV2 parity — theme-accent stroke, reduced-motion static-hairline fallback, stage's own border dropped); vitest 1037 · self-reviewer PASS (accent stroke confirmed live; brackets-inside-frame judged intentional-layered, borderline — drop bracket opacity if flagged busy). **Round-2 verdict IN (owner 2026-07-06: "all looks good") → APPROVED and SHIPPED:** `ce40f66` rolled the HUD language to all four rooms (shared `hud-rooms.css` + `HudMasthead` at the RoomShell verdict slot — masthead eyebrow "Repair bay / Live telemetry / Field records / Test bench" + honest LED + dateline, mono readout strip, page scanline; flag-off byte-identity re-pinned per room in `hud-rooms-flag.test.tsx`, superseding `hud-rooms-untouched.test.tsx` exactly as planned) · `96febda` flipped ALL THREE approved previews **default-ON** per [[ship-approved-work-as-the-build]] (`readHud`/`readLabBento`/`readSetupStepper` → `!== "0"`; Settings rows dropped "(preview)"; classic looks stay reachable as the "0" failsafe, toggle-off round-trip live-verified). tsc 0 · vitest 1048 · self-reviewer PASS (native 1500×980, default storage, all four rooms + Settings + Home-unchanged). ~~Remaining: deep Check/Fix internals de-slop + voice pass~~ → **SHIPPED `394dd2f` (2026-07-06), closing the lane:** CSS-only under the flag in `hud-rooms.css` (glow washes off; glass cards → hairline log rows with semantic warn/accent border MIXES — deliberately no side-stripe; section labels → micro-label + hairline rule; pills → flat mono tags; zero DOM delta so the flag-`"0"` failsafe stays byte-identical by construction) + surgical unflagged voice pass on shared strings (driver notes, startup-limiter reason + stale "in Optimize" self-ref, "YOUR rig" shout, "dialed in" double-say fixed + re-pinned, consent note, refuse intro drops the "honest" self-label). tsc 0 · vitest 1048 · self-reviewer PASS 7/7 (incl. flag-off classic round-trip) · installer rebuilt, silent-reinstalled, **stamp-verified `394dd2f` live** (RELEASE_STATE row current). **No non-gated item remains on this lane.**
-  - [x] ✅ **SHIPPED LIVE 2026-07-06:** installer built from `96febda` (NSIS SHA-256 `62E2D5CC…F5AE9`), silent-reinstalled via `scripts/ship-reinstall.ps1` (stale-build gate passed), **installed exe stamp-verified `96febda`**, one installer on the Desktop. Self-reviewer stepper addendum came back **PASS** (default-ON stepper at 1500×980; connector accent proven theme-token-driven Violet→Emerald, never vendor purple). Current-state row: RELEASE_STATE.md.
-  - Note: #6 "trending design tooling" — v0/Figma MCPs spend owner-gated credits ([[v0-mcp-for-compy-ui]]); pilot built in-repo instead (zero network, zero new deps). Use tooling only if a room's language demands it.
-- [x] **Lab bento checkup — COMPLETE (approved + default-ON in `96febda`, live). (owner directive 2026-07-05, reactbits MagicBento prompt)** — **built `b0ec87a`**, behind `compy_lab_bento` (Settings → Appearance "Lab checkup bento (preview)", DEFAULT OFF): station-card grid left→right in bench order (status LED · Measured/Not-yet chip · educational lab notes) + synthesized checkup report (coverage headline · per-station annotated readings, `stationReading` one-source · ONE next step); cards are doors onto the existing router jump; stations render below in guided numbered form. Flag-off byte-identity test-pinned in both guided states; theme-accent glow (vendor purple can never paint, test-pinned); 16 new guards, vitest 1029. Spec `2026-07-05-lab-bento-checkup.md`.
-  - [x] 🎨 **OWNER CHECKPOINT:** Lab checkup bento — **approved (owner 2026-07-06: "all looks good")**; flipping default-ON with the rollout-train rebuild.
-  - [x] Stepper (owner's 2nd reactbits prompt, pre-vetted pass) — **shipped `76cfb5e`** (2026-07-05), behind `compy_setup_stepper` (Settings → Appearance "Setup stepper (preview)", DEFAULT OFF): the Setup & Tour's footer progress row as numbered React Bits step indicators (active dot · check-marked completed steps · animated accent connectors · click hops to a step). Vendored per the law (StepIndicator/StepConnector exported; vendor purple moved out of the motion variants into token CSS, can never paint — test-pinned; reduced-motion gated). Flag-off byte-identity pinned; 7 new guards, vitest 1037; zero src-tauri. Self-review PASS at native 1500×980.
-  - [x] 🎨 **OWNER CHECKPOINT:** Setup stepper — **approved (owner 2026-07-06: "all looks good")**; flipping default-ON with the rollout-train rebuild.
+> **🔥 TOP PRIORITY LANE** (de-slop directive 2026-07-05) — CLOSED 2026-07-06: every item [x], Instrument-HUD reskin shipped (`394dd2f`/`96febda` live). Live UI truth = `UI_VISION_BACKLOG.md` + `RELEASE_STATE.md`. Moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22).
 
 ## 🚀 LAUNCH RUNWAY — the ordered cutline to first launch (Cowork consolidation, 2026-07-06)
 
@@ -718,40 +679,7 @@ When running a `/loop` or scheduled session against "the checklist":
    the merge is a no-op → already shipped → prune, don't surface. Only a tree-changing merge is real unmerged work.
    And re-RUN cargo/vitest for counts each cycle — never carry an assumed number forward. ([[branch-redundancy-detect-by-mergetree]])
 
-## 🌿 Branch-integration health (a contributing cause)
-
-At audit time the repo had **16 branches**; most feature work was already merged to `main` (branches showed
-"ahead of main by 0"), but a few carry **unmerged commits** that look "done" in their REPORTs yet are NOT in
-the product:
-
-- `feat/a1-detection` — 5 commits ahead of main (likely superseded by `reconcile/a1-merge`, verify before deleting)
-- `qa/locale-drift-hardening` — 4 ahead
-- `gaming/honest-partial-undo` — 1 ahead
-- `ui/honest-apply-errors` — 1 ahead (pushed to origin)
-- The working branch `tests/coverage-sweep-2026-06-18` is **140 behind main** — a stale checkout, easy to mistake for current.
-
-**✅ Reconciled 2026-06-24 (HQ — full local+remote sweep; supersedes the audit-time snapshot above for live status):**
-- **`ui/honest-apply-errors` is MERGED + DELETED** (its work is `6ce622d` on `main`) — it no longer exists local or
-  remote; the bullet above is historical. Don't chase it.
-- **Pruned** (fully merged, not checked out): `spike/backend-agent`, `benchmark`.
-- **Merged but still checked out in a lane worktree** (NOT cruft — the lane's own workspace; git refuses to prune,
-  and HQ does not remove other lanes' worktrees): `content/color-science-debunks` (worktree `content/`),
-  `feat/a4-service-inventory` (worktree `svc/`), `feat/blackbook-lifecycle` (worktree `qa/`). They free up when the
-  lane re-branches or the owner cleans the worktree.
-- **Already in main → PRUNED (Cycle 2026-06-24e):** `qa/locale-drift-hardening` (= PR #6 `5ab304d`),
-  `gaming/honest-partial-undo` (= PR #7 `47e93e6`) — both no-op merges; their content shipped under different hashes.
-- **Unmerged, real divergent content, deliberately retained as archive (do NOT land):** `feat/a1-detection`
-  (4-probe superseded by the 7-probe `reconcile/a1-merge`), `latency-capture` (older latency impl, overlaps `latency.rs`),
-  `tests/coverage-sweep-2026-06-18` (value already folded). `beta/private-beta-001` = FROZEN, never touch.
-- **Lane heartbeat:** `work/agent` 1 behind (active), **`work/bench` 13 behind — no push since the award-ledger
-  (`1f712b1`); bench's A2 hardware-tier-segmentation assignment looks unstarted/stalled — watching.**
-
-**Action item (A0):** reconcile/prune stranded branches so "merged into main" == "shipped." A branch whose
-work is described as complete but sits unmerged is exactly how a session loses the thread.
-*(Status (updated 2026-06-24e): every branch has a verified disposition ↑. The two branches once thought "stranded behind
-gates" were found **already in main** (PRs #6/#7) and pruned. The only remaining unmerged branches are deliberately-superseded
-archives (rejected/redundant content), so **`main` IS the single product truth** for shipped content. A0's reconcile sub-item
-is effectively complete — see A0 below.)*
+> **🌿 Branch-integration health** — RESOLVED 2026-06-24e: every branch has a verified disposition, `main` is the single product truth; the durable merge-tree law lives in protocol rule 5 above. Moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22).
 
 ---
 
@@ -978,95 +906,7 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 ---
 
-## UI SLIM-DOWN TRAIN — "answer first, detail on tap" (plan: `docs/UI_SLIMDOWN_PLAN.md` §5, council-approved 2026-07-01)
-
-- [x] **P1 slimRows (Optimize)** — `5bb13f4` (2026-07-01): `SlimRecRow` master-detail primitive + Fixes-segment
-  render path behind `compy_slim_rows` (**DEFAULT OFF**, Settings → Appearance preview toggle). One measured
-  proof line always visible (honesty guardrail, CI-enforced by `src/slim-row-proof-guard.test.tsx`); §8c
-  pre-selected Recommended in the consent sheet (selection ≠ application); TrustSwitch untouched; zero Rust.
-  Verified tsc clean + vitest 788/788. **Default-ON flip is an owner taste call after he reviews the look.**
-- [x] **P2 Monitor Basic/Advanced split** — `db00a44` (2026-07-02): global Basic/Advanced contract
-  (`theme.ts` ViewMode + `<html data-view-mode>`) behind `compy_basic_advanced` (**DEFAULT OFF**, Settings →
-  Appearance preview toggle). Basic = 4 glanceable tiles (FPS+capture · GPU temp · CPU · RAM) + ETW honesty
-  line + last-session door → Advanced→Sessions; Advanced = today's panels untouched; flag-off byte-identical
-  (test-pinned). Same read-only sensor IPC, zero new commands, NVIDIA grading unchanged (LOCKED #5). Verified
-  tsc clean + vitest 796/796 + live self-review (shots `docs/ui-sweep/shots/p2-*.png`). **Default-ON flip is
-  an owner taste call.** Open taste notes: "Advanced" now names both the rail Lab surface AND the mode; Basic
-  leaves the lower half of a tall window empty (answer-first minimalism) — both his call at review.
-- [x] **P3 Home answer-first** — (2026-07-02): `HomeV3` surface behind `compy_home_v3` (**DEFAULT OFF**,
-  Settings → Appearance preview toggle; supersedes the dashV2 layout when on). Verdict leads (squint-test
-  hero) → the #1 limiter (LimiterCard built in CommandCenter — apply/rollback flow byte-identical) → 3
-  glanceable last-session tiles (real numbers or the honest empty state; graded, NVIDIA temp stays ungraded
-  per LOCKED #5) → the RETAINED 3D rig hologram centerpiece with the full hardware cards one tap away (plan
-  §6 correction) → the Setup & Tour door. §8b backdrop: homeV3 defaults ambiance to "calm" (an explicit
-  Settings choice wins) and auto-offs in Advanced mode — both live-verified. Flag-off byte-identical
-  (test-pinned); zero Rust, zero new IPC. Verified tsc clean + vitest 804/804 + live self-review (shots
-  `docs/ui-sweep/shots/p3-*.png`). **Default-ON flip is an owner taste call.** Open taste note: the verdict
-  sentence and the limiter clear-state both say "measured clean" (the same pairing the classic Home had) —
-  a P5 copy-pass candidate.
-- [x] **Default-ON flip (all four slim-down flags)** — `733f132` (2026-07-02, owner call): `compy_slim_rows` ·
-  `compy_basic_advanced` · `compy_home_v3` · `compy_calm_chrome` all read `!== "0"` (unset ⇒ ON) — the
-  slim-down IS the build. Settings → Appearance toggles stay live as the opt-out; classic render paths kept
-  as the failsafe. Zero src-tauri/IPC change; TrustSwitch/apply/rollback untouched. tsc clean · vitest
-  809/809 (default-pinning tests inverted; flag-off byte-identical guards unchanged).
-- [x] **P5.5 Optimize deep-clean** — `cccb80e` (2026-07-02, owner live-build critique, all six items):
-  all-checks receipt rows (mark · name · one-line result, UI voice — mono terminal list gone from the
-  settled surface) · driver freshness grouped to ONE card (row per device w/ kind chips, ONE shared
-  "newer may be available" note, links behind Copy buttons only — raw URL text removed) · Gaming Mode
-  doored into its own Optimize segment (NEW `compy_gm_door`, calm-chrome family, DEFAULT ON, Settings
-  toggle, classic inline slot on `"0"` — live-verified both states) · History segment collapsed into
-  Applied as one `History (N)` expander + honest empty state (no more near-empty third room) ·
-  Optimize type voice unified (mono = numbers/stamps only; judgment: startup cmd path stays mono as a
-  machine value) · **honesty fix:** rendered disclosure now "Compy earns nothing from these links
-  today…" (the backend "may earn a commission" const is FALSE while links are tag-free; it stays in
-  `priorities.rs` untouched as the Phase-D swap point — swap the render back the same commit tags
-  arm; guard test pins both sides). Bonus: GamingMode "onWhat's this?" run-together fixed. Zero
-  src-tauri diff (`git diff 733f132..cccb80e -- src-tauri` empty) · TrustSwitch untouched · tsc clean ·
-  vitest 815/815 · cargo 659/0 (A6 green) · self-review shots `docs/ui-sweep/shots/p55/` · shipped +
-  stamp-verified live `cccb80e`.
-- [x] **P4 dedup: delete classic/losing render paths** — `f13f82a` (2026-07-02). **Owner verdict
-  RECORDED 2026-07-02: keeping the new look** (the P5.5 critique said "keep visual language"; his
-  follow-up "do the single thing that unblocks everything" cleared this gate). Removed the five
-  slim-down flags (`compy_slim_rows/basic_advanced/home_v3/calm_chrome/gm_door`) + every classic
-  branch they gated (−1196 lines): theme.ts readers/appliers, main.tsx pre-paint (view-mode mirror
-  kept), Settings' five preview toggles, dashV2-Home + classic-Home bodies + orphaned
-  `DashboardV2.tsx`, classic single-face Monitor, classic inline GM slot, header Export branch,
-  calm-static backdrop branch. Deliberately KEPT (older families, separate approval train — P4b
-  candidates): `compy_optimize` / `compy_monitor` / `compy_living_instrument` / `compy_dash_v2`
-  (standalone Tune view="all" classic FixRow rides `compy_optimize`). Self-review follow-up
-  SHIPPED same day — `706094f`: the applied-changes drift reason (rendered on the Home #1-limiter
-  card + the all-checks row) now NAMES the drifted setting(s) via a new read-only
-  `drifted_titles` on `AppliedChangesSummary` (≤3 named + "and N more", honest plurals) and says
-  Optimize instead of the merged-away "Tune"; bug→guard test pins named-setting and bans
-  "setting(s)"/"Tune" (`readiness.rs`; cargo 659 · clippy clean · no gate/mutation/IPC change).
-  P4 verified: tsc clean · vitest 800/800 · cargo 659 · live self-review shots
-  `docs/ui-sweep/shots/p4/`.
-- [x] **P6 "Journey" pass — SHIPPED via the V2 shell train** (Cowork audit 2026-07-04, verified in code; ledger
-  was stale — this item and the kickoff's "land the P6 spec" thread predated the V2 train absorbing it). The
-  V2-2..V2-8 train re-scoped the P6 spec (`2026-07-02-p6-journey-spec.md`) directly onto the V2 shell rather than a
-  separate `compy_journey` flag. `src/design/room-shell.tsx` ships the `RoomShell` 5-slot skeleton (§1), the
-  `ForwardDoor` primitive, and `DOOR_MAP` with the EXACT §2 copy/destinations (home→"Find what's worth fixing"→Optimize
-  · fix→"Watch it live"→Monitor · play→"See what changed"→Blackbook · learn→"Open the instruments"→Lab · lab→none) plus
-  the §2 `doorOpen` placement rules (Optimize opens only in apply-complete; Monitor closes during live capture). The
-  door renders inside RoomShell keyed by DOOR_MAP so a room can't pick its own destination — cleaner than the spec's
-  per-room render. §3 guards live in `room-shell.test.tsx` (copy + destinations pinned literally); §4 tour alignment =
-  the SetupTour journey recap (`SetupTour.tsx:39`). Hard line held: `git diff 706094f..4e07420 -- src-tauri/` empty.
-  Shipped DEFAULT-ON as part of the owner-greenlit V2 train (not a preview flag), so P6's reversibility contract was
-  satisfied by the V2 train's own gate. **Nothing left to land.**
-- [x] **P5 calm chrome (side-pile collapse + chrome/motion pass)** — `33669a1` (2026-07-02): behind
-  `compy_calm_chrome` (**DEFAULT OFF**, Settings → Appearance preview toggle; flag-off byte-identical,
-  test-pinned). ONE "Nothing else needs attention" expander at the foot of Optimize/Fixes swallows all six
-  "leave it alone" piles (measured fine · not worth touching · not for this rig · dismissed · refuse pile ·
-  Past Tweaks) via SidePileContext portals (`side-pile.tsx`) — content/state/audited handlers stay in
-  Check/Fix, moved never removed; inside the drawer the refuse pile is retitled "Deliberately refused" (it
-  stacked against Check's same-named pile). Export left the persistent header for the setup-summary card
-  (SessionDebrief's untouched). Calm ambiance drifts barely-there (§8b: 76s/94s @ 0.6 opacity; Advanced
-  auto-off + reduced/hidden freezes intact); the Settings Ambiance picker now shows the true effective
-  default (calm under homeV3). P3's open taste note CLOSED: limiter clear-state retitled "None found today"
-  and Check's Biggest-limiters empty state deduped — "measured clean" has one owner per screen, guard-pinned
-  (≤1 occurrence test). Verified tsc clean + vitest 810/810 + cargo 659 + live self-review (shots
-  `docs/ui-sweep/shots/p5/`). **Default-ON flip is an owner taste call** (armed in his live profile with
-  P1–P3 for the same review pass).
+> **UI SLIM-DOWN TRAIN** (council-approved 2026-07-01) — SHIPPED: P1–P3 + deep-cleans landed, all four flags default-ON since `733f132`; its P2 taste notes are point-in-time (pre-HUD Monitor, pre-rail-relabel). Moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22).
 
 ---
 
@@ -1169,9 +1009,4 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 
 > **✅ Phase-A closure (verified 2026-07-01):** no unchecked, non-gated, cleanly-buildable Phase-A `[ ]` item remains — the 5 open rows are all gated/walled: safe-to-suspend data (owner-curated) · peripheral debounce/Snap-Tap/Rapid-Trigger *detection* + sensor-ID DB (user-mode firmware-read wall, same class as DPI/line 355) · ISP-speed + DNS probes (📡 outbound-gated). Remaining VALUE is Phase B/C/D (gated). Supersedes the stale "Bottom line" below.
 
-## Bottom line (2026-06-23)
-The 1.0 lane (Phase A) is **substantially but not fully built**. A1 and A6 are done; A2 mostly done; A3 and
-A5 have scattered finishable gaps. **The real remaining bulk is A4** — Services advisory inventory, the
-entire Peripheral Audit surface, deep Network detection, and the Monitor preset/OSD/hint cards. So: no, the
-list has not been fully worked. The next-up, highest-leverage, non-gated work is **A4 + the A5 finishables
-(wire `hwchange.rs` to the UI) + A3 entry metadata**.
+> **Bottom line (2026-06-23)** — superseded by the Phase-A closure note above; moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22).

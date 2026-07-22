@@ -100,15 +100,15 @@ than papered over:
   fired in the same growth-cycle; if nothing changed, the injected reason escalates from a
   reminder to "step 1 below is not optional this time." Still can't verify the persisted content
   is actually *sufficient* to resume from cold — only that something was written.
-- **Boot tax — NOT fixed, flagged instead.** `docs/BACKLOG.md` is 124,218 bytes — already past
-  the usage-audit skill's own 120KB flag — while sitting at exactly its 12-cycle retention cap
-  (`docs/BACKLOG.md:250`). There's nothing over-retained to mechanically prune right now; the
-  size is inherent to how verbose 12 cycles are at this project's current logging style, plus
-  older non-cycle content (branch-reconciliation notes, etc.) living permanently in the file
-  past the rolling cycle window. Actually shrinking this requires judgment about what's still
-  load-bearing versus safe to move to `BACKLOG_ARCHIVE.md`/`CHANGELOG.md` — the kind of call this
-  pass deliberately did NOT make unilaterally, per the project's own false-done/never-silently-
-  drop-backlog-items law. Named here as the single largest concrete remaining lever, not solved.
+- **Boot tax — FIXED (2026-07-22, owner-approved tier-1 archive).** `docs/BACKLOG.md` had grown
+  to 128 KB — past the usage-audit skill's 120KB flag — at exactly its 12-cycle retention cap,
+  so the excess was completed non-cycle content living past the rolling window. The judgment
+  pass this bullet used to defer was made and owner-approved: five sections verified
+  complete/superseded (TOOLCHAIN pack · TOP PRIORITY LANE · Branch-integration health · UI
+  SLIM-DOWN TRAIN · the stale Bottom line) moved verbatim to `BACKLOG_ARCHIVE.md` with one-line
+  pointers left — ~21 KB off the board, back under the flag (107 KB). Remaining size is inherent
+  cycle-log verbosity; next lever if it regrows past the flag: Phase-A detail (~37 KB, needs
+  cross-reference re-pointing first — its Phase-D row and closure note cite lines inside it).
 - **The 150k window number itself is inherited, not re-derived.** It was set 2026-07-02 from that
   period's burn pattern; nobody has re-tested whether 150k is still the right cutoff specifically
   for Opus 4.8. Internally consistent now (§5), not empirically re-proven optimal.
