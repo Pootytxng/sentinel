@@ -4,22 +4,41 @@
 this list is the half that needs a human watching the screen on Windows. Tick each box; if anything
 fails, stop and report it. **"Beta shippable" is your call after this pass** — HQ doesn't declare it.*
 
-**Build under test:** `Compy_0.1.0_x64_en-US.msi` (3.8 MB) — `src-tauri\target\release\bundle\msi\`
-(or the NSIS `Compy_0.1.0_x64-setup.exe`, 2.5 MB, in `…\bundle\nsis\`). NotSigned by design.
+**Build under test:** `Compy_0.9.0_x64-setup.exe` (NSIS, 3,826,464 B / 3.65 MB) —
+`src-tauri\target\release\bundle\nsis\`, built from `37a166c`, SHA-256 `6BC2F7DF…F5A2C4` — the exact
+artifact now staged for distribution (`docs/BETA_DISTRIBUTION_RECORD.md`). **Updated 2026-07-22:**
+this line previously named the 0.1.0-era MSI + NSIS pair; whether an MSI is still produced for 0.9.0
+wasn't re-verified this pass, so only the NSIS this beta actually ships is named here — confirm
+before assuming an MSI exists too. NotSigned by design.
+
+> **Scope note (added 2026-07-22):** sections 2 and 8 below (migration, retiring old Sentinel) test
+> the OWNER's OWN machine history (pre-rename `%APPDATA%\Sentinel` data). The actual 0.9.0
+> invite-only testers are new external people who never ran Sentinel — those two sections don't
+> apply to them and can be skipped for THIS round; they only matter if this checklist gets re-run on
+> the owner's own box. **BUT some of the six DID run an earlier Compy build (0.1.0-era)** — for them
+> the relevant path is section 2b (upgrade-in-place over existing `%APPDATA%\Compy` data), not
+> section 2's Sentinel migration.
+>
+> **Elevation note:** every UAC prompt in this list (sections 2b/4/5/6) is clicked by the OWNER, by
+> design — HQ's own verification stays read-only on UAC/service state per the standing
+> security-settings rule and routes any elevation click here.
 
 ---
 
 ## Already verified by HQ (headless / programmatic — no action needed)
-- ✅ Installer rebuilt → exactly `Compy_0.1.0_x64_en-US.msi` + `Compy_0.1.0_x64-setup.exe`, NotSigned, **no updater artifacts**.
-- ✅ Identity strings: only the two intentional legacy literals remain (migration copy-*source* + `serde(alias)`); frontend clean; ETW session `Compy-FPS`; config `Compy` / `gg.compy.app` / `0.1.0` / `compy.gg`.
+- ✅ Installer rebuilt → exactly `Compy_0.9.0_x64-setup.exe`, NotSigned, **no updater artifacts**.
+- ✅ Identity strings: only the two intentional legacy literals remain (migration copy-*source* + `serde(alias)`); frontend clean; ETW session `Compy-FPS`; config `Compy` / `gg.compy.app` / `0.9.0` / `compy.gg`.
 - ✅ Single-instance plugin wired first; migration is copy-not-move + atomic staging-rename + OnceLock-guarded, with a unit test; rollback resolves purely from local `history.json` (which migration copies verbatim).
 - ✅ Export identity (`# Compy Report`, `compy-report-*`, UTF-8 BOM, `compy_version`); no HTTP-client dependency + CSP locks `connect-src` to self/ipc.
-- ✅ Suites green: `cargo test` 206/206, `npm test` 114/114, tsc + vite clean.
+- ⏳ Suites green: **re-run `cargo test` / `npm test` right before this pass and confirm 100%** — this
+  line hardcoded `206/206` / `114/114`, the 0.1.0-era count; badly stale now (cargo was already
+  787/787 as of the 2026-07-17 Intelligence Phase 2 ship alone, and grows every cycle). Don't trust
+  either old number — re-derive live rather than treating this line as still-current evidence.
 
 ---
 
 ## 1. Install + identity  *(~2 min)*
-- [ ] Run the MSI. SmartScreen warns (expected, unsigned) → **More info → Run anyway**. Installs without error.
+- [ ] Run the installer (`Compy_0.9.0_x64-setup.exe` — NSIS, not an MSI). SmartScreen warns (expected, unsigned) → **More info → Run anyway**. Installs without error.
 - [ ] Start menu shows **Compy**; launching opens a window titled **Compy** (not Sentinel).
 - [ ] About/footer + window chrome say Compy; no "Sentinel" visible anywhere.
 
@@ -37,6 +56,17 @@ fails, stop and report it. **"Beta shippable" is your call after this pass** —
 - [ ] Open the Trust Ledger / history → **all pre-rename entries render** (nothing lost).
 - [ ] **Roll back a pre-rename applied change** → it executes correctly and the setting reverts.
 - [ ] `%APPDATA%\Sentinel` is **still there, untouched** (copy-not-move safety net).
+
+## 2b. Upgrade over an existing 0.1.0-era Compy install  *(~2 min — added 2026-07-22)*
+> **Applies to any of the six invitees (or a staged profile) that already has Compy 0.1.0 installed
+> with real `%APPDATA%\Compy` data.** This is NOT the section-2 Sentinel migration — migration
+> correctly does nothing here because `%APPDATA%\Compy` already exists; the risk is the
+> upgrade-in-place path: old data loading under the new build, and installer-over-installer residue.
+- [ ] Run `Compy_0.9.0_x64-setup.exe` **without uninstalling 0.1.0 first** → installs without error; app launches and reports **0.9.0**.
+- [ ] `%APPDATA%\Compy` data survives untouched: Trust Ledger shows **all entries applied under 0.1.0**; sessions/exports/scoreboard still present.
+- [ ] **Roll back a change that was applied under 0.1.0** → executes correctly under 0.9.0 (rollback resolves from `history.json` alone, so old entries must stay undoable across versions).
+- [ ] Add/Remove Programs shows **ONE Compy at 0.9.0**. Caveat: if the old install was the 0.1.0 **MSI**, the NSIS upgrade won't remove that entry — uninstall the stale MSI entry afterwards (`%APPDATA%` data persists through it).
+- [ ] No stale 0.1.0 process or Start-menu duplicate; single-instance behavior still holds (second launch focuses the window).
 
 ## 3. First-run guided arc, end to end  *(~3 min — the whole reason the beta exists)*
 - [ ] First launch shows the new onboarding (3 steps, your real rig snapshot, line icons — **no emoji**), not the old 4-step lecture.
