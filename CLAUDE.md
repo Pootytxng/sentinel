@@ -47,9 +47,9 @@ safe + reversible by default, rollback over raw control. No jargon, no regkey du
   fabricate, never claim unmeasured — and amplify measured wins LOUDLY** (share cards,
   before/afters, aggregate stats, attack-marketing vs the snake-oil lane). "Your PC is probably
   fine" defensive copy is RETIRED.
-- **RETIRED:** no-telemetry absolutism → opt-in Receipts telemetry. It is a NEW outbound-network
-  boundary: own spec + security review + owner sign-off before ship (stop-rule 3). Until then the
-  verified zero-outbound property holds.
+- **RETIRED:** no-telemetry absolutism → opt-in Receipts telemetry. The live signed updater is
+  Compy's one narrow outbound surface; Receipts would add a materially different telemetry
+  boundary and still requires its own spec + security review + owner sign-off (stop-rule 3).
 - **UNTOUCHABLE (now business-critical):** rollback-first · no fabricated claims · no kernel
   driver/injection · frozen risky-tweak catalog · signed-remote-rules triple gate · every LOCKED
   rule below. One Reddit thread of brand damage kills the funnel — **the gates ARE the moat.**

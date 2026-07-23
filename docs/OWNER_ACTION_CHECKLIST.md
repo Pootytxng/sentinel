@@ -8,28 +8,28 @@
 > — it keeps going and only raises one of these if it *truly* can't proceed.
 >
 > **Status legend:** ⬜ open · ✅ done · ⏳ waiting on you · 🔒 gated on money/legal.
-> Last reconciled: **2026-07-08**, patched **2026-07-11** (Cowork full audit — added the missing
-> Monitor-v4 eyeball item, fixed a same-day self-contradiction on Lenis/HoloLens status, flagged a
-> dead repo link in the legal drafts). Not a full re-sweep of every doc — see
-> `docs/COWORK_AUDIT_2026-07-11.md` for what was and wasn't checked.
+> Last reconciled: **2026-07-22** for the live updater/release boundary. Older product items below
+> remain historical unless their own status says otherwise.
 
 ---
 
 ## §A — Needs your hands or eyes (owner-run, reversible)
 
-### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
+### A0. Live updater: protect the key, then approve the next tester send
 
-- ⏳ **Back up the updater signing key (2 minutes, genuinely important).** Copy
-  `C:\Users\Kuya\.tauri\compy-updater.key` (and `.key.pub`) somewhere private OFF this machine —
-  password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
-  another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
-  push code to every install. Same custody class as the remote-rules key law.
-- ⏳ **Send the six invitees the first updater-enabled build — the last manual send ever.** Their
-  current installs (0.9.0/0.1.0) have NO updater and cannot hear about updates until they install
-  one build that does. Send the v0.9.3 installer:
-  `https://github.com/Pootytxng/compy-releases/releases/latest` (direct exe link on that page).
-  After they install it once, every future patch reaches them in-app ("update ready" pill →
-  one click). Timing/wording is yours — distribution is owner territory.
+- ⏳ **Protect the updater signing key.** Keep the private key outside Git and make an encrypted,
+  access-controlled offline backup. Do not put it in ordinary shared cloud storage. Losing it means
+  installed clients cannot trust future updates; leaking it lets an attacker sign one. The release
+  pipeline now refuses a passwordless signing key, so set a strong key password through the
+  process-scoped `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` only when staging a release. Do not write the
+  password into the repo, a `.env` file, shell profile, command line, or CI.
+- ⏳ **Do not rotate the updater key during a normal release.** Existing clients pin the current
+  trust root. If rotation is ever required, use the owner/security bridge protocol in
+  [`UPDATER_TRUST_ROOT.md`](UPDATER_TRUST_ROOT.md); changing both keys at once strands the fleet.
+- ⏳ **Do not send v0.9.4 as the new tester baseline.** Wait for a clean 0.9.5-or-later candidate
+  produced by the hardened two-phase release pipeline, then review its staged receipt and give the
+  explicit publish/send GO. Testers on 0.9.0/0.1.0 still need one manual updater-enabled install;
+  their actual installed versions remain unknown until they report them.
 
 ### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
 
@@ -177,11 +177,15 @@ hologram has no visible purpose or information integrated"* (needs part-anchored
 rides a later Lab phase, tracked in [`BACKLOG.md`](BACKLOG.md).
 
 ### B2. Beta send — go / no-go  ·  ⏳
-[`BACKLOG.md`](BACKLOG.md) RUNG 3: private-beta to friends + your Discord. The decision "ship from
-current `main`" is made; what's pending is **your GO** to actually send (after A2 smoke). Also open:
-ship `beta-001` frozen vs. cut a fresh `beta-002` from `main`.
 
-**Distribution protocol (owner-dictated 2026-07-21 — the runbook when the GO comes):**
+**Current decision (2026-07-22; supersedes the older 0.9.0 ride-vs-recut text below): HOLD.** Do not
+send v0.9.4 as the new baseline and do not reuse the old Drive kit. First review and merge the
+hardened release train, protect the updater signing key, and stage a clean **0.9.5-or-later**
+candidate. The pipeline must produce a signed receipt, exact artifact hashes, a clean runtime proof,
+and a private draft release before the owner gives the separate **publish/send GO**. Existing tester
+install state remains unknown until each tester reports it.
+
+**Historical 0.9.0 distribution record (2026-07-21/22; retained for audit, NOT the next-send runbook):**
 Release label: **"Compy 0.9.0 Invite-Only Private Beta — Validated binary source: 37a166c"**.
 The artifact is the exact validated NSIS built from `37a166c` — `Compy_0.9.0_x64-setup.exe`,
 SHA-256 `6BC2F7DFBCCC31A6714A49EE07F36327016DBB65741FA40D4371A45690F5A2C4` (3,826,464 bytes;
@@ -212,8 +216,9 @@ https://drive.google.com/file/d/1BNuoY-ubKCLTkPUDFdnmFGAUkK4g0J9n/view?usp=shari
 2. ~~Re-send using ONLY the link above~~ → ✅ DONE 2026-07-22 (~9 AM PDT): owner sent the
    correction + verified link to all six; the exact sent link was re-verified unauthenticated
    **post-send** (HTTP 200 · SHA-256 exact) and the old link re-confirmed dead in the same pass.
-**Nothing left on you for this incident.** The open risk item is now §A2 (smoke pass, 0/24) —
-six people hold a working install link. Anyone clicking the old link sees "request access" — safe.
+**Nothing left on you for this incident.** Later smoke-pass and release decisions supersede the
+then-current `0/24` note; the live next-send state is the HOLD at the top of this section. Anyone
+clicking the retired old link sees "request access" — safe.
 
 **Fold-in — cold-start user testing (panel-review brief 2026-07-15 §4.10):** the beta send doubles as
 the cold-start test event — same recipients, no separate program. Target mix when picking who gets it:

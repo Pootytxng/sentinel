@@ -45,7 +45,8 @@ NVIDIA testers ___
 > Hey! No pressure at all — when you next get a gaming session in with Compy running, two tiny
 > things would help me a ton:
 > 1. Hit **Export** after you play and send me the file (it's a local report — you see it first,
->    nothing leaves your PC until you send it).
+>    the report itself leaves only when you send it; Compy's separate signed update check carries
+>    no hardware, session, or report data).
 > 2. One sentence: **how would you describe Compy to a friend?** Even "honestly, it's just X" is
 >    gold — that sentence tells me whether the whole idea lands.
 >

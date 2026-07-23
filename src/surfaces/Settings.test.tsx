@@ -33,7 +33,8 @@ describe("Settings", () => {
     expect(screen.getByText("Appearance")).toBeInTheDocument();
     expect(screen.getByText("Behavior")).toBeInTheDocument();
     expect(screen.getByText(/None of this touches what Compy measures/)).toBeInTheDocument();
-    expect(screen.getByText(/Fully local\. No account, no telemetry/)).toBeInTheDocument();
+    expect(screen.getByText(/Local-first: no telemetry, no account/i)).toBeInTheDocument();
+    expect(screen.getByText(/signed updates/i)).toBeInTheDocument();
     expect(screen.getByText("v0.1.0")).toBeInTheDocument();
   });
 

@@ -1,19 +1,21 @@
 # Compy — Privacy Policy
 
-**Status: DRAFT v0.2 (2026-06-13).** Reflects how the software AND the website behave today — v0.2
-adds the website/waitlist data section (email + a hashed IP) now that the launch waitlist is live.
+**Status: DRAFT v0.3 (2026-07-22).** Reflects how the software and website behave today. v0.3
+discloses the signed, consent-first app updater that became live on 2026-07-22.
 It is **not legal advice** — the owner should still have it reviewed by a qualified professional
 before public distribution. Owner/contact identity: Pootytxng (GitHub issues).
 
-> **Doctrine pointer (2026-06-12):** the absolutes below describe the software as it ships TODAY (still true); per `docs/RECEIPTS_DOCTRINE.md`, a future opt-in default-OFF Receipts telemetry phase is planned — this policy must be revised before that ships.
+> **Doctrine pointer:** Receipts telemetry remains disabled. If optional data sharing is ever armed,
+> this policy must be revised in the same release.
 
 ---
 
 ## The short version
 
-**The Compy app runs entirely on your PC.** It does not collect, transmit, sell, or share any of
-your data — no accounts, no telemetry, no analytics, no advertising, and no network connections to
-operate. **The only data we ever collect is on our website:** if you join the launch waitlist, we
+**Compy's analysis and saved history stay on your PC.** The app has no account, telemetry,
+analytics, advertising, or upload of your hardware/session data. Its one automatic network use is a
+signed update check; an installer downloads only after you approve it. **The only personal data we
+collect is on our website:** if you join the launch waitlist, we
 store your email (to send one launch message) and a hashed version of your IP (for spam prevention)
 — nothing else, and no third-party trackers. Details below.
 
@@ -29,8 +31,8 @@ machine**, including:
 - Live performance sensors while you have monitoring open (GPU/CPU usage, temperatures where
   available, RAM, and FPS/frametime for a running game).
 
-This information is **displayed to you and used only on your device**. It is never sent
-anywhere.
+This information is **displayed to you and used only on your device**. Compy does not include it in
+update requests or upload it anywhere.
 
 ## What Compy stores (locally)
 
@@ -54,10 +56,18 @@ You can delete any of these files; Compy will recreate what it needs.
 
 ## Network use
 
-Compy makes **no network requests** to function. The only outbound action is that some
-advisory recommendations may **open a link in your default web browser** (for example, a GPU
-driver download page). Once a link opens, your browser — not Compy — handles it, under your
-browser's own privacy terms.
+Compy makes one type of automatic outbound request: it checks a fixed GitHub release endpoint for a
+newer signed version when the app starts and about every four hours while it remains open. The check
+does not contain your hardware inventory, sessions, Trust Ledger, settings, or other Compy data.
+
+If an update exists, Compy shows its version and notes. It does **not** download or install the
+update until you click **Update now**. The downloaded installer must pass cryptographic verification
+against the public key built into Compy before installation. GitHub receives ordinary connection
+metadata, such as your IP address, under GitHub's own privacy terms.
+
+Some advisory recommendations may also **open a link in your default web browser** (for example, a
+GPU driver page), but only after you choose the link. Your browser then handles that page under its
+own privacy terms.
 
 > **About "telemetry" recommendations:** Some of Compy's optional recommendations help you
 > *disable* Windows or NVIDIA telemetry services. That is a privacy feature that reduces what
@@ -81,14 +91,15 @@ separate, and one part of it collects data — **only if you choose to give it:*
 - **Retention & deletion.** We keep your email until the launch message is sent (or until you ask us
   to remove it), then delete it. To have your email removed at any time, contact us (below).
 
-This website data collection does **not** change anything about the app: the installed Compy app
-still makes no network connections and sends nothing off your PC.
+This website data collection is separate from the app. The app does not send the website your
+hardware, session history, Trust Ledger, or settings; its only automatic connection is the signed
+update check described above.
 
 ## Future: signed rule updates (currently disabled)
 
 Compy contains the groundwork for downloading **cryptographically signed** recommendation
 rule files in the future. This capability is **disabled** in the current build and performs no
-network activity. If it is ever enabled, it would only **download** signed rule files to keep
+network activity of its own. If it is ever enabled, it would only **download** signed rule files to keep
 recommendations current — it would **never upload** information about you or your PC. Any such
 change will be reflected in an updated version of this policy before it ships.
 

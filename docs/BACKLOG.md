@@ -8,8 +8,8 @@
 > (`docs/superpowers/plans/2026-06-21-roadmap-sequencing.md`, Cowork's strategy lane). This file only
 > tracks *status*, verified against code on `main` — not against banners.
 >
-> **Status anchored to `main` @ `47e93e6` (2026-06-23 audit).** Verified by a 5-agent read-only sweep of
-> the actual source tree, not commit messages.
+> **Last full truth reconciliation used synchronized `main` @ `aa3c610` (2026-07-22).** This is a
+> dated baseline, not a live-pointer claim; verify Git before acting on release or build state.
 
 ---
 
@@ -17,21 +17,25 @@
 
 ## 🚚 LIVE UPDATER — SHIPPED (owner directive 2026-07-22) + FIRST FIELD-QA WAVE (reviews 2026-07-22)
 
-- [x] **Live in-app updater — SHIPPED + E2E-PROVEN** (`135d609` feat · `a6d1508` v0.9.2 · `90fc73e`
+- [x] **Live in-app updater — SHIPPED; first path operationally corroborated** (`135d609` feat · `a6d1508` v0.9.2 · `90fc73e`
   v0.9.3): endpoint `Pootytxng/compy-releases` `releases/latest/download/latest.json`; consent-first
   topbar UpdatePill (offer → progress → passive NSIS → auto-relaunch; zero chrome when idle); footer
-  honesty copy "Outbound: signed update check only" (test-pinned); minisign key OUTSIDE repo;
+  honesty copy "Network: signed update checks; downloads only when you click" (test-pinned); minisign key OUTSIDE repo;
   `scripts/release.ps1` pipeline + `scripts/e2e-updater-probe.mjs` CDP probe. **Proven live on the
-  owner's rig: 0.9.2 self-updated to 0.9.3 through the updater.** Full state: RELEASE_STATE 23a
-  banner. Owner leftovers: key backup + first-link send (OWNER_ACTION_CHECKLIST §A0).
+  owner's rig: available evidence supports a 0.9.2→0.9.3 updater run, but no durable
+  before/click/process-replacement/after transcript was preserved. Do not call it self-contained
+  E2E proof.** Full current state: `docs/RELEASE_STATE.md`. Owner leftovers: key backup + approval
+  of the first clean staged replacement send (`docs/OWNER_ACTION_CHECKLIST.md` §A0).
 
 **Tester reviews 2026-07-22 (J + Matthew, on the 0.9.0 build) — each item rides normal triage; fixes
 now SHIP through the updater.** J also praised: more organized, less overwhelming, loves controlled
 experiments + logbook. Matthew praised: guided-setup rail line, simple home, Optimize clarity,
 "What's this" on Telemetry Tasks.
 
-- [x] **Default window too small (multiple testers + owner 2026-07-23)** — ✅ SHIPPED v0.9.4
-  (`23ff847` feat · `419ec81` release), delivered to the owner's box THROUGH the updater: first-run
+- [x] **Default window too small (multiple testers + owner 2026-07-22)** — ✅ SHIPPED v0.9.4
+  (`23ff847` feat · `419ec81` release), installed on the owner's box. **Delivery route is
+  unverified:** the preserved evidence does not prove whether 0.9.4 arrived through the updater or
+  local reinstall. First-run
   default 800×600 → 1280×720 centered, plus `tauri-plugin-window-state` so the size/position the
   user sets persists (overlay denylisted). Restore path live-proven (state-file round-trip).
 - [ ] **J: bigger 3D PC window** — the Home rig-diagnostic 3D viewport reads too small. (Partially
@@ -58,6 +62,16 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
 - [ ] **Matthew: bottom expandable rows too "quiet"** — "Applied & history / More cleanup / Power
   features" read like footer link text; raise their visual weight (he compared them to
   contact-us/copyright links).
+
+## 🌐 SITE DEPENDENCY SECURITY FOLLOW-UP (found 2026-07-22)
+
+- [ ] **Astro major-version security refresh before the next site feature train.** A clean
+  `site-app/npm ci` + `npm audit` reports two high and one low vulnerable dependency paths
+  (`astro`, transitive `sharp`, transitive `esbuild`). The site is statically generated from
+  owner-controlled inputs, so the currently identified server/untrusted-input paths are not proven
+  exploitable in Compy's deployment; nevertheless, the supported fix requires an Astro 5→7 major
+  upgrade. Do this as a dedicated compatibility train with a clean site build, landing guards, and
+  visual regression review. Do **not** run `npm audit fix --force` inside a release train.
 
 ## 🧠 INTELLIGENCE PLATFORM LANE (owner directive 2026-07-16 — supersedes priority ordering per its §0.12)
 
@@ -890,11 +904,11 @@ Legend: `[x]` shipped on main · `[~]` partial/thin · `[ ]` not built · `[⛔]
 - [x] Wi-Fi link quality (band · signal% · link-rate) — enriches the network-connection advisory when on Wi-Fi (read-only `netsh wlan`; parser unit-tested; not verifiable on the wired dev rig)
 - [x] wired-port-aware Wi-Fi nudge — on Wi-Fi AND a wired Ethernet port exists → names it ("plug it in") instead of the hedged "if you can run a cable" (read-only, reuses `has_wired_ethernet_port`; unit-tested)
 - [x] wired link-speed detection — `hardware.rs`: negotiated wired Ethernet rate (MSFT_NetAdapter.Speed, reuses the existing adapter query — zero-outbound, NOT the 📡 ISP/DNS class); pure `active_wired_link_speed` + `format_link_rate`; readiness pill (neutral gigabit+, advisory ≤100 Mbps) + Diagnostics "Wired link speed" row with honest note (low link = old cable/port, still fine for gaming); 5 tests — `6f3f7dd`
-- [ ] ISP speed snapshot (local) — 📡 outbound-gated (a real throughput test must download from a server = first outbound call, same wall as the DNS probe); only the zero-outbound NIC link-rate above is feasible without owner sign-off. 🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence platform; already outbound-gated.
+- [ ] ISP speed snapshot (local) — 📡 outbound-gated (a real throughput test must download from a server = an additional outbound probe, same wall as the DNS probe); only the purely local NIC link-rate above is feasible without separate owner sign-off. 🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence platform; already outbound-gated.
 - [x] network-readiness pills (backend signal) — `hw.network_pills: [{label,tone}]` on HardwareInfo, derived read-only from adapters/Wi-Fi/QoS/wired-port (zero-outbound, no new probe/IPC); tones good/neutral/advisory/unknown mirror the network-connection readiness honesty; 6 pure tests; UI half = content/peripheral — `490e081`
 - [x] network-readiness pills (**UI half**, peripheral) — calm color-coded chips in the Latency surface ("Network connection" card, the online-latency axis); renders the authoritative `hw.network_pills` signal via a narrow `get_hardware_info` read (Benchmark `RigSpecs` precedent — the surface has no `hw` in scope); honest tones (`advisory` = calm accent, never amber/alarm; unknown future tone → neutral), card hidden when unread, no FPS promise; pure `networkPillTone` + 4 tests; live self-reviewed — `b33fcd4`
 - [x] Wi-Fi channel / interference — `channel` surfaced on 2.4 GHz + overlap advisory (only 1/6/11 don't overlap → switch router or to 5 GHz); read-only, parser already read it, unit-tested
-- [ ] DNS resolution-time probe — 📡 outbound-gated (a resolution-time measurement IS a live DNS query = outbound call; held at the same wall as the ISP snapshot above — Cycle 2026-06-25d flagged it as gated). 🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence platform; already outbound-gated.
+- [ ] DNS resolution-time probe — 📡 outbound-gated (a resolution-time measurement IS an additional live DNS query; held at the same wall as the ISP snapshot above — Cycle 2026-06-25d flagged it as gated). 🔻 **demotion-flagged 2026-07-17 (intelligence directive §0.12):** doesn't feed the intelligence platform; already outbound-gated.
 - [x] powerline / MoCA Learn guides — `powerline-ethernet` + `moca-ethernet` term explainers (network topic): honest no-new-cable wired-grade options for rooms you can't run a cable to. Both name the real win (ping/stability over Wi-Fi, NOT FPS), the practical catches (powerline ← wall-not-surge-strip, circuit-dependent; MoCA ← coax both ends + PoE filter), and when to prefer each. Cross-linked to `wifi-vs-ethernet-fps`; no fabricated speeds. Guard test `knowledge-powerline-moca.test.ts`. Flagged for owner brand-voice skim.
 - [x] QoS advisory — read-only Policy-based-QoS detection (HKLM+HKCU `…\Windows\QoS`); surfaces a named Advisory ONLY when a policy exists (no clutter when clean); honest "as-found, not a problem on its own" framing; unit-tested
 

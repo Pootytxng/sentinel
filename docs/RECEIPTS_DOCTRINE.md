@@ -36,7 +36,8 @@ This is the grand re-opening. We were never open; now we are, and the door says 
   Constraints (non-negotiable): consent-first UI, default OFF, anonymous (no PII, no rig serials),
   kill-switch, no third-party trackers, payload inspectable by the user before send. It is a NEW
   outbound-network boundary → rides its own spec + security review + **owner sign-off before ship**
-  (CLAUDE.md stop-rule 3). Until it ships, the verified zero-outbound property still holds.
+  (CLAUDE.md stop-rule 3). The live signed updater is already Compy's one narrow outbound surface;
+  Receipts would add a materially different telemetry boundary and remains separately gated.
 - **"Your PC is probably fine" defensive copy.** Retired app-wide and site-wide. Replacement voice:
   "Measured on rigs like yours." Celebrate measured wins loudly.
 - **The refusal to market.** Retired. Attack marketing is sanctioned: the debunk IS the ad; pick the
@@ -61,7 +62,7 @@ This is the grand re-opening. We were never open; now we are, and the door says 
 - Rollback-first integrity (the moat; B2B's entire purchase reason).
 - No fabricated claims (owner's integrity line + legal survival).
 - No kernel driver · no game injection (anti-cheat safety = market access).
-- Signed-remote-rules triple gate, updater off, secrets/signing-key rules, frozen beta refs,
+- Signed-remote-rules triple gate, consent-first signed updater, secrets/signing-key rules, frozen beta refs,
   security/system-settings owner gate — ALL CLAUDE.md LOCKED rules stand. A monetized Compy makes
   these MORE important: we will be charging strangers; the blast radius of sloppiness is the brand.
 

@@ -67,7 +67,7 @@ describe("Learn surface (reskin)", () => {
     fireEvent.change(screen.getByLabelText("Paste a tweak guide to autopsy"), {
       target: { value: "https://www.youtube.com/watch?v=abc123" },
     });
-    expect(screen.getByText(/Compy never fetches the internet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Autopsy does not open or fetch pasted links/i)).toBeInTheDocument();
     expect(screen.getByText(/Show transcript/i)).toBeInTheDocument(); // YouTube-specific path
     const grade = screen.getByRole("button", { name: "Grade this guide" }) as HTMLButtonElement;
     expect(grade.disabled).toBe(true);
@@ -90,7 +90,7 @@ describe("Learn surface (reskin)", () => {
         value: "turn on game mode and force hpet from https://example.com to boost fps now please",
       },
     });
-    expect(screen.queryByText(/Compy never fetches the internet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Autopsy does not open or fetch pasted links/i)).not.toBeInTheDocument();
     const grade = screen.getByRole("button", { name: "Grade this guide" }) as HTMLButtonElement;
     expect(grade.disabled).toBe(false);
   });

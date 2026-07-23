@@ -162,7 +162,9 @@ eyes-on run. What's left for the human sitting is listed at the end of this bloc
 ## 7. Single-instance + export + network  *(~1 min)*
 - [ ] Launch Compy a second time → it **focuses the existing window**, no second instance.
 - [ ] Export a report → file is named **`compy-report-*.md`**, title **"Compy Report"**, opens correctly (BOM intact — no stray characters at the top).
-- [ ] (Optional) With a network monitor open, do a normal session → **zero outbound connections** from compy.exe.
+- [ ] (Optional) With a network monitor open, do a normal session → only the documented signed
+  update check may connect; no telemetry, session data, hardware data, or pasted Autopsy content
+  leaves the PC. Nothing downloads until the user clicks **Update now**.
 
 ## 8. Uninstall / reinstall + retire old app  *(~1 min)*
 - [ ] Uninstall Compy → reinstall → your `%APPDATA%\Compy` data (ledger/sessions) **persists**.

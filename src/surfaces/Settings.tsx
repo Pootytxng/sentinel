@@ -414,7 +414,8 @@ export default function Settings({
               {buildStamp && <span className="set-about-stamp"> · {buildStamp}</span>}
             </div>
             <p className="set-about-privacy">
-              Fully local. No account, no telemetry, nothing leaves your PC.
+              Local-first: no telemetry, no account. Compy only connects to check for signed updates,
+              and downloads one only after you approve.
             </p>
             {/* Rules-source — engineering status, re-homed here from the header (one-rail §1b). */}
             <p className="set-about-rules">{rulesSourceLabel}</p>

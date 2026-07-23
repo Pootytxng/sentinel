@@ -4,13 +4,14 @@ import { join } from "path";
 
 // Receipts-arming copy guard (toolchain-enforced "stale-copy sweep").
 //
-// Today Compy is genuinely zero-telemetry: receipts_gate() returns false, no send path exists, and
-// the user-facing "no telemetry / nothing leaves your PC / these never change" copy below is TRUE.
+// Today Compy is genuinely zero-telemetry: receipts_gate() returns false and no send path exists.
+// The signed updater is a separate download-only outbound surface and must never be conflated with
+// telemetry. The user-facing "no telemetry" copy below is therefore still true.
 // The RECEIPTS_DOCTRINE plans an OPT-IN receipts telemetry (default-off). The moment that gate is
 // armed, these absolute claims become false/over-broad — exactly the stale-copy trap an external
 // audit warned about.
 //
-// This guard does NOT prematurely soften the (currently-honest) copy. Instead it FAILS the build the
+// This guard FAILS the build the
 // instant receipts_gate() is flipped to true while any watched absolute claim still ships — forcing
 // the copy sweep to land in the SAME change that arms telemetry. While the gate is dark it also
 // confirms the watched strings still exist, so the watch list can't silently rot out of date.
@@ -19,15 +20,15 @@ const receiptsRs = readFileSync(join("src-tauri", "src", "receipts.rs"), "utf8")
 
 // Watched absolute telemetry claims that must be reworded before/when receipts arms.
 const WATCHED: { file: string; phrase: string }[] = [
-  { file: join("src", "Onboarding.tsx"), phrase: "no telemetry" },
+  { file: join("src", "Onboarding.tsx"), phrase: "No telemetry" },
   {
     file: join("src", "surfaces", "setup", "setup-steps.ts"),
     phrase: "No telemetry. These never change.",
   },
-  { file: join("src", "surfaces", "setup", "SetupTour.tsx"), phrase: "no telemetry" },
+  { file: join("src", "surfaces", "setup", "SetupTour.tsx"), phrase: "No telemetry" },
   {
     file: join("src", "surfaces", "Settings.tsx"),
-    phrase: "no telemetry, nothing leaves your PC",
+    phrase: "no telemetry",
   },
 ];
 

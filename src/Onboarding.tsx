@@ -177,7 +177,7 @@ function StepHouseRules() {
   const rules = [
     { Icon: IconCpuOff, text: "No kernel driver — stays in user space" },
     { Icon: IconShieldCheck, text: "No game injection — anti-cheat safe by design" },
-    { Icon: IconWifiOff, text: "Nothing leaves your PC — no account, no telemetry" },
+    { Icon: IconWifiOff, text: "No telemetry or account — only signed update checks connect" },
   ];
   return (
     <>

@@ -30,9 +30,9 @@ code-signed, and code-signing certificates cost money — this beta is free, uns
 earned its keep yet. Signing happens before any public release.
 
 What the warning does NOT mean: it's not a virus flag, and it doesn't change what the app can do.
-For the record, here's what Compy deliberately never does — no kernel driver, no game injection,
-no network calls, no account, no auto-update. You can verify the no-network claim yourself with
-any firewall monitor; we'd honestly love it if one of you did.
+For the record, here's what Compy deliberately never does: no kernel driver, no game injection, no
+account, no telemetry, and no upload of your hardware or session data. Its only automatic network
+feature checks for cryptographically signed updates. Nothing downloads until you approve it.
 
 **To proceed:** click **More info** → **Run anyway.**
 
@@ -40,11 +40,13 @@ any firewall monitor; we'd honestly love it if one of you did.
 
 ## 3. Install
 
-Installer: **`Compy_0.1.0_x64-setup.exe`** (private beta — please don't share it publicly)
+Installer: use the **`Compy_<version>_x64-setup.exe`** link sent to you. Do not reuse an older saved
+installer or share the private-beta link publicly.
 
 1. Run the installer (installs per-user; no admin needed).
 2. SmartScreen → **More info** → **Run anyway** (see section 2).
-3. Launch **Compy** from the Start Menu.
+3. Launch **Compy** from the Start Menu. If it offers a newer signed beta, review the notes and choose
+   **Update now** or **Later**; it never downloads silently.
 
 You may see a **UAC prompt later** — only if you turn on FPS monitoring or apply certain
 recommendations. That's the elevated helper doing its job; "unknown publisher" there is the same
@@ -69,31 +71,30 @@ Compy now opens with a guided first-experience. **Please go in blind and note wh
 
 1. **Onboarding** (3 quick steps — it should read your actual rig on the first screen).
 2. **First check** — a fast scan with a verdict: what's worth fixing, what's already fine.
-3. **Apply the #1 fix** if you're comfortable (one click — and note the Trust Ledger entry it
-   leaves in **Fix**; everything is undoable from there).
-4. **Play something** — your normal game, with FPS monitoring on from **Play** (accept the UAC
+3. **Apply the #1 fix** if you're comfortable (one click — and note the Trust Ledger entry;
+   everything Compy changes is undoable).
+4. **Play something** — your normal game, with FPS monitoring on from **Monitor** (accept the UAC
    prompt).
-5. **Open Play afterward** — your session is in the list, and clicking it unfolds a plain-English
+5. **Open Monitor afterward** — your session is in the list, and clicking it unfolds a plain-English
    debrief right there.
 6. If you applied the fix in step 3 and chose "compare next session": **play the same game again**
    and the next debrief will show an honest verdict — improved, no measurable change, or
    regressed. **"No measurable change" is not a bug.** It's the product refusing to lie to you.
-7. **Roll something back** from the Trust Ledger (in **Fix**) and confirm your setting came back
+7. **Roll something back** from the Trust Ledger and confirm your setting came back
    exactly.
 
-The map, if you ever feel lost — six rooms on the left rail: **Home** (the overview) · **Check**
-(scan your rig, see what's worth fixing) · **Play** (live monitoring, overlay, your session
-debriefs) · **Fix** (changes + the Trust Ledger) · **Learn** (the Library — every tweak and scam,
-graded) · **Lab** (Benchmark + Latency instruments). Export lives in the header; Settings is the
-gear — **Appearance has three themes; tell us which one you ended up keeping.**
+The map, if you ever feel lost: **Home** is your rig and next action; **Monitor** records play;
+**Blackbook** keeps your changes, sessions, and graded advice; **Lab** applies and proves changes.
+Settings is the gear.
 
 ---
 
 ## 6. Privacy
 
-No telemetry, no account, no remote anything, no updater. **Nothing about your system leaves your
-PC unless you choose to send it to us.** Export reports are local files; review one before sharing
-— it contains hardware names and app state, nothing else.
+No telemetry and no account. Compy does not upload your hardware, sessions, settings, or Trust
+Ledger. Its one automatic connection is the signed updater check; downloads require your click.
+Export reports remain local files until you choose to send one. Review an export before sharing it
+because it contains hardware names and app state.
 
 ---
 
@@ -115,13 +116,15 @@ complaints all welcome.
 
 ## 8. Known limitations (honesty section)
 
-- **No CPU temperature** — reading it needs a kernel driver, and we won't ship one. By design,
-  forever. (GPU temperature works.)
+- **CPU temperature may be unavailable.** Compy ships no driver. It can display a read-only CPU
+  temperature only when HWiNFO, LibreHardwareMonitor, or OpenHardwareMonitor already publishes one;
+  otherwise it honestly shows unknown. GPU temperature uses the vendor SDK where supported.
 - **1% low is a live estimate**, not benchmark-grade.
 - **Comparison verdicts need two sessions of the same game** — different games don't compare.
 - **Overlay**: borderless/windowed only, not exclusive fullscreen.
 - **NVIDIA**: implemented, not yet hardware-verified (see section 7).
-- **Gaming Mode is not in this build** — it exists but stays off until it passes its own safety QA.
+- **Gaming Mode is live but opt-in.** It records and restores the exact prior state; report any
+  failed restore immediately.
 
 ---
 

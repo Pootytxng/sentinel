@@ -3,7 +3,7 @@
 *A shareable snapshot of where the project is and where it's going. Written for outside eyes:
 what's good, what's missing, what's a bad idea. Be blunt — "this part is dumb" is useful data.*
 
-> **Last reconciled: 2026-07-15**, against `docs/RELEASE_STATE.md`, `docs/RECEIPTS_DOCTRINE.md`,
+> **Last reconciled: 2026-07-22**, against `docs/RELEASE_STATE.md`, `docs/RECEIPTS_DOCTRINE.md`,
 > and `docs/MONETIZATION_PLAN.md` (the authoritative current-state docs — if this file and any of
 > those three ever disagree again, those three win). This file had gone six weeks stale (last
 > touched 2026-06-05) before a 2026-07-15 consumer panel review caught it describing a product
@@ -21,8 +21,9 @@ what's worth changing on *your* rig, what's already fine, and — the soul of th
 tweak did nothing, it says so.**
 
 It's a real, working Windows app (Tauri: Rust core, web UI), at private-beta quality. **Core
-promise: optimize + rollback stay free forever, no account required.** Today, nothing leaves your
-PC — the app is verified zero-outbound, full stop. A future opt-in **Receipts telemetry** feature
+promise: optimize + rollback stay free forever, no account required.** The app has no telemetry or
+hardware/session upload. Its only outbound network feature is the signed, consent-first updater:
+checks happen automatically, while an installer downloads only after the user clicks Update now. A future opt-in **Receipts telemetry** feature
 (anonymous, default-off, kill-switched) is planned but **not yet built** — there is no toggle to
 turn on yet, and it won't ship without its own security review and owner sign-off. The wedge isn't
 "boost" — it's being the only tool in a snake-oil category that **measures instead of promises.**
@@ -63,18 +64,19 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
   were audited and most were refused*: HPET/timer hacks, Defender disable, core parking, TCP
   mega-packs, fixed pagefile — permanently blocklisted. The category competes on tweak count;
   Compy competes on what it leaves out, on purpose, with receipts.
-- **No risky internals.** No kernel driver (which is why there's no CPU temperature — reading it
-  needs one, and we won't ship one). No game injection — FPS is captured externally via Windows'
-  own event tracing, so it's anti-cheat safe by design. GPU sensors via official vendor SDKs.
-- **Local-first, one outbound call.** No account, no remote config, no telemetry. **The in-app
-  updater (LIVE 2026-07-22, owner-directed) is the one thing that talks out:** a signed-update
+- **No risky internals.** No Compy kernel driver. CPU temperature is shown only when an external
+  monitor the user already runs publishes it read-only; otherwise it stays unknown. No game
+  injection — FPS is captured externally via Windows' own event tracing, so it's anti-cheat safe by
+  design. GPU sensors use official vendor SDKs.
+- **Local-first, one outbound feature.** No account, no remote config, no telemetry. **The in-app
+  updater (LIVE 2026-07-22, owner-directed) is the only network surface:** a signed-update
   check against the public releases repo on launch + every 4h; nothing downloads until the user
   clicks Update now, and every package is signature-verified against the pinned public key before
   install (private key lives outside the repo). The Export report still leaves only by the user's
   hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) remains a separate
   gated track requiring its own security review and owner sign-off before it can arm. The old
   "verified zero-outbound" absolute is RETIRED by the updater decision — the in-app footer now
-  states exactly what leaves the machine: "Outbound: signed update check only."
+  states exactly what happens: "Network: signed update checks; downloads only when you click."
 
 ## Honesty about the project itself
 
@@ -106,10 +108,10 @@ you to turn off its own telemetry.
 
 ## Status & what gates what
 
-- **Private beta: functionally complete, still unsent.** The full loop above, plus readiness
-  checks, priority ranking, latency diagnostics, live monitoring + overlay, Gaming Mode (live),
-  and local export. Remaining before invites go out: the beta smoke pass (24 checks, 0 run) and
-  the owner's send GO. Distribution: unsigned, invite-only, direct download, fully local.
+- **Private beta: active, replacement send on hold.** Six invitees received the verified 0.9.0
+  link; what they installed is unknown. A signed-updater feed now exists through v0.9.4, but the next
+  tester baseline waits for a clean candidate produced by the hardened release pipeline and the
+  owner's explicit send GO. The Windows publisher remains unsigned.
 - **The compy.gg marketing site is already live and public** (`compy-bd6.pages.dev`, owner deploy
   GO 2026-07-15) — landing page, `/compare`, Blackbook content pages, waitlist funnel, SEO
   plumbing. This is ahead of the app beta send, not behind it: the site is a separate, lower-risk
@@ -117,7 +119,7 @@ you to turn off its own telemetry.
 - **Money: deliberately zero spend** until a phase proves it can pay for itself — domain purchase,
   code signing, legal, and a Pro entity/payments are all owner-gated. Signing and legal gate the
   *public app* release; the domain gates the site's canonical URLs; none of this blocks the beta.
-- **Still dark on purpose:** remote rules (triple-gated off), the updater (off), Receipts
+- **Still dark on purpose:** remote rules (triple-gated off), Receipts
   telemetry (no send path, needs its own security review + owner sign-off), Compy Pro licensing
   (needs an entity + payments). Gaming Mode is **no longer on this list — it's live.**
 - **The tweak catalog is open, not frozen** (owner decision 2026-07-09): a tweak earns inclusion

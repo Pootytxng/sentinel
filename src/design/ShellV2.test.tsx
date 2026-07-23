@@ -7,7 +7,7 @@ import { railFor, HOME_RAIL } from "./homeRail";
 // does nothing is a fake affordance), the topbar carries room title + plain-English crumb + the
 // real build stamp (never a fabricated one), and the footer states the outbound-honesty +
 // reversibility promises with the MEASURED ledger count. (Updater ARMED 2026-07-22: the footer
-// names the signed update check as the one outbound call — "zero outbound" would now be a lie.)
+// names signed checks and the click-gated download as one outbound feature — "zero outbound" lies.)
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) =>
@@ -54,7 +54,7 @@ describe("ShellV2 rail", () => {
 
   it("footer: outbound-honesty line + reversibility line with the measured ledger count", () => {
     render(shell());
-    expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
+    expect(screen.getByText("Network: signed update checks; downloads only when you click")).toBeTruthy();
     expect(screen.getByText("ledger 41")).toBeTruthy();
   });
 });

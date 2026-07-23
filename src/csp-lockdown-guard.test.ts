@@ -3,10 +3,10 @@ import { readFileSync } from "fs";
 import { join } from "path";
 // (fs/path typed by src/test-node-shims.d.ts — same pattern as voice-guard.test.ts.)
 
-// CSP / no-network lockdown guard (Measurement Platform 2.0, Task H — the "no-network/CSP" guard).
-// The verified zero-outbound property is a LOCKED law (CLAUDE.md; Receipts telemetry is the ONLY
-// planned outbound boundary and ships dark, default-OFF, owner-gated). The production Content-
-// Security-Policy is the wall that mechanically forbids the webview from reaching any remote host:
+// CSP / webview-network lockdown guard (Measurement Platform 2.0, Task H).
+// Compy's signed Rust-side updater is the one approved outbound surface; Receipts telemetry remains
+// dark, default-OFF, and owner-gated. The production Content-Security-Policy is the separate wall
+// that mechanically forbids the webview from reaching any remote host:
 // connect-src is restricted to the app itself + the Tauri IPC/asset local schemes. This guard pins
 // that wall so a well-meaning edit to tauri.conf.json can't silently widen it and open an outbound
 // channel. If this fails: you loosened the production CSP — that is an owner-gated security change
@@ -55,7 +55,7 @@ function isRemoteOrigin(token: string): boolean {
   );
 }
 
-describe("CSP lockdown guard: the production CSP stays zero-outbound", () => {
+describe("CSP lockdown guard: the production webview cannot reach remote hosts", () => {
   it("has a structured production security.csp object", () => {
     expect(csp, "src-tauri/tauri.conf.json app.security.csp must be a directive object").toBeTruthy();
   });

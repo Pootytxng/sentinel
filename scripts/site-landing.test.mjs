@@ -52,12 +52,12 @@ describe("landing (Flight Test contract v3)", () => {
     for (const id of ["features", "receipts", "pricing", "faq", "waitlist"]) {
       expect(html, `missing section #${id}`).toContain(`id="${id}"`);
     }
-    // Trust bar: the five never-promises. "core free forever" is the SCOPED promise
+    // Trust bar: current product laws. "core free forever" is the SCOPED promise
     // (owner decision 2026-07-15, panel-review brief 3.1): optimize + rollback stay free
     // forever; Pro is paid depth, never a gate — an unscoped absolute must not return.
     for (const vow of [
       "rollback-first",
-      "zero outbound connections",
+      "signed update checks; downloads need your click",
       "no kernel driver",
       "no game injection",
       "core free forever",

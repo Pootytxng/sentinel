@@ -1,5 +1,9 @@
 # 🔒 Gate Decision Brief — the safe path to "opening a gate"
 
+> **HISTORICAL PROCESS BRIEF (2026-06-27).** This records how the original gates were evaluated;
+> it is not a current state table or an instruction to re-arm completed work. For live state and
+> current owner decisions, use `docs/RELEASE_STATE.md` and `docs/OWNER_ACTION_CHECKLIST.md`.
+
 > **Owner said "open any gates."** HQ will **not blanket-arm** — each LOCKED gate is, by your own law
 > (CLAUDE.md), a *deliberate, specific, informed* decision + welfare-check + per-feature QA + sign-off. Arming
 > ships **Windows-mutation code or outbound network to real machines** = the "irreversible / outward-facing /
@@ -8,7 +12,7 @@
 > gate** so you can say e.g. *"arm service-suspend"* with eyes open. The flip itself stays your sign-off — that line
 > is immovable; everything *up to* it I'll do for you.
 
-## Current gate states (verified 2026-06-27, `main` @ `9463c10`)
+## Historical gate states (verified 2026-06-27, `main` @ `9463c10`)
 
 > **`docs/RELEASE_STATE.md` is the authoritative gate matrix — if this table and it ever disagree, RELEASE_STATE wins.** This table is a quick reference for the arming PROCESS below; keep it in sync or defer to RELEASE_STATE.
 
@@ -22,7 +26,7 @@
 | Receipts telemetry (Phase C) | **BUILT-DARK** (off) | `receipts.rs` |
 | License/Pro (Phase D) | **BUILT-DARK** (off) | `license.rs` |
 | Gaming Mode (F1) | **ON** — *pre-existing*, owner-signed 2026-06-18 for reboot QA | `lib.rs:499` |
-| updater / signing | off / none | `tauri.conf.json` |
+| updater / signing | **OFF at this historical snapshot; now LIVE** | current truth: `docs/RELEASE_STATE.md` |
 
 ## Per-gate brief — what each arming actually requires
 
@@ -37,13 +41,17 @@
 
 ### 📡 Phase C · Receipts telemetry
 - **State:** consent UI + payload preview BUILT-DARK.
-- **Arming = ** a **NEW outbound-network boundary** — it breaks the *verified zero-outbound* property that the whole "measurement brand" trust rests on. **Requires** its own spec + **security review** + explicit owner sign-off (stop-rule 3). **Highest brand-risk of any gate** — do not arm casually; only after Phase B is proven and a deliberate spec exists.
+- **Arming = ** a **NEW telemetry boundary beyond the signed updater**. **Requires** its own spec +
+  **security review** + explicit owner sign-off (stop-rule 3). **Highest brand-risk of any remaining
+  gate** — do not arm casually; only after a deliberate spec exists.
 
 ### 🔒 Phase D · money / affiliate / funnel / Pro
 - Owner-territory business steps (entity, Paddle, domain, waitlist) — not a code flip I perform.
 
 ### ⛔ Hard-locked, not in scope to arm now
-- remote-fetch arming · updater enable · signing keys · force-push · frozen beta refs (`16069fa`). These stay shut.
+- remote-fetch arming · signing-key exposure · force-push · frozen beta refs (`16069fa`). The
+  updater item in this historical list is superseded: it is now live and consent-first per
+  `docs/RELEASE_STATE.md`.
 
 ## Phase B service-suspend — WELFARE-CHECK (what / why / blast-radius)
 - **What:** let a gaming session temporarily `sc stop` an owner-chosen set of safe services and **restore them exactly** on session end / crash.

@@ -115,9 +115,9 @@ function mdToHtml(md) {
   return out.join("\n");
 }
 
-// Still true today (and test-pinned): the shipped app makes zero outbound requests. If the
-// opt-in Receipts telemetry phase ever ships (owner-gated), this line gets revised WITH it.
-const FOOTER_PROMISE = "Local-only by design · no telemetry · no account";
+// App data stays local. The signed updater is the one disclosed outbound surface; future
+// opt-in Receipts telemetry remains separately owner-gated.
+const FOOTER_PROMISE = "Local-first · no telemetry · no account · signed updates only";
 
 // ---------- Real-wins strip (library index) — doctrine §5, web-design-director 2026-07-15 ----------
 // The flat alphabetical manifest has no way to FOREGROUND the measured wins — a "Sample" badge in a

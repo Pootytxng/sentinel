@@ -163,13 +163,13 @@ export function ShellV2({
             ))}
           </div>
           <div className="v2-foot">
-            {/* Outbound honesty line (updater ARMED 2026-07-22): the signed update check is now
-                Compy's ONE outbound call, so the old "Zero outbound connections" absolute would
-                be a lie. Copy states exactly what leaves the machine; opt-in Receipts still
+            {/* Outbound honesty line (updater ARMED 2026-07-22): signed checks plus a user-approved
+                installer download are Compy's ONE outbound feature, so the old "Zero outbound
+                connections" absolute would be a lie. Copy states the consent boundary; Receipts
                 gates separately and would change this line again when (if) it ships. */}
             <div className="v2-zero">
               <span className="v2-zero-led" aria-hidden="true" />
-              Outbound: signed update check only
+              Network: signed update checks; downloads only when you click
             </div>
             <div>
               Every change reversible · <span className="v2-mono">ledger {ledgerCount}</span>

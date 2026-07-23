@@ -175,8 +175,8 @@ const VERDICT_FILTERS: { key: TweakVerdict; label: string }[] = [
 // §5 category order for the collapsed browse sections (guides first — they're the "start here" doers).
 const CATEGORY_ORDER: KnowledgeType[] = ["guide", "tweak", "term", "trick"];
 
-// §7 — detect a URL PASTE into the autopsy. Fetching URLs is off the table ("nothing leaves your PC"
-// is a shipped promise), but silent non-registration is a doorknob violation. Returns the source kind
+// §7 — detect a URL PASTE into the autopsy. Autopsy never fetches pasted URLs; the signed updater
+// is Compy's only outbound surface. Silent non-registration is a doorknob violation. Returns the source kind
 // for in-voice coaching, or null. A mixed paste (URL + substantial prose) returns null → we grade the
 // prose and ignore the URL. NEVER fetches; pure string inspection.
 function detectUrlPaste(text: string): "youtube" | "webpage" | null {
@@ -583,7 +583,7 @@ function AutopsyPanel({
     <div className="lx-autopsy">
       <p className="lx-sub">
         Paste a tweak guide — a forum post, a video description, a "do these 10 things" list — and get
-        the autopsy. Nothing leaves your PC; it's matched against this library, offline.
+        the autopsy. The pasted text stays on your PC and is matched against this library offline.
       </p>
       {/* A3.8 — your local autopsy record: a running tally of what the guides you've graded turned out
           to be. Counts only, stored on this PC. Shown once you've graded at least one guide. */}
@@ -649,8 +649,7 @@ function AutopsyPanel({
       {urlKind ? (
         <div className="lx-urlcard" role="status">
           <p className="lx-urlcard-lead">
-            That's a link — and Compy never fetches the internet (nothing leaves your PC; that's the
-            deal). Bring me the words instead:
+            That's a link — Autopsy does not open or fetch pasted links. Bring me the words instead:
           </p>
           <p className="lx-urlcard-how">
             {urlKind === "youtube"
