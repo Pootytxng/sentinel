@@ -110,3 +110,15 @@ describe("Guard E — both production render sites consume APP_VERSION, never a 
     expect(app).not.toMatch(/\b(?:appVersion|version)=\{?\s*["']\d+\.\d+\.\d+["']/);
   });
 });
+
+describe("Guard F — installer metadata is valid Unicode, not double-encoded mojibake", () => {
+  const config = JSON.parse(read("src-tauri/tauri.conf.json"));
+
+  it("renders the intended copyright string", () => {
+    expect(config.bundle.copyright).toBe("© 2026 Pootytxng");
+  });
+
+  it("keeps mojibake markers out of the raw bundle metadata", () => {
+    expect(read("src-tauri/tauri.conf.json")).not.toContain("Ã");
+  });
+});
