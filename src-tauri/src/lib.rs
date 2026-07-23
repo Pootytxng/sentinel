@@ -983,6 +983,15 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Process relaunch, used solely to restart into the new build after an update installs.
         .plugin(tauri_plugin_process::init())
+        // Remember the main window's size/position across launches (first run opens at the
+        // tauri.conf.json 1280x720 centered default — tester gripe 2026-07-23). The telemetry
+        // overlay is DENYLISTED: it places itself programmatically (corner picker) and a restore
+        // would fight that logic.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["overlay"])
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             get_hardware_info,
             get_recommendations,

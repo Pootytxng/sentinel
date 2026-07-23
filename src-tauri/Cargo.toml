@@ -37,6 +37,11 @@ tauri-plugin-notification = "2"
 tauri-plugin-updater = "2"
 # relaunch() so "Update now" can restart into the new build after the installer runs.
 tauri-plugin-process = "2"
+# Remember last window size/position (tester gripe 2026-07-23: the 800x600 default was too
+# small — the intuitive fix is BOTH a larger first-run default (1280x720, tauri.conf.json)
+# AND respecting whatever size the user then chooses). Overlay window denylisted in lib.rs —
+# it positions/sizes itself programmatically and must never be "restored".
+tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = "0.33"
