@@ -70,7 +70,7 @@ unauthenticated → HTTP 200, `MZ`, 3,826,464 B, SHA-256 `6BC2F7DF…F5A2C4` (ex
 re-confirmed dead in the same pass. **Install status per tester: unknown until they report** —
 `BETA_TESTER_TRACKER.md` is the follow-up surface.
 
-## Release: Compy 0.9.1 — STAGING IN PROGRESS, NOT SENT (correction in flight)
+## Release: Compy 0.9.1 — STAGED + VERIFIED, NOT SENT
 
 **Artifact identity (the ONLY file this release may distribute once staging completes):**
 
@@ -91,23 +91,25 @@ from the reconciled/merged train. The wrong upload is missing the `775c9bb` fail
 sticky-attachment fix and CPU thermal-peak tracking that landed in the merge — shipping it as
 "0.9.1" would under-ship testers relative to what's already running on the owner's own machine.
 
-**Correction status (interrupted mid-fix):** attempted to revoke the wrong file's public sharing
-and rename it in place; a mistimed click moved it to Trash instead (caught immediately, Restored —
-no data lost). Before sharing could actually be revoked, **the Chrome bridge disconnected**
-("Browser extension is not connected"). Actual Drive state right now: the WRONG build is back in
-My Drive, still carrying "anyone with the link — Viewer" (this link was never recorded here and
-never sent to anyone — practically undiscoverable without the exact fileId). The CORRECT file
-(`7D7650EA…`, verified above) is staged into the Cowork session's local storage, ready to upload as
-a new Drive entity once the browser bridge reconnects. **Nothing 0.9.1 has been sent to any
-tester.** Follow-up, in order: (1) revoke the wrong file's public sharing + rename it in place
-(`SUPERSEDED-presenter-fix-only-preMerge_Compy_0.9.1...`) per the standing retire-don't-delete
-pattern, (2) upload the correct file as a new Drive entity, (3) re-verify via anonymous download +
-SHA-256 match, (4) record its real link here.
+**Correction status: RESOLVED 2026-07-22 ~6:05 PM PDT.** The Chrome bridge reconnected; the wrong
+file was renamed in place (same fileId `1784qUWc5HtgI-vqyA90IBN8Cf1cZjnzg`, same retire-don't-delete
+pattern as the 0.1.0 incident) to `SUPERSEDED-DO-NOT-SEND_Compy_0.9.1_preMerge-presenterFixOnly.exe`
+and its sharing set to Restricted — confirmed dead via unauthenticated `curl` (redirects to Google
+sign-in, HTTP 303, no file bytes served). The CORRECT file (`7D7650EA…`, verified above) was then
+uploaded as a brand-new Drive entity, fileId `1DdMXaYIFe_Cy8t-vsCc-nlHPbBT4DRlo`, sharing set to
+"anyone with the link — Viewer", and re-verified by an unauthenticated download through that exact
+link (virus-scan-interstitial confirm-token flow, same as the 0.9.0 protocol) — 3,836,321 B,
+SHA-256 `7d7650eac09375e797877fbea69558565b3f3835a93507b16d7463d44c57e108`, exact match.
 
-**Distributed artifact unchanged:** the six invitees still hold only the `37a166c` 0.9.0 NSIS link
-(above) — this section changes nothing about that. A 0.9.1 replacement send is a separate owner
+**Link:** https://drive.google.com/file/d/1DdMXaYIFe_Cy8t-vsCc-nlHPbBT4DRlo/view?usp=sharing
+(Drive fileId `1DdMXaYIFe_Cy8t-vsCc-nlHPbBT4DRlo`)
+
+**Distributed artifact unchanged — nothing sent to any tester:** the six invitees still hold only
+the `37a166c` 0.9.0 NSIS link (above); this section changes nothing about that, and the link above
+is not recorded anywhere a tester would find it. A 0.9.1 replacement send is a separate owner
 decision, additionally gated per `RELEASE_STATE.md` CURRENT STATE on an **owner-present smoke
-pass** before GO — not yet scheduled, not implied by anything in this section.
+pass** before GO — not yet scheduled. Whether to send 0.9.1 at all, versus waiting for 0.9.2 (the
+in-progress updater build — see `RELEASE_STATE.md`), is also an open owner decision.
 
 ## Prior distribution surfaces (historical)
 
