@@ -4,6 +4,17 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-07-23 — updater train v0.9.2–v0.9.7 + tester-review wave (banners retired from the live file)
+
+The live RELEASE_STATE.md was rewritten this date to a single current-truth table (Phase 4 control-plane
+repair); the per-train banners it used to stack are retired here. Full text of each is in git history
+(`git log ac518f1..1d9bad6`, plus the `23a`–`23d` banners at `f69c98e`/`116ce28`). Summary:
+- **v0.9.2 `a6d1508` / v0.9.3 `90fc73e`** — in-app updater armed + first fleet-path proof (0.9.2→0.9.3 self-update, CDP-witnessed). Endpoint `Pootytxng/compy-releases`; minisign key outside repo; footer copy → "Outbound: signed update check only".
+- **v0.9.4 `419ec81`** — 1280×720 default window + remember-last-size; owner box self-updated 0.9.3→0.9.4.
+- **v0.9.5 `ac518f1`** — "Apply to all rooms" accent action (taste call). Self-update proof #3.
+- **v0.9.6 `29e5217` / v0.9.7 `1d9bad6`** — tester-review UX wave (bigger 3D stage, advisory cards as doors, orientation-first intro, calm admin lines, Field-Guide self-intro, Lab door rows) + a same-day honesty patch. Self-update proofs #4/#5.
+- Owner-installed build progressed 0.9.4→0.9.7 entirely through the updater; GitHub asset counters later corroborated the downloads. The stale "0.9.1 / 37a166c / 970f801" table rows and the two contradictory "Bottom line" paragraphs were removed as superseded.
+
 ## Snapshot history (reverse-chronological log â€” superseded by CURRENT STATE above)
 
 > **UPDATE 2026-07-22b (Â§6 LIVE CATCH â†’ `970f801` SHIPPED TO THE OWNER'S BOX â€” NO DISTRIBUTION CHANGE).**

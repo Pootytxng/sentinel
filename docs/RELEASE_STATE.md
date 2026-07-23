@@ -1,199 +1,106 @@
-# RELEASE_STATE.md — Compy single-source-of-truth gate matrix
+# RELEASE_STATE.md ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Compy single-source-of-truth gate matrix
 
 > **This file is the AUTHORITATIVE current-truth snapshot of every gate, artifact, and release
-> blocker.** When any other doc (CLAUDE.md banners, RELEASE_QA.md, PACKAGING_SIGNING_PLAN.md,
-> GATE_DECISIONS.md) disagrees with this file about *current state*, **this file wins** — fix the
-> other doc. Created 2026-06-26 in response to an external source-level audit that flagged
-> state/documentation drift as the project's #1 risk. Keep it current: update it in the SAME commit
-> that flips any gate, arms any feature, or rebuilds the installer. Every row carries a `file:line`
-> so it can be re-verified in seconds, never asserted from memory.
+> blocker.** When any other doc (CLAUDE.md, GATE_DECISIONS.md, OWNER_ACTION_CHECKLIST.md) disagrees
+> with this file about *current state*, **this file wins** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â fix the other doc. Created 2026-06-26
+> after an external audit named state/doc drift the project's #1 risk. Keep it current: update the
+> rows below in the SAME commit that flips a gate, arms a feature, or cuts a release. Every gate row
+> carries a `file:line` for re-verification. The CURRENT STATE table carries machine-readable
+> `<!-- STATE:ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ -->` anchors that `scripts/verify-release-state.mjs` enforces against live source:
+> app-version drift, a stacked banner, an undisclosed public endpoint, a stale owner decision, or a
+> second bottom-line section all FAIL the gate.
 
-## CURRENT STATE (authoritative — read this first)
+## CURRENT STATE (authoritative ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â read this first)
 
-> This block is the single reconciled current-truth summary. It deliberately keeps **five distinct
-> identities** that an earlier revision of this block collapsed into one "HEAD" line:
-> **(1) newest locally verified installed build** (a static fact about the exe on the OWNER's disk) ·
-> **(2) current corrective source train** (a static, reviewed commit) · **(3) historically distributed
-> private-beta artifact(s)** (more than one private build has left this machine — at least the `fc940fe`
-> kit AND the frozen `16069fa` source ref; `16069fa` was **not** the only one) · **(4) current
-> tester installs + old share-link reachability** (**UNKNOWN** — owner-confirmable only; no telemetry to
-> read it from here) · **(5) `origin/main` tracking ref vs the remote server** (a LOCAL cached pointer
-> that can lag the server until `git fetch`; the ahead/behind counts are *derived by running git* and go
-> stale the instant anyone commits or pushes). **No static hash in this block is "the current HEAD."** A
-> commit hash names a fixed point in history; "current HEAD" is a *live* pointer you learn only by
-> running `git rev-parse HEAD` at read time. **The row-5 ahead/behind integers are deliberately NOT
-> committed here** — they are volatile and were stale within one commit last time; **derive them live on
-> read, and `git fetch` before trusting the `origin/main` comparison.** The dated `UPDATE …` banners in archive/RELEASE_STATE_HISTORY.md are a reverse-chronological LOG
-> of individual trains, **not** current state; where a banner disagrees with THIS block, this block wins.
-> Reconciled 2026-07-20: the audit-corrective train (`c1071c1..05f0ce4`) was **pushed to `origin/main`
-> via fast-forward** this date — an **AUDIT-CORRECTIVE closure, NOT a release closure**: no gate flipped,
-> no build, no ship to another machine, no Windows-state change. Push ≠ ship.
-> **Updated 2026-07-20b (release-validation build):** HEAD `37a166c` — which now subsumes that train and the
-> whole `75c38c6..37a166c` accumulation (Measurement Platform 2.0 + Home masthead/intake, 20 commits) — was
-> **release-built AND silently reinstalled onto the OWNER's own machine** via `scripts/ship-reinstall.ps1`.
-> So the row-2 code is **no longer "NOT built"**: it is **built + installed on the owner's machine, still
-> NOT distributed** to any other machine (directive step 12 held — no tester send, no share-link change). The
-> installed build (row 1) now **EQUALS** HEAD. This was a **release-VALIDATION** pass on the owner's box, not
-> a tester/public release: no gate flipped, no new outbound boundary, the mutation/rollback modules
-> byte-identical across the delta, and no live apply/rollback exercised *in that pass* (closed later the same
-> date — next paragraph).
-> **Updated 2026-07-20c (RUNTIME CLOSURE — this update ships as a DOCS-ONLY commit):** the two runtime items
-> 20b left open are **CLOSED on the installed `37a166c` build itself**: the **orphaned Gaming Mode session**
-> `gm-1784436112238` was recovered through the app's own **Restore** path (owner-clicked; restore completed
-> clean — session file cleared, no quarantine, ledger consistent), and a **live rollback → reapply cycle ran through
-> the installed release UI** on the benign Windows Game Mode rec (HKCU, non-elevated, zero UAC; ledger 55 → 56,
-> new entry `game-mode-1784599052740` with the full typed rollback contract; machine left in its original
-> Game-Mode-ON state). **Private beta = GO for invite-only distribution** (the send itself stays an owner
-> action — nothing has been distributed); **public release stays BLOCKED** on Code signing + Legal. This
-> closure commit is **documentation-only**: it advances HEAD one commit past `37a166c` with zero
-> source/product/version/gate delta — the **validated binary source remains `37a166c`**, the installed NSIS
-> SHA-256 `6BC2F7DF…F5A2C4` is unchanged, and **no rebuild/reinstall is warranted by a docs-only HEAD
-> advance**. Still open, honestly: elevated mutation/rollback not exercised this pass · NVIDIA sensor lane not
-> hardware-verified · multi-rec batch apply not runtime-exercised · live Codex hook activation pending
-> (unrelated to the Compy binary). Full evidence: the 2026-07-20c snapshot entry (archive/RELEASE_STATE_HISTORY.md).
-> **Updated 2026-07-22b (LIVE §6 SMOKE CATCH → FIX SHIPPED TO THE OWNER'S BOX):** during the owner's live
-> Marvel Rivals §6 sitting on `37a166c`, HQ caught the FPS dominant-presenter picker attributing capture to an
-> empty-named elevated `dwm.exe` presenter at fabricated rates (OpenProcess failure → `""` name → bypassed the
-> name-keyed denylist). Fixed in **`f96347d`** (`select_game_presenter` excludes empty-named candidates + 2
-> regression tests; cargo 858/858), ship-script elevated-helper kill-denial fixed in **`970f801`**, rebuilt +
-> silently reinstalled same day — **the owner's live build is now `970f801`** (row 1). Helper self-exit
-> verified live after a real stop (§6 exit box: PASS). **The DISTRIBUTED artifact stays the `37a166c` NSIS**
-> (rows 3–4 — the link the six invitees hold) — no send, no link change; refreshing the kit is an owner send
-> decision. Secondary finding (BACKLOG `34bd173`): between matches, desktop DXGI presenters (Discord etc.) can
-> win attribution — **CLOSED 2026-07-22c:** the fail-closed sticky-attachment fix shipped in `775c9bb`
-> (positive window-evidence game ID + attach hysteresis; ambiguous/non-game presenters emit NOTHING;
-> attachment releases only on process death/pid-recycle; 8 guard tests) — riding the 0.9.1 train, not
-> yet built/installed anywhere (row 2) at that time.
-> **Updated 2026-07-22d (0.9.1 BUILT + SILENTLY REINSTALLED on the owner's box):** the reconciled 0.9.1 tree (`149d315` merge → follow-ups `395752a`) passed the full verify suite (cargo 869/869 · clippy -D clean · tsc 0 · vitest 1777/1777 · version-drift 14/14 · verify-release-state --strict 23/23 · doc-budget PASS · rust-tauri review "fix-before-merge not required"; one tracked Warning → BACKLOG fps.rs pid-recycle entry), was release-built and silently reinstalled via `scripts/ship-reinstall.ps1` — **the owner's live build is now `395752a` · 0.9.1** (row 1; stamp byte-verified; the same-day `7aa9f1b` lane-install superseded — product diff `7aa9f1b..395752a` empty, docs/scripts only). In-place 0.9.0→0.9.1 upgrade preserved `%APPDATA%\Compy` (history/intelligence byte-identical; drift.json rewritten by the running app on launch). **DISTRIBUTED artifact unchanged** (rows 3–4, the `37a166c` 0.9.0 NSIS) — the replacement send awaits the owner-present smoke + GO.
+> **One table. No banner stack.** The dated per-train banners that used to live here are a LOG, not
+> state ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â they live in [archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md). Do NOT
+> stack a new banner on this file; update the rows below in place. Static commit hashes name fixed
+> points in history; the *live* `main` pointer is whatever `git rev-parse HEAD` returns at read time.
 
-> **Updated 2026-07-23a (LIVE UPDATER — new outbound boundary, ARMED BY OWNER DIRECTIVE):** the
-> in-app auto-updater is SHIPPED and FIELD-PROVEN. `tauri-plugin-updater` + consent-first topbar
-> UpdatePill (`135d609`); endpoint `https://github.com/Pootytxng/compy-releases/releases/latest/download/latest.json`
-> (public releases-ONLY repo — source stays private); minisign pubkey pinned at `tauri.conf.json:74`;
-> **private key OUTSIDE the repo** (`%USERPROFILE%\.tauri\compy-updater.key`; owner backup =
-> OWNER_ACTION_CHECKLIST §A0). Releases **v0.9.2** (`a6d1508`) + **v0.9.3** (`90fc73e`) published.
-> **E2E proven live on the owner's rig:** installed 0.9.2 offered v0.9.3 in-app → consent click →
-> signature-verified download → passive NSIS → auto-relaunched as `90fc73e · release` / 0.9.3
-> (CDP-probed; screenshot `docs/UPDATER_E2E_2026-07-22.png`). **Row 1 is now `90fc73e` · 0.9.3 — installed BY
-> the updater itself.** Rows 3–4 UNCHANGED: testers still hold the 0.9.0 Drive artifact; sending the
-> first updater-enabled link is an owner send decision (§A0) — after that send, manual links end
-> permanently. The "verified zero-outbound" era ENDS here by owner decision: the ONE outbound surface
-> is the signed update check/download (Rust-side; CSP `connect-src` untouched — `tauri.conf.json:46`);
-> ShellV2 footer copy now reads "Outbound: signed update check only" (test-pinned, `ShellV2.test.tsx`).
-> Pipeline for every future patch: `scripts/release.ps1` (bump → commit → signed build → latest.json →
-> gh release → ship-reinstall → push). The 0.9.2 stamp carries a cosmetic `+dirty` (untracked build
-> scripts in the build worktree — cause found + fixed); 0.9.3's stamp is clean and byte-verified.
->
-> **23b — v0.9.4 (`419ec81`, first REAL feature patch through the pipe):** default window
-> 1280×720 centered + remember-last-size (`tauri-plugin-window-state`, overlay denylisted —
-> `Cargo.toml:44`, tester gripe). Published to the endpoint; **the owner's installed 0.9.3
-> self-updated to it in-app** (post-update probe: stamp `419ec81 · release`, window exactly
-> 1280×720; restore path proven by state-file round-trip 1100×650; `.window-state.json` lands in
-> `%APPDATA%\gg.compy.app\`, overlay correctly absent from it). **Row 1 = `419ec81` · 0.9.4.**
-> Desktop holds the one current (0.9.4) installer. Rows 3–4 still unchanged (§A0 send pending).
->
-> **23c — v0.9.5 (`ac518f1`): "Apply to all rooms"** accent action (owner taste call resolving
-> NAV-1 (a); `RoomAccentPicker.tsx` + `setAccentForAllRooms` in `theme.ts`; room-accents suite
-> 36/36). Fleet-path proof #3: the installed 0.9.4 self-updated in-app to `ac518f1 · release` /
-> 0.9.5; feature live-exercised on the owner's rig (all five rooms stamped in one tap, owner's
-> prior duo picks restored byte-identical after). **Row 1 = `ac518f1` · 0.9.5.** Desktop installer
-> hygiene note: Desktop still holds the 0.9.4 setup exe — superseded, refresh rides the next
-> ship-reinstall (the owner's INSTALLED app is current via the updater; the Desktop copy is a
-> convenience artifact).
->
-> **23d — v0.9.6 (`29e5217`) + v0.9.7 (`1d9bad6`): the tester-review UX wave, DELIVERED THROUGH
-> THE UPDATER (pipe proofs #4 + #5); owner directive: complete review recs BEFORE any tester
-> send.** Shipped: Home 3D stage 420→540 (canvas 362→482 live-measured) with the cards-band guard
-> now deriving its bound from the stage css; needs-your-call advisory cards are DOORS (whole head
-> toggles, chevron, honest answer when no guide exists, bordered Not-for-me); guided-intro rail
-> orientation on the FIRST step (mode-aware, 3 new guards) + "can tune"/nothing-changes fine line;
-> Field Guide self-intro on its tab + named in the intro blurb; unreadable leftovers grouped in a
-> calm bordered aside (guard-pinned line format preserved); Lab bottom rows restyled from
-> legalese links to door rows (deliberate revision of the earlier demote-spec). 0.9.7 is a same-day
-> honesty patch: the 0.9.6 no-guide card copy referenced a non-rendering "What's this" and promised
-> steps it didn't have — caught in this session's own screenshot review, live-verified fixed.
-> **Row 1 = `1d9bad6` · 0.9.7** (self-updated 0.9.5→0.9.6→0.9.7 in-app; Desktop holds the one
-> 0.9.7 installer). Rows 3–4 unchanged — NO tester send (owner's explicit hold; §A0 unchanged).
-> Open from the reviews: cursor consistency + safe-tweak dropdown + post-check routing (other-lane
-> WIP files, deliberately not touched) · advisory-door DOM guard = logged test-debt (BACKLOG).
+<!-- STATE:source_main_commit=cff77ab -->
+<!-- STATE:latest_release_version=0.9.7 -->
+<!-- STATE:latest_release_commit=1d9bad6 -->
+<!-- STATE:owner_installed_version=0.9.7 -->
+<!-- STATE:owner_installed_stamp=1d9bad6 -->
+<!-- STATE:manifest_version=0.9.7 -->
+<!-- STATE:tester_distributed_version=0.9.0 -->
+<!-- STATE:public_artifact=releases-repo-public -->
+<!-- STATE:code_signing=open -->
+<!-- STATE:legal=open -->
 
-| # | Identity (kept distinct on purpose) | Current truth | How verified |
-|---|---|---|---|
-| 1 | **Newest locally verified installed build** — static fact about the exe on the OWNER's disk | **`395752a` · 0.9.1** → **`Compy_0.9.1_x64-setup.exe`**, installer SHA-256 `7D7650EAC09375E797877FBEA69558565B3F3835A93507B16D7463D44C57E108` (3,836,321 B). **Built + silently reinstalled 2026-07-22d** via `scripts/ship-reinstall.ps1`; the installed exe (`%LOCALAPPDATA%\Compy\compy.exe`) byte-embeds `395752a`; ONE Compy installer on the Desktop. In-place upgrade over 0.9.0 preserved `%APPDATA%\Compy` (history.json/intelligence.json byte-identical; drift.json rewritten by the app on launch). Delta vs the prior installed 0.9.0 train: the fail-closed FPS sticky-attachment fix + monitoring freshness gate + CPU thermal-peak (`775c9bb`), the earlier `f96347d` presenter-picker + `970f801` ship-script fixes (already installed 22b), version bumps to 0.9.1, docs/scripts. Supersedes the same-day `7aa9f1b` parallel-lane install (product diff empty). **The split stands: the owner's box runs `395752a` · 0.9.1, but the DISTRIBUTED artifact (rows 3–4, the link the six invitees hold) is still the `37a166c` 0.9.0 NSIS SHA-256 `6BC2F7DF…F5A2C4`** — refreshing the kit/link is an owner send decision, not implied by this reinstall. This row is **NOT** a claim about what any *other* machine runs (rows 3–4). | Embedded-hash byte-scan of the installed exe (read-only, `Select-String` for the shorthash) + `ship-reinstall OK` output with installer SHA-256 |
-| 2 | **Current corrective source train** — static; a *reviewed* commit, NOT a live pointer | **Updated 2026-07-22c:** the newest reviewed code is the **0.9.1 correction train** — `775c9bb` (fail-closed FPS sticky-attachment fix + monitoring freshness gate + CPU thermal-peak; cargo 869/869 · vitest 1777/1777 claimed at commit, re-verify on the reconciled tree) plus **two parallel 0.9.1 version-bump commits**: `5ed7d4e` (local `main`) and `5d396f9` (pushed to `origin/main` from the rel091 worktree) — the lanes bumped independently, so local and remote main had DIVERGED — **reconciled 2026-07-22d by merge `149d315` (no force-push), pushed, in sync 0/0**; the newest reviewed commit is the follow-ups commit **`395752a`** (full verify suite green on the reconciled tree — see the 22d banner). **BUILT + INSTALLED on the owner's box (row 1), NOT distributed:** the distributed artifact stays the `37a166c` NSIS (rows 3–4) until the owner-present smoke passes and the owner gives the replacement-send GO. *Superseded record (2026-07-20b/c):* `37a166c` — then HEAD = `origin/main`, the newest *reviewed* code on `main` (subsumes the audit-corrective train **and** the `75c38c6..37a166c` Measurement-Platform-2.0 / Home-masthead-intake accumulation — 20 commits). **As of 2026-07-20b it is BUILT + installed on the owner's machine (row 1) — still NOT distributed to any other machine (step 12 held).** **As of 2026-07-20c the newest commit on `main` is a DOCUMENTATION-ONLY runtime-closure commit stacked ONE past `37a166c`** (this file's closure records; zero source/product/version/gate delta) — **`37a166c` remains the validated binary source**, and a docs-only HEAD advance does **NOT** obligate a rebuild/reinstall (row 1 unchanged). | `git log --oneline origin/main..HEAD` (empty ⇒ in sync; read at review time) |
-| 3 | **Historically distributed private-beta artifact(s)** — what other machines were actually handed | The repo records prove **more than one** private build left this machine: `16069fa` / `beta/private-beta-001` (the OLD verified **unsigned** private beta, frozen ref, never to be moved) **AND** a later kit cut from **`fc940fe`** — an NSIS `Compy_0.1.0_x64-setup.exe`, SHA-256 `5F2549E7EDD6BC94440D3C24ECCC0CB784005DAC520DE2490BB81F3260021F18`, hosted on Google Drive and DM'd to testers (`docs/CHANGELOG.md:378-391`, `docs/archive/cowork-handoff-board-2026-06.md:354-356`); `fc940fe` is 349 commits after `16069fa`. So the earlier claim that `16069fa` was the *only* build ever handed to another machine is **FALSE**. A frozen *source* ref does not prove which *binary* a tester received; the **exact last artifact each tester installed is UNKNOWN pending owner reconciliation** (row 4). **2026-07-22: the `37a166c` 0.9.0 NSIS (SHA-256 `6BC2F7DF…F5A2C4`) was DISTRIBUTED invite-only** — the owner sent the recorded Drive link to six invitees (Matcher · Chinaman · J · Zoid · Sultan · Majin; `BETA_DISTRIBUTION_RECORD.md`), after the same-morning wrong-link send of the stale kit was corrected (old link killed + file renamed; sent link re-verified unauthenticated post-send, hash exact). **Public:** **NONE** — no public download, store listing, or signed public artifact (gated on **Code signing** + **Legal**, both OPEN in *Release blockers*). | Repo records (CHANGELOG + archived handoff board) + frozen ref; exact tester binary owner-confirmable only |
-| 4 | **Current tester installs + old share-link reachability** — old link RE-KILLED 2026-07-22 AM (first kill did not hold); tester installs still UNKNOWN | **Old share-link: RE-KILLED 2026-07-22 AM — the first (2026-07-21) restriction did NOT hold.** The `fc940fe`-era `Compy-Beta-Kit.zip` (fileId `1dphNbBkoJSbCPOWiUVy-y6iz25t9nMEO`) was confirmed still shared **anyone-with-link** (direct-download endpoint HTTP 200) as of 2026-07-21/22, then link-sharing was removed 2026-07-22 (`General access: Restricted`, confirmed via Drive UI + `get_file_permissions`) — the stale build can no longer be installed from that link. **INCIDENT ADDENDUM 2026-07-22 AM:** that restriction did NOT hold — Drive Activity shows a re-share (anyone-viewer) at 9:16 PM on 2026-07-21 (API-corroborated) which stayed open overnight — measured OPEN ~8:10 AM PDT 2026-07-22 (the Activity entries that appeared to show a same-night re-restrict were display-mislabels of the morning kill itself; that panel's timestamps proved untrustworthy — see the distribution record's corrected incident block) (`anyone:reader`; unauthenticated download served the zip bytes), during which window the stale link was sent out as the beta link (the wrong-build alert). Re-killed ~8:30 AM PDT 2026-07-22, verified 3 independent ways, and the file renamed in place to `RETIRED-DO-NOT-SEND_Compy-Beta-Kit_OLD-0.1.0-June.zip` (same fileId, dead link) — full incident + the new MANDATORY SEND RULE live in `BETA_DISTRIBUTION_RECORD.md`. **What any private-beta tester currently runs is still NOT knowable from here** — no telemetry (zero-outbound), no local record, still pending owner confirmation; do not assert testers are on any specific build. **2026-07-22 ~9 AM PDT: six invitees (distribution record) now HOLD the verified 0.9.0 link** — the owner's correction DM went to all six and the exact sent link re-verified unauthenticated post-send (SHA-256 exact); what each has actually *installed* stays unknown until they report. | Live Drive API check (`get_file_permissions`) + unauthenticated `curl` before/after (2026-07-22); tester-install state still unknowable without an owner report |
-| 5 | **`origin/main` tracking ref vs the remote server** — LOCAL cache; may lag the server | **Post-push (2026-07-20):** the audit-corrective train `c1071c1..05f0ce4` **landed on the server via fast-forward** (`408c860..05f0ce4`, no force); `origin/main` advanced from `408c860` to `05f0ce4` and HEAD is **in sync** at that tip. Numbers still go stale on the next commit — `git fetch` and re-derive live before trusting. **As of 2026-07-20b, HEAD `37a166c` = `origin/main` = the installed build (row 1)** — the prior "HEAD ahead of the installed build (`75c38c6`)" gap is **closed** (verified live: `git rev-list --left-right --count origin/main...HEAD` = `0  0`; `75c38c6..HEAD` = 20). **As of 2026-07-20c HEAD advances ONE docs-only closure commit past `37a166c`** — committed locally; the push follows owner approval of that exact diff, so `origin/main` stays `37a166c` until it lands; the installed build (row 1) stays `37a166c` either way. **The exact ahead / installed-distance integers are deliberately NOT committed here** — they are volatile (they change on every commit and push) and were stale within one commit the last time this row baked them. Derive them live at read time with the commands at right; tie any snapshot you record to the exact `HEAD` commit it was taken at, and `git fetch` before trusting the `origin/main` comparison. **2026-07-22c: the 0.9.1 train DIVERGED local-vs-remote** (`5ed7d4e` local · `5d396f9` on the server — parallel lanes, same version files); reconcile by merge (no force-push) and re-derive the counts live — do not trust any baked integer from before the merge. | `git rev-parse origin/main` (local ref) · `git rev-list --left-right --count origin/main...HEAD` (ahead/behind) · `git rev-list --count 75c38c6..HEAD` (installed distance) — **`git fetch` first to compare to the server** |
+| Identity | Current truth | How to re-verify |
+|---|---|---|
+| **Source `main` commit** | `cff77ab` at last write (the hardening-reconciliation train). A dated marker, not the live pointer. | `git rev-parse HEAD` Ãƒâ€šÃ‚Â· `git fetch && git rev-list --left-right --count origin/main...HEAD` |
+| **Latest released version + source commit** | **v0.9.7**, source `1d9bad6` (tag `v0.9.7` on `Pootytxng/compy-releases`). | `gh release list --repo Pootytxng/compy-releases`; tag ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ commit |
+| **Owner-installed version + embedded stamp** | **0.9.7**, embedded stamp **`1d9bad6`**. Registry `DisplayVersion` 0.9.7; exe `ProductVersion` 0.9.7. Arrived via the in-app updater (0.9.4ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢0.9.5ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢0.9.6ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢0.9.7, CDP-witnessed this session ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the running exe's stamp changed after an in-app "Update now" click with NO reinstall run between). | `Select-String compy.exe <shorthash>` + HKCU uninstall `DisplayVersion` (read-only) |
+| **Latest updater manifest version** | **v0.9.7** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `latest.json` at `releases/latest/download/` names the v0.9.7 asset; signature verifies against the pinned minisign key; installer + `latest.json` match GitHub's bytes. | unauthenticated fetch of `latest.json` + `scripts/verify-updater-signature.mjs` |
+| **Tester-distributed version** | **0.9.0** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the `37a166c` NSIS (SHA-256 `6BC2F7DFÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦F5A2C4`) is what the six invitees were sent (Drive link). **NO updater-enabled build has been sent to any tester** (owner hold). | `BETA_DISTRIBUTION_RECORD.md` |
+| **Known tester installation state** | **UNKNOWN.** No telemetry, no remote inventory by design. Six invitees hold the 0.9.0 link; what each actually installed is owner-confirmable only. | owner report only |
+| **Public artifact exposure** | **YES ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `Pootytxng/compy-releases` is a PUBLIC repo.** Every updater installer + `latest.json` is unauthenticated-downloadable (required for the updater; same discoverability as a shared link). **Source repo `Pootytxng/sentinel` stays PRIVATE.** No store listing, no marketing page, no Authenticode-signed public artifact. | `gh repo view Pootytxng/compy-releases --json visibility` |
+| **Code-signing status** | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â installers are Authenticode **NotSigned**. Gates a PUBLIC (store/marketing) release, not the private-beta updater. | `Get-AuthenticodeSignature` on the NSIS |
+| **Legal status** | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â EULA + privacy are DRAFTS only. Gates a PUBLIC release. | `docs/` legal drafts |
 
-**Bottom line — 2026-07-22b update first:** the owner's live installer is now **`970f801`** (the §6 presenter-picker fix + ship-script drain fix — see the 22b paragraph above); the paragraph below describes the superseded `37a166c` state and stays as the record of that pass. The distributed artifact (rows 3–4) is unchanged by the 22b reinstall. **22c/22d:** the 0.9.1 correction train was reconciled (`149d315`), fully verified at `395752a`, **built + silently reinstalled on the owner's box** (row 1 now `395752a` · 0.9.1) — rows 3–4 (distribution) stand until the owner-present smoke passes and the owner gives the replacement-send GO.
-
-**Bottom line (updated 2026-07-20b):** the owner's live installer is now **`37a166c`** — HEAD = `origin/main` = the installed build are all the **same** commit; the `75c38c6`→`37a166c` accumulation (20 commits: Measurement Platform 2.0 + Home masthead/intake) was **release-built AND silently reinstalled onto the owner's machine** this date. So the older "nothing newer than `75c38c6` has been built" line is **retired** — `37a166c` IS built + installed here. **Distribution is still ZERO, though:** nothing newer than the historical private-beta kits (row 3) has been sent to any *other* machine — this was a release-VALIDATION pass on the owner's own box (step 12 held: no tester send, no share-link change). The earlier audit-corrective train (`c1071c1..05f0ce4`) **was pushed to `origin/main` via fast-forward on 2026-07-20** and is now subsumed by `37a166c` — that push was an **audit-corrective closure, NOT a release closure** (push ≠ ship); the subsequent 2026-07-20b build is what put this code on the owner's disk, and it too shipped to **no other machine**. At least **two** private builds were handed to other machines historically — the frozen unsigned private beta `16069fa` **AND** a later kit cut from `fc940fe` (row 3) — so `16069fa` was **not** the only one; **what testers currently run and whether the old share link still resolves are UNKNOWN pending owner confirmation.** `origin/main` (`37a166c`) is a LOCAL tracking ref that may lag the server until a `git fetch`. **No gate flipped and no new outbound boundary across `75c38c6..37a166c`:** the verified zero-outbound property and every LOCKED gate still hold (delta confirmed: 11 mutation modules byte-identical, IPC `#[tauri::command]` count 90→90, no capabilities/CSP change, no new outbound-network code). All ahead/behind numbers are tooling-derived — re-run the commands above (and `git fetch` for the server) rather than trusting them. **Update THIS block in the same commit that ships or flips a gate; a PUSH is verified/refreshed AFTER it lands** — re-derive the row-5 counts (and `git fetch`) once the remote has the commit, since the tracking ref only advances post-push. **2026-07-20c runtime closure:** the installed `37a166c` build itself passed the two live checks 20b had deferred — the orphaned Gaming Mode session `gm-1784436112238` recovered through the app's own Restore path (owner-clicked), and a live **rollback → reapply** cycle ran through the installed UI on the Windows Game Mode rec with a field-perfect Trust-Ledger round-trip (55 → 56 entries, zero UAC, machine left in its original Game-Mode-ON state). **Private beta: GO for invite-only distribution** — the send itself remains an owner action (ships-to-others stop; step 12 still held, nothing distributed). **Public release: still BLOCKED** on Code signing + Legal (Release blockers). The closure lands as a **documentation-only commit** advancing HEAD one past `37a166c` with zero product delta — the validated binary source and the installed NSIS SHA-256 (`6BC2F7DF…F5A2C4`) are unchanged, and **no rebuild/reinstall follows from a docs-only HEAD advance**.
+**Bottom line:** the updater pipeline is live and the owner's box self-updates through it (on 0.9.7 now ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â four consecutive versions witnessed). The releases repo is **public**, so installers are downloadable by anyone with the URL ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â "zero public artifact" is retired; what stays private is the **source**. Nothing newer than the 0.9.0 kit has been **sent** to a tester ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the next tester artifact is the hardened **v0.9.8** candidate, single-tester canary first. Public/store release stays blocked on **Code signing + Legal**.
 
 ## Gate matrix
 
-> **Restored 2026-07-22c.** The same-day diet (`f21c170`) cut this matrix and the Release-blockers
-> section along with the history — the diet's job was history only; the live matrix is required
-> content (CURRENT STATE row 3 and the bottom line both reference it). Restored from the pre-diet
-> copy (`181be2a`) and **re-verified at source this date: all 10 gate functions re-read, every state
-> unchanged** (no gate module was touched by any commit since `181be2a` — the deltas were docs +
-> the fps/monitoring/sessions 0.9.1 feature train). `scripts/verify-release-state.mjs` now FAILS
-> if this section, CURRENT STATE, or Release blockers is missing, or if the file carries zero
-> `file:line` citations — the diet-cut class can't silently recur.
+> `scripts/verify-release-state.mjs` FAILS if this section, CURRENT STATE, or Release blockers is
+> missing, or if the file carries zero `file:line` citations ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the f21c170 diet-cut class (a doc
+> trim silently gutting the live matrix) can't recur silently.
 
 | Gate / capability | State | Source | Notes |
 |---|---|---|---|
-| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:518` | Flipped on 2026-06-18 w/ owner sign-off. §7 QA harness (6 scenarios) passed; **GAMING_MODE_QA.md live checklist 10/10 PASSED 2026-07-14**. **Owner SIGNED OFF 2026-07-14** — F1 is field-proven for 1.0. |
-| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2029` | Armed 2026-06-25. Live running-service exact-restore + UAC-cancel=no-partial + critical-service block proven. Session-start suspends and restores both ride the ONE batched elevation (T6/T6b). |
-| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2102` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. Fix-surface UI `DebloatTasks`. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:170` | Performs a REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
-| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2251` | Built dark 2026-07-06. Command `remove_known_preload_app` refuses while dark; FE card renders nothing (test-pinned). Arming needs live remove→reinstall QA + Store links verified + owner-curated list + sign-off. |
-| **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:274` | Built dark 2026-07-09 (reuses audited `apply_recommendations_batch` — no new mutation primitive; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). Commands refuse while dark; no FE surface. Arming needs live apply→rollback QA + owner sign-off. |
-| **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:55` | Armed after owner sign-off + live apply→rollback round-trip on this rig. Orchestrates the audited mutation boundary — no new apply/rollback primitive; resolve stays history-only. Simulator reads the catalog READ-ONLY; unknown rec ⇒ honest insufficient-evidence. |
-| **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:730` | Armed after owner-present live-UAC QA (all 3 loops PASS); receipts ride the Trust Ledger with provenance `leftover_adopted`. No FE caller yet. |
-| **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
-| **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key) | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
-| **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:97`; all-zeros pubkey `remote_rules.rs:85` | Double-gated: `verify_chain` (`remote_rules.rs:231`) ALSO hard-fails on the placeholder key. Ed25519 verify is real but never runs in shipped builds. |
-| **Auto-updater** | **LIVE** (2026-07-22, owner-directed) | `plugins.updater` — `tauri.conf.json:73` (pubkey `:74`, endpoints `:75`); `tauri-plugin-updater` — `Cargo.toml:37`; capability `capabilities/updater.json` (main window ONLY) | Consent-first: check on launch + every 4h; NOTHING downloads until the user clicks Update now. Minisign-verified against the pinned pubkey before install; private key outside the repo. E2E-proven 0.9.2→0.9.3 through the updater on the owner's rig. |
-| **Outbound network** | **ONE surface: signed update check/download** (2026-07-22, owner-directed) | `tauri-plugin-updater` (`Cargo.toml:37`) fetches the pinned endpoint (`tauri.conf.json:75`) Rust-side; **production CSP `connect-src` UNCHANGED** (`tauri.conf.json:46` — `'self' ipc: http://ipc.localhost`; no webview-reachable HTTP) | Supersedes the 2026-07-11 zero-outbound audit BY OWNER DECISION (the updater arming). Nothing else talks out: Receipts + remote-fetch stay dark; Export leaves only by the user's hand. The ShellV2 footer states this exactly. |
+| **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `lib.rs:518` | Flipped 2026-06-18 w/ owner sign-off. Ãƒâ€šÃ‚Â§7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â field-proven for 1.0. |
+| **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `actions.rs:2029` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
+| **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `actions.rs:2102` | Armed 2026-06-26. Live exact disableÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢enable restore + off-list/Defender rejected. |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `benchmark_trial.rs:170` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `actions.rs:2251` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live removeÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢reinstall QA + owner sign-off. |
+| **Aggregate-stack A/B trial (Ãƒâ€šÃ‚Â§2a)** | **DARK** (`false`) | `stack_trial_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `benchmark_trial.rs:274` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
+| **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `experiment.rs:55` | Armed after owner sign-off + live applyÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢rollback round-trip. No new mutation primitive; resolve stays history-only; simulator reads catalog READ-ONLY. |
+| **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `leftovers.rs:730` | Armed after owner-present live-UAC QA (3 loops PASS); receipts ride the Trust Ledger (`leftover_adopted`). |
+| **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `receipts.rs:18` | No send path/endpoint/queue; preview refuses. Arming = its own security review + owner sign-off. |
+| **License / Pro enforcement** | **DISARMED ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â nothing enforced** | `licensing_armed()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `license.rs:40` (all-zeros key) | Plumbing wired but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
+| **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `remote_rules.rs:97`; all-zeros pubkey `remote_rules.rs:85` | Double-gated: `verify_chain` (`remote_rules.rs:231`) hard-fails on the placeholder key. Never runs in shipped builds. |
+| **Auto-updater** | **LIVE** (2026-07-22, owner-directed) | `plugins.updater` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `tauri.conf.json:73` (pubkey `:75`, endpoints `:76`); `tauri-plugin-updater` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `Cargo.toml:37`; capability `capabilities/updater.json` (main window ONLY, `updater:allow-check` + `allow-download-and-install`) | Consent-first: check on launch + every 4h; nothing downloads until the user clicks Update now. Minisign-verified against the pinned key before install; private key outside the repo. **E2E-witnessed 0.9.4ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢0.9.7 this session** (CDP stamp transitions, no reinstall between); GitHub asset counters corroborate. |
+| **Outbound network** | **ONE surface: signed update check/download** (2026-07-22) | `tauri-plugin-updater` (`Cargo.toml:37`) fetches the pinned endpoint (`tauri.conf.json:76`) Rust-side; **production CSP `connect-src` UNCHANGED** (`tauri.conf.json:47` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `'self' ipc:`; no webview-reachable HTTP) | Supersedes the 2026-07-11 zero-outbound audit BY OWNER DECISION. Receipts + remote-fetch stay dark; Export leaves only by the user's hand. |
 
 ## Mutation safety posture (unchanged LOCKED rules)
 
-- No kernel driver · no game injection · rollback-first · typed mutation allowlist
+- No kernel driver Ãƒâ€šÃ‚Â· no game injection Ãƒâ€šÃ‚Â· rollback-first Ãƒâ€šÃ‚Â· typed mutation allowlist
   (`KnownService`/`KnownBloatTask`/`AppliedAction`/`RollbackAction`/`Snapshot`, unknown inputs rejected).
-- Rollback resolves from `history.json` alone, never the live catalog (`history.rs:818`?`actions::resolve_rollback`).
-- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:332`).
+- Rollback resolves from `history.json` alone, never the live catalog (`actions::resolve_rollback` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `history.rs:818`).
+- Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `history.rs:332`).
 - Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
-  outcome attribution (`elevation_outcome` — `actions.rs:964`); the helper runs ONLY hex
-  byte-matching the one-time dispatch ticket (`mint_elevation_ticket` — `actions.rs:1149` ·
-  `consume_elevation_ticket` — `actions.rs:1171` · `run_elevated_helper` — `lib.rs:76`).
+  attribution (`elevation_outcome` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `actions.rs:964`); helper runs ONLY hex byte-matching the
+  one-time ticket (`mint_elevation_ticket` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `actions.rs:1149`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
-  (T6/T6b; `apply_elevated_tier` — `gaming_orchestrator.rs:201`). No-partial abort+restore
-  contract unchanged; UAC-decline drops only verifiably-never-ran staged entries
-  (`elevation_error_nothing_ran` — `actions.rs:988`).
+  (`apply_elevated_tier` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `gaming_orchestrator.rs:201`); no-partial abort+restore contract;
+  UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `actions.rs:988`).
 
 ## Release blockers
 
 | Item | Status |
 |---|---|
-| Private-beta functional blockers | **NONE** — the installed-build QA + runtime closure (2026-07-20b/c, on `37a166c`) ⇒ **GO for invite-only private beta**; the 0.9.0 send happened 2026-07-22 (rows 3–4). The 0.9.1 correction build (`395752a`) is installed on the owner's box; the owner-present smoke is the last check before the replacement-send GO. |
-| Code signing | **OPEN** — gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
-| Legal (EULA + privacy) | **OPEN** — gates PUBLIC release. DRAFTS only. |
-| Receipts security review + consent UI + payload preview + kill switch | **OPEN** — gates arming Receipts telemetry. |
-| Preload-app removal live QA + owner-curated list | **OPEN** — gates arming preload-app removal (built DARK, not a ship blocker). |
-| Aggregate-stack trial live QA | **OPEN** — gates arming the §2a stack trial (built DARK, not a ship blocker). |
-| Remote-rules production key + CDN + staged rollout | **OPEN** — gates arming remote fetch. |
+| Private-beta functional blockers | **NONE** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Gaming Mode signed off; installed-build QA + runtime closure done; the updater path is live and owner-proven. The next tester artifact is the hardened **v0.9.8** candidate (single-tester canary before any wider send). |
+| Code signing | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gates PUBLIC release (Azure Trusted Signing route, owner/$-gated). |
+| Legal (EULA + privacy) | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gates PUBLIC release. DRAFTS only. |
+| Receipts security review + consent UI + payload preview + kill switch | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gates arming Receipts telemetry. |
+| Preload-app removal live QA + owner-curated list | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gates arming preload-app removal (built DARK, not a ship blocker). |
+| Aggregate-stack trial live QA | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gates arming the Ãƒâ€šÃ‚Â§2a stack trial (built DARK, not a ship blocker). |
+| Remote-rules production key + CDN + staged rollout | **OPEN** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â gates arming remote fetch. |
 
 ## Required owner decisions (live)
 
-1. **0.9.1 replacement send** — after the 0.9.1 build passes its smoke: GO/NO-GO on sending the
-   corrected installer to the six 0.9.0 invitees (send = owner action, always).
-2. Code-signing route + legal finalization (PUBLIC gates).
-3. When/whether to arm Receipts (its own security review + owner sign-off).
+1. **v0.9.8 candidate GO/NO-GO** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â approve the verified, unpublished v0.9.8 candidate for publish
+   (publish = owner action, via `scripts/release-publish.ps1`).
+2. **Single-tester canary** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â after publish + the owner-box updater proof, choose the ONE tester to
+   receive the updater-enabled build first; expand to the rest only after that tester completes the
+   core path.
+3. Code-signing route + legal finalization (PUBLIC gates).
+4. When/whether to arm Receipts (its own security review + owner sign-off).
 
-## Snapshot history - MOVED to archive (2026-07-22)
+## Snapshot history ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â in archive
 
-The full reverse-chronological UPDATE-banner log (every dated banner, byte-preserved) lives in
-[archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md). It had grown to 1,300+ lines of
-pure history - explicitly superseded by CURRENT STATE above - re-read and re-cached by every session
-that touched this file. APPEND new dated banners to the TOP of the archive; keep THIS file to CURRENT
-STATE only (budget: 300 lines, enforced by scripts/doc-budget.ps1 - run it in every verify pass).
+The full reverse-chronological banner log (every dated train, byte-preserved) lives in
+[archive/RELEASE_STATE_HISTORY.md](archive/RELEASE_STATE_HISTORY.md). APPEND new dated banners to the
+TOP of the archive; keep THIS file to CURRENT STATE only (budget: 300 lines, `scripts/doc-budget.ps1`).

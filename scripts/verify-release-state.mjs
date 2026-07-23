@@ -129,8 +129,67 @@ const missingSections = REQUIRED_SECTIONS.filter(
 for (const s of missingSections) console.log(`MISSING-SECTION  '${s}' — required section absent from RELEASE_STATE.md`);
 if (citations.length === 0) console.log("ZERO-COVERAGE    no `file:line` citations found — the matrix contract is empty");
 
-console.log(`\n${results.length} citations: ${results.filter((r) => r.verdict.startsWith("OK")).length} ok · ${near.length} near-drift · ${bad.length} broken · ${missingSections.length} missing section(s)`);
-if (bad.length || missingSections.length || citations.length === 0 || (STRICT && near.length)) {
-  console.log("FIX-FORWARD: re-anchor each citation in the SAME commit as whatever moved it (precedent c056fee); restore any cut required section from the pre-diet copy.");
+// --- CURRENT-STATE drift gates (Phase 4, 2026-07-23) -------------------------------------------
+// Truth-repair layer: the citation checks above verify LOCATION; these verify that the current-state
+// SUMMARY hasn't drifted from the live config, from itself, or from reality. Each reads a
+// machine-readable `<!-- STATE:key=value -->` anchor, so the gate is deterministic, not regex-over-prose.
+const docText = docLines.join("\n");
+const liveRegion = docText.split(/^##\s+Gate matrix/m)[0]; // banners/bottom-lines live above the matrix
+const anchor = (key) => {
+  const m = docText.match(new RegExp(`<!--\\s*STATE:${key}=([^\\s]+)\\s*-->`));
+  return m ? m[1] : null;
+};
+const cmpVer = (a, b) => {
+  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+};
+const stateFail = [];
+let conf = null;
+try { conf = JSON.parse(readFileSync(join(ROOT, "src-tauri", "tauri.conf.json"), "utf8")); }
+catch (e) { stateFail.push(`tauri.conf.json unreadable/unparseable: ${e.message}`); }
+const latestVersion = anchor("latest_release_version");
+
+// (1) configured app version must equal the declared latest-release version.
+if (!latestVersion) stateFail.push("STATE:latest_release_version anchor missing from CURRENT STATE");
+else if (conf && conf.version !== latestVersion)
+  stateFail.push(`VERSION-DRIFT: tauri.conf version ${conf.version} != CURRENT STATE latest_release_version ${latestVersion}`);
+
+// (2) no dated release banner may be stacked in the live section (banners belong in the archive).
+if (/^>\s*\*\*(?:Updated\s+20\d\d|2\d[a-z]?\s*[—-]\s|v0\.\d)/m.test(liveRegion))
+  stateFail.push("BANNER-STACK: a dated release banner is stacked in the live section — move it to archive/RELEASE_STATE_HISTORY.md");
+
+// (3) a configured public updater endpoint must not coexist with a 'no public artifact' claim.
+const hasPublicEndpoint = !!(conf && conf.plugins && conf.plugins.updater && conf.plugins.updater.endpoints && conf.plugins.updater.endpoints.length);
+if (hasPublicEndpoint) {
+  if (/\bno public (?:artifact|download)\b/i.test(liveRegion) || /public[^.\n|]*\bnone\b/i.test(liveRegion))
+    stateFail.push("PUBLIC-CONTRADICTION: a public updater endpoint is configured while CURRENT STATE claims no public artifact");
+  const pub = anchor("public_artifact");
+  if (!pub || /^(none|no)$/i.test(pub))
+    stateFail.push("PUBLIC-CONTRADICTION: STATE:public_artifact must acknowledge the public releases repo (endpoint is configured)");
+}
+
+// (4) no owner decision may reference a version older than the latest release.
+const decMatch = docText.match(/##\s+Required owner decisions[\s\S]*?(?=^##\s|\Z)/m);
+if (decMatch && latestVersion) {
+  // Optional `v` prefix: "v0.9.3" has NO word boundary between v and 0, so `\b0\.` would miss it.
+  for (const m of decMatch[0].matchAll(/\bv?(0\.\d+\.\d+)\b/g)) {
+    if (cmpVer(m[1], latestVersion) < 0)
+      stateFail.push(`STALE-DECISION: owner decision references ${m[1]}, older than the latest release ${latestVersion}`);
+  }
+}
+
+// (5) exactly one 'Bottom line' section.
+const bottomLines = (docText.match(/^\*\*Bottom line/gim) || []).length;
+if (bottomLines > 1) stateFail.push(`MULTI-BOTTOM-LINE: ${bottomLines} "Bottom line" sections — collapse to one current bottom line`);
+
+for (const f of stateFail) console.log(`STATE-DRIFT      ${f}`);
+
+console.log(`\n${results.length} citations: ${results.filter((r) => r.verdict.startsWith("OK")).length} ok · ${near.length} near-drift · ${bad.length} broken · ${missingSections.length} missing section(s) · ${stateFail.length} state-drift`);
+if (bad.length || missingSections.length || citations.length === 0 || stateFail.length || (STRICT && near.length)) {
+  console.log("FIX-FORWARD: re-anchor each citation in the SAME commit as whatever moved it (precedent c056fee); restore any cut required section from the pre-diet copy; reconcile every STATE-DRIFT before the gate can pass.");
   process.exit(1);
 }
