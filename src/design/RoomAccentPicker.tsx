@@ -16,7 +16,7 @@ import {
   swatchKey,
   type PickableRoom,
 } from "./room-identity";
-import { readRoomAccents, setRoomAccent } from "./theme";
+import { readRoomAccents, setAccentForAllRooms, setRoomAccent } from "./theme";
 import "./room-accent-picker.css";
 
 export function RoomAccentPicker({
@@ -102,6 +102,21 @@ export function RoomAccentPicker({
               );
             })}
           </div>
+          {/* One-tap whole-app match (owner taste call 2026-07-23): stamps the CURRENT accent on
+              every room. A one-shot action, not a mode — per-room picking keeps working exactly as
+              before, and there is no hidden state to remember. */}
+          <button
+            type="button"
+            className="v2-accent-all"
+            title="Make every room use this accent"
+            onClick={() => {
+              setAccentForAllRooms(effective);
+              setPick(effective.toLowerCase());
+              setOpen(false);
+            }}
+          >
+            Apply to all rooms
+          </button>
           <button
             type="button"
             className="v2-accent-reset"

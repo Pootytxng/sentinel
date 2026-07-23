@@ -463,3 +463,40 @@ describe("room-accents: bug→guard (self-review 2026-07-12b)", () => {
     expect(sessionStackTsx).toMatch(/roomIdentityOn,\s*accentTick,\s*inkFor\s*\]/);
   });
 });
+
+// ── "Apply to all rooms" (owner taste call 2026-07-23: per-room freedom stays, one tap makes the
+// whole app match — resolves the tester read of per-room accents as inconsistent theming) ──
+describe("apply to all rooms", () => {
+  it("persists the CURRENT accent to every pickable room with ONE change event, and per-room picking stays intact", () => {
+    localStorage.clear();
+    const events = vi.fn();
+    window.addEventListener("compy:room-identity-changed", events);
+    render(<RoomAccentPicker room="play" roomLabel="Monitor" />);
+    fireEvent.click(screen.getByRole("button", { name: "Monitor accent color" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply to all rooms" }));
+    const teal = ROOM_IDENTITY.play.toLowerCase();
+    const stored = readRoomAccents();
+    for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(teal);
+    expect(events).toHaveBeenCalledTimes(1);
+    // A later SINGLE-room pick moves only that room — apply-to-all is a one-shot, not a mode.
+    const amber = swatchKey(ROOM_ACCENT_SWATCHES.find((s) => s.name === "Amber")!);
+    setRoomAccent("learn", amber);
+    const after = readRoomAccents();
+    expect(after.learn).toBe(amber);
+    expect(after.home).toBe(teal);
+    expect(after.play).toBe(teal);
+    window.removeEventListener("compy:room-identity-changed", events);
+    localStorage.clear();
+  });
+
+  it("closes the popover on apply; a room with no explicit pick applies its DEFAULT accent everywhere", () => {
+    localStorage.clear();
+    render(<RoomAccentPicker room="home" roomLabel="Home" />);
+    fireEvent.click(screen.getByRole("button", { name: "Home accent color" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply to all rooms" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    const stored = readRoomAccents();
+    for (const room of PICKABLE_ROOMS) expect(stored[room]).toBe(HOME_ACCENT.toLowerCase());
+    localStorage.clear();
+  });
+});

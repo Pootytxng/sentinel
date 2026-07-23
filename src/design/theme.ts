@@ -819,6 +819,29 @@ export function setRoomAccent(room: PickableRoom, hex: string | null): void {
   }
 }
 
+// Apply ONE accent to EVERY pickable room (owner taste call 2026-07-23, resolving the tester read
+// of per-room accents as "inconsistent theming": per-room freedom stays, one tap makes the whole
+// app match). Persists an explicit pick for every room — so later per-room tweaks behave exactly
+// as before — applies once, notifies once. Same whitelist guarantee as setRoomAccent: a non-swatch
+// key is a full no-op (never a half-applied state).
+export function setAccentForAllRooms(hex: string): void {
+  if (!isSwatchHex(hex)) return;
+  const key = hex.trim().toLowerCase();
+  const accents = readRoomAccents();
+  for (const room of PICKABLE_ROOMS) accents[room] = key;
+  try {
+    localStorage.setItem(ROOM_ACCENTS_KEY, JSON.stringify(accents));
+  } catch {
+    /* persistence failed — still applies this session */
+  }
+  applyRoomAccents();
+  try {
+    window.dispatchEvent(new Event("compy:room-identity-changed"));
+  } catch {
+    /* not in a DOM context (tests) */
+  }
+}
+
 // JARVIS motion layer (UI_VISION_BACKLOG §A.2/A.3/A.5/A.6; rails: the de-slop directive
 // 2026-07-05 §"Interaction / motion layer" :111-176) — the interactive layer the reskin left
 // unbuilt: Lenis glide scrolling on the content lane, a room-change "retune" sweep, magnetic
