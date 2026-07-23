@@ -132,6 +132,16 @@ describe("release pipeline safety", () => {
     expect(executable).toContain('Invoke-TauriSigned $KeyPath @("run", "tauri", "--", "signer", "sign", $Path)');
   });
 
+  it("commits the release version via a parse-safe message file, never -m $Notes", () => {
+    // bug->guard (2026-07-23): Windows PowerShell 5.1 mangles a multi-line note, or one with an
+    // embedded double-quote, when it is passed to git.exe as a native -m argument -- git read a
+    // fragment of the note as a pathspec and "commit staged release version" failed. The release
+    // commit message must come from a file (-F), which is parse-safe for any note content.
+    expect(executable).toContain("git -C $repo commit -F");
+    expect(executable).toContain("Write-NoBom $commitMsgPath");
+    expect(executable).not.toContain('git -C $repo commit -m "release: v$nextText" -m $Notes');
+  });
+
   it.runIf(process.platform === "win32")(
     "executes the exact PowerShell-resolved npm.cmd runner on Windows",
     () => {

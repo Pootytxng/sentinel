@@ -549,7 +549,17 @@ try {
 Invoke-Native "stage release version files" {
   git -C $repo add "src-tauri/tauri.conf.json" "package.json" "package-lock.json" "src-tauri/Cargo.toml" "src-tauri/Cargo.lock"
 }
-Invoke-Native "commit staged release version" { git -C $repo commit -m "release: v$nextText" -m $Notes }
+# Commit via a message FILE (-F), never `-m $Notes`: Windows PowerShell 5.1 mangles a note that is
+# multi-line or contains an embedded double-quote when it is handed to git.exe as a native argument
+# (git then reads a fragment of the note as a pathspec and the commit fails). A file is parse-safe
+# for any note content.
+$commitMsgPath = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-relmsg-" + [guid]::NewGuid().ToString("N") + ".txt")
+Write-NoBom $commitMsgPath ("release: v$nextText`n`n$Notes`n")
+try {
+  Invoke-Native "commit staged release version" { git -C $repo commit -F $commitMsgPath }
+} finally {
+  Remove-Item -LiteralPath $commitMsgPath -Force -ErrorAction SilentlyContinue
+}
 $releaseCommit = Get-GitLine @("rev-parse", "HEAD")
 Assert-CleanMain
 $releaseParent = Get-GitLine @("rev-parse", "HEAD^")
