@@ -4,6 +4,16 @@ export type StartupEntry = {
   enabled: boolean;
 };
 
+// Read-only local evidence bundle from the `export_report` command. Mirrors the Rust ExportResult
+// (src-tauri/src/export.rs). `path`/`json_path` are on-disk files; `markdown` is the full report,
+// `discord` the compact share-card summary. Fully local — assembling it sends nothing.
+export type ExportResult = {
+  path: string;
+  json_path: string;
+  markdown: string;
+  discord: string;
+};
+
 export type ReadinessStatus = "ready" | "attention" | "unknown" | "advisory";
 export type PriorityStatus = "ready" | "attention" | "unknown";
 export type Confidence = "high" | "medium" | "low";

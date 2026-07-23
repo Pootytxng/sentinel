@@ -472,3 +472,84 @@
   color: var(--ix-text-3);
   font-size: 12px;
 }
+
+/* ── Feedback & help — always-visible beta/help surface. Reuses .set-section / .set-action /
+   .receipts-hint / .receipts-preview; these add the note field, the primary CTA, and the
+   saved-report block. Token-only, same calm register as the rest of Settings. ── */
+.fb-notes {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 84px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ix-text-1);
+  background: var(--ix-surface-2, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--ix-glass-border);
+  border-top-color: var(--ix-glass-top);
+  border-radius: var(--ix-radius, 8px);
+  padding: 10px 12px;
+}
+.fb-notes:focus {
+  outline: none;
+  border-color: var(--ix-accent);
+}
+.fb-notes::placeholder {
+  color: var(--ix-text-3);
+}
+.fb-count {
+  margin: 4px 2px 0;
+  text-align: right;
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ix-text-3);
+}
+.fb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+/* Compound selector so the accent fill outranks the base .set-action ghost regardless of source
+   order (same guard pattern as .fc-btn.fc-btn-lab). Ink-on-accent text via --ix-accent-ink keeps it
+   legible on every theme's bright fill — never white (button-legibility guard). */
+.set-action.fb-primary {
+  background: var(--ix-accent);
+  border-color: var(--ix-accent);
+  color: var(--ix-accent-ink);
+  font-weight: 600;
+}
+.set-action.fb-primary:hover {
+  border-color: var(--ix-accent);
+  filter: brightness(1.06);
+}
+.set-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+  filter: none;
+}
+.fb-error {
+  color: var(--ix-danger);
+}
+.fb-saved {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ix-glass-border);
+}
+.fb-saved-line {
+  margin: 0 0 10px;
+}
+.fb-path {
+  font-family: var(--ix-mono, ui-monospace, monospace);
+  color: var(--ix-text-1);
+  word-break: break-all;
+}
+.fb-saved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fb-summary {
+  margin-top: 12px;
+}

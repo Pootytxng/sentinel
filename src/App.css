@@ -1784,6 +1784,21 @@ html, body, #root {
   display: flex;
   justify-content: flex-end;
 }
+.export-feedback-pointer {
+  margin: -2px 0 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  /* Own the muted color explicitly — the bare `.muted` class has no standalone rule in this
+     codebase (only `.rec-row-value.muted`), so relying on it renders full-brightness. Real
+     per-theme token. */
+  color: var(--muted);
+}
+.export-feedback-pointer strong {
+  /* --fg is the real per-theme foreground token (~20 uses in App.css); the emphasized path tracks
+     the active theme and reads brighter than the muted body for a genuine two-tier hierarchy. */
+  color: var(--fg);
+  font-weight: 600;
+}
 
 /* ─── Priority Ranking (F4): grouped advisory lists ───────────────────────── */
 .priorities-group {

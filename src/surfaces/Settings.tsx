@@ -23,6 +23,7 @@ import { readMotionPref, setMotionPref, type MotionPref } from "../design/use-mo
 import { readExpertView, setExpertView } from "../design/use-expert-view";
 import ReceiptsConsent from "./ReceiptsConsent";
 import { LicensePanel } from "./LicensePanel";
+import { FeedbackExport } from "./FeedbackExport";
 import "./Settings.css";
 
 // Settings / Appearance surface (spec 2026-06-06-settings-and-icon §A). Frontend + localStorage only;
@@ -403,8 +404,13 @@ export default function Settings({
             in the privacy-adjacent room). ── */}
         <ReceiptsConsent />
 
-        {/* ── About ── */}
         <LicensePanel />
+
+        {/* ── Feedback & help (always visible — the beta/help path; local bundle + one-click email,
+            nothing auto-sent). ── */}
+        <FeedbackExport appVersion={appVersion} buildStamp={buildStamp} />
+
+        {/* ── About ── */}
 
         <section className="set-section">
           <h2 className="set-section-title">About</h2>

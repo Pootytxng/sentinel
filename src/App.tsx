@@ -49,7 +49,7 @@ import { Optimize as OptimizeShell } from "./surfaces/Optimize";
 import { prewarmScan } from "./surfaces/use-scan";
 import { activeChangeCount } from "./surfaces/dashboard-data";
 import { gpuVendor } from "./surfaces/walkthroughs";
-import type { BatchApplyReport } from "./types";
+import type { BatchApplyReport, ExportResult } from "./types";
 import { LEDGER_CHANGED_EVENT } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { readOptimizeMerged, readMonitorMerged } from "./data/nav-flags";
@@ -352,8 +352,8 @@ type SessionSummary = {
   stutter_insight?: string | null;
 };
 
-// Export Snapshot (F5): read-only local report. Mirrors the Rust ExportResult.
-type ExportResult = { path: string; json_path: string; markdown: string; discord: string };
+// Export Snapshot (F5): read-only local report. ExportResult now lives in ./types (shared with the
+// Settings → Feedback surface) so the export_report IPC contract has one source of truth.
 
 export function ReportModal({
   report,
@@ -433,6 +433,14 @@ export function ReportModal({
           <div className="export-feedback-head">
             Before you share — help us improve <span className="muted">(optional)</span>
           </div>
+          {/* One reconciled feature, two entry points (self-review 2026-07-23): this modal captures
+              guided feedback at the moment you export; Settings → Feedback & help is the always-on
+              home that also emails your note straight to the team. Pointer so they don't read as two
+              unrelated surfaces. */}
+          <p className="export-feedback-pointer muted">
+            Want it to reach us directly? <strong>Settings → Feedback &amp; help</strong> emails your
+            note and report in one click.
+          </p>
           <label className="export-feedback-field">
             <span>In one sentence, what is Compy to you?</span>
             <textarea rows={2} value={fbWhat} onChange={(e) => setFbWhat(e.target.value)} />
