@@ -23,7 +23,11 @@
 // does NOT prove Codex activates this hook in-product — only a trusted Codex runtime run proves that.
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HOOKS_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HOOKS_DIR, "..", "..");
 
 let data;
 try {
@@ -56,14 +60,22 @@ for (const re of [FILE_HEADER, MOVE_TO]) {
 if (typeof ti.file_path === "string") candidates.push(ti.file_path);
 if (!candidates.length) process.exit(0);
 
-// A UI file is a repo-ROOT `src/….{tsx,css}`. Normalize each candidate (strip surrounding quotes,
-// make an absolute path repo-root-relative, forward-slash it, drop a leading `./` or `/`) and require
-// it to START with `src/` — so `src-tauri/src/lib.rs` (backend) and `dist/src/generated.css` (build
-// artifact) are correctly EXCLUDED, and only a genuine frontend source file fires.
+// A UI file is a repo-ROOT `src/….{tsx,css}`. Resolve every candidate against the repository root,
+// never process.cwd(): Codex may launch a hook from a nested CWD, and CWD-relative classification can
+// both miss a real absolute frontend path and misclassify `src-tauri/src/*.css` as frontend. Reject
+// anything outside the repository before requiring the normalized relative path to start with `src/`.
 const isUiFile = (raw) => {
   let p = String(raw).trim().replace(/^["'`]+|["'`]+$/g, "");
-  if (/^([A-Za-z]:[\\/]|[\\/])/.test(p)) p = relative(process.cwd(), p);
-  p = p.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+  const absolute = isAbsolute(p) ? resolve(p) : resolve(REPO_ROOT, p);
+  const repoRelative = relative(REPO_ROOT, absolute);
+  if (
+    repoRelative === ".." ||
+    repoRelative.startsWith(`..${sep}`) ||
+    isAbsolute(repoRelative)
+  ) {
+    return false;
+  }
+  p = repoRelative.replace(/\\/g, "/");
   return /^src\/.*\.(tsx|css)$/i.test(p);
 };
 if (!candidates.some(isUiFile)) process.exit(0);

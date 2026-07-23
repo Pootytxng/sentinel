@@ -81,11 +81,11 @@ const APPLY_BACKEND_MENTIONS_FRONTEND =
   "*** Begin Patch\n*** Update File: src-tauri/src/lib.rs\n@@\n-// see src/App.tsx for the TS contract\n+// see src/App.tsx and src/theme.css for the TS contract\n*** End Patch";
 
 // Run self-review-reminder.mjs directly under node with a JSON event on stdin. Returns {stdout,status}.
-function runHook(payload) {
+function runHook(payload, cwd = REPO_ROOT) {
   const r = spawnSync(process.execPath, [join(HOOKS_DIR, "self-review-reminder.mjs")], {
     input: JSON.stringify(payload),
     encoding: "utf8",
-    cwd: REPO_ROOT,
+    cwd,
   });
   return { stdout: r.stdout || "", status: r.status };
 }
@@ -141,6 +141,25 @@ process.stdout.write("\n[2] self-review-reminder — file_path fallback + non-UI
 
   const abs = runHook({ session_id: sid(), tool_input: { file_path: `${REPO_ROOT}/src/App.tsx` } });
   check("absolute file_path src/*.tsx fires (fallback shape)", fires(abs.stdout));
+
+  const nestedCwd = join(REPO_ROOT, "src-tauri");
+  const absUiNested = runHook(
+    { session_id: sid(), tool_input: { file_path: join(REPO_ROOT, "src", "App.tsx") } },
+    nestedCwd,
+  );
+  check(
+    "absolute frontend file_path still fires when the hook CWD is nested",
+    fires(absUiNested.stdout),
+  );
+
+  const absBackendCssNested = runHook(
+    { session_id: sid(), tool_input: { file_path: join(REPO_ROOT, "src-tauri", "src", "fake.css") } },
+    nestedCwd,
+  );
+  check(
+    "absolute backend file_path stays SILENT when the hook CWD is nested",
+    parse(absBackendCssNested.stdout) === null && absBackendCssNested.status === 0,
+  );
 
   const backend = runHook({ session_id: sid(), tool_input: { command: APPLY_BACKEND } });
   check("a backend-only apply_patch (src-tauri/src/lib.rs) is SILENT", parse(backend.stdout) === null && backend.status === 0);
