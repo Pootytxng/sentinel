@@ -91,6 +91,15 @@
 > 1280×720; restore path proven by state-file round-trip 1100×650; `.window-state.json` lands in
 > `%APPDATA%\gg.compy.app\`, overlay correctly absent from it). **Row 1 = `419ec81` · 0.9.4.**
 > Desktop holds the one current (0.9.4) installer. Rows 3–4 still unchanged (§A0 send pending).
+>
+> **23c — v0.9.5 (`ac518f1`): "Apply to all rooms"** accent action (owner taste call resolving
+> NAV-1 (a); `RoomAccentPicker.tsx` + `setAccentForAllRooms` in `theme.ts`; room-accents suite
+> 36/36). Fleet-path proof #3: the installed 0.9.4 self-updated in-app to `ac518f1 · release` /
+> 0.9.5; feature live-exercised on the owner's rig (all five rooms stamped in one tap, owner's
+> prior duo picks restored byte-identical after). **Row 1 = `ac518f1` · 0.9.5.** Desktop installer
+> hygiene note: Desktop still holds the 0.9.4 setup exe — superseded, refresh rides the next
+> ship-reinstall (the owner's INSTALLED app is current via the updater; the Desktop copy is a
+> convenience artifact).
 
 | # | Identity (kept distinct on purpose) | Current truth | How verified |
 |---|---|---|---|

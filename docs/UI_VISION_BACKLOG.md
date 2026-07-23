@@ -75,12 +75,20 @@ bottom expandable rows read like footer legalese.
    (VBS, Defender exclusions, VRR) — likely covers J's "show me the tweak + let me act" class.
    Reconcile with that lane before assigning NAV work.
 
-**Owner taste calls needed (each is a direction pick, not a build task):**
-(a) Per-room accents: keep as identity feature with an "apply to all rooms" affordance, or default
-to one app-wide theme with per-room as opt-in? (J read it as a bug.)
-(b) Post-check landing: route straight into Lab→Optimize ("take me to the lab", J's own ask) or
-stay on Home with a louder hand-off band?
-(c) Which face per room is the blessed one for the pruning pass (finding 2)?
+**Owner taste calls — status 2026-07-23b:**
+(a) ✅ **RESOLVED + SHIPPED (v0.9.5, `67541e4`/`ac518f1`)** — owner picked "apply to all": per-room
+accents stay (his 2026-07-12b feature), plus a one-shot "Apply to all rooms" action in the picker
+popover (accent-tinted primary action above the muted reset; no mode, no hidden state; per-room
+picking untouched). Live-proven on the owner's rig: all five rooms stamped in one tap, owner's own
+duo picks restored after the test. Delivered to his box through the updater.
+(b) Post-check landing — **owner delegated the call 2026-07-23 ("you decide whats seems most
+tasteful")**; direction per his taste record: J's own ask, a "take me to the lab" CTA routing into
+Lab→Optimize through the front door (navigation-never-teleports law). **BUILD HELD pending
+reconciliation with the CC-lane's uncommitted FirstCheck/guided WIP (finding 4)** — building on a
+colliding file mid-flight would be lane sabotage, not momentum.
+(c) Blessed-face pruning — **delegated same message.** Direction: the newest shipped face per room
+(the ones the owner has eyeballed and testers now use) is the bless candidate; the pass itself is
+a CC-lane refactor train with full-suite verification, queued behind (b).
 
 **Execution lane:** direction + audit = this file; the redesign build itself = CC/Fable lane per
 the owner's standing preference (Cowork steers + audits, doesn't blueprint final creative).

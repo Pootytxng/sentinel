@@ -45,9 +45,10 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   second CTA ("take me to the lab") that opens the Lab's Optimize tab directly.
 - [ ] **J: "Needs your call" cards not interactive** — can't click a tweak to see impact, can't
   apply/ignore from the card (Optimize tab).
-- [ ] **J: per-room accents read as INCONSISTENCY** — Violet on Home vs Teal on Monitor; he asks if
-  he must retheme every page. The per-room accent feature needs either an "apply to all rooms"
-  affordance or clearer communication (owner taste call on direction).
+- [x] **J: per-room accents read as INCONSISTENCY** — ✅ RESOLVED per owner taste call 2026-07-23
+  ("apply to all"): SHIPPED v0.9.5 (`67541e4` feat · `ac518f1` release) through the updater — one-tap
+  "Apply to all rooms" in the accent picker; per-room freedom intact. Live-proven + owner state
+  restored. UI_VISION_BACKLOG NAV-1 (a) has the record.
 - [ ] **Matthew: Guided-Setup copy** — the "rail reads top to bottom" line is the clearest moment;
   surface it earlier. PSU-calculator step momentarily reads like it will CHANGE something ("ight
   bet I'm down") — set the informational expectation up front.
