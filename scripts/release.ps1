@@ -230,12 +230,39 @@ function Invoke-TauriSigned([string]$KeyPath, [string[]]$NpmArgs, [string]$Label
   # (a non-empty TAURI_SIGNING_PRIVATE_KEY_PASSWORD in the environment passes through). The real gate
   # stays cryptographic: the sign-probe + the trust-root pubkey pin reject any key that is not the
   # exact fleet anchor, with or without a password.
-  $shim = 'const {spawnSync}=require("child_process");const a=process.argv.slice(1);const r=spawnSync(a[0],a.slice(1),{env:{...process.env,TAURI_SIGNING_PRIVATE_KEY:process.env.COMPY_SIGN_KEY,TAURI_SIGNING_PRIVATE_KEY_PASSWORD:process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD||""},stdio:"inherit",shell:true});process.exit(r.status===null?1:r.status);'
-  $env:COMPY_SIGN_KEY = $KeyPath
+  # Everything is passed via ENV (key content + the command as a JSON array), never node argv or an
+  # inline `node -e` script: PowerShell mangles the double-quotes when handing an inline script to
+  # node.exe, and `node -e SCRIPT ... -- ...` also swallows the `--` that `signer sign` needs. The
+  # shim is written to a temp `.cjs` file (`.cjs` because package.json is type:module) and run as
+  # `node <file>`, which is quote-safe.
+  $shimBody = @"
+const { spawnSync } = require("child_process");
+const a = JSON.parse(process.env.COMPY_SIGN_ARGS);
+// shell:true is required to launch npm.cmd, but Node does NOT quote the exe/args for it, so a
+// spaced path (C:\Program Files\nodejs\npm.cmd) or a spaced artifact path would be split by cmd.exe.
+// Pass a single command string with every whitespace-bearing token quoted; cmd.exe /s + Node's own
+// outer quotes then hand each token through intact.
+const cmd = a.map(s => /\s/.test(s) ? '"' + s + '"' : s).join(" ");
+const r = spawnSync(cmd, {
+  env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY: process.env.COMPY_SIGN_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || "" },
+  stdio: "inherit",
+  shell: true,
+});
+process.exit(r.status === null ? 1 : r.status);
+"@
+  $shimPath = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-sign-shim-" + [guid]::NewGuid().ToString("N") + ".cjs")
+  [System.IO.File]::WriteAllText($shimPath, $shimBody, (New-Object System.Text.UTF8Encoding($false)))
+  # TAURI_SIGNING_PRIVATE_KEY carries the key CONTENT, not the path: `tauri signer sign` (used by the
+  # sign-probe preflight and receipt signing) treats the env value as literal base64 key material and
+  # never path-resolves it, so a path here fails with "failed to decode base64 secret key". Content is
+  # accepted uniformly by both `signer sign` and `tauri build`.
+  $env:COMPY_SIGN_KEY = (Get-Content -LiteralPath $KeyPath -Raw).Trim()
+  $env:COMPY_SIGN_ARGS = (,$npmCmd + $NpmArgs | ConvertTo-Json -Compress)
   try {
-    Invoke-Native $Label { & node -e $shim $npmCmd @NpmArgs }
+    Invoke-Native $Label { & node $shimPath }
   } finally {
-    Remove-Item Env:\COMPY_SIGN_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:\COMPY_SIGN_KEY, Env:\COMPY_SIGN_ARGS -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $shimPath -Force -ErrorAction SilentlyContinue
   }
 }
 

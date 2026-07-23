@@ -115,9 +115,18 @@ describe("release pipeline safety", () => {
     expect(signingProbe).toBeLessThan(versionWrite);
     expect(signingProbe).toBeLessThan(commit);
     // A real password passes THROUGH when set; the shim never hardcodes an empty password.
-    expect(executable).toContain('TAURI_SIGNING_PRIVATE_KEY_PASSWORD:process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD||""');
+    expect(executable).toContain('TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || ""');
     expect(script).not.toContain("TAURI_SIGNING_PRIVATE_KEY_PASSWORD:''");
     expect(executable).toContain("Get-Command npm.cmd");
+    // bug->guard (2026-07-23): signing carries the key CONTENT, not the path. `tauri signer sign`
+    // (sign-probe preflight + receipt signing) treats TAURI_SIGNING_PRIVATE_KEY as literal base64
+    // key material and never path-resolves it, so a path fails "failed to decode base64 secret key".
+    expect(executable).toContain("Get-Content -LiteralPath $KeyPath -Raw");
+    expect(executable).not.toContain("$env:COMPY_SIGN_KEY = $KeyPath");
+    // bug->guard (2026-07-23): the shim hands cmd.exe ONE per-token-quoted command string under
+    // shell:true, so the spaced npm.cmd path (C:\Program Files\nodejs\npm.cmd) is not word-split.
+    expect(executable).toContain("spawnSync(cmd, {");
+    expect(executable).not.toContain("spawnSync(a[0], a.slice(1)");
     // Build + signer both route through the single signing shim (Invoke-TauriSigned).
     expect(executable).toContain('Invoke-TauriSigned $keyPath @("run", "tauri", "build")');
     expect(executable).toContain('Invoke-TauriSigned $KeyPath @("run", "tauri", "--", "signer", "sign", $Path)');
