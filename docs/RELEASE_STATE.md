@@ -83,6 +83,14 @@
 > Pipeline for every future patch: `scripts/release.ps1` (bump → commit → signed build → latest.json →
 > gh release → ship-reinstall → push). The 0.9.2 stamp carries a cosmetic `+dirty` (untracked build
 > scripts in the build worktree — cause found + fixed); 0.9.3's stamp is clean and byte-verified.
+>
+> **23b — v0.9.4 (`419ec81`, first REAL feature patch through the pipe):** default window
+> 1280×720 centered + remember-last-size (`tauri-plugin-window-state`, overlay denylisted —
+> `Cargo.toml:44`, tester gripe). Published to the endpoint; **the owner's installed 0.9.3
+> self-updated to it in-app** (post-update probe: stamp `419ec81 · release`, window exactly
+> 1280×720; restore path proven by state-file round-trip 1100×650; `.window-state.json` lands in
+> `%APPDATA%\gg.compy.app\`, overlay correctly absent from it). **Row 1 = `419ec81` · 0.9.4.**
+> Desktop holds the one current (0.9.4) installer. Rows 3–4 still unchanged (§A0 send pending).
 
 | # | Identity (kept distinct on purpose) | Current truth | How verified |
 |---|---|---|---|

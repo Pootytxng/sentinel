@@ -22,6 +22,69 @@
 These are owner asks that are **never-built or parked**, not yet reflected as active work anywhere
 else. This is the list the owner meant.
 
+### ⭐ STANDING DIRECTIVE — organization · ease of access · inherently intuitive UI (owner, restated 2026-07-23; "made many times") 🔴 OPEN
+
+**Owner verbatim (2026-07-23, updater-ship session):**
+
+> we need to look way more in depth in how to consolidate and neatly compact everything without
+> overcomplicating or sensory overloading anything throughout the UI we need to focus way more on
+> organization and ease of access navigational implementations. intuitive UI capability should be
+> way more inherintly comprehensive this is a very very very important note ive made many times.
+
+**Standing meaning:** every UI train is judged FIRST on "can a non-technical gamer find it,
+understand it, and act on it without being taught." Density and spectacle never outrank
+orientation. This is the lens over every 🔴 item in this file, not a one-off ask. A train that
+ships visuals but worsens wayfinding is a regression under this directive.
+
+**Quick win shipped same-day:** default window 1280×720 centered + remember-last-size (v0.9.4,
+through the live updater) — the 800×600 default crammed the whole HUD into a postage stamp and was
+called out by testers.
+
+### NAV-1. Navigation & consolidation audit (2026-07-23) — findings + candidates awaiting owner direction 🔴 OPEN
+
+**What real testers hit (2026-07-22 reviews, 0.9.0 build — the receipts for this audit):**
+J: after a check you're dropped on the dashboard "feeling lost — where do I go to apply these?";
+the "1 safe tweak not applied" verdict names a count but not the tweak; "Needs your call" cards
+aren't clickable; per-room accents read as broken theming ("do I have to change every page?").
+Matthew: the clearest orientation moment of the entire app is a COPY LINE ("the rail reads top to
+bottom…") buried at the end of guided setup; Field Guide is explained in the wrong room; the
+bottom expandable rows read like footer legalese.
+
+**Structural findings (verified against src on `main` 2026-07-23):**
+
+1. **The rail is clean (4 rooms: Home · Monitor · Blackbook · Lab) but the Lab is a mega-room** —
+   six stations (Optimize · Diagnostics · Benchmark · Latency · Tuning · Blackbox), and it is the
+   ONLY door to applying tweaks (ground merge, owner 2026-07-10). Post-check the app returns you
+   to Home, one room AWAY from where the found tweaks live. Both J complaints (lost-after-check,
+   invisible safe tweak) are this one seam: **the check's output and the fix's door live in
+   different rooms with no hallway.** The fix class is a routed hand-off (check verdict → deep
+   link into Lab→Optimize with the found items highlighted), not more UI.
+2. **Parallel UI generations coexist behind flags** — Home has 4+ faces (HomeRoom/V2/Console/HUD),
+   Monitor 4 (classic/V2/Basic/Console), Lab 5 (classic/V2/Bento/Console/Ground), plus legacy
+   Check/Fix/Play/Learn surfaces still in-tree. One blessed face per room exists at runtime, but
+   the generations cost: every new feature must pick a face (some land on one and not another),
+   copy/affordances drift between faces, and "which app am I in" inconsistencies (J's theming
+   complaint is partly this). **Candidate: a pruning pass — bless one face per room, delete or
+   archive the rest** (mechanical once the owner blesses faces; big token/complexity payoff).
+3. **Orientation lives in copy, not chrome.** The room's purpose is a one-line crumb in the
+   topbar; the strongest wayfinding line ships at the END of onboarding. **Candidates:** surface
+   the rail-reads-top-to-bottom framing at guided-setup START; make each room's first screen
+   answer "what do I do here" above the fold; give the quiet bottom rows real affordance weight.
+4. **Already in flight elsewhere (do NOT duplicate):** an uncommitted CC-lane train (observed
+   2026-07-22, `FirstCheck.tsx` + `guided.ts`) is building per-item guided steps with deep links
+   (VBS, Defender exclusions, VRR) — likely covers J's "show me the tweak + let me act" class.
+   Reconcile with that lane before assigning NAV work.
+
+**Owner taste calls needed (each is a direction pick, not a build task):**
+(a) Per-room accents: keep as identity feature with an "apply to all rooms" affordance, or default
+to one app-wide theme with per-room as opt-in? (J read it as a bug.)
+(b) Post-check landing: route straight into Lab→Optimize ("take me to the lab", J's own ask) or
+stay on Home with a louder hand-off band?
+(c) Which face per room is the blessed one for the pruning pass (finding 2)?
+
+**Execution lane:** direction + audit = this file; the redesign build itself = CC/Fable lane per
+the owner's standing preference (Cowork steers + audits, doesn't blueprint final creative).
+
 ### A0. Monitor console v3 — "up the ante" rework (owner, 2026-07-10, post-Phase-3 ship) 🔴 OPEN
 
 **Owner's FULL response, retained verbatim at his explicit request** ("please be sure to retain the

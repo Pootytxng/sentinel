@@ -30,7 +30,12 @@ now SHIP through the updater.** J also praised: more organized, less overwhelmin
 experiments + logbook. Matthew praised: guided-setup rail line, simple home, Optimize clarity,
 "What's this" on Telemetry Tasks.
 
-- [ ] **J: bigger 3D PC window** — the Home rig-diagnostic 3D viewport reads too small.
+- [x] **Default window too small (multiple testers + owner 2026-07-23)** — ✅ SHIPPED v0.9.4
+  (`23ff847` feat · `419ec81` release), delivered to the owner's box THROUGH the updater: first-run
+  default 800×600 → 1280×720 centered, plus `tauri-plugin-window-state` so the size/position the
+  user sets persists (overlay denylisted). Restore path live-proven (state-file round-trip).
+- [ ] **J: bigger 3D PC window** — the Home rig-diagnostic 3D viewport reads too small. (Partially
+  eased by the 0.9.4 default-window bump; the viewport's own sizing is still open.)
 - [ ] **J: cursor consistency** — native Windows cursor appears over sidebar items + some buttons
   (Monitor "Overlay", "Start Capture") instead of the Compy reticle cursor; keep ONE cursor.
   (Matthew separately finds the square crosshair "a little weird" — treat as one cursor pass.)
