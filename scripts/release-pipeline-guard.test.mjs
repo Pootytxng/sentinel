@@ -65,7 +65,7 @@ describe("release pipeline safety", () => {
   it("runs the complete gate again on the exact clean release commit before building", () => {
     const releaseCommit = position("$releaseCommit = Get-GitLine");
     const exactGate = position("=== Exact release-commit verification ===");
-    const signedBuild = position('Invoke-Native "Signed Tauri build"');
+    const signedBuild = position('Invoke-TauriSigned $keyPath @("run", "tauri", "build")');
     const exactGateBlock = executable.slice(exactGate, signedBuild);
     expect(releaseCommit).toBeLessThan(exactGate);
     expect(exactGate).toBeLessThan(signedBuild);
@@ -105,19 +105,22 @@ describe("release pipeline safety", () => {
     expect(executable).toContain("push release tag");
   });
 
-  it("refuses passwordless signing and proves the key before creating a version commit", () => {
-    const passwordGate = position("requires a non-empty TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
+  it("signs via the grandfathered fleet-anchor path and proves the key before the version commit", () => {
+    // The passwordless anchor is grandfathered (docs/UPDATER_TRUST_ROOT.md); the REAL gate is the
+    // cryptographic sign-probe (key signs AND the pinned pubkey accepts), before any version write.
     const signingProbe = position("signing-key preflight verification");
     const versionWrite = position("Write-NoBom $confPath");
     const commit = position("commit staged release version");
-    expect(passwordGate).toBeLessThan(versionWrite);
+    expect(script).toContain("GRANDFATHERED FLEET ANCHOR"); // the grandfather rationale is documented
     expect(signingProbe).toBeLessThan(versionWrite);
     expect(signingProbe).toBeLessThan(commit);
+    // A real password passes THROUGH when set; the shim never hardcodes an empty password.
+    expect(executable).toContain('TAURI_SIGNING_PRIVATE_KEY_PASSWORD:process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD||""');
     expect(script).not.toContain("TAURI_SIGNING_PRIVATE_KEY_PASSWORD:''");
-    expect(executable).not.toContain("spawnSync");
     expect(executable).toContain("Get-Command npm.cmd");
-    expect(executable).toContain("& $npmCmd run tauri -- signer sign $Path");
-    expect(executable).toContain("& $npmCmd run tauri build");
+    // Build + signer both route through the single signing shim (Invoke-TauriSigned).
+    expect(executable).toContain('Invoke-TauriSigned $keyPath @("run", "tauri", "build")');
+    expect(executable).toContain('Invoke-TauriSigned $KeyPath @("run", "tauri", "--", "signer", "sign", $Path)');
   });
 
   it.runIf(process.platform === "win32")(

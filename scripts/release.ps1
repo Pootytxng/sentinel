@@ -221,15 +221,26 @@ function Assert-PublicVersionCanPublish([string]$CandidateVersion, [string]$Cand
   }
 }
 
-function Invoke-ProtectedSigner([string]$Path, [string]$KeyPath, [string]$Label) {
-  $signingKeyName = "TAURI_SIGNING_PRIVATE_KEY"
-  $priorSigningKey = [Environment]::GetEnvironmentVariable($signingKeyName, "Process")
-  [Environment]::SetEnvironmentVariable($signingKeyName, $KeyPath, "Process")
+function Invoke-TauriSigned([string]$KeyPath, [string[]]$NpmArgs, [string]$Label) {
+  # GRANDFATHERED FLEET ANCHOR (reconcile 2026-07-23, owner-approved): the pinned fleet key
+  # (docs/UPDATER_TRUST_ROOT.md) is passwordless, and normal releases MUST use it. The tauri CLI
+  # needs TAURI_SIGNING_PRIVATE_KEY_PASSWORD PRESENT-BUT-EMPTY, which PowerShell/.NET cannot express
+  # (assigning "" deletes the var), so route every signing build/sign through a node shim whose spawn
+  # env carries the present-but-empty value. A future password-protected key is honored transparently
+  # (a non-empty TAURI_SIGNING_PRIVATE_KEY_PASSWORD in the environment passes through). The real gate
+  # stays cryptographic: the sign-probe + the trust-root pubkey pin reject any key that is not the
+  # exact fleet anchor, with or without a password.
+  $shim = 'const {spawnSync}=require("child_process");const a=process.argv.slice(1);const r=spawnSync(a[0],a.slice(1),{env:{...process.env,TAURI_SIGNING_PRIVATE_KEY:process.env.COMPY_SIGN_KEY,TAURI_SIGNING_PRIVATE_KEY_PASSWORD:process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD||""},stdio:"inherit",shell:true});process.exit(r.status===null?1:r.status);'
+  $env:COMPY_SIGN_KEY = $KeyPath
   try {
-    Invoke-Native $Label { & $npmCmd run tauri -- signer sign $Path }
+    Invoke-Native $Label { & node -e $shim $npmCmd @NpmArgs }
   } finally {
-    [Environment]::SetEnvironmentVariable($signingKeyName, $priorSigningKey, "Process")
+    Remove-Item Env:\COMPY_SIGN_KEY -ErrorAction SilentlyContinue
   }
+}
+
+function Invoke-ProtectedSigner([string]$Path, [string]$KeyPath, [string]$Label) {
+  Invoke-TauriSigned $KeyPath @("run", "tauri", "--", "signer", "sign", $Path) $Label
 }
 
 Assert-UpdaterTrustRoot
@@ -424,8 +435,16 @@ $keyPath = Join-Path $env:USERPROFILE ".tauri\compy-updater.key"
 if (-not (Test-Path -LiteralPath $keyPath -PathType Leaf)) {
   throw "Updater signing key is unavailable. Restore the owner's protected key before staging."
 }
-if ([string]::IsNullOrEmpty($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
-  throw "Release staging requires a non-empty TAURI_SIGNING_PRIVATE_KEY_PASSWORD. Protect the updater key before retrying; passwordless fleet signing is refused."
+# Passwordless signing is GRANDFATHERED for the pinned fleet anchor only (owner-approved 2026-07-23):
+# docs/UPDATER_TRUST_ROOT.md pins a passwordless key as the anchor and requires normal releases to use
+# it, so a non-empty password can't be a release precondition. The genuine gate is the sign-probe
+# below (proves the key signs AND the pinned pubkey accepts) plus Assert-UpdaterTrustRoot; an unknown
+# or wrong key fails those regardless of password. A future protected key still works: set
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD and it is used transparently. Rotation stays a separate train.
+if ($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+  Write-Host "Signing with a password-protected key (rotation in progress?)."
+} else {
+  Write-Host "Signing with the passwordless pinned fleet anchor (grandfathered; docs/UPDATER_TRUST_ROOT.md)."
 }
 
 $confPath = Join-Path $repo "src-tauri\tauri.conf.json"
@@ -523,16 +542,13 @@ if ($postCommitVerifyHead -ne $releaseCommit) {
   throw "Source moved while the exact release commit was verified. Expected=$releaseCommit current=$postCommitVerifyHead"
 }
 
-# Build signed updater artifacts from the committed, clean release source.
-$signingKeyName = "TAURI_SIGNING_PRIVATE_KEY"
-$priorSigningKey = [Environment]::GetEnvironmentVariable($signingKeyName, "Process")
-[Environment]::SetEnvironmentVariable($signingKeyName, $keyPath, "Process")
+# Build signed updater artifacts from the committed, clean release source (via the grandfathered
+# present-but-empty-password signing shim; see Invoke-TauriSigned).
 Push-Location $repo
 try {
-  Invoke-Native "Signed Tauri build" { & $npmCmd run tauri build }
+  Invoke-TauriSigned $keyPath @("run", "tauri", "build") "Signed Tauri build"
 } finally {
   Pop-Location
-  [Environment]::SetEnvironmentVariable($signingKeyName, $priorSigningKey, "Process")
 }
 
 $installerRelative = "src-tauri/target/release/bundle/nsis/Compy_${nextText}_x64-setup.exe"
