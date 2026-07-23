@@ -15,6 +15,45 @@
 
 > **🧰 TOOLCHAIN — Fable-window persistence pack** (2026-07-06) — COMPLETE 2026-07-07: all 4 items shipped; living pointer = CLAUDE.md → PROJECT SKILLS INDEX. Moved verbatim to `BACKLOG_ARCHIVE.md` (2026-07-22 tier-1 board diet).
 
+## 🚚 LIVE UPDATER — SHIPPED (owner directive 2026-07-22) + FIRST FIELD-QA WAVE (reviews 2026-07-22)
+
+- [x] **Live in-app updater — SHIPPED + E2E-PROVEN** (`135d609` feat · `a6d1508` v0.9.2 · `90fc73e`
+  v0.9.3): endpoint `Pootytxng/compy-releases` `releases/latest/download/latest.json`; consent-first
+  topbar UpdatePill (offer → progress → passive NSIS → auto-relaunch; zero chrome when idle); footer
+  honesty copy "Outbound: signed update check only" (test-pinned); minisign key OUTSIDE repo;
+  `scripts/release.ps1` pipeline + `scripts/e2e-updater-probe.mjs` CDP probe. **Proven live on the
+  owner's rig: 0.9.2 self-updated to 0.9.3 through the updater.** Full state: RELEASE_STATE 23a
+  banner. Owner leftovers: key backup + first-link send (OWNER_ACTION_CHECKLIST §A0).
+
+**Tester reviews 2026-07-22 (J + Matthew, on the 0.9.0 build) — each item rides normal triage; fixes
+now SHIP through the updater.** J also praised: more organized, less overwhelming, loves controlled
+experiments + logbook. Matthew praised: guided-setup rail line, simple home, Optimize clarity,
+"What's this" on Telemetry Tasks.
+
+- [ ] **J: bigger 3D PC window** — the Home rig-diagnostic 3D viewport reads too small.
+- [ ] **J: cursor consistency** — native Windows cursor appears over sidebar items + some buttons
+  (Monitor "Overlay", "Start Capture") instead of the Compy reticle cursor; keep ONE cursor.
+  (Matthew separately finds the square crosshair "a little weird" — treat as one cursor pass.)
+- [ ] **J: "1 safe tweak not applied" is a dead end** — post-check verdict names a count but not the
+  tweak; add a dropdown/expand showing WHICH tweak + apply/ignore inline.
+- [ ] **J: post-check routing** — landing on the dashboard after a check feels directionless; add a
+  second CTA ("take me to the lab") that opens the Lab's Optimize tab directly.
+- [ ] **J: "Needs your call" cards not interactive** — can't click a tweak to see impact, can't
+  apply/ignore from the card (Optimize tab).
+- [ ] **J: per-room accents read as INCONSISTENCY** — Violet on Home vs Teal on Monitor; he asks if
+  he must retheme every page. The per-room accent feature needs either an "apply to all rooms"
+  affordance or clearer communication (owner taste call on direction).
+- [ ] **Matthew: Guided-Setup copy** — the "rail reads top to bottom" line is the clearest moment;
+  surface it earlier. PSU-calculator step momentarily reads like it will CHANGE something ("ight
+  bet I'm down") — set the informational expectation up front.
+- [ ] **Matthew: Field Guide explanation placement** — explain Field Guide during the Guided Intro
+  and on the Field Guide tab itself, not inside the Logbook tab (confused him there).
+- [ ] **Matthew: non-admin old-tweaks check prints three "Couldn't check — needs admin" lines** —
+  consider a guided-intro admin recommendation or friendlier gating of those rows.
+- [ ] **Matthew: bottom expandable rows too "quiet"** — "Applied & history / More cleanup / Power
+  features" read like footer link text; raise their visual weight (he compared them to
+  contact-us/copyright links).
+
 ## 🧠 INTELLIGENCE PLATFORM LANE (owner directive 2026-07-16 — supersedes priority ordering per its §0.12)
 
 Owner-approved direction: evolve Compy into **evidence-based PC performance intelligence** — the

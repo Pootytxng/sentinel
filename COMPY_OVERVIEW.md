@@ -66,12 +66,15 @@ Detect → diagnose → debrief → prove. That loop is built and running today 
 - **No risky internals.** No kernel driver (which is why there's no CPU temperature — reading it
   needs one, and we won't ship one). No game injection — FPS is captured externally via Windows'
   own event tracing, so it's anti-cheat safe by design. GPU sensors via official vendor SDKs.
-- **Local-first, with an honest exception planned.** No account, no remote config, no updater
-  today. The Export report is the only thing that currently ever leaves the machine, and only by
-  the user's hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) is
-  planned as a new outbound boundary to power aggregate "measured gains" marketing — it is a
-  separate gated track requiring its own security review and owner sign-off before it can arm.
-  Until then, the verified-zero-outbound property holds.
+- **Local-first, one outbound call.** No account, no remote config, no telemetry. **The in-app
+  updater (LIVE 2026-07-22, owner-directed) is the one thing that talks out:** a signed-update
+  check against the public releases repo on launch + every 4h; nothing downloads until the user
+  clicks Update now, and every package is signature-verified against the pinned public key before
+  install (private key lives outside the repo). The Export report still leaves only by the user's
+  hand. **Receipts telemetry** (anonymous, opt-in, default-off, kill-switched) remains a separate
+  gated track requiring its own security review and owner sign-off before it can arm. The old
+  "verified zero-outbound" absolute is RETIRED by the updater decision — the in-app footer now
+  states exactly what leaves the machine: "Outbound: signed update check only."
 
 ## Honesty about the project itself
 

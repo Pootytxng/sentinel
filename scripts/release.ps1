@@ -77,15 +77,21 @@ if ($LASTEXITCODE -ne 0) { throw "git commit of the version bump failed" }
 $head = (git -C $repo rev-parse --short HEAD).Trim()
 Write-Host "Release commit: $head"
 
-# 3) Signed build. TAURI_SIGNING_PRIVATE_KEY_PATH makes `tauri build` emit the .sig next to
-#    the NSIS installer (createUpdaterArtifacts). Process-scoped env: nothing persists.
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = $keyPath
+# 3) Signed build. TAURI_SIGNING_PRIVATE_KEY (path-or-content var; the _PATH variant is NOT
+#    read by this CLI version - live-tested 2026-07-22) makes `tauri build` emit the .sig
+#    next to the NSIS installer (createUpdaterArtifacts). Process-scoped: nothing persists.
+# The no-password key still PROMPTS (and hangs headless) unless the PASSWORD env var is
+# PRESENT-BUT-EMPTY - and PowerShell/cmd both DELETE an env var assigned "". A node spawn
+# is the one Windows path that hands the child a present-but-empty value (live-caught +
+# live-fixed 2026-07-22 during the v0.9.2 build).
+# Key path rides an ordinary env var into node (dodges PS-in-JS quoting entirely).
+$env:COMPY_KEY_PATH = $keyPath
 Push-Location $repo
-npm run tauri build
+node -e "const {spawnSync} = require('child_process'); const r = spawnSync('npm', ['run','tauri','build'], {env: {...process.env, TAURI_SIGNING_PRIVATE_KEY: process.env.COMPY_KEY_PATH, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''}, stdio: 'inherit', shell: true}); process.exit(r.status === null ? 1 : r.status)"
 $buildExit = $LASTEXITCODE
 Pop-Location
-Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PATH -ErrorAction SilentlyContinue
-if ($buildExit -ne 0) { throw "npm run tauri build failed (exit $buildExit)" }
+Remove-Item Env:\COMPY_KEY_PATH -ErrorAction SilentlyContinue
+if ($buildExit -ne 0) { throw "signed tauri build failed (exit $buildExit)" }
 
 # 4) Artifact + signature verification. A missing .sig means signing broke: the release would
 #    be UNINSTALLABLE by the fleet updater (signature verification is mandatory). Hard abort.

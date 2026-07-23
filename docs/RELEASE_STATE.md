@@ -74,7 +74,7 @@
 > OWNER_ACTION_CHECKLIST §A0). Releases **v0.9.2** (`a6d1508`) + **v0.9.3** (`90fc73e`) published.
 > **E2E proven live on the owner's rig:** installed 0.9.2 offered v0.9.3 in-app → consent click →
 > signature-verified download → passive NSIS → auto-relaunched as `90fc73e · release` / 0.9.3
-> (CDP-probed; screenshot `compy-update-offer.png`). **Row 1 is now `90fc73e` · 0.9.3 — installed BY
+> (CDP-probed; screenshot `docs/UPDATER_E2E_2026-07-22.png`). **Row 1 is now `90fc73e` · 0.9.3 — installed BY
 > the updater itself.** Rows 3–4 UNCHANGED: testers still hold the 0.9.0 Drive artifact; sending the
 > first updater-enabled link is an owner send decision (§A0) — after that send, manual links end
 > permanently. The "verified zero-outbound" era ENDS here by owner decision: the ONE outbound surface
@@ -120,8 +120,8 @@
 | **Receipts telemetry** | **DARK** (`false`) | `receipts_gate()` — `receipts.rs:18` | No send path/endpoint/queue; preview refuses; payload sanitized+bucketed. New outbound boundary → own security review + owner sign-off before arming. |
 | **License / Pro enforcement** | **DISARMED — nothing enforced** | `licensing_armed()` — `license.rs:40` (all-zeros key) | Plumbing wired end-to-end but inert; `ProGate` renders everything free. No Windows mutation, no phone-home. |
 | **Signed remote rules / fetch** | **OFF** (`false`) | `remote_fetch_enabled()` — `remote_rules.rs:97`; all-zeros pubkey `remote_rules.rs:85` | Double-gated: `verify_chain` (`remote_rules.rs:231`) ALSO hard-fails on the placeholder key. Ed25519 verify is real but never runs in shipped builds. |
-| **Auto-updater** | **OFF / absent** | no `plugins`/`updater` block in `tauri.conf.json`; no updater dep in `Cargo.toml` | — |
-| **Outbound network** | **NONE** | no HTTP client anywhere in `src-tauri/src` or `Cargo.toml` (2026-07-11 whole-tree audit); **production** CSP `connect-src` (`tauri.conf.json:46`) is `'self' ipc: http://ipc.localhost` — dev-only `devCsp` (`tauri.conf.json:51`) not shipped | Verified-zero-outbound property holds while Receipts + remote-fetch stay dark. |
+| **Auto-updater** | **LIVE** (2026-07-22, owner-directed) | `plugins.updater` — `tauri.conf.json:73` (pubkey `:74`, endpoints `:75`); `tauri-plugin-updater` — `Cargo.toml:37`; capability `capabilities/updater.json` (main window ONLY) | Consent-first: check on launch + every 4h; NOTHING downloads until the user clicks Update now. Minisign-verified against the pinned pubkey before install; private key outside the repo. E2E-proven 0.9.2→0.9.3 through the updater on the owner's rig. |
+| **Outbound network** | **ONE surface: signed update check/download** (2026-07-22, owner-directed) | `tauri-plugin-updater` (`Cargo.toml:37`) fetches the pinned endpoint (`tauri.conf.json:75`) Rust-side; **production CSP `connect-src` UNCHANGED** (`tauri.conf.json:46` — `'self' ipc: http://ipc.localhost`; no webview-reachable HTTP) | Supersedes the 2026-07-11 zero-outbound audit BY OWNER DECISION (the updater arming). Nothing else talks out: Receipts + remote-fetch stay dark; Export leaves only by the user's hand. The ShellV2 footer states this exactly. |
 
 ## Mutation safety posture (unchanged LOCKED rules)
 

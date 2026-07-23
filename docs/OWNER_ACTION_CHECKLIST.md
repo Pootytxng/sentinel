@@ -17,6 +17,20 @@
 
 ## §A — Needs your hands or eyes (owner-run, reversible)
 
+### A0. NEW 2026-07-23 — Live updater: key backup + the LAST manual send
+
+- ⏳ **Back up the updater signing key (2 minutes, genuinely important).** Copy
+  `C:\Users\Kuya\.tauri\compy-updater.key` (and `.key.pub`) somewhere private OFF this machine —
+  password-manager attachment or your personal cloud. **Lose it** → the fleet can never receive
+  another update (one-time re-send of new-key builds required). **Leak it** → whoever holds it can
+  push code to every install. Same custody class as the remote-rules key law.
+- ⏳ **Send the six invitees the first updater-enabled build — the last manual send ever.** Their
+  current installs (0.9.0/0.1.0) have NO updater and cannot hear about updates until they install
+  one build that does. Send the v0.9.3 installer:
+  `https://github.com/Pootytxng/compy-releases/releases/latest` (direct exe link on that page).
+  After they install it once, every future patch reaches them in-app ("update ready" pill →
+  one click). Timing/wording is yours — distribution is owner territory.
+
 ### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
 
 **Owner said "gaming mode qa signed off" 2026-07-14 — F1 is field-proven for 1.0.** Nothing left on
