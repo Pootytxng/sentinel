@@ -682,8 +682,8 @@ function GuidedRow({
                 deeper story lives. */}
             <p className="fix-guided-none">
               No safe, reversible switch for this one — it lives in a vendor app or a Windows page,
-              so Compy shows you exactly where it lives instead of flipping it. &ldquo;What's
-              this?&rdquo; above has the full story of what it does to your game.
+              and flipping it is deliberately left to you. Compy won't automate a change it can't
+              safely undo.
             </p>
           </div>
         )}
