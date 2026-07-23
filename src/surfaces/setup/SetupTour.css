@@ -383,6 +383,14 @@
   color: var(--ix-text-3, #8b95a8);
   margin-bottom: 6px;
 }
+/* Expectation fine-print (tester Matthew 2026-07-22: the tweak list read like the tour was
+   applying things) — quiet, but present on every lesson. */
+.st-tweaks-fine {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ix-text-3, #8b95a8);
+}
 .st-tweaks-list {
   margin: 0;
   padding-left: 16px;

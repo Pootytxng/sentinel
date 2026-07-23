@@ -78,8 +78,11 @@
   color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
 }
 
-/* The optional system-hygiene scan, demoted a step below the enable-all hero. A hairline rule +
-   a quiet mono summary reads as "the bonus", never a competing action. */
+/* Optional sections below the enable-all hero. REVISED 2026-07-23 (tester Matthew, owner-backed
+   wave: they read "like the small ass text links at the bottom of any website… contact us and
+   copyright") — the old inline mono-caps costume was the legalese. Now: full-width bordered door
+   rows matching the fixes view's group-head grammar. Still BELOW the hero in hierarchy (no fill,
+   quiet text) — subordinate, but unmistakably a door. */
 .lab-optimize-more {
   border-top: 1px solid var(--v2-line, var(--ix-glass-border, rgba(255, 255, 255, 0.08)));
   padding-top: 12px;
@@ -88,19 +91,23 @@
 .lab-optimize-more-summary {
   cursor: pointer;
   list-style: none;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--v2-font-mono, var(--font-mono, ui-monospace, monospace));
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ix-text-3, var(--v2-muted, rgba(255, 255, 255, 0.55)));
-  transition: color 0.15s ease;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--v2-line, var(--ix-glass-border, rgba(255, 255, 255, 0.08)));
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 13px;
+  color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .lab-optimize-more-summary:hover {
-  color: var(--ix-text-2, var(--v2-text, rgba(255, 255, 255, 0.8)));
+  color: var(--ix-text-1, #ffffff);
+  border-color: var(--ix-accent, var(--v2-accent, #2ee6c0));
+  background: color-mix(in srgb, var(--ix-accent, #2ee6c0) 6%, transparent);
 }
 
 /* Native marker off; a rotating caret keeps the door grammar (doorknob law) consistent with the

@@ -151,6 +151,15 @@ export function BlackbookV2({
               aria-label="Blackbook view"
             />
           </div>
+          {/* The Field Guide introduces ITSELF on its own tab (tester Matthew 2026-07-22: he first
+              met the term inside the Logbook and was confused — the description belongs where the
+              guide lives, and in the intro's Blackbook blurb, not buried in a sibling tab). */}
+          {face === "guide" && (
+            <p className="bbv2-guide-lede">
+              The Field Guide is Compy's library: every tweak and myth, graded by the measured
+              record — hardware-aware for this rig.
+            </p>
+          )}
           {face === "logbook" ? (
             <>
               {/* Intelligence Phase 2 — cross-session pattern synthesis sits above the record tape

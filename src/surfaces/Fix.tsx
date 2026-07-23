@@ -606,19 +606,31 @@ function GuidedRow({
   const guide = GUIDED_STEPS[rec.id];
   const walkthrough = walkthroughForKey(rec.id);
   return (
-    <li className="fix-row fix-row-advisory">
+    <li className={"fix-row fix-row-advisory" + (open ? " fix-advisory-open" : "")}>
       <div className="fix-row-main">
-        <div className="fix-row-head">
+        {/* The WHOLE head is a door (tester J 2026-07-22: clicked the card, nothing happened,
+            concluded the section was dead — the affordance has to be the card, not a small link).
+            WhatsThis moved OUT of the head: a button can't nest a button, and it now sits in the
+            always-visible actions row where it's findable. */}
+        <button
+          type="button"
+          className="fix-row-head fix-advisory-door"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="fix-advisory-chev" aria-hidden="true" />
           <RecTitle id={rec.id} title={rec.title} />
-          <WhatsThis id={rec.id} onOpen={onWhatsThis} />
           <EvidenceChip p={rec.provenance} />
           <span className="fix-guided-tag">Guided</span>
-        </div>
+        </button>
         <RecReason id={rec.id} text={rec.impact || rec.description} />
         <ExpertTargetLine id={rec.id} />
-        <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
-          Not for me
-        </button>
+        <div className="fix-advisory-quickacts">
+          <WhatsThis id={rec.id} onOpen={onWhatsThis} />
+          <button className="fix-dismiss" onClick={() => onDismiss(rec.id)}>
+            Not for me
+          </button>
+        </div>
         {guide && (
           <div className="fix-guided-actions">
             <button
@@ -661,6 +673,18 @@ function GuidedRow({
                 <Walkthrough walkthrough={walkthrough} vendor={vendor} />
               </details>
             )}
+          </div>
+        )}
+        {open && !guide && (
+          <div className="fix-guided-detail">
+            {/* An opened card ALWAYS answers — a door that opens onto nothing teaches users to
+                stop clicking (J's exact conclusion). Honest: no safe switch exists; say where the
+                deeper story lives. */}
+            <p className="fix-guided-none">
+              No safe, reversible switch for this one — it lives in a vendor app or a Windows page,
+              so Compy shows you exactly where it lives instead of flipping it. &ldquo;What's
+              this?&rdquo; above has the full story of what it does to your game.
+            </p>
           </div>
         )}
       </div>

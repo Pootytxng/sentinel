@@ -23,7 +23,9 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
   check: "Scan game-readiness, then apply the safe fixes it finds for your rig.",
   play: "Watch live FPS, 1% lows and temps — with a debrief after each session.",
   fix: "Apply and undo reversible tweaks — every change logged in the ledger.",
-  learn: "The measured record of what actually works — and the myths that don't.",
+  // Names the Field Guide explicitly (tester Matthew 2026-07-22: he first met the term inside the
+  // Logbook tab and was confused — the intro should introduce it).
+  learn: "The measured record of what actually works — and the myths that don't. Its library is the Field Guide.",
   lab: "Go deeper: benchmarks, latency and system diagnostics.",
 };
 
@@ -256,9 +258,17 @@ export const GROUND_RECAP_BODY =
   "The rail reads top to bottom: Home for the glance, Monitor to watch it live, Blackbook for what actually works, the Lab to check, fix and prove it.";
 
 // The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
+// 2026-07-23 (tester Matthew: "the last tab is the best for clarity" — orientation must not wait
+// until the END): the FIRST step now also carries the mode's rail-orientation line, so the user
+// holds the map from minute zero; the closing recap still repeats it with the tab cards (repeating
+// a MAP is good pedagogy, not overload).
 export function buildSetupSteps(parts: RigPart[], merged = true, ground = false): SetupStep[] {
+  const orientation = ground ? GROUND_RECAP_BODY : merged ? JOURNEY_RECAP_BODY : null;
+  const setupSteps = SETUP_STEPS.map((s) =>
+    s.id === "setup-rig" && orientation ? { ...s, body: `${s.body} ${orientation}` } : s,
+  );
   return [
-    ...SETUP_STEPS,
+    ...setupSteps,
     ...buildHardwareSteps(parts, merged, ground),
     {
       id: "tour-tabmap",

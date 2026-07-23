@@ -91,3 +91,12 @@
 :root[data-v2="on"] .v2-room[data-room="learn"] .lx-gradekey {
   background: var(--v2-bg);
 }
+
+/* Field Guide self-introduction (tester Matthew 2026-07-22 — the guide explains itself on its own
+   tab, one quiet line under the face toggle). */
+:root[data-v2="on"] .bbv2-guide-lede {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--v2-muted, var(--ix-text-3, #8b95a8));
+}

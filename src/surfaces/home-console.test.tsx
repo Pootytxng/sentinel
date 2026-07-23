@@ -612,17 +612,23 @@ describe("HomeConsole — 2D card viewport clears the always-present corner gaug
     }
   });
 
-  it("CSS: .hc-stage-cards is a scroll viewport confined to a bounded max-height (never full-stage)", () => {
+  it("CSS: .hc-stage-cards is a scroll viewport confined to the gauge-free band (never full-stage)", () => {
     const css = readFileSync(join("src", "surfaces", "home-console.css"), "utf8");
     const cards = block(css, ':root[data-v2="on"] .hc-stage-cards');
     expect(cards).toMatch(/overflow-y:\s*auto/); // a scroll viewport (clips, then scrolls), not clip
     const m = cards.match(/max-height:\s*(\d+)px/);
     expect(m, "max-height must be an explicit px bound").not.toBeNull();
     const maxH = Number(m![1]);
-    // Stage content = min-height 420 − 2·28 padding = 364px; each corner gauge intrudes
-    // ~(22 inset + 56 tall − 28 padding) = 50px from the top AND the bottom, so the gauge-free band
-    // is 364 − 2·50 = 264px. The viewport must stay within it (the regression was 420px, full-stage).
-    expect(maxH).toBeLessThanOrEqual(264);
+    // DERIVED bound (2026-07-23, stage grew 420→540 for tester J's bigger-hologram ask): read the
+    // stage's own min-height so the two values can never drift apart again. Stage content =
+    // minH − 2·28 padding; each corner gauge intrudes ~(22 inset + 56 tall − 28 padding) = 50px
+    // from the top AND the bottom, so the gauge-free band is (minH − 56) − 100. The regression
+    // this guards was a full-stage viewport scrolling rows UNDER the gauges.
+    const stage = block(css, ':root[data-v2="on"] .hc-stage');
+    const minM = stage.match(/min-height:\s*(\d+)px/);
+    expect(minM, ".hc-stage must declare an explicit min-height").not.toBeNull();
+    const band = Number(minM![1]) - 56 - 100;
+    expect(maxH).toBeLessThanOrEqual(band);
     expect(maxH).toBeGreaterThan(0);
   });
 });

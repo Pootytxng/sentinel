@@ -226,3 +226,24 @@ describe("proving-ground tour alignment (ground=true)", () => {
     expect(buildSetupSteps(PARTS, false, false)).toEqual(buildSetupSteps(PARTS, false));
   });
 });
+
+// 2026-07-23 (tester Matthew: "the last tab is the best for clarity" — orientation must not wait
+// until the END): the FIRST step carries the mode's rail line; the closing recap still repeats it.
+describe("orientation on the first step (2026-07-23)", () => {
+  it("ground: the setup-rig body carries the ground rail line AND the recap keeps it", () => {
+    const steps = buildSetupSteps(PARTS, true, true);
+    expect(steps[0].id).toBe("setup-rig");
+    expect(steps[0].body).toContain(GROUND_RECAP_BODY);
+    expect(steps[steps.length - 1].body).toBe(GROUND_RECAP_BODY);
+  });
+
+  it("merged: the journey line rides the first step", () => {
+    const steps = buildSetupSteps(PARTS, true, false);
+    expect(steps[0].body).toContain(JOURNEY_RECAP_BODY);
+  });
+
+  it("classic six-room: the first step stays untouched (no line to preview)", () => {
+    const steps = buildSetupSteps(PARTS, false, false);
+    expect(steps[0].body).not.toContain("The rail reads top to bottom");
+  });
+});

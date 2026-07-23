@@ -533,11 +533,29 @@
   color: var(--ix-text-3);
   margin: 4px 0 0;
 }
+/* Unreadable-settings block, calm framing (tester Matthew 2026-07-22: the bare lines read as an
+   error dump). A quiet bordered aside: head → the named items → the why. Honest, not alarming. */
 .check-leftover-unchecked {
-  list-style: none;
-  margin: 2px 0 0;
-  padding: 0;
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
   font-size: 11.5px;
+  color: var(--ix-text-3);
+}
+.check-unchecked-head {
+  margin: 0 0 4px;
+  color: var(--ix-text-2, #b8bcc8);
+}
+.check-unchecked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.check-unchecked-note {
+  margin: 6px 0 0;
+  font-style: normal;
   color: var(--ix-text-3);
 }
 

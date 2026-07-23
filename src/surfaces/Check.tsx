@@ -979,15 +979,31 @@ export default function Check({
           </ul>
         )}
         {/* Whatever couldn't be read is NAMED with its reason (e.g. bcdedit: needs admin) —
-            an unchecked setting is never folded into "nothing found". */}
+            an unchecked setting is never folded into "nothing found". Framed calmly since
+            2026-07-23 (tester Matthew: three bare "Couldn't check…" lines under the verdict read
+            as an error dump): one head states what they are, the per-item lines keep the exact
+            honest format (guard-pinned), and the admin note explains the design instead of
+            sounding broken. */}
         {leftovers && leftovers.unavailable.length > 0 && (
-          <ul className="check-leftover-unchecked">
-            {leftovers.unavailable.map((u) => (
-              <li key={u.id}>
-                Couldn't check {u.title} — {u.reason}.
-              </li>
-            ))}
-          </ul>
+          <div className="check-leftover-unchecked">
+            <p className="check-unchecked-head">
+              {leftovers.unavailable.length === 1
+                ? "1 setting couldn't be read this pass — no guesses made about it:"
+                : `${leftovers.unavailable.length} settings couldn't be read this pass — no guesses made about them:`}
+            </p>
+            <ul className="check-unchecked-list">
+              {leftovers.unavailable.map((u) => (
+                <li key={u.id}>
+                  Couldn't check {u.title} — {u.reason}.
+                </li>
+              ))}
+            </ul>
+            {leftovers.unavailable.some((u) => /admin/i.test(u.reason)) && (
+              <p className="check-unchecked-note">
+                Reading those needs admin rights — Compy doesn't ask for them just to look.
+              </p>
+            )}
+          </div>
         )}
       </div>
     </section>

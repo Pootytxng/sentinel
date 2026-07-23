@@ -772,3 +772,53 @@
     transition: none;
   }
 }
+
+/* ── Advisory card as a DOOR (tester J 2026-07-22: clicked the card, nothing happened, concluded
+   the section was dead — owner-backed wave 2026-07-23). The whole head toggles the detail;
+   chevron carries the door grammar; quick actions are visible weight, not footnote text. */
+.fix-advisory-door {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.fix-advisory-chev {
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--ix-text-3, #8b95a8);
+  transition: transform 0.15s ease;
+}
+.fix-advisory-open .fix-advisory-chev {
+  transform: rotate(90deg);
+}
+.fix-row-advisory {
+  transition: border-color 0.15s ease;
+}
+.fix-row-advisory:hover {
+  border-color: var(--ix-accent, #2ee6c0);
+}
+.fix-advisory-quickacts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+/* The dismiss reads as a real (quiet) button now, not ghost text. */
+.fix-advisory-quickacts .fix-dismiss {
+  border: 1px solid var(--ix-glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 7px;
+  padding: 4px 10px;
+}
+.fix-guided-none {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ix-text-2, #b8bcc8);
+}

@@ -483,12 +483,19 @@ function StepLesson({ step }: { step: SetupStep }) {
         <span className="st-affects-key">Drives</span> {l.affects}
       </div>
       <div className="st-tweaks">
-        <div className="st-tweaks-head">Settings Compy tunes here</div>
+        {/* "can tune" + the fine line (tester Matthew 2026-07-22: the old "tunes here" present
+            tense read like the tour was applying things — "I was like 'ight bet I'm down'").
+            The tour is read-only; expectation is now set where it formed. */}
+        <div className="st-tweaks-head">Settings Compy can tune here</div>
         <ul className="st-tweaks-list">
           {l.tweaks.map((t) => (
             <li key={t}>{t}</li>
           ))}
         </ul>
+        <p className="st-tweaks-fine">
+          Nothing changes during the tour — every tweak applies only when you click it, and undoes
+          from the ledger.
+        </p>
       </div>
       <div className="st-tabchip">
         <span className="st-tabchip-ico">
