@@ -34,8 +34,9 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   (`23ff847` feat · `419ec81` release), delivered to the owner's box THROUGH the updater: first-run
   default 800×600 → 1280×720 centered, plus `tauri-plugin-window-state` so the size/position the
   user sets persists (overlay denylisted). Restore path live-proven (state-file round-trip).
-- [ ] **J: bigger 3D PC window** — the Home rig-diagnostic 3D viewport reads too small. (Partially
-  eased by the 0.9.4 default-window bump; the viewport's own sizing is still open.)
+- [x] **J: bigger 3D PC window** — ✅ SHIPPED v0.9.6 (`5c74ba2`/`29e5217`, through the updater):
+  Home stage 420→540, live canvas 362→482px; cards-band guard upgraded to DERIVE its bound from
+  the stage css (drift-proof).
 - [ ] **J: cursor consistency** — native Windows cursor appears over sidebar items + some buttons
   (Monitor "Overlay", "Start Capture") instead of the Compy reticle cursor; keep ONE cursor.
   (Matthew separately finds the square crosshair "a little weird" — treat as one cursor pass.)
@@ -43,22 +44,29 @@ experiments + logbook. Matthew praised: guided-setup rail line, simple home, Opt
   tweak; add a dropdown/expand showing WHICH tweak + apply/ignore inline.
 - [ ] **J: post-check routing** — landing on the dashboard after a check feels directionless; add a
   second CTA ("take me to the lab") that opens the Lab's Optimize tab directly.
-- [ ] **J: "Needs your call" cards not interactive** — can't click a tweak to see impact, can't
-  apply/ignore from the card (Optimize tab).
+- [x] **J: "Needs your call" cards not interactive** — ✅ SHIPPED v0.9.6+v0.9.7: whole card head is
+  a door (chevron, hover accent), opens the guided steps or an HONEST no-switch answer; What's-this
+  + bordered Not-for-me in a visible actions row. Live-verified via CDP (6 doors, no-guide case).
+  **Test-debt:** a DOM guard for the door behavior is NOT yet written (live-verified only) — add to
+  `optimize-v2-ia.test.tsx` next pass. Apply-from-card stays absent BY DESIGN (no safe switch).
 - [x] **J: per-room accents read as INCONSISTENCY** — ✅ RESOLVED per owner taste call 2026-07-23
   ("apply to all"): SHIPPED v0.9.5 (`67541e4` feat · `ac518f1` release) through the updater — one-tap
   "Apply to all rooms" in the accent picker; per-room freedom intact. Live-proven + owner state
   restored. UI_VISION_BACKLOG NAV-1 (a) has the record.
-- [ ] **Matthew: Guided-Setup copy** — the "rail reads top to bottom" line is the clearest moment;
-  surface it earlier. PSU-calculator step momentarily reads like it will CHANGE something ("ight
-  bet I'm down") — set the informational expectation up front.
-- [ ] **Matthew: Field Guide explanation placement** — explain Field Guide during the Guided Intro
-  and on the Field Guide tab itself, not inside the Logbook tab (confused him there).
-- [ ] **Matthew: non-admin old-tweaks check prints three "Couldn't check — needs admin" lines** —
-  consider a guided-intro admin recommendation or friendlier gating of those rows.
-- [ ] **Matthew: bottom expandable rows too "quiet"** — "Applied & history / More cleanup / Power
-  features" read like footer link text; raise their visual weight (he compared them to
-  contact-us/copyright links).
+- [x] **Matthew: Guided-Setup copy** — ✅ SHIPPED v0.9.6: the rail-orientation line now rides the
+  FIRST step (mode-aware, 3 new setup-steps guards; recap still closes with it), and every lesson's
+  tweak list reads "Settings Compy **can** tune here" + a nothing-changes-during-the-tour fine line.
+- [x] **Matthew: Field Guide explanation placement** — ✅ SHIPPED v0.9.6: the guide introduces
+  itself on its own tab (`bbv2-guide-lede`) and the intro's Blackbook blurb names it.
+- [x] **Matthew: non-admin old-tweaks check "Couldn't check" lines** — ✅ SHIPPED v0.9.6: grouped
+  in a calm bordered aside with an honest head ("N settings couldn't be read this pass — no guesses
+  made") + the design-philosophy note ("Compy doesn't ask for admin rights just to look"). The
+  guard-pinned per-item line format is preserved; the blanket run-as-admin recommendation was
+  deliberately NOT taken (conflicts with the consent-first elevation doctrine).
+- [x] **Matthew: bottom expandable rows too "quiet"** — ✅ SHIPPED v0.9.6: `.lab-optimize-more-summary`
+  restyled from inline mono-caps links to full-width bordered door rows (matching the group-head
+  grammar above); still subordinate to the enable-all hero. Deliberate revision of the earlier
+  demote-spec, owner-backed.
 
 ## 🧠 INTELLIGENCE PLATFORM LANE (owner directive 2026-07-16 — supersedes priority ordering per its §0.12)
 

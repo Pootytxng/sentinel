@@ -100,6 +100,22 @@
 > hygiene note: Desktop still holds the 0.9.4 setup exe — superseded, refresh rides the next
 > ship-reinstall (the owner's INSTALLED app is current via the updater; the Desktop copy is a
 > convenience artifact).
+>
+> **23d — v0.9.6 (`29e5217`) + v0.9.7 (`1d9bad6`): the tester-review UX wave, DELIVERED THROUGH
+> THE UPDATER (pipe proofs #4 + #5); owner directive: complete review recs BEFORE any tester
+> send.** Shipped: Home 3D stage 420→540 (canvas 362→482 live-measured) with the cards-band guard
+> now deriving its bound from the stage css; needs-your-call advisory cards are DOORS (whole head
+> toggles, chevron, honest answer when no guide exists, bordered Not-for-me); guided-intro rail
+> orientation on the FIRST step (mode-aware, 3 new guards) + "can tune"/nothing-changes fine line;
+> Field Guide self-intro on its tab + named in the intro blurb; unreadable leftovers grouped in a
+> calm bordered aside (guard-pinned line format preserved); Lab bottom rows restyled from
+> legalese links to door rows (deliberate revision of the earlier demote-spec). 0.9.7 is a same-day
+> honesty patch: the 0.9.6 no-guide card copy referenced a non-rendering "What's this" and promised
+> steps it didn't have — caught in this session's own screenshot review, live-verified fixed.
+> **Row 1 = `1d9bad6` · 0.9.7** (self-updated 0.9.5→0.9.6→0.9.7 in-app; Desktop holds the one
+> 0.9.7 installer). Rows 3–4 unchanged — NO tester send (owner's explicit hold; §A0 unchanged).
+> Open from the reviews: cursor consistency + safe-tweak dropdown + post-check routing (other-lane
+> WIP files, deliberately not touched) · advisory-door DOM guard = logged test-debt (BACKLOG).
 
 | # | Identity (kept distinct on purpose) | Current truth | How verified |
 |---|---|---|---|
