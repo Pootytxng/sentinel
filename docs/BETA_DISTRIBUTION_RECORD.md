@@ -70,6 +70,45 @@ unauthenticated → HTTP 200, `MZ`, 3,826,464 B, SHA-256 `6BC2F7DF…F5A2C4` (ex
 re-confirmed dead in the same pass. **Install status per tester: unknown until they report** —
 `BETA_TESTER_TRACKER.md` is the follow-up surface.
 
+## Release: Compy 0.9.1 — STAGING IN PROGRESS, NOT SENT (correction in flight)
+
+**Artifact identity (the ONLY file this release may distribute once staging completes):**
+
+- File: `Compy_0.9.1_x64-setup.exe` (NSIS)
+- Built from: `395752a` (reconciled 0.9.1 train, merge `149d315` + follow-ups; `RELEASE_STATE.md` row 1/2)
+- SHA-256: `7D7650EAC09375E797877FBEA69558565B3F3835A93507B16D7463D44C57E108`
+- Size: 3,836,321 bytes
+- Verified 2026-07-22 against both the build-output copy and the Desktop copy (`ship-reinstall.ps1`'s install copy) — hash-identical.
+
+**Staging incident — self-caught before any send, not owner-caught:** this session first uploaded
+the WRONG 0.9.1 build to Drive — `Compy_0.9.1_x64-setup.exe` sourced from the pre-merge `5d396f9`
+lane (presenter-fix only, SHA-256 `81C64BDC5FB4ED7E42E99C4833CD17DD5572F64EA769D4349DBA5F4DBAF0FCB2`,
+3,826,285 B, pulled from a stale `release-out/` copy this session hadn't refreshed against the
+merge). That file was uploaded, set to "anyone with the link — Viewer", and even
+anonymously re-downloaded/hash-verified successfully — before the mistake was caught by
+cross-checking `RELEASE_STATE.md` row 1, which records a DIFFERENT installed hash (`7D7650EA…`)
+from the reconciled/merged train. The wrong upload is missing the `775c9bb` fail-closed FPS
+sticky-attachment fix and CPU thermal-peak tracking that landed in the merge — shipping it as
+"0.9.1" would under-ship testers relative to what's already running on the owner's own machine.
+
+**Correction status (interrupted mid-fix):** attempted to revoke the wrong file's public sharing
+and rename it in place; a mistimed click moved it to Trash instead (caught immediately, Restored —
+no data lost). Before sharing could actually be revoked, **the Chrome bridge disconnected**
+("Browser extension is not connected"). Actual Drive state right now: the WRONG build is back in
+My Drive, still carrying "anyone with the link — Viewer" (this link was never recorded here and
+never sent to anyone — practically undiscoverable without the exact fileId). The CORRECT file
+(`7D7650EA…`, verified above) is staged into the Cowork session's local storage, ready to upload as
+a new Drive entity once the browser bridge reconnects. **Nothing 0.9.1 has been sent to any
+tester.** Follow-up, in order: (1) revoke the wrong file's public sharing + rename it in place
+(`SUPERSEDED-presenter-fix-only-preMerge_Compy_0.9.1...`) per the standing retire-don't-delete
+pattern, (2) upload the correct file as a new Drive entity, (3) re-verify via anonymous download +
+SHA-256 match, (4) record its real link here.
+
+**Distributed artifact unchanged:** the six invitees still hold only the `37a166c` 0.9.0 NSIS link
+(above) — this section changes nothing about that. A 0.9.1 replacement send is a separate owner
+decision, additionally gated per `RELEASE_STATE.md` CURRENT STATE on an **owner-present smoke
+pass** before GO — not yet scheduled, not implied by anything in this section.
+
 ## Prior distribution surfaces (historical)
 
 - **`Compy-Beta-Kit.zip` on Google Drive** (file ID `1dphNbBkoJSbCPOWiUVy-y6iz25t9nMEO`, uploaded
