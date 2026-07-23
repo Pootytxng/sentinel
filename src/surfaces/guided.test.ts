@@ -16,6 +16,8 @@ const EXPECTED_ALLOWED = [
   "ms-settings:display-advancedgraphics",
   "ms-settings:display-advanced",
   "ms-settings:storagesense",
+  "ms-settings:sound",
+  "ms-settings:windowsdefender",
 ];
 
 beforeEach(() => {

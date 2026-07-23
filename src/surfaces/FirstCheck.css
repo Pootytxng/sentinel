@@ -271,19 +271,54 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  width: 100%;
   padding: 10px 12px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md, 10px);
+  font: inherit;
   font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.fc-rest-row[aria-expanded="true"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .fc-rest-title {
   color: var(--fg);
+}
+.fc-rest-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
 }
 .fc-rest-conf {
   color: var(--muted);
   font-size: 11.5px;
   text-transform: capitalize;
+}
+.fc-rest-caret {
+  color: var(--muted);
+  font-size: 11px;
+}
+.fc-rest-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--r-md, 10px) var(--r-md, 10px);
+  margin-top: -1px;
+}
+.fc-rest-reason {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 /* Green strip */
@@ -332,6 +367,18 @@
 .fc-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+}
+/* Secondary "Take me to the Lab" post-check route (tester J 2026-07-22): a ghost button beside the
+   primary so the user has a clear door into the fixes instead of only "Open the dashboard". */
+.fc-btn-lab {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+}
+.fc-btn-lab:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 
 .fc-btn {

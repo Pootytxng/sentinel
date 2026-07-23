@@ -21,7 +21,17 @@ import "./FirstCheck.css";
 
 export const FIRST_CHECK_KEY = "compy_first_check_v1";
 
-export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => void; arcV2?: boolean }) {
+export default function FirstCheck({
+  onDone,
+  onGoToLab,
+  arcV2 = false,
+}: {
+  onDone: () => void;
+  // Post-check route into the Lab's Optimize station (tester J 2026-07-22). Optional: when absent
+  // the verdict shows only "Open the dashboard" (byte-identical to before this prop).
+  onGoToLab?: () => void;
+  arcV2?: boolean;
+}) {
   // Boot theater (T2+T4a, default ON; classic ScanStream is the failsafe). Read once at mount —
   // this is a full-screen arc, Settings can't flip beneath it. Theater tightens the reveal to
   // 200ms/row so 16 checks land inside the ~3–4s ceiling; a click skips to the verdict.
@@ -31,6 +41,7 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
     theater ? { staggerMs: 200 } : undefined,
   );
   const [greenOpen, setGreenOpen] = useState(false);
+  const [openRestId, setOpenRestId] = useState<string | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
 
@@ -188,15 +199,50 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
               </div>
             )}
 
-            {/* #2…N compact */}
+            {/* #2…N compact — expandable so a tapped row reveals WHICH tweak it is + an Apply/Fix
+                affordance (bug→guard: previously a dead-end row, tester had no way to see or act
+                on "1 safe tweak not applied"). */}
             {rest.length > 0 && (
               <div className="fc-rest">
-                {rest.map((lim) => (
-                  <div key={lim.id} className="fc-rest-row">
-                    <span className="fc-rest-title">{lim.title}</span>
-                    <span className="fc-rest-conf">{lim.confidence[0].toUpperCase() + lim.confidence.slice(1)} confidence</span>
-                  </div>
-                ))}
+                {rest.map((lim) => {
+                  const open = openRestId === lim.id;
+                  const rec = recFor(lim);
+                  return (
+                    <div key={lim.id} className="fc-rest-item">
+                      <button
+                        className="fc-rest-row"
+                        onClick={() => setOpenRestId(open ? null : lim.id)}
+                        aria-expanded={open}
+                      >
+                        <span className="fc-rest-title">{lim.title}</span>
+                        <span className="fc-rest-right">
+                          <span className="fc-rest-conf">
+                            {lim.confidence[0].toUpperCase() + lim.confidence.slice(1)} confidence
+                          </span>
+                          <span className="fc-rest-caret">{open ? "▾" : "▸"}</span>
+                        </span>
+                      </button>
+                      {open && (
+                        <div className="fc-rest-detail">
+                          <p className="fc-rest-reason">{lim.reason}</p>
+                          {rec ? (
+                            <button
+                              className="fc-btn fc-btn-primary"
+                              disabled={applyingId !== null}
+                              onClick={() => applyLimiter(lim)}
+                            >
+                              {applyingId === rec.id ? "Applying…" : "Apply"}
+                            </button>
+                          ) : (
+                            <span className="fc-chip fc-chip-muted">
+                              Hands-on fix — no switch to flip, but Compy shows you the steps
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -231,6 +277,21 @@ export default function FirstCheck({ onDone, arcV2 = false }: { onDone: () => vo
             </p>
 
             <div className="fc-actions">
+              {onGoToLab && (
+                <button
+                  className="fc-btn fc-btn-lab"
+                  onClick={() => {
+                    try {
+                      localStorage.setItem(FIRST_CHECK_KEY, "1");
+                    } catch {
+                      /* non-fatal */
+                    }
+                    onGoToLab();
+                  }}
+                >
+                  Take me to the Lab
+                </button>
+              )}
               <button className="fc-btn fc-btn-go" onClick={finish}>
                 Open the dashboard
               </button>

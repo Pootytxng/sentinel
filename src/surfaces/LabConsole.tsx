@@ -184,6 +184,21 @@ export function LabConsole({
     const k = key as LabStationKey;
     setOpenStation((cur) => (cur === k ? null : k));
   };
+  // Post-check deep-link (tester J 2026-07-22, Phase 5): "Take me to the Lab" from the first-check
+  // verdict lands here and auto-opens the Optimize station (the door to the safe-tweak toggles)
+  // instead of dropping the user on the dock to hunt for it. Race-free: the intent is written to
+  // localStorage BEFORE this face mounts. One-shot — cleared on read, so a normal Lab visit is
+  // unaffected.
+  useEffect(() => {
+    let pending: string | null = null;
+    try {
+      pending = localStorage.getItem("compy_lab_open_station");
+      if (pending) localStorage.removeItem("compy_lab_open_station");
+    } catch {
+      /* ignore — no deep-link this visit */
+    }
+    if (pending === "optimize") setOpenStation("optimize");
+  }, []);
 
   // The identical instrument bodies the classic Lab renders — one source for every layout. Optimize
   // opens <OptimizeStation> inline instead (handled by the caller, not this switch).

@@ -1355,6 +1355,19 @@ function App() {
             // is exactly that class of event too. Bug found in Cowork audit of 408c860, 2026-07-19.
             void refresh();
           }}
+          onGoToLab={() => {
+            // Post-check route (tester J 2026-07-22): close the verdict and land the user in the Lab
+            // with the Optimize station auto-opened. The intent is persisted BEFORE navHome mounts
+            // LabConsole (race-free); LabConsole reads + clears it on mount.
+            try {
+              localStorage.setItem("compy_lab_open_station", "optimize");
+            } catch {
+              /* non-fatal — the user still lands in the Lab, just on the dock */
+            }
+            setShowFirstCheck(false);
+            void refresh();
+            navHome("lab");
+          }}
           arcV2
         />
       )}

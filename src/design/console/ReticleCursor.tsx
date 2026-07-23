@@ -75,7 +75,7 @@ export function ReticleCursor({
       }
     };
     const isTarget = (e: Event) =>
-      e.target instanceof Element && !!e.target.closest("[data-target], button");
+      e.target instanceof Element && !!e.target.closest("[data-target], button:not(:disabled)");
     const onOver = (e: Event) => {
       if (isTarget(e)) snap = true;
     };

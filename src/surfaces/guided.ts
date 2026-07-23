@@ -82,6 +82,70 @@ export const GUIDED_STEPS: Record<string, Guide> = {
       "If you add one, install Windows or your games on it and keep it as the system/boot drive.",
     ],
   },
+  "memory-integrity-vbs-advisory": {
+    where: "Windows Security — Device security",
+    state: "needs-action",
+    openUri: "ms-settings:windowsdefender",
+    openLabel: "Open Windows Security",
+    steps: [
+      "In Windows Security, go to Device security → Core isolation details.",
+      'Turn off "Memory integrity" — this is a real security tradeoff, not a free win.',
+      "Reboot to apply. If a kernel-mode anti-cheat you play needs it (some Vanguard / EAC / BattlEye setups), turn it back on.",
+    ],
+  },
+  "defender-game-folder-exclusions-advisory": {
+    where: "Windows Security — Virus & threat protection",
+    state: "unknown",
+    openUri: "ms-settings:windowsdefender",
+    openLabel: "Open Windows Security",
+    steps: [
+      "In Windows Security, go to Virus & threat protection → Manage settings → Exclusions → Add or remove exclusions.",
+      "Add each game install folder (Steam library, Epic, Riot, Battle.net, etc.).",
+      "Only add folders that ONLY contain game data — never Downloads or Desktop.",
+    ],
+  },
+  "vrr-advisory": {
+    where: "Windows Graphics settings + GPU control panel",
+    state: "unknown",
+    openUri: "ms-settings:display-advancedgraphics",
+    openLabel: "Open Graphics settings",
+    steps: [
+      'In Graphics settings, click "Default graphics settings" and confirm "Variable refresh rate" is on.',
+      "Then in your GPU vendor's app: NVIDIA Control Panel → Set up G-SYNC, or AMD Software → Display → AMD FreeSync.",
+      "Both switches need to be on. If you see brightness flicker on your panel, turn VRR back off.",
+    ],
+  },
+  "audio-enhancements-advisory": {
+    where: "Sound settings — device properties",
+    state: "unknown",
+    openUri: "ms-settings:sound",
+    openLabel: "Open Sound settings",
+    steps: [
+      "Click your active output device → Device properties → Additional device properties.",
+      'Enhancements tab → check "Disable all enhancements" (or "Disable all sound effects").',
+      "Leave Spatial sound (Windows Sonic / Dolby Atmos) alone — that's a separate call.",
+    ],
+  },
+  "hdr-advisory": {
+    where: "Windows Display — HDR",
+    state: "unknown",
+    openUri: "ms-settings:display-advancedgraphics",
+    openLabel: "Open Graphics settings",
+    steps: [
+      "Leave Auto HDR on globally (Settings → System → Display → HDR).",
+      "For competitive titles, toggle Auto HDR off per-game on that same page or in the game's own video settings.",
+      "Native HDR games (built for it) almost always look better staying in HDR.",
+    ],
+  },
+  "game-install-location-advisory": {
+    where: "Your game launcher (Steam / Epic / Battle.net)",
+    state: "unknown",
+    steps: [
+      "Steam: right-click the game → Properties → Installed Files → Move install folder.",
+      "Epic: Library → ⋯ → Move. Battle.net: Settings → Game Install/Update → drive picker.",
+      "Move your 2–3 most-played games to your fastest drive; leave the rest where they are.",
+    ],
+  },
 };
 
 // Security: only fixed ms-settings: targets defined above may ever be opened.

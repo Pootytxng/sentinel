@@ -2,12 +2,24 @@
    theme accent (never gamer-RGB). Positioned absolute inside its scope container (which must be
    position:relative); the JS lerps its transform toward the pointer and toggles the scale on snap.
    Scoped under [data-v2="on"]; registered in tokens-v2-guard V2_CSS with the rest of the kit. */
-:root[data-v2="on"] .lc-has-reticle {
-  cursor: none;
+/* !important + a universal descendant selector: dozens of buttons/links across the app declare
+   their own explicit `cursor: pointer`, which otherwise wins over this inherited `cursor: none`
+   regardless of specificity (an explicit same-element declaration beats an inherited one). Without
+   this, the reticle silently loses to any interactive element that sets its own cursor — reported
+   2026-07-22 on the sidebar nav rail + Monitor's capture/overlay buttons, but the same collapse
+   would recur anywhere else a component sets `cursor: pointer`. */
+:root[data-v2="on"] .lc-has-reticle,
+:root[data-v2="on"] .lc-has-reticle * {
+  cursor: none !important;
 }
 /* Text entry escapes the reticle: caret/native cursor comes back (the JS hides the brackets). */
 :root[data-v2="on"] .lc-has-reticle :is(input, textarea, select, [contenteditable="true"]) {
-  cursor: auto;
+  cursor: auto !important;
+}
+/* A disabled control escapes too: the universal rule above would otherwise show cursor:none over
+   it exactly as if it were clickable (ReticleCursor's snap is skipped separately, see isTarget). */
+:root[data-v2="on"] .lc-has-reticle *:disabled {
+  cursor: not-allowed !important;
 }
 /* App-shell instance (compy_hud_frame): above every in-shell overlay (GamingMode modal 1000)
    so cursor:none never strands an invisible pointer over a drawer/modal; below wc-bar (9000). */

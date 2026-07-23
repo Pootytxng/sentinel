@@ -354,3 +354,54 @@ describe("Fix", () => {
     expect(screen.queryByText(/Applied on|Last seen working on/)).toBeNull();
   });
 });
+
+// Advisory "Needs your call" cards are DOORS (tester J 2026-07-22: clicked the card, nothing
+// happened, concluded the section was dead). Regression guard for the 0.9.6/0.9.7 fix + the
+// 0.9.7 honesty correction (an opened card ALWAYS answers — never a dead open).
+describe("Fix advisory cards behave as doors", () => {
+  beforeEach(() => localStorage.clear());
+
+  // The advisory GuidedRows live inside the "Compy points the way" collapsible; open it first
+  // (in the live Lab it renders expanded, but the isolated Fix render starts collapsed).
+  const openAdvisory = (container: HTMLElement) => {
+    if (container.querySelector("button.fix-advisory-door")) return;
+    const head = screen.queryByText(/Compy points the way/);
+    if (head) fireEvent.click(head);
+  };
+
+  it("the card head toggles a detail; a no-guide advisory still answers honestly on open", () => {
+    // nvidia-telemetry is not appliable (baseProps.isAppliable) and has no GUIDED_STEPS entry →
+    // advisory, no guide (amd-uxp does carry a guide, so it would hit the guided branch instead).
+    const { container } = render(<Fix recs={[rec("nvidia-telemetry", false)]} {...baseProps} />);
+    openAdvisory(container);
+    const door = container.querySelector("button.fix-advisory-door") as HTMLElement;
+    expect(door).toBeTruthy();
+    expect(door.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".fix-guided-detail")).toBeNull();
+    fireEvent.click(door);
+    expect(door.getAttribute("aria-expanded")).toBe("true");
+    // Opened: ALWAYS answers. With no guide, the honest no-switch copy renders (not a dead open).
+    expect(container.querySelector(".fix-guided-detail")).toBeTruthy();
+    expect(container.querySelector(".fix-guided-none")).toBeTruthy();
+    // Quick actions carry a real (bordered) Not-for-me button in a visible row.
+    const quick = container.querySelector(".fix-advisory-quickacts") as HTMLElement;
+    expect(quick).toBeTruthy();
+    expect(quick.querySelector(".fix-dismiss")).toBeTruthy();
+  });
+
+  it("a guided advisory opens its steps, not the no-switch fallback", () => {
+    // audio-enhancements-advisory is not appliable AND has a GUIDED_STEPS entry → advisory + guide.
+    const { container } = render(
+      <Fix recs={[rec("audio-enhancements-advisory", false)]} {...baseProps} />,
+    );
+    openAdvisory(container);
+    const door = container.querySelector("button.fix-advisory-door") as HTMLElement;
+    expect(door).toBeTruthy();
+    // The guided "How to ->" affordance exists for a guided advisory.
+    expect(container.querySelector(".fix-guided-actions")).toBeTruthy();
+    fireEvent.click(door);
+    // Opened a guided card: real detail, never the no-switch fallback.
+    expect(container.querySelector(".fix-guided-detail")).toBeTruthy();
+    expect(container.querySelector(".fix-guided-none")).toBeNull();
+  });
+});
