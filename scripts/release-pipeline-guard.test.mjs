@@ -142,6 +142,15 @@ describe("release pipeline safety", () => {
     expect(executable).not.toContain('git -C $repo commit -m "release: v$nextText" -m $Notes');
   });
 
+  it("bumps the release-state version anchor in lockstep with the version files and stages the doc", () => {
+    // bug->guard (2026-07-23): the strict release-state verifier enforces tauri.conf version ==
+    // STATE:latest_release_version. The first real release drifted because the bump updated the
+    // version files but not the doc. The bump must rewrite the anchor AND stage docs/RELEASE_STATE.md
+    // into the release commit so the exact-commit gate stays green.
+    expect(executable).toContain("STATE:latest_release_version=");
+    expect(executable).toContain('"src-tauri/Cargo.lock" "docs/RELEASE_STATE.md"');
+  });
+
   it.runIf(process.platform === "win32")(
     "executes the exact PowerShell-resolved npm.cmd runner on Windows",
     () => {

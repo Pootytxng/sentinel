@@ -478,6 +478,7 @@ $confPath = Join-Path $repo "src-tauri\tauri.conf.json"
 $pkgPath = Join-Path $repo "package.json"
 $lockPath = Join-Path $repo "package-lock.json"
 $cargoPath = Join-Path $repo "src-tauri\Cargo.toml"
+$statePath = Join-Path $repo "docs\RELEASE_STATE.md"
 
 # Full project proof runs on the exact clean source that will be versioned.
 & (Join-Path $repo "scripts\verify-release.ps1")
@@ -528,6 +529,17 @@ Write-NoBom $pkgPath ((Get-Content -LiteralPath $pkgPath -Raw) -replace ('"versi
 $lockPattern = '("name": "compy",\s*"version": ")' + $currentEscaped + '"'
 Write-NoBom $lockPath ((Get-Content -LiteralPath $lockPath -Raw) -replace $lockPattern, ('${1}' + $nextText + '"'))
 Write-NoBom $cargoPath ((Get-Content -LiteralPath $cargoPath -Raw) -replace ('(?m)^version = "' + $currentEscaped + '"'), ('version = "' + $nextText + '"'))
+# Keep docs/RELEASE_STATE.md's version anchor in lockstep with the bump so the strict release-state
+# verifier (tauri.conf version == STATE:latest_release_version) stays green in the exact-commit gate.
+# manifest_version is intentionally NOT touched here: it tracks the PUBLIC updater manifest and only
+# advances when publish actually ships the artifact.
+$statePattern = '(<!-- STATE:latest_release_version=)' + $currentEscaped + '( -->)'
+$stateBefore = Get-Content -LiteralPath $statePath -Raw
+$stateAfter = $stateBefore -replace $statePattern, ('${1}' + $nextText + '${2}')
+if ($stateAfter -eq $stateBefore) {
+  throw "Release-state version anchor not found/updated in docs/RELEASE_STATE.md (expected STATE:latest_release_version=$currentText). Reconcile the doc, then retry."
+}
+Write-NoBom $statePath $stateAfter
 
 Push-Location (Join-Path $repo "src-tauri")
 try {
@@ -547,7 +559,7 @@ try {
 }
 
 Invoke-Native "stage release version files" {
-  git -C $repo add "src-tauri/tauri.conf.json" "package.json" "package-lock.json" "src-tauri/Cargo.toml" "src-tauri/Cargo.lock"
+  git -C $repo add "src-tauri/tauri.conf.json" "package.json" "package-lock.json" "src-tauri/Cargo.toml" "src-tauri/Cargo.lock" "docs/RELEASE_STATE.md"
 }
 # Commit via a message FILE (-F), never `-m $Notes`: Windows PowerShell 5.1 mangles a note that is
 # multi-line or contains an embedded double-quote when it is handed to git.exe as a native argument
