@@ -133,6 +133,36 @@ pub(crate) fn session_data_dir() -> PathBuf {
     crate::compy_data_dir()
 }
 
+/// Update/restart safety boundary. Any session-contract-shaped artifact means temporary Windows
+/// changes may still need restoration. This is intentionally stricter than `load_session()`:
+/// unreadable, future-schema, temp, and quarantined contracts all block a restart instead of being
+/// collapsed into "no session." An unreadable directory also fails closed.
+pub(crate) fn has_pending_contract() -> Result<bool, String> {
+    let dir = session_data_dir();
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => {
+            return Err(format!(
+                "could not verify Gaming Mode recovery state at {}: {error}",
+                dir.display()
+            ))
+        }
+    };
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "could not verify Gaming Mode recovery state at {}: {error}",
+                dir.display()
+            )
+        })?;
+        if entry.file_name().to_string_lossy().starts_with("gaming-session") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn session_path() -> PathBuf {
     session_data_dir().join(GAMING_SESSION_FILE)
 }
@@ -357,5 +387,23 @@ mod tests {
         let dir = temp_dir("quarantine-empty");
         let _redirect = SessionDirOverride::begin(&dir);
         assert!(quarantine_session().is_none(), "nothing on disk → nothing to preserve");
+    }
+
+    #[test]
+    fn update_restart_gate_blocks_every_contract_shape_and_allows_an_empty_dir() {
+        let dir = temp_dir("update-restart-gate");
+        let _redirect = SessionDirOverride::begin(&dir);
+        assert!(!has_pending_contract().unwrap());
+
+        for name in [
+            GAMING_SESSION_FILE,
+            "gaming-session.json.tmp",
+            "gaming-session.orphaned.json",
+            "gaming-session.orphaned-2.json",
+        ] {
+            std::fs::write(dir.join(name), "unreadable-but-must-not-be-lost").unwrap();
+            assert!(has_pending_contract().unwrap(), "{name} must block update/restart");
+            std::fs::remove_file(dir.join(name)).unwrap();
+        }
     }
 }

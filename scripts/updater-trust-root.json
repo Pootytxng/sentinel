@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "key_id": "43711DD10AAB67D7",
+  "public_key_sha256": "a9b2df7ea775a4a3a095791222e781b2629ef2bafa077d2f0e89be99bf50662e",
+  "public_key": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzNzExREQxMEFBQjY3RDcKUldUWFo2c0swUjF4UTFta1F6b1lJMW15YnBHSWZyNXEwWDRvOSthSGdSVm9DYkQzMFZ3ZnpPMWUK",
+  "fleet_anchor": "v0.9.4-and-earlier-signed-updater-clients",
+  "rotation_policy": "normal-release-drift-forbidden; use docs/UPDATER_TRUST_ROOT.md"
+}

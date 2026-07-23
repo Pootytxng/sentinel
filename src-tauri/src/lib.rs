@@ -524,12 +524,44 @@ fn gaming_mode_enabled() -> bool {
     gaming_mode_gate()
 }
 
+// A package install may terminate Compy. Hold this process-local barrier from the user's Update
+// click through relaunch so Gaming Mode cannot start in the download/install window after the
+// contract check. Poisoning fails closed rather than weakening the rollback law.
+static UPDATE_RESTART_BARRIER: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+
+#[tauri::command]
+fn begin_update_restart() -> Result<(), String> {
+    let mut barrier = UPDATE_RESTART_BARRIER
+        .lock()
+        .map_err(|_| "Update safety barrier is unavailable; restart/update refused.".to_string())?;
+    if gaming_session::has_pending_contract()? {
+        return Err("Finish Gaming Mode or recover its pending changes before updating Compy.".into());
+    }
+    *barrier = true;
+    Ok(())
+}
+
+#[tauri::command]
+fn cancel_update_restart() -> Result<(), String> {
+    let mut barrier = UPDATE_RESTART_BARRIER
+        .lock()
+        .map_err(|_| "Update safety barrier is unavailable; Gaming Mode remains blocked.".to_string())?;
+    *barrier = false;
+    Ok(())
+}
+
 #[tauri::command]
 fn start_gaming_session(
     opts: gaming_orchestrator::StartOptions,
 ) -> Result<gaming_session::SessionFile, String> {
     if !gaming_mode_gate() {
         return Err("Gaming Mode is gated".into());
+    }
+    let update_barrier = UPDATE_RESTART_BARRIER
+        .lock()
+        .map_err(|_| "Update safety barrier is unavailable; Gaming Mode start refused.".to_string())?;
+    if *update_barrier {
+        return Err("A signed Compy update is being installed; Gaming Mode cannot start until Compy restarts.".into());
     }
     gaming_orchestrator::start(opts)
 }
@@ -1063,6 +1095,8 @@ pub fn run() {
             set_benchmark_baseline,
             clear_benchmark_baseline,
             gaming_mode_enabled,
+            begin_update_restart,
+            cancel_update_restart,
             start_gaming_session,
             stop_gaming_session,
             get_gaming_session_state,

@@ -35,6 +35,30 @@ export function UpdatePill() {
       </button>
     );
   }
+  if (phase.kind === "blocked") {
+    return (
+      <button
+        type="button"
+        className="v2-update v2-update-err"
+        onClick={install}
+        title={phase.message}
+      >
+        finish Gaming Mode before updating
+      </button>
+    );
+  }
+  if (phase.kind === "restart-required") {
+    return (
+      <button
+        type="button"
+        className="v2-update v2-update-err"
+        onClick={install}
+        title={phase.message}
+      >
+        update installed · restart Compy
+      </button>
+    );
+  }
 
   return (
     <span className="v2-update-wrap">

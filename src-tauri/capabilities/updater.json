@@ -3,5 +3,9 @@
   "identifier": "updater",
   "description": "Main window only: check/download/install signed updates + relaunch after install. Deliberately NOT granted to the overlay window (least privilege).",
   "windows": ["main"],
-  "permissions": ["updater:default", "process:allow-restart"]
+  "permissions": [
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart"
+  ]
 }
