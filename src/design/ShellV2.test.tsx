@@ -5,8 +5,9 @@ import { railFor, HOME_RAIL } from "./homeRail";
 
 // V2-2 shell guards: the rail renders the blessed room set with WORKING digit hints (a hint that
 // does nothing is a fake affordance), the topbar carries room title + plain-English crumb + the
-// real build stamp (never a fabricated one), and the footer states the verified zero-outbound +
-// reversibility promises with the MEASURED ledger count.
+// real build stamp (never a fabricated one), and the footer states the outbound-honesty +
+// reversibility promises with the MEASURED ledger count. (Updater ARMED 2026-07-22: the footer
+// names the signed update check as the one outbound call — "zero outbound" would now be a lie.)
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) =>
@@ -51,9 +52,9 @@ describe("ShellV2 rail", () => {
     for (const r of HOME_RAIL) expect(ROOM_CRUMB[r.id]).toBeTruthy();
   });
 
-  it("footer: zero-outbound line + reversibility line with the measured ledger count", () => {
+  it("footer: outbound-honesty line + reversibility line with the measured ledger count", () => {
     render(shell());
-    expect(screen.getByText("Zero outbound connections")).toBeTruthy();
+    expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
     expect(screen.getByText("ledger 41")).toBeTruthy();
   });
 });

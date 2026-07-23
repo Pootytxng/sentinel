@@ -53,6 +53,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "publisher": "Pootytxng",
     "copyright": "© 2026 Pootytxng",
@@ -67,5 +68,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzNzExREQxMEFBQjY3RDcKUldUWFo2c0swUjF4UTFta1F6b1lJMW15YnBHSWZyNXEwWDRvOSthSGdSVm9DYkQzMFZ3ZnpPMWUK",
+      "endpoints": [
+        "https://github.com/Pootytxng/compy-releases/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

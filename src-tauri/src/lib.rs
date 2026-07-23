@@ -976,6 +976,13 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // In-app updater (ARMED 2026-07-22, owner decision): signed-update check against the
+        // public releases repo — Compy's only outbound call (ShellV2 footer copy states it).
+        // Packages are signature-verified against the tauri.conf.json pubkey before install;
+        // a compromised host alone cannot push code to the fleet without the private key.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Process relaunch, used solely to restart into the new build after an update installs.
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             get_hardware_info,
             get_recommendations,

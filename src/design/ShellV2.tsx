@@ -1,6 +1,7 @@
 // V2 product shell (V2-2, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Linear/Geist-discipline
 // chrome from the owner-approved mockup: 216px rail (wordmark · rooms with digit hints · the
-// zero-outbound/reversible footer) + 46px topbar (room title · plain-English crumb · build stamp)
+// outbound-honesty/reversible footer) + 46px topbar (room title · plain-English crumb · build
+// stamp · update pill when a signed update is live)
 // + a scrolling content lane. Renders ONLY when App's compy_v2 state is on; flag off, this tree
 // never mounts and the app is byte-identical (tokens-v2-guard.test.ts pins the CSS side).
 //
@@ -18,6 +19,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { Wordmark } from "./Wordmark";
 import { NavGlyph } from "./NavGlyph";
+import { UpdatePill } from "./UpdatePill";
 import { HOME_RAIL, type HomeRailId, type HomeRailItem } from "./homeRail";
 import { useJarvisActive } from "./jarvis/use-jarvis";
 import { useRoomIdentityFlag, useHudFrameFlag } from "./use-hud";
@@ -161,11 +163,13 @@ export function ShellV2({
             ))}
           </div>
           <div className="v2-foot">
-            {/* The verified zero-outbound property (holds until opt-in Receipts ships through its
-                own gate) + the rollback-first promise, with the measured ledger count. */}
+            {/* Outbound honesty line (updater ARMED 2026-07-22): the signed update check is now
+                Compy's ONE outbound call, so the old "Zero outbound connections" absolute would
+                be a lie. Copy states exactly what leaves the machine; opt-in Receipts still
+                gates separately and would change this line again when (if) it ships. */}
             <div className="v2-zero">
               <span className="v2-zero-led" aria-hidden="true" />
-              Zero outbound connections
+              Outbound: signed update check only
             </div>
             <div>
               Every change reversible · <span className="v2-mono">ledger {ledgerCount}</span>
@@ -178,6 +182,7 @@ export function ShellV2({
             <span className="v2-room-title">{active?.label ?? "Compy"}</span>
             {active && <span className="v2-crumb">· {ROOM_CRUMB[active.id]}</span>}
             {stamp && <span className="v2-stamp">{stamp}</span>}
+            <UpdatePill />
             {roomIdentity && active && PICKABLE_ROOMS.includes(active.id as PickableRoom) && (
               <RoomAccentPicker room={active.id as PickableRoom} roomLabel={active.label} />
             )}
