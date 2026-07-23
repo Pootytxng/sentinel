@@ -79,12 +79,30 @@ describe("release pipeline safety", () => {
     expect(script).toMatch(/if\s*\(\$Mode\s+-eq\s+"publish"\)/i);
     expect(script).toMatch(/HEAD does not match staged commit/i);
     expect(script).toContain("verify-updater-signature.mjs");
-    expect(executable).toContain("schema_version = 2");
+    expect(executable).toContain("schema_version = 3");
     expect(executable).toContain("staged receipt signature verification");
     expect(executable).toContain("staged receipt self-verification");
     expect(executable).toContain("canonicalInstallerRelative");
     expect(executable).toContain("canonicalSignatureRelative");
     expect(executable).toContain("canonicalManifestRelative");
+  });
+
+  it("refuses a pending Gaming Mode contract in both stage and publish (reconcile 2026-07-23)", () => {
+    expect(executable).toContain('Assert-NoPendingGamingContract "stage"');
+    expect(executable).toContain('Assert-NoPendingGamingContract "publish"');
+    // A cleanly-cleared backup must NOT block; a live contract must — same rule in both scripts.
+    expect(executable).toContain('-notlike "*.cleared-*.json.bak"');
+    expect(reinstallExecutable).toContain('-notlike "*.cleared-*.json.bak"');
+    // The pinned broad glob is preserved so the ordering guard still anchors.
+    expect(reinstallExecutable).toContain('Where-Object { $_.Name -like "gaming-session*" }');
+  });
+
+  it("verifies the embedded release stamp, records installer size, and requires a pre-existing tag", () => {
+    expect(executable).toContain("EMBEDDED-STAMP MISMATCH");
+    expect(executable).toContain("bytes = (Get-Item -LiteralPath $installer).Length");
+    expect(executable).toContain("git -C $repo tag -a $releaseTag $releaseCommit");
+    expect(executable).toContain("does not point at the staged commit");
+    expect(executable).toContain("push release tag");
   });
 
   it("refuses passwordless signing and proves the key before creating a version commit", () => {
@@ -144,7 +162,7 @@ describe("release pipeline safety", () => {
     expect(downloadedCrypto).toBeLessThan(publish);
     expect(draft).toBeLessThan(publish);
     expect(executable.slice(draft, publish)).toContain("--draft");
-    expect(executable.slice(draft, publish)).toContain("--target main");
+    expect(executable.slice(draft, publish)).toContain("--verify-tag");
     expect(executable.slice(draft, publish)).not.toContain("--target $head");
   });
 

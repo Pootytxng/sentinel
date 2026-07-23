@@ -103,8 +103,16 @@ if ($treeDirt -and -not $AllowDirty) {
 $gamingDataDir = Join-Path $env:APPDATA "Compy"
 $pendingGamingContracts = @()
 if (Test-Path -LiteralPath $gamingDataDir -PathType Container) {
+  # A cleanly-CLEARED session backup (the app renames an ended contract to
+  # gaming-session.cleared-<ts>.json.bak) is the app's OWN "already restored" marker and does NOT need
+  # recovery (gaming_session.rs documented intent: cleared sessions don't qualify). Exclude ONLY that
+  # exact cleared-backup shape; a live gaming-session.json, a quarantine, a temp, or a numbered contract
+  # still blocks. Reconcile 2026-07-23: the broad glob false-positived on a month-old cleared .bak and
+  # would have blocked EVERY publish (evidence: gaming-session.cleared-20260618-202101.json.bak). The
+  # pinned `gaming-session*` substring is preserved for release-pipeline-guard.test.mjs.
   $pendingGamingContracts = @(Get-ChildItem -LiteralPath $gamingDataDir -Force -ErrorAction Stop |
-    Where-Object { $_.Name -like "gaming-session*" })
+    Where-Object { $_.Name -like "gaming-session*" } |
+    Where-Object { $_.Name -notlike "*.cleared-*.json.bak" })
 }
 if ($pendingGamingContracts.Count -gt 0) {
   $contractNames = ($pendingGamingContracts.Name -join ", ")

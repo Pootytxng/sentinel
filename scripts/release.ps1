@@ -1,4 +1,12 @@
-# release.ps1 - fail-closed two-phase Compy updater release pipeline.
+# release.ps1 - fail-closed two-phase Compy updater release pipeline (engine for the two-command
+# interface: scripts/release-prepare.ps1 and scripts/release-publish.ps1 are thin wrappers over the
+# -Mode stage / -Mode publish paths below; prefer those so the two operations can't be confused).
+#
+# Reconcile 2026-07-23 (Phase 3) added, on top of the fail-closed base: stage + publish both refuse a
+# pending Gaming Mode session/recovery record (a cleanly-cleared .bak backup does NOT count); stage
+# verifies the built exe EMBEDS the release commit stamp before writing the receipt; the receipt
+# records installer size + SHA-256; stage creates a pre-existing annotated source tag at the exact
+# release commit; publish requires that tag, pushes it, and creates the GitHub release with --verify-tag.
 #
 # Phase 1 (default) prepares a signed, locally verified release candidate and writes an
 # immutable receipt. It never installs, pushes, or publishes anything:
@@ -67,6 +75,21 @@ function Assert-StageStartsAtRemoteMain {
   $remote = Get-GitLine @("rev-parse", "origin/main")
   if ($head -ne $remote) {
     throw "Release refused: local main is not synchronized with origin/main. HEAD=$head origin/main=$remote"
+  }
+}
+
+function Assert-NoPendingGamingContract([string]$Phase) {
+  # An active Gaming Mode session or a pending recovery record means temporary Windows changes may
+  # still be un-restored — never bump a version or publish over that. Same definition ship-reinstall
+  # uses: any `gaming-session*` contract blocks EXCEPT a cleanly-cleared backup
+  # (gaming-session.cleared-<ts>.json.bak), which is the app's own "already restored" marker.
+  $dir = Join-Path $env:APPDATA "Compy"
+  if (-not (Test-Path -LiteralPath $dir -PathType Container)) { return }
+  $pending = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop |
+    Where-Object { $_.Name -like "gaming-session*" } |
+    Where-Object { $_.Name -notlike "*.cleared-*.json.bak" })
+  if ($pending.Count -gt 0) {
+    throw "Release refused ($Phase): a pending Gaming Mode session/recovery record exists ($($pending.Name -join ', ')). Return to normal or recover it in the app, confirm the contract clears, then retry."
   }
 }
 
@@ -217,12 +240,13 @@ if ($Mode -eq "publish") {
   }
 
   Assert-CleanMain
+  Assert-NoPendingGamingContract "publish"
   if (-not (Test-Path -LiteralPath $stageReceiptPath -PathType Leaf)) {
     throw "No staged release receipt found at $stageReceiptPath. Run stage mode first."
   }
 
   $receipt = Get-Content -LiteralPath $stageReceiptPath -Raw | ConvertFrom-Json
-  if ($receipt.schema_version -ne 2) {
+  if ($receipt.schema_version -ne 3) {
     throw "Unsupported staged receipt schema: $($receipt.schema_version)"
   }
 
@@ -234,6 +258,15 @@ if ($Mode -eq "publish") {
   $conf = Get-Content -LiteralPath (Join-Path $repo "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json
   if ($conf.version -ne $receipt.version) {
     throw "Source version $($conf.version) does not match staged version $($receipt.version)."
+  }
+
+  # Pre-existing tag gate (Phase 3 #4): the annotated tag from stage must ALREADY point at the exact
+  # release commit before publish will push source or create the release.
+  if ([string]::IsNullOrWhiteSpace($receipt.tag)) { throw "Staged receipt has no release tag." }
+  if ($receipt.tag -ne "v$($receipt.version)") { throw "Staged tag $($receipt.tag) does not match version v$($receipt.version)." }
+  $tagCommit = Get-GitLine @("rev-parse", "$($receipt.tag)^{commit}")
+  if ($tagCommit -ne $receipt.commit) {
+    throw "Release tag $($receipt.tag) does not point at the staged commit. tag=$tagCommit staged=$($receipt.commit)"
   }
 
   if (-not (Test-Path -LiteralPath $stageReceiptSignaturePath -PathType Leaf)) {
@@ -293,11 +326,29 @@ if ($Mode -eq "publish") {
   if ($pushed -ne $receipt.commit) {
     throw "Source push did not publish the staged commit. Expected $($receipt.commit); found $pushed."
   }
+  # Push the source tag alongside the commit; confirm origin's tag resolves to the exact commit.
+  Invoke-Native "push release tag" { git -C $repo push origin "refs/tags/$($receipt.tag)" }
+  $remoteTagLine = (& git -C $repo ls-remote origin "refs/tags/$($receipt.tag)^{}" | Out-String).Trim()
+  $remoteTagSha = ($remoteTagLine -split '\s+')[0]
+  if ($remoteTagSha -ne $receipt.commit) {
+    throw "Pushed release tag $($receipt.tag) does not resolve to the staged commit on origin. tag=$remoteTagSha staged=$($receipt.commit)"
+  }
 
   # A draft is still not visible to the fleet updater. Verify its exact downloaded bytes first.
   $releaseNotes = "$($receipt.notes)`n`nSource commit: $head"
+  # The release lives in compy-releases (no source commits), so its tag can't point at the source
+  # commit — that binding is the source-tag gate above + this notes line. Create the releases-repo tag
+  # ref so gh --verify-tag is a real fail-closed check (refuses creation if the tag is absent).
+  # Idempotent for a retried publish.
+  $releasesMainSha = (& gh api "repos/$releasesRepo/commits/main" --jq ".sha")
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releasesMainSha)) { throw "Could not resolve $releasesRepo main sha for the release tag." }
+  $releasesMainSha = $releasesMainSha.Trim()
+  $existingReleasesTag = (& gh api "repos/$releasesRepo/git/refs/tags/$tag" --jq ".object.sha" 2>$null)
+  if ([string]::IsNullOrWhiteSpace($existingReleasesTag)) {
+    Invoke-Native "create releases-repo tag" { gh api "repos/$releasesRepo/git/refs" -f "ref=refs/tags/$tag" -f "sha=$releasesMainSha" }
+  }
   Invoke-Native "create draft GitHub release" {
-    gh release create $tag --repo $releasesRepo --draft --target main --title "Compy $tag" --notes $releaseNotes $installer $manifestPath
+    gh release create $tag --repo $releasesRepo --draft --verify-tag --title "Compy $tag" --notes $releaseNotes $installer $manifestPath
   }
 
   $verifyDir = Join-Path ([System.IO.Path]::GetTempPath()) ("compy-release-verify-" + [guid]::NewGuid().ToString("N"))
@@ -367,6 +418,7 @@ if ([string]::IsNullOrWhiteSpace($Notes)) {
 
 # Stage preflight runs before any version file is touched.
 Assert-StageStartsAtRemoteMain
+Assert-NoPendingGamingContract "stage"
 $verifiedSourceHead = Get-GitLine @("rev-parse", "HEAD")
 $keyPath = Join-Path $env:USERPROFILE ".tauri\compy-updater.key"
 if (-not (Test-Path -LiteralPath $keyPath -PathType Leaf)) {
@@ -502,6 +554,19 @@ if ($postBuildHead -ne $releaseCommit) {
   throw "Source moved while the signed build ran. Built=$releaseCommit current=$postBuildHead"
 }
 
+# Verify the built binary EMBEDS the release commit stamp (build.rs stamps the short hash into the
+# release exe). A cached/stale cargo fingerprint can silently rebundle a prior binary; the stamp is
+# the proof the artifact IS this exact source. The uncompressed release exe carries it (the NSIS
+# installer is compressed, so publish re-proves it on the INSTALLED exe via ship-reinstall -VerifyRuntime).
+$releaseShort = Get-GitLine @("rev-parse", "--short", $releaseCommit)
+$releaseExe = Join-Path $repo "src-tauri\target\release\compy.exe"
+if (-not (Select-String -LiteralPath $releaseExe -Pattern $releaseShort -SimpleMatch -Quiet)) {
+  throw "EMBEDDED-STAMP MISMATCH: target\release\compy.exe does not embed the release stamp $releaseShort. cargo reused a cached binary; run 'cargo clean -p compy --release --manifest-path src-tauri/Cargo.toml' and re-stage."
+}
+if (Select-String -LiteralPath $releaseExe -Pattern "$releaseShort+dirty" -SimpleMatch -Quiet) {
+  throw "EMBEDDED-STAMP MISMATCH: the release exe stamp reads '+dirty'; the build was cut from an unclean tree."
+}
+
 $signatureText = (Get-Content -LiteralPath $signature -Raw).Trim()
 $manifest = [ordered]@{
   version = $nextText
@@ -516,13 +581,20 @@ $manifest = [ordered]@{
 }
 Write-NoBom $manifestPath (($manifest | ConvertTo-Json -Depth 5))
 
+# Pre-existing tag (Phase 3 #4): an annotated tag pointing at the EXACT release commit, in the
+# source repo. LOCAL only — stage never pushes/publishes. Publish REQUIRES this tag to already point
+# at the receipt commit before it will push source or create the release.
+$releaseTag = "v$nextText"
+Invoke-Native "create release tag" { git -C $repo tag -a $releaseTag $releaseCommit -m "Compy $releaseTag" }
+
 $receipt = [ordered]@{
-  schema_version = 2
+  schema_version = 3
   version = $nextText
   commit = $releaseCommit
+  tag = $releaseTag
   notes = $Notes
   created_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
-  installer = [ordered]@{ path = $installerRelative; sha256 = Get-ArtifactHash $installer }
+  installer = [ordered]@{ path = $installerRelative; sha256 = Get-ArtifactHash $installer; bytes = (Get-Item -LiteralPath $installer).Length }
   signature = [ordered]@{ path = $signatureRelative; sha256 = Get-ArtifactHash $signature }
   manifest = [ordered]@{ path = $manifestRelative; sha256 = Get-ArtifactHash $manifestPath }
 }
