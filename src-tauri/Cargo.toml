@@ -1,6 +1,6 @@
 [package]
 name = "compy"
-version = "0.9.5"
+version = "0.9.6"
 description = "Hardware-aware Windows PC optimization for everyday gamers"
 authors = ["Kuya"]
 edition = "2021"
@@ -18,19 +18,19 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# `tray-icon` enables the opt-in "minimize to tray" (Behavior setting, default OFF ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â close still
-# fully exits per Train #3 ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§1). Backend-only API; adds no webview capability.
+# `tray-icon` enables the opt-in "minimize to tray" (Behavior setting, default OFF ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â close still
+# fully exits per Train #3 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§1). Backend-only API; adds no webview capability.
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 # Single-instance guard: a second launch focuses the existing main window instead
-# of starting another process ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â prevents two windows racing history.json. Backend
+# of starting another process ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â prevents two windows racing history.json. Backend
 # only (no webview commands); the --fps-capture helper returns from main.rs before
 # tauri::Builder, so it never registers this plugin and is unaffected.
 tauri-plugin-single-instance = "2"
 # Native OS notification for the session-end "debrief ready" toast (read-only, no auto-open).
 tauri-plugin-notification = "2"
 # In-app updater (ARMED 2026-07-22, owner decision): checks the public Pootytxng/compy-releases
-# GitHub repo for a newer signed build ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Compy's ONLY outbound call. Update packages are
+# GitHub repo for a newer signed build ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Compy's ONLY outbound call. Update packages are
 # minisign(Ed25519)-verified against the pubkey in tauri.conf.json before install; the private
 # key lives OUTSIDE the repo (owner machine, %USERPROFILE%\.tauri\ + owner backup) per the
 # same key law as remote-rules signing.
@@ -38,8 +38,8 @@ tauri-plugin-updater = "2"
 # relaunch() so "Update now" can restart into the new build after the installer runs.
 tauri-plugin-process = "2"
 # Remember last window size/position (tester gripe 2026-07-23: the 800x600 default was too
-# small Ã¢â‚¬â€ the intuitive fix is BOTH a larger first-run default (1280x720, tauri.conf.json)
-# AND respecting whatever size the user then chooses). Overlay window denylisted in lib.rs Ã¢â‚¬â€
+# small ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the intuitive fix is BOTH a larger first-run default (1280x720, tauri.conf.json)
+# AND respecting whatever size the user then chooses). Overlay window denylisted in lib.rs ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
 # it positions/sizes itself programmatically and must never be "restored".
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
@@ -48,7 +48,7 @@ sysinfo = "0.33"
 wmi = "0.14"
 winreg = "0.55"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
-# NOTE: the `runas` crate (1.2.0) was REMOVED 2026-07-14 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â its Windows impl never returns Err
+# NOTE: the `runas` crate (1.2.0) was REMOVED 2026-07-14 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â its Windows impl never returns Err
 # (ShellExecuteExW failure, incl. a UAC decline, collapses to Ok(exit -1)), which inverted the
 # decline attribution at the elevation boundary. Replaced by actions::elevate_and_wait.
 winapi = { version = "0.3", features = [
@@ -58,7 +58,7 @@ winapi = { version = "0.3", features = [
   "sysinfoapi",
   # Hidden-window + Raw Input session for the latency module's HID polling-rate probe
   # (latency.rs). GetModuleHandleW needs libloaderapi; HWND/window handles need windef.
-  # Read-only passive input observation ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no injection, no hook, no elevation.
+  # Read-only passive input observation ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â no injection, no hook, no elevation.
   "libloaderapi",
   "windef",
 ] }
@@ -66,7 +66,7 @@ windows = { version = "0.59", features = [
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
   # D3D11 compute + runtime HLSL compile (D3DCompile) for the GPU benchmark
-  # (F6, benchmark.rs). Vendor graphics API, anti-cheat-safe ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â same class as the
+  # (F6, benchmark.rs). Vendor graphics API, anti-cheat-safe ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â same class as the
   # existing DXGI/ADLX usage; no injection, no kernel driver.
   "Win32_Graphics_Direct3D",
   "Win32_Graphics_Direct3D11",
@@ -78,7 +78,7 @@ windows = { version = "0.59", features = [
   "Win32_Graphics_Gdi",
   # Window subclassing (SetWindowSubclass/DefSubclassProc) + MINMAXINFO/WM_GETMINMAXINFO
   # so the decorations:false main window's native maximize stops at the monitor work area
-  # instead of covering the taskbar. Read-only window-message handling ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no injection, no
+  # instead of covering the taskbar. Read-only window-message handling ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â no injection, no
   # hook into other processes, no elevation.
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Shell",
@@ -89,14 +89,14 @@ windows = { version = "0.59", features = [
   # timestamps into milliseconds in the FPS/frametime capture engine.
   "Win32_System_Performance",
   # GetLogicalProcessorInformationEx, for CPU core/cache topology. The latency
-  # module counts L3 cache complexes (ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°Ãƒâ€¹Ã¢â‚¬Â  CCDs on AMD Zen) so it only offers
+  # module counts L3 cache complexes (ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¹ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â  CCDs on AMD Zen) so it only offers
   # interrupt-affinity tweaks where they're meaningful (multi-CCD), and refuses
-  # them on single-CCD parts (e.g. an 8-core X3D) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â read-only, no elevation.
+  # them on single-CCD parts (e.g. an 8-core X3D) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â read-only, no elevation.
   "Win32_System_SystemInformation",
   # OpenProcess + QueryFullProcessImageNameW, so the elevated FPS helper can
   # resolve the presenting process's name (it has the rights; the UI doesn't).
   "Win32_System_Threading",
-  # Read HWiNFO's published sensor block (shared memory-mapped file) for CPU temp ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â read-only,
+  # Read HWiNFO's published sensor block (shared memory-mapped file) for CPU temp ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â read-only,
   # no driver of our own. OpenFileMappingW / MapViewOfFile. See cpu_temp.rs.
   "Win32_System_Memory",
   "Win32_Foundation",
@@ -109,12 +109,12 @@ windows = { version = "0.59", features = [
 
 # ETW (Event Tracing for Windows) consumer for FPS / frametime capture.
 # Sentinel's --fps-capture helper subscribes to the Microsoft-Windows-DXGI
-# provider's present events to derive frame timing from OUTSIDE the game ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â
+# provider's present events to derive frame timing from OUTSIDE the game ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â
 # no DLL injection, the same anti-cheat-safe mechanism Intel PresentMon uses.
 # Creating a real-time ETW session requires elevation, so this runs in an
 # elevated helper process (see fps.rs).
 ferrisetw = "1.2"
-# Signed-manifest infra (ARCHITECTURE_LOCKS ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§1.4).
+# Signed-manifest infra (ARCHITECTURE_LOCKS ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§1.4).
 #
 # Ed25519 signature verification for remote rules manifests. We use
 # `ed25519-compact` rather than `ed25519-dalek`: it's pure-Rust with a tiny
@@ -129,15 +129,15 @@ sha2 = "0.10"
 
 # NVIDIA Management Library wrapper. Used by the Monitoring tab to surface
 # GPU temperature, utilization, clocks, power, and VRAM. nvml.dll ships with
-# the NVIDIA driver ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â when the driver is absent (AMD/Intel-only systems, or
+# the NVIDIA driver ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â when the driver is absent (AMD/Intel-only systems, or
 # NVIDIA driver not installed), Nvml::init() returns Err and the Monitoring
 # tab falls back to "GPU sensors unavailable" instead of crashing. Anti-cheat
-# safe ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â NVML is a vendor-blessed signed library, no injection, no kernel
+# safe ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â NVML is a vendor-blessed signed library, no injection, no kernel
 # driver.
 nvml-wrapper = "0.10"
 
 # AMD GPU telemetry via ADLX (AMD Device Library eXtra). Dynamically loads
-# amdadlx64.dll, which ships with the Adrenalin driver ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â same model as NVML
+# amdadlx64.dll, which ships with the Adrenalin driver ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â same model as NVML
 # for NVIDIA, and equally anti-cheat-safe (vendor library, no injection, no
 # kernel driver). Pinned to the exact alpha because the crate is pre-1.0;
 # the API we use (helper -> system -> performance_monitoring_services ->
