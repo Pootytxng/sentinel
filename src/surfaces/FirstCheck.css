@@ -369,17 +369,6 @@
   justify-content: flex-end;
   gap: 10px;
 }
-/* Secondary "Take me to the Lab" post-check route (tester J 2026-07-22): a ghost button beside the
-   primary so the user has a clear door into the fixes instead of only "Open the dashboard". */
-.fc-btn-lab {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--fg);
-}
-.fc-btn-lab:hover {
-  border-color: var(--accent-line);
-  color: var(--accent);
-}
 
 .fc-btn {
   font: inherit;
@@ -407,4 +396,17 @@
   color: var(--ix-accent-ink, #06231c);
   font-weight: 600;
   padding: 10px 22px;
+}
+/* Secondary "Take me to the Lab" post-check route (tester J 2026-07-22): a ghost button beside the
+   primary so the user has a clear door into the fixes instead of only "Open the dashboard". Compound
+   selector (.fc-btn.fc-btn-lab) so it outranks the base .fc-btn accent fill regardless of source
+   order — a plain .fc-btn-lab is equal-specificity and lost to the later base rule (self-review fix). */
+.fc-btn.fc-btn-lab {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+}
+.fc-btn.fc-btn-lab:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
