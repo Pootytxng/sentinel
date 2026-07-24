@@ -233,14 +233,17 @@ describe("release pipeline safety", () => {
     expect(script).toContain("single-writer owner action");
   });
 
-  it("proves installed bytes, executable version, and Windows app metadata before success", () => {
+  it("proves the installed build's embedded commit, executable version, and Windows app metadata before success", () => {
     expect(reinstall).toContain("Built release executable is missing before install");
     expect(reinstall).toContain("Could not resolve the source HEAD before install");
     expect(reinstall).toContain("Could not verify the source worktree before install");
     expect(reinstallExecutable).toContain("WaitForExit(180000)");
     expect(reinstall).toContain("Silent install timed out after 180 seconds");
-    expect(reinstall).toContain("Get-FileHash $releaseExe");
-    expect(reinstall).toContain("Get-FileHash $exe");
+    // Correctness invariant is the embedded HEAD commit + version, NOT byte-identity vs
+    // target/release/compy.exe: NSIS packaging + non-reproducible Rust links mean a legitimate
+    // install of THIS build has a different SHA-256 (same commit/version/size). See ship-reinstall.ps1.
+    expect(reinstall).toContain("Select-String -Path $exe -Pattern $head -Quiet");
+    expect(reinstall).toContain("INSTALLED-BINARY STALE");
     expect(reinstall).toContain("VersionInfo.ProductVersion");
     expect(reinstall).toContain("DisplayVersion");
     expect(reinstall).toContain("INSTALL-METADATA MISMATCH");

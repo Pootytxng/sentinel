@@ -164,10 +164,16 @@ if ($p.ExitCode -ne 0) { throw "Silent install failed: exit $($p.ExitCode)" }
 # 4) Prove the installed payload and Windows app metadata both match the staged release.
 $exe = Join-Path $env:LOCALAPPDATA "Compy\compy.exe"
 if (-not (Test-Path $exe)) { throw "Installed exe not found after install: $exe" }
-$builtExeHash = (Get-FileHash $releaseExe -Algorithm SHA256).Hash
-$installedExeHash = (Get-FileHash $exe -Algorithm SHA256).Hash
-if ($installedExeHash -ne $builtExeHash) {
-  throw "INSTALLED-BINARY MISMATCH: installed compy.exe does not byte-match the staged release binary."
+# Correctness invariant is EMBEDDED COMMIT + version, NOT byte-identity. NSIS packaging is not
+# byte-preserving and Rust release links aren't reproducible (PE timestamp + debug GUID differ per
+# link), so a legitimate install of THIS build routinely has a different SHA-256 than
+# target/release/compy.exe (same commit, same version, same size). Byte-matching the two spuriously
+# failed a correct 0.9.7/100ace3 install on 2026-07-23. The staleness we actually guard against is
+# "an OLDER build got installed" — caught precisely by the env!("COMPY_GIT_HASH") short hash baked
+# into the exe (the same Gate-0 proof run against the staged binary) plus the ProductVersion check
+# below. (bug->guard 2026-07-23; matches CLAUDE.md ship-LAW: verify by stamp, not exe hash.)
+if (-not (Select-String -Path $exe -Pattern $head -Quiet)) {
+  throw "INSTALLED-BINARY STALE: installed compy.exe does not embed HEAD commit $head; a wrong/older build is installed."
 }
 $installedVersion = (Get-Item $exe).VersionInfo.ProductVersion
 if ($installedVersion -ne $ver) {
