@@ -1,0 +1,9 @@
+# Portable editor pin — stops the RELEASE_STATE.md mojibake class from recurring.
+# Root cause (fd31bc8, 6eec11f): a UTF-8 file re-saved as cp1252 twice, corrupting
+# — · → … § into `Ã…`-runs. Pinning UTF-8 keeps those bytes intact across editors.
+# Charset only by design — line endings are left to git/.gitattributes (CRLF is
+# benign here), so this introduces no whitespace/EOL churn.
+root = true
+
+[*]
+charset = utf-8
