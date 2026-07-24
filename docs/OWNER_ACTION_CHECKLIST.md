@@ -31,6 +31,23 @@
   After they install it once, every future patch reaches them in-app ("update ready" pill →
   one click). Timing/wording is yours — distribution is owner territory.
 
+### A0b. zh-CN (Simplified Chinese) build — verified SHIP-READY, awaiting your merge + publish GO (2026-07-23)
+
+Branch `i18n/zh-CN` = current `main` + 3 clean commits: full zh-CN translation `100ace3`, plus two
+reversible tooling fixes (ship-gate `e22be5e`, QA-probe `719408b`). Version **0.9.7** everywhere —
+main, branch, the one Desktop installer, and the live installed build all agree, no drift. End-to-end
+smoke **PASS**: EN↔ZH switch clean (no reload), every surface translated, no raw i18n keys, no crashes;
+live==build proven by stamp (`100ace3 · release`). Feedback surface (`c51f3bb`) already included.
+Two owner calls, both **HELD** (never self-authorized):
+
+- ⏳ **Merge `i18n/zh-CN` → `main`** — clean fast-forward (main hasn't moved since the fork). Needs your
+  explicit "merge it" (per the shared-main per-PR rule).
+- ⏳ **Publish into the in-app updater** (ships zh-CN to the six invitees) — owner territory + signing-key
+  custody. Your GO.
+
+Optional taste call: Lab verdict labels (Real/Placebo/Risky) stay English by brand design — say if you
+want them localized.
+
 ### A1. Gaming Mode QA — ✅ CLOSED: SIGNED OFF (owner, 2026-07-14)  ·  full list: [`GAMING_MODE_QA.md`](GAMING_MODE_QA.md)
 
 **Owner said "gaming mode qa signed off" 2026-07-14 — F1 is field-proven for 1.0.** Nothing left on
