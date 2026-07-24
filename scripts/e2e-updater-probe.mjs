@@ -96,17 +96,28 @@ if (!pages.length) {
   console.error("no page targets on port", port);
   process.exit(1);
 }
-// Pick the MAIN window: the one whose DOM has the v2 shell (the overlay never mounts it).
+// Pick the MAIN window. The obvious marker is the v2 shell, but Settings (and other full-surface
+// views) render as a SIBLING that REPLACES ShellV2 (App.tsx), so `.v2-shell` is absent while a
+// surface is open — a `.v2-shell`-only test then wrongly falls to pages[0], which can be the overlay
+// HUD (found during zh-CN Settings QA, 2026-07-23). So score every page and take the best: the shell
+// wins outright when present; otherwise fall back to the button-count heuristic (the main window is
+// button-rich in every view — shell OR Settings — while the overlay HUD has almost none).
 let main = null;
+let bestScore = -1;
 for (const p of pages) {
   try {
-    const probe = await evalIn(p, `!!document.querySelector(".v2-shell")`);
-    if (probe.result?.value === true) {
+    const probe = await evalIn(
+      p,
+      `({ shell: !!document.querySelector(".v2-shell"), buttons: document.querySelectorAll("button").length })`,
+    );
+    const v = probe.result?.value ?? {};
+    const score = (v.shell ? 100000 : 0) + (v.buttons ?? 0);
+    if (score > bestScore) {
+      bestScore = score;
       main = p;
-      break;
     }
   } catch {
-    /* target may be closing; try the next */
+    /* target may be closing; skip it */
   }
 }
 if (!main) main = pages[0];
